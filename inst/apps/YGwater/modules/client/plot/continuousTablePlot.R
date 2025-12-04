@@ -37,6 +37,31 @@ contTablePlotUI <- function(id) {
       ns("accordion_panels"),
       ns("plot_panel")
     ))),
+    tags$style(HTML(sprintf(
+      "
+      /* Force DT table background to white (scoped to this module/table) */
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td {
+        background-color: #FFFFFF !important;
+      }
+
+      /* keep filters at top white too */
+      #%s table.dataTable thead tr,
+      #%s table.dataTable thead th,
+      #%s table.dataTable thead td {
+        background-color: #FFFFFF !important;
+      }
+      ",
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table")
+    ))),
     uiOutput(ns("main"))
   )
 }
@@ -262,12 +287,17 @@ contTablePlot <- function(id, language, inputs) {
       ts <- merge(ts, projects, by = "location_id", all.x = TRUE)
 
       ts[, `:=`(
-        record_rate = as.character(lubridate::seconds_to_period(record_rate)),
+        record_rate = as.factor(as.character(lubridate::seconds_to_period(
+          record_rate
+        ))),
         start_date = as.Date(start_datetime),
         end_date = as.Date(end_datetime),
         parameter = as.factor(parameter),
         media = as.factor(media),
-        aggregation = as.factor(aggregation)
+        aggregation = as.factor(aggregation),
+        z = as.numeric(z),
+        location = as.factor(location),
+        sub_location = as.factor(sub_location)
       )]
 
       ts <- ts[, .(
@@ -573,6 +603,7 @@ contTablePlot <- function(id, language, inputs) {
         options = list(
           pageLength = 5,
           lengthMenu = c(5, 10, 20),
+          columnDefs = list(list(visible = FALSE, targets = 0)),
           searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(

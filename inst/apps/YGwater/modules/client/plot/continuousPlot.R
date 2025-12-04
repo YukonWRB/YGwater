@@ -463,7 +463,7 @@ contPlot <- function(id, language, windowDims, inputs) {
             c("all", moduleData$networks$network_id),
             c(
               tr("all", language$language),
-              moduleData$networks[, tr("generic_name_col", language$language)]
+              moduleData$networks[[tr("generic_name_col", language$language)]]
             )
           ),
           multiple = TRUE,
@@ -476,7 +476,7 @@ contPlot <- function(id, language, windowDims, inputs) {
             c("all", moduleData$projects$project_id),
             c(
               tr("all", language$language),
-              moduleData$projects[, tr("generic_name_col", language$language)]
+              moduleData$projects[[tr("generic_name_col", language$language)]]
             )
           ),
           multiple = TRUE,
@@ -519,7 +519,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         "location",
         choices = stats::setNames(
           remain_locs$location_id,
-          remain_locs[, tr("generic_name_col", language$language)]
+          remain_locs[[tr("generic_name_col", language$language)]]
         ),
         selected = character(0)
       )
@@ -726,7 +726,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
         tmp.choices <- stats::setNames(
           filteredData$media$media_id,
-          filteredData$media[, tr("media_type_col", language$language)]
+          filteredData$media[[tr("media_type_col", language$language)]]
         )
         if (!is.null(input$media)) {
           tmp.selected <- if (input$media %in% tmp.choices) {
@@ -752,10 +752,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData$aggregation_types$aggregation_type_id,
-          filteredData$aggregation_types[, tr(
+          filteredData$aggregation_types[[tr(
             "aggregation_type_col",
             language$language
-          )]
+          )]]
         )
         if (!is.null(input$aggregation)) {
           tmp.selected <- if (input$aggregation %in% tmp.choices) {
@@ -807,7 +807,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData$params$parameter_id,
-          filteredData$params[, tr("param_name_col", language$language)]
+          filteredData$params[[tr("param_name_col", language$language)]]
         )
         if (!is.null(input$param)) {
           tmp.selected <- if (input$param %in% tmp.choices) {
@@ -988,7 +988,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
         tmp.choices <- stats::setNames(
           filteredData_sub_locs$media$media_id,
-          filteredData_sub_locs$media[, tr("media_type_col", language$language)]
+          filteredData_sub_locs$media[[tr("media_type_col", language$language)]]
         )
         if (!is.null(input$media)) {
           tmp.selected <- if (input$media %in% tmp.choices) {
@@ -1014,10 +1014,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData_sub_locs$aggregation_types$aggregation_type_id,
-          filteredData_sub_locs$aggregation_types[, tr(
+          filteredData_sub_locs$aggregation_types[[tr(
             "aggregation_type_col",
             language$language
-          )]
+          )]]
         )
         if (!is.null(input$aggregation)) {
           tmp.selected <- if (input$aggregation %in% tmp.choices) {
@@ -1069,10 +1069,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData_sub_locs$params$parameter_id,
-          filteredData_sub_locs$params[, tr(
+          filteredData_sub_locs$params[[tr(
             "param_name_col",
             language$language
-          )]
+          )]]
         )
         if (!is.null(input$param)) {
           tmp.selected <- if (input$param %in% tmp.choices) {
@@ -1211,7 +1211,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
         tmp.choices <- stats::setNames(
           filteredData_z$media$media_id,
-          filteredData_z$media[, tr("media_type_col", language$language)]
+          filteredData_z$media[[tr("media_type_col", language$language)]]
         )
         if (!is.null(input$media)) {
           tmp.selected <- if (input$media %in% tmp.choices) {
@@ -1237,10 +1237,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData_z$aggregation_types$aggregation_type_id,
-          filteredData_z$aggregation_types[, tr(
+          filteredData_z$aggregation_types[[tr(
             "aggregation_type_col",
             language$language
-          )]
+          )]]
         )
         if (!is.null(input$aggregation)) {
           tmp.selected <- if (input$aggregation %in% tmp.choices) {
@@ -1292,7 +1292,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData_z$params$parameter_id,
-          filteredData_z$params[, tr("param_name_col", language$language)]
+          filteredData_z$params[[tr("param_name_col", language$language)]]
         )
         if (!is.null(input$param)) {
           tmp.selected <- if (input$param %in% tmp.choices) {
@@ -1410,10 +1410,10 @@ contPlot <- function(id, language, windowDims, inputs) {
         # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
         tmp.choices <- stats::setNames(
           filteredData_media$aggregation_types$aggregation_type_id,
-          filteredData_media$aggregation_types[, tr(
+          filteredData_media$aggregation_types[[tr(
             "aggregation_type_col",
             language$language
-          )]
+          )]]
         )
         if (!is.null(input$aggregation)) {
           tmp.selected <- if (input$aggregation %in% tmp.choices) {
@@ -1465,7 +1465,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData_media$params$parameter_id,
-          filteredData_media$params[, tr("param_name_col", language$language)]
+          filteredData_media$params[[tr("param_name_col", language$language)]]
         )
         if (!is.null(input$param)) {
           tmp.selected <- if (input$param %in% tmp.choices) {
@@ -1614,10 +1614,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
         tmp.choices <- stats::setNames(
           filteredData_aggregation$params$parameter_id,
-          filteredData_aggregation$params[, tr(
+          filteredData_aggregation$params[[tr(
             "param_name_col",
             language$language
-          )]
+          )]]
         )
         if (!is.null(input$param)) {
           tmp.selected <- if (input$param %in% tmp.choices) {
@@ -1729,7 +1729,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
         tmp.choices <- stats::setNames(
           filteredData_rate$params$parameter_id,
-          filteredData_rate$params[, tr("param_name_col", language$language)]
+          filteredData_rate$params[[tr("param_name_col", language$language)]]
         )
         if (!is.null(input$param)) {
           tmp.selected <- if (input$param %in% tmp.choices) {
@@ -2046,7 +2046,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("loc", language$language),
           choices = stats::setNames(
             moduleData$locs$location_id,
-            moduleData$locs[, tr("generic_name_col", language$language)]
+            moduleData$locs[[tr("generic_name_col", language$language)]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1),
@@ -2062,7 +2062,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("media_type", language$language),
           choices = stats::setNames(
             moduleData$media$media_id,
-            moduleData$media[, tr("media_type_col", language$language)]
+            moduleData$media[[tr("media_type_col", language$language)]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1)
@@ -2073,10 +2073,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("aggregation_type", language$language),
           choices = stats::setNames(
             moduleData$aggregation_types$aggregation_type_id,
-            moduleData$aggregation_types[, tr(
+            moduleData$aggregation_types[[tr(
               "aggregation_type_col",
               language$language
-            )]
+            )]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1)
@@ -2097,7 +2097,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             moduleData$params$parameter_id,
-            moduleData$params[, tr("param_name_col", language$language)]
+            moduleData$params[[tr("param_name_col", language$language)]]
           ),
           selected = character(0)
         ),
@@ -2297,7 +2297,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
       tmp.choices <- stats::setNames(
         filteredDataModal$media$media_id,
-        filteredDataModal$media[, tr("media_type_col", language$language)]
+        filteredDataModal$media[[tr("media_type_col", language$language)]]
       )
       if (!is.null(input$traceNew_media)) {
         tmp.selected <- if (input$traceNew_media %in% tmp.choices) {
@@ -2323,10 +2323,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal$aggregation_types$aggregation_type_id,
-        filteredDataModal$aggregation_types[, tr(
+        filteredDataModal$aggregation_types[[tr(
           "aggregation_type_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_aggregation)) {
         tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) {
@@ -2378,7 +2378,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal$params$parameter_id,
-        filteredDataModal$params[, tr("param_name_col", language$language)]
+        filteredDataModal$params[[tr("param_name_col", language$language)]]
       )
       if (!is.null(input$traceNew_param)) {
         tmp.selected <- if (input$traceNew_param %in% tmp.choices) {
@@ -2488,10 +2488,10 @@ contPlot <- function(id, language, windowDims, inputs) {
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
       tmp.choices <- stats::setNames(
         filteredDataModal_sub_locs$media$media_id,
-        filteredDataModal_sub_locs$media[, tr(
+        filteredDataModal_sub_locs$media[[tr(
           "media_type_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_media)) {
         tmp.selected <- if (input$traceNew_media %in% tmp.choices) {
@@ -2517,10 +2517,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal_sub_locs$aggregation_types$aggregation_type_id,
-        filteredDataModal_sub_locs$aggregation_types[, tr(
+        filteredDataModal_sub_locs$aggregation_types[[tr(
           "aggregation_type_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_aggregation)) {
         tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) {
@@ -2572,10 +2572,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal_sub_locs$params$parameter_id,
-        filteredDataModal_sub_locs$params[, tr(
+        filteredDataModal_sub_locs$params[[tr(
           "param_name_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_param)) {
         tmp.selected <- if (input$traceNew_param %in% tmp.choices) {
@@ -2653,7 +2653,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
       tmp.choices <- stats::setNames(
         filteredDataModal_z$media$media_id,
-        filteredDataModal_z$media[, tr("media_type_col", language$language)]
+        filteredDataModal_z$media[[tr("media_type_col", language$language)]]
       )
       if (!is.null(input$traceNew_media)) {
         tmp.selected <- if (input$traceNew_media %in% tmp.choices) {
@@ -2679,10 +2679,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal_z$aggregation_types$aggregation_type_id,
-        filteredDataModal_z$aggregation_types[, tr(
+        filteredDataModal_z$aggregation_types[[tr(
           "aggregation_type_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_aggregation)) {
         tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) {
@@ -2734,7 +2734,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal_z$params$parameter_id,
-        filteredDataModal_z$params[, tr("param_name_col", language$language)]
+        filteredDataModal_z$params[[tr("param_name_col", language$language)]]
       )
       if (!is.null(input$traceNew_param)) {
         tmp.selected <- if (input$traceNew_param %in% tmp.choices) {
@@ -2802,10 +2802,10 @@ contPlot <- function(id, language, windowDims, inputs) {
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
       tmp.choices <- stats::setNames(
         filteredDataModal_media$aggregation_types$aggregation_type_id,
-        filteredDataModal_media$aggregation_types[, tr(
+        filteredDataModal_media$aggregation_types[[tr(
           "aggregation_type_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_aggregation)) {
         tmp.selected <- if (input$traceNew_aggregation %in% tmp.choices) {
@@ -2857,10 +2857,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal_media$params$parameter_id,
-        filteredDataModal_media$params[, tr(
+        filteredDataModal_media$params[[tr(
           "param_name_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_param)) {
         tmp.selected <- if (input$traceNew_param %in% tmp.choices) {
@@ -2949,10 +2949,10 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       tmp.choices <- stats::setNames(
         filteredDataModal_aggregation$params$parameter_id,
-        filteredDataModal_aggregation$params[, tr(
+        filteredDataModal_aggregation$params[[tr(
           "param_name_col",
           language$language
-        )]
+        )]]
       )
       if (!is.null(input$traceNew_param)) {
         tmp.selected <- if (input$traceNew_param %in% tmp.choices) {
@@ -3003,7 +3003,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       # If possible, keep the previous selection, otherwise if there's only one choice available, select it, else null
       tmp.choices <- stats::setNames(
         filteredDataModal_rate$params$parameter_id,
-        filteredDataModal_rate$params[, tr("param_name_col", language$language)]
+        filteredDataModal_rate$params[[tr("param_name_col", language$language)]]
       )
       if (!is.null(input$traceNew_param)) {
         tmp.selected <- if (input$traceNew_param %in% tmp.choices) {
@@ -3172,7 +3172,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("loc", language$language),
           choices = stats::setNames(
             moduleData$locs$location_id,
-            moduleData$locs[, tr("generic_name_col", language$language)]
+            moduleData$locs[[tr("generic_name_col", language$language)]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1),
@@ -3185,7 +3185,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("media_type", language$language),
           choices = stats::setNames(
             filteredDataModal_z$media$media_id,
-            filteredDataModal_z$media[, tr("media_type_col", language$language)]
+            filteredDataModal_z$media[[tr("media_type_col", language$language)]]
           ),
           selected = traces[[trace]]$media,
           multiple = TRUE,
@@ -3196,10 +3196,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("aggregation_type", language$language),
           choices = stats::setNames(
             filteredDataModal_media$aggregation_types$aggregation_type_id,
-            filteredDataModal_media$aggregation_types[, tr(
+            filteredDataModal_media$aggregation_types[[tr(
               "aggregation_type_col",
               language$language
-            )]
+            )]]
           ),
           selected = traces[[trace]]$aggregation,
           multiple = TRUE,
@@ -3221,10 +3221,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             filteredDataModal_rate$params$parameter_id,
-            filteredDataModal_rate$params[, tr(
+            filteredDataModal_rate$params[[tr(
               "param_name_col",
               language$language
-            )]
+            )]]
           ),
           selected = traces[[trace]]$parameter
         ),
@@ -3601,7 +3601,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("loc", language$language),
           choices = stats::setNames(
             moduleData$locs$location_id,
-            moduleData$locs[, tr("generic_name_col", language$language)]
+            moduleData$locs[[tr("generic_name_col", language$language)]]
           ),
           multiple = TRUE,
           options = list(maxItems = 1),
@@ -3614,7 +3614,7 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("media_type", language$language),
           choices = stats::setNames(
             filteredDataModal_z$media$media_id,
-            filteredDataModal_z$media[, tr("media_type_col", language$language)]
+            filteredDataModal_z$media[[tr("media_type_col", language$language)]]
           ),
           selected = subplots[[subplot]]$media,
           multiple = TRUE,
@@ -3625,10 +3625,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("aggregation_type", language$language),
           choices = stats::setNames(
             filteredDataModal_media$aggregation_types$aggregation_type_id,
-            filteredDataModal_media$aggregation_types[, tr(
+            filteredDataModal_media$aggregation_types[[tr(
               "aggregation_type_col",
               language$language
-            )]
+            )]]
           ),
           selected = subplots[[subplot]]$aggregation,
           multiple = TRUE,
@@ -3650,10 +3650,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             filteredDataModal_rate$params$parameter_id,
-            filteredDataModal_rate$params[, tr(
+            filteredDataModal_rate$params[[tr(
               "param_name_col",
               language$language
-            )]
+            )]]
           ),
           selected = subplots[[subplot]]$parameter
         ),

@@ -529,7 +529,7 @@ contData <- function(id, language, inputs) {
             c("all", moduleData$locs$location_id),
             c(
               tr("all", language$language),
-              moduleData$locs[, tr("generic_name_col", language$language)]
+              moduleData$locs[[tr("generic_name_col", language$language)]]
             )
           ),
           selected = "all"
@@ -541,7 +541,7 @@ contData <- function(id, language, inputs) {
             c("all", moduleData$sub_locs$sub_location_id),
             c(
               tr("all", language$language),
-              moduleData$sub_locs[, tr("sub_location_col", language$language)]
+              moduleData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
           selected = "all"
@@ -553,7 +553,7 @@ contData <- function(id, language, inputs) {
             c("all", moduleData$media$media_id),
             c(
               tr("all", language$language),
-              moduleData$media[, tr("media_type_col", language$language)]
+              moduleData$media[[tr("media_type_col", language$language)]]
             )
           ),
           selected = "all"
@@ -574,10 +574,10 @@ contData <- function(id, language, inputs) {
             c("all", moduleData$aggregation_types$aggregation_type_id),
             c(
               tr("all", language$language),
-              moduleData$aggregation_types[, tr(
+              moduleData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
-              )]
+              )]]
             )
           ),
           selected = "all"
@@ -598,7 +598,7 @@ contData <- function(id, language, inputs) {
             c("all", moduleData$params$parameter_id),
             c(
               tr("all", language$language),
-              moduleData$params[, tr("param_name_col", language$language)]
+              moduleData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = "all"
@@ -638,7 +638,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$networks$network_id),
             c(
               tr("all", language$language),
-              filteredData$networks[, tr("generic_name_col", language$language)]
+              filteredData$networks[[tr("generic_name_col", language$language)]]
             )
           ),
           multiple = TRUE,
@@ -651,7 +651,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$projects$project_id),
             c(
               tr("all", language$language),
-              filteredData$projects[, tr("generic_name_col", language$language)]
+              filteredData$projects[[tr("generic_name_col", language$language)]]
             )
           ),
           multiple = TRUE,
@@ -696,7 +696,7 @@ contData <- function(id, language, inputs) {
           c("all", remain_locs$location_id),
           c(
             tr("all", language$language),
-            remain_locs[, tr("generic_name_col", language$language)]
+            remain_locs[[tr("generic_name_col", language$language)]]
           )
         ),
         selected = "all"
@@ -715,10 +715,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$param_groups$group_id),
             c(
               tr("all", language$language),
-              filteredData$param_groups[, tr(
+              filteredData$param_groups[[tr(
                 "param_group_col",
                 language$language
-              )]
+              )]]
             )
           ),
           multiple = TRUE,
@@ -731,10 +731,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$param_sub_groups$sub_group_id),
             c(
               tr("all", language$language),
-              filteredData$param_sub_groups[, tr(
+              filteredData$param_sub_groups[[tr(
                 "param_sub_group_col",
                 language$language
-              )]
+              )]]
             )
           ),
           multiple = TRUE,
@@ -781,7 +781,7 @@ contData <- function(id, language, inputs) {
           c("all", remain_params$parameter_id),
           c(
             tr("all", language$language),
-            remain_params[, tr("param_name_col", language$language)]
+            remain_params[[tr("param_name_col", language$language)]]
           )
         ),
         selected = "all"
@@ -945,7 +945,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$locs$location_id),
             c(
               tr("all", language$language),
-              filteredData$locs[, tr("generic_name_col", language$language)]
+              filteredData$locs[[tr("generic_name_col", language$language)]]
             )
           ),
           selected = if (input$locations %in% filteredData$locs$location_id) {
@@ -961,7 +961,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$sub_locs$sub_location_id),
             c(
               tr("all", language$language),
-              filteredData$sub_locs[, tr("sub_location_col", language$language)]
+              filteredData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
           selected = if (
@@ -988,7 +988,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$media$media_id),
             c(
               tr("all", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
+              filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
           selected = if (input$media %in% filteredData$media$media_id) {
@@ -1004,10 +1004,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
               tr("all", language$language),
-              filteredData$aggregation_types[, tr(
+              filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
-              )]
+              )]]
             )
           ),
           selected = if (
@@ -1039,7 +1039,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = if (input$params %in% filteredData$params$parameter_id) {
@@ -1178,7 +1178,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$sub_locs$sub_location_id),
             c(
               tr("all", language$language),
-              filteredData$sub_locs[, tr("sub_location_col", language$language)]
+              filteredData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
           selected = if (
@@ -1196,7 +1196,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$media$media_id),
             c(
               tr("all", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
+              filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
           selected = if (input$media %in% filteredData$media$media_id) {
@@ -1221,10 +1221,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
               tr("all", language$language),
-              filteredData$aggregation_types[, tr(
+              filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
-              )]
+              )]]
             )
           ),
           selected = if (
@@ -1256,7 +1256,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = if (input$params %in% filteredData$params$parameter_id) {
@@ -1380,7 +1380,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$media$media_id),
             c(
               tr("all", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
+              filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
           selected = if (input$media %in% filteredData$media$media_id) {
@@ -1405,10 +1405,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
               tr("all", language$language),
-              filteredData$aggregation_types[, tr(
+              filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
-              )]
+              )]]
             )
           ),
           selected = if (
@@ -1440,7 +1440,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = if (input$params %in% filteredData$params$parameter_id) {
@@ -1560,7 +1560,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$media$media_id),
             c(
               tr("all", language$language),
-              filteredData$media[, tr("media_type_col", language$language)]
+              filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
           selected = if (input$media %in% filteredData$media$media_id) {
@@ -1576,10 +1576,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
               tr("all", language$language),
-              filteredData$aggregation_types[, tr(
+              filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
-              )]
+              )]]
             )
           ),
           selected = if (
@@ -1611,7 +1611,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = if (input$params %in% filteredData$params$parameter_id) {
@@ -1732,10 +1732,10 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
               tr("all", language$language),
-              filteredData$aggregation_types[, tr(
+              filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
-              )]
+              )]]
             )
           ),
           selected = if (
@@ -1767,7 +1767,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = if (input$params %in% filteredData$params$parameter_id) {
@@ -1898,7 +1898,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = if (input$params %in% filteredData$params$parameter_id) {
@@ -2008,7 +2008,7 @@ contData <- function(id, language, inputs) {
             c("all", filteredData$params$parameter_id),
             c(
               tr("all", language$language),
-              filteredData$params[, tr("param_name_col", language$language)]
+              filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
           selected = if (input$params %in% filteredData$params$parameter_id) {
