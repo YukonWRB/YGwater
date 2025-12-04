@@ -1,7 +1,44 @@
 contTablePlotUI <- function(id) {
   ns <- NS(id)
-
-  uiOutput(ns("main"))
+  tagList(
+    tags$style(HTML(sprintf(
+      "
+    /* container id */
+    #%s.accordion {
+      /* optional default for all panels */
+    }
+    
+    /* Panel: filters_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #FFFCF5;
+      --bs-accordion-btn-bg:    #FBE5B2;
+      --bs-accordion-active-bg: #FBE5B2;
+    }
+    
+    /* Panel: table_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #E5F4F6;
+      --bs-accordion-btn-bg:    #0097A9;
+      --bs-accordion-active-bg: #0097A9;
+    }
+    
+    /* Panel: plot_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #F1F4E5;
+      --bs-accordion-btn-bg:    #7A9A01;
+      --bs-accordion-active-bg: #7A9A01;
+    }
+    ",
+      ns("accordion_panels"),
+      ns("accordion_panels"),
+      ns("filters_panel"),
+      ns("accordion_panels"),
+      ns("table_panel"),
+      ns("accordion_panels"),
+      ns("plot_panel")
+    ))),
+    uiOutput(ns("main"))
+  )
 }
 
 contTablePlot <- function(id, language, inputs) {
@@ -227,6 +264,7 @@ contTablePlot <- function(id, language, inputs) {
         end_date
       )]
 
+      # Helper function to identify empty columns
       is_empty_col <- function(col) {
         if (is.character(col) || is.factor(col)) {
           all(is.na(col) | col == "")
@@ -248,6 +286,7 @@ contTablePlot <- function(id, language, inputs) {
     })
 
     output$main <- renderUI({
+      req(moduleData, language$language)
       date_range <- table_range()
       network_col <- tr("generic_name_col", language$language)
       project_col <- tr("generic_name_col", language$language)
@@ -257,8 +296,12 @@ contTablePlot <- function(id, language, inputs) {
           network_col %in% names(moduleData$networks)
       ) {
         stats::setNames(
-          moduleData$networks$network_id,
-          moduleData$networks[[network_col]]
+          moduleData$networks$network_id[order(moduleData$networks[[
+            network_col
+          ]])],
+          moduleData$networks[[network_col]][order(moduleData$networks[[
+            network_col
+          ]])]
         )
       } else {
         NULL
@@ -268,8 +311,12 @@ contTablePlot <- function(id, language, inputs) {
           project_col %in% names(moduleData$projects)
       ) {
         stats::setNames(
-          moduleData$projects$project_id,
-          moduleData$projects[[project_col]]
+          moduleData$projects$project_id[order(moduleData$projects[[
+            project_col
+          ]])],
+          moduleData$projects[[project_col]][order(moduleData$projects[[
+            project_col
+          ]])]
         )
       } else {
         NULL
@@ -279,16 +326,22 @@ contTablePlot <- function(id, language, inputs) {
           param_grp_col %in% names(moduleData$param_groups)
       ) {
         stats::setNames(
-          moduleData$param_groups$param_group_id,
-          moduleData$param_groups$param_group_name
+          moduleData$param_groups$group_id[order(moduleData$param_groups[[
+            param_grp_col
+          ]])],
+          moduleData$param_groups[[
+            param_grp_col
+          ]][order(moduleData$param_groups[[
+            param_grp_col
+          ]])]
         )
       } else {
         NULL
       }
       tagList(
         bslib::accordion(
-          id = ns("accordion_1"),
-          open = c(ns("filters_panel"), ns("table_panel")),
+          id = ns("accordion_panels"),
+          open = c(ns("table_panel")),
           bslib::accordion_panel(
             title = tr("filters", language$language),
             value = ns("filters_panel"),
@@ -385,10 +438,11 @@ contTablePlot <- function(id, language, inputs) {
                   tr("plot_show_qualifiers", language$language),
                   value = FALSE
                 ),
-                actionButton(
-                  ns("render_plot"),
-                  label = "Render plot",
-                  class = "btn-primary"
+                input_task_button(
+                  ns("make_plot"),
+                  label = tr("create_plot", language$language),
+                  style = "display: block; width: 100%;",
+                  class = "btn btn-primary"
                 )
               )
             )
@@ -396,7 +450,8 @@ contTablePlot <- function(id, language, inputs) {
         ),
         plotly::plotlyOutput(ns("timeseries_plot"), height = "600px")
       )
-    })
+    }) %>% # End renderUI
+      bindEvent(language$language) # Re-render the UI if the language or moduleData changes
 
     observeEvent(
       timeseries_table(),
@@ -448,9 +503,9 @@ contTablePlot <- function(id, language, inputs) {
         media = tr("cont_table_col_media", language$language),
         aggregation = tr("cont_table_col_aggregation", language$language),
         record_rate = tr("cont_table_col_record_rate", language$language),
-        z = "z",
-        networks = "Networks",
-        projects = "Projects",
+        z = tr("z", language$language),
+        networks = tr("networks", language$language),
+        projects = tr("projects", language$language),
         start_date = tr("cont_table_col_start_date", language$language),
         end_date = tr("cont_table_col_end_date", language$language)
       )
@@ -477,22 +532,19 @@ contTablePlot <- function(id, language, inputs) {
         rownames = FALSE,
         selection = list(mode = "single", selected = selected_row),
         options = list(
-          pageLength = 10,
+          pageLength = 5,
+          lengthMenu = c(5, 10, 20),
           columnDefs = list(list(visible = FALSE, targets = 0)), # Hide timeseries_id
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
-            "function(settings, json) {",
-            "$(this.api().table().header()).css({",
-            "  'background-color': '#079',",
-            "  'color': '#fff',",
-            "  'font-size': '90%',",
-            # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
-            "});",
-            "$(this.api().table().body()).css({",
-            "  'font-size': '80%',",
-            # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
-            "});",
-            "}"
+            "function(settings, json) {
+             $(this.api().table().header()).css({
+              'font-size': '90%'
+             });
+             $(this.api().table().body()).css({
+              'font-size': '80%'
+             });
+            }"
           ),
           language = list(
             info = tr("tbl_info", language$language),
@@ -521,7 +573,7 @@ contTablePlot <- function(id, language, inputs) {
       dt
     })
 
-    plot_request <- eventReactive(input$render_plot, {
+    plot_request <- reactive({
       ts <- timeseries_table()
       validate(need(nrow(ts) > 0, tr("error", language$language)))
 
@@ -540,32 +592,42 @@ contTablePlot <- function(id, language, inputs) {
       list(
         timeseries_id = ts$timeseries_id[selected_row],
         start_date = input$date_range[1],
-        end_date = input$date_range[2]
+        end_date = input$date_range[2],
+        historic_range = input$show_hist,
+        unusable = input$show_unusable,
+        grades = input$show_grades,
+        approvals = input$show_approvals,
+        qualifiers = input$show_qualifiers,
+        lang = language$abbrev
       )
     })
 
-    output$timeseries_plot <- plotly::renderPlotly({
-      req(plot_request())
-
-      tryCatch(
-        {
-          plotTimeseries(
-            timeseries_id = plot_request()$timeseries_id,
-            start_date = plot_request()$start_date,
-            end_date = plot_request()$end_date,
-            historic_range = input$show_hist,
-            unusable = input$show_unusable,
-            grades = input$show_grades,
-            approvals = input$show_approvals,
-            qualifiers = input$show_qualifiers,
-            lang = language$abbrev,
-            webgl = TRUE
-          )
-        },
-        error = function(e) {
-          validate(need(FALSE, e$message))
-        }
+    # ExtendedTask that does the heavy plotting work
+    plot_task <- ExtendedTask$new(function(req) {
+      # req is the list returned by plot_request()
+      plotTimeseries(
+        timeseries_id = req$timeseries_id,
+        start_date = req$start_date,
+        end_date = req$end_date,
+        historic_range = req$historic_range,
+        unusable = req$unusable,
+        grades = req$grades,
+        approvals = req$approvals,
+        qualifiers = req$qualifiers,
+        lang = req$lang,
+        webgl = session$userData$use_webgl
       )
+    }) |>
+      bind_task_button("make_plot")
+
+    # Kick off task on button click
+    observeEvent(input$make_plot, {
+      plot_task$invoke(plot_request())
+    })
+
+    # Render from the task result
+    output$timeseries_plot <- plotly::renderPlotly({
+      plot_task$result()
     })
   })
 }
