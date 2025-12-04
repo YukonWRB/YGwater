@@ -675,17 +675,38 @@ contTablePlot <- function(id, language, inputs) {
     # ExtendedTask that does the heavy plotting work
     plot_task <- ExtendedTask$new(function(req) {
       # req is the list returned by plot_request()
-      plotTimeseries(
-        timeseries_id = req$timeseries_id,
-        start_date = req$start_date,
-        end_date = req$end_date,
-        historic_range = req$historic_range,
-        unusable = req$unusable,
-        grades = req$grades,
-        approvals = req$approvals,
-        qualifiers = req$qualifiers,
-        lang = req$lang,
-        webgl = session$userData$use_webgl
+      tryCatch(
+        {
+          # New connection necessary because the task gets farmed out to another core
+          con <- AquaConnect(
+            name = config$dbName,
+            host = config$dbHost,
+            port = config$dbPort,
+            username = config$dbUser,
+            password = config$dbPass,
+            silent = TRUE
+          )
+          # Auto close the connection - important!!!
+          on.exit(DBI::dbDisconnect(con))
+
+          plot <- plotTimeseries(
+            timeseries_id = req$timeseries_id,
+            start_date = req$start_date,
+            end_date = req$end_date,
+            historic_range = req$historic_range,
+            unusable = req$unusable,
+            grades = req$grades,
+            approvals = req$approvals,
+            qualifiers = req$qualifiers,
+            lang = req$lang,
+            webgl = session$userData$use_webgl,
+            con = con
+          )
+          return(plot)
+        },
+        error = function(e) {
+          return(e$message)
+        }
       )
     }) |>
       bind_task_button("make_plot")
