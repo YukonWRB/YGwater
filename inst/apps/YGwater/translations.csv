@@ -322,11 +322,11 @@ select_params,,Select parameters,Sélectionnez des paramètres
 project,direct translation,Project,Projet
 projects,direct translation,Projects,Projets
 project(s),direct translation,Project(s),Projet(s)
-select_project,,Select project(s),S�lectionez un/des projets
+select_project,,Select project(s),Sélectionez un/des projets
 network,direct translation,Network,Réseau
 networks,direct translation,Networks,Réseaux
 network(s),direct translation,Network(s),Réseau(x)
-select_network,,Select network(s),S�lectionez un/des r�seaux
+select_network,,Select network(s),Sélectionez un/des réseaux
 units,direct translation,Units,Unités
 period,direct translation,Period,Période
 category,direct translation,Category,Catégorie

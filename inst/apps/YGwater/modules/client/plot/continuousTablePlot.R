@@ -70,6 +70,14 @@ contTablePlot <- function(id, language, inputs) {
       timeseries = cached$timeseries
     )
 
+    moduleInputs <- reactiveValues(
+      location_id = if (!is.null(inputs$location_id)) {
+        as.numeric(inputs$location_id)
+      } else {
+        NULL
+      }
+    )
+
     selected_timeseries_id <- reactiveVal(
       if (!is.null(inputs$timeseries_id)) {
         as.numeric(inputs$timeseries_id)
@@ -114,6 +122,26 @@ contTablePlot <- function(id, language, inputs) {
       }
 
       loc_ids
+    })
+
+    location_filter_value <- reactive({
+      if (is.null(moduleInputs$location_id)) {
+        return(NULL)
+      }
+
+      loc_name_col <- tr("generic_name_col", language$language)
+      locs <- unique(moduleData$locs, by = "location_id")
+
+      available_values <- locs[
+        location_id %in% moduleInputs$location_id,
+        ..loc_name_col
+      ][[loc_name_col]]
+
+      if (length(available_values) == 0) {
+        return(NULL)
+      }
+
+      stats::na.omit(available_values)[1]
     })
 
     timeseries_table <- reactive({
@@ -280,6 +308,7 @@ contTablePlot <- function(id, language, inputs) {
 
     output$main <- renderUI({
       req(moduleData, language$language)
+      print("rendering contTablePlot UI")
       date_range <- table_range()
       network_col <- tr("generic_name_col", language$language)
       project_col <- tr("generic_name_col", language$language)
@@ -443,8 +472,7 @@ contTablePlot <- function(id, language, inputs) {
         ),
         plotly::plotlyOutput(ns("timeseries_plot"), height = "600px")
       )
-    }) %>% # End renderUI
-      bindEvent(language$language) # Re-render the UI if the language or moduleData changes
+    }) # End renderUI
 
     observeEvent(
       timeseries_table(),
@@ -455,7 +483,18 @@ contTablePlot <- function(id, language, inputs) {
           return()
         }
         if (nrow(ts) > 0) {
-          selected_timeseries_id(ts$timeseries_id[1])
+          preferred_row <- NULL
+
+          if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
+            matches <- which(ts$location %in% location_filter_value())
+            if (length(matches) > 0) {
+              preferred_row <- matches[1]
+            }
+          }
+
+          fallback_row <- if (is.null(preferred_row)) 1 else preferred_row
+
+          selected_timeseries_id(ts$timeseries_id[fallback_row])
         } else {
           selected_timeseries_id(NULL)
         }
@@ -520,6 +559,13 @@ contTablePlot <- function(id, language, inputs) {
         )
       }
 
+      search_cols <- vector("list", ncol(ts))
+      if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
+        search_cols[[match("location", names(ts))]] <- list(
+          search = location_filter_value()
+        )
+      }
+
       dt <- DT::datatable(
         ts,
         rownames = FALSE,
@@ -527,7 +573,7 @@ contTablePlot <- function(id, language, inputs) {
         options = list(
           pageLength = 5,
           lengthMenu = c(5, 10, 20),
-          columnDefs = list(list(visible = FALSE, targets = 0)), # Hide timeseries_id
+          searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             "function(settings, json) {
