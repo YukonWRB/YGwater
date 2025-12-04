@@ -117,39 +117,32 @@ contTablePlot <- function(id, language, inputs) {
     })
 
     timeseries_table <- reactive({
-      lang <- language$language
-      loc_name_col <- if (lang == "fr") "name_fr" else "name"
-      sub_loc_col <- if (lang == "fr") {
-        "sub_location_name_fr"
-      } else {
-        "sub_location_name"
-      }
-      param_col <- if (lang == "fr") "param_name_fr" else "param_name"
-      media_col <- if (lang == "fr") "media_type_fr" else "media_type"
-      agg_col <- if (lang == "fr") "aggregation_type_fr" else "aggregation_type"
-      network_col <- if (lang == "fr") "name_fr" else "name"
-      project_col <- if (lang == "fr") "name_fr" else "name"
+      loc_name_col <- tr("generic_name_col", language$language)
+      sub_loc_col <- tr("sub_location_col", language$language)
+      param_col <- tr("param_name_col", language$language)
+      media_col <- tr("media_type_col", language$language)
+      agg_col <- tr("aggregation_type_col", language$language)
+      network_col <- tr("generic_name_col", language$language)
+      project_col <- tr("generic_name_col", language$language)
 
-      as_dt <- function(x) data.table::as.data.table(data.table::copy(x))
-
-      ts <- as_dt(moduleData$timeseries)
+      ts <- moduleData$timeseries
       loc_filter_ids <- location_network_filter()
       ts <- ts[location_id %in% loc_filter_ids]
 
-      locs <- unique(as_dt(moduleData$locs), by = "location_id")
-      sub_locs <- unique(as_dt(moduleData$sub_locs), by = "sub_location_id")
-      params <- unique(as_dt(moduleData$params), by = "parameter_id")
-      media <- unique(as_dt(moduleData$media), by = "media_id")
+      locs <- unique(moduleData$locs, by = "location_id")
+      sub_locs <- unique(moduleData$sub_locs, by = "sub_location_id")
+      params <- unique(moduleData$params, by = "parameter_id")
+      media <- unique(moduleData$media, by = "media_id")
       aggregation_types <- unique(
-        as_dt(moduleData$aggregation_types),
+        moduleData$aggregation_types,
         by = "aggregation_type_id"
       )
 
-      networks <- as_dt(moduleData$locations_networks)
+      networks <- moduleData$locations_networks
       if (nrow(networks) > 0 && nrow(moduleData$networks) > 0) {
         networks <- merge(
           networks,
-          as_dt(moduleData$networks),
+          moduleData$networks,
           by = "network_id",
           all.x = TRUE,
           allow.cartesian = TRUE
@@ -170,11 +163,11 @@ contTablePlot <- function(id, language, inputs) {
         )
       }
 
-      projects <- as_dt(moduleData$locations_projects)
+      projects <- moduleData$locations_projects
       if (nrow(projects) > 0 && nrow(moduleData$projects) > 0) {
         projects <- merge(
           projects,
-          as_dt(moduleData$projects),
+          moduleData$projects,
           by = "project_id",
           all.x = TRUE,
           allow.cartesian = TRUE
