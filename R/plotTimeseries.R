@@ -48,7 +48,7 @@ plotTimeseries <- function(
   timeseries_id = NULL,
   location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -138,6 +138,14 @@ plotTimeseries <- function(
 
   if (tzone == "auto") {
     tzone <- Sys.timezone()
+  }
+
+  if (!is.null(parameter)) {
+    if (inherits(parameter, "character")) {
+      parameter <- tolower(parameter)
+    }
+  } else if (is.null(timeseries_id)) {
+    stop("Parameter is required when timeseries_id is NULL.")
   }
 
   if (!is.null(invert)) {

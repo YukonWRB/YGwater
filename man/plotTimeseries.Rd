@@ -8,7 +8,7 @@ plotTimeseries(
   timeseries_id = NULL,
   location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,

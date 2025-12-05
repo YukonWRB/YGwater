@@ -3,6 +3,7 @@
 #' @description
 #' A pared-down, sped up, simplified version of the original [ggplotOverlap()] function. Created for use with a simple Shiny application linked to the Flood Atlas, but will likely see other uses.
 #'
+#' @param timeseries_id The timeseries ID to plot, if known (else leave NULL).
 #' @param location The location for which you want a plot.
 #' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
@@ -71,9 +72,10 @@
 # slider = FALSE
 
 plotOverlap <- function(
-  location,
+  timeseries_id = NULL,
+  location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -117,8 +119,12 @@ plotOverlap <- function(
   on.exit(options(warn = old_warn), add = TRUE)
 
   #### --------- Checks on input parameters and other start-up bits ------- ####
-  if (inherits(parameter, "character")) {
-    parameter <- tolower(parameter)
+  if (!is.null(parameter)) {
+    if (inherits(parameter, "character")) {
+      parameter <- tolower(parameter)
+    }
+  } else if (is.null(timeseries_id)) {
+    stop("Parameter is required when timeseries_id is NULL.")
   }
 
   if (!is.null(invert)) {
@@ -312,68 +318,100 @@ plotOverlap <- function(
 
   day_seq <- seq.POSIXt(startDay, endDay, by = "day")
 
-  # Get the location and parameter metadata ###########
-  location_txt <- as.character(location)
-  location_id <- DBI::dbGetQuery(
-    con,
-    glue::glue_sql(
-      "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",
-      .con = con
-    )
-  )[1, 1]
-  if (is.na(location_id)) {
-    stop("The location you entered does not exist in the database.")
-  }
-
-  #Confirm parameter and location exist in the database and that there is only one entry
-  parameter_txt <- tolower(as.character(parameter))
-  parameter_tbl <- DBI::dbGetQuery(
-    con,
-    glue::glue_sql(
-      "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",
-      .con = con
-    )
-  )
-  parameter_code <- parameter_tbl$parameter_id[1]
-  if (is.na(parameter_code)) {
-    stop("The parameter you entered does not exist in the database.")
-  }
-  # Default to the english name if the french name is not available
-  parameter_tbl[
-    is.na(parameter_tbl$param_name_fr),
-    "param_name_fr"
-  ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
-
-  if (lang == "fr") {
-    parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-  }
-  if (lang == "en" || is.na(parameter_name)) {
-    # Some parameters don't have a french name in the DB
-    parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
-  }
-
-  if (is.null(sub_location)) {
-    # Check if there are multiple timeseries for this parameter_code, location regardless of sub_location. If so, throw a stop
-    sub_loc_check <- DBI::dbGetQuery(
-      con,
-      paste0(
-        "SELECT sub_location_id FROM timeseries WHERE location_id = ",
-        location_id,
-        " AND parameter_id = ",
-        parameter_code,
-        " AND sub_location_id IS NOT NULL;"
-      )
-    )
-    if (nrow(sub_loc_check) > 1) {
-      stop(
-        "There are multiple sub-locations for this location and parameter. Please specify a sub-location."
-      )
+  if (is.null(timeseries_id)) {
+    if (is.null(location)) {
+      stop("Location is required when timeseries_id is NULL.")
     }
 
-    if (is.null(record_rate)) {
-      # aggregation_type_id may or may not be NULL
-      if (is.null(aggregation_type_id)) {
-        #both record_rate and aggregation_type_id are NULL
+    # Get the location and parameter metadata ###########
+    location_txt <- as.character(location)
+    location_id <- DBI::dbGetQuery(
+      con,
+      glue::glue_sql(
+        "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",
+        .con = con
+      )
+    )[1, 1]
+    if (is.na(location_id)) {
+      stop("The location you entered does not exist in the database.")
+    }
+
+    #Confirm parameter and location exist in the database and that there is only one entry
+    parameter_txt <- tolower(as.character(parameter))
+    parameter_tbl <- DBI::dbGetQuery(
+      con,
+      glue::glue_sql(
+        "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",
+        .con = con
+      )
+    )
+    parameter_code <- parameter_tbl$parameter_id[1]
+    if (is.na(parameter_code)) {
+      stop("The parameter you entered does not exist in the database.")
+    }
+    # Default to the english name if the french name is not available
+    parameter_tbl[
+      is.na(parameter_tbl$param_name_fr),
+      "param_name_fr"
+    ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
+
+    if (lang == "fr") {
+      parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
+    }
+    if (lang == "en" || is.na(parameter_name)) {
+      # Some parameters don't have a french name in the DB
+      parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
+    }
+
+    if (is.null(sub_location)) {
+      # Check if there are multiple timeseries for this parameter_code, location regardless of sub_location. If so, throw a stop
+      sub_loc_check <- DBI::dbGetQuery(
+        con,
+        paste0(
+          "SELECT sub_location_id FROM timeseries WHERE location_id = ",
+          location_id,
+          " AND parameter_id = ",
+          parameter_code,
+          " AND sub_location_id IS NOT NULL;"
+        )
+      )
+      if (nrow(sub_loc_check) > 1) {
+        stop(
+          "There are multiple sub-locations for this location and parameter. Please specify a sub-location."
+        )
+      }
+
+      if (is.null(record_rate)) {
+        # aggregation_type_id may or may not be NULL
+        if (is.null(aggregation_type_id)) {
+          #both record_rate and aggregation_type_id are NULL
+          exist_check <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              location_id,
+              " AND ts.parameter_id = ",
+              parameter_code,
+              ";"
+            )
+          )
+        } else {
+          #aggregation_type_id is not NULL but record_rate is
+          exist_check <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              location_id,
+              " AND ts.parameter_id = ",
+              parameter_code,
+              " AND ts.aggregation_type_id = ",
+              aggregation_type_id,
+              ";"
+            )
+          )
+        }
+      } else if (is.null(aggregation_type_id)) {
+        #record_rate is not NULL but aggregation_type_id is
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
@@ -381,11 +419,13 @@ plotOverlap <- function(
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
-            ";"
+            " AND ts.record_rate = '",
+            record_rate,
+            "';"
           )
         )
       } else {
-        #aggregation_type_id is not NULL but record_rate is
+        #both record_rate and aggregation_type_id are not NULL
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
@@ -393,43 +433,14 @@ plotOverlap <- function(
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
-            " AND ts.aggregation_type_id = ",
+            " AND ts.record_rate = '",
+            record_rate,
+            "' AND ts.aggregation_type_id = ",
             aggregation_type_id,
             ";"
           )
         )
       }
-    } else if (is.null(aggregation_type_id)) {
-      #record_rate is not NULL but aggregation_type_id is
-      exist_check <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-          location_id,
-          " AND ts.parameter_id = ",
-          parameter_code,
-          " AND ts.record_rate = '",
-          record_rate,
-          "';"
-        )
-      )
-    } else {
-      #both record_rate and aggregation_type_id are not NULL
-      exist_check <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-          location_id,
-          " AND ts.parameter_id = ",
-          parameter_code,
-          " AND ts.record_rate = '",
-          record_rate,
-          "' AND ts.aggregation_type_id = ",
-          aggregation_type_id,
-          ";"
-        )
-      )
-    }
   } else {
     #sub location was specified
     # Find the sub location_id
@@ -633,14 +644,45 @@ plotOverlap <- function(
   }
 
   tsid <- exist_check$timeseries_id
+} else {
+  tsid <- timeseries_id
+  exist_check <- DBI::dbGetQuery(
+    con,
+    "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
+    params = list(tsid)
+  )
+
+  if (nrow(exist_check) == 0 || is.na(exist_check$timeseries_id[1])) {
+    stop("The timeseries_id you entered does not exist in the database.")
+  }
+
+  location_id <- exist_check$location_id[1]
+  parameter_code <- exist_check$parameter_id[1]
+  parameter_tbl <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = $1;",
+    params = list(parameter_code)
+  )
+
+  parameter_tbl[
+    is.na(parameter_tbl$param_name_fr),
+    "param_name_fr"
+  ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
+
+  if (lang == "fr") {
+    parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
+  }
+  if (lang == "en" || is.na(parameter_name)) {
+    parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
+  }
+}
 
   # Find the ts units
   units <- DBI::dbGetQuery(
     con,
-    paste0(
-      "SELECT unit_default FROM parameters WHERE parameter_id = ",
-      parameter_code,
-      ";"
+    glue::glue_sql(
+      "SELECT unit_default FROM parameters WHERE parameter_id = {parameter_code};",
+      .con = con
     )
   )
 
