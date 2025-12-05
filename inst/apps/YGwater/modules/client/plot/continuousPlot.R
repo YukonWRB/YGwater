@@ -500,7 +500,7 @@ contPlot <- function(id, language, windowDims, inputs) {
             )
           )
         ),
-        plotly::plotlyOutput(ns("timeseries_plot"), height = "600px")
+        plotly::plotlyOutput(ns("plot"), height = "600px")
       )
     }) # End renderUI
 
@@ -673,7 +673,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     # ExtendedTask that does the heavy plotting work
-    plot_task <- ExtendedTask$new(function(req) {
+    long_ts_plot <- ExtendedTask$new(function(req) {
       # req is the list returned by plot_request()
       tryCatch(
         {
@@ -713,12 +713,12 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
-      plot_task$invoke(plot_request())
+      long_ts_plot$invoke(plot_request())
     })
 
     # Render from the task result
-    output$timeseries_plot <- plotly::renderPlotly({
-      plot_task$result()
+    output$plot <- plotly::renderPlotly({
+      long_ts_plot$result()
     })
   })
 }
