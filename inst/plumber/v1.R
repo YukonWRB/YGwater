@@ -552,7 +552,7 @@ function(req, res) {
     quiet = TRUE,
     stats = FALSE,
     save_path = NULL,
-    header = "object"
+    headers = "object"
   )$measurements
   return(out)
 }
@@ -596,7 +596,7 @@ function(req, res) {
     quiet = TRUE,
     stats = FALSE,
     save_path = NULL,
-    header = "object"
+    headers = "object"
   )$locations
   return(out)
 }
@@ -640,7 +640,7 @@ function(req, res) {
     quiet = TRUE,
     stats = TRUE,
     save_path = NULL,
-    header = "object"
+    headers = "object"
   )$stats
   return(out)
 }
@@ -684,7 +684,7 @@ function(req, res) {
     quiet = TRUE,
     stats = TRUE,
     save_path = NULL,
-    header = "object"
+    headers = "object"
   )$trends
   return(out)
 }
