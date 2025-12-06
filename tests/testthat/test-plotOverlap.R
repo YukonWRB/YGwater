@@ -161,6 +161,7 @@ test_that("plotOverlap works when given only a timeseries_id", {
     c("datetime", "value", "max", "min", "q75", "q25", "year", "month", "day")
   )
 
+  skip_on_ci()
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)

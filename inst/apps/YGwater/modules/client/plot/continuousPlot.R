@@ -111,20 +111,6 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
     )
 
-    table_range <- reactive({
-      start_val <- as.Date(moduleData$range$min_datetime)
-      end_val <- as.Date(moduleData$range$max_datetime)
-
-      if (is.na(start_val)) {
-        start_val <- Sys.Date() - 365
-      }
-      if (is.na(end_val)) {
-        end_val <- Sys.Date()
-      }
-
-      list(start = start_val, end = end_val)
-    })
-
     location_network_filter <- reactive({
       loc_ids <- moduleData$locs$location_id
 
@@ -333,13 +319,11 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
 
       data.table::setorder(ts, location, parameter, record_rate)
-      out <<- ts
       ts
     })
 
     output$main <- renderUI({
       req(moduleData, language$language)
-      date_range <- table_range()
       network_col <- tr("generic_name_col", language$language)
       project_col <- tr("generic_name_col", language$language)
       param_grp_col <- tr("param_group_col", language$language)
@@ -453,15 +437,32 @@ contPlot <- function(id, language, windowDims, inputs) {
                 dateRangeInput(
                   ns("date_range"),
                   tr("date_range_lab", language$language),
-                  start = date_range$start,
-                  end = date_range$end,
+                  start = Sys.Date() - 365,
+                  end = Sys.Date(),
                   format = "yyyy-mm-dd",
                   startview = "month",
-                  min = date_range$start,
-                  max = date_range$end,
                   language = language$abbrev,
                   separator = tr("date_sep", language$language)
-                )
+                ),
+                # shinyWidgets::airDatepickerInput(
+                #   ns("date_range"),
+                #   label = tr("date_range_lab", language$language),
+                #   value = c(
+                #     Sys.time() - 365 * 24 * 3600,
+                #     Sys.time()
+                #   ),
+                #   range = TRUE,
+                #   multiple = FALSE,
+                #   timepicker = TRUE,
+                #   maxDate = Sys.Date() + 1,
+                #   startView = Sys.Date(),
+                #   update_on = "change",
+                #   timepickerOpts = shinyWidgets::timepickerOptions(
+                #     minutesStep = 15,
+                #     timeFormat = "HH:mm"
+                #   ),
+                #   width = "100%"
+                # ),
               ),
               column(
                 width = 6,
@@ -489,18 +490,18 @@ contPlot <- function(id, language, windowDims, inputs) {
                   ns("show_qualifiers"),
                   tr("plot_show_qualifiers", language$language),
                   value = FALSE
-                ),
-                input_task_button(
-                  ns("make_plot"),
-                  label = tr("create_plot", language$language),
-                  style = "display: block; width: 100%;",
-                  class = "btn btn-primary"
                 )
+              ),
+              input_task_button(
+                ns("make_plot"),
+                label = tr("create_plot", language$language),
+                class = "btn btn-primary"
               )
             )
           )
         ),
-        plotly::plotlyOutput(ns("plot"), height = "600px")
+        plotly::plotlyOutput(ns("plot"), height = "600px", inline = TRUE),
+        uiOutput(ns("full_screen_ui"))
       )
     }) # End renderUI
 
@@ -543,19 +544,25 @@ contPlot <- function(id, language, windowDims, inputs) {
           input$timeseries_table_rows_selected
         ])
       }
+      # Update the date range input to reflect the selected timeseries
+      selected_id <- selected_timeseries_id()
+      if (is.null(selected_id)) {
+        return()
+      }
+      updateDateRangeInput(
+        session,
+        "date_range",
+        start = ts$end_date[ts$timeseries_id == selected_id] - 365,
+        end = ts$end_date[ts$timeseries_id == selected_id],
+        min = ts$start_date[ts$timeseries_id == selected_id],
+        max = ts$end_date[ts$timeseries_id == selected_id]
+      )
     })
 
     output$timeseries_table <- DT::renderDataTable({
       ts <- timeseries_table()
-      selected_id <- selected_timeseries_id()
-      selected_row <- if (!is.null(selected_id)) {
-        which(ts$timeseries_id == selected_id)
-      } else {
-        NULL
-      }
-      if (length(selected_row) == 0) {
-        selected_row <- NULL
-      }
+
+      out <<- ts
 
       column_labels <- c(
         timeseries_id = "timeseries_id",
@@ -596,14 +603,29 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
       }
 
+      date_targets <- which(names(ts) %in% c("start_date", "end_date")) - 1
+
       dt <- DT::datatable(
         ts,
         rownames = FALSE,
-        selection = list(mode = "single", selected = selected_row),
+        selection = list(mode = "single"),
         options = list(
           pageLength = 5,
           lengthMenu = c(5, 10, 20),
-          columnDefs = list(list(visible = FALSE, targets = 0)),
+          columnDefs = list(
+            list(visible = FALSE, targets = 0),
+            list(
+              targets = date_targets,
+              render = htmlwidgets::JS(
+                "function(data, type, row){
+                  if (!data) return '';
+                  var d = new Date(data);
+                  if (type === 'display') return d.toISOString().substring(0,10);
+                  return data;
+                }"
+              )
+            )
+          ),
           searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
@@ -625,23 +647,36 @@ contPlot <- function(id, language, windowDims, inputs) {
             infoFiltered = tr("tbl_filtered", language$language),
             zeroRecords = tr("tbl_zero", language$language)
           ),
-          order = order_columns
+          order = order_columns,
+          stateSave = TRUE
         ),
         colnames = c("timeseries_id", col_names),
         filter = "top"
       )
-
-      date_cols <- intersect(c("start_date", "end_date"), names(ts))
-      if (length(date_cols) > 0) {
-        dt <- DT::formatDate(
-          dt,
-          columns = date_cols,
-          method = "toDateString"
-        )
-      }
-
       dt
     })
+
+    proxy <- DT::dataTableProxy(ns("timeseries_table"))
+
+    # Keep selection in sync with selected_timeseries_id()
+    observeEvent(
+      list(selected_timeseries_id(), timeseries_table()),
+      {
+        ts <- timeseries_table()
+        id <- selected_timeseries_id()
+
+        if (is.null(id) || nrow(ts) == 0) {
+          DT::selectRows(proxy, NULL)
+          return()
+        }
+
+        row <- which(ts$timeseries_id == id)
+        if (length(row) == 1) {
+          DT::selectRows(proxy, row)
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     plot_request <- reactive({
       ts <- timeseries_table()
@@ -700,7 +735,9 @@ contPlot <- function(id, language, windowDims, inputs) {
             qualifiers = req$qualifiers,
             lang = req$lang,
             webgl = session$userData$use_webgl,
-            con = con
+            con = con,
+            data = TRUE,
+            slider = FALSE
           )
           return(plot)
         },
@@ -711,14 +748,111 @@ contPlot <- function(id, language, windowDims, inputs) {
     }) |>
       bind_task_button("make_plot")
 
+    plot_created <- reactiveVal(FALSE) # Flag to determine if a plot has been created
+
     # Kick off task on button click
     observeEvent(input$make_plot, {
+      if (plot_created()) {
+        shinyjs::hide("full_screen_ui")
+      }
       long_ts_plot$invoke(plot_request())
     })
 
     # Render from the task result
     output$plot <- plotly::renderPlotly({
-      long_ts_plot$result()
-    })
-  })
+      plot <- long_ts_plot$result()$plot
+
+      # Create a full screen button if necessary
+      if (!plot_created()) {
+        output$full_screen_ui <- renderUI({
+          # Side-by-side buttons
+          page_fluid(
+            div(
+              class = "d-inline-block",
+              actionButton(
+                ns("full_screen"),
+                tr("full_screen", language$language)
+              ),
+              style = "display: none;"
+            ),
+            div(
+              class = "d-inline-block",
+              downloadButton(
+                ns("download_data"),
+                tr("dl_data", language$language)
+              ),
+              style = "display: none;"
+            )
+          )
+        })
+      } else {
+        shinyjs::show("full_screen_ui")
+      }
+      plot_created(TRUE)
+
+      return(plot)
+    }) # End renderPlotly
+
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    # The js function takes care of debouncing the window resize event and also reacts to a change in orientation or full screen event
+    observeEvent(
+      windowDims(),
+      {
+        req(plot_created())
+        if (is.null(windowDims())) {
+          return()
+        }
+        if (windowDims()$width > windowDims()$height) {
+          plotly::plotlyProxy("plot", session) %>%
+            plotly::plotlyProxyInvoke(
+              "relayout",
+              legend = list(orientation = "v")
+            )
+        } else {
+          plotly::plotlyProxy("plot", session) %>%
+            plotly::plotlyProxyInvoke(
+              "relayout",
+              legend = list(orientation = "h")
+            )
+        }
+      },
+      ignoreNULL = TRUE
+    )
+
+    # Observe the full screen button and run the javascript function to make the plot full screen
+    observeEvent(
+      input$full_screen,
+      {
+        shinyjs::runjs(paste0("toggleFullScreen('", ns("plot"), "');"))
+        # Manually trigger a window resize event after some delay
+        shinyjs::runjs(
+          "
+                      setTimeout(function() {
+                        sendWindowSizeToShiny();
+                      }, 700);
+                    "
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    # Send the user the plotting data
+    output$download_data <- downloadHandler(
+      filename = function() {
+        time <- Sys.time()
+        attr(time, "tzone") <- "UTC"
+        paste0(
+          "continuous_plot_data_",
+          gsub("-", "", gsub(" ", "_", gsub(":", "", substr(time, 0, 16)))),
+          "_UTC.xlsx"
+        )
+      },
+      content = function(file) {
+        openxlsx::write.xlsx(
+          long_ts_plot$result()$data,
+          file
+        )
+      } # End content
+    ) # End downloadHandler
+  }) # End moduleServer
 }

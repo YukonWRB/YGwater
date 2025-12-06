@@ -408,7 +408,7 @@ contPlotOld <- function(id, language, windowDims, inputs) {
               ns("extra_aes"),
               tr("modify_plot_aes", language$language),
               style = "display: block; width: 100%; margin-bottom: 10px;"
-            ), # Ensure block display and full width
+            ),
           )
         ),
         br(),
@@ -4788,7 +4788,6 @@ contPlotOld <- function(id, language, windowDims, inputs) {
       input$full_screen,
       {
         shinyjs::runjs(paste0("toggleFullScreen('", ns("plot"), "');"))
-
         # Manually trigger a window resize event after some delay
         shinyjs::runjs(
           "

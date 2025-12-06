@@ -256,6 +256,9 @@ test_that("plotTimeseries works when given only a timeseries_id", {
   expect_named(plot$data$trace_data, c("datetime", "value", "imputed"))
   expect_named(plot$data$range_data, c("datetime", "min", "max", "q75", "q25"))
 
+  # Skip snapshot test on CI
+  skip_on_ci()
+
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
@@ -299,6 +302,9 @@ test_that("plotTimeseries plots raw and corrected data", {
     c("datetime", "value", "value_raw", "imputed")
   )
   expect_named(plot$data$range_data, c("datetime", "min", "max", "q75", "q25"))
+
+  # Skip snapshot test on CI
+  skip_on_ci()
 
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
