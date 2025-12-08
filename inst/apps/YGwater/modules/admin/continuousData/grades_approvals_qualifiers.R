@@ -96,8 +96,16 @@ grades_approvals_qualifiersUI <- function(id) {
               actionButton(ns("clear_selection"), "Clear selection"),
               br(),
               br(),
-              actionButton(ns("apply_attribute"), "Add attribute", class = "btn-primary w-100"),
-              actionButton(ns("delete_attribute"), "Delete selected", class = "btn-danger w-100 mt-2")
+              actionButton(
+                ns("apply_attribute"),
+                "Add attribute",
+                class = "btn-primary w-100"
+              ),
+              actionButton(
+                ns("delete_attribute"),
+                "Delete selected",
+                class = "btn-danger w-100 mt-2"
+              )
             ),
             column(
               width = 8,
@@ -253,7 +261,11 @@ grades_approvals_qualifiers <- function(id) {
     output$ts_table <- DT::renderDT({
       df <- as.data.frame(ts_meta())
       if (!nrow(df)) {
-        return(DT::datatable(data.frame(Message = "No timeseries available."), options = list(dom = 't'), selection = 'none'))
+        return(DT::datatable(
+          data.frame(Message = "No timeseries available."),
+          options = list(dom = 't'),
+          selection = 'none'
+        ))
       }
       df$recording_rate <- as.factor(df$recording_rate)
       df$media <- as.factor(df$media)
@@ -287,48 +299,63 @@ grades_approvals_qualifiers <- function(id) {
     assignment_refresh <- reactiveVal(0)
     next_edge <- reactiveVal("start")
 
-    observeEvent(input$ts_table_rows_selected, {
-      selection <- input$ts_table_rows_selected
-      if (length(selection)) {
-        tsid <- ts_meta()[selection, "timeseries_id"]
-        selected_ts(tsid)
-        assignment_refresh(assignment_refresh() + 1)
-        selected_record(NULL)
-        next_edge("start")
+    observeEvent(
+      input$ts_table_rows_selected,
+      {
+        selection <- input$ts_table_rows_selected
+        if (length(selection)) {
+          tsid <- ts_meta()[selection, "timeseries_id"]
+          selected_ts(tsid)
+          assignment_refresh(assignment_refresh() + 1)
+          selected_record(NULL)
+          next_edge("start")
 
-        range_info <- safe_query(
-          DBI::dbGetQuery(
-            con,
-            "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
-            params = list(tsid)
+          range_info <- safe_query(
+            DBI::dbGetQuery(
+              con,
+              "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
+              params = list(tsid)
+            )
           )
-        )
 
-        default_end <- if (nrow(range_info) && !is.na(range_info$max_dt[1])) {
-          as.POSIXct(range_info$max_dt[1], tz = "UTC")
-        } else {
-          Sys.time()
-        }
-        default_start <- default_end - 7 * 24 * 3600
-        if (nrow(range_info) && !is.na(range_info$min_dt[1])) {
-          min_dt <- as.POSIXct(range_info$min_dt[1], tz = "UTC")
-          if (!is.na(min_dt) && default_start < min_dt) {
-            default_start <- min_dt
+          default_end <- if (nrow(range_info) && !is.na(range_info$max_dt[1])) {
+            as.POSIXct(range_info$max_dt[1], tz = "UTC")
+          } else {
+            Sys.time()
           }
+          default_start <- default_end - 7 * 24 * 3600
+          if (nrow(range_info) && !is.na(range_info$min_dt[1])) {
+            min_dt <- as.POSIXct(range_info$min_dt[1], tz = "UTC")
+            if (!is.na(min_dt) && default_start < min_dt) {
+              default_start <- min_dt
+            }
+          }
+          if (
+            !is.finite(as.numeric(default_start)) ||
+              !is.finite(as.numeric(default_end))
+          ) {
+            default_start <- Sys.time() - 7 * 24 * 3600
+            default_end <- Sys.time()
+          }
+          if (default_start >= default_end) {
+            default_start <- default_end - 1 * 3600
+          }
+          updateTextInput(
+            session,
+            "start_dt",
+            value = format_datetime(default_start)
+          )
+          updateTextInput(
+            session,
+            "end_dt",
+            value = format_datetime(default_end)
+          )
+        } else {
+          selected_ts(NULL)
         }
-        if (!is.finite(as.numeric(default_start)) || !is.finite(as.numeric(default_end))) {
-          default_start <- Sys.time() - 7 * 24 * 3600
-          default_end <- Sys.time()
-        }
-        if (default_start >= default_end) {
-          default_start <- default_end - 1 * 3600
-        }
-        updateTextInput(session, "start_dt", value = format_datetime(default_start))
-        updateTextInput(session, "end_dt", value = format_datetime(default_end))
-      } else {
-        selected_ts(NULL)
-      }
-    }, ignoreNULL = FALSE)
+      },
+      ignoreNULL = FALSE
+    )
 
     range_error <- reactive({
       if (is.null(selected_ts())) {
@@ -386,7 +413,10 @@ grades_approvals_qualifiers <- function(id) {
       if (!nrow(df)) {
         return(df)
       }
-      cols <- intersect(c("start_dt", "end_dt", "created", "updated"), names(df))
+      cols <- intersect(
+        c("start_dt", "end_dt", "created", "updated"),
+        names(df)
+      )
       for (col in cols) {
         df[[col]] <- as.POSIXct(df[[col]], tz = "UTC")
       }
@@ -447,23 +477,55 @@ grades_approvals_qualifiers <- function(id) {
         qualifier = module_data$qualifier_types
       )
       if (is.null(types) || !nrow(types)) {
-        updateSelectizeInput(session, "attribute_value", choices = character(0), selected = character(0))
+        updateSelectizeInput(
+          session,
+          "attribute_value",
+          choices = character(0),
+          selected = character(0)
+        )
       } else {
-        id_col <- switch(kind, grade = "grade_type_id", approval = "approval_type_id", qualifier = "qualifier_type_id")
-        label_col <- switch(kind, grade = "grade_type_description", approval = "approval_type_description", qualifier = "qualifier_type_description")
-        choices <- stats::setNames(as.character(types[[id_col]]), types[[label_col]])
+        id_col <- switch(
+          kind,
+          grade = "grade_type_id",
+          approval = "approval_type_id",
+          qualifier = "qualifier_type_id"
+        )
+        label_col <- switch(
+          kind,
+          grade = "grade_type_description",
+          approval = "approval_type_description",
+          qualifier = "qualifier_type_description"
+        )
+        choices <- stats::setNames(
+          as.character(types[[id_col]]),
+          types[[label_col]]
+        )
         current <- selected_record()
-        selected_value <- if (!is.null(current) && !is.null(current$type_id)) as.character(current$type_id) else character(0)
-        updateSelectizeInput(session, "attribute_value", choices = choices, selected = selected_value, server = TRUE)
+        selected_value <- if (!is.null(current) && !is.null(current$type_id)) {
+          as.character(current$type_id)
+        } else {
+          character(0)
+        }
+        updateSelectizeInput(
+          session,
+          "attribute_value",
+          choices = choices,
+          selected = selected_value,
+          server = TRUE
+        )
       }
     })
 
-    observeEvent(active_kind(), {
-      selected_record(NULL)
-      next_edge("start")
-      proxy <- DT::dataTableProxy("active_assignments", session = session)
-      DT::selectRows(proxy, NULL)
-    }, ignoreNULL = FALSE)
+    observeEvent(
+      active_kind(),
+      {
+        selected_record(NULL)
+        next_edge("start")
+        proxy <- DT::dataTableProxy("active_assignments", session = session)
+        DT::selectRows(proxy, NULL)
+      },
+      ignoreNULL = FALSE
+    )
 
     output$active_table_title <- renderText({
       switch(
@@ -487,7 +549,11 @@ grades_approvals_qualifiers <- function(id) {
     render_active_table <- function(df, label) {
       if (is.null(df) || !nrow(df)) {
         msg <- sprintf("No %s have been recorded for this timeseries.", label)
-        return(DT::datatable(data.frame(Message = msg), options = list(dom = 't'), selection = 'none'))
+        return(DT::datatable(
+          data.frame(Message = msg),
+          options = list(dom = 't'),
+          selection = 'none'
+        ))
       }
       display <- df
       display$Start <- vapply(display$start_dt, format_datetime, character(1))
@@ -498,8 +564,26 @@ grades_approvals_qualifiers <- function(id) {
         '<span style="display:inline-block;width:18px;height:18px;border:1px solid #444;background-color:%s;"></span>',
         display$color_code
       )
-      display <- display[, c("record_id", "type_id", "description", "Start", "End", "Created", "Updated", "Color")]
-      names(display) <- c("record_id", "type_id", "Description", "Start", "End", "Created", "Updated", "Color")
+      display <- display[, c(
+        "record_id",
+        "type_id",
+        "description",
+        "Start",
+        "End",
+        "Created",
+        "Updated",
+        "Color"
+      )]
+      names(display) <- c(
+        "record_id",
+        "type_id",
+        "Description",
+        "Start",
+        "End",
+        "Created",
+        "Updated",
+        "Color"
+      )
       DT::datatable(
         display,
         selection = 'single',
@@ -519,7 +603,11 @@ grades_approvals_qualifiers <- function(id) {
     render_overview_table <- function(df, label) {
       if (is.null(df) || !nrow(df)) {
         msg <- sprintf("No %s have been recorded for this timeseries.", label)
-        return(DT::datatable(data.frame(Message = msg), options = list(dom = 't'), selection = 'none'))
+        return(DT::datatable(
+          data.frame(Message = msg),
+          options = list(dom = 't'),
+          selection = 'none'
+        ))
       }
       display <- data.frame(
         Description = df$description,
@@ -548,7 +636,12 @@ grades_approvals_qualifiers <- function(id) {
 
     output$active_assignments <- DT::renderDT({
       req(selected_ts())
-      label <- switch(active_kind(), grade = "grades", approval = "approvals", qualifier = "qualifiers")
+      label <- switch(
+        active_kind(),
+        grade = "grades",
+        approval = "approvals",
+        qualifier = "qualifiers"
+      )
       render_active_table(active_assignments_data(), label)
     })
 
@@ -567,17 +660,38 @@ grades_approvals_qualifiers <- function(id) {
       render_overview_table(assignments()$qualifiers, "qualifiers")
     })
 
-    observeEvent(input$active_assignments_rows_selected, {
-      idx <- input$active_assignments_rows_selected
-      df <- active_assignments_data()
-      if (length(idx) == 1 && nrow(df) >= idx) {
-        row <- df[idx, ]
-        selected_record(list(id = row$record_id, type_id = row$type_id, start = row$start_dt, end = row$end_dt))
-        updateSelectizeInput(session, "attribute_value", selected = as.character(row$type_id))
-        updateTextInput(session, "start_dt", value = format_datetime(row$start_dt))
-        updateTextInput(session, "end_dt", value = format_datetime(row$end_dt))
-      }
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$active_assignments_rows_selected,
+      {
+        idx <- input$active_assignments_rows_selected
+        df <- active_assignments_data()
+        if (length(idx) == 1 && nrow(df) >= idx) {
+          row <- df[idx, ]
+          selected_record(list(
+            id = row$record_id,
+            type_id = row$type_id,
+            start = row$start_dt,
+            end = row$end_dt
+          ))
+          updateSelectizeInput(
+            session,
+            "attribute_value",
+            selected = as.character(row$type_id)
+          )
+          updateTextInput(
+            session,
+            "start_dt",
+            value = format_datetime(row$start_dt)
+          )
+          updateTextInput(
+            session,
+            "end_dt",
+            value = format_datetime(row$end_dt)
+          )
+        }
+      },
+      ignoreNULL = TRUE
+    )
 
     observeEvent(input$clear_selection, {
       selected_record(NULL)
@@ -587,7 +701,11 @@ grades_approvals_qualifiers <- function(id) {
     })
 
     observe({
-      label <- if (is.null(selected_record())) "Add attribute" else "Update attribute"
+      label <- if (is.null(selected_record())) {
+        "Add attribute"
+      } else {
+        "Update attribute"
+      }
       shiny::updateActionButton(session, "apply_attribute", label = label)
     })
 
@@ -597,7 +715,10 @@ grades_approvals_qualifiers <- function(id) {
       record <- selected_record()
       type_id <- input$attribute_value
       if (!length(type_id)) {
-        showNotification("Select an attribute value before applying.", type = "warning")
+        showNotification(
+          "Select an attribute value before applying.",
+          type = "warning"
+        )
         return()
       }
       err <- range_error()
@@ -611,15 +732,37 @@ grades_approvals_qualifiers <- function(id) {
         showNotification("Start or end datetime is invalid.", type = "error")
         return()
       }
-      table_name <- switch(kind, grade = "continuous.grades", approval = "continuous.approvals", qualifier = "continuous.qualifiers")
-      id_col <- switch(kind, grade = "grade_id", approval = "approval_id", qualifier = "qualifier_id")
-      type_col <- switch(kind, grade = "grade_type_id", approval = "approval_type_id", qualifier = "qualifier_type_id")
+      table_name <- switch(
+        kind,
+        grade = "continuous.grades",
+        approval = "continuous.approvals",
+        qualifier = "continuous.qualifiers"
+      )
+      id_col <- switch(
+        kind,
+        grade = "grade_id",
+        approval = "approval_id",
+        qualifier = "qualifier_id"
+      )
+      type_col <- switch(
+        kind,
+        grade = "grade_type_id",
+        approval = "approval_type_id",
+        qualifier = "qualifier_type_id"
+      )
       if (is.null(record)) {
         if (!isTRUE(module_data$privileges[[paste0(kind, "_insert")]])) {
-          showNotification("You do not have permission to add records to this table.", type = "error")
+          showNotification(
+            "You do not have permission to add records to this table.",
+            type = "error"
+          )
           return()
         }
-        query <- sprintf("INSERT INTO %s (timeseries_id, %s, start_dt, end_dt) VALUES ($1, $2, $3, $4)", table_name, type_col)
+        query <- sprintf(
+          "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt) VALUES ($1, $2, $3, $4)",
+          table_name,
+          type_col
+        )
         res <- tryCatch(
           DBI::dbExecute(
             con,
@@ -640,10 +783,18 @@ grades_approvals_qualifiers <- function(id) {
         }
       } else {
         if (!isTRUE(module_data$privileges[[paste0(kind, "_update")]])) {
-          showNotification("You do not have permission to update this record.", type = "error")
+          showNotification(
+            "You do not have permission to update this record.",
+            type = "error"
+          )
           return()
         }
-        query <- sprintf("UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3 WHERE %s = $4", table_name, type_col, id_col)
+        query <- sprintf(
+          "UPDATE %s SET %s = $1, start_dt = $2, end_dt = $3 WHERE %s = $4",
+          table_name,
+          type_col,
+          id_col
+        )
         res <- tryCatch(
           DBI::dbExecute(
             con,
@@ -674,11 +825,24 @@ grades_approvals_qualifiers <- function(id) {
       }
       kind <- active_kind()
       if (!isTRUE(module_data$privileges[[paste0(kind, "_delete")]])) {
-        showNotification("You do not have permission to delete this record.", type = "error")
+        showNotification(
+          "You do not have permission to delete this record.",
+          type = "error"
+        )
         return()
       }
-      table_name <- switch(kind, grade = "continuous.grades", approval = "continuous.approvals", qualifier = "continuous.qualifiers")
-      id_col <- switch(kind, grade = "grade_id", approval = "approval_id", qualifier = "qualifier_id")
+      table_name <- switch(
+        kind,
+        grade = "continuous.grades",
+        approval = "continuous.approvals",
+        qualifier = "continuous.qualifiers"
+      )
+      id_col <- switch(
+        kind,
+        grade = "grade_id",
+        approval = "approval_id",
+        qualifier = "qualifier_id"
+      )
       query <- sprintf("DELETE FROM %s WHERE %s = $1", table_name, id_col)
       res <- tryCatch(
         DBI::dbExecute(con, query, params = list(record$id)),
@@ -696,41 +860,56 @@ grades_approvals_qualifiers <- function(id) {
       }
     })
 
-    observeEvent(plotly::event_data("plotly_selected", source = ns("ts_plot")), {
-      req(selected_ts())
-      selection <- plotly::event_data("plotly_selected", source = ns("ts_plot"))
-      if (is.null(selection) || !nrow(selection)) {
-        return()
-      }
-      times <- vapply(selection$x, to_posix_from_event, as.POSIXct(NA))
-      times <- times[!is.na(times)]
-      if (!length(times)) {
-        return()
-      }
-      times <- sort(times)
-      updateTextInput(session, "start_dt", value = format_datetime(times[1]))
-      updateTextInput(session, "end_dt", value = format_datetime(times[length(times)]))
-      next_edge("start")
-    }, ignoreNULL = TRUE)
-
-    observeEvent(plotly::event_data("plotly_click", source = ns("ts_plot")), {
-      req(selected_ts())
-      click <- plotly::event_data("plotly_click", source = ns("ts_plot"))
-      if (is.null(click) || is.null(click$x)) {
-        return()
-      }
-      dt <- to_posix_from_event(click$x)
-      if (is.na(dt)) {
-        return()
-      }
-      if (identical(next_edge(), "start")) {
-        updateTextInput(session, "start_dt", value = format_datetime(dt))
-        next_edge("end")
-      } else {
-        updateTextInput(session, "end_dt", value = format_datetime(dt))
+    observeEvent(
+      plotly::event_data("plotly_selected", source = ns("ts_plot")),
+      {
+        req(selected_ts())
+        selection <- plotly::event_data(
+          "plotly_selected",
+          source = ns("ts_plot")
+        )
+        if (is.null(selection) || !nrow(selection)) {
+          return()
+        }
+        times <- vapply(selection$x, to_posix_from_event, as.POSIXct(NA))
+        times <- times[!is.na(times)]
+        if (!length(times)) {
+          return()
+        }
+        times <- sort(times)
+        updateTextInput(session, "start_dt", value = format_datetime(times[1]))
+        updateTextInput(
+          session,
+          "end_dt",
+          value = format_datetime(times[length(times)])
+        )
         next_edge("start")
-      }
-    }, ignoreNULL = TRUE)
+      },
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      plotly::event_data("plotly_click", source = ns("ts_plot")),
+      {
+        req(selected_ts())
+        click <- plotly::event_data("plotly_click", source = ns("ts_plot"))
+        if (is.null(click) || is.null(click$x)) {
+          return()
+        }
+        dt <- to_posix_from_event(click$x)
+        if (is.na(dt)) {
+          return()
+        }
+        if (identical(next_edge(), "start")) {
+          updateTextInput(session, "start_dt", value = format_datetime(dt))
+          next_edge("end")
+        } else {
+          updateTextInput(session, "end_dt", value = format_datetime(dt))
+          next_edge("start")
+        }
+      },
+      ignoreNULL = TRUE
+    )
 
     output$ts_plot <- plotly::renderPlotly({
       req(selected_ts())
@@ -741,7 +920,11 @@ grades_approvals_qualifiers <- function(id) {
       assignments_list <- assignments()
       if (!nrow(df)) {
         return(
-          plotly::plotly_empty(type = "scatter", mode = "lines", source = plot_source) %>%
+          plotly::plotly_empty(
+            type = "scatter",
+            mode = "lines",
+            source = plot_source
+          ) %>%
             plotly::layout(
               title = NULL,
               xaxis = list(title = "Datetime"),
@@ -788,9 +971,11 @@ grades_approvals_qualifiers <- function(id) {
           }
           fill_col <- tryCatch(
             grDevices::adjustcolor(row$color_code, alpha.f = opacity),
-            error = function(e) grDevices::adjustcolor("#cccccc", alpha.f = opacity)
+            error = function(e) {
+              grDevices::adjustcolor("#cccccc", alpha.f = opacity)
+            }
           )
-          shapes[[length(shapes) + 1]] <<- list(
+          shapes[[length(shapes) + 1]] <- list(
             type = "rect",
             x0 = row$start_dt,
             x1 = row$end_dt,
