@@ -848,9 +848,133 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
       },
       content = function(file) {
-        openxlsx::write.xlsx(
-          long_ts_plot$result()$data,
-          file
+        out <- long_ts_plot$result()$data
+
+        wb <- openxlsx::createWorkbook()
+
+        # Create metadata
+        timeseries <- plot_request()$timeseries_id
+        loc_id <- moduleData$timeseries[
+          timeseries_id == timeseries,
+          location_id
+        ]
+        location <- moduleData$locs[
+          location_id == loc_id,
+          get(tr("generic_name_col", language$language))
+        ]
+        sloc_id <- moduleData$timeseries[
+          timeseries_id == timeseries,
+          sub_location_id
+        ]
+        if (!is.na(sloc_id)) {
+          sub_location <- moduleData$sub_locs[
+            sub_location_id == sloc_id,
+            get(tr("sub_location_col", language$language))
+          ]
+        } else {
+          sub_location <- NA
+        }
+        pid <- moduleData$timeseries[
+          timeseries_id == timeseries,
+          parameter_id
+        ]
+        parameter <- moduleData$params[
+          parameter_id == pid,
+          get(tr("param_name_col", language$language))
+        ]
+        units <- moduleData$params[
+          parameter_id == pid,
+          get("unit")
+        ]
+        date_range_start <- format(
+          min(out$trace_data$datetime, na.rm = TRUE),
+          "%Y-%m-%d %H:%M"
+        )
+        date_range_end <- format(
+          max(out$trace_data$datetime),
+          "%Y-%m-%d %H:%M",
+          na.rm = TRUE
+        )
+        hist_range_start <- as.character(moduleData$timeseries[
+          timeseries_id == timeseries,
+          start_datetime
+        ])
+
+        hist_range_end <- as.character(moduleData$timeseries[
+          timeseries_id == timeseries,
+          end_datetime
+        ])
+        metadata <- data.frame(
+          "Attribute" = c(
+            "Generated on:",
+            "Location:",
+            "Sub-location:",
+            "Parameter:",
+            "Units:",
+            "Start of exported data:",
+            "End of exported data:",
+            "Start historic record for stats calculations:",
+            "End historic record for stats calculations:"
+          ),
+          "Value" = c(
+            paste0(
+              substr(.POSIXct(Sys.time(), tz = "UTC"), 1, 16),
+              " UTC"
+            ),
+            location,
+            sub_location,
+            parameter,
+            units,
+            date_range_start,
+            date_range_end,
+            hist_range_start,
+            hist_range_end
+          ),
+          stringsAsFactors = FALSE,
+          check.names = FALSE
+        )
+
+        # Add metadata sheet
+        openxlsx::addWorksheet(wb, sheetName = "metadata")
+        # Write metadata to sheet
+        openxlsx::writeData(
+          wb,
+          sheet = "metadata",
+          x = metadata,
+          colNames = TRUE
+        )
+        trace_data <- out$trace_data
+        names(trace_data)[1:2] <- c(
+          "datetime_UTC",
+          paste0(parameter, "_", units)
+        )
+        openxlsx::addWorksheet(wb, sheetName = "trace_data")
+        openxlsx::writeData(
+          wb,
+          sheet = "trace_data",
+          x = trace_data,
+          colNames = TRUE
+        )
+        range_data <- out$range_data
+        names(range_data)[1:5] <- c(
+          "datetime_UTC",
+          paste0("historic_min_", units),
+          paste0("historic_max_", units),
+          paste0("historic_Q75_", units),
+          paste0("historic_Q25_", units)
+        )
+        openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
+        openxlsx::writeData(
+          wb,
+          sheet = "historic_range_data",
+          x = range_data,
+          colNames = TRUE
+        )
+
+        openxlsx::saveWorkbook(
+          wb,
+          file,
+          overwrite = TRUE
         )
       } # End content
     ) # End downloadHandler

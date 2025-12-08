@@ -8,7 +8,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
     fetch_fun = function() {
       locs <- dbGetQueryDT(
         con,
-        "SELECT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc LEFT JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
       )
       sub_locs <- dbGetQueryDT(
         con,
