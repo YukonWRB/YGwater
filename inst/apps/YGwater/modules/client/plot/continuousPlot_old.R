@@ -3972,7 +3972,8 @@ contPlotOld <- function(id, language, windowDims, inputs) {
                 gridx = gridx,
                 gridy = gridy,
                 con = con,
-                data = TRUE
+                data = TRUE,
+                tzone = "MST"
               )
 
               return(plot)

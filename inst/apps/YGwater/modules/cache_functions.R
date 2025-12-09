@@ -8,7 +8,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
     fetch_fun = function() {
       locs <- dbGetQueryDT(
         con,
-        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc LEFT JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
       )
       sub_locs <- dbGetQueryDT(
         con,
@@ -36,7 +36,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       )
       timeseries <- dbGetQueryDT(
         con,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.location, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
       )
 
       rates <- data.frame(
@@ -172,7 +172,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
     fetch_fun = function() {
       locs <- DBI::dbGetQuery(
         con,
-        "SELECT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
       )
       sub_locs <- DBI::dbGetQuery(
         con,

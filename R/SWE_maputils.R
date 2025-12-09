@@ -1161,13 +1161,7 @@ download_discrete_ts <- function(
 load_snowcourse_factors <- function(
     metadata_discrete
 ) {
-    snowcourse_factors <- utils::read.csv(
-        system.file(
-            "snow_survey/snowcourse_factors.csv",
-            package = "YGwater"
-        ),
-        stringsAsFactors = FALSE
-    )
+    snowcourse_factors <- data$snowcourse_factors
 
     # Remove duplicate Hyland River value
     snowcourse_factors <- snowcourse_factors[

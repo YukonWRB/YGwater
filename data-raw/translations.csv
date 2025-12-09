@@ -148,6 +148,8 @@ plot_show_unusable,,Show unusable data?,Montrer les données inutilisables?
 plot_show_grades,,Show grades?,Montrer les cotes?
 plot_show_approvals,,Show approval levels?,Montrer les niveaux d'approbations?
 plot_show_qualifiers,,Show qualifiers?,Montrer les qualificatifs?
+plot_last_30,,Last 30 days,Derniers 30 jours
+plot_all_record,,Entire record,P�riode enti�re
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
 cont_table_heading,,Available timeseries,Séries chronologiques disponibles
 cont_table_plot_heading,,Plot,Graphique

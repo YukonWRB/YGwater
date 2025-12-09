@@ -273,9 +273,6 @@ contPlot <- function(id, language, windowDims, inputs) {
       ts <- merge(ts, projects, by = "location_id", all.x = TRUE)
 
       ts[, `:=`(
-        record_rate = as.factor(as.character(lubridate::seconds_to_period(
-          record_rate
-        ))),
         start_date = as.Date(start_datetime),
         end_date = as.Date(end_datetime),
         parameter = as.factor(parameter),
@@ -293,7 +290,6 @@ contPlot <- function(id, language, windowDims, inputs) {
         parameter,
         media,
         aggregation,
-        record_rate,
         z,
         networks,
         projects,
@@ -318,7 +314,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         ts[, (empty_cols) := NULL]
       }
 
-      data.table::setorder(ts, location, parameter, record_rate)
+      data.table::setorder(ts, location, parameter)
       ts
     })
 
@@ -377,7 +373,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       tagList(
         bslib::accordion(
           id = ns("accordion_panels"),
-          open = c(ns("table_panel")),
+          open = c(ns("table_panel"), ns("plot_options_panel")),
           bslib::accordion_panel(
             title = tr("filters", language$language),
             value = ns("filters_panel"),
@@ -419,18 +415,17 @@ contPlot <- function(id, language, windowDims, inputs) {
                 )
               )
             )
-          ),
+          ), # End filters_panel
           bslib::accordion_panel(
             title = tr("cont_table_heading", language$language),
             value = ns("table_panel"),
             div(
               DT::dataTableOutput(ns("timeseries_table"))
-            )
-          )
-        ),
-        h4(tr("cont_table_plot_heading", language$language)),
-        bslib::card(
-          bslib::card_body(
+            ) # End div
+          ), # End table_panel
+          bslib::accordion_panel(
+            title = tr("cont_table_plot_heading", language$language),
+            value = ns("plot_options_panel"),
             fluidRow(
               column(
                 width = 6,
@@ -444,25 +439,14 @@ contPlot <- function(id, language, windowDims, inputs) {
                   language = language$abbrev,
                   separator = tr("date_sep", language$language)
                 ),
-                # shinyWidgets::airDatepickerInput(
-                #   ns("date_range"),
-                #   label = tr("date_range_lab", language$language),
-                #   value = c(
-                #     Sys.time() - 365 * 24 * 3600,
-                #     Sys.time()
-                #   ),
-                #   range = TRUE,
-                #   multiple = FALSE,
-                #   timepicker = TRUE,
-                #   maxDate = Sys.Date() + 1,
-                #   startView = Sys.Date(),
-                #   update_on = "change",
-                #   timepickerOpts = shinyWidgets::timepickerOptions(
-                #     minutesStep = 15,
-                #     timeFormat = "HH:mm"
-                #   ),
-                #   width = "100%"
-                # ),
+                actionButton(
+                  ns("last_30"),
+                  tr("plot_last_30", language$language)
+                ),
+                actionButton(
+                  ns("entire_record"),
+                  tr("plot_all_record", language$language)
+                )
               ),
               column(
                 width = 6,
@@ -498,11 +482,11 @@ contPlot <- function(id, language, windowDims, inputs) {
                 class = "btn btn-primary"
               )
             )
-          )
-        ),
+          ) # End plot_options_panel
+        ), # End accordion
         plotly::plotlyOutput(ns("plot"), height = "600px", inline = TRUE),
         uiOutput(ns("full_screen_ui"))
-      )
+      ) # End tagList
     }) # End renderUI
 
     observeEvent(
@@ -562,8 +546,6 @@ contPlot <- function(id, language, windowDims, inputs) {
     output$timeseries_table <- DT::renderDataTable({
       ts <- timeseries_table()
 
-      out <<- ts
-
       column_labels <- c(
         timeseries_id = "timeseries_id",
         location = tr("cont_table_col_location", language$language),
@@ -571,10 +553,9 @@ contPlot <- function(id, language, windowDims, inputs) {
         parameter = tr("cont_table_col_parameter", language$language),
         media = tr("cont_table_col_media", language$language),
         aggregation = tr("cont_table_col_aggregation", language$language),
-        record_rate = tr("cont_table_col_record_rate", language$language),
         z = tr("z", language$language),
-        networks = tr("networks", language$language),
-        projects = tr("projects", language$language),
+        networks = tr("network", language$language),
+        projects = tr("project", language$language),
         start_date = tr("cont_table_col_start_date", language$language),
         end_date = tr("cont_table_col_end_date", language$language)
       )
@@ -678,6 +659,47 @@ contPlot <- function(id, language, windowDims, inputs) {
       ignoreInit = TRUE
     )
 
+    # Observe buttons to update date range
+    observeEvent(input$last_30, {
+      ts <- timeseries_table()
+      selected_id <- selected_timeseries_id()
+      if (is.null(selected_id)) {
+        return()
+      }
+      selected_row <- which(ts$timeseries_id == selected_id)
+      if (length(selected_row) == 0) {
+        return()
+      }
+      end_date <- ts$end_date[selected_row]
+      start_date <- end_date - 30
+      updateDateRangeInput(
+        session,
+        "date_range",
+        start = start_date,
+        end = end_date
+      )
+    })
+
+    observeEvent(input$entire_record, {
+      ts <- timeseries_table()
+      selected_id <- selected_timeseries_id()
+      if (is.null(selected_id)) {
+        return()
+      }
+      selected_row <- which(ts$timeseries_id == selected_id)
+      if (length(selected_row) == 0) {
+        return()
+      }
+      start_date <- ts$start_date[selected_row]
+      end_date <- ts$end_date[selected_row]
+      updateDateRangeInput(
+        session,
+        "date_range",
+        start = start_date,
+        end = end_date
+      )
+    })
+
     plot_request <- reactive({
       ts <- timeseries_table()
       validate(need(nrow(ts) > 0, tr("error", language$language)))
@@ -737,7 +759,8 @@ contPlot <- function(id, language, windowDims, inputs) {
             webgl = session$userData$use_webgl,
             con = con,
             data = TRUE,
-            slider = FALSE
+            slider = FALSE,
+            tzone = "MST"
           )
           return(plot)
         },
@@ -752,6 +775,9 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
+      # Ensure a row is selected
+      print(plot_request())
+
       if (plot_created()) {
         shinyjs::hide("full_screen_ui")
       }
