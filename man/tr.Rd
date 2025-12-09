@@ -4,14 +4,17 @@
 \alias{tr}
 \title{Find the translation for a given placeholder}
 \usage{
-tr(key, lang, translations)
+tr(key, lang, translations = data$translations)
 }
 \arguments{
 \item{key}{A string representing the translation key. Must be a name in the 'id' column of the translations data.frame, else an error will be generated.}
 
 \item{lang}{A string representing the target language code. Must be a name in the translations list, else an error will be generated.}
 
-\item{translations}{A named list (with names representing the 'lang') of named character vectors (with names as the 'key') containing translations for different languages.}
+\item{translations}{A named list (with names representing the 'lang') of named character vectors (with names as the 'key') containing translations for different languages. Defaults to \code{data$translations}, package internal data but can be overridden with a custom translations list.}
+}
+\value{
+A string representing the translated text for the specified key and language.
 }
 \description{
 This function retrieves the translation for a specified key and language
