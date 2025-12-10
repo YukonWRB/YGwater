@@ -394,3 +394,28 @@ pw_change_success,modal text,Password updated successfully.,Mot de passe mis à 
 pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
+snowbull_relative_median,,Percent of median (%), Pourcentage de la médiane historique (%)
+snowbull_swe,,Snow water equivalent (mm),Équivalent en eau de neige (mm)
+snowbull_percentile,,Percentile (%),Percentile (%)
+snowbull_values,,Values, Valeurs
+snowbull_details,, Map details, Détails de la carte
+app_version,, Current application version:,Version actuelle de l'application :
+snowbull_gen_on,, Map generated on, Carte générée le
+snowbull_disclaimer,, <i>Disclaimer:</i> Basin average estimates may differ slightly from archived bulletins., <i>Avertissement :</i> Les estimations moyennes par bassin peuvent différer légèrement des bulletins archivés.
+snowbull_map_credits,, Basemap:</b> Esri World Imagery, Crédits de la carte de base :</b> Imagerie mondiale Esri
+snowbull_data_credits,, Data source:</b> AquaCache database, Source des données :</b> Base de données AquaCache
+snowbull_date,, Snow Bulletin Date, Date du bulletin de neige
+snowbull_historical_period,, Historical period for statistics, Période historique pour les statistiques
+snowbull_no_snow,, No snow (no record), Pas de neige (aucun enregistrement historique)
+snowbull_some_snow,, "Snow present (no record)", "Neige présente (aucun enregistrement historique)"
+snowbull_percentile_suffix,, th, ème
+snowbull_snow_survey,, Snow survey, Relevé nivométrique
+snowbull_snow_pillow,, Snow pillow, Coussin à neige
+snowbull_swe_basin,, Basin average SWE, EEN moyen du bassin
+snowbull_communities,, Communities, Communautés
+snowbull_roads,, Roads, Routes
+snowbull_symbols,, Symbols, Symboles
+snowbull_generate_plot,, Generate plot, Générer le graphique
+snowbull_mean_elevation,, Mean elevation, Altitude moyenne
+snowbull_elevation,, Elevation, Altitude
+snowbull_coordinates,, Coordinates, Coordonnées
