@@ -299,7 +299,7 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
-    ui_loaded$contTablePlot <- FALSE
+    ui_loaded$contPlotOld <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -481,8 +481,8 @@ app_server <- function(input, output, session) {
     output$plotsNavContTitle <- renderUI({
       tr("plots_continuous", languageSelection$language)
     })
-    output$plotsNavContTableTitle <- renderUI({
-      tr("plots_continuous_table", languageSelection$language)
+    output$plotsNavContOldTitle <- renderUI({
+      tr("plots_continuous_old", languageSelection$language)
     })
 
     output$reportsNavMenuTitle <- renderUI({
@@ -1139,6 +1139,7 @@ $(document).keyup(function(event) {
           "home",
           "discPlot",
           "contPlot",
+          "contPlotOld",
           "mix",
           "map",
           "FOD",
@@ -1246,14 +1247,15 @@ $(document).keyup(function(event) {
         }
       }
     }
-    if (input$navbar == "contTablePlot") {
-      if (!ui_loaded$contTablePlot) {
-        output$plotContinuousTable_ui <- renderUI(contTablePlotUI(
-          "contTablePlot"
+    if (input$navbar == "contPlotOld") {
+      if (!ui_loaded$contPlotOld) {
+        output$plotContinuousOld_ui <- renderUI(contPlotOldUI(
+          "contPlotOld"
         ))
-        ui_loaded$contTablePlot <- TRUE
-        contTablePlot(
-          "contTablePlot",
+        ui_loaded$contPlotOld <- TRUE
+        contPlotOld(
+          "contPlotOld",
+          windowDims,
           language = languageSelection,
           inputs = moduleOutputs$mapLocs
         )
@@ -1290,9 +1292,6 @@ $(document).keyup(function(event) {
           }
           if (target == "contPlot") {
             ui_loaded$contPlot <- FALSE
-          }
-          if (target == "contTablePlot") {
-            ui_loaded$contTablePlot <- FALSE
           }
           nav_select(session = session, "navbar", selected = target) # Change tabs
           moduleOutputs$mapLocs$change_tab <- NULL

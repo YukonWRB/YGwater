@@ -1,6 +1,9 @@
 # Check and load python environment for tests on plotly objects
 
 if (!isTRUE(getOption("YGwater_pythonSetupDone", FALSE))) {
+  print(
+    "Setting up python environment for tests on plotly objects. Please be patient, this takes up to a minute. This is done only once per R session."
+  )
   warning(
     "tests on plotly objects use an outdated version of the 'kaleido' python package. You should try to reinstall kaleido periodically. See the 'setup.R' file in tests where this message originates."
   )

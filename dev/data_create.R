@@ -12,10 +12,44 @@ spatial_stns <- read.csv("data-raw/spatial_stns.csv")
 peaks <- read.csv("data-raw/peaks.csv")
 flow_level_flood <- read.csv("data-raw/flow_level_flood.csv")
 snowcourse_factors <- read.csv("data-raw/snowcourse_factors.csv")
-eq_std_calc_CCME_Mn <- read.csv("data-raw/eq_std_calc_CCME_Mn.csv", check.names = FALSE)
-eq_std_calc_CCME_NH4 <- read.csv("data-raw/eq_std_calc_CCME_NH4.csv", check.names = FALSE)
+eq_std_calc_CCME_Mn <- read.csv(
+  "data-raw/eq_std_calc_CCME_Mn.csv",
+  check.names = FALSE
+)
+eq_std_calc_CCME_NH4 <- read.csv(
+  "data-raw/eq_std_calc_CCME_NH4.csv",
+  check.names = FALSE
+)
 
 
-data <- list(level_returns_max = level_returns_max, flow_returns_max = flow_returns_max, spatial_stns = spatial_stns, peaks = peaks, flow_level_flood = flow_level_flood, snowcourse_factors = snowcourse_factors, eq_std_calc_CCME_Mn = eq_std_calc_CCME_Mn, eq_std_calc_CCME_NH4 = eq_std_calc_CCME_NH4)
+# Creating translations from csv
+translations_df <- data.table::fread(
+  system.file(
+    "data-raw/translations.csv",
+    package = "YGwater"
+  ),
+  encoding = "UTF-8"
+)
+# Build a list from the data.frame
+translations <- lapply(
+  setdiff(names(translations_df[, -2]), "id"),
+  function(lang) {
+    # Removes the second, "description" column, builds lists for each language
+    setNames(translations_df[[lang]], translations_df$id)
+  }
+)
+names(translations) <- setdiff(names(translations_df)[-2], "id")
+
+data <- list(
+  level_returns_max = level_returns_max,
+  flow_returns_max = flow_returns_max,
+  spatial_stns = spatial_stns,
+  peaks = peaks,
+  flow_level_flood = flow_level_flood,
+  snowcourse_factors = snowcourse_factors,
+  eq_std_calc_CCME_Mn = eq_std_calc_CCME_Mn,
+  eq_std_calc_CCME_NH4 = eq_std_calc_CCME_NH4,
+  translations = translations
+)
 
 usethis::use_data(data, internal = TRUE, overwrite = TRUE)

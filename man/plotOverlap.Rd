@@ -5,9 +5,10 @@
 \title{Plot of overlapping years or portions thereof}
 \usage{
 plotOverlap(
-  location,
+  timeseries_id = NULL,
+  location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -39,6 +40,8 @@ plotOverlap(
 )
 }
 \arguments{
+\item{timeseries_id}{The timeseries ID to plot, if known (else leave NULL).}
+
 \item{location}{The location for which you want a plot.}
 
 \item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}

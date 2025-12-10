@@ -239,7 +239,7 @@ test_that("plotTimeseries works when given only a timeseries_id", {
   )[1, 1]
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id, start_datetime, end_datetime FROM timeseries WHERE parameter_id = $1 AND start_datetime <= '2022-01-01' AND end_datetime >= '2023-01-01' LIMIT 1;",
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location = '09EA004';",
     params = list(wl)
   )[1, 1]
   plot <- plotTimeseries(
@@ -255,12 +255,25 @@ test_that("plotTimeseries works when given only a timeseries_id", {
   expect_named(plot$data, c("trace_data", "range_data"))
   expect_named(plot$data$trace_data, c("datetime", "value", "imputed"))
   expect_named(plot$data$range_data, c("datetime", "min", "max", "q75", "q25"))
+
+  # Skip snapshot test on CI
+  skip_on_ci()
+
+  dir <- file.path(tempdir(), "plotly_tests")
+  unlink(dir, recursive = TRUE, force = TRUE)
+  dir.create(dir, recursive = TRUE)
+  path <- file.path(dir, "test8.png")
+  path <- pathPrep(path)
+  on.exit(unlink(path), add = TRUE)
+
+  plotly::save_image(plot$plot, file = path, width = 500, height = 500)
+
+  expect_snapshot_file(path)
 })
 
 # Test that plotTimeseries plots raw and uncorrected data
 test_that("plotTimeseries plots raw and corrected data", {
   skip_on_cran()
-  skip_on_ci()
 
   # Find an appropriate timeseries_id
   wl <- DBI::dbGetQuery(
@@ -269,7 +282,7 @@ test_that("plotTimeseries plots raw and corrected data", {
   )[1, 1]
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id, start_datetime, end_datetime FROM timeseries WHERE parameter_id = $1 AND start_datetime <= '2022-01-01' AND end_datetime >= '2023-01-01' LIMIT 1;",
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location = '09EA004';",
     params = list(wl)
   )[1, 1]
   plot <- plotTimeseries(
@@ -290,10 +303,13 @@ test_that("plotTimeseries plots raw and corrected data", {
   )
   expect_named(plot$data$range_data, c("datetime", "min", "max", "q75", "q25"))
 
+  # Skip snapshot test on CI
+  skip_on_ci()
+
   dir <- file.path(tempdir(), "plotly_tests")
   unlink(dir, recursive = TRUE, force = TRUE)
   dir.create(dir, recursive = TRUE)
-  path <- file.path(dir, "test8.png")
+  path <- file.path(dir, "test9.png")
   path <- pathPrep(path)
 
   on.exit(unlink(path), add = TRUE)

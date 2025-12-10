@@ -11,7 +11,7 @@ maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
 plots,plotsNavMenuTitle,Plots ,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
 plots_continuous,plotsNavContTitle,Continuous,Continues
-plots_continuous_table,plotsNavContTableTitle,Continuous (table),Continues (tableau)
+plots_continuous_old,plotsNavContOldTitle,Continuous (old version),Continues (ancienne version)
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
@@ -148,6 +148,8 @@ plot_show_unusable,,Show unusable data?,Montrer les données inutilisables?
 plot_show_grades,,Show grades?,Montrer les cotes?
 plot_show_approvals,,Show approval levels?,Montrer les niveaux d'approbations?
 plot_show_qualifiers,,Show qualifiers?,Montrer les qualificatifs?
+plot_last_30,,Last 30 days,Derniers 30 jours
+plot_all_record,,Entire record,P�riode enti�re
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
 cont_table_heading,,Available timeseries,Séries chronologiques disponibles
 cont_table_plot_heading,,Plot,Graphique
@@ -322,11 +324,11 @@ select_params,,Select parameters,Sélectionnez des paramètres
 project,direct translation,Project,Projet
 projects,direct translation,Projects,Projets
 project(s),direct translation,Project(s),Projet(s)
-select_project,,Select project(s),S�lectionez un/des projets
+select_project,,Select project(s),Sélectionez un/des projets
 network,direct translation,Network,Réseau
 networks,direct translation,Networks,Réseaux
 network(s),direct translation,Network(s),Réseau(x)
-select_network,,Select network(s),S�lectionez un/des r�seaux
+select_network,,Select network(s),Sélectionez un/des réseaux
 units,direct translation,Units,Unités
 period,direct translation,Period,Période
 category,direct translation,Category,Catégorie

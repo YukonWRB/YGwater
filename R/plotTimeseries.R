@@ -48,7 +48,7 @@ plotTimeseries <- function(
   timeseries_id = NULL,
   location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -138,6 +138,14 @@ plotTimeseries <- function(
 
   if (tzone == "auto") {
     tzone <- Sys.timezone()
+  }
+
+  if (!is.null(parameter)) {
+    if (inherits(parameter, "character")) {
+      parameter <- tolower(parameter)
+    }
+  } else if (is.null(timeseries_id)) {
+    stop("Parameter is required when timeseries_id is NULL.")
   }
 
   if (!is.null(invert)) {
@@ -836,7 +844,10 @@ plotTimeseries <- function(
     attr(range_data$datetime, "tzone") <- tzone
 
     # Check if the range data extends to the end of trace data. Because range is taken from calculated daily means, it's possible that there's no data yet for the current day. In this case we'll just use the values from the last available range_data$datetime, incrementing it by a day
-    if (max(range_data$datetime) < max(trace_data$datetime)) {
+    if (
+      max(range_data$datetime, na.rm = TRUE) <
+        max(trace_data$datetime, na.rm = TRUE)
+    ) {
       last <- range_data[nrow(range_data), ]
       range_data <- rbind(
         range_data,
@@ -849,6 +860,21 @@ plotTimeseries <- function(
         )
       )
     }
+
+    # Find gaps in range data and add NAs
+    # full_range <- data.table::data.table(
+    #   datetime = seq.POSIXt(
+    #     from = min(range_data$datetime),
+    #     to = max(range_data$datetime),
+    #     by = "day"
+    #   )
+    # )
+    # range_data <- merge(
+    #   full_range,
+    #   range_data,
+    #   by = "datetime",
+    #   all.x = TRUE
+    # )
   }
 
   if (!unusable) {
@@ -1038,7 +1064,7 @@ plotTimeseries <- function(
   if (historic_range) {
     plot <- plot %>%
       plotly::add_ribbons(
-        data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ],
+        data = range_data,
         x = ~datetime,
         ymin = ~q25,
         ymax = ~q75,
@@ -1058,7 +1084,7 @@ plotTimeseries <- function(
         )
       ) %>%
       plotly::add_ribbons(
-        data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ],
+        data = range_data,
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,

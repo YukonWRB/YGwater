@@ -1,3 +1,37 @@
+#' Find the translation for a given placeholder
+#'
+#' @description
+#' This function retrieves the translation for a specified key and language
+#' from a provided translations list. Allows for referencing only the key in
+#' function code, with the language specified at runtime.
+#'
+#' @param key A string representing the translation key. Must be a name in the 'id' column of the translations data.frame, else an error will be generated.
+#' @param lang A string representing the target language code. Must be a name in the translations list, else an error will be generated.
+#' @param translations A named list (with names representing the 'lang') of named character vectors (with names as the 'key') containing translations for different languages. Defaults to `data$translations`, package internal data but can be overridden with a custom translations list.
+#' @return A string representing the translated text for the specified key and language.
+#' @export
+
+tr <- function(key, lang, translations = data$translations) {
+  # Ensure that 'lang' is a name in the translations list
+  if (!lang %in% names(translations)) {
+    stop(
+      "Language ",
+      lang,
+      "not found in translations data."
+    )
+  }
+
+  # Ensure that 'key' is a value in the 'id' column of the translations data.frame
+  if (!key %in% names(translations[[lang]])) {
+    stop(
+      "Translation key ",
+      key,
+      "not found in translations data."
+    )
+  }
+  return(translations[[lang]][[key]]) # list 'lang', item 'key'
+}
+
 ## Ask for something and save the result
 #' @noRd
 ask <- function(...) {

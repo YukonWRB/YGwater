@@ -33,6 +33,11 @@ YGwater_globals <- function(
   g_drive <- FALSE
 
   if (!public) {
+    # confirm G drive access for FOD reports
+    g_drive <- dir.exists(
+      "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
+    )
+
     # 'Admin' side modules #####
     # database admin modules
     source(system.file(
@@ -157,11 +162,6 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
 
-    # confirm G drive access for FOD reports
-    g_drive <- dir.exists(
-      "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
-    )
-
     if (g_drive) {
       # FOD module (only visible internally)
       source(system.file(
@@ -169,6 +169,11 @@ YGwater_globals <- function(
         package = "YGwater"
       ))
     }
+
+    # Set up a temporary directory for storing R documentation files during app runtime
+    .rd_dir <<- file.path(tempdir(), "rdocs")
+    dir.create(.rd_dir, showWarnings = FALSE, recursive = TRUE)
+    shiny::addResourcePath("rdocs", .rd_dir)
 
     # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
     options(shiny.maxRequestSize = 1024 * 1024^2)
@@ -184,30 +189,35 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/plot/continuousPlot.R",
     package = "YGwater"
   ))
-  source(system.file(
-    "apps/YGwater/modules/client/plot/continuousTablePlot.R",
-    package = "YGwater"
-  ))
 
-  # Report modules
-  if (g_drive) {
+  # Non-public client-side modules
+  if (!public) {
+    # Old plot modules (kept for backward compatibility)
     source(system.file(
-      "apps/YGwater/modules/client/reports/WQReport.R",
+      "apps/YGwater/modules/client/plot/continuousPlot_old.R",
+      package = "YGwater"
+    ))
+
+    # Report modules
+    if (g_drive) {
+      source(system.file(
+        "apps/YGwater/modules/client/reports/WQReport.R",
+        package = "YGwater"
+      ))
+      source(system.file(
+        "apps/YGwater/modules/client/reports/snowBulletin.R",
+        package = "YGwater"
+      ))
+    }
+    source(system.file(
+      "apps/YGwater/modules/client/reports/snowInfo.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/client/reports/snowBulletin.R",
+      "apps/YGwater/modules/client/reports/waterInfo.R",
       package = "YGwater"
     ))
   }
-  source(system.file(
-    "apps/YGwater/modules/client/reports/snowInfo.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/reports/waterInfo.R",
-    package = "YGwater"
-  ))
 
   # Map modules
   source(system.file(
@@ -261,84 +271,83 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
-  # Load translations infrastructure to the global environment
+  # # Load translations infrastructure to the global environment
 
-  translations <- data.table::fread(
-    system.file(
-      "apps/YGwater/translations.csv",
-      package = "YGwater"
-    ),
-    encoding = "UTF-8"
-  )
-  # Build a list from the data.frame
-  translation_cache <<- lapply(
-    setdiff(names(translations[, -2]), "id"),
-    function(lang) {
-      # Removes the second, "description" column, builds lists for each language
-      setNames(translations[[lang]], translations$id)
-    }
-  )
-  names(translation_cache) <<- setdiff(names(translations)[-2], "id")
+  # translations <- data.table::fread(
+  #   system.file(
+  #     "apps/YGwater/translations.csv",
+  #     package = "YGwater"
+  #   ),
+  #   encoding = "UTF-8"
+  # )
+  # # Build a list from the data.frame
+  # translation_cache <<- lapply(
+  #   setdiff(names(translations[, -2]), "id"),
+  #   function(lang) {
+  #     # Removes the second, "description" column, builds lists for each language
+  #     setNames(translations[[lang]], translations$id)
+  #   }
+  # )
+  # names(translation_cache) <<- setdiff(names(translations)[-2], "id")
 
-  # Make a helper function, send to global environment
-  tr <<- function(key, lang) {
-    # Ensure that 'key' is a value in the 'id' column of the translations data.frame
-    if (!key %in% translations$id) {
-      stop(paste("Translation key", key, "not found in translations data."))
-    }
-    translation_cache[[lang]][[key]] # list 'lang', item 'key'
-  }
+  # # Make a helper function, send to global environment
+  # tr <<- function(key, lang) {
+  #   # Ensure that 'key' is a value in the 'id' column of the translations data.frame
+  #   if (!key %in% translations$id) {
+  #     stop(paste("Translation key", key, "not found in translations data."))
+  #   }
+  #   translation_cache[[lang]][[key]] # list 'lang', item 'key'
+  # }
 
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
 
   ## Access database connections ###########
   # Look for .mdb files in the AccessPath directories
-  if (!is.null(accessPath1)) {
-    if (dir.exists(accessPath1) & !public) {
-      # List the *.mdb files in the directory
-      mdb_files1 <- list.files(
-        accessPath1,
-        pattern = "*.mdb",
-        full.names = TRUE
-      )
-      if (length(mdb_files1) == 0) {
+  if (g_drive) {
+    if (!is.null(accessPath1)) {
+      if (dir.exists(accessPath1) & !public) {
+        # List the *.mdb files in the directory
+        mdb_files1 <- list.files(
+          accessPath1,
+          pattern = "*.mdb",
+          full.names = TRUE
+        )
+        if (length(mdb_files1) == 0) {
+          mdb_files1 <- NULL
+        }
+      } else {
         mdb_files1 <- NULL
       }
     } else {
       mdb_files1 <- NULL
     }
-  } else {
-    mdb_files1 <- NULL
-  }
-  if (!is.null(accessPath2)) {
-    if (dir.exists(accessPath2) & !public) {
-      # List the *.mdb files in the directory
-      mdb_files2 <- list.files(
-        accessPath2,
-        pattern = "*.mdb",
-        full.names = TRUE
-      )
-      if (length(mdb_files2) == 0) {
+    if (!is.null(accessPath2)) {
+      if (dir.exists(accessPath2) & !public) {
+        # List the *.mdb files in the directory
+        mdb_files2 <- list.files(
+          accessPath2,
+          pattern = "*.mdb",
+          full.names = TRUE
+        )
+        if (length(mdb_files2) == 0) {
+          mdb_files2 <- NULL
+        }
+      } else {
         mdb_files2 <- NULL
       }
     } else {
       mdb_files2 <- NULL
     }
+
+    mdb_files <- c(mdb_files1, mdb_files2)
+
+    if (is.null(mdb_files) & !public) {
+      print("No .mdb files found in the accessPath directories.")
+    }
   } else {
-    mdb_files2 <- NULL
+    mdb_files <- NULL
   }
-
-  mdb_files <- c(mdb_files1, mdb_files2)
-
-  if (is.null(mdb_files) & !public) {
-    print("No .mdb files found in the accessPath directories.")
-  }
-
-  # Set up a temporary directory for storing R documentation files during app runtime
-  .rd_dir <<- file.path(tempdir(), "rdocs")
-  dir.create(.rd_dir, showWarnings = FALSE, recursive = TRUE)
-  shiny::addResourcePath("rdocs", .rd_dir)
 
   # Make the configuration list available globally
   # double assignment creates a global variable that can be accessed by all UI and server functions

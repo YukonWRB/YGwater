@@ -504,21 +504,16 @@ get_discrete_timeseries <- function(
 #' Load and process snowcourse factors for discrete SWE stations
 #'
 #' @param metadata_discrete sf object with discrete station metadata
-#' @param csv_path character path to the snowcourse factors CSV file
 #' @return data.frame with location names and basin weighting factors
 #' @details Reads the CSV file containing weights for how much each snow course
 #'   station contributes to each SWE basin calculation. Removes duplicates and
 #'   unnecessary columns.
 load_snowcourse_factors <- function(
-    metadata_discrete,
-    csv_path = "data-raw/snowcourse_factors.csv"
+    metadata_discrete
 ) {
-    snowcourse_factors <- read.csv(
-        csv_path,
-        stringsAsFactors = FALSE
-    )
+    snowcourse_factors <- data$snowcourse_factors
     # Remove duplicate Hyland River value
-    snowcourse_factors <- subset(snowcourse_factors, location_id != "10AD-SC01")
+    snowcourse_factors <- subset(snowcourse_factors, location != "10AD-SC01")
     # Drop location_name column
     snowcourse_factors <- snowcourse_factors[,
         !colnames(snowcourse_factors) %in% "location_name"
