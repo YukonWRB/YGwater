@@ -14,8 +14,6 @@ get_swe_state(data, year, month, key)
 \item{month}{Integer target month for data extraction}
 
 \item{key}{Character name of the key column in metadata (e.g., "timeseries_id", "location_id")}
-
-\item{language}{Character string for language}
 }
 \value{
 data.frame subset of metadata with additional SWE value columns:

@@ -21,7 +21,7 @@ create_continuous_plot_popup(
 
 \item{station_name}{Optional character string for station name in plot title}
 
-\item{language}{Character string for language}
+\item{language}{Character string for language. Defaults to "English".}
 }
 \value{
 Character string containing HTML with embedded base64 image

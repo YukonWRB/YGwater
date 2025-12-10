@@ -35,6 +35,9 @@ ggplot_snow_bulletin_map(
 \item{parameter_name}{Character, parameter to plot (default: "swe")}
 
 \item{type}{Character, "absolute", "relative", or "percentile" (default: "relative")}
+
+\item{language}{Character string indicating the language for labels and legends. Default is "English".
+(default: "English")}
 }
 \value{
 A ggplot2 object with SWE basins and stations

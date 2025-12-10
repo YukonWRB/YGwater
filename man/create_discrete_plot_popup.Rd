@@ -11,7 +11,7 @@ create_discrete_plot_popup(timeseries, station_name, language = "English")
 
 \item{station_name}{Character string for station name in plot title}
 
-\item{language}{Character string for language}
+\item{language}{Character string for language. Defaults to "English".}
 }
 \value{
 Character string containing HTML with embedded base64 image

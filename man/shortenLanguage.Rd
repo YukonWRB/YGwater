@@ -8,8 +8,8 @@ shortenLanguage(language)
 }
 \arguments{
 \item{language}{Character string specifying the language. Accepts values such as
-"en", "english", "anglais" for English, and "fr", "french", "fran\u00e7ais", "francais",
-"fran\u00e7ais" for French. Case-insensitive.}
+"en", "english", "anglais" for English, and "fr", "french", "français", "francais",
+"français" for French. Case-insensitive.}
 }
 \value{
 A character string: "en" for English or "fr" for French.
@@ -22,7 +22,7 @@ recognized, a warning is issued and the function defaults to English.
 }
 \examples{
 shortenLanguage("EN")        # returns "en"
-shortenLanguage("fran\u00e7ais")  # returns "fr"
-shortenLanguage(NULL)        # returns "English"
+shortenLanguage("français")  # returns "fr"
+shortenLanguage(NULL)        # returns "en"
 shortenLanguage("de")        # returns "en" with a warning
 }

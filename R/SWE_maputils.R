@@ -1553,7 +1553,6 @@ split_communities <- function(communities) {
 #' @param year Integer target year for data extraction
 #' @param month Integer target month for data extraction
 #' @param key Character name of the key column in metadata (e.g., "timeseries_id", "location_id")
-#' @param language Character string for language
 #' @return data.frame subset of metadata with additional SWE value columns:
 #' \describe{
 #'   \item{swe}{Absolute SWE value in mm}
@@ -1646,9 +1645,6 @@ get_swe_state <- function(
     )
 
     return(point_source_data)
-
-    # For backward compatibility, also set $value to match selected value_type if needed
-    # (optional, depending on how downstream code expects it)
 }
 
 # =============================================================================
@@ -1661,7 +1657,7 @@ get_swe_state <- function(
 #' @param year Integer year for plot focus
 #' @param con Database connection for historical data access
 #' @param station_name Optional character string for station name in plot title
-#' @param language Character string for language
+#' @param language Character string for language. Defaults to "English".
 #' @return Character string containing HTML with embedded base64 image
 #'
 #' @description
@@ -1770,7 +1766,7 @@ create_continuous_plot_popup <- function(
 #'
 #' @param timeseries data.frame with timeseries data formatted for plotting
 #' @param station_name Character string for station name in plot title
-#' @param language Character string for language
+#' @param language Character string for language. Defaults to "English".
 #' @return Character string containing HTML with embedded base64 image
 #'
 #' @description
@@ -2693,7 +2689,7 @@ get_processed_data <- function(
 #' @param data List containing processed SWE data at basins, surveys, and pillows
 #' @param value_type Character string indicating which SWE value to visualize
 #' (e.g., "data", "relative_to_med", "percentile")
-#' @param language Character string indicating the language for labels and legends
+#' @param language Character string indicating the language for labels and legends. Default is "English".
 #' @param snowbull_data List containing all loaded base data, returned from load_bulletin_data()
 #' @param month Integer month for map title
 #' @param year Integer year for map title
@@ -3135,6 +3131,8 @@ leaflet_snow_bulletin_map <- function(
 #' @param dpi Numeric resolution in dots per inch (default: 300)
 #' @param parameter_name Character, parameter to plot (default: "swe")
 #' @param type Character, "absolute", "relative", or "percentile" (default: "relative")
+#' @param language Character string indicating the language for labels and legends. Default is "English".
+#' (default: "English")
 #' @return A ggplot2 object with SWE basins and stations
 #'
 #' @description

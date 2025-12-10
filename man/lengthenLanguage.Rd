@@ -7,19 +7,19 @@
 lengthenLanguage(language)
 }
 \arguments{
-\item{language}{Character string specifying the language. Accepts values such as "en", "english", "anglais" for English, and "fr", "french", "fran\u00e7ais", "francais", "fran\u00e7ais" for French. Case-insensitive.}
+\item{language}{Character string specifying the language. Accepts values such as "en", "english", "anglais" for English, and "fr", "french", "français", "francais", "français" for French. Case-insensitive.}
 }
 \value{
-A character string: "English" for English or "Fran\u00e7ais" for French.
+A character string: "English" for English or "Français" for French.
 }
 \description{
-Standardizes the input language to either "English" or "Fran\u00e7ais".
+Standardizes the input language to either "English" or "Français".
 Accepts various representations of English and French, including common abbreviations
 and translations. If the input is \code{NULL}, defaults to English. If the input is not
 recognized, a warning is issued and the function defaults to English.
 }
 \examples{
 lengthenLanguage("EN")        # returns "English"
-lengthenLanguage("\u00e7")  # returns "Fran\u00e7ais"
+lengthenLanguage("fr")  # returns "Fran\u00e7ais"
 lengthenLanguage(NULL)        # returns "English"
 }

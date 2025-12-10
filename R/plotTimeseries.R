@@ -121,7 +121,7 @@ plotTimeseries <- function(
   # Checks and initial work ##########################################
 
   # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- NULL
 
   if (!is.null(resolution)) {
     if (resolution == "day" && raw) {
@@ -1576,7 +1576,11 @@ plotTimeseries <- function(
   if (data) {
     datalist <- list(
       trace_data = trace_data,
-      range_data = if (historic_range) range_data else data.frame()
+      range_data = if (historic_range) {
+        range_data[, c("datetime", "min", "max", "q75", "q25")]
+      } else {
+        data.frame()
+      }
     )
     return(list(plot = plot, data = datalist))
   } else {
