@@ -8,7 +8,7 @@ maps_locs,mapsNavLocsTitle,Monitoring locations,Emplacements de surveillance
 maps_params,mapsNavParamsTitle,Current/past conditions,Conditions présentes/historiques
 maps_raster,mapsNavRastersTitle,Rasters,Rasters
 maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
-plots,plotsNavMenuTitle,Plots ,Graphiques
+plots,plotsNavMenuTitle,Plots,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
 plots_continuous,plotsNavContTitle,Continuous,Continues
 plots_continuous_old,plotsNavContOldTitle,Continuous (old version),Continues (ancienne version)
@@ -16,7 +16,7 @@ plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
 reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
-reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualitée de l'eau
+reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
 data,dataNavMenuTitle,Data,Données
 data_discrete,dataNavDiscTitle,Discrete,Discrètes
@@ -27,14 +27,14 @@ images_map,imagesNavMapTitle,Map selection,Sélection par carte
 info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,News,Nouvelles
-fod_comments,FODNavTitle,Forecaster comments,Commentaires prévisionniste
+fod_comments,FODNavTitle,Forecaster comments,Commentaires du prévisionniste
 Home module,,,
 betaTitle,beta version warning,🚧 Notice: this web site is under construction 🚧,🚧 Avis: ce site web est en état de construction. 🚧
 betaText,beta version warning,"<br>We're testing this site with the public and will launch soon! Use the thumbs up or down at the bottom of any page to share feedback. This will track which page you're on, but please add a descriptive comment before submitting.<br><br>We will keep improving the site during this time, including adding missing translations, updating the interface, and fixing bugs.","<br>Nous sommes désormais en phase de tests externes - le développement est presque terminé! Vous trouverez une interface pour nous faire part de vos retours en bas de chaque page. <br><br>Certains éléments de l’application continueront d’être améliorés pendant cette phase de test, notamment les traductions manquantes en français, l'améliorations de l’interface utilisateur, ainsi que la réparation de 'bugs'."
 homeTitle,Home page welcome message heading,Welcome to the Yukon Water Data Explorer,Bienvenue à l'explorateur de données sur l'eau du Yukon
 homeText,Home page welcome message,"This application hosts real-time and historic water and climate data for the Yukon and surrounding regions gathered by the Government of Yukon and partners. You'll find data related to water quality (temperature, chemistry) and quantity (level/flow) along with snowpack measurements, precipitation, temperature data - and more.","Cette application met à disposition des données hydrologiques et climatiques, en temps réel et historiques, pour le Yukon et les régions environnantes. Ces données sont recueillies par le gouvernement du Yukon et ses partenaires. Vous y trouverez notamment des renseignements sur la qualité de l’eau (température, composition chimique) et la quantité d’eau (niveaux, débits), ainsi que sur l’enneigement, les précipitations, la température — et davantage encore."
 home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organisation de nos données
-home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:<ul><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li></ul><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.<br><br>","Nous classifions les données en <b>discrètes</b> ou <b>continues</b>. Cette classification dépend de :</div><li>la fréquence des mesures</li><li>la méthode de mesure</li><li>autres métadonnées pertinentes</li></ul><br><b>Qu’est-ce que les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (p. ex. profondeur de neige) ou par analyse en laboratoire. Ces données doivent comporter une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Qu’est-ce que les données continues ?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (p. ex. horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument et les conditions d’enregistrement.</li>"
+home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:<ul><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li></ul><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.<br><br>","Nous classifions les données en <b>discrètes</b> ou <b>continues</b>. Cette classification dépend de :<ul><li>la fréquence des mesures</li><li>la méthode de mesure</li><li>autres métadonnées pertinentes</li></ul><br><b>Qu’est-ce que les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (p. ex. profondeur de neige) ou par analyse en laboratoire. Ces données doivent comporter une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Qu’est-ce que les données continues ?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (p. ex. horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument et les conditions d’enregistrement.<br><br>"
 home_map_locs_btn,button text,See a map of available data,Voir une carte des données disponibles
 home_map_params_btn,button text,See a map of current or past conditions,Voir une carte des conditions actuelles ou passées
 feedback_text,thumbs up down button text,Was this page helpful?,Avez-vous trouvé cette page utile?
@@ -99,7 +99,7 @@ param_modal,button text for modal,Filter by group/sub-group,Filtrer par groupe/s
 loc_modal,button text for modal,Filter by network/project,Filtrer par réseau/projet
 tooltip_reset,tooltip text for resetting filters,Filters affect each other by limiting subsequent options. Reset to clear all filters.,Les filtres s'affectent mutuellement en limitant les options suivantes. Réinitialiser pour effacer tous les filtres.
 year_filter,year filter title,With data between…,Avec des données entre...
-choose_locs,location selection title,Or choose one of more locations,Ou choisissez une ou plusieures stations
+choose_locs,location selection title,Or choose one of more locations,Ou choisissez une ou plusieurs stations
 tooltip1,table tool tips,Continuous = recorded at regular intervals automatically; Discrete = measurements or sample acquisition at variable time intervals.,Continues = enregistré à intervalles réguliers automatiquement ; Discrètes = mesures ou acquisition d'échantillons à intervalles de temps variables.
 tooltip2,table tool tips,UTC-7,UTC-7
 filters,,Filters,Filtres
@@ -135,7 +135,7 @@ Visualize/plot module,,,
 plot_type,,Plot type,Type de graphique
 plot_type_tooltip,,Timeseries plots show changes over time and can display multiple traces or subplots. Overlapping years plots help compare data from different years at the same location.,Les graphiques de longues séries temporelles montrent les changements au fil du temps et peuvent afficher plusieurs tracés ou sous-graphiques. Les graphiques d’années superposées permettent de comparer les données de différentes années pour un même emplacement.
 plot_type_overlap,,Overlapping years,Années superposées
-plot_select_years,,Select years to plot,Sélectionez les années à tracer
+plot_select_years,,Select years to plot,Sélectionnez les années à tracer
 plot_select_yrs,,"For periods overlapping the new year, select the December year","Pour les périodes chevauchant la nouvelle année, sélectionnez l’année de décembre."
 plot_type_ts,,Timeseries,Série temporelle
 plot_hist_range,,Plot historic range?,Tracer la plage historique
@@ -143,13 +143,13 @@ plot_hist_range_select,,Historic range calculated with,Plage historique calculé
 plot_hist_range_select_tooltip,,Choose whether the historic range should include all available years of record or only up to the last year shown on the plot.,Choisissez si la plage historique doit inclure toutes les années de données disponibles ou seulement jusqu’à la dernière année affichée sur le graphique.
 plot_extra_options,,Extra options,Options supplémentaires
 plot_apply_vert_datum,,Apply vertical datum?,Appliquer le référentiel vertical?
-plot_filter,,Filter extreme values?,Filtrer les valeures extrêmes?
+plot_filter,,Filter extreme values?,Filtrer les valeurs extrêmes?
 plot_show_unusable,,Show unusable data?,Montrer les données inutilisables?
 plot_show_grades,,Show grades?,Montrer les cotes?
 plot_show_approvals,,Show approval levels?,Montrer les niveaux d'approbations?
 plot_show_qualifiers,,Show qualifiers?,Montrer les qualificatifs?
 plot_last_30,,Last 30 days,Derniers 30 jours
-plot_all_record,,Entire record,P�riode enti�re
+plot_all_record,,Entire record,Période entière
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
 cont_table_heading,,Available timeseries,Séries chronologiques disponibles
 cont_table_plot_heading,,Plot,Graphique
@@ -172,8 +172,8 @@ share_y_axis_tooltip,,Aligns the Y-axis for all plots to make it easier to compa
 loc_code,,Choose how to display location names/codes,Choisissez comment montrer le nom/code des emplacements
 loc_code_name,,Name,Nom
 loc_code_code,,Code,Code
-loc_code_nameCode,,Name (code), Nom (code)
-loc_code_codeName,,Code (name), Code (nom)
+loc_code_nameCode,,Name (code),Nom (code)
+loc_code_codeName,,Code (name),Code (nom)
 target_datetime,,Use target date/time,Utiliser la date/le temps cible
 target_datetime_tooltip,,"Some measurements use a set date to line up repeated readings. For example, snow surveys may be taken within a few days of the 1st of the month but are shown as if taken on the 1st.","Certaines mesures utilisent une date fixe pour aligner des relevés répétés. Par exemple, les relevés de neige peuvent être effectués quelques jours avant ou après le 1er du mois, mais sont affichés comme s’ils avaient été pris le 1er."
 modify_plot_aes,,Change plot appearance,Modifier l'apparence du graphique
@@ -181,7 +181,7 @@ full_screen,,Full screen,Plein écran
 language,,Language,Langue
 show_x_grid,,Show X-axis gridlines,Afficher la grille de l'axe X
 show_y_grid,,Show Y-axis gridlines,Afficher la grille de l'axe Y
-num_rows,,Number of rows (leave blank for automatic),Nombres de lignes (laisser vide pour automatique)
+num_rows,,Number of rows (leave blank for automatic),Nombre de lignes (laisser vide pour automatique)
 colorblind_friend,,Color-blind friendly,Adapté au daltonisme
 point_scale,,Point size factor,Facteur de taille des points
 line_scale,,Line scale factor,Facteur de taille des lignes
@@ -230,11 +230,11 @@ gen_waterInfo_param_select,,One parameter or both?,Un ou deux paramètres?
 gen_waterInfo_param_select_one,,"One (flow where exists, else level)","Un (débit si existe, autrement niveau)"
 gen_waterInfo_param_select_both,,Both (flow and level where both exist),Deux (débit et niveau lorsque existent)
 gen_loc_select,,"Select one, many, or all locations","Sélectionnez un, plusieurs, ou tous les endroits"
-gen_no_loc,,Select at least one location.,Sélectionez au moins un endroit.
+gen_no_loc,,Select at least one location.,Sélectionnez au moins un endroit.
 gen_waterInfo_end_date,,Last day to use for calculations,Dernière date à considérer pour les calculs
 gen_waterInfo_min_months,,Months in which to look for minimums,Mois dans lesquels rechercher les valeurs minimum
 gen_waterInfo_max_months,,Months in which to look for maximums,Mois dans lesquels rechercher les valeurs maximum
-gen_waterInfo_prct_miss,,Max % missing data to retain annual value (in months of interest),Max % de données manquantes pour retenir une valeure annuelle (dans les mois d'intérêt)
+gen_waterInfo_prct_miss,,Max % missing data to retain annual value (in months of interest),Max % de données manquantes pour retenir une valeur annuelle (dans les mois d'intérêt)
 gen_generate_plots,,Generate plots?,Générer les graphiques?
 gen_waterInfo_ptype,,Min/max on single plot or separate?,Min/max sur le même graphique ou séparé?
 gen_waterInfo_ptype_combine,,Single,même
@@ -242,7 +242,7 @@ gen_waterInfo_ptype_separate,,Separate,séparés
 gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (EEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
 gen_snowInfo_inactive,,Include inactive locations?,Inclure les emplacements inactifs?
 gen_snowInfo_complete,,Complete years only?,Années complètes seulement?
-gen_snowInfo_ptype,,Combined or separate plots?,Grahpiques séparés ou combinés?
+gen_snowInfo_ptype,,Combined or separate plots?,Graphiques séparés ou combinés?
 gen_snowInfo_ptype_separate,,Separate,séparés
 gen_snowInfo_ptype_combine,,Combined,combinés
 gen_snowBul_info,,"This function allows you to create Excel workbooks with the statistics used in creating the Snow Bulletin, or to create the entire Snow Bulletin Word document.","Cette fonction vous permet de créer des documents Excel qui contiennent les statistics utilisées lors de la création du bulletin de conditions de neige, ou de créer le bulletin de neige en document Word."
@@ -251,8 +251,8 @@ gen_snowBul_toggle_bulletin,,Bulletin,Bulletin
 gen_snowBul_year,,Year,Année
 gen_snowBul_month,,Month,Mois
 gen_snowBul_basins,,Basins,Basins versants
-gen_snowBul_lang,,Bulletin language,Language du bulletin
-gen_snowBul_precip_period,,Period of record for precip stats,Période a utiliser pour les statistiques de précipitation
+gen_snowBul_lang,,Bulletin language,Langue du bulletin
+gen_snowBul_precip_period,,Period of record for precip stats,Période à utiliser pour les statistiques de précipitation
 gen_snowBul_cddf_period,,Period of record for CDDF stats,Période à utiliser pour les statistiques de DJGC
 gen_snowBul_period1,,Last 40 years,Derniers 40 ans
 all_yrs_record,,All years of record,Toutes les années disponibles
@@ -314,7 +314,7 @@ param_group,direct translation,Parameter group,Groupe de paramètre
 param_groups,direct translation,Parameter groups,Groupes de paramètres
 param_group(s),direct translation,Parameter group(s),Groupe(s) de paramètre(s)
 param_sub_group,direct translation,Parameter sub-group,Sous-groupe de paramètre
-param_sub_groups,direct translation,Parameter sub-groups,Sous-roupes de paramètres
+param_sub_groups,direct translation,Parameter sub-groups,Sous-groupes de paramètres
 param_sub_group(s),direct translation,Parameter sub-group(s),Sous-groupe(s) de paramètre(s)
 group,direct translation,Group,Groupe
 parameter,direct translation,Parameter,Paramètre
@@ -324,11 +324,11 @@ select_params,,Select parameters,Sélectionnez des paramètres
 project,direct translation,Project,Projet
 projects,direct translation,Projects,Projets
 project(s),direct translation,Project(s),Projet(s)
-select_project,,Select project(s),Sélectionez un/des projets
+select_project,,Select project(s),Sélectionnez un/des projets
 network,direct translation,Network,Réseau
 networks,direct translation,Networks,Réseaux
 network(s),direct translation,Network(s),Réseau(x)
-select_network,,Select network(s),Sélectionez un/des réseaux
+select_network,,Select network(s),Sélectionnez un/des réseaux
 units,direct translation,Units,Unités
 period,direct translation,Period,Période
 category,direct translation,Category,Catégorie

@@ -155,7 +155,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       stats::na.omit(available_values)[1]
     })
 
-    timeseries_table <- reactive({
+    timeseries_table_reactive <- reactive({
       loc_name_col <- tr("generic_name_col", language$language)
       sub_loc_col <- tr("sub_location_col", language$language)
       param_col <- tr("param_name_col", language$language)
@@ -280,13 +280,15 @@ contPlot <- function(id, language, windowDims, inputs) {
         aggregation = as.factor(aggregation),
         z = as.numeric(z),
         location = as.factor(location),
-        sub_location = as.factor(sub_location)
+        sub_location = as.factor(sub_location),
+        loc_code = as.factor(loc_code)
       )]
 
       ts <- ts[, .(
         timeseries_id,
         location,
         sub_location,
+        loc_code,
         parameter,
         media,
         aggregation,
@@ -370,7 +372,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       } else {
         NULL
       }
-      tagList(
+      tags <- tagList(
         bslib::accordion(
           id = ns("accordion_panels"),
           open = c(ns("table_panel"), ns("plot_options_panel")),
@@ -487,12 +489,14 @@ contPlot <- function(id, language, windowDims, inputs) {
         plotly::plotlyOutput(ns("plot"), height = "600px", inline = TRUE),
         uiOutput(ns("full_screen_ui"))
       ) # End tagList
+      return(tags)
     }) # End renderUI
 
+    # Automatically select a timeseries if none is selected or if the current selection is invalid
     observeEvent(
-      timeseries_table(),
+      timeseries_table_reactive(),
       {
-        ts <- timeseries_table()
+        ts <- timeseries_table_reactive()
         current <- selected_timeseries_id()
         if (!is.null(current) && current %in% ts$timeseries_id) {
           return()
@@ -517,8 +521,9 @@ contPlot <- function(id, language, windowDims, inputs) {
       ignoreNULL = FALSE
     )
 
+    # Update selected_timeseries_id() when a row is selected in the table
     observeEvent(input$timeseries_table_rows_selected, {
-      ts <- timeseries_table()
+      ts <- timeseries_table_reactive()
       if (
         !is.null(input$timeseries_table_rows_selected) &&
           length(input$timeseries_table_rows_selected) == 1 &&
@@ -543,13 +548,15 @@ contPlot <- function(id, language, windowDims, inputs) {
       )
     })
 
+    # Render the timeseries table
     output$timeseries_table <- DT::renderDataTable({
-      ts <- timeseries_table()
+      ts <- timeseries_table_reactive()
 
       column_labels <- c(
         timeseries_id = "timeseries_id",
         location = tr("cont_table_col_location", language$language),
         sub_location = tr("cont_table_col_sub_location", language$language),
+        loc_code = tr("loc_code_code", language$language),
         parameter = tr("cont_table_col_parameter", language$language),
         media = tr("cont_table_col_media", language$language),
         aggregation = tr("cont_table_col_aggregation", language$language),
@@ -585,7 +592,6 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
 
       date_targets <- which(names(ts) %in% c("start_date", "end_date")) - 1
-
       dt <- DT::datatable(
         ts,
         rownames = FALSE,
@@ -641,9 +647,9 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Keep selection in sync with selected_timeseries_id()
     observeEvent(
-      list(selected_timeseries_id(), timeseries_table()),
+      list(selected_timeseries_id(), timeseries_table_reactive()),
       {
-        ts <- timeseries_table()
+        ts <- timeseries_table_reactive()
         id <- selected_timeseries_id()
 
         if (is.null(id) || nrow(ts) == 0) {
@@ -661,7 +667,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Observe buttons to update date range
     observeEvent(input$last_30, {
-      ts <- timeseries_table()
+      ts <- timeseries_table_reactive()
       selected_id <- selected_timeseries_id()
       if (is.null(selected_id)) {
         return()
@@ -681,7 +687,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     observeEvent(input$entire_record, {
-      ts <- timeseries_table()
+      ts <- timeseries_table_reactive()
       selected_id <- selected_timeseries_id()
       if (is.null(selected_id)) {
         return()
@@ -701,7 +707,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     plot_request <- reactive({
-      ts <- timeseries_table()
+      ts <- timeseries_table_reactive()
       validate(need(nrow(ts) > 0, tr("error", language$language)))
 
       selected_id <- selected_timeseries_id()
@@ -775,9 +781,6 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
-      # Ensure a row is selected
-      print(plot_request())
-
       if (plot_created()) {
         shinyjs::hide("full_screen_ui")
       }
