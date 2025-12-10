@@ -5,10 +5,21 @@
 # Author: esniede
 # ===========================================================================
 
-# NOTE (ES): temprary workaround until re-install
-source("R/standardizeInputs.R")
-
-
+#' Create string of month names
+#'
+#' @description
+#' Generates a character vector of month names or abbreviations.
+#'
+#' @param month Optional integer vector of month numbers (1-12). If NULL, returns all months.
+#' @param short Logical indicating whether to return abbreviated month names (TRUE) or full names (FALSE). Default is FALSE.
+#'
+#' @return A character vector of month names or abbreviations
+#'
+#' @details
+#' The relative SWE bins are designed to highlight significant departures from normal
+#'
+#' @noRd
+#'
 snowbull_months <- function(month = NULL, short = FALSE) {
     months = c(
         "January",
@@ -26,14 +37,6 @@ snowbull_months <- function(month = NULL, short = FALSE) {
     )
     if (short) {
         months = tolower(substr(months, 1, 3))
-    }
-
-    if (!is.null(month)) {
-        #    if (month < 1 || month > 12) {
-        #        stop("Month must be between 1 and 12")
-        #    } else {
-        return(months[month])
-        #    }
     }
     return(months)
 }
@@ -1688,7 +1691,7 @@ create_continuous_plot_popup <- function(
     station_name,
     language = "English"
 ) {
-    lang <- .shortenLanguage(language)
+    lang <- shortenLanguage(language)
 
     # Validate timeseries structure
     if (!is.data.frame(timeseries) || ncol(timeseries) < 2) {
@@ -1796,7 +1799,7 @@ create_discrete_plot_popup <- function(
     # Clean and validate the data before plotting
     names(timeseries) <- c("datetime", "value")
 
-    lang <- .shortenLanguage(language)
+    lang <- shortenLanguage(language)
 
     timeseries$month <- as.integer(format(timeseries$datetime, "%m"))
     timeseries$year <- as.integer(format(timeseries$datetime, "%Y"))
@@ -2515,7 +2518,7 @@ get_processed_data <- function(
     shiny = TRUE,
     language = "English"
 ) {
-    lang <- .shortenLanguage(language)
+    lang <- shortenLanguage(language)
 
     # Extract data at points for the selected date
     swe_at_basins <- get_swe_state(
@@ -3053,7 +3056,7 @@ leaflet_snow_bulletin_map <- function(
     requireNamespace("htmltools")
 
     # standadize language input
-    language <- .lengthenLanguage(language)
+    language <- lengthenLanguage(language)
 
     # Define color palettes and bins
     static_style_elements <- get_static_style_elements()
@@ -3167,7 +3170,7 @@ ggplot_snow_bulletin_map <- function(
     type = "relative_to_med",
     language = "English"
 ) {
-    language <- .lengthenLanguage(language)
+    language <- lengthenLanguage(language)
 
     # Load required packages
     requireNamespace("ggplot2")
@@ -3486,10 +3489,3 @@ ggplot_snow_bulletin_map <- function(
     }
     return(p)
 }
-
-leaflet_snow_bulletin_map(
-    2025,
-    4,
-    filename = "swe_map_apr2025.html",
-    language = "French"
-)

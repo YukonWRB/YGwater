@@ -4,12 +4,14 @@
 \alias{create_discrete_plot_popup}
 \title{Create base64-encoded plot for discrete stations}
 \usage{
-create_discrete_plot_popup(timeseries, station_name)
+create_discrete_plot_popup(timeseries, station_name, language = "English")
 }
 \arguments{
 \item{timeseries}{data.frame with timeseries data formatted for plotting}
 
 \item{station_name}{Character string for station name in plot title}
+
+\item{language}{Character string for language}
 }
 \value{
 Character string containing HTML with embedded base64 image
@@ -28,7 +30,7 @@ The discrete plot shows monthly snow course measurements as:
 }
 \examples{
 \dontrun{
-station_ts <- base_data$surveys$timeseries$data[, c("datetime", "456")]
+station_ts <- snowbull_data$surveys$timeseries$data[, c("datetime", "456")]
 popup_html <- create_discrete_plot_popup(station_ts)
 }
 }
