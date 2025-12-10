@@ -36,7 +36,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       )
       timeseries <- dbGetQueryDT(
         con,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.location, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.location AS loc_code, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
       )
 
       rates <- data.frame(
@@ -161,7 +161,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
     },
     ttl = 60 * 60 * 2
   ) # Cache the data for 2 hours
-}
+} # End cont_data.plot_module_data
 
 
 # discrete data module #####
