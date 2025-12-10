@@ -1570,7 +1570,7 @@ split_communities <- function(communities) {
 #' @examples
 #' \dontrun{
 #' # Get pillow data for March 2025
-#' pillow_data <- get_swe_state(
+#' pillow_data <- get_parameter_states(
 #'   snowbull_data$pillows,
 #'   year = 2025,
 #'   month = 3,
@@ -1581,7 +1581,7 @@ split_communities <- function(communities) {
 #' valid_stations <- pillow_data[!is.na(pillow_data$swe), ]
 #' }
 
-get_swe_state <- function(
+get_parameter_states <- function(
     data,
     year,
     month,
@@ -1620,6 +1620,8 @@ get_swe_state <- function(
         vals
     }
 
+    # get the statistics at the target date
+    # this code is a bit clunky and could be optimized, but works for now; should not need to call extract_at_date every time
     point_source_data$data <- extract_at_date(
         data$timeseries$data,
         key,
@@ -1643,9 +1645,6 @@ get_swe_state <- function(
     )
 
     return(point_source_data)
-
-    # For backward compatibility, also set $value to match selected value_type if needed
-    # (optional, depending on how downstream code expects it)
 }
 
 # =============================================================================
@@ -2439,7 +2438,7 @@ generate_popup_content <- function(
                 )
             }
             paste0(
-                "<b>:</b> ",
+                "<b>",
                 tr("snowbull_coordinates", language),
                 ":</b> ",
                 lat,
@@ -2467,21 +2466,27 @@ generate_popup_content <- function(
         "<b>SWE Value:</b> ",
         if (!is.na(swe)) paste0(round(swe, 1), " mm") else "No data",
         "<br>",
-        "<b>Percent of Median:</b> ",
+        "<b>",
+        tr("snowbull_relative_median", language),
+        ":</b> ",
         if (!is.na(relative_to_med)) {
             paste0(round(relative_to_med, 1), "% of normal")
         } else {
             "No data"
         },
         "<br>",
-        "<b>Historical Median:</b> ",
+        "<b>",
+        tr("snowbull_historical_median", language),
+        ":</b> ",
         if (!is.na(historic_median)) {
             paste0(round(historic_median, 1), " mm")
         } else {
             "No data"
         },
         "<br>",
-        "<b>Percentile:</b> ",
+        "<b>",
+        tr("snowbull_percentile", language),
+        ":</b> ",
         if (!is.null(percentile) && !is.na(percentile)) {
             paste0(round(percentile, 1), "th percentile")
         } else {
@@ -2518,19 +2523,19 @@ get_processed_data <- function(
     lang <- .shortenLanguage(language)
 
     # Extract data at points for the selected date
-    swe_at_basins <- get_swe_state(
+    states_basins <- get_parameter_states(
         data = snowbull_data$basins,
         year = year,
         month = month,
         key = "name"
     )
-    swe_at_surveys <- get_swe_state(
+    states_discrete <- get_parameter_states(
         data = snowbull_data$surveys,
         year = year,
         month = month,
         key = "location_id"
     )
-    swe_at_pillows <- get_swe_state(
+    states_continuous <- get_parameter_states(
         data = snowbull_data$pillows,
         year = year,
         month = month,
@@ -2538,30 +2543,42 @@ get_processed_data <- function(
     )
 
     # Ensure all swe_at_* columns are numeric (especially percentiles)
-    swe_at_basins$data <- as.numeric(swe_at_basins$data)
-    swe_at_basins$relative_to_med <- as.numeric(swe_at_basins$relative_to_med)
-    swe_at_basins$historic_median <- as.numeric(swe_at_basins$historic_median)
-    swe_at_basins$percentile <- as.numeric(swe_at_basins$percentile)
+    states_basins$data <- as.numeric(states_basins$data)
+    states_basins$relative_to_med <- as.numeric(
+        states_basins$relative_to_med
+    )
+    states_basins$historic_median <- as.numeric(
+        states_basins$historic_median
+    )
+    states_basins$percentile <- as.numeric(states_basins$percentile)
 
-    swe_at_surveys$data <- as.numeric(swe_at_surveys$data)
-    swe_at_surveys$relative_to_med <- as.numeric(swe_at_surveys$relative_to_med)
-    swe_at_surveys$historic_median <- as.numeric(swe_at_surveys$historic_median)
-    swe_at_surveys$percentile <- as.numeric(swe_at_surveys$percentile)
+    states_discrete$data <- as.numeric(states_discrete$data)
+    states_discrete$relative_to_med <- as.numeric(
+        states_discrete$relative_to_med
+    )
+    states_discrete$historic_median <- as.numeric(
+        states_discrete$historic_median
+    )
+    states_discrete$percentile <- as.numeric(states_discrete$percentile)
 
-    swe_at_pillows$data <- as.numeric(swe_at_pillows$data)
-    swe_at_pillows$relative_to_med <- as.numeric(swe_at_pillows$relative_to_med)
-    swe_at_pillows$historic_median <- as.numeric(swe_at_pillows$historic_median)
-    swe_at_pillows$percentile <- as.numeric(swe_at_pillows$percentile)
+    states_continuous$data <- as.numeric(states_continuous$data)
+    states_continuous$relative_to_med <- as.numeric(
+        states_continuous$relative_to_med
+    )
+    states_continuous$historic_median <- as.numeric(
+        states_continuous$historic_median
+    )
+    states_continuous$percentile <- as.numeric(states_continuous$percentile)
 
-    swe_at_basins$annotation <- paste0(
-        swe_at_basins$annotation,
+    states_basins$annotation <- paste0(
+        states_basins$annotation,
         "<br>(",
-        round(swe_at_basins$relative_to_med, 0),
+        round(states_basins$relative_to_med, 0),
         "%)"
     )
 
     # Fix mapply argument mismatch for popup_content
-    swe_at_basins$popup_content <- mapply(
+    states_basins$popup_content <- mapply(
         function(data, relative_to_med, historic_median, percentile, name) {
             generate_popup_content(
                 "basin",
@@ -2577,14 +2594,14 @@ get_processed_data <- function(
                 snowbull_data = snowbull_data
             )
         },
-        swe_at_basins$data,
-        swe_at_basins$relative_to_med,
-        swe_at_basins$historic_median,
-        swe_at_basins$percentile,
-        swe_at_basins$name,
+        states_basins$data,
+        states_basins$relative_to_med,
+        states_basins$historic_median,
+        states_basins$percentile,
+        states_basins$name,
         SIMPLIFY = FALSE
     )
-    swe_at_surveys$popup_content <- mapply(
+    states_discrete$popup_content <- mapply(
         function(
             swe,
             relative_to_med,
@@ -2608,16 +2625,16 @@ get_processed_data <- function(
                 snowbull_data = snowbull_data
             )
         },
-        swe_at_surveys$data,
-        swe_at_surveys$relative_to_med,
-        swe_at_surveys$historic_median,
-        swe_at_surveys$percentile,
-        swe_at_surveys$name,
-        swe_at_surveys$location,
-        swe_at_surveys$location_id,
+        states_discrete$data,
+        states_discrete$relative_to_med,
+        states_discrete$historic_median,
+        states_discrete$percentile,
+        states_discrete$name,
+        states_discrete$location,
+        states_discrete$location_id,
         SIMPLIFY = FALSE
     )
-    swe_at_pillows$popup_content <- mapply(
+    states_continuous$popup_content <- mapply(
         function(
             swe,
             relative_to_med,
@@ -2641,13 +2658,13 @@ get_processed_data <- function(
                 snowbull_data = snowbull_data
             )
         },
-        swe_at_pillows$data,
-        swe_at_pillows$relative_to_med,
-        swe_at_pillows$historic_median,
-        swe_at_pillows$percentile,
-        swe_at_pillows$name,
-        swe_at_pillows$location,
-        swe_at_pillows$timeseries_id,
+        states_continuous$data,
+        states_continuous$relative_to_med,
+        states_continuous$historic_median,
+        states_continuous$percentile,
+        states_continuous$name,
+        states_continuous$location,
+        states_continuous$timeseries_id,
         SIMPLIFY = FALSE
     )
 
@@ -2667,22 +2684,22 @@ get_processed_data <- function(
 
     input_date <- get_datetime(year, month)
 
-    swe_at_surveys <- filter_by_latest_date(
-        swe_at_surveys,
+    states_discrete <- filter_by_latest_date(
+        states_discrete,
         input_date,
         366
     )
 
-    swe_at_pillows <- filter_by_latest_date(
-        swe_at_pillows,
+    states_continuous <- filter_by_latest_date(
+        states_continuous,
         input_date,
         366
     )
 
     list(
-        swe_at_basins = swe_at_basins,
-        swe_at_surveys = swe_at_surveys,
-        swe_at_pillows = swe_at_pillows
+        states_basins = states_basins,
+        states_discrete = states_discrete,
+        states_continuous = states_continuous
     )
 }
 
@@ -2727,12 +2744,12 @@ make_leaflet_map <- function(
         language = language
     )
 
-    # swe_at_basins includes different value types (median, percentile, etc.)
+    # states_basins includes different value types (median, percentile, etc.)
     # assign the selected input col to 'value_to_show' for mapping
     # this is a bit clunky, but I find it to be a bit more readable
-    data$swe_at_basins$value_to_show <- data$swe_at_basins[[value_type]]
-    data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[value_type]]
-    data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[value_type]]
+    data$states_basins$value_to_show <- data$states_basins[[value_type]]
+    data$states_discrete$value_to_show <- data$states_discrete[[value_type]]
+    data$states_continuous$value_to_show <- data$states_continuous[[value_type]]
 
     # legend created dynamically based on inputs
     legend_title <- paste0(
@@ -2778,7 +2795,7 @@ make_leaflet_map <- function(
             as.numeric(bbox["ymax"])
         ) %>%
         leaflet::addPolygons(
-            data = data$swe_at_basins,
+            data = data$states_basins,
             fillColor = ~ get_state_style_elements(
                 value_to_show,
                 dynamic_style_elements
@@ -2797,7 +2814,7 @@ make_leaflet_map <- function(
             group = "Basins averages"
         ) %>%
         leaflet::addPolygons(
-            data = data$swe_at_basins,
+            data = data$states_basins,
             fill = FALSE,
             color = "black",
             weight = 0.5 * static_style_elements$basins$weight,
@@ -2808,10 +2825,10 @@ make_leaflet_map <- function(
             group = "Basins averages"
         ) %>%
         leaflet::addLabelOnlyMarkers(
-            data = data$swe_at_basins,
-            lng = data$swe_at_basins$x_adjusted,
-            lat = data$swe_at_basins$y_adjusted,
-            label = lapply(data$swe_at_basins$annotation, htmltools::HTML),
+            data = data$states_basins,
+            lng = data$states_basins$x_adjusted,
+            lat = data$states_basins$y_adjusted,
+            label = lapply(data$states_basins$annotation, htmltools::HTML),
             labelOptions = leaflet::labelOptions(
                 noHide = static_style_elements$basins$labelOptions$noHide %||%
                     TRUE,
@@ -2824,7 +2841,7 @@ make_leaflet_map <- function(
             group = "Basins averages"
         ) %>%
         leaflet::addCircleMarkers(
-            data = data$swe_at_surveys,
+            data = data$states_discrete,
             radius = static_style_elements$surveys$radius,
             color = static_style_elements$surveys$color,
             fillColor = ~ get_state_style_elements(
@@ -2858,7 +2875,7 @@ make_leaflet_map <- function(
             }
         } %>%
         leaflet::addMarkers(
-            data = data$swe_at_pillows,
+            data = data$states_continuous,
             icon = leaflet::icons(
                 iconUrl = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16'><rect x='2' y='2' width='12' height='12' fill='none' stroke='black' stroke-width='2'/></svg>",
                 iconWidth = 2.7 * static_style_elements$pillows$radius,
@@ -2873,7 +2890,7 @@ make_leaflet_map <- function(
             group = "Snow pillows (continuous)"
         ) %>%
         leaflet::addCircleMarkers(
-            data = data$swe_at_pillows,
+            data = data$states_continuous,
             radius = static_style_elements$pillows$radius,
             color = static_style_elements$pillows$color,
             fillColor = ~ get_state_style_elements(
@@ -3083,9 +3100,9 @@ leaflet_snow_bulletin_map <- function(
         shiny = FALSE
     )
 
-    data$swe_at_basins$value_to_show <- data$swe_at_basins[[type]]
-    data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[type]]
-    data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[type]]
+    data$states_basins$value_to_show <- data$states_basins[[type]]
+    data$states_discrete$value_to_show <- data$states_discrete[[type]]
+    data$states_continuous$value_to_show <- data$states_continuous[[type]]
 
     m <- make_leaflet_map(
         data = data,
@@ -3176,6 +3193,7 @@ ggplot_snow_bulletin_map <- function(
     requireNamespace("stats")
 
     parameter_name <- standardize_parameter_name(parameter_name)
+
     type <- match.arg(
         type,
         choices = c("data", "relative_to_med", "percentile")
@@ -3197,7 +3215,13 @@ ggplot_snow_bulletin_map <- function(
             password = "aquacache"
         )
         on.exit(DBI::dbDisconnect(con))
-        snowbull_data <- load_bulletin_data(con)
+
+        snowbull_data <- load_bulletin_data(
+            con,
+            load_swe = parameter_name == "swe",
+            load_precip = parameter_name == "precip",
+            load_temp = parameter_name == "temp"
+        )
     }
     data <- get_processed_data(
         year = year,
@@ -3206,32 +3230,32 @@ ggplot_snow_bulletin_map <- function(
         shiny = FALSE
     )
 
-    data$swe_at_basins$value_to_show <- data$swe_at_basins[[type]]
-    data$swe_at_surveys$value_to_show <- data$swe_at_surveys[[type]]
-    ### data$swe_at_pillows$value_to_show <- data$swe_at_pillows[[type]]
+    data$states_basins$value_to_show <- data$states_basins[[type]]
+    data$states_discrete$value_to_show <- data$states_discrete[[type]]
+    ### data$states_continuous$value_to_show <- data$states_continuous[[type]]
 
     # Apply colors to data
-    data$swe_at_basins$fill_color <- get_state_style_elements(
-        data$swe_at_basins$value_to_show,
+    data$states_basins$fill_color <- get_state_style_elements(
+        data$states_basins$value_to_show,
         style_elements = dynamic_style_elements
     )
-    data$swe_at_surveys$fill_color <- get_state_style_elements(
-        data$swe_at_surveys$value_to_show,
+    data$states_discrete$fill_color <- get_state_style_elements(
+        data$states_discrete$value_to_show,
         style_elements = dynamic_style_elements
     )
     # commenting out pillows on PNG
-    #data$swe_at_pillows$fill_color <- create_color_mapping(
-    #    data$swe_at_pillows$value_to_show
+    #data$states_continuous$fill_color <- create_color_mapping(
+    #    data$states_continuous$value_to_show
     #)
 
     # Get coordinates for stations
-    surveys_coords <- sf::st_coordinates(data$swe_at_surveys)
-    data$swe_at_surveys$x <- surveys_coords[, 1]
-    data$swe_at_surveys$y <- surveys_coords[, 2]
+    surveys_coords <- sf::st_coordinates(data$states_discrete)
+    data$states_discrete$x <- surveys_coords[, 1]
+    data$states_discrete$y <- surveys_coords[, 2]
 
-    #pillows_coords <- sf::st_coordinates(data$swe_at_pillows)
-    #data$swe_at_pillows$x <- pillows_coords[, 1]
-    #data$swe_at_pillows$y <- pillows_coords[, 2]
+    #pillows_coords <- sf::st_coordinates(data$states_continuous)
+    #data$states_continuous$x <- pillows_coords[, 1]
+    #data$states_continuous$y <- pillows_coords[, 2]
 
     # Create the base plot
     p <- ggplot2::ggplot() +
@@ -3261,8 +3285,8 @@ ggplot_snow_bulletin_map <- function(
     # Add SWE basins
     p <- p +
         ggplot2::geom_sf(
-            data = data$swe_at_basins,
-            fill = data$swe_at_basins$fill_color,
+            data = data$states_basins,
+            fill = data$states_basins$fill_color,
             color = static_style_elements$basins$color,
             size = static_style_elements$basins$weight * 0.25,
             alpha = static_style_elements$basins$fillOpacity
@@ -3290,15 +3314,15 @@ ggplot_snow_bulletin_map <- function(
     }
 
     # Add survey stations (discrete)
-    if (nrow(data$swe_at_surveys) > 0) {
+    if (nrow(data$states_discrete) > 0) {
         p <- p +
             ggplot2::geom_point(
-                data = data$swe_at_surveys,
+                data = data$states_discrete,
                 ggplot2::aes(
                     x = .data$x,
                     y = .data$y
                 ),
-                fill = data$swe_at_surveys$fill_color,
+                fill = data$states_discrete$fill_color,
                 color = static_style_elements$surveys$color,
                 size = static_style_elements$surveys$radius / 2.5,
                 shape = 21,
@@ -3307,15 +3331,15 @@ ggplot_snow_bulletin_map <- function(
     }
 
     # # Add pillow stations (continuous)
-    # if (nrow(data$swe_at_pillows) > 0) {
+    # if (nrow(data$states_continuous) > 0) {
     #     p <- p +
     #         ggplot2::geom_point(
-    #             data = data$swe_at_pillows,
+    #             data = data$states_continuous,
     #             ggplot2::aes(
     #                 x = .data$x,
     #                 y = .data$y
     #             ),
-    #             fill = data$swe_at_pillows$fill_color,
+    #             fill = data$states_continuous$fill_color,
     #             color = viz_params$pillows$color,
     #             size = viz_params$pillows$radius / 2.5,
     #             shape = 21,
@@ -3365,9 +3389,9 @@ ggplot_snow_bulletin_map <- function(
 
     # Add basin labels using adjusted coordinates
     basin_labels_df <- data.frame(
-        x = data$swe_at_basins$x_adjusted,
-        y = data$swe_at_basins$y_adjusted,
-        annotation = data$swe_at_basins$annotation
+        x = data$states_basins$x_adjusted,
+        y = data$states_basins$y_adjusted,
+        annotation = data$states_basins$annotation
     )
 
     basin_labels_df$annotation <- gsub("<br>", "\n", basin_labels_df$annotation)
@@ -3448,7 +3472,7 @@ ggplot_snow_bulletin_map <- function(
 
     # Add coordinate system
     # Calculate basin extents with 50km buffer
-    basin_bbox <- sf::st_bbox(data$swe_at_basins)
+    basin_bbox <- sf::st_bbox(data$states_basins)
     yukon_bbox <- sf::st_bbox(snowbull_data$shapefiles$yukon)
     basin_bbox <- sf::st_bbox(c(
         xmin = min(basin_bbox["xmin"], yukon_bbox["xmin"]),
@@ -3487,9 +3511,12 @@ ggplot_snow_bulletin_map <- function(
     return(p)
 }
 
-leaflet_snow_bulletin_map(
-    2025,
-    4,
-    filename = "swe_map_apr2025.html",
-    language = "French"
-)
+
+if (sys.nframe() == 0) {
+    ggplot_snow_bulletin_map(
+        2025,
+        3,
+        filename = "swe_map_mar2025.png",
+        parameter_name = "precip"
+    )
+}
