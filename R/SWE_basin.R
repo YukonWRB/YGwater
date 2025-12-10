@@ -11,19 +11,20 @@
 #' @param csv TRUE or FALSE. If TRUE, a csv will be created.
 #' @param source Database from which to fetch this data. Options are: aquacache or snow.
 #' @param con A connection to the database specified in `source`. If NULL, a new connection will be created with [AquaConnect()] or [snowConnect()] (depending on 'source' parameter) and automatically closed.
-#' 
+#'
 #' @return A table and a csv file (if csv = TRUE) with either (summarise = FALSE) the swe for all basins, years and months of interest or (summarise = TRUE) the current SWE, historical median, the swe relative to the median (swe / swe_median), historical maximum, historical minimum, and year of maximum and minimum for each basin and month of interest.
 #' @export
 
-SWE_basin <- function(year,
-                      month,
-                      lookback = 100,
-                      threshold = 7,
-                      csv = FALSE,
-                      summarise = FALSE,
-                      source = "aquacache",
-                      con = NULL) {
-  
+SWE_basin <- function(
+  year,
+  month,
+  lookback = 100,
+  threshold = 7,
+  csv = FALSE,
+  summarise = FALSE,
+  source = "aquacache",
+  con = NULL
+) {
   # parameter checks
   if (any(!month %in% c(3, 4, 5))) {
     stop("Parameter 'month' must be either 3, 4 or 5")
@@ -35,57 +36,77 @@ SWE_basin <- function(year,
   if (!source %in% c("aquacache", "snow")) {
     stop("Parameter 'source' must be either 'aquacache' or 'snow'")
   }
-  
+
   ### Retrieve data from aquacache db
   if (source == "aquacache") {
     if (is.null(con)) {
       con <- AquaConnect(silent = TRUE)
       on.exit(DBI::dbDisconnect(con), add = TRUE)
     }
-    
-    samples <- DBI::dbGetQuery(con, paste0(
-                               "SELECT s.sample_id, l.location, s.target_datetime 
+
+    samples <- DBI::dbGetQuery(
+      con,
+      paste0(
+        "SELECT s.sample_id, l.location, s.target_datetime 
                                FROM samples s 
                                INNER JOIN locations l ON l.location_id = s.location_id 
                                WHERE media_id = 7 
                                AND collection_method = 1
-                               AND target_datetime >= '", year - lookback, "-01-01';")) # media = 'atmospheric', collection_method = 'observation'
-    
-    Meas <- DBI::dbGetQuery(con, 
-                            paste0("SELECT r.sample_id, r.result AS value
+                               AND target_datetime >= '",
+        year - lookback,
+        "-01-01';"
+      )
+    ) # media = 'atmospheric', collection_method = 'observation'
+
+    Meas <- DBI::dbGetQuery(
+      con,
+      paste0(
+        "SELECT r.sample_id, r.result AS value
                                    FROM results AS r 
                                    JOIN parameters AS p ON p.parameter_id = r.parameter_id 
-                                   WHERE r.sample_id IN ('", paste(samples$sample_id, collapse = "', '"), "') 
-                                   AND p.parameter_id = 21")) # 21 = SWE
+                                   WHERE r.sample_id IN ('",
+        paste(samples$sample_id, collapse = "', '"),
+        "') 
+                                   AND p.parameter_id = 21"
+      )
+    ) # 21 = SWE
     Meas <- merge(Meas, samples, by = "sample_id")
     Meas <- Meas[, c("location", "value", "target_datetime")]
     # Rename columns:
     colnames(Meas) <- c("location_id", "SWE", "target_date")
-  } else if (source == "snow") { ### Retrieve data from snow db
+  } else if (source == "snow") {
+    ### Retrieve data from snow db
     if (is.null(con)) {
       con <- snowConnect(silent = TRUE)
       on.exit(DBI::dbDisconnect(con), add = TRUE)
     }
-    
-    Meas <- DBI::dbGetQuery(con, paste0("SELECT location, swe, target_date FROM means WHERE target_date >= '", year - lookback, "-01-01'"))
+
+    Meas <- DBI::dbGetQuery(
+      con,
+      paste0(
+        "SELECT location, swe, target_date FROM means WHERE target_date >= '",
+        year - lookback,
+        "-01-01'"
+      )
+    )
     # Rename columns:
     colnames(Meas) <- c("location_id", "SWE", "target_date")
   }
-  
+
   ###### PART 1. Aggregate SWE by basin and year ######
   # 1. Import the Factors table: To use location_numS and Weights for basin-scale SWE estimates:
   # Factors <-
   #   openxlsx::read.xlsx(paste0(file_loc, "/Course_Factors.xlsx"))
   Factors <- data$snowcourse_factors
-  
+
   # 2. Add Day, Month and Year columns to the Meas dataframe:
   Meas$mon <- lubridate::month(Meas$target_date)
   Meas$yr <- lubridate::year(Meas$target_date)
   Meas$day <- lubridate::day(Meas$target_date)
-  
+
   # 3. Subset to month or months of interest
   Meas <- Meas %>% dplyr::filter(.data$mon %in% month & .data$day == 1)
-  
+
   # Create vector of basins
   basins <- c(
     "Pelly",
@@ -102,38 +123,53 @@ SWE_basin <- function(year,
   )
   # 4. go through each year one by one
   swe_basin_year <-
-    stats::setNames(data.frame(matrix(ncol = 5, nrow = 0)),
-                    c("basin", "yr", "mon", "swe", "perc"))
+    stats::setNames(
+      data.frame(matrix(ncol = 5, nrow = 0)),
+      c("basin", "yr", "mon", "swe", "perc")
+    )
   # Create year, month dataframe to run through
   yr_mon <- expand.grid(years = 1980:year, months = month)
-  
+
   for (ym in 1:nrow(yr_mon)) {
-    tab <- Meas %>% dplyr::filter(.data$yr == yr_mon[ym,1] & .data$mon == yr_mon[ym,2])
+    tab <- Meas %>%
+      dplyr::filter(.data$yr == yr_mon[ym, 1] & .data$mon == yr_mon[ym, 2])
     # Go through each basin one by one
     for (b in basins) {
       # subset factors to only what we need
-      fact <- Factors[, c(b, "location_id")]
+      fact <- Factors[, c(b, "location")]
       names(fact) <- c("val", "location_id")
-      fact <- fact[fact$val != 0,]
-      
+      fact <- fact[fact$val != 0, ]
+
       # Go through each location one by one
       # Initialize empty dataframe
-      sweb <- data.frame("location_id" = numeric(),
-                         "swe" = numeric(),
-                         "perc" = numeric())
+      sweb <- data.frame(
+        "location_id" = numeric(),
+        "swe" = numeric(),
+        "perc" = numeric()
+      )
       for (l in fact$location_id) {
         # Check if location has measurement in tab
-        if (length(tab[tab$location_id == l,]$SWE) == 0 |
-            is.null(tab[tab$location_id == l,]$SWE)) {
+        if (
+          length(tab[tab$location_id == l, ]$SWE) == 0 |
+            is.null(tab[tab$location_id == l, ]$SWE)
+        ) {
           # Create vector with location, swe, percentage of basin that it represents. 0 if value is missing
           swe <- c(l, NA, 0)
-        } else if (!is.null(tab[tab$location_id == l,]$SWE &
-                            length(tab[tab$location_id == l,]$SWE) == 1)) {
+        } else if (
+          !is.null(
+            tab[tab$location_id == l, ]$SWE &
+              length(tab[tab$location_id == l, ]$SWE) == 1
+          )
+        ) {
           # Create vector with location, swe, percentage of basin that it represents
           swe <-
-            c(l,
-              fact[fact$location_id == l,]$val * tab[tab$location_id == l,]$SWE / 10,
-              fact[fact$location_id == l,]$val)
+            c(
+              l,
+              fact[fact$location_id == l, ]$val *
+                tab[tab$location_id == l, ]$SWE /
+                10,
+              fact[fact$location_id == l, ]$val
+            )
         }
         # Calculate sum for basin with total percentage not missing
         sweb[nrow(sweb) + 1, ] = swe
@@ -145,31 +181,45 @@ SWE_basin <- function(year,
       } else {
         swe <- inf_to_na(sum(as.numeric(sweb$swe), na.rm = TRUE) * 10 / perc)
       }
-      swe_basin_year[nrow(swe_basin_year) + 1, ]  <- c(b, yr_mon[ym,1], yr_mon[ym,2], swe, perc)
+      swe_basin_year[nrow(swe_basin_year) + 1, ] <- c(
+        b,
+        yr_mon[ym, 1],
+        yr_mon[ym, 2],
+        swe,
+        perc
+      )
     }
     # swe_basin_year[nrow(swe_basin_year) + 1, ]  <- swe_basin_year
   }
-  
+
   # Set column classes
   swe_basin_year$yr <- as.numeric(swe_basin_year$yr)
   swe_basin_year$swe <- as.numeric(swe_basin_year$swe)
   swe_basin_year$perc <- as.numeric(swe_basin_year$perc)
-  
+
   # Add units and parameter
   swe_basin_year$parameter <- rep("SWE", length(swe_basin_year$basin))
   swe_basin_year$units <- rep("mm", length(swe_basin_year$basin))
-  
+
   # Get current year values
   swe_basin_current <- swe_basin_year %>%
     dplyr::filter(.data$yr == year)
-  
+
   # Remove years based on percentage of basin stations with measurements
   swe_basin_year <- swe_basin_year %>% dplyr::filter(perc >= threshold)
   swe_basin <- swe_basin_year
-  
+
   # rename columns
-  colnames(swe_basin) <- c("location", "year", "month", "value", "perc", "parameter", "units")
-  
+  colnames(swe_basin) <- c(
+    "location",
+    "year",
+    "month",
+    "value",
+    "perc",
+    "parameter",
+    "units"
+  )
+
   ## Calculate max, min and median historical SWE for each basin if summarise = TRUE
   if (summarise) {
     # calculate stats excluding current year
@@ -184,9 +234,13 @@ SWE_basin <- function(year,
         swe_median = stats::median(swe, na.rm = TRUE)
       )
     # combine tables
-    swe_basin_summary <- merge(swe_basin_summary, swe_basin_current[, c("basin", "mon", "swe")])
+    swe_basin_summary <- merge(
+      swe_basin_summary,
+      swe_basin_current[, c("basin", "mon", "swe")]
+    )
     # calculate relative swe
-    swe_basin_summary$swe_relative <- swe_basin_summary$swe / swe_basin_summary$swe_median
+    swe_basin_summary$swe_relative <- swe_basin_summary$swe /
+      swe_basin_summary$swe_median
     # round all values
     swe_basin_summary <- swe_basin_summary %>%
       dplyr::mutate(dplyr::across(
@@ -195,13 +249,14 @@ SWE_basin <- function(year,
       ))
     swe_basin <- swe_basin_summary
   }
-  
+
   # Write csv if csv = TRUE
   if (csv) {
-    utils::write.csv(swe_basin, file = paste0("SweBasin_", year, "-0", month, ".csv"), row.names = FALSE)
+    utils::write.csv(
+      swe_basin,
+      file = paste0("SweBasin_", year, "-0", month, ".csv"),
+      row.names = FALSE
+    )
   }
   return(swe_basin)
 }
-
-
-

@@ -138,16 +138,16 @@ plot_type_overlap,,Overlapping years,Années superposées
 plot_select_years,,Select years to plot,Sélectionnez les années à tracer
 plot_select_yrs,,"For periods overlapping the new year, select the December year","Pour les périodes chevauchant la nouvelle année, sélectionnez l’année de décembre."
 plot_type_ts,,Timeseries,Série temporelle
-plot_hist_range,,Plot historic range?,Tracer la plage historique
+plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec
 plot_hist_range_select_tooltip,,Choose whether the historic range should include all available years of record or only up to the last year shown on the plot.,Choisissez si la plage historique doit inclure toutes les années de données disponibles ou seulement jusqu’à la dernière année affichée sur le graphique.
 plot_extra_options,,Extra options,Options supplémentaires
-plot_apply_vert_datum,,Apply vertical datum?,Appliquer le référentiel vertical?
-plot_filter,,Filter extreme values?,Filtrer les valeurs extrêmes?
-plot_show_unusable,,Show unusable data?,Montrer les données inutilisables?
-plot_show_grades,,Show grades?,Montrer les cotes?
-plot_show_approvals,,Show approval levels?,Montrer les niveaux d'approbations?
-plot_show_qualifiers,,Show qualifiers?,Montrer les qualificatifs?
+plot_apply_vert_datum,,Apply vertical datum,Appliquer le référentiel vertical
+plot_filter,,Filter extreme values,Filtrer les valeurs extrêmes
+plot_show_unusable,,Show unusable data,Montrer les données inutilisables
+plot_show_grades,,Show grades,Montrer les cotes
+plot_show_approvals,,Show approval levels,Montrer les niveaux d'approbations
+plot_show_qualifiers,,Show qualifiers,Montrer les qualificatifs
 plot_last_30,,Last 30 days,Derniers 30 jours
 plot_all_record,,Entire record,Période entière
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
@@ -226,7 +226,7 @@ map_edit_second_param,,Edit secondary parameter,Modifier paramètre secondaire
 map_rm_second_param,,Remove secondary parameter,Enlever paramètre secondaire
 map_edit_aes,,Edit map aesthetics,Modifier l'esthétique de la carte
 gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes. In particular, note that very little of the data underlying the trends calculated has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives. En particulier, il convient de souligner que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
-gen_waterInfo_param_select,,One parameter or both?,Un ou deux paramètres?
+gen_waterInfo_param_select,,One parameter or both,Un ou deux paramètres
 gen_waterInfo_param_select_one,,"One (flow where exists, else level)","Un (débit si existe, autrement niveau)"
 gen_waterInfo_param_select_both,,Both (flow and level where both exist),Deux (débit et niveau lorsque existent)
 gen_loc_select,,"Select one, many, or all locations","Sélectionnez un, plusieurs, ou tous les endroits"
@@ -235,14 +235,14 @@ gen_waterInfo_end_date,,Last day to use for calculations,Dernière date à consi
 gen_waterInfo_min_months,,Months in which to look for minimums,Mois dans lesquels rechercher les valeurs minimum
 gen_waterInfo_max_months,,Months in which to look for maximums,Mois dans lesquels rechercher les valeurs maximum
 gen_waterInfo_prct_miss,,Max % missing data to retain annual value (in months of interest),Max % de données manquantes pour retenir une valeur annuelle (dans les mois d'intérêt)
-gen_generate_plots,,Generate plots?,Générer les graphiques?
-gen_waterInfo_ptype,,Min/max on single plot or separate?,Min/max sur le même graphique ou séparé?
+gen_generate_plots,,Generate plots,Générer les graphiques
+gen_waterInfo_ptype,,Min/max on single plot or separate,Min/max sur le même graphique ou séparé
 gen_waterInfo_ptype_combine,,Single,même
 gen_waterInfo_ptype_separate,,Separate,séparés
 gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (EEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
-gen_snowInfo_inactive,,Include inactive locations?,Inclure les emplacements inactifs?
-gen_snowInfo_complete,,Complete years only?,Années complètes seulement?
-gen_snowInfo_ptype,,Combined or separate plots?,Graphiques séparés ou combinés?
+gen_snowInfo_inactive,,Include inactive locations,Inclure les emplacements inactifs
+gen_snowInfo_complete,,Complete years only,Années complètes seulement
+gen_snowInfo_ptype,,Combined or separate plots,Graphiques séparés ou combinés
 gen_snowInfo_ptype_separate,,Separate,séparés
 gen_snowInfo_ptype_combine,,Combined,combinés
 gen_snowBul_info,,"This function allows you to create Excel workbooks with the statistics used in creating the Snow Bulletin, or to create the entire Snow Bulletin Word document.","Cette fonction vous permet de créer des documents Excel qui contiennent les statistics utilisées lors de la création du bulletin de conditions de neige, ou de créer le bulletin de neige en document Word."
