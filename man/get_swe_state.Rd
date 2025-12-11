@@ -36,7 +36,7 @@ Missing data is represented as NA.
 \dontrun{
 # Get pillow data for March 2025
 pillow_data <- get_swe_state(
-  base_data$pillows,
+  snowbull_data$pillows,
   year = 2025,
   month = 3,
   key = "timeseries_id"

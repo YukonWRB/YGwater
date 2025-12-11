@@ -82,10 +82,11 @@ plotTimeseries <- function(
   data = FALSE,
   con = NULL
 ) {
-  # location <- "29AB009"
+  # timeseries_id = NULL
+  # location <- "30AA003"
   # sub_location <- NULL
   # parameter = 1165
-  # start_date <- "2024-08-12"
+  # start_date <- "2022-08-12"
   # end_date <- "2025-08-13"
   # record_rate = NULL
   # aggregation_type = NULL
@@ -120,7 +121,7 @@ plotTimeseries <- function(
   # Checks and initial work ##########################################
 
   # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- NULL
 
   if (!is.null(resolution)) {
     if (resolution == "day" && raw) {
@@ -862,19 +863,22 @@ plotTimeseries <- function(
     }
 
     # Find gaps in range data and add NAs
-    # full_range <- data.table::data.table(
-    #   datetime = seq.POSIXt(
-    #     from = min(range_data$datetime),
-    #     to = max(range_data$datetime),
-    #     by = "day"
-    #   )
-    # )
-    # range_data <- merge(
-    #   full_range,
-    #   range_data,
-    #   by = "datetime",
-    #   all.x = TRUE
-    # )
+    full_range <- data.table::data.table(
+      datetime = seq.POSIXt(
+        from = min(range_data$datetime),
+        to = max(range_data$datetime),
+        by = "day"
+      )
+    )
+    range_data <- merge(
+      full_range,
+      range_data,
+      by = "datetime",
+      all.x = TRUE
+    )
+
+    # order by datetime
+    data.table::setorder(range_data, datetime)
   }
 
   if (!unusable) {
@@ -1043,6 +1047,24 @@ plotTimeseries <- function(
     }
   }
 
+  # Fix the range data
+  # Identify rows where stats exist
+  if (historic_range) {
+    range_data[,
+      has_stats := !is.na(q25) & !is.na(q75) & !is.na(min) & !is.na(max)
+    ]
+
+    # Create a run id that increments each time has_stats changes
+    range_data[, run := data.table::rleid(has_stats)]
+
+    # Keep only runs with data
+    range_runs <- split(
+      range_data[has_stats == TRUE],
+      by = "run",
+      keep.by = FALSE
+    )
+  }
+
   # Make the plot ###################################
   if (is.null(invert)) {
     if (parameter_tbl$plot_default_y_orientation[1] == "inverted") {
@@ -1062,46 +1084,115 @@ plotTimeseries <- function(
 
   plot <- plotly::plot_ly()
   if (historic_range) {
+    # plot <- plot %>%
+    #   plotly::add_ribbons(
+    #     data = range_data,
+    #     x = ~datetime,
+    #     ymin = ~q25,
+    #     ymax = ~q75,
+    #     # name = if (lang == "en") "IQR" else "EIQ",
+    #     name = if (lang == "en") "Typical" else "Typique",
+    #     color = I("#5f9da6"),
+    #     line = list(width = 0.2),
+    #     hoverinfo = if (hover) "text" else "none",
+    #     text = ~ paste0(
+    #       "Q25: ",
+    #       round(q25, 2),
+    #       ", Q75: ",
+    #       round(q75, 2),
+    #       " (",
+    #       as.Date(datetime),
+    #       ")"
+    #     )
+    #   ) %>%
+    #   plotly::add_ribbons(
+    #     data = range_data,
+    #     x = ~datetime,
+    #     ymin = ~min,
+    #     ymax = ~max,
+    #     # name = "Min-Max",
+    #     name = if (lang == "en") "Historic" else "Historique",
+    #     color = I("#D4ECEF"),
+    #     line = list(width = 0.2),
+    #     hoverinfo = if (hover) "text" else "none",
+    #     text = ~ paste0(
+    #       "Min: ",
+    #       round(.data$min, 2),
+    #       ", Max: ",
+    #       round(.data$max, 2),
+    #       " (",
+    #       as.Date(.data$datetime),
+    #       ")"
+    #     )
+    #   )
+    for (rd in range_runs) {
+      plot <- plot %>%
+        plotly::add_ribbons(
+          data = rd,
+          x = ~datetime,
+          ymin = ~q25,
+          ymax = ~q75,
+          name = if (lang == "en") "Typical" else "Typique",
+          color = I("#5f9da6"),
+          line = list(width = 0.2),
+          hoverinfo = if (hover) "text" else "none",
+          text = ~ paste0(
+            "Q25: ",
+            round(q25, 2),
+            ", Q75: ",
+            round(q75, 2),
+            " (",
+            as.Date(datetime),
+            ")"
+          ),
+          showlegend = FALSE
+        ) %>%
+        plotly::add_ribbons(
+          data = rd,
+          x = ~datetime,
+          ymin = ~min,
+          ymax = ~max,
+          name = if (lang == "en") "Historic" else "Historique",
+          color = I("#D4ECEF"),
+          line = list(width = 0.2),
+          hoverinfo = if (hover) "text" else "none",
+          text = ~ paste0(
+            "Min: ",
+            round(min, 2),
+            ", Max: ",
+            round(max, 2),
+            " (",
+            as.Date(datetime),
+            ")"
+          ),
+          showlegend = FALSE
+        )
+    }
+    # Add *visible* dummy legend keys (one point is enough)
+    key_rd <- range_runs[[1]][1]
+
     plot <- plot %>%
       plotly::add_ribbons(
-        data = range_data,
+        data = key_rd,
         x = ~datetime,
         ymin = ~q25,
         ymax = ~q75,
-        # name = if (lang == "en") "IQR" else "EIQ",
         name = if (lang == "en") "Typical" else "Typique",
         color = I("#5f9da6"),
         line = list(width = 0.2),
-        hoverinfo = if (hover) "text" else "none",
-        text = ~ paste0(
-          "Q25: ",
-          round(q25, 2),
-          ", Q75: ",
-          round(q75, 2),
-          " (",
-          as.Date(datetime),
-          ")"
-        )
+        hoverinfo = "none",
+        showlegend = TRUE
       ) %>%
       plotly::add_ribbons(
-        data = range_data,
+        data = key_rd,
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,
-        # name = "Min-Max",
         name = if (lang == "en") "Historic" else "Historique",
         color = I("#D4ECEF"),
         line = list(width = 0.2),
-        hoverinfo = if (hover) "text" else "none",
-        text = ~ paste0(
-          "Min: ",
-          round(.data$min, 2),
-          ", Max: ",
-          round(.data$max, 2),
-          " (",
-          as.Date(.data$datetime),
-          ")"
-        )
+        hoverinfo = "none",
+        showlegend = TRUE
       )
   }
 
@@ -1485,7 +1576,11 @@ plotTimeseries <- function(
   if (data) {
     datalist <- list(
       trace_data = trace_data,
-      range_data = if (historic_range) range_data else data.frame()
+      range_data = if (historic_range) {
+        range_data[, c("datetime", "min", "max", "q75", "q25")]
+      } else {
+        data.frame()
+      }
     )
     return(list(plot = plot, data = datalist))
   } else {

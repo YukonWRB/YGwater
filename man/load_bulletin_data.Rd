@@ -52,12 +52,12 @@ static (export) mapping applications.
 \examples{
 \dontrun{
 con <- AquaCache::AquaConnect(...)
-base_data <- load_bulletin_data(con)
+snowbull_data <- load_bulletin_data(con)
 
 # Check data availability
-print(sprintf("Loaded \%d pillow stations", nrow(base_data$pillows$metadata)))
-print(sprintf("Loaded \%d survey stations", nrow(base_data$surveys$metadata)))
-print(sprintf("Loaded \%d basins", nrow(base_data$basins$metadata)))
+print(sprintf("Loaded \%d pillow stations", nrow(snowbull_data$pillows$metadata)))
+print(sprintf("Loaded \%d survey stations", nrow(snowbull_data$surveys$metadata)))
+print(sprintf("Loaded \%d basins", nrow(snowbull_data$basins$metadata)))
 }
 
 }

@@ -5,10 +5,21 @@
 # Author: esniede
 # ===========================================================================
 
-# NOTE (ES): temprary workaround until re-install
-source("R/standardizeInputs.R")
-
-
+#' Create string of month names
+#'
+#' @description
+#' Generates a character vector of month names or abbreviations.
+#'
+#' @param month Optional integer vector of month numbers (1-12). If NULL, returns all months.
+#' @param short Logical indicating whether to return abbreviated month names (TRUE) or full names (FALSE). Default is FALSE.
+#'
+#' @return A character vector of month names or abbreviations
+#'
+#' @details
+#' The relative SWE bins are designed to highlight significant departures from normal
+#'
+#' @noRd
+#'
 snowbull_months <- function(month = NULL, short = FALSE) {
     months = c(
         "January",
@@ -26,14 +37,6 @@ snowbull_months <- function(month = NULL, short = FALSE) {
     )
     if (short) {
         months = tolower(substr(months, 1, 3))
-    }
-
-    if (!is.null(month)) {
-        #    if (month < 1 || month > 12) {
-        #        stop("Month must be between 1 and 12")
-        #    } else {
-        return(months[month])
-        #    }
     }
     return(months)
 }
@@ -1550,7 +1553,6 @@ split_communities <- function(communities) {
 #' @param year Integer target year for data extraction
 #' @param month Integer target month for data extraction
 #' @param key Character name of the key column in metadata (e.g., "timeseries_id", "location_id")
-#' @param language Character string for language
 #' @return data.frame subset of metadata with additional SWE value columns:
 #' \describe{
 #'   \item{swe}{Absolute SWE value in mm}
@@ -1657,7 +1659,7 @@ get_parameter_states <- function(
 #' @param year Integer year for plot focus
 #' @param con Database connection for historical data access
 #' @param station_name Optional character string for station name in plot title
-#' @param language Character string for language
+#' @param language Character string for language. Defaults to "English".
 #' @return Character string containing HTML with embedded base64 image
 #'
 #' @description
@@ -1687,7 +1689,7 @@ create_continuous_plot_popup <- function(
     station_name,
     language = "English"
 ) {
-    lang <- .shortenLanguage(language)
+    lang <- shortenLanguage(language)
 
     # Validate timeseries structure
     if (!is.data.frame(timeseries) || ncol(timeseries) < 2) {
@@ -1766,7 +1768,7 @@ create_continuous_plot_popup <- function(
 #'
 #' @param timeseries data.frame with timeseries data formatted for plotting
 #' @param station_name Character string for station name in plot title
-#' @param language Character string for language
+#' @param language Character string for language. Defaults to "English".
 #' @return Character string containing HTML with embedded base64 image
 #'
 #' @description
@@ -1795,7 +1797,7 @@ create_discrete_plot_popup <- function(
     # Clean and validate the data before plotting
     names(timeseries) <- c("datetime", "value")
 
-    lang <- .shortenLanguage(language)
+    lang <- shortenLanguage(language)
 
     timeseries$month <- as.integer(format(timeseries$datetime, "%m"))
     timeseries$year <- as.integer(format(timeseries$datetime, "%Y"))
@@ -2520,7 +2522,7 @@ get_processed_data <- function(
     shiny = TRUE,
     language = "English"
 ) {
-    lang <- .shortenLanguage(language)
+    lang <- shortenLanguage(language)
 
     # Extract data at points for the selected date
     states_basins <- get_parameter_states(
@@ -2707,7 +2709,7 @@ get_processed_data <- function(
 #' @param data List containing processed SWE data at basins, surveys, and pillows
 #' @param value_type Character string indicating which SWE value to visualize
 #' (e.g., "data", "relative_to_med", "percentile")
-#' @param language Character string indicating the language for labels and legends
+#' @param language Character string indicating the language for labels and legends. Default is "English".
 #' @param snowbull_data List containing all loaded base data, returned from load_bulletin_data()
 #' @param month Integer month for map title
 #' @param year Integer year for map title
@@ -3070,7 +3072,7 @@ leaflet_snow_bulletin_map <- function(
     requireNamespace("htmltools")
 
     # standadize language input
-    language <- .lengthenLanguage(language)
+    language <- lengthenLanguage(language)
 
     # Define color palettes and bins
     static_style_elements <- get_static_style_elements()
@@ -3149,6 +3151,8 @@ leaflet_snow_bulletin_map <- function(
 #' @param dpi Numeric resolution in dots per inch (default: 300)
 #' @param parameter_name Character, parameter to plot (default: "swe")
 #' @param type Character, "absolute", "relative", or "percentile" (default: "relative")
+#' @param language Character string indicating the language for labels and legends. Default is "English".
+#' (default: "English")
 #' @return A ggplot2 object with SWE basins and stations
 #'
 #' @description
@@ -3184,7 +3188,7 @@ ggplot_snow_bulletin_map <- function(
     type = "relative_to_med",
     language = "English"
 ) {
-    language <- .lengthenLanguage(language)
+    language <- lengthenLanguage(language)
 
     # Load required packages
     requireNamespace("ggplot2")
@@ -3509,14 +3513,4 @@ ggplot_snow_bulletin_map <- function(
         )
     }
     return(p)
-}
-
-
-if (sys.nframe() == 0) {
-    ggplot_snow_bulletin_map(
-        2025,
-        3,
-        filename = "swe_map_mar2025.png",
-        parameter_name = "precip"
-    )
 }

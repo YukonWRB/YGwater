@@ -8,12 +8,13 @@ ggplot_snow_bulletin_map(
   year,
   month,
   filename = NULL,
-  base_data = NULL,
+  snowbull_data = NULL,
   width = 12,
   height = 8,
   dpi = 300,
   parameter_name = "swe",
-  type = "relative_to_med"
+  type = "relative_to_med",
+  language = "English"
 )
 }
 \arguments{
@@ -23,7 +24,7 @@ ggplot_snow_bulletin_map(
 
 \item{filename}{Optional character string for PNG output file path}
 
-\item{base_data}{Optional preloaded base_data from \code{load_bulletin_data()}, otherwise loads from default connection}
+\item{snowbull_data}{Optional preloaded snowbull_data from \code{load_bulletin_data()}, otherwise loads from default connection}
 
 \item{width}{Numeric width of the plot in inches (default: 12)}
 
@@ -34,6 +35,9 @@ ggplot_snow_bulletin_map(
 \item{parameter_name}{Character, parameter to plot (default: "swe")}
 
 \item{type}{Character, "absolute", "relative", or "percentile" (default: "relative")}
+
+\item{language}{Character string indicating the language for labels and legends. Default is "English".
+(default: "English")}
 }
 \value{
 A ggplot2 object with SWE basins and stations

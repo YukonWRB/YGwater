@@ -11,7 +11,7 @@
 #' @param plots Set TRUE if you want plots of SWE, depth, and density generated (but see next parameter).
 #' @param plot_type Set to "separate" for 3 plots per location, or "combined" for a single compound plot per location.
 #' @param quiet Suppresses most messages and warnings.
-#' @param headers Choose from 'file', 'object', 'both', or 'none'. Specifies whether to include headers (metadata about the data pull) in the saved files, the returned R objects, or both. Default is 'file' (i.e., only in the saved file).
+#' @param headers Choose from 'file', 'object', 'both', or 'none'. Specifies whether to include headers (metadata about the data pull) in the saved files, the returned R objects (as a separate list), or both. Default is 'file' (i.e., only in the saved file).
 #' @param con A connection to the aquacache. Leave as NULL to use [AquaConnect()] to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.
 #'
 #' @return A list with four data.frames: location metadata, basic statistics, trend information, and snow course measurements is returned to the R environment. In addition, an Excel workbook is saved to the save_path with the four data.frames, and a new folder created to hold SWE and depth plots for each station requested.
@@ -1066,40 +1066,145 @@ snowInfo <- function(
   } else {
     out <- list("locations" = locations, "measurements" = results)
   }
+
+  if (headers != "none") {
+    head_locations <- data.frame(
+      c(
+        "Description: Metadata about Yukon snow survey locations. Information is fetched in real-time and reflects the location metadata at query time.",
+        paste0(
+          "Generated at : ",
+          substr(format(Sys.time(), tz = "MST"), 1, 16),
+          " MST"
+        ),
+        "Report Title: Snow survey location metadata",
+        paste0(
+          "Date metadata last modified: ",
+          as.character(last_metadata_modified)
+        ),
+        "",
+        "Fields information:",
+        "location_code: Unique code for the snow survey location, with prefix correspond to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
+        "note: short descriptions of significant events affecting the records, if course was discontinued, of deviations from standard 10-pt snow course, where partners outside of Yukon Governemnt conduct surveys, where an automated snow-weather station is paired with the course, etc.",
+        "march1_surveys: Count of surveys conducted on March 1",
+        "april1_surveys: Count of surveys conducted on April 1",
+        "may1_surveys: Count of surveys conducted on May 1",
+        "may15_surveys: Count of surveys conducted on May 15"
+      ),
+      stringsAsFactors = FALSE
+    )
+
+    head_stats <- data.frame(c(
+      "Description: Summary statistics for Yukon snow survey locations. Statistics are computed in real-time and reflect the measurements at query time.",
+      if (complete_yrs) {
+        "Only complete years are considered for statistics (i.e., if the current year is incomplete, it is excluded)."
+      } else {
+        "All years with any data are considered for statistics, including the current year."
+      },
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "total_record_yrs: Total number of years with snow survey data on record",
+      "missing_yrs: Years between start and end year with no snow survey data on record",
+      "sample_months: Months in which snow surveys were conducted (abbreviated month names)",
+      "max_SWE_mm: Maximum SWE (mm) recorded on any survey",
+      "mean_max_SWE_mm: Mean of annual maximum SWE (mm) values",
+      "median_max_SWE_mm: Median of annual maximum SWE (mm) values",
+      "max_DEPTH_cm: Maximum snow depth (cm) recorded on any survey",
+      "mean_max_DEPTH_cm: Mean of annual maximum snow depth (cm) values",
+      "median_max_DEPTH_cm: Median of annual maximum snow depth (cm) values"
+    ))
+
+    head_trends <- data.frame(c(
+      "Description: Trend analysis for Yukon snow survey locations. Trends are computed in real-time and reflect the measurements at query time.",
+      if (complete_yrs) {
+        "Only complete years are considered for trend calculations (i.e., if the current year is incomplete, it is excluded)."
+      } else {
+        "All years with any data are considered for trend calculations, including the current year."
+      },
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "p.value_SWE_max: P-value for Mann-Kendall trend test on annual maximum SWE (mm) values",
+      "sens.slope_SWE_max: Sen's slope estimate for trend on annual maximum SWE (mm) values",
+      "n_years_SWE: Number of years of data used in trend calculation for SWE",
+      "p.value_DEPTH_max: P-value for Mann-Kendall trend test on annual maximum snow depth (cm) values",
+      "sens.slope_DEPTH_max: Sen's slope estimate for trend on annual maximum snow depth (cm) values",
+      "n_years_DEPTH: Number of years of data used in trend calculation for snow depth",
+      "annual_prct_chg_SWE: Estimated annual percent change in maximum SWE (mm)",
+      "annual_prct_chg_DEPTH: Estimated annual percent change in maximum snow depth (cm)",
+      "note: Additional information about the trend calculations"
+    ))
+
+    head_territory <- data.frame(c(
+      "Description: Territory-wide summary statistics and trend analysis for Yukon snow survey locations. Statistics and trends are computed in real-time and reflect the measurements at query time.",
+      if (complete_yrs) {
+        "Only complete years are considered for statistics and trends (i.e., if the current year is incomplete, it is excluded)."
+      } else {
+        "All years with any data are considered for statistics and trends, including the current year."
+      },
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "subset: Indicates whether the row corresponds to mean of annual maximum values or mean of April 1 values",
+      "inactive_locs: TRUE/FALSE indicating whether inactive locations were included in calculations",
+      "n_locs: Number of locations included in calculations",
+      "yr_start: Start year for calculations",
+      "yr_end: End year for calculations",
+      "mean_SWE_mm: Mean SWE (mm) across all locations and years",
+      "median_SWE_mm: Median SWE (mm) across all locations and years",
+      "mean_DEPTH_cm: Mean snow depth (cm) across all locations and years",
+      "median_DEPTH_cm: Median snow depth (cm) across all locations and years",
+      "p.val_SWE_mean: P-value for Mann-Kendall trend test on territory-averaged SWE (mm)",
+      "sens.slope_SWE_mean: Sen's slope estimate for trend on territory-averaged SWE (mm)",
+      "p.val_DEPTH_mean: P-value for Mann-Kendall trend test on territory-averaged snow depth (cm)",
+      "sens.slope_DEPTH_mean: Sen's slope estimate for trend on territory-averaged snow depth (cm)",
+      "annual_prct_chg_SWE: Estimated annual percent change in territory-averaged SWE (mm)",
+      "annual_prct_chg_DEPTH: Estimated annual percent change in territory-averaged snow depth (cm)",
+      "description: Additional information about the calculations"
+    ))
+
+    head_measurements <- data.frame(c(
+      "Description: Snow survey measurements for Yukon snow survey locations. Measurements are fetched in real-time and reflect the data at query time.",
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "location_code: Unique code for the snow survey location, with prefix correspond to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
+      "parameter: Name of the measured parameter (snow water equivalent, snow depth)",
+      "units: Units of the measured parameter",
+      "sample_date: True date when the snow survey measurement was taken",
+      "target_date: Target date for which the snow survey measurement is intended to represent",
+      "year: Year of the target date",
+      "month: Month of the target date. 2 = February, 3 = March, 4 = April, 5 = May, 5.5 = May 15",
+      "result: Measured value for the parameter"
+    ))
+  }
+
   if (!is.null(save_path)) {
     wb <- openxlsx::createWorkbook()
     for (sheet_name in names(out)) {
       openxlsx::addWorksheet(wb, sheetName = sheet_name)
       if (sheet_name == "locations") {
         if (headers %in% c("both", "file")) {
-          head <- data.frame(
-            c(
-              "Description: Metadata about Yukon snow survey locations. Information is fetched in real-time and reflects the location metadata at query time.",
-              paste0(
-                "Generated at : ",
-                substr(format(Sys.time(), tz = "MST"), 1, 16),
-                " MST"
-              ),
-              "Report Title: Snow survey location metadata",
-              paste0(
-                "Date metadata last modified: ",
-                as.character(last_metadata_modified)
-              ),
-              "",
-              "Fields information:",
-              "location_code: Unique code for the snow survey location, with prefix correspond to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
-              "note: short descriptions of significant events affecting the records, if course was discontinued, of deviations from standard 10-pt snow course, where partners outside of Yukon Governemnt conduct surveys, where an automated snow-weather station is paired with the course, etc.",
-              "march1_surveys: Count of surveys conducted on March 1",
-              "april1_surveys: Count of surveys conducted on April 1",
-              "may1_surveys: Count of surveys conducted on May 1",
-              "may15_surveys: Count of surveys conducted on May 15"
-            ),
-            stringsAsFactors = FALSE
-          )
           openxlsx::writeData(
             wb,
             sheet = sheet_name,
-            x = head,
+            x = head_locations,
             startCol = 1,
             startRow = 1,
             colNames = FALSE
@@ -1109,7 +1214,7 @@ snowInfo <- function(
             sheet = sheet_name,
             x = out[[sheet_name]],
             startCol = 1,
-            startRow = nrow(head) + 2
+            startRow = nrow(head_locations) + 2
           )
         } else {
           openxlsx::writeData(
@@ -1122,34 +1227,10 @@ snowInfo <- function(
         }
       } else if (sheet_name == "stats") {
         if (headers %in% c("both", "file")) {
-          head <- data.frame(c(
-            "Description: Summary statistics for Yukon snow survey locations. Statistics are computed in real-time and reflect the measurements at query time.",
-            if (complete_yrs) {
-              "Only complete years are considered for statistics (i.e., if the current year is incomplete, it is excluded)."
-            } else {
-              "All years with any data are considered for statistics, including the current year."
-            },
-            paste0(
-              "Generated at : ",
-              substr(format(Sys.time(), tz = "MST"), 1, 16),
-              " MST"
-            ),
-            "",
-            "Fields information:",
-            "total_record_yrs: Total number of years with snow survey data on record",
-            "missing_yrs: Years between start and end year with no snow survey data on record",
-            "sample_months: Months in which snow surveys were conducted (abbreviated month names)",
-            "max_SWE_mm: Maximum SWE (mm) recorded on any survey",
-            "mean_max_SWE_mm: Mean of annual maximum SWE (mm) values",
-            "median_max_SWE_mm: Median of annual maximum SWE (mm) values",
-            "max_DEPTH_cm: Maximum snow depth (cm) recorded on any survey",
-            "mean_max_DEPTH_cm: Mean of annual maximum snow depth (cm) values",
-            "median_max_DEPTH_cm: Median of annual maximum snow depth (cm) values"
-          ))
           openxlsx::writeData(
             wb,
             sheet = sheet_name,
-            x = head,
+            x = head_stats,
             startCol = 1,
             startRow = 1,
             colNames = FALSE
@@ -1159,7 +1240,7 @@ snowInfo <- function(
             sheet = sheet_name,
             x = out[[sheet_name]],
             startCol = 1,
-            startRow = nrow(head) + 2
+            startRow = nrow(head_stats) + 2
           )
         } else {
           openxlsx::writeData(
@@ -1172,34 +1253,10 @@ snowInfo <- function(
         }
       } else if (sheet_name == "trends") {
         if (headers %in% c("both", "file")) {
-          head <- data.frame(c(
-            "Description: Trend analysis for Yukon snow survey locations. Trends are computed in real-time and reflect the measurements at query time.",
-            if (complete_yrs) {
-              "Only complete years are considered for trend calculations (i.e., if the current year is incomplete, it is excluded)."
-            } else {
-              "All years with any data are considered for trend calculations, including the current year."
-            },
-            paste0(
-              "Generated at : ",
-              substr(format(Sys.time(), tz = "MST"), 1, 16),
-              " MST"
-            ),
-            "",
-            "Fields information:",
-            "p.value_SWE_max: P-value for Mann-Kendall trend test on annual maximum SWE (mm) values",
-            "sens.slope_SWE_max: Sen's slope estimate for trend on annual maximum SWE (mm) values",
-            "n_years_SWE: Number of years of data used in trend calculation for SWE",
-            "p.value_DEPTH_max: P-value for Mann-Kendall trend test on annual maximum snow depth (cm) values",
-            "sens.slope_DEPTH_max: Sen's slope estimate for trend on annual maximum snow depth (cm) values",
-            "n_years_DEPTH: Number of years of data used in trend calculation for snow depth",
-            "annual_prct_chg_SWE: Estimated annual percent change in maximum SWE (mm)",
-            "annual_prct_chg_DEPTH: Estimated annual percent change in maximum snow depth (cm)",
-            "note: Additional information about the trend calculations"
-          ))
           openxlsx::writeData(
             wb,
             sheet = sheet_name,
-            x = head,
+            x = head_trends,
             startCol = 1,
             startRow = 1,
             colNames = FALSE
@@ -1209,7 +1266,7 @@ snowInfo <- function(
             sheet = sheet_name,
             x = out[[sheet_name]],
             startCol = 1,
-            startRow = nrow(head) + 2
+            startRow = nrow(head_trends) + 2
           )
         } else {
           openxlsx::writeData(
@@ -1222,41 +1279,10 @@ snowInfo <- function(
         }
       } else if (sheet_name == "territory_stats_trends") {
         if (headers %in% c("both", "file")) {
-          head <- data.frame(c(
-            "Description: Territory-wide summary statistics and trend analysis for Yukon snow survey locations. Statistics and trends are computed in real-time and reflect the measurements at query time.",
-            if (complete_yrs) {
-              "Only complete years are considered for statistics and trends (i.e., if the current year is incomplete, it is excluded)."
-            } else {
-              "All years with any data are considered for statistics and trends, including the current year."
-            },
-            paste0(
-              "Generated at : ",
-              substr(format(Sys.time(), tz = "MST"), 1, 16),
-              " MST"
-            ),
-            "",
-            "Fields information:",
-            "subset: Indicates whether the row corresponds to mean of annual maximum values or mean of April 1 values",
-            "inactive_locs: TRUE/FALSE indicating whether inactive locations were included in calculations",
-            "n_locs: Number of locations included in calculations",
-            "yr_start: Start year for calculations",
-            "yr_end: End year for calculations",
-            "mean_SWE_mm: Mean SWE (mm) across all locations and years",
-            "median_SWE_mm: Median SWE (mm) across all locations and years",
-            "mean_DEPTH_cm: Mean snow depth (cm) across all locations and years",
-            "median_DEPTH_cm: Median snow depth (cm) across all locations and years",
-            "p.val_SWE_mean: P-value for Mann-Kendall trend test on territory-averaged SWE (mm)",
-            "sens.slope_SWE_mean: Sen's slope estimate for trend on territory-averaged SWE (mm)",
-            "p.val_DEPTH_mean: P-value for Mann-Kendall trend test on territory-averaged snow depth (cm)",
-            "sens.slope_DEPTH_mean: Sen's slope estimate for trend on territory-averaged snow depth (cm)",
-            "annual_prct_chg_SWE: Estimated annual percent change in territory-averaged SWE (mm)",
-            "annual_prct_chg_DEPTH: Estimated annual percent change in territory-averaged snow depth (cm)",
-            "description: Additional information about the calculations"
-          ))
           openxlsx::writeData(
             wb,
             sheet = sheet_name,
-            x = head,
+            x = head_territory,
             startCol = 1,
             startRow = 1,
             colNames = FALSE
@@ -1266,7 +1292,7 @@ snowInfo <- function(
             sheet = sheet_name,
             x = out[[sheet_name]],
             startCol = 1,
-            startRow = nrow(head) + 2
+            startRow = nrow(head_territory) + 2
           )
         } else {
           openxlsx::writeData(
@@ -1279,28 +1305,10 @@ snowInfo <- function(
         }
       } else if (sheet_name == "measurements") {
         if (headers %in% c("both", "file")) {
-          head <- data.frame(c(
-            "Description: Snow survey measurements for Yukon snow survey locations. Measurements are fetched in real-time and reflect the data at query time.",
-            paste0(
-              "Generated at : ",
-              substr(format(Sys.time(), tz = "MST"), 1, 16),
-              " MST"
-            ),
-            "",
-            "Fields information:",
-            "location_code: Unique code for the snow survey location, with prefix correspond to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
-            "parameter: Name of the measured parameter (snow water equivalent, snow depth)",
-            "units: Units of the measured parameter",
-            "sample_date: True date when the snow survey measurement was taken",
-            "target_date: Target date for which the snow survey measurement is intended to represent",
-            "year: Year of the target date",
-            "month: Month of the target date. 2 = February, 3 = March, 4 = April, 5 = May, 5.5 = May 15",
-            "result: Measured value for the parameter"
-          ))
           openxlsx::writeData(
             wb,
             sheet = sheet_name,
-            x = head,
+            x = head_measurements,
             startCol = 1,
             startRow = 1,
             colNames = FALSE
@@ -1310,7 +1318,7 @@ snowInfo <- function(
             sheet = sheet_name,
             x = out[[sheet_name]],
             startCol = 1,
-            startRow = nrow(head) + 2
+            startRow = nrow(head_measurements) + 2
           )
         } else {
           openxlsx::writeData(
@@ -1346,7 +1354,15 @@ snowInfo <- function(
   }
 
   # Add headers to the output object if requested. Same as above, but consider that the returned object must go to .csv
-  if (headers %in% c("both", "object")) {}
+  if (headers %in% c("both", "object")) {
+    out[["headers"]] <- list(
+      "locations" = head_locations,
+      "stats" = head_stats,
+      "trends" = head_trends,
+      "territory_stats_trends" = head_territory,
+      "measurements" = head_measurements
+    )
+  }
 
   return(out)
 } #End of function

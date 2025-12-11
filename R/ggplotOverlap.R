@@ -119,7 +119,7 @@ ggplotOverlap <- function(
     on.exit(DBI::dbDisconnect(con))
   }
 
-  lang <- .shortenLanguage(lang)
+  lang <- shortenLanguage(lang)
 
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   old_warn <- getOption("warn")

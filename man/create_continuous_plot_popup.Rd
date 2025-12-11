@@ -4,7 +4,13 @@
 \alias{create_continuous_plot_popup}
 \title{Create base64-encoded ggplotOverlap plot for continuous stations}
 \usage{
-create_continuous_plot_popup(timeseries, year, con, station_name)
+create_continuous_plot_popup(
+  timeseries,
+  year,
+  con,
+  station_name,
+  language = "English"
+)
 }
 \arguments{
 \item{timeseries}{data.frame with 'datetime' and station value columns}
@@ -14,6 +20,8 @@ create_continuous_plot_popup(timeseries, year, con, station_name)
 \item{con}{Database connection for historical data access}
 
 \item{station_name}{Optional character string for station name in plot title}
+
+\item{language}{Character string for language. Defaults to "English".}
 }
 \value{
 Character string containing HTML with embedded base64 image
@@ -34,7 +42,7 @@ The plot shows:
 }
 \examples{
 \dontrun{
-station_ts <- base_data$pillows$timeseries$data[, c("datetime", "123")]
+station_ts <- snowbull_data$pillows$timeseries$data[, c("datetime", "123")]
 popup_html <- create_continuous_plot_popup(station_ts, 2025, con)
 }
 }

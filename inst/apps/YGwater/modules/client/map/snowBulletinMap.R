@@ -17,9 +17,6 @@
 # - Timeseries data: Continuous and discrete measurements database
 # - Snowcourse factors: CSV file with basin weighting factors
 # =============================================================================
-# Load utility functions and color palettes
-#source("R/SWE_maputils.R")
-# =============================================================================
 # DATA LOADING AND PROCESSING
 # =============================================================================
 
