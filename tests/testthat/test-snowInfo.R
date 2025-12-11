@@ -28,6 +28,7 @@ test_that("locations table has correct names", {
       'metadata_modified',
       'first_survey',
       'last_survey',
+      'feb1_surveys',
       'march1_surveys',
       'april1_surveys',
       'may1_surveys',

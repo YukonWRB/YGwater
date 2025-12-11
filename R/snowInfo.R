@@ -183,9 +183,9 @@ snowInfo <- function(
     stop("No snow survey results were found for the selected locations.")
   }
 
-  #Manipulate/preprocess things a bit
+  #M anipulate/preprocess things a bit
   samples$year <- lubridate::year(samples$target_datetime)
-  # samples$month <- lubridate::month(samples$target_datetime)
+
   # Create samples$month, but be aware than May could have sampling on the 15th as well as on the 1st. The 15th should become month 5.5
   samples$month <- round(
     as.numeric(
@@ -927,9 +927,10 @@ snowInfo <- function(
     ]
   }
 
-  # Add column to locations for 'last_survey' 'first_survey_date', 'march1_surveys', 'april1_surveys', 'may1_surveys' (counts of surveys on those dates, using target_datetime)
+  # Add column to locations for 'last_survey' 'first_survey_date', 'feb1_surveys', 'march1_surveys', 'april1_surveys', 'may1_surveys' (counts of surveys on those dates, using target_datetime)
   locations$first_survey <- NA
   locations$last_survey <- NA
+  locations$feb1_surveys <- NA
   locations$march1_surveys <- NA
   locations$april1_surveys <- NA
   locations$may1_surveys <- NA
@@ -944,6 +945,7 @@ snowInfo <- function(
     locations$last_survey[i] <- as.character(as.Date(max(
       surveys$target_datetime
     )))
+    locations$feb1_surveys[i] <- nrow(surveys[surveys$month == 2, ])
     locations$march1_surveys[i] <- nrow(surveys[surveys$month == 3, ])
     locations$april1_surveys[i] <- nrow(surveys[surveys$month == 4, ])
     locations$may1_surveys[i] <- nrow(surveys[surveys$month == 5, ])
@@ -971,6 +973,7 @@ snowInfo <- function(
     "modified",
     "first_survey",
     "last_survey",
+    "feb1_surveys",
     "march1_surveys",
     "april1_surveys",
     "may1_surveys",
@@ -989,6 +992,7 @@ snowInfo <- function(
     "metadata_modified",
     "first_survey",
     "last_survey",
+    "feb1_surveys",
     "march1_surveys",
     "april1_surveys",
     "may1_surveys",
@@ -1042,6 +1046,9 @@ snowInfo <- function(
   # Make 'month' a character column so it prints without the trailing .0
   results$month <- as.character(results$month)
 
+  # Replace 'flag' values of Estimated with Estimated SWE
+  results$flag[results$flag == "Estimated"] <- "Estimated SWE"
+
   # Order by location_code and target_date
   results <- results[order(results$location_code, results$target_date), ]
 
@@ -1085,6 +1092,8 @@ snowInfo <- function(
         "Fields information:",
         "location_code: Unique code for the snow survey location, with prefix correspond to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
         "note: short descriptions of significant events affecting the records, if course was discontinued, of deviations from standard 10-pt snow course, where partners outside of Yukon Governemnt conduct surveys, where an automated snow-weather station is paired with the course, etc.",
+        "sub_basin: Drainage Basins as presented in Yukon Snow Bulletins.",
+        "feb1_surveys: Count of surveys conducted on February 1",
         "march1_surveys: Count of surveys conducted on March 1",
         "april1_surveys: Count of surveys conducted on April 1",
         "may1_surveys: Count of surveys conducted on May 1",
@@ -1191,7 +1200,8 @@ snowInfo <- function(
       "target_date: Target date for which the snow survey measurement is intended to represent",
       "year: Year of the target date",
       "month: Month of the target date. 2 = February, 3 = March, 4 = April, 5 = May, 5.5 = May 15",
-      "result: Measured value for the parameter"
+      "result: Measured value for the parameter",
+      "flag: Actual = averaged value from actual snow depth and snow water equivalent readings; Estimated SWE = averaged value from actual snow depth readings and estimated snow water equivalent result based on current snow depth and average historical density."
     ))
   }
 
