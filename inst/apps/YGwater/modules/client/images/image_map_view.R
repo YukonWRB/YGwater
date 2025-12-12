@@ -3,7 +3,8 @@
 imgMapViewUI <- function(id) {
   ns <- NS(id)
   tagList(
-    tags$style(HTML(sprintf("
+    tags$style(HTML(sprintf(
+      "
       /* Add colors to the accordion. Using ns() makes it specific to this module. */
       #%s .accordion {
         /* body background */
@@ -13,7 +14,9 @@ imgMapViewUI <- function(id) {
         /* expanded header */
         --bs-accordion-active-bg:   #FBE5B2;
       }
-    ", ns("accordion")))),
+    ",
+      ns("accordion")
+    ))),
     # All UI elements are rendered in the server function to allow multi-language functionality
     page_fluid(
       # Top row with filters (collapsible using bslib accordion)
@@ -35,12 +38,17 @@ imgMapView <- function(id, language) {
         "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE i.datetime > NOW() - INTERVAL '7 days'"
       )
     )
-    images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
+    images$unique_types <- images$images[
+      !duplicated(images$images$image_type),
+      c("image_type_id", "image_type")
+    ]
 
     images$images <- images$images[order(images$images$datetime), ]
 
     images$images$tags_list <- lapply(images$images$tags, function(raw) {
-      if (is.na(raw) || raw == "") return(character(0))
+      if (is.na(raw) || raw == "") {
+        return(character(0))
+      }
       inner <- gsub('["{}]', "", raw)
       strsplit(inner, ",", fixed = TRUE)[[1]]
     })
@@ -49,22 +57,33 @@ imgMapView <- function(id, language) {
 
     selections = reactiveValues()
     selections$filter <- rep(TRUE, nrow(images$images))
-    selected_colour = rgb(0, 1, 1, 0.8)  # Cyan with 0.5 transparency for the selected image in the mini timeline plot
+    selected_colour = rgb(0, 1, 1, 0.8) # Cyan with 0.5 transparency for the selected image in the mini timeline plot
 
     renderSelectedImage <- function(id) {
       if (is.na(id)) {
         return(NULL)
       } else {
-        output$img <- renderImage({
-          image <- DBI::dbGetQuery(session$userData$AquaCache, paste0("SELECT format, file FROM images WHERE image_id = ", id))
-          if (nrow(image) == 1 && !is.null(image$file)) {
-            outfile <- tempfile(fileext = paste0(".", image$format))
-            writeBin(image$file[[1]], outfile)
-            list(src = outfile, alt = "User selected image", width = "100%", height = "auto")
-          } else {
-            list(src = NULL)
-          }
-        }, deleteFile = TRUE)
+        output$img <- renderImage(
+          {
+            image <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              paste0("SELECT format, file FROM images WHERE image_id = ", id)
+            )
+            if (nrow(image) == 1 && !is.null(image$file)) {
+              outfile <- tempfile(fileext = paste0(".", image$format))
+              writeBin(image$file[[1]], outfile)
+              list(
+                src = outfile,
+                alt = "User selected image",
+                width = "100%",
+                height = "auto"
+              )
+            } else {
+              list(src = NULL)
+            }
+          },
+          deleteFile = TRUE
+        )
       }
     }
 
@@ -122,7 +141,10 @@ imgMapView <- function(id, language) {
               selectizeInput(
                 ns("img_type"),
                 label = "Image type",
-                choices = stats::setNames(images$unique_types$image_type_id, images$unique_types$image_type),
+                choices = stats::setNames(
+                  images$unique_types$image_type_id,
+                  images$unique_types$image_type
+                ),
                 selected = NULL,
                 multiple = TRUE
               )
@@ -144,14 +166,18 @@ imgMapView <- function(id, language) {
           id = ns("map_options"),
           title = "Map options",
           page_fluid(
-            actionButton(ns("load_additional_layers"), "Load additional layers"),
+            actionButton(
+              ns("load_additional_layers"),
+              "Load additional layers"
+            ),
             actionButton(ns("reset_view"), "Reset view"),
             actionButton(ns("refresh_images"), "Refresh images"),
             checkboxInput(ns("cluster_map"), "Cluster map", value = TRUE)
           )
         )
       )
-    }) |> bindEvent(language$language)
+    }) |>
+      bindEvent(language$language)
 
     output$sidebar_page <- renderUI({
       page_sidebar(
@@ -176,9 +202,21 @@ imgMapView <- function(id, language) {
 
     output$map <- leaflet::renderLeaflet({
       leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 13)) %>%
-        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite", options = leaflet::providerTileOptions(attribution = "")) %>%
-        leaflet::addProviderTiles("USGS.USTopo", group = "USGS", options = leaflet::providerTileOptions(attribution = "")) %>%
-        leaflet::addProviderTiles("Stadia.StamenTerrain", group = "Terrain", options = leaflet::providerTileOptions(attribution = "")) %>%
+        leaflet::addProviderTiles(
+          "Esri.WorldImagery",
+          group = "Satellite",
+          options = leaflet::providerTileOptions(attribution = "")
+        ) %>%
+        leaflet::addProviderTiles(
+          "USGS.USTopo",
+          group = "USGS",
+          options = leaflet::providerTileOptions(attribution = "")
+        ) %>%
+        leaflet::addProviderTiles(
+          "Stadia.StamenTerrain",
+          group = "Terrain",
+          options = leaflet::providerTileOptions(attribution = "")
+        ) %>%
         leaflet::addLayersControl(
           baseGroups = c("Satellite", "USGS", "Terrain"),
           options = leaflet::layersControlOptions(collapsed = FALSE)
@@ -194,11 +232,13 @@ imgMapView <- function(id, language) {
     updateMap <- function(selection) {
       filtered_images <- images$images[selection, ]
       if (nrow(filtered_images) == 0) {
-        leaflet::leafletProxy("map", session) %>% leaflet::clearMarkerClusters()
+        leaflet::leafletProxy("map", session) %>%
+          leaflet::clearMarkers() %>%
+          leaflet::clearMarkerClusters()
       } else {
         leaflet::leafletProxy("map", session) %>%
-          leaflet::clearMarkerClusters() %>%
           leaflet::clearMarkers() %>%
+          leaflet::clearMarkerClusters() %>%
           leaflet::addCircleMarkers(
             data = filtered_images,
             lng = ~longitude,
@@ -209,8 +249,15 @@ imgMapView <- function(id, language) {
             color = "#3182bd",
             fillColor = "#3182bd",
             fillOpacity = 0.9,
-            label = ~as.character(image_id),
-            clusterOptions = if (isTRUE(input$cluster_map)) leaflet::markerClusterOptions(spiderfyDistanceMultiplier = 1.2, showCoverageOnHover = TRUE) else NULL
+            label = ~ as.character(image_id),
+            clusterOptions = if (isTRUE(input$cluster_map)) {
+              leaflet::markerClusterOptions(
+                spiderfyDistanceMultiplier = 1.2,
+                showCoverageOnHover = TRUE
+              )
+            } else {
+              NULL
+            }
           ) %>%
           leaflet::fitBounds(
             min(filtered_images$longitude, na.rm = TRUE),
@@ -228,7 +275,9 @@ imgMapView <- function(id, language) {
     observe({
       req(selections$filter)
       filtered_ids <- images$images$image_id[selections$filter]
-      if (!is.null(selections$img_id) && !(selections$img_id %in% filtered_ids)) {
+      if (
+        !is.null(selections$img_id) && !(selections$img_id %in% filtered_ids)
+      ) {
         selections$img_id <- NA
       }
     })
@@ -239,8 +288,12 @@ imgMapView <- function(id, language) {
       leaflet::leafletProxy("map", session) %>%
         leaflet::clearGroup("selected_marker") %>%
         leaflet::addCircleMarkers(
-          lng = images$images$longitude[images$images$image_id == selections$img_id],
-          lat = images$images$latitude[images$images$image_id == selections$img_id],
+          lng = images$images$longitude[
+            images$images$image_id == selections$img_id
+          ],
+          lat = images$images$latitude[
+            images$images$image_id == selections$img_id
+          ],
           radius = 12,
           color = selected_colour,
           fillColor = selected_colour,
@@ -295,29 +348,55 @@ imgMapView <- function(id, language) {
       req(selections$in_view, selections$img_id)
       output$img_graph <- renderPlot({
         images_filtered <- images$images[selections$in_view, ]
-        if (nrow(images_filtered) == 0) return(NULL)
+        if (nrow(images_filtered) == 0) {
+          return(NULL)
+        }
         min_datetime <- min(images_filtered$datetime, na.rm = TRUE)
         max_datetime <- max(images_filtered$datetime, na.rm = TRUE)
         par(mar = c(2, 0, 0, 0))
         plot(
           images_filtered$datetime,
           rep(1, nrow(images_filtered)),
-          type = "n", axes = FALSE, ylab = "",
+          type = "n",
+          axes = FALSE,
+          ylab = "",
           xlim = c(min_datetime, max_datetime),
           ylim = c(0.9, 1.1),
           xlab = "Date/Time (UTC-7)"
         )
         unique_dates <- unique(as.Date(images_filtered$datetime))
-        n_ticks <- max(3, min(length(unique_dates), 7, na.rm = TRUE), na.rm = TRUE)
-        x_ticks <- pretty(range(images_filtered$datetime, na.rm = TRUE), n = n_ticks)
-        axis(1, at = x_ticks, labels = format(x_ticks, "%d-%b-%Y"), las = 0, cex.axis = 0.7)
+        n_ticks <- max(
+          3,
+          min(length(unique_dates), 7, na.rm = TRUE),
+          na.rm = TRUE
+        )
+        x_ticks <- pretty(
+          range(images_filtered$datetime, na.rm = TRUE),
+          n = n_ticks
+        )
+        axis(
+          1,
+          at = x_ticks,
+          labels = format(x_ticks, "%d-%b-%Y"),
+          las = 0,
+          cex.axis = 0.7
+        )
         x_minor <- pretty(range(images_filtered$datetime, na.rm = TRUE), n = 10)
         x_minor <- setdiff(x_minor, x_ticks)
         axis(1, at = x_minor, labels = FALSE, tcl = -0.2, lwd = 0.5)
-        abline(v = images_filtered$datetime, col = rgb(0.5, 0.5, 0.5, 0.5), lwd = 3)
+        abline(
+          v = images_filtered$datetime,
+          col = rgb(0.5, 0.5, 0.5, 0.5),
+          lwd = 3
+        )
         selected_idx <- which(images_filtered$image_id == selections$img_id)
         if (length(selected_idx) == 1) {
-          abline(v = images_filtered$datetime[selected_idx], col = selected_colour, lwd = 3, lty = 2)
+          abline(
+            v = images_filtered$datetime[selected_idx],
+            col = selected_colour,
+            lwd = 3,
+            lty = 2
+          )
         }
       })
     })
@@ -325,10 +404,12 @@ imgMapView <- function(id, language) {
     observe({
       req(input$dates, images$images)
       end_date <- as.POSIXct(paste0(input$dates[2], " 23:59"))
-      date_filter <- images$images$datetime >= input$dates[1] & images$images$datetime <= end_date
+      date_filter <- images$images$datetime >= input$dates[1] &
+        images$images$datetime <= end_date
 
       if (!is.null(input$months) && length(input$months) > 0) {
-        month_filter <- format(as.Date(images$images$datetime), "%B") %in% input$months
+        month_filter <- format(as.Date(images$images$datetime), "%B") %in%
+          input$months
       } else {
         month_filter <- TRUE
       }
@@ -343,12 +424,18 @@ imgMapView <- function(id, language) {
       }
 
       if (!is.null(input$tags) && length(input$tags) > 0) {
-        tag_filter <- sapply(images$images$tags_list, function(v) { any(v %in% input$tags) })
+        tag_filter <- sapply(images$images$tags_list, function(v) {
+          any(v %in% input$tags)
+        })
       } else {
         tag_filter <- TRUE
       }
 
-      selections$filter <- date_filter & month_filter & toy_filter & tag_filter & type_filter
+      selections$filter <- date_filter &
+        month_filter &
+        toy_filter &
+        tag_filter &
+        type_filter
       updateMap(selections$filter)
     })
 
@@ -359,13 +446,26 @@ imgMapView <- function(id, language) {
         return("No image selected.")
       }
       paste(
-        "Image ID:", img_data$image_id, "\n",
-        "Date/Time:", format(img_data$datetime, "%Y-%m-%d %H:%M:%S"), "\n",
-        "Location ID:", img_data$location_id, "\n",
-        "Latitude:", img_data$latitude, "\n",
-        "Longitude:", img_data$longitude, "\n",
-        "Image Type:", img_data$image_type, "\n",
-        "Azimuth:", if ("azimuth" %in% names(img_data)) {
+        "Image ID:",
+        img_data$image_id,
+        "\n",
+        "Date/Time:",
+        format(img_data$datetime, "%Y-%m-%d %H:%M:%S"),
+        "\n",
+        "Location ID:",
+        img_data$location_id,
+        "\n",
+        "Latitude:",
+        img_data$latitude,
+        "\n",
+        "Longitude:",
+        img_data$longitude,
+        "\n",
+        "Image Type:",
+        img_data$image_type,
+        "\n",
+        "Azimuth:",
+        if ("azimuth" %in% names(img_data)) {
           az <- img_data$azimuth_true
           if (is.na(az)) {
             "N/A"
@@ -376,52 +476,112 @@ imgMapView <- function(id, language) {
           }
         } else {
           "N/A"
-        }, "\n",
-        "Elevation (MSL):", if ("elevation_msl" %in% names(img_data)) img_data$elevation_msl_m else "N/A"
+        },
+        "\n",
+        "Elevation (MSL):",
+        if ("elevation_msl" %in% names(img_data)) {
+          img_data$elevation_msl_m
+        } else {
+          "N/A"
+        }
       )
     })
 
-    observeEvent(input$refresh_images, {
-      images$images <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        paste0("SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';")
-      )
-      attr(images$images$datetime, "tzone") <- "MST"
-      images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
-      images$images$tags_list <- lapply(images$images$tags, function(raw) {
-        if (is.na(raw) || raw == "") return(character(0))
-        inner <- gsub('["{}]', "", raw)
-        strsplit(inner, ",", fixed = TRUE)[[1]]
-      })
-      updateSelectizeInput(session, "img_type", choices = stats::setNames(images$unique_types$image_type_id, images$unique_types$image_type))
-      updateSelectizeInput(session, "tags", choices = unique(unlist(images$images$tags_list)))
-    }, ignoreInit = TRUE)
-
-    datesControl <- reactive(FALSE)
-    observeEvent(input$dates, {
-      if (datesControl()) {
-        return()
-        datesControl(TRUE)
-      }
-      if (as.POSIXct(input$dates[1], tz = "MST") - 7*60 < min(images$images$datetime, na.rm = TRUE)) {
+    observeEvent(
+      input$refresh_images,
+      {
         images$images <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          paste0("SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '", as.POSIXct(input$dates[1], tz = "MST") - 7*60, "';")
+          paste0(
+            "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '",
+            as.POSIXct(input$dates[1], tz = "MST") - 7 * 60,
+            "';"
+          )
         )
         attr(images$images$datetime, "tzone") <- "MST"
-        images$unique_types <- images$images[!duplicated(images$images$image_type), c("image_type_id", "image_type")]
+        images$unique_types <- images$images[
+          !duplicated(images$images$image_type),
+          c("image_type_id", "image_type")
+        ]
         images$images$tags_list <- lapply(images$images$tags, function(raw) {
-          if (is.na(raw) || raw == "") return(character(0))
+          if (is.na(raw) || raw == "") {
+            return(character(0))
+          }
           inner <- gsub('["{}]', "", raw)
           strsplit(inner, ",", fixed = TRUE)[[1]]
         })
-        updateSelectizeInput(session, "img_type", choices = stats::setNames(images$unique_types$image_type_id, images$unique_types$image_type))
-        updateSelectizeInput(session, "tags", choices = unique(unlist(images$images$tags_list)))
-      }
-    }, ignoreInit = TRUE)
+        updateSelectizeInput(
+          session,
+          "img_type",
+          choices = stats::setNames(
+            images$unique_types$image_type_id,
+            images$unique_types$image_type
+          )
+        )
+        updateSelectizeInput(
+          session,
+          "tags",
+          choices = unique(unlist(images$images$tags_list))
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    datesControl <- reactive(FALSE)
+    observeEvent(
+      input$dates,
+      {
+        if (datesControl()) {
+          return()
+          datesControl(TRUE)
+        }
+        if (
+          as.POSIXct(input$dates[1], tz = "MST") - 7 * 60 <
+            min(images$images$datetime, na.rm = TRUE)
+        ) {
+          images$images <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            paste0(
+              "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '",
+              as.POSIXct(input$dates[1], tz = "MST") - 7 * 60,
+              "';"
+            )
+          )
+          attr(images$images$datetime, "tzone") <- "MST"
+          images$unique_types <- images$images[
+            !duplicated(images$images$image_type),
+            c("image_type_id", "image_type")
+          ]
+          images$images$tags_list <- lapply(images$images$tags, function(raw) {
+            if (is.na(raw) || raw == "") {
+              return(character(0))
+            }
+            inner <- gsub('["{}]', "", raw)
+            strsplit(inner, ",", fixed = TRUE)[[1]]
+          })
+          updateSelectizeInput(
+            session,
+            "img_type",
+            choices = stats::setNames(
+              images$unique_types$image_type_id,
+              images$unique_types$image_type
+            )
+          )
+          updateSelectizeInput(
+            session,
+            "tags",
+            choices = unique(unlist(images$images$tags_list))
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$load_additional_layers, {
-      showNotification("Loading additional layers (30-120 seconds)...", type = "message")
+      showNotification(
+        "Loading additional layers (30-120 seconds)...",
+        type = "message"
+      )
       basins <- getVector(layer_name = "Drainage basins")
       #locations <- getVector(layer_name = "Locations")
       roads <- getVector(layer_name = "Roads")
@@ -441,11 +601,10 @@ imgMapView <- function(id, language) {
               opacity = 0.7,
               fillOpacity = 0.2,
               group = "Basins",
-              label = ~as.character(feature_name)
+              label = ~ as.character(feature_name)
             )
         }
       }
-
 
       # if (!is.null(locations)) {
       #   m <- m %>%
@@ -461,7 +620,6 @@ imgMapView <- function(id, language) {
       #     )
       # }
 
-      
       if (!is.null(roads)) {
         m <- leaflet::leafletProxy("map", session)
         m <- m %>%
@@ -471,7 +629,7 @@ imgMapView <- function(id, language) {
             weight = 1,
             opacity = 0.5,
             group = "Roads",
-            label = ~as.character(feature_name)
+            label = ~ as.character(feature_name)
           )
       }
 
@@ -484,14 +642,20 @@ imgMapView <- function(id, language) {
             weight = 1,
             opacity = 0.5,
             group = "Watercourses",
-            label = ~as.character(feature_name)
+            label = ~ as.character(feature_name)
           )
       }
 
-
       m <- m %>%
         leaflet::addLayersControl(
-          overlayGroups = c("Satellite", "USGS","Terrain", "Basins", "Watercourses", "Roads"),
+          overlayGroups = c(
+            "Satellite",
+            "USGS",
+            "Terrain",
+            "Basins",
+            "Watercourses",
+            "Roads"
+          ),
           options = leaflet::layersControlOptions(collapsed = FALSE)
         ) %>%
         leaflet::hideGroup("Locations")

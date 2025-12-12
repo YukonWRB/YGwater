@@ -8,13 +8,11 @@ editDiscDataUI <- function(id) {
 }
 
 editDiscData <- function(id) {
-  
   moduleServer(id, function(input, output, session) {
-    
     ns <- session$ns
-    
-    output$placeholder <- renderText("Placeholder for discrete data modify/delete module")
-    
-    
+
+    output$placeholder <- renderText(
+      "Placeholder for discrete data modify/delete module"
+    )
   }) # End of moduleServer
 }

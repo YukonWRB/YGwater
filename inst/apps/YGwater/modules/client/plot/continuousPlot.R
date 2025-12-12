@@ -448,7 +448,30 @@ contPlot <- function(id, language, windowDims, inputs) {
                 actionButton(
                   ns("entire_record"),
                   tr("plot_all_record", language$language)
-                )
+                ),
+                selectInput(
+                  ns("plot_resolution"),
+                  label = tr("plot_resolution_lab", language$language),
+                  choices = stats::setNames(
+                    c("max", "hour", "day"),
+                    c(
+                      tr("plot_resolution_max", language$language),
+                      tr("plot_resolution_hourly", language$language),
+                      tr("plot_resolution_daily", language$language)
+                    )
+                  ),
+                  selected = "day"
+                ) |>
+                  tooltip(
+                    id = ns("plot_resolution_tooltip"),
+                    # tr("plot_long_time_to_plot", language$language),
+                    div(
+                      class = "text-warning",
+                      shiny::icon("triangle-exclamation"),
+                      tr("plot_long_time_to_plot", language$language)
+                    ),
+                    placement = "right"
+                  )
               ),
               column(
                 width = 6,
@@ -731,7 +754,8 @@ contPlot <- function(id, language, windowDims, inputs) {
         grades = input$show_grades,
         approvals = input$show_approvals,
         qualifiers = input$show_qualifiers,
-        lang = language$abbrev
+        lang = language$abbrev,
+        plot_resolution = input$plot_resolution
       )
     })
 
@@ -766,7 +790,8 @@ contPlot <- function(id, language, windowDims, inputs) {
             con = con,
             data = TRUE,
             slider = FALSE,
-            tzone = "MST"
+            tzone = "MST",
+            resolution = req$plot_resolution
           )
           return(plot)
         },
@@ -920,9 +945,8 @@ contPlot <- function(id, language, windowDims, inputs) {
           "%Y-%m-%d %H:%M"
         )
         date_range_end <- format(
-          max(out$trace_data$datetime),
-          "%Y-%m-%d %H:%M",
-          na.rm = TRUE
+          max(out$trace_data$datetime, na.rm = TRUE),
+          "%Y-%m-%d %H:%M"
         )
         hist_range_start <- as.character(moduleData$timeseries[
           timeseries_id == timeseries,

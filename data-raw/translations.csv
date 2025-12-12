@@ -137,6 +137,11 @@ plot_type_tooltip,,Timeseries plots show changes over time and can display multi
 plot_type_overlap,,Overlapping years,Années superposées
 plot_select_years,,Select years to plot,Sélectionnez les années à tracer
 plot_select_yrs,,"For periods overlapping the new year, select the December year","Pour les périodes chevauchant la nouvelle année, sélectionnez l’année de décembre."
+plot_long_time_to_plot,,Plotting can take a while for large time ranges at max resolution.,Le tracé peut prendre un certain temps pour de grandes plages temporelles à la résolution maximale.
+plot_resolution_lab,,Data resolution,Résolution des données
+plot_resolution_max,,Maximum,Maximum
+plot_resolution_hourly,,Hourly,Horaire
+plot_resolution_daily,,Daily,Journalière
 plot_type_ts,,Timeseries,Série temporelle
 plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec

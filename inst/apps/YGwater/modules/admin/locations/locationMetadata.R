@@ -8,12 +8,11 @@ locsMetaUI <- function(id) {
 }
 
 locsMetaServer <- function(id, data) {
-  
   moduleServer(id, function(input, output, session) {
-    
     ns <- session$ns
-    
-    output$placeholder <- renderText("Placeholder for location metadata view/edit module")
-    
+
+    output$placeholder <- renderText(
+      "Placeholder for location metadata view/edit module"
+    )
   }) # End of moduleServer
 }
