@@ -356,6 +356,7 @@ create_report,,Create report,Créer le rapport
 close,modal actionButton text,Close,Fermer
 cancel,,Cancel,Annuler
 create_plot,,Create plot,Créer le graphique
+processing,,Processing…,Traitement en cours…
 jan,,January,janvier
 feb,,February,février
 mar,,March,mars

@@ -415,6 +415,7 @@ contPlotOld <- function(id, language, windowDims, inputs) {
         input_task_button(
           ns("make_plot"),
           label = tr("create_plot", language$language),
+          label_busy = tr("processing", language$language),
           style = "display: block; width: 100%;",
           class = "btn btn-primary"
         )
