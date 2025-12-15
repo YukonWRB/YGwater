@@ -164,10 +164,10 @@ home <- function(id, language) {
       outputs$change_tab <- "contData"
     })
     observeEvent(input$map_locs, {
-      outputs$change_tab <- "monitoringLocations"
+      outputs$change_tab <- "monitoringLocationsMap"
     })
     observeEvent(input$map_params, {
-      outputs$change_tab <- "parameterValues"
+      outputs$change_tab <- "parameterValuesMap"
     })
 
     return(outputs)
