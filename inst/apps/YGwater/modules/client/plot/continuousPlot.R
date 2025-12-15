@@ -521,25 +521,12 @@ contPlot <- function(id, language, windowDims, inputs) {
       {
         ts <- timeseries_table_reactive()
         current <- selected_timeseries_id()
+
         if (!is.null(current) && current %in% ts$timeseries_id) {
           return()
         }
-        if (nrow(ts) > 0) {
-          preferred_row <- NULL
 
-          if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
-            matches <- which(ts$location %in% location_filter_value())
-            if (length(matches) > 0) {
-              preferred_row <- matches[1]
-            }
-          }
-
-          fallback_row <- if (is.null(preferred_row)) 1 else preferred_row
-
-          selected_timeseries_id(ts$timeseries_id[fallback_row])
-        } else {
-          selected_timeseries_id(NULL)
-        }
+        selected_timeseries_id(NULL)
       },
       ignoreNULL = FALSE
     )
@@ -555,6 +542,8 @@ contPlot <- function(id, language, windowDims, inputs) {
         selected_timeseries_id(ts$timeseries_id[
           input$timeseries_table_rows_selected
         ])
+      } else {
+        selected_timeseries_id(NULL)
       }
       # Update the date range input to reflect the selected timeseries
       selected_id <- selected_timeseries_id()
@@ -658,7 +647,7 @@ contPlot <- function(id, language, windowDims, inputs) {
             zeroRecords = tr("tbl_zero", language$language)
           ),
           order = order_columns,
-          stateSave = TRUE
+          stateSave = FALSE
         ),
         colnames = c("timeseries_id", col_names),
         filter = "top"
@@ -739,9 +728,10 @@ contPlot <- function(id, language, windowDims, inputs) {
       } else {
         NULL
       }
-      if (length(selected_row) == 0) {
-        selected_row <- 1
-      }
+
+      validate(need(!is.null(selected_row) && length(selected_row) > 0,
+        "Please select a row in the table before creating a plot."
+      ))
 
       req(input$date_range)
 
@@ -806,6 +796,14 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
+      if (is.null(selected_timeseries_id())) {
+        showModal(modalDialog(
+          title = tr("error", language$language),
+          "Please select a row in the table before creating a plot.",
+          easyClose = TRUE
+        ))
+        return()
+      }
       if (plot_created()) {
         shinyjs::hide("full_screen_ui")
       }
