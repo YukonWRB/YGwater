@@ -125,8 +125,10 @@ standard_warning,,Warning: this adds a lot of time for plot generation!,Attentio
 EQWin_db,,EQWin database,Base de données EQWin
 Image view module,,,
 img_type_lab,input label,Image Type,Type d'image
+img_tags_lab,input label,Tags,Étiquettes
 img_type_auto,input choice,Automatic (series),Automatique (série)
 img_type_man,input choice,Manual (one-off),Manuelle (non-série)
+map_options,,Map options,Options de la carte
 date_range_lab,input label,Date Range,Plage temporelle
 date_sep,dateRangeInput separator, to , à 
 Visualize/plot module,,,
@@ -350,6 +352,7 @@ start_utc_offset,direct translation,Start (UTC-7),Début (UTC-7)
 end_utc_offset,direct translations,End (UTC-7),Fin (UTC-7)
 datetime,direct translation,Date/Time,Date/temps
 datetime_utc_offset,direct translation,Date/Time (UTC-7),Date/temps (UTC-7)
+time_of_day_utc7,direct translation,Time of day (UTC-7),Temps de la journée (UTC-7)
 settings,direct translation,Settings,Paramètres
 save,,Save,Enregistrer
 create_report,,Create report,Créer le rapport

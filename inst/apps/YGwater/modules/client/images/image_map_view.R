@@ -114,7 +114,7 @@ imgMapView <- function(id, language) {
               style = "vertical-align: top; display: inline-flex;",
               selectInput(
                 ns("months"),
-                label = "Month",
+                label = tr("month", language$language),
                 choices = month.name,
                 selected = NULL,
                 multiple = TRUE
@@ -125,7 +125,7 @@ imgMapView <- function(id, language) {
               style = "vertical-align: top; display: inline-flex;",
               sliderInput(
                 ns("tod"),
-                label = "Time of day (UTC-7)",
+                label = tr("time_of_day_utc7", language$language),
                 min = 0,
                 max = 23,
                 value = c(0, 23),
@@ -140,7 +140,7 @@ imgMapView <- function(id, language) {
               style = "vertical-align: top; display: inline-flex;",
               selectizeInput(
                 ns("img_type"),
-                label = "Image type",
+                label = tr("img_type_lab", language$language),
                 choices = stats::setNames(
                   images$unique_types$image_type_id,
                   images$unique_types$image_type
@@ -154,7 +154,7 @@ imgMapView <- function(id, language) {
               style = "vertical-align: top; display: inline-flex;",
               selectizeInput(
                 ns("tags"),
-                label = "Tag",
+                label = tr("img_tags_lab", language$language),
                 choices = unique(unlist(images$images$tags_list)),
                 selected = NULL,
                 multiple = TRUE
@@ -164,7 +164,7 @@ imgMapView <- function(id, language) {
         ),
         accordion_panel(
           id = ns("map_options"),
-          title = "Map options",
+          title = tr("map_options", language$language),
           page_fluid(
             actionButton(
               ns("load_additional_layers"),
@@ -192,8 +192,8 @@ imgMapView <- function(id, language) {
         ),
         div(
           style = "display: flex; justify-content: stretch; align-items: left; margin-bottom: 10px; gap: 10px; width: 100%;",
-          actionButton(ns("prev_img"), "Previous"),
-          actionButton(ns("next_img"), "Next"),
+          actionButton(ns("prev_img"), tr("tbl_prev", language$language)),
+          actionButton(ns("next_img"), tr("tbl_next", language$language)),
           plotOutput(ns("img_graph"), height = "40px", width = "100%")
         ),
         imageOutput(ns("img"), fill = TRUE)
