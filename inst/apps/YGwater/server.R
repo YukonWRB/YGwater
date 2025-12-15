@@ -476,10 +476,10 @@ app_server <- function(input, output, session) {
       tr("plots", languageSelection$language)
     })
     output$plotsNavDiscTitle <- renderUI({
-      tr("plots_discrete", languageSelection$language)
+      tr("discrete", languageSelection$language)
     })
     output$plotsNavContTitle <- renderUI({
-      tr("plots_continuous", languageSelection$language)
+      tr("continuous", languageSelection$language)
     })
     output$plotsNavContOldTitle <- renderUI({
       tr("plots_continuous_old", languageSelection$language)
@@ -505,10 +505,10 @@ app_server <- function(input, output, session) {
       tr("data", languageSelection$language)
     })
     output$dataNavDiscTitle <- renderUI({
-      tr("data_discrete", languageSelection$language)
+      tr("discrete", languageSelection$language)
     })
     output$dataNavContTitle <- renderUI({
-      tr("data_continuous", languageSelection$language)
+      tr("continuous", languageSelection$language)
     })
 
     output$imagesNavMenuTitle <- renderUI({

@@ -10,7 +10,6 @@ maps_raster,mapsNavRastersTitle,Rasters,Rasters
 maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
 plots,plotsNavMenuTitle,Plots,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
-plots_continuous,plotsNavContTitle,Continuous,Continues
 plots_continuous_old,plotsNavContOldTitle,Continuous (old version),Continues (ancienne version)
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
@@ -19,8 +18,6 @@ reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de n
 reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
 data,dataNavMenuTitle,Data,Données
-data_discrete,dataNavDiscTitle,Discrete,Discrètes
-data_continuous,dataNavContTitle,Continuous,Continues
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,Sélection par tableau
 images_map,imagesNavMapTitle,Map selection,Sélection par carte
@@ -100,8 +97,9 @@ loc_modal,button text for modal,Filter by network/project,Filtrer par réseau/pr
 tooltip_reset,tooltip text for resetting filters,Filters affect each other by limiting subsequent options. Reset to clear all filters.,Les filtres s'affectent mutuellement en limitant les options suivantes. Réinitialiser pour effacer tous les filtres.
 year_filter,year filter title,With data between…,Avec des données entre...
 choose_locs,location selection title,Or choose one of more locations,Ou choisissez une ou plusieurs stations
-tooltip1,table tool tips,Continuous = recorded at regular intervals automatically; Discrete = measurements or sample acquisition at variable time intervals.,Continues = enregistré à intervalles réguliers automatiquement ; Discrètes = mesures ou acquisition d'échantillons à intervalles de temps variables.
-tooltip2,table tool tips,UTC-7,UTC-7
+tooltip_discrete_continuous,tool tips,Continuous = recorded at regular intervals automatically; Discrete = measurements or samples at variable intervals.,Continues = enregistré à intervalles réguliers automatiquement; Discrètes = mesures ou échantillons à intervalles variables.
+tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Type de média dans lequel l'échantillon ou la mesure a été collecté
+tooltip_utc7,table tool tips,UTC-7,UTC-7
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
 view_samples,,Show samples,Voir les échantillons
@@ -295,6 +293,7 @@ app_version2,,connected to AquaCache database revision ,connectée à la base de
 app_version3,,revision,révision
 Generic labels,,,
 data_type,direct translation,Data Type,Types de données
+data_format,direct translation,Data Format,Format de données
 unknown,,Unknown,Inconnu
 cluster_points_label,,Cluster points,Regrouper les points
 location_type_legend,,Location type,Type d’emplacement
@@ -399,28 +398,28 @@ pw_change_success,modal text,Password updated successfully.,Mot de passe mis à 
 pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
-snowbull_relative_median,,Percent of median (%), Pourcentage de la médiane historique (%)
+snowbull_relative_median,,Percent of median (%),Pourcentage de la médiane historique (%)
 snowbull_swe,,Snow water equivalent (mm),Équivalent en eau de neige (mm)
 snowbull_percentile,,Percentile (%),Percentile (%)
-snowbull_values,,Values, Valeurs
-snowbull_details,, Map details, Détails de la carte
-app_version,, Current application version:,Version actuelle de l'application :
-snowbull_gen_on,, Map generated on, Carte générée le
-snowbull_disclaimer,, <i>Disclaimer:</i> Basin average estimates may differ slightly from archived bulletins., <i>Avertissement :</i> Les estimations moyennes par bassin peuvent différer légèrement des bulletins archivés.
-snowbull_map_credits,, Basemap:</b> Esri World Imagery, Crédits de la carte de base :</b> Imagerie mondiale Esri
-snowbull_data_credits,, Data source:</b> AquaCache database, Source des données :</b> Base de données AquaCache
-snowbull_date,, Snow Bulletin Date, Date du bulletin de neige
-snowbull_historical_period,, Historical period for statistics, Période historique pour les statistiques
-snowbull_no_snow,, No snow (no record), Pas de neige (aucun enregistrement historique)
-snowbull_some_snow,, "Snow present (no record)", "Neige présente (aucun enregistrement historique)"
-snowbull_percentile_suffix,, th, ème
-snowbull_snow_survey,, Snow survey, Relevé nivométrique
-snowbull_snow_pillow,, Snow pillow, Coussin à neige
-snowbull_swe_basin,, Basin average SWE, EEN moyen du bassin
-snowbull_communities,, Communities, Communautés
-snowbull_roads,, Roads, Routes
-snowbull_symbols,, Symbols, Symboles
-snowbull_generate_plot,, Generate plot, Générer le graphique
-snowbull_mean_elevation,, Mean elevation, Altitude moyenne
-snowbull_elevation,, Elevation, Altitude
-snowbull_coordinates,, Coordinates, Coordonnées
+snowbull_values,,Values,Valeurs
+snowbull_details,,Map details,Détails de la carte
+app_version,,Current application version:,Version actuelle de l'application :
+snowbull_gen_on,,Map generated on,Carte générée le
+snowbull_disclaimer,,<i>Disclaimer:</i> Basin average estimates may differ slightly from archived bulletins.,<i>Avertissement :</i> Les estimations moyennes par bassin peuvent différer légèrement des bulletins archivés.
+snowbull_map_credits,,Basemap:</b> Esri World Imagery,Crédits de la carte de base :</b> Imagerie mondiale Esri
+snowbull_data_credits,,Data source:</b> AquaCache database,Source des données :</b> Base de données AquaCache
+snowbull_date,,Snow Bulletin Date,Date du bulletin de neige
+snowbull_historical_period,,Historical period for statistics,Période historique pour les statistiques
+snowbull_no_snow,,No snow (no record),Pas de neige (aucun enregistrement historique)
+snowbull_some_snow,,"Snow present (no record)","Neige présente (aucun enregistrement historique)"
+snowbull_percentile_suffix,,th,ème
+snowbull_snow_survey,,Snow survey,Relevé nivométrique
+snowbull_snow_pillow,,Snow pillow,Coussin à neige
+snowbull_swe_basin,,Basin average SWE,EEN moyen du bassin
+snowbull_communities,,Communities,Communautés
+snowbull_roads,,Roads,Routes
+snowbull_symbols,,Symbols,Symboles
+snowbull_generate_plot,,Generate plot,Générer le graphique
+snowbull_mean_elevation,,Mean elevation,Altitude moyenne
+snowbull_elevation,,Elevation,Altitude
+snowbull_coordinates,,Coordinates,Coordonnées

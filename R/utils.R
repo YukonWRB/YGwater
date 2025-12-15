@@ -13,12 +13,18 @@
 
 tr <- function(key, lang, translations = data$translations) {
   # Ensure that 'lang' is a name in the translations list
+  if (is.na(lang) || !nzchar(lang)) {
+    stop("Language code is NA or empty.")
+  }
   if (!lang %in% names(translations)) {
     stop(
       "Language ",
       lang,
       "not found in translations data."
     )
+  }
+  if (is.na(key) || !nzchar(key)) {
+    stop("Translation key is NA or empty.")
   }
 
   # Ensure that 'key' is a value in the 'id' column of the translations data.frame
