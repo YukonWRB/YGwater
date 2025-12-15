@@ -177,7 +177,7 @@ imgMapView <- function(id, language) {
             ),
             checkboxInput(
               ns("cluster_map"),
-              tr("cluster_points_label"),
+              tr("cluster_points_label", language$language),
               value = TRUE
             )
           )
