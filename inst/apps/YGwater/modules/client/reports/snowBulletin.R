@@ -69,7 +69,7 @@ snowBulletinMod <- function(id, language) {
         # Selector for month
         selectizeInput(
           ns("month"),
-          label = tr("gen_snowBul_month", language$language),
+          label = tr("month", language$language),
           choices = c(3:5),
           selected = selections$month,
           multiple = FALSE,

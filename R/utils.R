@@ -20,7 +20,7 @@ tr <- function(key, lang, translations = data$translations) {
     stop(
       "Language ",
       lang,
-      "not found in translations data."
+      " not found in translations data."
     )
   }
   if (is.na(key) || !nzchar(key)) {
@@ -32,7 +32,7 @@ tr <- function(key, lang, translations = data$translations) {
     stop(
       "Translation key ",
       key,
-      "not found in translations data."
+      " not found in translations data."
     )
   }
   return(translations[[lang]][[key]]) # list 'lang', item 'key'

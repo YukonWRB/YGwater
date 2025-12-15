@@ -168,11 +168,18 @@ imgMapView <- function(id, language) {
           page_fluid(
             actionButton(
               ns("load_additional_layers"),
-              "Load additional layers"
+              tr("map_load_addtional_layers", language$language)
             ),
-            actionButton(ns("reset_view"), "Reset view"),
-            actionButton(ns("refresh_images"), "Refresh images"),
-            checkboxInput(ns("cluster_map"), "Cluster map", value = TRUE)
+            actionButton(ns("reset_view"), tr("reset_view", language$language)),
+            actionButton(
+              ns("refresh_images"),
+              tr("refresh_images", language$language)
+            ),
+            checkboxInput(
+              ns("cluster_map"),
+              tr("cluster_points_label"),
+              value = TRUE
+            )
           )
         )
       )
