@@ -30,7 +30,7 @@
 #' @param years The years to plot. If `startDay` and `endDay` cover December 31 - January 1, select the December year(s). Max 10 years, NULL = current year. Currently, only 1 year can be provided for when other data is provided to function.
 #' @param datum Should a vertical datum be applied to the data, if available? TRUE or FALSE.
 #' @param title Should a title be included?
-#' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as Location <<location id>>: <<location name>>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.
+#' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
@@ -96,7 +96,7 @@ ggplotOverlap <- function(
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
-  historic_range = "all",
+  historic_range = NULL,
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
@@ -118,6 +118,8 @@ ggplotOverlap <- function(
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
+
+  lang <- shortenLanguage(lang)
 
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   old_warn <- getOption("warn")
@@ -184,11 +186,24 @@ ggplotOverlap <- function(
     }
   }
 
-  if (!(historic_range %in% c("all", "last"))) {
-    warning(
-      "Parameter `historic_range` can only be 'all' or 'last'. Resetting it to the default 'all'."
-    )
+  if (is.null(continuous_data) && is.null(historic_range)) {
     historic_range <- "all"
+    warning(
+      "Parameter `historic_range` was not specified. Defaulting to 'all' to use all available historical data."
+    )
+  } else if (!is.null(continuous_data) && !is.null(historic_range)) {
+    warning(
+      "Parameter `historic_range` will not be used when `continuous_data` is provided."
+    )
+  }
+
+  if (!is.null(historic_range)) {
+    if (!(historic_range %in% c("all", "last"))) {
+      warning(
+        "Parameter `historic_range` can only be 'all' or 'last'. Resetting it to the default 'all'."
+      )
+      historic_range <- "all"
+    }
   }
 
   #### ------------------ Dealing with start/end dates and traceEnd ---------------------- ####
@@ -290,17 +305,21 @@ ggplotOverlap <- function(
   }
 
   if (is.null(return_max_year)) {
-    if (historic_range == "last") {
-      return_max_year <- max(years)
+    if (!is.null(historic_range)) {
+      if (historic_range == "last") {
+        return_max_year <- max(years)
+      } else {
+        return_max_year <- lubridate::year(Sys.Date())
+      }
     } else {
-      return_max_year <- lubridate::year(Sys.Date())
-    }
-  } else {
-    if (return_max_year > max(years) & historic_range == "last") {
-      return_max_year <- max(years)
-      message(
-        "Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot. See the help file for other options."
-      )
+      if (!is.null(historic_range)) {
+        if (return_max_year > max(years) && historic_range == "last") {
+          return_max_year <- max(years)
+          message(
+            "Your parameter entry for 'return_max_year' is invalid (greater than the last year to plot). It has been adjusted to the last year to plot. See the help file for other options."
+          )
+        }
+      }
     }
   }
 
@@ -322,6 +341,59 @@ ggplotOverlap <- function(
     )
   }
 
+  #Confirm parameter and location exist in the database and that there is only one entry
+  if (inherits(parameter, "character")) {
+    escaped_parameter <- gsub("'", "''", parameter)
+    parameter_tbl <- dbGetQueryDT(
+      con,
+      paste0(
+        "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '",
+        escaped_parameter,
+        "' OR param_name_fr = '",
+        escaped_parameter,
+        "';"
+      )
+    )
+    parameter_code <- parameter_tbl$parameter_id[1]
+    if (is.na(parameter_code)) {
+      stop("The parameter you entered does not exist in the database.")
+    }
+  } else if (inherits(parameter, "numeric")) {
+    parameter_tbl <- dbGetQueryDT(
+      con,
+      paste0(
+        "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ",
+        parameter,
+        ";"
+      )
+    )
+    if (nrow(parameter_tbl) == 0) {
+      stop("The parameter you entered does not exist in the database.")
+    }
+    parameter_code <- parameter
+  }
+  # Default to the english name if the french name is not available
+  parameter_tbl[
+    is.na(parameter_tbl$param_name_fr),
+    "param_name_fr"
+  ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
+
+  if (lang == "fr") {
+    parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
+  } else if (lang == "en" || is.na(parameter_name)) {
+    parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
+  }
+
+  # Find the ts units
+  units <- dbGetQueryDT(
+    con,
+    paste0(
+      "SELECT unit_default FROM parameters WHERE parameter_id = ",
+      parameter_code,
+      ";"
+    )
+  )
+
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
     location_id <- dbGetQueryDT(
@@ -332,48 +404,7 @@ ggplotOverlap <- function(
         "';"
       )
     )[1, 1]
-    #Confirm parameter and location exist in the database and that there is only one entry
-    if (inherits(parameter, "character")) {
-      escaped_parameter <- gsub("'", "''", parameter)
-      parameter_tbl <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '",
-          escaped_parameter,
-          "' OR param_name_fr = '",
-          escaped_parameter,
-          "';"
-        )
-      )
-      parameter_code <- parameter_tbl$parameter_id[1]
-      if (is.na(parameter_code)) {
-        stop("The parameter you entered does not exist in the database.")
-      }
-    } else if (inherits(parameter, "numeric")) {
-      parameter_tbl <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ",
-          parameter,
-          ";"
-        )
-      )
-      if (nrow(parameter_tbl) == 0) {
-        stop("The parameter you entered does not exist in the database.")
-      }
-      parameter_code <- parameter
-    }
-    # Default to the english name if the french name is not available
-    parameter_tbl[
-      is.na(parameter_tbl$param_name_fr),
-      "param_name_fr"
-    ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
 
-    if (lang == "fr") {
-      parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-    } else if (lang == "en" || is.na(parameter_name)) {
-      parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
-    }
     instantaneous <- dbGetQueryDT(
       con,
       "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';"
@@ -443,16 +474,6 @@ ggplotOverlap <- function(
     } else if (nrow(exist_check) == 1) {
       tsid <- exist_check$timeseries_id
     }
-
-    # Find the ts units
-    units <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT unit_default FROM parameters WHERE parameter_id = ",
-        parameter_code,
-        ";"
-      )
-    )
 
     # Find the necessary datum (latest datum)
     if (datum) {
@@ -672,7 +693,7 @@ ggplotOverlap <- function(
         !(lubridate::month(target_date) == 2 &
           lubridate::day(target_date) == 29)
       ) {
-        #Can't have the Feb 29 date because there is no Feb 29 ribbon
+        # Can't have the Feb 29 date because there is no Feb 29 ribbon
         row <- daily[
           daily$datetime == target_date,
           !names(daily) %in% c("value", "grade", "approval")
@@ -689,7 +710,7 @@ ggplotOverlap <- function(
         }
         lubridate::year(row$datetime) <- lubridate::year(plot_date)
         if (i == length(ribbon_seq)) {
-          row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
+          row$datetime <- row$datetime - 1 # This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
           ribbon_start_end <- if (overlaps) {
             c(
               ribbon_start_end,
@@ -731,7 +752,7 @@ ggplotOverlap <- function(
     realtime <- realtime[!(realtime$month == 2 & realtime$day == 29), ] #Remove Feb 29
     daily$year <- lubridate::year(daily$datetime)
     daily$month <- lubridate::month(daily$datetime)
-    daily$day <- lubridate::month(daily$datetime)
+    daily$day <- lubridate::day(daily$datetime)
     daily <- daily[!(daily$month == 2 & daily$day == 29), ] #Remove Feb 29
 
     if (overlaps) {
@@ -791,8 +812,12 @@ ggplotOverlap <- function(
         realtime$fake_datetime,
         tz = tzone,
         format = '%Y-%m-%d %H:%M:%S'
-      ) #Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
+      ) # Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
     }
+
+    # ES: get unique years used to calculate historic stats (just used for annotation on  plot)
+    historic_years <- ribbon_start_end
+    # HEY FLAG
 
     # apply datum correction where necessary
     if (datum$conversion_m > 0) {
@@ -818,8 +843,12 @@ ggplotOverlap <- function(
       )
     }
     parameter_name <- titleCase(parameter)
-    #### Add this in here: ------------------
+
     dat <- continuous_data
+
+    # ES: get unique years used to calculate historic stats (just used for annotation on  plot)
+    historic_years <- sort(unique(lubridate::year(dat$datetime)))
+
     # Remove Feb 29
     dat$monthday <- format(dat$datetime, "%m-%d")
     dat <- dat[dat$monthday != "02-29", ]
@@ -964,7 +993,6 @@ ggplotOverlap <- function(
     realtime <- tab
     daily <- continuous_data
     day_seq <- realtime$datetime
-    units <- "\u00B0C"
   } #End of loop integrating provided data
 
   if (snowbulletin) {
@@ -1258,7 +1286,25 @@ ggplotOverlap <- function(
       )
   }
 
+  current_year_label_en <- paste0("Year(s): ", paste(years, collapse = ", "))
+  current_year_label_fr <- paste0(
+    "Ann\u00E9e(s): ",
+    paste(years, collapse = ", ")
+  )
+  current_year_label <- if (lang == "en") {
+    current_year_label_en
+  } else {
+    current_year_label_fr
+  }
+
+  color_mapping <- c(
+    "Maximum" = "#0097A9",
+    "Minimum" = "#834333"
+  )
+  color_mapping[current_year_label] <- "black"
+
   if (!snowbulletin) {
+    # Create legend entry variables
     plot <- plot +
       ggplot2::geom_line(
         ggplot2::aes(colour = .data$plot_year, group = .data$plot_year),
@@ -1279,11 +1325,32 @@ ggplotOverlap <- function(
       )
   } else {
     plot <- plot +
-      ggplot2::geom_line(ggplot2::aes(y = max), colour = "#0097A9", size = 1) +
-      ggplot2::geom_line(ggplot2::aes(y = min), colour = "#834333", size = 1) +
-      ggplot2::geom_line(colour = "black", linewidth = line_size, na.rm = T)
-  }
+      ggplot2::geom_line(
+        ggplot2::aes(y = max, colour = "Maximum"),
+        size = 1
+      ) +
+      ggplot2::geom_line(
+        ggplot2::aes(y = min, colour = "Minimum"),
+        size = 1
+      ) +
+      ggplot2::geom_line(
+        ggplot2::aes(colour = current_year_label),
+        linewidth = line_size,
+        na.rm = T
+      ) +
+      ggplot2::scale_colour_manual(
+        name = if (lang == "en") "Legend" else "L\u00E9egende",
+        # Create the color mapping as a variable
 
+        # Then use it in scale_colour_manual
+        values = color_mapping,
+        breaks = c(
+          "Maximum",
+          "Minimum",
+          current_year_label
+        )
+      )
+  }
   # Get or calculate return periods -------------
   label_en <- c(
     "two year return",
@@ -1573,26 +1640,26 @@ ggplotOverlap <- function(
       )
     }
   }
-  #Add some information below the legend
+  # Add some information below the legend
   if (legend) {
-    spread_vert <- max - min #Used to determine where to put the text
+    spread_vert <- max - min # Used to determine where to put the text
     end_time1 <- max(realtime$fake_datetime, na.rm = TRUE)
     if (!is.infinite(minHist)) {
       if (overlaps) {
         if (lang == "en") {
           line1 <- paste0(
             "\n         \n        Historical range based\n        on years\n        ",
-            ribbon_start_end[1],
+            min(historic_years),
             " to ",
-            ribbon_start_end[2],
+            max(historic_years),
             "."
           )
         } else {
           line1 <- paste0(
             "\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es\n        ",
-            ribbon_start_end[1],
+            min(historic_years),
             " \u00E0 ",
-            ribbon_start_end[2],
+            max(historic_years),
             "."
           )
         }
@@ -1600,17 +1667,17 @@ ggplotOverlap <- function(
         if (lang == "en") {
           line1 <- paste0(
             "\n         \n        Historical range based\n        on years ",
-            ribbon_start_end[1],
+            min(historic_years),
             " to ",
-            ribbon_start_end[2],
+            max(historic_years),
             "."
           )
         } else {
           line1 <- paste0(
             "\n         \n        Plage historique bas\u00E9e\n        sur les ann\u00E9es ",
-            ribbon_start_end[1],
+            min(historic_years),
             " \u00E0 ",
-            ribbon_start_end[2],
+            max(historic_years),
             "."
           )
         }

@@ -29,6 +29,10 @@ app_ui <- function(request) {
     ),
 
     tags$head(
+      includeHTML(system.file(
+        "apps/YGwater/www/html/matomo.html",
+        package = "YGwater"
+      )), # Include Matomo analytics tracking code
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
       tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
       # JS below is for updating the title of the page from the server, when the user changes language
@@ -193,7 +197,14 @@ app_ui <- function(request) {
             title = uiOutput("plotsNavContTitle"),
             value = "contPlot",
             uiOutput("plotContinuous_ui")
-          )
+          ),
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("plotsNavContOldTitle"),
+              value = "contPlotOld",
+              uiOutput("plotContinuousOld_ui")
+            )
+          }
         ),
         if (config$g_drive) {
           nav_menu(
@@ -265,14 +276,14 @@ app_ui <- function(request) {
           title = uiOutput("infoNavMenuTitle"),
           value = "info",
           nav_panel(
-            title = uiOutput("infoNavNewsTitle"),
-            value = "news",
-            uiOutput("news_ui")
-          ),
-          nav_panel(
             title = uiOutput("infoNavAboutTitle"),
             value = "about",
             uiOutput("about_ui")
+          ),
+          nav_panel(
+            title = uiOutput("infoNavNewsTitle"),
+            value = "news",
+            uiOutput("news_ui")
           )
         ),
         if (!config$public) {
@@ -326,6 +337,11 @@ app_ui <- function(request) {
               uiOutput("addDiscData_ui")
             ),
             nav_panel(
+              title = "Add/edit samples",
+              value = "addSamples",
+              uiOutput("addSamples_ui")
+            ),
+            nav_panel(
               title = "Edit/delete discrete data",
               value = "editDiscData",
               uiOutput("editDiscData_ui")
@@ -334,6 +350,11 @@ app_ui <- function(request) {
               title = "Add/modify guidelines",
               value = "addGuidelines",
               uiOutput("addGuidelines_ui")
+            ),
+            nav_panel(
+              title = "Add/edit sample series",
+              value = "addSampleSeries",
+              uiOutput("addSampleSeries_ui")
             ),
             nav_panel(
               title = "Sync sample series",

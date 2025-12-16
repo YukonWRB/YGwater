@@ -1126,7 +1126,10 @@ simplerIndex <- function(id) {
           ) |>
           terra::project("epsg:4326")
         lonlat <- terra::geom(v)[, c("x", "y")]
-        return(list(latitude = lonlat$y, longitude = lonlat$x))
+        return(list(
+          latitude = lonlat[names(lonlat) == "y"],
+          longitude = lonlat[names(lonlat) == "x"]
+        ))
       }
 
       convert_length_to_m <- function(value, unit) {
@@ -1399,6 +1402,8 @@ simplerIndex <- function(id) {
           }
         }
       }
+
+      sanitized
     }
 
     validate_metadata_for_upload <- function(metadata) {
@@ -1425,7 +1430,7 @@ simplerIndex <- function(id) {
         session$userData$AquaCache,
         "SELECT borehole_name FROM boreholes.boreholes WHERE borehole_name = $1;",
         params = list(metadata$name)
-      )$name
+      )$borehole_name
 
       if (length(existing_names) > 0) {
         showNotification(
@@ -3354,8 +3359,6 @@ simplerIndex <- function(id) {
           return()
         }
 
-        out <<- metadata
-
         # Show processing notification
         showNotification(
           "Uploading selected borehole...",
@@ -3411,12 +3414,13 @@ simplerIndex <- function(id) {
               share_with_well = metadata[["share_with_well"]]
             )
 
+            DBI::dbExecute(session$userData$AquaCache, "COMMIT")
+
             showNotification(
               paste("Successfully uploaded borehole", current_borehole_id),
               type = "message",
               duration = 5
             )
-            DBI::dbExecute(session$userData$AquaCache, "COMMIT")
 
             # Remove uploaded borehole from local data to prevent re-upload
             rv$borehole_data[[current_borehole_id]] <- NULL
@@ -3551,6 +3555,8 @@ simplerIndex <- function(id) {
               share_with_well = metadata[["share_with_well"]]
             )
 
+            DBI::dbExecute(session$userData$AquaCache, "COMMIT")
+
             success_count <- success_count + 1
 
             # Show progress notification
@@ -3565,7 +3571,6 @@ simplerIndex <- function(id) {
               type = "message",
               duration = 7
             )
-            DBI::dbExecute(session$userData$AquaCache, "COMMIT")
             # Remove uploaded borehole from local data to prevent re-upload
             rv$borehole_data[[well_id]] <- NULL
           },

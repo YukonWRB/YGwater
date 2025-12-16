@@ -13,3 +13,14 @@ test_that("iso_period converts numeric hours to ISO 8601 durations", {
     c("P0DT1H30M0S", "P2DT2H45M0S")
   )
 })
+
+test_that("translations work correctly", {
+  # Ensure package data exists
+  check <- data$translations
+  expect_true(!is.null(check))
+  expect_true(length(check) > 0)
+  expect_true(is.list(check))
+
+  expect_equal(tr("home", "English"), "Home")
+  expect_equal(tr("home", "Français"), "Accueil")
+})

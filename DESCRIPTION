@@ -1,6 +1,6 @@
 Package: YGwater
 Title: R functions and applications for the Yukon Water Science and Stewardship Branch
-Version: 1.8.1
+Version: 1.8.5
 Authors@R: c(
     person("Ghislain", "de Laplante", email = "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -53,8 +53,10 @@ Imports:
     zoo
 Suggests:
     AquaCache,
+    base64enc,
     bslib,
     bsicons,
+    cachem,
     callthat,
     curl,
     DT,
@@ -69,9 +71,11 @@ Suggests:
     knitr,
     leaflet,
     magick,
+    memoise,
     odbc,
     officer,
     officedown,
+    pandoc,
     pdftools,
     plumber,
     purrr,
@@ -82,7 +86,9 @@ Suggests:
     RSQLite,
     tesseract,
     trend,
+    shadowtext,
     shiny,
+    shinycssloaders,
     shinyjs,
     shinyWidgets,
     testthat (>= 3.0.0),

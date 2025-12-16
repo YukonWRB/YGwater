@@ -21,9 +21,9 @@
 YGwater <- function(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
-  dbName = "aquacache",
+  dbName = Sys.getenv("aquacachenName", "aquacache"),
   dbHost = Sys.getenv("aquacacheHost"),
-  dbPort = Sys.getenv("aquacachePort"),
+  dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
   accessPath1 = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
@@ -50,6 +50,10 @@ YGwater <- function(
   rlang::check_installed("zip", reason = "required to use YGwater app")
   rlang::check_installed("htmlwidgets", reason = "required to use YGwater app")
   rlang::check_installed("jsonlite", reason = "required to use YGwater app")
+  rlang::check_installed(
+    "base64enc",
+    reason = "to create base64-encoded plot images"
+  )
 
   if (!rlang::is_installed("AquaCache")) {
     rlang::check_installed(

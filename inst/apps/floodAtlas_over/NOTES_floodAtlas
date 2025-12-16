@@ -1,9 +1,0 @@
-Last edited: 2025-01-29
-
-App is currently available on Shiny Server needs changes/improvements.
-
-1. Enable asynch programing so that one user's plot generation doesn't block another user's reactivity. Two options (see YGwater notes): asynch using futures and promises, and ExtendedTasks. asynch is likely better since it inherently blocks a user from doing further clicks/selections while their own plot is being generated.
-
-2. Add 'Go' button to re-create plot. Currently being done reactively, but even when using debounce it's too easy to redo the plot generation while the user is selecting dates.
-
-3. Speed up app load and plot generation function further (data.tables??)

@@ -19,10 +19,20 @@ test_that("locations table has correct names", {
     c(
       'location_code',
       'location_name',
+      'note',
+      'sub_basin',
       'latitude',
       'longitude',
       'elevation_m',
-      'last_survey'
+      'metadata_created',
+      'metadata_modified',
+      'first_survey',
+      'last_survey',
+      'feb1_surveys',
+      'march1_surveys',
+      'april1_surveys',
+      'may1_surveys',
+      'may15_surveys'
     )
   )
 })
@@ -35,11 +45,13 @@ test_that("measurements table has correct names", {
       'location_code',
       "location_name",
       "parameter",
+      "units",
       "sample_date",
       "target_date",
       "year",
       "month",
-      "result"
+      "result",
+      "flag"
     )
   )
 })

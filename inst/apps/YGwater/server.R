@@ -106,7 +106,9 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addDiscData,
+          session$userData$admin_privs$addSamples,
           session$userData$admin_privs$editDiscData,
+          session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
           session$userData$admin_privs$addGuidelines
         )
@@ -115,8 +117,14 @@ app_server <- function(input, output, session) {
         if (!isTRUE(session$userData$admin_privs$addDiscData)) {
           nav_hide(id = "navbar", target = "addDiscData")
         }
+        if (!isTRUE(session$userData$admin_privs$addSamples)) {
+          nav_hide(id = "navbar", target = "addSamples")
+        }
         if (!isTRUE(session$userData$admin_privs$editDiscData)) {
           nav_hide(id = "navbar", target = "editDiscData")
+        }
+        if (!isTRUE(session$userData$admin_privs$addSampleSeries)) {
+          nav_hide(id = "navbar", target = "addSampleSeries")
         }
         if (!isTRUE(session$userData$admin_privs$syncDisc)) {
           nav_hide(id = "navbar", target = "syncDisc")
@@ -150,11 +158,22 @@ app_server <- function(input, output, session) {
         nav_hide(id = "navbar", target = "fileTasks")
       }
 
-      # Field visit ---------------------------------------------------------
-      if (isTRUE(session$userData$admin_privs$visit)) {
-        nav_show(id = "navbar", target = "visit")
+      # Field tasks ---------------------------------------------------------
+      if (
+        any(
+          session$userData$admin_privs$visit,
+          session$userData$admin_privs$deploy_recover
+        )
+      ) {
+        nav_show(id = "navbar", target = "fieldTasks")
+        if (!isTRUE(session$userData$admin_privs$visit)) {
+          nav_hide(id = "navbar", target = "visit")
+        }
+        if (!isTRUE(session$userData$admin_privs$deploy_recover)) {
+          nav_hide(id = "navbar", target = "deploy_recover")
+        }
       } else {
-        nav_hide(id = "navbar", target = "visit")
+        nav_hide(id = "navbar", target = "fieldTasks")
       }
 
       # Simple Index
@@ -186,7 +205,9 @@ app_server <- function(input, output, session) {
         "continuousDataTasks",
         "discreteDataTasks",
         "fileTasks",
+        "fieldTasks",
         "visit",
+        "deploy_recover",
         "adminTasks",
         "metadataTasks",
         "wellTasks"
@@ -278,6 +299,7 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
+    ui_loaded$contPlotOld <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -310,8 +332,10 @@ app_server <- function(input, output, session) {
     ui_loaded$addTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
+    ui_loaded$addSamples <- FALSE
     ui_loaded$editDiscData <- FALSE
     ui_loaded$addGuidelines <- FALSE
+    ui_loaded$addSampleSeries <- FALSE
     ui_loaded$syncDisc <- FALSE
 
     ui_loaded$addDocs <- FALSE
@@ -452,10 +476,13 @@ app_server <- function(input, output, session) {
       tr("plots", languageSelection$language)
     })
     output$plotsNavDiscTitle <- renderUI({
-      tr("plots_discrete", languageSelection$language)
+      tr("discrete", languageSelection$language)
     })
     output$plotsNavContTitle <- renderUI({
-      tr("plots_continuous", languageSelection$language)
+      tr("continuous", languageSelection$language)
+    })
+    output$plotsNavContOldTitle <- renderUI({
+      tr("plots_continuous_old", languageSelection$language)
     })
 
     output$reportsNavMenuTitle <- renderUI({
@@ -478,10 +505,10 @@ app_server <- function(input, output, session) {
       tr("data", languageSelection$language)
     })
     output$dataNavDiscTitle <- renderUI({
-      tr("data_discrete", languageSelection$language)
+      tr("discrete", languageSelection$language)
     })
     output$dataNavContTitle <- renderUI({
-      tr("data_continuous", languageSelection$language)
+      tr("continuous", languageSelection$language)
     })
 
     output$imagesNavMenuTitle <- renderUI({
@@ -910,7 +937,9 @@ $(document).keyup(function(event) {
               )
             ),
             addDiscData = has_priv("discrete", c("results", "samples")),
+            addSamples = has_priv("discrete", "samples"),
             editDiscData = has_priv("discrete", c("results", "samples")),
+            addSampleSeries = has_priv("discrete", "sample_series"),
             syncDisc = has_priv(
               "discrete",
               c("results", "samples", "sample_series")
@@ -1110,6 +1139,7 @@ $(document).keyup(function(event) {
           "home",
           "discPlot",
           "contPlot",
+          "contPlotOld",
           "mix",
           "map",
           "FOD",
@@ -1204,12 +1234,31 @@ $(document).keyup(function(event) {
       if (!ui_loaded$contPlot) {
         output$plotContinuous_ui <- renderUI(contPlotUI("contPlot"))
         ui_loaded$contPlot <- TRUE
+        # Call the server
         contPlot(
           "contPlot",
           language = languageSelection,
           windowDims,
           inputs = moduleOutputs$mapLocs
-        ) # Call the server
+        )
+        if (!is.null(moduleOutputs$mapLocs)) {
+          moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$change_tab <- NULL
+        }
+      }
+    }
+    if (input$navbar == "contPlotOld") {
+      if (!ui_loaded$contPlotOld) {
+        output$plotContinuousOld_ui <- renderUI(contPlotOldUI(
+          "contPlotOld"
+        ))
+        ui_loaded$contPlotOld <- TRUE
+        contPlotOld(
+          "contPlotOld",
+          windowDims,
+          language = languageSelection,
+          inputs = moduleOutputs$mapLocs
+        )
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -1223,10 +1272,11 @@ $(document).keyup(function(event) {
       if (!ui_loaded$monitoringLocationsMap) {
         output$mapLocs_ui <- renderUI(mapLocsUI("mapLocs"))
         ui_loaded$monitoringLocationsMap <- TRUE
+        # Call the server
         moduleOutputs$mapLocs <- mapLocs(
           "mapLocs",
           language = languageSelection
-        ) # Call the server
+        )
       }
       observe({
         if (!is.null(moduleOutputs$mapLocs$change_tab)) {
@@ -1252,7 +1302,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$paramValuesMap) {
         output$mapParams_ui <- renderUI(mapParamsUI("mapParams"))
         ui_loaded$paramValuesMap <- TRUE
-        mapParams("mapParams", language = languageSelection) # Call the server
+        #  Call the server
+        mapParams("mapParams", language = languageSelection)
       }
     }
     if (input$navbar == "rasterValuesMap") {
@@ -1266,7 +1317,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$snowBulletinMap) {
         output$mapSnowbull_ui <- renderUI(mapSnowbullUI("mapSnowbull"))
         ui_loaded$snowBulletinMap <- TRUE
-        mapSnowbull("mapSnowbull", language = languageSelection) # Call the server
+        # Call the server
+        mapSnowbull("mapSnowbull", language = languageSelection)
       }
     }
 
@@ -1275,7 +1327,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$FOD) {
         output$fod_ui <- renderUI(FODUI("FOD"))
         ui_loaded$FOD <- TRUE
-        FOD("FOD") # Call the server
+        # Call the server
+        FOD("FOD")
       }
     }
     ### Image nav_menu ##########################
@@ -1283,14 +1336,16 @@ $(document).keyup(function(event) {
       if (!ui_loaded$imgTableView) {
         output$imgTableView_ui <- renderUI(imgTableViewUI("imgTableView"))
         ui_loaded$imgTableView <- TRUE
-        imgTableView("imgTableView", language = languageSelection) # Call the server
+        # Call the server
+        imgTableView("imgTableView", language = languageSelection)
       }
     }
     if (input$navbar == "imgMapView") {
       if (!ui_loaded$imgMapView) {
         output$imgMapView_ui <- renderUI(imgMapViewUI("imgMapView"))
         ui_loaded$imgMapView <- TRUE
-        imgMapView("imgMapView", language = languageSelection) # Call the server
+        # Call the server
+        imgMapView("imgMapView", language = languageSelection)
       }
     }
 
@@ -1299,14 +1354,16 @@ $(document).keyup(function(event) {
       if (!ui_loaded$snowInfo) {
         output$snowInfo_ui <- renderUI(snowInfoUIMod("snowInfo"))
         ui_loaded$snowInfo <- TRUE
-        snowInfoMod("snowInfo", language = languageSelection) # Call the server
+        # Call the server
+        snowInfoMod("snowInfo", language = languageSelection)
       }
     }
     if (input$navbar == "waterInfo") {
       if (!ui_loaded$waterInfo) {
         output$waterInfo_ui <- renderUI(waterInfoUIMod("waterInfo"))
         ui_loaded$waterInfo <- TRUE
-        waterInfoMod("waterInfo", language = languageSelection) # Call the server
+        # Call the server
+        waterInfoMod("waterInfo", language = languageSelection)
       }
     }
     if (input$navbar == "WQReport") {
@@ -1324,7 +1381,8 @@ $(document).keyup(function(event) {
       if (!ui_loaded$snowBulletin) {
         output$snowBulletin_ui <- renderUI(snowBulletinUIMod("snowBulletin"))
         ui_loaded$snowBulletin <- TRUE
-        snowBulletinMod("snowBulletin", language = languageSelection) # Call the server
+        # Call the server
+        snowBulletinMod("snowBulletin", language = languageSelection)
       }
     }
 
@@ -1507,6 +1565,13 @@ $(document).keyup(function(event) {
         }
       })
     }
+    if (input$navbar == "addSamples") {
+      if (!ui_loaded$addSamples) {
+        output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
+        ui_loaded$addSamples <- TRUE
+        addSamples("addSamples")
+      }
+    }
     if (input$navbar == "editDiscData") {
       if (!ui_loaded$editDiscData) {
         output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData")) # Render the UI
@@ -1519,6 +1584,15 @@ $(document).keyup(function(event) {
         output$addGuidelines_ui <- renderUI(addGuidelinesUI("addGuidelines")) # Render the UI
         ui_loaded$addGuidelines <- TRUE
         addGuidelines("addGuidelines") # Call the server
+      }
+    }
+    if (input$navbar == "addSampleSeries") {
+      if (!ui_loaded$addSampleSeries) {
+        output$addSampleSeries_ui <- renderUI(addSampleSeriesUI(
+          "addSampleSeries"
+        ))
+        ui_loaded$addSampleSeries <- TRUE
+        addSampleSeries("addSampleSeries")
       }
     }
     if (input$navbar == "addDocs") {

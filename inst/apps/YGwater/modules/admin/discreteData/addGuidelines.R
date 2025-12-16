@@ -116,7 +116,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
           width = "100%",
           multiple = TRUE,
           options = list(maxItems = 1)
-        ) %>%
+        ) |>
           tooltip(
             "Required for most parameters. If visible after selecting a parameter, it's required."
           ),
@@ -127,7 +127,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
           width = "100%",
           multiple = TRUE,
           options = list(maxItems = 1)
-        ) %>%
+        ) |>
           tooltip(
             "Only required for some parameters, e.g. hardness as CaCO3. If visible after selecting a parameter, it's requird."
           ),
@@ -144,8 +144,8 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
               "Guideline SQL",
               width = "100%",
               height = "400px"
-            ) %>%
-              tagAppendAttributes(spellcheck = "false") %>%
+            ) |>
+              tagAppendAttributes(spellcheck = "false") |>
               tooltip(
                 "The SQL code that defines how the guideline value is calculated. See the help file for details and examples."
               ),
@@ -168,13 +168,13 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
                 multiple = TRUE,
                 options = list(maxItems = 1),
                 width = "100%"
-              ) %>%
+              ) |>
                 tooltip("Insert a template for common guideline SQL patterns."),
               actionButton(
                 ns("insert_parameter"),
                 "Insert parameter",
                 width = "100%"
-              ) %>%
+              ) |>
                 tooltip(
                   "Select a parameter_id interactively and insert it where the cursor is in the SQL box."
                 ),
@@ -182,7 +182,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
                 ns("insert_fraction"),
                 "Insert sample fraction",
                 width = "100%"
-              ) %>%
+              ) |>
                 tooltip(
                   "Select a sample_fraction_id interactively and inserty it where the cursor is in the SQL box."
                 ),
@@ -190,7 +190,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
                 ns("insert_speciation"),
                 "Insert result speciation",
                 width = "100%"
-              ) %>%
+              ) |>
                 tooltip(
                   "Select a result_speciation_id interactively and inserty it where the cursor is in the SQL box."
                 )
@@ -203,7 +203,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
           width = "100%",
           style = "font-size: 14px;",
           class = "btn btn-primary"
-        ) %>%
+        ) |>
           tooltip(
             "Save changes to the selected guideline. This will update the database if successful, otherwise an error message will be shown to help you fix the issue."
           ),
@@ -213,7 +213,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
           width = "100%",
           style = "font-size: 14px;",
           class = "btn btn-primary"
-        ) %>%
+        ) |>
           tooltip(
             "Test the guideline SQL by providing temporary sample results."
           )
@@ -398,7 +398,7 @@ addGuidelines <- function(id) {
       moduleData$guidelines_temp <- rbind(moduleData$guidelines_temp, new)
 
       # Select the new row in the data.table
-      DT::dataTableProxy("guidelines_table") %>%
+      DT::dataTableProxy("guidelines_table") |>
         DT::selectRows(nrow(moduleData$guidelines))
 
       # Show the user a modal telling them to edit their new guideline to the right
@@ -1259,7 +1259,7 @@ FROM vals -- from the 'vals' CTE"
           moduleData$guidelines_temp <- moduleData$guidelines
 
           # Clear table selection and hide save button
-          DT::dataTableProxy("guidelines_table") %>% DT::selectRows(NULL)
+          DT::dataTableProxy("guidelines_table") |> DT::selectRows(NULL)
           shinyjs::hide("save_guideline")
           # Reset inputs
           updateTextInput(session, "guideline_name", value = "")

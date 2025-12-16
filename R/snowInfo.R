@@ -11,6 +11,7 @@
 #' @param plots Set TRUE if you want plots of SWE, depth, and density generated (but see next parameter).
 #' @param plot_type Set to "separate" for 3 plots per location, or "combined" for a single compound plot per location.
 #' @param quiet Suppresses most messages and warnings.
+#' @param headers Choose from 'file', 'object', 'both', or 'none'. Specifies whether to include headers (metadata about the data pull) in the saved files, the returned R objects (as a separate list), or both. Default is 'file' (i.e., only in the saved file).
 #' @param con A connection to the aquacache. Leave as NULL to use [AquaConnect()] to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.
 #'
 #' @return A list with four data.frames: location metadata, basic statistics, trend information, and snow course measurements is returned to the R environment. In addition, an Excel workbook is saved to the save_path with the four data.frames, and a new folder created to hold SWE and depth plots for each station requested.
@@ -28,17 +29,19 @@ snowInfo <- function(
   plots = TRUE,
   plot_type = "combined",
   quiet = FALSE,
+  headers = "file",
   con = NULL
 ) {
   # parameters for testing (remember to comment out when done)
   # locations <- "all"
-  # inactive <- TRUE
+  # inactive <- FALSE
   # save_path <- "C:/Users/gtdelapl/Desktop"
   # stats <- TRUE
-  # complete_yrs <- FALSE
-  # plots <- FALSE
+  # complete_yrs <- TRUE
+  # plots <- TRUE
   # plot_type <- "combined"
   # quiet <- FALSE
+  # headers <- "both"
   # con <- NULL
 
   rlang::check_installed("trend", reason = " to calculate trends.")
@@ -62,6 +65,13 @@ snowInfo <- function(
     }
   }
 
+  # Check headers parameter
+  if (!(headers %in% c("file", "object", "both", "none"))) {
+    stop(
+      "The parameter 'headers' must be set to either 'file', 'object', or 'both'."
+    )
+  }
+
   if (!(plot_type %in% c("separate", "combined"))) {
     stop(
       "The parameter 'plot_type' must be set to either 'separate' or 'combined'."
@@ -77,14 +87,15 @@ snowInfo <- function(
     locations <- DBI::dbGetQuery(
       con,
       "
-    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Snow Survey Network';
-"
+    WHERE n.name = 'Yukon Snow Survey Network'
+    ORDER BY l.name;
+  "
     )
     all_locs <- TRUE
   } else {
@@ -93,17 +104,17 @@ snowInfo <- function(
       con,
       paste0(
         "
-    SELECT DISTINCT l.location, l.name, l.location_id, l.latitude, l.longitude, d.conversion_m
+    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Snow Survey Network' AND l.location IN ('",
+    WHERE n.name = 'Yukon Snow Survey Network' AND l.location IN ('",
         paste(locations, collapse = "', '"),
-        "'
-        ORDER BY l.name);
-"
+        "')
+    ORDER BY l.name;
+  "
       )
     )
     # Find the missing locations if any were not found. locations is a vector of requested locations
@@ -118,16 +129,26 @@ snowInfo <- function(
     all_locs <- FALSE
   }
 
+  if (!nrow(locations)) {
+    stop("No matching snow survey locations were found.")
+  }
+
   #Get the measurements
   samples <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT sample_id, location_id, datetime, target_datetime FROM samples WHERE location_id IN ('",
+      "SELECT sample_id, location_id, datetime, target_datetime 
+      FROM samples 
+      WHERE location_id IN ('",
       paste(locations$location_id, collapse = "', '"),
-      "') AND media_id = 7 AND collection_method = 1
-      ORDER BY location_id, target_datetime;"
+      "') AND media_id = 7 AND collection_method = 1 ",
+      "ORDER BY location_id, target_datetime;"
     )
   ) # media = 'atmospheric', collection_method = 'observation'
+
+  if (!nrow(samples)) {
+    stop("No snow survey measurements were found for the selected locations.")
+  }
 
   if (!inactive) {
     # Filter out any location with no measurements for 5 or more years
@@ -147,16 +168,38 @@ snowInfo <- function(
   results <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT r.sample_id, r.result, p.param_name FROM results AS r JOIN parameters AS p ON p.parameter_id = r.parameter_id WHERE r.sample_id IN ('",
+      "SELECT r.sample_id, r.result, p.param_name, p.unit_default, rvt.result_value_type AS flag
+      FROM results AS r 
+      JOIN parameters AS p ON p.parameter_id = r.parameter_id 
+      JOIN result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type
+      WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
-      "') AND p.parameter_id IN (21, 1220)
-      ORDER BY r.sample_id"
+      "') AND p.parameter_id IN (21, 1220) ",
+      "ORDER BY r.sample_id"
     )
   ) # 21 = SWE, 1220 = depth
 
-  #Manipulate/preprocess things a bit
+  if (!nrow(results)) {
+    stop("No snow survey results were found for the selected locations.")
+  }
+
+  #M anipulate/preprocess things a bit
   samples$year <- lubridate::year(samples$target_datetime)
-  samples$month <- lubridate::month(samples$target_datetime)
+
+  # Create samples$month, but be aware than May could have sampling on the 15th as well as on the 1st. The 15th should become month 5.5
+  samples$month <- round(
+    as.numeric(
+      format(samples$target_datetime, "%m")
+    ) +
+      (as.numeric(format(samples$target_datetime, "%d")) - 1) / 31,
+    1
+  )
+  # Drop numbers after decimal place if they are 0
+  samples$month <- ifelse(
+    samples$month %% 1 == 0,
+    as.integer(samples$month),
+    samples$month
+  )
 
   results <- merge(results, samples, by = "sample_id")
 
@@ -661,10 +704,12 @@ snowInfo <- function(
         datetime = datetimes,
         target_datetime = target_datetimes,
         result = (SWE / 10) / depth,
+        unit_default = "g/cm3",
         year = years,
         month = months,
         location = unique(plot_results$location),
         name = unique(plot_results$name),
+        flag = "C",
         param_name = "density"
       )
       density <- inf_to_na(density)
@@ -761,7 +806,7 @@ snowInfo <- function(
                 cm^{
                   "3"
                 } *
-                  ')'
+                ')'
             ),
             title = paste0(locations$location[i], ": ", display_name)
           )
@@ -774,7 +819,7 @@ snowInfo <- function(
                 cm^{
                   "3"
                 } *
-                  ')'
+                ')'
             )
           )
       }
@@ -882,53 +927,132 @@ snowInfo <- function(
     ]
   }
 
+  # Add column to locations for 'last_survey' 'first_survey_date', 'feb1_surveys', 'march1_surveys', 'april1_surveys', 'may1_surveys' (counts of surveys on those dates, using target_datetime)
+  locations$first_survey <- NA
   locations$last_survey <- NA
+  locations$feb1_surveys <- NA
+  locations$march1_surveys <- NA
+  locations$april1_surveys <- NA
+  locations$may1_surveys <- NA
+  locations$may15_surveys <- NA
   for (i in 1:nrow(locations)) {
-    locations$last_survey[i] <- as.character(as.Date(max(samples[
+    surveys <- samples[
       samples$location_id == locations$location_id[i],
-      "target_datetime"
-    ])))
+    ]
+    locations$first_survey[i] <- as.character(as.Date(min(
+      surveys$target_datetime
+    )))
+    locations$last_survey[i] <- as.character(as.Date(max(
+      surveys$target_datetime
+    )))
+    locations$feb1_surveys[i] <- nrow(surveys[surveys$month == 2, ])
+    locations$march1_surveys[i] <- nrow(surveys[surveys$month == 3, ])
+    locations$april1_surveys[i] <- nrow(surveys[surveys$month == 4, ])
+    locations$may1_surveys[i] <- nrow(surveys[surveys$month == 5, ])
+    locations$may15_surveys[i] <- nrow(surveys[surveys$month == 5.5, ])
   }
 
   #Fix up the location metadata table
   locations <- locations[, -which(names(locations) == "location_id")]
+
+  locations$sub_basin <- NA_character_
+
+  # Placeholder for future basin lookup once vectors are added to the database
+  # basin_shapes <- sf::st_read(con, query = "SELECT * FROM spatial.vectors WHERE ...")
+  # locations$sub_basin <- getVector(....)
+
+  locations <- locations[, c(
+    "location",
+    "name",
+    "note",
+    "sub_basin",
+    "latitude",
+    "longitude",
+    "conversion_m",
+    "created",
+    "modified",
+    "first_survey",
+    "last_survey",
+    "feb1_surveys",
+    "march1_surveys",
+    "april1_surveys",
+    "may1_surveys",
+    "may15_surveys"
+  )]
+
   names(locations) <- c(
     "location_code",
     "location_name",
+    "note",
+    "sub_basin",
     "latitude",
     "longitude",
     "elevation_m",
-    "last_survey"
+    "metadata_created",
+    "metadata_modified",
+    "first_survey",
+    "last_survey",
+    "feb1_surveys",
+    "march1_surveys",
+    "april1_surveys",
+    "may1_surveys",
+    "may15_surveys"
   )
 
-  # Fix up the results table\
+  locations$metadata_created <- as.Date(locations$metadata_created)
+  locations$metadata_modified <- as.Date(locations$metadata_modified)
+  metadata_dates <- locations$metadata_modified
+  metadata_dates[is.na(metadata_dates)] <- locations$metadata_created[is.na(
+    metadata_dates
+  )]
+  last_metadata_modified <- suppressWarnings(max(
+    as.Date(metadata_dates),
+    na.rm = TRUE
+  ))
+  report_generated <- Sys.time()
+
+  locations <- locations[order(locations$location_code), ]
+
+  # Fix up the results table
   results <- results[, c(
     "location",
     "name",
     "param_name",
+    "unit_default",
     "datetime",
     "target_datetime",
     "year",
     "month",
-    "result"
+    "result",
+    "flag"
   )]
   names(results) <- c(
     "location_code",
     "location_name",
     "parameter",
+    "units",
     "sample_date",
     "target_date",
     "year",
     "month",
-    "result"
+    "result",
+    "flag"
   )
   # Round the results to 1 decimal place
   results$result <- round(results$result, 1)
   # Make dates Date class
   results$sample_date <- as.Date(results$sample_date)
   results$target_date <- as.Date(results$target_date)
+  # Make 'month' a character column so it prints without the trailing .0
+  results$month <- as.character(results$month)
 
-  #Concatenate the various products into a list to return.
+  # Replace 'flag' values of Estimated with Estimated SWE
+  results$flag[results$flag == "Estimated"] <- "Estimated SWE"
+
+  # Order by location_code and target_date
+  results <- results[order(results$location_code, results$target_date), ]
+
+  # Concatenate the various products into a list to return.
   if (stats) {
     if (all_locs) {
       out <- list(
@@ -949,10 +1073,281 @@ snowInfo <- function(
   } else {
     out <- list("locations" = locations, "measurements" = results)
   }
+
+  if (headers != "none") {
+    head_locations <- data.frame(
+      c(
+        "Description: Metadata about Yukon snow survey locations. Information is fetched in real-time and reflects the location metadata at query time.",
+        paste0(
+          "Generated at : ",
+          substr(format(Sys.time(), tz = "MST"), 1, 16),
+          " MST"
+        ),
+        "Report Title: Snow survey location metadata",
+        paste0(
+          "Date metadata last modified: ",
+          as.character(last_metadata_modified)
+        ),
+        "",
+        "Fields information:",
+        "location_code: Unique code for the snow survey location, with prefix corresponding to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
+        "note: short descriptions of significant events affecting the records, if course was discontinued, of deviations from standard 10-pt snow course, where partners outside of Yukon Government conduct surveys, where an automated snow-weather station is paired with the course, etc.",
+        "sub_basin: Drainage Basins as presented in Yukon Snow Bulletins.",
+        "feb1_surveys: Count of surveys conducted on February 1",
+        "march1_surveys: Count of surveys conducted on March 1",
+        "april1_surveys: Count of surveys conducted on April 1",
+        "may1_surveys: Count of surveys conducted on May 1",
+        "may15_surveys: Count of surveys conducted on May 15"
+      ),
+      stringsAsFactors = FALSE
+    )
+
+    head_stats <- data.frame(c(
+      "Description: Summary statistics for Yukon snow survey locations. Statistics are computed in real-time and reflect the measurements at query time.",
+      if (complete_yrs) {
+        "Only complete years are considered for statistics (i.e., if the current year is incomplete, it is excluded)."
+      } else {
+        "All years with any data are considered for statistics, including the current year."
+      },
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "total_record_yrs: Total number of years with snow survey data on record",
+      "missing_yrs: Years between start and end year with no snow survey data on record",
+      "sample_months: Months in which snow surveys were conducted (abbreviated month names)",
+      "max_SWE_mm: Maximum SWE (mm) recorded on any survey",
+      "mean_max_SWE_mm: Mean of annual maximum SWE (mm) values",
+      "median_max_SWE_mm: Median of annual maximum SWE (mm) values",
+      "max_DEPTH_cm: Maximum snow depth (cm) recorded on any survey",
+      "mean_max_DEPTH_cm: Mean of annual maximum snow depth (cm) values",
+      "median_max_DEPTH_cm: Median of annual maximum snow depth (cm) values"
+    ))
+
+    head_trends <- data.frame(c(
+      "Description: Trend analysis for Yukon snow survey locations. Trends are computed in real-time and reflect the measurements at query time.",
+      if (complete_yrs) {
+        "Only complete years are considered for trend calculations (i.e., if the current year is incomplete, it is excluded)."
+      } else {
+        "All years with any data are considered for trend calculations, including the current year."
+      },
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "p.value_SWE_max: P-value for Mann-Kendall trend test on annual maximum SWE (mm) values",
+      "sens.slope_SWE_max: Sen's slope estimate for trend on annual maximum SWE (mm) values",
+      "n_years_SWE: Number of years of data used in trend calculation for SWE",
+      "p.value_DEPTH_max: P-value for Mann-Kendall trend test on annual maximum snow depth (cm) values",
+      "sens.slope_DEPTH_max: Sen's slope estimate for trend on annual maximum snow depth (cm) values",
+      "n_years_DEPTH: Number of years of data used in trend calculation for snow depth",
+      "annual_prct_chg_SWE: Estimated annual percent change in maximum SWE (mm)",
+      "annual_prct_chg_DEPTH: Estimated annual percent change in maximum snow depth (cm)",
+      "note: Additional information about the trend calculations"
+    ))
+
+    head_territory <- data.frame(c(
+      "Description: Territory-wide summary statistics and trend analysis for Yukon snow survey locations. Statistics and trends are computed in real-time and reflect the measurements at query time.",
+      if (complete_yrs) {
+        "Only complete years are considered for statistics and trends (i.e., if the current year is incomplete, it is excluded)."
+      } else {
+        "All years with any data are considered for statistics and trends, including the current year."
+      },
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "subset: Indicates whether the row corresponds to mean of annual maximum values or mean of April 1 values",
+      "inactive_locs: TRUE/FALSE indicating whether inactive locations were included in calculations",
+      "n_locs: Number of locations included in calculations",
+      "yr_start: Start year for calculations",
+      "yr_end: End year for calculations",
+      "mean_SWE_mm: Mean SWE (mm) across all locations and years",
+      "median_SWE_mm: Median SWE (mm) across all locations and years",
+      "mean_DEPTH_cm: Mean snow depth (cm) across all locations and years",
+      "median_DEPTH_cm: Median snow depth (cm) across all locations and years",
+      "p.val_SWE_mean: P-value for Mann-Kendall trend test on territory-averaged SWE (mm)",
+      "sens.slope_SWE_mean: Sen's slope estimate for trend on territory-averaged SWE (mm)",
+      "p.val_DEPTH_mean: P-value for Mann-Kendall trend test on territory-averaged snow depth (cm)",
+      "sens.slope_DEPTH_mean: Sen's slope estimate for trend on territory-averaged snow depth (cm)",
+      "annual_prct_chg_SWE: Estimated annual percent change in territory-averaged SWE (mm)",
+      "annual_prct_chg_DEPTH: Estimated annual percent change in territory-averaged snow depth (cm)",
+      "description: Additional information about the calculations"
+    ))
+
+    head_measurements <- data.frame(c(
+      "Description: Snow survey measurements for Yukon snow survey locations. Measurements are fetched in real-time and reflect the data at query time.",
+      paste0(
+        "Generated at : ",
+        substr(format(Sys.time(), tz = "MST"), 1, 16),
+        " MST"
+      ),
+      "",
+      "Fields information:",
+      "location_code: Unique code for the snow survey location, with prefix corresponding to major drainage (08 = Alsek River, 09 = Yukon River, 10 = MacKenzie River) ",
+      "parameter: Name of the measured parameter (snow water equivalent, snow depth)",
+      "units: Units of the measured parameter",
+      "sample_date: True date when the snow survey measurement was taken",
+      "target_date: Target date for which the snow survey measurement is intended to represent",
+      "year: Year of the target date",
+      "month: Month of the target date. 2 = February, 3 = March, 4 = April, 5 = May, 5.5 = May 15",
+      "result: Measured value for the parameter",
+      "flag: Actual = averaged value from actual snow depth and snow water equivalent readings; Estimated SWE = averaged value from actual snow depth readings and estimated snow water equivalent result based on current snow depth and average historical density."
+    ))
+  }
+
   if (!is.null(save_path)) {
-    openxlsx::write.xlsx(
-      out,
-      paste0(save_path, "/SnowInfo_", Sys.Date(), "/snow survey.xlsx")
+    wb <- openxlsx::createWorkbook()
+    for (sheet_name in names(out)) {
+      openxlsx::addWorksheet(wb, sheetName = sheet_name)
+      if (sheet_name == "locations") {
+        if (headers %in% c("both", "file")) {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = head_locations,
+            startCol = 1,
+            startRow = 1,
+            colNames = FALSE
+          )
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = nrow(head_locations) + 2
+          )
+        } else {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = 1
+          )
+        }
+      } else if (sheet_name == "stats") {
+        if (headers %in% c("both", "file")) {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = head_stats,
+            startCol = 1,
+            startRow = 1,
+            colNames = FALSE
+          )
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = nrow(head_stats) + 2
+          )
+        } else {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = 1
+          )
+        }
+      } else if (sheet_name == "trends") {
+        if (headers %in% c("both", "file")) {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = head_trends,
+            startCol = 1,
+            startRow = 1,
+            colNames = FALSE
+          )
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = nrow(head_trends) + 2
+          )
+        } else {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = 1
+          )
+        }
+      } else if (sheet_name == "territory_stats_trends") {
+        if (headers %in% c("both", "file")) {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = head_territory,
+            startCol = 1,
+            startRow = 1,
+            colNames = FALSE
+          )
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = nrow(head_territory) + 2
+          )
+        } else {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = 1
+          )
+        }
+      } else if (sheet_name == "measurements") {
+        if (headers %in% c("both", "file")) {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = head_measurements,
+            startCol = 1,
+            startRow = 1,
+            colNames = FALSE
+          )
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = nrow(head_measurements) + 2
+          )
+        } else {
+          openxlsx::writeData(
+            wb,
+            sheet = sheet_name,
+            x = out[[sheet_name]],
+            startCol = 1,
+            startRow = 1
+          )
+        }
+      } else {
+        openxlsx::writeData(wb, sheet = sheet_name, x = out[[sheet_name]])
+      }
+    }
+
+    openxlsx::saveWorkbook(
+      wb,
+      file = paste0(save_path, "/SnowInfo_", Sys.Date(), "/snow survey.xlsx"),
+      overwrite = TRUE
     )
   }
 
@@ -967,5 +1362,17 @@ snowInfo <- function(
       )
     }
   }
+
+  # Add headers to the output object if requested. Same as above, but consider that the returned object must go to .csv
+  if (headers %in% c("both", "object")) {
+    out[["headers"]] <- list(
+      "locations" = head_locations,
+      "stats" = head_stats,
+      "trends" = head_trends,
+      "territory_stats_trends" = head_territory,
+      "measurements" = head_measurements
+    )
+  }
+
   return(out)
 } #End of function

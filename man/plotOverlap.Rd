@@ -5,9 +5,10 @@
 \title{Plot of overlapping years or portions thereof}
 \usage{
 plotOverlap(
-  location,
+  timeseries_id = NULL,
+  location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -24,7 +25,7 @@ plotOverlap(
   filter = NULL,
   unusable = FALSE,
   historic_range = "last",
-  rate = "day",
+  resolution = "day",
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
@@ -39,6 +40,8 @@ plotOverlap(
 )
 }
 \arguments{
+\item{timeseries_id}{The timeseries ID to plot, if known (else leave NULL).}
+
 \item{location}{The location for which you want a plot.}
 
 \item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}
@@ -77,7 +80,7 @@ plotOverlap(
 
 \item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
 
-\item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
+\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
 \item{line_scale}{A scale factor to apply to the size (width) of the lines. Default is 1.}
 

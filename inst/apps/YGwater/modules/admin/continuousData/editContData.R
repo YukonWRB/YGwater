@@ -8,13 +8,11 @@ editContDataUI <- function(id) {
 }
 
 editContData <- function(id) {
-  
   moduleServer(id, function(input, output, session) {
-    
     ns <- session$ns
-    
-    output$placeholder <- renderText("Placeholder for continuous data modify/delete module")
-    
-    
+
+    output$placeholder <- renderText(
+      "Placeholder for continuous data modify/delete module"
+    )
   }) # End of moduleServer
 }

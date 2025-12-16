@@ -1,5 +1,8 @@
+# !IMPORTANT! Some helper functions are located at the bottom of this file.
+
 #' @apiTitle AquaCache API version 1
-#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory
+#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory. Many endpoints can make use of authentication via HTTP Basic Auth. See the documentation for details. In addition, memoisation is used in multiple endpoints to cache results for improved performance.
+#' @apiVersion 1.0.0
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
@@ -11,7 +14,7 @@ function(req, res) {
     "^/parameters$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
-    "^/__docs__/", # UI shell & assets
+    "^/__docs__/", # Swagger UI shell & assets
     "^/openapi.json$", # <-- needed for the UI to load without auth
     "^/openapi.yaml$", # <-- sometimes used
     "^/timeseries/measurements$",
@@ -483,10 +486,41 @@ function(req, res, sample_ids, parameters = NA) {
 }
 
 
+# Functions and endpoints for snow survey data ########################
+# Memoised version of snowInfo to improve performance. Re-used for multiple endpoints.
+snowInfo_mem <- memoise::memoise(
+  # Stamp argument to force cache invalidation only when needed, using a cheap DB check for more recent samples than last cache time.
+  function(stamp, ...) {
+    YGwater::snowInfo(...)
+  },
+  cache = cachem::cache_mem(), # no time limit, only invalidates when stamp changes
+  omit_args = c("con") # Omit the connection as can changes each time yet is irrelevant
+)
+
+# Function to check for latest snow sample/result timestamp for cache invalidation
+get_snow_stamp <- function(con) {
+  sql <- "
+    SELECT GREATEST(
+      (SELECT MAX(COALESCE(s.modified, s.created))
+         FROM discrete.samples s
+        WHERE s.import_source = 'downloadSnowCourse'),
+
+      (SELECT MAX(COALESCE(r.modified, r.created))
+         FROM discrete.results r
+         JOIN discrete.samples s ON s.sample_id = r.sample_id
+        WHERE s.import_source = 'downloadSnowCourse'
+          AND r.parameter_id IN (21, 1220))
+    ) AS stamp
+  "
+
+  stamp <- DBI::dbGetQuery(con, sql)$stamp[[1]]
+
+  if (is.na(stamp)) "none" else as.character(stamp) # stabilize type for hashing
+}
+
 #' Return basic snow survey data
 #* @get /snow-survey/data
-#* @serializer csv
-
+#* @serializer contentType list(type = "text/csv")
 function(req, res) {
   con <- try(
     YGwater::AquaConnect(
@@ -510,20 +544,30 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
+
+  out <- snowInfo_mem(
+    stamp = latest,
     con = con,
     complete_yrs = FALSE,
+    inactive = TRUE,
     plots = FALSE,
     quiet = TRUE,
     stats = FALSE,
-    save_path = NULL
-  )$measurements
-  return(res)
+    save_path = NULL,
+    headers = "object"
+  )
+
+  csv_with_header(
+    out$measurements,
+    header_lines = out$headers$measurements[[1]]
+  )
 }
 
 #' Return basic snow survey metadata
 #* @get /snow-survey/metadata
-#* @serializer csv
+#* @serializer contentType list(type = "text/csv")
 
 function(req, res) {
   con <- try(
@@ -548,20 +592,30 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
+
+  out <- snowInfo_mem(
+    stamp = latest,
     con = con,
     complete_yrs = FALSE,
+    inactive = TRUE,
     plots = FALSE,
     quiet = TRUE,
     stats = FALSE,
-    save_path = NULL
-  )$locations
-  return(res)
+    save_path = NULL,
+    headers = "object"
+  )
+
+  csv_with_header(
+    out$locations,
+    header_lines = out$headers$locations[[1]]
+  )
 }
 
 #' Return snow survey statistics
 #* @get /snow-survey/stats
-#* @serializer csv
+#* @serializer contentType list(type = "text/csv")
 
 function(req, res) {
   con <- try(
@@ -586,20 +640,30 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
+
+  out <- snowInfo_mem(
+    stamp = latest,
     con = con,
     complete_yrs = TRUE,
+    inactive = TRUE,
     plots = FALSE,
     quiet = TRUE,
     stats = TRUE,
-    save_path = NULL
-  )$stats
-  return(res)
+    save_path = NULL,
+    headers = "object"
+  )
+
+  csv_with_header(
+    out$stats,
+    header_lines = out$headers$stats[[1]]
+  )
 }
 
 #' Return basic snow survey trends
 #* @get /snow-survey/trends
-#* @serializer csv
+#* @serializer contentType list(type = "text/csv")
 
 function(req, res) {
   con <- try(
@@ -624,14 +688,42 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
+
+  out <- snowInfo_mem(
+    stamp = latest,
     con = con,
     complete_yrs = TRUE,
+    inactive = TRUE,
     plots = FALSE,
     quiet = TRUE,
     stats = TRUE,
-    save_path = NULL
-  )$trends
+    save_path = NULL,
+    headers = "object"
+  )
 
-  return(res)
+  csv_with_header(
+    out$trends,
+    header_lines = out$headers$trends[[1]]
+  )
+}
+
+
+# Helper function to serialize data.frame to CSV with optional header lines
+csv_with_header <- function(df, header_lines = NULL) {
+  csv_lines <- capture.output(utils::write.csv(df, row.names = FALSE, na = ""))
+
+  if (is.null(header_lines) || length(header_lines) == 0) {
+    return(paste(csv_lines, collapse = "\n"))
+  }
+
+  header_lines <- paste0("# ", header_lines)
+  # Add a blank line between header and CSV
+  header_lines <- c(header_lines, "")
+
+  # Enclose all lines in quotes to prevent commas from separating text into columns
+  header_lines <- paste0('"', header_lines, '"')
+
+  paste(c(header_lines, csv_lines), collapse = "\n")
 }

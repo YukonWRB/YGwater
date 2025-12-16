@@ -6,37 +6,37 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
     key = "cont_data.plot_module_data",
     env = env,
     fetch_fun = function() {
-      locs <- DBI::dbGetQuery(
+      locs <- dbGetQueryDT(
         con,
-        "SELECT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
       )
-      sub_locs <- DBI::dbGetQuery(
+      sub_locs <- dbGetQueryDT(
         con,
         "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM timeseries) ORDER BY sub_location_name ASC;"
       )
-      params <- DBI::dbGetQuery(
+      params <- dbGetQueryDT(
         con,
         "SELECT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries) ORDER BY param_name ASC;"
       )
-      media <- DBI::dbGetQuery(
+      media <- dbGetQueryDT(
         con,
         "SELECT m.media_id, m.media_type, m.media_type_fr FROM media_types as m WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE m.media_id = t.media_id);"
       )
-      aggregation_types <- DBI::dbGetQuery(
+      aggregation_types <- dbGetQueryDT(
         con,
         "SELECT aggregation_type_id, aggregation_type, aggregation_type_fr FROM aggregation_types WHERE aggregation_type_id IN (SELECT DISTINCT aggregation_type_id FROM timeseries);"
       )
-      parameter_relationships <- DBI::dbGetQuery(
+      parameter_relationships <- dbGetQueryDT(
         con,
         "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE p.parameter_id = t.parameter_id) ;"
       )
-      range <- DBI::dbGetQuery(
+      range <- dbGetQueryDT(
         con,
         "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM timeseries;"
       )
-      timeseries <- DBI::dbGetQuery(
+      timeseries <- dbGetQueryDT(
         con,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.location AS loc_code, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
       )
 
       rates <- data.frame(
@@ -47,7 +47,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       rates$period <- as.character(lubridate::seconds_to_period(rates$seconds))
       z <- unique(timeseries$z[!is.na(timeseries$z)])
 
-      locations_projects <- DBI::dbGetQuery(
+      locations_projects <- dbGetQueryDT(
         con,
         paste0(
           "SELECT project_id, location_id FROM locations_projects WHERE location_id IN (",
@@ -56,7 +56,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         )
       )
       if (nrow(locations_projects) > 0) {
-        projects <- DBI::dbGetQuery(
+        projects <- dbGetQueryDT(
           con,
           paste0(
             "SELECT project_id, name, name_fr FROM projects WHERE project_id IN (",
@@ -76,7 +76,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         )
       }
 
-      locations_networks <- DBI::dbGetQuery(
+      locations_networks <- dbGetQueryDT(
         con,
         paste0(
           "SELECT network_id, location_id FROM locations_networks WHERE location_id IN (",
@@ -85,7 +85,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         )
       )
       if (nrow(locations_networks) > 0) {
-        networks <- DBI::dbGetQuery(
+        networks <- dbGetQueryDT(
           con,
           paste0(
             "SELECT network_id, name, name_fr FROM networks WHERE network_id IN (",
@@ -161,7 +161,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
     },
     ttl = 60 * 60 * 2
   ) # Cache the data for 2 hours
-}
+} # End cont_data.plot_module_data
 
 
 # discrete data module #####
@@ -172,7 +172,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
     fetch_fun = function() {
       locs <- DBI::dbGetQuery(
         con,
-        "SELECT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
       )
       sub_locs <- DBI::dbGetQuery(
         con,
@@ -368,7 +368,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT location, name, name_fr, latitude, longitude, location_id FROM locations"
+          "SELECT l.location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
         ),
         timeseries = dbGetQueryDT(
           con,
