@@ -602,6 +602,11 @@ discData <- function(id, language, inputs) {
       ))
     })
 
+    # Observer for the modal close button
+    observeEvent(input$modal_close, {
+      removeModal()
+    })
+
     # Observer for the locations modal filter button
     observeEvent(input$loc_modal_filter, {
       # Filter the locations based on the selected projects and networks, update the locations selectizeInput
@@ -1713,11 +1718,11 @@ discData <- function(id, language, inputs) {
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "}"
@@ -1829,10 +1834,10 @@ discData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -1881,10 +1886,10 @@ discData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -1935,12 +1940,12 @@ discData <- function(id, language, inputs) {
           selected = "xlsx"
         ),
         footer = tagList(
-          modalButton(tr("close", language$language)),
-          actionButton(
+          downloadButton(
             ns("download"),
             tr("dl_data", language$language),
             icon = icon("download")
-          )
+          ),
+          actionButton(ns("modal_close"), tr("close", language$language))
         ),
         size = "xl"
       ))

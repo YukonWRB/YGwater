@@ -2136,11 +2136,11 @@ contData <- function(id, language, inputs) {
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "}"
@@ -2269,10 +2269,10 @@ contData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -2321,10 +2321,10 @@ contData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -2632,10 +2632,10 @@ contData <- function(id, language, inputs) {
                   "$(this.api().table().header()).css({",
                   "  'background-color': '#079',",
                   "  'color': '#fff',",
-                  "  'font-size': '100%',",
+                  "  'font-size': '90%',",
                   "});",
                   "$(this.api().table().body()).css({",
-                  "  'font-size': '90%',",
+                  "  'font-size': '80%',",
                   "});",
                   "}"
                 ),
