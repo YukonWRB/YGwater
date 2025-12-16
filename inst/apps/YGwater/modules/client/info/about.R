@@ -41,19 +41,6 @@ about <- function(id, language) {
         ))
       })
 
-      # output$title_about <- renderUI({
-      #   HTML(paste0('<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
-      #               tr("about_title1", language$language),
-      #               '</div>'
-      #   ))
-      # })
-      # output$content_about <- renderUI({
-      #   HTML(paste0('<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
-      #               tr("about_content1", language$language),
-      #               '</div>'
-      #   ))
-      # })
-
       output$title_web_page <- renderUI({
         HTML(paste0(
           '<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',

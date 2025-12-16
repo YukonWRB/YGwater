@@ -276,14 +276,14 @@ app_ui <- function(request) {
           title = uiOutput("infoNavMenuTitle"),
           value = "info",
           nav_panel(
-            title = uiOutput("infoNavNewsTitle"),
-            value = "news",
-            uiOutput("news_ui")
-          ),
-          nav_panel(
             title = uiOutput("infoNavAboutTitle"),
             value = "about",
             uiOutput("about_ui")
+          ),
+          nav_panel(
+            title = uiOutput("infoNavNewsTitle"),
+            value = "news",
+            uiOutput("news_ui")
           )
         ),
         if (!config$public) {

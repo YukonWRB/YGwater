@@ -14,7 +14,15 @@ news <- function(id, language) {
     output$content <- renderUI({
       order <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT * FROM application.page_content WHERE page = 'news' ORDER BY position"
+        "
+        SELECT *
+        FROM application.page_content
+        WHERE page = 'news'
+        ORDER BY
+          CASE WHEN position IN (1,2,3) THEN 0 ELSE 1 END,
+          CASE WHEN position IN (1,2,3) THEN position END ASC,
+          CASE WHEN position NOT IN (1,2,3) THEN position END DESC
+        "
       )
 
       # Create a list to hold the UI elements

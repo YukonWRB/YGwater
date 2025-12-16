@@ -23,7 +23,7 @@ images_table,imagesNavTableTitle,Table selection,Sélection par tableau
 images_map,imagesNavMapTitle,Map selection,Sélection par carte
 info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
-info_news,infoNavNewsTitle,News,Nouvelles
+info_news,infoNavNewsTitle,Updates and changes,Mises à jour et changements
 fod_comments,FODNavTitle,Forecaster comments,Commentaires du prévisionniste
 Home module,,,
 betaTitle,beta version warning,🚧 Notice: this web site is under construction 🚧,🚧 Avis: ce site web est en état de construction. 🚧
@@ -208,8 +208,8 @@ map_date_within,,With data within ... day(s) at most,Avec données dans un déla
 map_date_within_selected1,,and data within,et données dans un délai de
 map_date_within_selected2,,day(s) or less of target date,jour(s) ou moins de la date ciblée
 render_map,,Create map,Créer la carte
-map_min_yrs,minimum number of years to use historic range stats,with at least … years of record,avec au moins … années de mesures
-map_min_yrs_selected1,,With at least,Avec au moins
+map_min_yrs,minimum number of years to use historic range stats,With at least … years of record,Avec au moins … années de mesures
+map_min_yrs_selected1,,with at least,avec au moins
 map_min_yrs_selected2,,years of record,années de mesures
 map_target_date,target date for historical range map,Target date,Date ciblée
 map_actual_values,,Actual values,Valeurs actuelles
@@ -281,8 +281,6 @@ licence1,,"The data, reports, and plots generated from this application are lice
 licence2,,Open Government Licence,licence de gouvernement ouvert du Yukon
 licence_url,,https://yukon.ca/en/your-government/open-government/open-government-licence-yukon,https://yukon.ca/fr/votre-gouvernement/gouvernement-ouvert/gouvernement-ouvert-licence-du-yukon
 licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms, which apply in addition to the Yukon Government licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains ensembles de données fournis par cette application proviennent d’organisations externes (p. ex. le relevé hydrométrique du Canada). Ces données peuvent être assujetties à leurs propres conditions de licence, qui s’appliquent en plus de la licence du gouvernement du Yukon. Il incombe aux utilisateurs de prendre connaissance des licences de tiers applicables et de s’y conformer."
-about_title1,title,About us,À propos de nous
-about_content1,content,Content to be developed!,À développer!
 about_title2,title,About this application,À propos cette application
 about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strenghts in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Ce site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour la gestion et la visualisation des données. Le code de l’application est regroupé dans un package contenant de nombreuses autres fonctions utiles, au-delà de celles présentées ici, accessible publiquement au "
 about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base de données maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre package R disponible ici : "
