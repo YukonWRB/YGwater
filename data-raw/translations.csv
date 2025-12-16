@@ -208,12 +208,12 @@ map_date_within,,With data within ... day(s) at most,Avec données dans un déla
 map_date_within_selected1,,and data within,et données dans un délai de
 map_date_within_selected2,,day(s) or less of target date,jour(s) ou moins de la date ciblée
 render_map,,Create map,Créer la carte
-map_min_yrs,minimum number of years to use historic range stats,With at least … years of record,Avec au moins … années de mesures
+map_min_yrs,minimum number of years to use historic range stats,with at least … years of record,avec au moins … années de mesures
 map_min_yrs_selected1,,With at least,Avec au moins
 map_min_yrs_selected2,,years of record,années de mesures
 map_target_date,target date for historical range map,Target date,Date ciblée
-map_absolute1,,Absolute values,Valeurs absolue
-map_absolute2,,Absolute value,Valeur absolue
+map_actual_values,,Actual values,Valeurs actuelles
+value,,Value,Valeur
 map_relative,,% historic range,% plage historique
 map_actual_date,,Date,Date
 map_actual_yrs,,Years of record,Années de mesures
@@ -223,9 +223,9 @@ map_two_parameter,,Two parameters,Deux paramètres
 map_latest_measurements,,Latest measurements,Plus récentes mesures
 map_latest_measurements_modal,,"<b>Note</b>: Latest measurements are compared to the <i>average</i> values for the same day in past years. Keep this in mind for parameters that change a lot during the day, like temperature.","<b>Remarque</b> : Les mesures les plus récentes sont comparées aux valeurs <i>moyennes</i> de la même journée dans les années passées. Ceci impacte surtout les paramètres qui varient beaucoup au cours d’une journée, comme la température."
 map_primary_param,,Primary parameter,Paramètre primaire
-map_primary_param_solo,single parameter (public facing),Plotted parameter,Paramètre représenté
+map_primary_param_solo,single parameter (public facing),Parameter,Paramètre
 map_edit_primary_param,,Edit primary parameter,Modifer paramètre primaire
-map_edit_primary_param_solo,,Edit plotted parameter,Modifier le paramètre
+map_edit_primary_param_solo,,Edit parameter,Modifier le paramètre
 map_second_param,,Secondary parameter,Paramètre secondaire
 map_add_second_param,,Add secondary parameter,Ajouter paramètre secondaire
 map_edit_second_param,,Edit secondary parameter,Modifier paramètre secondaire

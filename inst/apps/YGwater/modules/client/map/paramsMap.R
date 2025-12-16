@@ -44,7 +44,7 @@ mapParams <- function(id, language) {
                 c("range", "abs"),
                 c(
                   tr("map_relative", language$language),
-                  tr("map_absolute1", language$language)
+                  tr("map_actual_values", language$language)
                 )
               ),
               selected = "range",
@@ -787,7 +787,7 @@ mapParams <- function(id, language) {
             ": ",
             round(percent_historic_range, 2),
             "% <br/>",
-            tr("map_absolute2", language$language),
+            tr("value", language$language),
             ": ",
             round(value, 2),
             " ",
