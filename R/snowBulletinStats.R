@@ -677,6 +677,8 @@ snowBulletinStats <- function(
     stations = "all",
     year = year,
     month = month,
+    historical_start_year = 1991,
+    historical_end_year = 2020,
     return_missing = TRUE,
     active = TRUE,
     source = source,

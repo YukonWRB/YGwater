@@ -7,6 +7,7 @@
 ggplotOverlap(
   location,
   parameter,
+  units = "",
   record_rate = NULL,
   startDay = 1,
   endDay = 365,
@@ -40,6 +41,8 @@ ggplotOverlap(
 \item{location}{The location for which you want a plot.}
 
 \item{parameter}{The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.}
+
+\item{units}{The units to display on the y-axis. Default is "" and the function will attempt to find the appropriate units from the database.}
 
 \item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.}
 

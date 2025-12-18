@@ -252,6 +252,17 @@ get_dynamic_style_elements <- function(
         "#6772F7" # Blue (extremely high)
     )
 
+    anomalies_bins <- c(-Inf, -5, -2, -0.4, 0.5, 2, 5, Inf)
+    anomalies_colors <- c(
+        "#EBB966", # Orange (near normal)
+        "#EEE383", # Yellow (normal)
+        "#C1FB80", # Light green (above normal)
+        "#6CFC88", # Green (well above normal)
+        "#8CEFE1", # Cyan (high)
+        "#85B4F8", # Light blue (very high)
+        "#6772F7" # Blue (extremely high)
+    )
+
     absolute_bins <- c(0, 50, 100, 150, 200, 250, 300, 400, 500, Inf)
     absolute_colors <- c(
         "#e6f5ff", # Very light sky blue
@@ -281,7 +292,7 @@ get_dynamic_style_elements <- function(
     )
 
     # Custom legend labels for each value type
-    relative_labels = c(
+    relative_labels <- c(
         tr("snowbull_no_snow", language), #"No snow present where<br>historical median is zero",
         tr("snowbull_some_snow", language), #"Snow present where<br>historical median is zero",
         "< 50%",
@@ -292,7 +303,17 @@ get_dynamic_style_elements <- function(
         "130 - 149%",
         ">= 150%"
     )
-    absolute_labels = c(
+    anomalies_labels <- c(
+        ">= -5.0",
+        "-5.0 to -2.0",
+        "-2.0 to -0.4",
+        "-0.4 to +0.5",
+        "+0.5 to +2.0",
+        "+2.0 to +5.0",
+        ">= +5.0"
+    )
+
+    absolute_labels <- c(
         "0-50 mm",
         "50-100 mm",
         "100-150 mm",
@@ -303,7 +324,7 @@ get_dynamic_style_elements <- function(
         "400-500 mm",
         ">500 mm"
     )
-    percentile_labels = c(
+    percentile_labels <- c(
         paste("0-10", tr("snowbull_percentile_suffix", language)),
         paste("10-20", tr("snowbull_percentile_suffix", language)),
         paste("20-30", tr("snowbull_percentile_suffix", language)),
@@ -331,6 +352,11 @@ get_dynamic_style_elements <- function(
             bins = percentile_bins,
             colors = percentile_colors,
             labels = percentile_labels
+        ),
+        anomalies = list(
+            bins = anomalies_bins,
+            colors = anomalies_colors,
+            labels = anomalies_labels
         )
     )
 
@@ -433,9 +459,15 @@ get_most_recent_date <- function(ts) {
 #' standardize_parameter_name("temp")   # Returns "temperature, air"
 #' }
 #' @noRd
-standardize_parameter_name <- function(parameter) {
+standardize_parameter_name <- function(parameter, long = FALSE) {
     if (is.null(parameter) || is.na(parameter) || parameter == "") {
         return("snow water equivalent") # Default to SWE
+    }
+
+    # Ensure 'long' is binary (TRUE/FALSE or 1/0)
+    if (!is.logical(long)) {
+        long <- as.logical(long)
+        if (is.na(long)) long <- FALSE
     }
 
     # Convert to lowercase and trim whitespace for comparison
@@ -469,16 +501,28 @@ standardize_parameter_name <- function(parameter) {
 
     # Check each category and return standardized name
     if (param_clean %in% snow_variants) {
-        return("snow water equivalent")
+        param_out <- "swe"
     } else if (param_clean %in% precip_variants) {
-        return("precipitation, total")
+        param_out <- "precipitation"
     } else if (param_clean %in% temp_variants) {
-        return("temperature, air")
+        param_out <- "temperature"
     } else {
         # Return original parameter if no match found
         warning(sprintf("Unknown parameter '%s', returning as-is", parameter))
-        return(parameter)
+        param_out <- "swe"
     }
+
+    # if long, convert to long form for AC query
+    param_short_to_long <- list(
+        "swe" = "snow water equivalent",
+        "precipitation" = "precipitation, total",
+        "temperature" = "temperature, air"
+    )
+    if (long) {
+        param_out <- param_short_to_long[[param_out]]
+    }
+
+    return(param_out)
 }
 
 #' Convert year and month to POSIXct datetime
@@ -742,17 +786,15 @@ download_continuous_ts <- function(
     start_date = sprintf("%d-01-01", 1950),
     end_date = sprintf("%d-01-01", 2100),
     resolution = "daily",
-    parameter_name = "snow water equivalent"
+    parameter_name = "swe"
 ) {
-    parameter_name <- standardize_parameter_name(parameter_name)
-
-    print(parameter_name)
+    param_name_long <- standardize_parameter_name(parameter_name, long = TRUE)
 
     # Verify parameter exists in public.parameters table
-    if (!check_parameter_exists(con, parameter_name)) {
+    if (!check_parameter_exists(con, param_name_long)) {
         warning(sprintf(
             "Parameter '%s' not found in public.parameters table",
-            parameter_name
+            param_name_long
         ))
         return(list(
             timeseries = list(
@@ -777,7 +819,7 @@ download_continuous_ts <- function(
          LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
          WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters
                                  WHERE param_name = ",
-        DBI::dbQuoteString(con, parameter_name),
+        DBI::dbQuoteString(con, param_name_long),
         ")"
     )
 
@@ -982,8 +1024,7 @@ download_continuous_ts <- function(
         metadata = metadata_sf,
         geom = "point",
         continuity = "continuous",
-        label = "snow_pillow",
-        parameter = "swe"
+        parameter = parameter_name
     ))
 }
 
@@ -1037,13 +1078,15 @@ download_discrete_ts <- function(
     con,
     start_date = sprintf("%d-01-01", 1950),
     end_date = sprintf("%d-01-01", 2100),
-    parameter_name = "snow water equivalent"
+    parameter_name = "swe"
 ) {
+    param_name_long <- standardize_parameter_name(parameter_name, long = TRUE)
+
     # Verify parameter exists in public.parameters table
-    if (!check_parameter_exists(con, parameter_name)) {
+    if (!check_parameter_exists(con, param_name_long)) {
         warning(sprintf(
             "Parameter '%s' not found in public.parameters table",
-            parameter_name
+            param_name_long
         ))
         return(list(
             timeseries = list(
@@ -1070,7 +1113,7 @@ download_discrete_ts <- function(
              LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
              WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters
                          WHERE param_name = %s)",
-            DBI::dbQuoteString(con, parameter_name)
+            DBI::dbQuoteString(con, param_name_long)
         )
     )
 
@@ -1107,9 +1150,10 @@ download_discrete_ts <- function(
              JOIN discrete.results r ON s.sample_id = r.sample_id
              WHERE s.location_id = %s
                AND r.parameter_id = (SELECT parameter_id FROM public.parameters
-                                     WHERE param_name = 'snow water equivalent')
+                                     WHERE param_name = %s)
                AND r.result IS NOT NULL",
-            DBI::dbQuoteLiteral(con, loc_id)
+            DBI::dbQuoteLiteral(con, loc_id),
+            DBI::dbQuoteString(con, param_name_long)
         )
 
         if (!is.null(start_date)) {
@@ -1254,8 +1298,7 @@ download_discrete_ts <- function(
         metadata = metadata_sf,
         geom = "point",
         continuity = "discrete",
-        label = "snow_survey",
-        parameter = "swe"
+        parameter = parameter_name
     ))
 }
 
@@ -2013,7 +2056,7 @@ load_bulletin_timeseries <- function(
         # process norms and relative values
         ret <- calculate_historic_daily_median(
             continuous_data$timeseries$data,
-            lookback_start = 1980,
+            lookback_start = 1991,
             lookback_end = 2020
         )
         continuous_data$timeseries$historic_median <- ret$historic_median
@@ -2028,7 +2071,7 @@ load_bulletin_timeseries <- function(
 
         ret <- calculate_historic_daily_median(
             discrete_data$timeseries$data,
-            lookback_start = 1980,
+            lookback_start = 1991,
             lookback_end = 2020
         )
         discrete_data$timeseries$historic_median <- ret$historic_median
@@ -2125,8 +2168,7 @@ load_bulletin_timeseries <- function(
 
         snowbull_timeseries$swe$basins$geom <- "poly"
         snowbull_timeseries$swe$basins$continuity <- "discrete"
-        snowbull_timeseries$swe$basins$parameter <- "swe"
-        snowbull_timeseries$swe$basins$label <- "snow_basin"
+        snowbull_timeseries$swe$basins$parameter <- "snow water equivalent"
 
         # Process basin names for better display on map
         snowbull_timeseries$swe$basins$metadata <- basins_shp
@@ -2209,7 +2251,7 @@ load_bulletin_timeseries <- function(
     if (load_precip) {
         precip_data <- download_continuous_ts(
             con,
-            parameter_name = "precipitation, total",
+            parameter_name = "precipitation",
             start_date = "1980-01-01"
         )
 
@@ -2233,6 +2275,32 @@ load_bulletin_timeseries <- function(
         snowbull_timeseries$precipitation <- precip_data
     } # end load_precip
 
+    if (load_temp) {
+        temp_data <- download_continuous_ts(
+            con,
+            parameter_name = "temperature",
+            start_date = "1980-01-01"
+        )
+
+        # aggregate to monthly totals (data on 1st of month of sum of previous month)
+        monthly_temp <- resample_timeseries(
+            temp_data$timeseries$data,
+            frequency = "monthly",
+            func = "mean"
+        )
+
+        ret = calculate_historic_daily_median(
+            monthly_temp,
+            lookback_start = 1980,
+            lookback_end = 2020
+        )
+
+        temp_data$timeseries$historic_median <- ret$historic_median
+        temp_data$timeseries$relative_to_med <- ret$relative_to_med
+        temp_data$timeseries$percentile <- ret$percentile
+
+        snowbull_timeseries$temperature <- temp_data
+    } # end load_temp
     return(snowbull_timeseries)
 }
 
@@ -2300,19 +2368,22 @@ load_bulletin_shapefiles <- function(con) {
         additional_query = "AND description IN ('Primary Highway', 'Secondary Highway')"
     )
     # Ensure CRS is WGS84 for leaflet
-    if (!is.null(roads) && sf::st_crs(roads)$epsg != 4326) {
-        roads <- sf::st_transform(roads, 4326)
-    }
+    roads <- sf::st_transform(roads, 4326)
 
     # Clip roads to basin boundaries if both exist
     # Ensure both have the same CRS
-    if (sf::st_crs(roads) != sf::st_crs(basins_shp)) {
-        roads <- sf::st_transform(roads, sf::st_crs(basins_shp))
-    }
+    # if (sf::st_crs(roads) != sf::st_crs(basins_shp)) {
+    #     roads <- sf::st_transform(roads, sf::st_crs(basins_shp))
+    # }
 
     # Buffer basin boundaries by 10km and clip roads to buffered area
-    basins_buffered <- sf::st_buffer(sf::st_union(basins_shp), dist = 100000) # 10km in meters
-    roads <- sf::st_intersection(roads, basins_buffered)
+    # basins_buffered <- sf::st_buffer(sf::st_union(basins_shp), dist = 100000) # 10km in meters
+    # roads <- sf::st_intersection(roads, basins_buffered)
+
+    # Ensure 'roads' is an sf object (sometimes st_intersection drops class)
+    # if (!inherits(roads, "sf")) {
+    #     roads <- sf::st_as_sf(roads)
+    # }
 
     snowbull_shapefiles$roads <- roads
 
@@ -2337,9 +2408,9 @@ load_bulletin_shapefiles <- function(con) {
         layer_name = "Communities"
     )
     # Ensure CRS is WGS84 for leaflet
-    if (!is.null(communities) && sf::st_crs(communities)$epsg != 4326) {
-        communities <- sf::st_transform(communities, 4326)
-    }
+    #if (!is.null(communities) && sf::st_crs(communities)$epsg != 4326) {
+    communities <- sf::st_transform(communities, 4326)
+    #}
 
     # Add popup, annotate, and annotation columns to communities
     if (!is.null(communities)) {
@@ -2421,8 +2492,16 @@ load_bulletin_shapefiles <- function(con) {
                 numeric(1)
             )
     }
-
+    communities <- sf::st_transform(communities, 4326)
     snowbull_shapefiles$communities <- communities
+
+    # Ensure all shapefiles are in WGS84 (EPSG:4326)
+    for (nm in names(snowbull_shapefiles)) {
+        shp <- snowbull_shapefiles[[nm]]
+        if (inherits(shp, "sf") && sf::st_crs(shp)$epsg != 4326) {
+            snowbull_shapefiles[[nm]] <- sf::st_transform(shp, 4326)
+        }
+    }
 
     return(snowbull_shapefiles)
 }
@@ -2453,19 +2532,21 @@ generate_popup_content <- function(
     percentile = NA,
     language = "English",
     shiny = TRUE,
-    datatype = ""
+    label = ""
 ) {
+    language <- lengthenLanguage(language)
+
     # match the datatype label to translation key
-    datatype_tr_key <- switch(
-        datatype,
-        "snow_basin" = "snowbull_swe_basin",
-        "snow_survey" = "snowbull_snow_survey",
-        "snow_pillow" = "snowbull_snow_pillow",
-        "unknown"
+    label_tr_key <- switch(
+        label,
+        "swe_poly_discrete" = "snowbull_swe_basin",
+        "swe_point_discrete" = "snowbull_snow_survey",
+        "swe_point_continuous" = "snowbull_snow_pillow",
+        "snowbull_snow_survey"
     )
     datatype_label <- paste0(
         "<b>Type:</b>",
-        tr(datatype_tr_key, language),
+        tr(label_tr_key, language),
         "<br>"
     )
 
@@ -2475,7 +2556,7 @@ generate_popup_content <- function(
     plot_button <- if (shiny) {
         paste(
             "<button onclick='generatePlot(\"",
-            datatype,
+            datatype_label,
             "\", \"",
             id,
             "\", \"",
@@ -2592,6 +2673,15 @@ get_display_data <- function(
         month = month
     )
 
+    # create a label with format parameter_geom_continuity (e.g., swe_point_continuous)
+    # these labels are matched to the translation dict
+    label <- paste(
+        dataset$parameter,
+        dataset$geom,
+        dataset$continuity,
+        sep = "_"
+    )
+
     # generate popup content for each station/basin
     dataset_state$popup_content <- mapply(
         function(
@@ -2605,9 +2695,9 @@ get_display_data <- function(
                 relative_to_med = relative_to_med,
                 historic_median = historic_median,
                 percentile = percentile,
-                language = language,
+                language = lang,
                 shiny = shiny,
-                datatype = dataset$label
+                label = label
             )
         },
         dataset_state$data,
@@ -2671,7 +2761,7 @@ make_leaflet_map <- function(
     point_data = NULL,
     poly_data = NULL,
     point_data_secondary = NULL,
-    snowbull_shapefiles,
+    snowbull_shapefiles = NULL,
     statistic = NULL,
     language = "English",
     month = NULL,
@@ -2756,10 +2846,10 @@ make_leaflet_map <- function(
                 group = "Basins averages"
             ) %>%
             leaflet::addLabelOnlyMarkers(
-                data = data$states_basins,
-                lng = data$states_basins$x_adjusted,
-                lat = data$states_basins$y_adjusted,
-                label = lapply(data$states_basins$annotation, htmltools::HTML),
+                data = poly_data,
+                lng = poly_data$x_adjusted,
+                lat = poly_data$y_adjusted,
+                label = lapply(poly_data$annotation, htmltools::HTML),
                 labelOptions = leaflet::labelOptions(
                     noHide = static_style_elements$basins$labelOptions$noHide %||%
                         TRUE,
@@ -2772,17 +2862,19 @@ make_leaflet_map <- function(
                 group = "Basins averages"
             )
     }
-    leaflet::addPolygons(
-        data = snowbull_shapefiles$basins,
-        fill = FALSE,
-        color = "black",
-        weight = 0.5 * static_style_elements$basins$weight,
-        opacity = static_style_elements$basins$opacity,
-        fillOpacity = 0,
-        label = NULL,
-        popup = NULL,
-        group = "Basins averages"
-    )
+
+    m <- m %>%
+        leaflet::addPolygons(
+            data = snowbull_shapefiles$basins,
+            fill = FALSE,
+            color = "black",
+            weight = 0.5 * static_style_elements$basins$weight,
+            opacity = static_style_elements$basins$opacity,
+            fillOpacity = 0,
+            label = NULL,
+            popup = NULL,
+            group = "Basins averages"
+        )
 
     if (!is.null(point_data)) {
         m <- m %>%
@@ -2810,21 +2902,18 @@ make_leaflet_map <- function(
                 group = "Snow surveys (discrete)"
             )
     }
-    {
-        if (!is.null(snowbull_shapefiles$roads)) {
-            m <- m %>%
-                leaflet::addPolylines(
-                    .,
-                    data = snowbull_shapefiles$roads,
-                    color = static_style_elements$roads$color,
-                    weight = static_style_elements$roads$weight,
-                    opacity = static_style_elements$roads$opacity,
-                    group = "Roads"
-                )
-        } else {
-            .
-        }
+
+    if (!is.null(snowbull_shapefiles$roads)) {
+        m <- m %>%
+            leaflet::addPolylines(
+                data = snowbull_shapefiles$roads,
+                color = static_style_elements$roads$color,
+                weight = static_style_elements$roads$weight,
+                opacity = static_style_elements$roads$opacity,
+                group = "Roads"
+            )
     }
+
     if (!is.null(point_data_secondary)) {
         m <- m %>%
             leaflet::addMarkers(
@@ -2870,8 +2959,8 @@ make_leaflet_map <- function(
             )
     }
 
-    {
-        if (!is.null(snowbull_shapefiles$yukon)) {
+    if (!is.null(snowbull_shapefiles$yukon)) {
+        {
             m <- m %>%
                 leaflet::addPolygons(
                     .,
@@ -2881,17 +2970,14 @@ make_leaflet_map <- function(
                     fill = static_style_elements$boundary$fill,
                     group = "Boundary"
                 )
-        } else {
-            .
         }
-    } %>%
-        {
-            communities_split <- split_communities(
-                snowbull_shapefiles$communities
-            )
 
-            . <- leaflet::addMarkers(
-                .,
+        communities_split <- split_communities(
+            snowbull_shapefiles$communities
+        )
+
+        m <- m %>%
+            leaflet::addMarkers(
                 data = communities_split$large,
                 icon = static_style_elements$communities$icon,
                 label = ~ lapply(annotation, htmltools::HTML),
@@ -2902,8 +2988,8 @@ make_leaflet_map <- function(
                 ),
                 group = c("Communities_large")
             )
-            . <- leaflet::addLabelOnlyMarkers(
-                .,
+        m <- m %>%
+            leaflet::addLabelOnlyMarkers(
                 data = communities_split$large,
                 lng = communities_split$large$x,
                 lat = communities_split$large$y,
@@ -2914,8 +3000,8 @@ make_leaflet_map <- function(
                 labelOptions = static_style_elements$communities$labelOptions,
                 group = c("Communities_large")
             )
-            . <- leaflet::addMarkers(
-                .,
+        m <- m %>%
+            leaflet::addMarkers(
                 data = communities_split$small,
                 icon = static_style_elements$communities$icon,
                 label = ~ lapply(annotation, htmltools::HTML),
@@ -2926,8 +3012,8 @@ make_leaflet_map <- function(
                 ),
                 group = c("Communities_small")
             )
-            . <- leaflet::addLabelOnlyMarkers(
-                .,
+        m <- m %>%
+            leaflet::addLabelOnlyMarkers(
                 data = communities_split$small,
                 lng = communities_split$small$x,
                 lat = communities_split$small$y,
@@ -2938,51 +3024,52 @@ make_leaflet_map <- function(
                 labelOptions = static_style_elements$communities$labelOptions,
                 group = c("Communities_small")
             )
-            .
-        } %>%
-        leaflet::groupOptions(
-            "Communities_large",
-            zoomLevels = seq(7, 18, 0.25)
-        ) %>%
-        leaflet::groupOptions(
-            "Communities_small",
-            zoomLevels = seq(8, 18, 0.25)
-        ) %>%
-        leaflet::addControl(
-            # here we specify a dummy HTML legend since it's much easier than the alternative.
-            # we grab some style elements from the static styles to keep it consistent, but this isn't possible for all cases
-            html = paste0(
-                "<div style='padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4; min-width: 140px;'>",
-                "<b>",
-                tr("snowbull_symbols", language),
-                "</b><br>",
-                "<svg width='18' height='18' style='vertical-align:middle;'><circle cx='9' cy='9' r='7' fill='none' stroke='black' stroke-width='2'/></svg> ",
-                tr("snowbull_snow_survey", language),
-                "<br>",
-                "<svg width='18' height='18' style='vertical-align:middle;'><rect x='3' y='3' width='12' height='12' fill='none' stroke='black' stroke-width='2'/><circle cx='9' cy='9' r='5' fill='none' stroke='black' stroke-width='2'/></svg> ",
-                tr("snowbull_snow_pillow", language),
-                "<br>",
-                sprintf(
-                    "<svg width='18' height='18' style='vertical-align:middle;'><line x1='2' y1='16' x2='16' y2='2' style='stroke:%s;stroke-width:%d'/></svg> ",
-                    static_style_elements$roads$color,
-                    static_style_elements$roads$weight
+
+        m <- m %>%
+            leaflet::groupOptions(
+                "Communities_large",
+                zoomLevels = seq(7, 18, 0.25)
+            ) %>%
+            leaflet::groupOptions(
+                "Communities_small",
+                zoomLevels = seq(8, 18, 0.25)
+            ) %>%
+            leaflet::addControl(
+                # here we specify a dummy HTML legend since it's much easier than the alternative.
+                # we grab some style elements from the static styles to keep it consistent, but this isn't possible for all cases
+                html = paste0(
+                    "<div style='padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4; min-width: 140px;'>",
+                    "<b>",
+                    tr("snowbull_symbols", language),
+                    "</b><br>",
+                    "<svg width='18' height='18' style='vertical-align:middle;'><circle cx='9' cy='9' r='7' fill='none' stroke='black' stroke-width='2'/></svg> ",
+                    tr("snowbull_snow_survey", language),
+                    "<br>",
+                    "<svg width='18' height='18' style='vertical-align:middle;'><rect x='3' y='3' width='12' height='12' fill='none' stroke='black' stroke-width='2'/><circle cx='9' cy='9' r='5' fill='none' stroke='black' stroke-width='2'/></svg> ",
+                    tr("snowbull_snow_pillow", language),
+                    "<br>",
+                    sprintf(
+                        "<svg width='18' height='18' style='vertical-align:middle;'><line x1='2' y1='16' x2='16' y2='2' style='stroke:%s;stroke-width:%d'/></svg> ",
+                        static_style_elements$roads$color,
+                        static_style_elements$roads$weight
+                    ),
+                    tr("snowbull_roads", language),
+                    "<br>",
+                    "<svg width='18' height='18' style='vertical-align:middle;'><polygon points='9,2 16,9 9,16 2,9' fill='black' stroke='white' stroke-width='2'/></svg> ",
+                    tr("snowbull_communities", language),
+                    "<br>",
+                    "</div>"
                 ),
-                tr("snowbull_roads", language),
-                "<br>",
-                "<svg width='18' height='18' style='vertical-align:middle;'><polygon points='9,2 16,9 9,16 2,9' fill='black' stroke='white' stroke-width='2'/></svg> ",
-                tr("snowbull_communities", language),
-                "<br>",
-                "</div>"
-            ),
-            position = "bottomright"
-        ) %>%
-        leaflet::addLegend(
-            position = "bottomright",
-            colors = dynamic_style_elements$colors,
-            title = legend_title,
-            labels = dynamic_style_elements$labels,
-            opacity = 1
-        )
+                position = "bottomright"
+            ) %>%
+            leaflet::addLegend(
+                position = "bottomright",
+                colors = dynamic_style_elements$colors,
+                title = legend_title,
+                labels = dynamic_style_elements$labels,
+                opacity = 1
+            )
+    }
 
     if (!is.null(filename)) {
         cat(sprintf("Saving map to file: %s\n", filename))
@@ -3420,9 +3507,9 @@ make_snowbull_map <- function(
     if (is.null(snowbull_timeseries)) {
         snowbull_timeseries <- load_bulletin_timeseries(
             con,
-            load_swe = parameter_name == "snow water equivalent",
-            load_precip = parameter_name == "precipitation, total",
-            load_temp = parameter_name == "air temperature"
+            load_swe = parameter_name == "swe",
+            load_precip = parameter_name == "precipitation",
+            load_temp = parameter_name == "temperature"
         )
     }
 
@@ -3435,24 +3522,24 @@ make_snowbull_map <- function(
 
     switch(
         parameter_name,
-        "snow water equivalent" = {
+        "swe" = {
             timeseries_data <- list(
                 poly_data = snowbull_timeseries$swe$basins,
                 point_data = snowbull_timeseries$swe$surveys,
                 point_data_secondary = snowbull_timeseries$swe$pillows
             )
         },
-        "precipitation, total" = {
+        "precipitation" = {
             timeseries_data <- list(
                 poly_data = NULL,
                 point_data = snowbull_timeseries$precipitation,
                 point_data_secondary = NULL
             )
         },
-        "air temperature" = {
+        "temperature" = {
             timeseries_data <- list(
                 poly_data = NULL,
-                point_data = snowbull_shapefiles$surveys_temp,
+                point_data = snowbull_timeseries$temperature,
                 point_data_secondary = NULL
             )
         },
@@ -3510,33 +3597,12 @@ make_snowbull_map <- function(
                 statistic = statistic,
                 month = month,
                 year = year,
-                filename = filename
+                filename = filename,
+                height = height,
+                width = width,
+                dpi = dpi
             ))
         },
         stop("Unknown format: ", format)
     )
 }
-
-con <- AquaCache::AquaConnect(
-    name = "aquacache",
-    host = "10.250.12.154",
-    port = 5432,
-    user = "public_reader",
-    password = "aquacache"
-)
-
-year <- 2025
-month <- 3
-language <- "English"
-statistic <- "relative_to_med"
-parameter_name <- "swe"
-
-make_snowbull_map(
-    year = 2025,
-    month = 3,
-    filename = "swe_map_march2025.html",
-    format = "leaflet",
-    parameter_name = "swe",
-    statistic = "relative_to_med",
-    language = "English"
-)

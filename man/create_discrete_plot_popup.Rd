@@ -30,7 +30,7 @@ The discrete plot shows monthly snow course measurements as:
 }
 \examples{
 \dontrun{
-station_ts <- snowbull_data$surveys$timeseries$data[, c("datetime", "456")]
+station_ts <- snowbull_data$swe$surveys$timeseries$data[, c("datetime", "456")]
 popup_html <- create_discrete_plot_popup(station_ts)
 }
 }
