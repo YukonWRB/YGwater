@@ -133,15 +133,21 @@ snowInfo <- function(
     stop("No matching snow survey locations were found.")
   }
 
-  #Get the measurements
+  # Get the measurements
+  snow_id <- DBI::dbGetQuery(
+    con,
+    "SELECT media_id FROM media_types WHERE media_type = 'snow'"
+  )[1, 1]
   samples <- DBI::dbGetQuery(
     con,
     paste0(
       "SELECT sample_id, location_id, datetime, target_datetime 
       FROM samples 
-      WHERE location_id IN ('",
-      paste(locations$location_id, collapse = "', '"),
-      "') AND media_id = 7 AND collection_method = 1 ",
+      WHERE location_id IN (",
+      paste(locations$location_id, collapse = ", "),
+      ") AND media_id = ",
+      snow_id,
+      " AND collection_method = 1 ",
       "ORDER BY location_id, target_datetime;"
     )
   ) # media = 'atmospheric', collection_method = 'observation'
