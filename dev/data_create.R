@@ -1,6 +1,6 @@
-#Shortcut script for (re)creating sysdata.rda
+# Shortcut script for (re)creating sysdata.rda
 
-#IMPORTANT NOTE: spatial data doesn't behave well as internal package data. See the file data_load in the /R folder for a better way to do this. Non-spatial data can almost all be incorporated using  internal data though.
+# IMPORTANT NOTE: spatial data doesn't behave well as internal package data. See the file data_load in the /R folder for a better way to do this. Non-spatial data can almost all be incorporated using  internal data though.
 
 # DO NOT DO THE FOLLOWING FOR SPATIAL DATA:
 # prov_buff <- sf::read_sf(dsn = "dev/prov_buffers", layer = "Provinces_buffered_300km")

@@ -95,25 +95,19 @@ wellRegistry <- function(id, language) {
     outputs <- reactiveValues() # This allows the module to pass values back to the main server
 
     if (session$userData$user_logged_in) {
-      cached <- map_location_module_data(
+      cached <- wwr_module_data(
         con = session$userData$AquaCache,
         env = session$userData$app_cache
       )
     } else {
-      cached <- map_location_module_data(con = session$userData$AquaCache)
+      cached <- wwr_module_data(con = session$userData$AquaCache)
     }
 
     moduleData <- reactiveValues(
-      locations = cached$locations,
-      timeseries = cached$timeseries,
-      projects = cached$projects,
-      networks = cached$networks,
-      locations_projects = cached$locations_projects,
-      locations_networks = cached$locations_networks,
-      media_types = cached$media_types,
-      parameters = cached$parameters,
-      parameter_groups = cached$parameter_groups,
-      parameter_sub_groups = cached$parameter_sub_groups
+      wells = cached$wells,
+      casing_materials = cached$casing_materials,
+      boreholes_docs = cached$boreholes_docs,
+      purposes = cached$purposes
     )
 
     # Adjust filter selections based on if 'all' is selected (remove selections other than 'all')
@@ -135,6 +129,7 @@ wellRegistry <- function(id, language) {
         }
       })
     }
+    # TODO: change based on new filter names
     observeFilterInput("data_type")
     observeFilterInput("media_type")
     observeFilterInput("param_group")
@@ -143,7 +138,6 @@ wellRegistry <- function(id, language) {
     observeFilterInput("network")
 
     # Create UI elements #####
-
     output$sidebar_page <- renderUI({
       req(moduleData, language)
       page_sidebar(
@@ -152,32 +146,29 @@ wellRegistry <- function(id, language) {
           bg = config$sidebar_bg, # Set in globals file'
           open = list(mobile = "always-above"),
           tagList(
-            # checkboxInput(
-            #   ns("cluster_points"),
-            #   label = tr("cluster_points_label", language$language),
-            #   value = FALSE
-            # ),
             selectizeInput(
-              ns("data_type"),
+              ns("purpose"),
               label = tooltip(
                 trigger = list(
-                  tr("data_format", language$language),
+                  # TODO Add well purpose to translation file
+                  tr("well_purpose", language$language),
                   bsicons::bs_icon("info-circle-fill")
                 ),
-                tr("tooltip_discrete_continuous", language$language),
+                # TODO Add well purpose tooltip to translation file
+                tr("well_purpose_tooltip", language$language),
               ),
               choices = stats::setNames(
-                c("all", "discrete", "continuous"),
+                c("all", moduleData$borehole_well_purpose_id),
                 c(
                   tr("all", language$language),
-                  c(
-                    tr("discrete", language$language),
-                    tr("continuous", language$language)
-                  )
+                  # TODO add column, reference in translation file
+                  moduleData$puposes$purpose_name
                 )
               ),
               multiple = TRUE
             ),
+
+            ######## !!!!!!! Module not modified beyond this line yet!!!!!!
             selectizeInput(
               ns("media_type"),
               label = tooltip(
