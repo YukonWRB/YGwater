@@ -236,6 +236,10 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/snowBulletinMap.R",
     package = "YGwater"
   ))
+  source(system.file(
+    "apps/YGwater/modules/client/WWR/registry_front_end.R",
+    package = "YGwater"
+  ))
 
   # Image modules
   source(system.file(
@@ -270,34 +274,6 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/info/about.R",
     package = "YGwater"
   ))
-
-  # # Load translations infrastructure to the global environment
-
-  # translations <- data.table::fread(
-  #   system.file(
-  #     "apps/YGwater/translations.csv",
-  #     package = "YGwater"
-  #   ),
-  #   encoding = "UTF-8"
-  # )
-  # # Build a list from the data.frame
-  # translation_cache <<- lapply(
-  #   setdiff(names(translations[, -2]), "id"),
-  #   function(lang) {
-  #     # Removes the second, "description" column, builds lists for each language
-  #     setNames(translations[[lang]], translations$id)
-  #   }
-  # )
-  # names(translation_cache) <<- setdiff(names(translations)[-2], "id")
-
-  # # Make a helper function, send to global environment
-  # tr <<- function(key, lang) {
-  #   # Ensure that 'key' is a value in the 'id' column of the translations data.frame
-  #   if (!key %in% translations$id) {
-  #     stop(paste("Translation key", key, "not found in translations data."))
-  #   }
-  #   translation_cache[[lang]][[key]] # list 'lang', item 'key'
-  # }
 
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements

@@ -25,6 +25,7 @@ info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,Updates and changes,Mises à jour et changements
 fod_comments,FODNavTitle,Forecaster comments,Commentaires du prévisionniste
+wwr_title,Well Registry title,Water Well Registry,Registre des puits d'eau
 Home module,,,
 betaTitle,beta version warning,🚧 Notice: this web site is under construction 🚧,🚧 Avis: ce site web est en état de construction. 🚧
 betaText,beta version warning,"<br>We're testing this site with the public and will launch soon! Use the thumbs up or down at the bottom of any page to share feedback. This will track which page you're on, but please add a descriptive comment before submitting.<br><br>We will keep improving the site during this time, including adding missing translations, updating the interface, and fixing bugs.","<br>Nous sommes désormais en phase de tests externes - le développement est presque terminé! Vous trouverez une interface pour nous faire part de vos retours en bas de chaque page. <br><br>Certains éléments de l’application continueront d’être améliorés pendant cette phase de test, notamment les traductions manquantes en français, l'améliorations de l’interface utilisateur, ainsi que la réparation de 'bugs'."

@@ -272,6 +272,11 @@ app_ui <- function(request) {
             uiOutput("fod_ui")
           )
         },
+        nav_panel(
+          title = uiOutput("WWRNavTitle"),
+          value = "WWR",
+          uiOutput("WWR_ui")
+        ),
         nav_menu(
           title = uiOutput("infoNavMenuTitle"),
           value = "info",

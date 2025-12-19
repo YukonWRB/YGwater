@@ -20,7 +20,16 @@ app_server <- function(input, output, session) {
   # Show relevant tabs for viz mode
   showViz <- function(show = TRUE) {
     nav_fun <- if (show) nav_show else nav_hide
-    tabs <- c("home", "plot", "maps", "reports", "images", "data", "info")
+    tabs <- c(
+      "home",
+      "plot",
+      "maps",
+      "reports",
+      "images",
+      "data",
+      "info",
+      "WWR"
+    )
     for (tab in tabs) {
       nav_fun(id = "navbar", target = tab)
     }
@@ -245,6 +254,7 @@ app_server <- function(input, output, session) {
     "imgMapView",
     "discData",
     "contData",
+    "WWR",
     "news",
     "about"
   )
@@ -313,6 +323,7 @@ app_server <- function(input, output, session) {
     ui_loaded$snowBulletin <- FALSE
     ui_loaded$discData <- FALSE
     ui_loaded$contData <- FALSE
+    ui_loaded$WWR <- FALSE
     ui_loaded$news <- FALSE
     ui_loaded$about <- FALSE
 
@@ -529,6 +540,9 @@ app_server <- function(input, output, session) {
     })
     output$infoNavAboutTitle <- renderUI({
       tr("info_about", languageSelection$language)
+    })
+    output$WWRNavTitle <- renderUI({
+      tr("wwr_title", languageSelection$language)
     })
     output$changePwdNavTitle <- renderUI({
       tr("changepwd_nav", languageSelection$language)
@@ -1153,10 +1167,9 @@ $(document).keyup(function(event) {
           "news",
           "discData",
           "contData",
-          "feedback"
+          "WWR"
         )
     ) {
-      # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
     } else if (
@@ -1415,6 +1428,18 @@ $(document).keyup(function(event) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
+      }
+    }
+
+    ### Water Well Registry
+    if (input$navbar == "WWR") {
+      if (!ui_loaded$WWR) {
+        output$WWR_ui <- renderUI(wellRegistryUI("wellRegistry"))
+        ui_loaded$WWR <- TRUE
+        wellRegistry(
+          "wellRegistry",
+          language = languageSelection
+        ) # Call the server
       }
     }
 
