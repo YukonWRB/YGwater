@@ -924,9 +924,30 @@ Le débit hivernal des cours d’eau et le niveau des lacs sont présentés pour
 
 # `r titles$MAP1`
 
+```{r MAP_TEMP, echo=FALSE, eval=TRUE, fig.show='hold', fig.width=9, fig.height=11}
+# r UpperYukonRiver_Snow, echo=FALSE, eval=include, out.width='.49\\linewidth', fig.width=4, fig.height=3,fig.show='hold',fig.align='center'
+# graphics::par(mfrow = c(1, 2))
+
+# Plot SWE
+tryCatch(
+  {
+    make_snowbull_map(
+      year = year_param,
+      month = month_param,
+      statistic = "anomalies",
+      language = language,
+      format = "ggplot",
+      parameter_name = "temperature"
+    )
+  },
+  error = function(e) {
+    cat("Map generation error: ", e$message, "\n")
+  }
+)
+```
 # `r titles$MAP2`
 
-```{r MAP_PRECIP, echo=FALSE, eval=TRUE, fig.show='hold', fig.width=9, fig.height=12}
+```{r MAP_PRECIP, echo=FALSE, eval=TRUE, fig.show='hold', fig.width=9, fig.height=11}
 # r UpperYukonRiver_Snow, echo=FALSE, eval=include, out.width='.49\\linewidth', fig.width=4, fig.height=3,fig.show='hold',fig.align='center'
 # graphics::par(mfrow = c(1, 2))
 
@@ -950,7 +971,7 @@ tryCatch(
 
 # `r titles$MAP3`
 
-```{r MAP_SWE, echo=FALSE, eval=TRUE, fig.show='hold', fig.width=9, fig.height=12}
+```{r MAP_SWE, echo=FALSE, eval=TRUE, fig.show='hold', fig.width=9, fig.height=11}
 # r UpperYukonRiver_Snow, echo=FALSE, eval=include, out.width='.49\\linewidth', fig.width=4, fig.height=3,fig.show='hold',fig.align='center'
 # graphics::par(mfrow = c(1, 2))
 

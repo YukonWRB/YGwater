@@ -254,13 +254,13 @@ get_dynamic_style_elements <- function(
 
     anomalies_bins <- c(-Inf, -5, -2, -0.4, 0.5, 2, 5, Inf)
     anomalies_colors <- c(
-        "#EBB966", # Orange (near normal)
-        "#EEE383", # Yellow (normal)
-        "#C1FB80", # Light green (above normal)
-        "#6CFC88", # Green (well above normal)
-        "#8CEFE1", # Cyan (high)
+        "#6772F7", # Blue (extremely high)
         "#85B4F8", # Light blue (very high)
-        "#6772F7" # Blue (extremely high)
+        "#8CEFE1", # Cyan (high)
+        "#6CFC88", # Green (well above normal)
+        "#C1FB80", # Light green (above normal)
+        "#EEE383", # Yellow (normal)
+        "#EBB966" # Orange (near normal)
     )
 
     absolute_bins <- c(0, 50, 100, 150, 200, 250, 300, 400, 500, Inf)
@@ -303,8 +303,9 @@ get_dynamic_style_elements <- function(
         "130 - 149%",
         ">= 150%"
     )
+
     anomalies_labels <- c(
-        ">= -5.0",
+        "> -5.0",
         "-5.0 to -2.0",
         "-2.0 to -0.4",
         "-0.4 to +0.5",
@@ -724,12 +725,17 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
 #' )
 #' }
 #' @noRd
-
-download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
+download_spatial_layer <- function(
+    con,
+    layer_name,
+    additional_query = NULL,
+    epsg = 4326
+) {
     query <- sprintf(
-        "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326
+        "SELECT *, ST_AsText(ST_Transform(geom, %d)) as geom_wkt
          FROM spatial.vectors
          WHERE layer_name = %s",
+        epsg,
         DBI::dbQuoteString(con, layer_name)
     )
 
@@ -743,8 +749,15 @@ download_spatial_layer <- function(con, layer_name, additional_query = NULL) {
         return(NULL)
     }
 
-    geom <- sf::st_as_sfc(data$geom_4326, crs = 4326)
-    sf::st_sf(data, geometry = geom, crs = 4326)
+    # Remove any existing geom column to avoid duplicate
+    if ("geom" %in% names(data)) {
+        data$geom <- NULL
+    }
+
+    geom <- sf::st_as_sfc(data$geom_wkt, crs = epsg)
+    data$geom_wkt <- NULL
+
+    sf::st_sf(data, geometry = geom, crs = epsg)
 }
 
 #' Retrieve continuous SWE timeseries and station metadata
@@ -786,7 +799,8 @@ download_continuous_ts <- function(
     start_date = sprintf("%d-01-01", 1950),
     end_date = sprintf("%d-01-01", 2100),
     resolution = "daily",
-    parameter_name = "swe"
+    parameter_name = "swe",
+    epsg = 4326
 ) {
     param_name_long <- standardize_parameter_name(parameter_name, long = TRUE)
 
@@ -840,6 +854,8 @@ download_continuous_ts <- function(
         crs = 4326,
         remove = FALSE
     )
+
+    md_continuous <- sf::st_transform(md_continuous, crs = epsg)
 
     ts_ids <- unique(md_continuous$timeseries_id)
     # Temporary list to hold per-station data.frames for latest-date calculation
@@ -1078,7 +1094,8 @@ download_discrete_ts <- function(
     con,
     start_date = sprintf("%d-01-01", 1950),
     end_date = sprintf("%d-01-01", 2100),
-    parameter_name = "swe"
+    parameter_name = "swe",
+    epsg = 4326
 ) {
     param_name_long <- standardize_parameter_name(parameter_name, long = TRUE)
 
@@ -1134,6 +1151,8 @@ download_discrete_ts <- function(
         crs = 4326,
         remove = FALSE
     )
+
+    md_discrete <- sf::st_transform(md_discrete, crs = epsg)
 
     ts_ids <- unique(md_discrete$location_id)
     ts_list_temp <- vector("list", length(ts_ids))
@@ -1366,6 +1385,167 @@ load_snowcourse_factors <- function(
 # DATA PROCESSING FUNCTIONS
 # =============================================================================
 
+# Helper: get aggregation function by parameter
+get_aggr_fun <- function(parameter) {
+    switch(
+        parameter,
+        precipitation = function(x) sum(x, na.rm = TRUE),
+        swe = function(x) mean(x, na.rm = TRUE),
+        temperature = function(x) mean(x, na.rm = TRUE),
+        function(x) mean(x, na.rm = TRUE)
+    )
+}
+
+# Helper: get station names from ts
+get_station_names <- function(ts) {
+    setdiff(colnames(ts), "datetime")
+}
+
+# Helper: get start/end dates for a given parameter and year/month
+get_period_dates <- function(year, month) {
+    # for the feb or mar bulletin, start from oct previous year
+    # otherwise start from previous month
+    if ((month == 2) || (month == 3)) {
+        start_month <- 10
+    } else {
+        start_month <- month - 1
+    }
+
+    if (start_month == 10) {
+        start_year <- year - 1
+    } else {
+        start_year <- year
+    }
+
+    start_date <- as.Date(sprintf("%d-%02d-01", start_year, start_month))
+    end_date <- as.Date(sprintf("%d-%02d-01", year, month))
+    list(start_date = start_date, end_date = end_date)
+}
+
+# Helper: get indices for a given parameter and period
+get_indices <- function(parameter, ts, start_date, end_date) {
+    switch(
+        parameter,
+        precipitation = which(
+            ts$datetime >= start_date & ts$datetime < end_date
+        ),
+        swe = which(ts$datetime == end_date),
+        temperature = which(ts$datetime >= start_date & ts$datetime < end_date),
+        which(ts$datetime >= start_date & ts$datetime < end_date)
+    )
+}
+
+get_norms <- function(
+    start_year_historical,
+    end_year_historical,
+    ts,
+    parameter,
+    end_months_historical = c(2, 3, 4, 5)
+) {
+    aggr_fun <- get_aggr_fun(parameter)
+    station_names <- get_station_names(ts)
+
+    # Create a 3D array: years x months x stations
+    historical_distr <- array(
+        NA,
+        dim = c(
+            end_year_historical - start_year_historical + 1,
+            length(end_months_historical),
+            length(station_names)
+        ),
+        dimnames = list(
+            year = as.character(start_year_historical:end_year_historical),
+            month = as.character(end_months_historical),
+            station = station_names
+        )
+    )
+
+    for (yr in start_year_historical:end_year_historical) {
+        for (m in end_months_historical) {
+            period <- get_period_dates(yr, m)
+            idx <- get_indices(
+                parameter,
+                ts,
+                period$start_date,
+                period$end_date
+            )
+            for (station in station_names) {
+                aggr_value <- aggr_fun(ts[idx, station])
+                historical_distr[
+                    as.character(yr),
+                    as.character(m),
+                    station
+                ] <- aggr_value
+            }
+        }
+    }
+
+    # Calculate median (norm) for each station and month
+    station_norms <- apply(historical_distr, c(2, 3), median, na.rm = TRUE)
+    # station_norms: months x stations
+
+    list(
+        station_norms = station_norms,
+        historical_distr = historical_distr
+    )
+}
+
+apply_norms <- function(
+    bulletin_month,
+    bulletin_year,
+    ts,
+    norms,
+    parameter
+) {
+    aggr_fun <- get_aggr_fun(parameter)
+    station_names <- get_station_names(ts)
+
+    period <- get_period_dates(bulletin_year, bulletin_month)
+    idx <- get_indices(parameter, ts, period$start_date, period$end_date)
+
+    station_current <- setNames(
+        sapply(station_names, function(station) aggr_fun(ts[idx, station])),
+        station_names
+    )
+    # Save current_aggr in the same format as station_norms (named numeric vector)
+    station_current <- as.numeric(station_current)
+    names(station_current) <- station_names
+
+    norms_for_month <- norms$station_norms[
+        rownames(norms$station_norms) == bulletin_month,
+    ]
+    # Calculate the ratio of current_aggr to station_norms for each station
+    relative_to_norm <- 100 *
+        (station_current /
+            norms_for_month)
+
+    anomalies <- station_current -
+        norms_for_month
+
+    # Calculate the percentile of station_current within historical values for each
+    # station
+    station_percentiles <- sapply(station_names, function(station) {
+        hist_values <- norms$historical_distr[,
+            rownames(norms$station_norms) == bulletin_month,
+            station
+        ]
+        # Remove NA values
+        hist_values <- hist_values[!is.na(hist_values)]
+
+        # Percentile: proportion of historical values less than or equal to current value
+        mean(hist_values <= station_current[station]) * 100
+    })
+
+    list(
+        current = station_current,
+        relative_to_norm = relative_to_norm,
+        norm = norms_for_month,
+        percentiles = station_percentiles,
+        anomalies = anomalies
+    )
+}
+
+
 #' Calculate historic daily median and relative change for timeseries
 #'
 #' @param ts Wide-format data.frame with 'datetime' column and station columns
@@ -1378,10 +1558,7 @@ load_snowcourse_factors <- function(
 #'   \item{relative_to_med}{data.frame with current values as percentage of historic median}
 #' }
 #'
-#' @description
-#' For each measurement, calculates the historic median for the same day-of-year
-#' using data from previous years within the lookback period. Supports both
-#' fixed lookback periods and rolling windows.
+#' @param parameter Character string specifying the parameter name.
 #'
 #' @details
 #' The function handles special cases for relative SWE calculation:
@@ -1713,53 +1890,44 @@ get_state_as_shp <- function(
     stopifnot(is.list(data))
     stopifnot("timeseries" %in% names(data))
     stopifnot("metadata" %in% names(data))
-    stopifnot(all(
-        c("data", "historic_median", "relative_to_med") %in%
-            names(data$timeseries)
-    ))
-    point_source_data <- data$metadata
-    target_date <- get_datetime(year, month)
 
-    # Helper to extract value for each station at the closest matching date
-    extract_at_date <- function(ts_df, target_date) {
-        vals <- rep(NA_real_, nrow(point_source_data))
-        if (!is.null(ts_df) && "datetime" %in% names(ts_df)) {
-            for (i in seq_len(nrow(point_source_data))) {
-                station_id <- as.character(point_source_data[["key"]][i])
-                if (!is.null(station_id) && station_id %in% names(ts_df)) {
-                    # Find row in ts_df with closest date to target_date
-                    dt <- as.Date(ts_df$datetime)
-                    idx <- which(dt == as.Date(target_date))
-                    if (length(idx) == 1) {
-                        vals[i] <- as.numeric(ts_df[[station_id]][idx])
-                    }
-                }
-            }
-        }
-        vals
-    }
-
-    # get the statistics at the target date
-    # this code is a bit clunky and could be optimized, but works for now; should not need to call extract_at_date every time
-    point_source_data$data <- extract_at_date(
-        data$timeseries$data,
-        target_date
-    )
-    point_source_data$relative_to_med <- extract_at_date(
-        data$timeseries$relative_to_med,
-        target_date
-    )
-    point_source_data$historic_median <- extract_at_date(
-        data$timeseries$historic_median,
-        target_date
+    data_stats <- apply_norms(
+        bulletin_month = month,
+        bulletin_year = year,
+        ts = data$timeseries$data,
+        norms = data$norms,
+        parameter = data$parameter
     )
 
-    point_source_data$percentile <- extract_at_date(
-        data$timeseries$percentile,
-        target_date
+    shp <- data$metadata
+
+    # Join data_stats entries to shp based on shp$key
+    # Assume data_stats entries are named by key (station/basin name/id)
+    # and shp$key matches those names
+    # We'll add columns to shp: swe, relative_to_med, historic_median, percentile
+
+    key <- as.character(shp$key)
+
+    # Ensure data_stats vectors are named and match keys
+    stats_df <- data.frame(
+        key = key,
+        data = as.numeric(data_stats$current[key]),
+        relative_to_med = as.numeric(data_stats$relative_to_norm[key]),
+        historic_median = as.numeric(data_stats$norm[key]),
+        percentile = as.numeric(data_stats$percentiles[key]),
+        anomalies = as.numeric(data_stats$anomalies[key])
     )
 
-    return(point_source_data)
+    shp <- merge(
+        shp,
+        stats_df,
+        by.x = "key",
+        by.y = "key",
+        all.x = TRUE,
+        sort = FALSE
+    )
+
+    return(shp)
 }
 
 # =============================================================================
@@ -1968,6 +2136,19 @@ create_discrete_plot_popup <- function(
     return(popup_html)
 }
 
+
+get_km_to_crs_correction <- function(epsg) {
+    distance_correction <- switch(
+        as.character(epsg),
+        "4326" = 111.32, # degrees to km
+        "3857" = 1 / 1000, # meters to km
+        "3577" = 1 / 1000, # meters to km
+        "3579" = 1 / 1000, # meters to km
+        111.32 # default to degrees to km
+    )
+    return(distance_correction)
+}
+
 #' Load all base data for the SWE mapping application
 #'
 #' @param con DBI database connection object
@@ -2018,7 +2199,8 @@ load_bulletin_timeseries <- function(
     con,
     load_swe = TRUE,
     load_precip = FALSE,
-    load_temp = FALSE
+    load_temp = FALSE,
+    epsg = 4326
 ) {
     # Initialize output structure
     # SWE consists of pillows (continuous), surveys (discrete), and basins (weighted average)
@@ -2042,6 +2224,9 @@ load_bulletin_timeseries <- function(
             quiet = TRUE
         )
 
+        # Ensure basin CRS is WGS84
+        basins_shp <- sf::st_transform(basins_shp, epsg)
+
         # rename basin name column if needed
         if ("SWE_Basin" %in% names(basins_shp)) {
             names(basins_shp)[names(basins_shp) == "SWE_Basin"] <- "name"
@@ -2051,45 +2236,48 @@ load_bulletin_timeseries <- function(
         basins_shp$area_km2 <- sf::st_area(basins_shp) |> as.numeric() * 1e-6
 
         # load swe data from continuous source
-        continuous_data <- download_continuous_ts(con, parameter_name = "swe")
-
-        # process norms and relative values
-        ret <- calculate_historic_daily_median(
-            continuous_data$timeseries$data,
-            lookback_start = 1991,
-            lookback_end = 2020
+        continuous_data <- download_continuous_ts(
+            con,
+            parameter_name = "swe",
+            epsg = epsg
         )
-        continuous_data$timeseries$historic_median <- ret$historic_median
-        continuous_data$timeseries$relative_to_med <- ret$relative_to_med
-        continuous_data$timeseries$percentile <- ret$percentile
 
+        # # process norms and relative values
+        # ret <- calculate_historic_daily_median(
+        #     continuous_data$timeseries$data,
+        #     lookback_start = 1991,
+        #     lookback_end = 2020
+        # )
+        # continuous_data$timeseries$historic_median <- ret$historic_median
+        # continuous_data$timeseries$relative_to_med <- ret$relative_to_med
+        # continuous_data$timeseries$percentile <- ret$percentile
+        norms <- get_norms(
+            start_year_historical = 1991,
+            end_year_historical = 2020,
+            ts = continuous_data$timeseries$data,
+            parameter = "swe"
+        )
         # store continuous pillow data
+
         snowbull_timeseries$swe$pillows <- continuous_data
-
+        snowbull_timeseries$swe$pillows$norms <- norms
         # load swe data from discrete source
-        discrete_data <- download_discrete_ts(con)
+        discrete_data <- download_discrete_ts(con, epsg = epsg)
 
-        ret <- calculate_historic_daily_median(
-            discrete_data$timeseries$data,
-            lookback_start = 1991,
-            lookback_end = 2020
+        norms <- get_norms(
+            start_year_historical = 1991,
+            end_year_historical = 2020,
+            ts = discrete_data$timeseries$data,
+            parameter = "swe"
         )
-        discrete_data$timeseries$historic_median <- ret$historic_median
-        discrete_data$timeseries$relative_to_med <- ret$relative_to_med
-        discrete_data$timeseries$percentile <- ret$percentile
 
         # store discrete survey data
         snowbull_timeseries$swe$surveys <- discrete_data
-
+        snowbull_timeseries$swe$surveys$norms <- norms
         # Load or infer weight matrix from snowcourse factors CSV using discrete metadata
         weights_df <- load_snowcourse_factors(
             metadata_discrete = discrete_data$metadata
         )
-
-        # Ensure basin CRS is WGS84
-        if (sf::st_crs(basins_shp)$epsg != 4326) {
-            basins_shp <- sf::st_transform(basins_shp, 4326)
-        }
 
         # Prepare dates and station list from discrete wide timeseries
         basin_dates <- snowbull_timeseries$swe$surveys$timeseries$data$datetime
@@ -2152,23 +2340,33 @@ load_bulletin_timeseries <- function(
         basin_timeseries[, basin_names] <- basin_swe_mat
 
         # Compute historic median and relative change for basins
-        ret <- calculate_historic_daily_median(
-            basin_timeseries,
-            lookback_start = 1980,
-            lookback_end = 2020
-        )
+        # ret <- calculate_historic_daily_median(
+        #     basin_timeseries,
+        #     lookback_start = 1980,
+        #     lookback_end = 2020
+        # )
 
         # store basin-averaged data
-        snowbull_timeseries$swe$basins$timeseries <- list(
-            data = basin_timeseries,
-            historic_median = ret$historic_median,
-            relative_to_med = ret$relative_to_med,
-            percentile = ret$percentile
-        )
+        # snowbull_timeseries$swe$basins$timeseries <- list(
+        #     data = basin_timeseries,
+        #     historic_median = ret$historic_median,
+        #     relative_to_med = ret$relative_to_med,
+        #     percentile = ret$percentile
+        # )
 
+        norms <- get_norms(
+            start_year_historical = 1991,
+            end_year_historical = 2020,
+            ts = basin_timeseries,
+            parameter = "swe"
+        )
+        snowbull_timeseries$swe$basins$timeseries <- list(
+            data = basin_timeseries
+        )
+        snowbull_timeseries$swe$basins$norms <- norms
         snowbull_timeseries$swe$basins$geom <- "poly"
         snowbull_timeseries$swe$basins$continuity <- "discrete"
-        snowbull_timeseries$swe$basins$parameter <- "snow water equivalent"
+        snowbull_timeseries$swe$basins$parameter <- "swe"
 
         # Process basin names for better display on map
         snowbull_timeseries$swe$basins$metadata <- basins_shp
@@ -2222,12 +2420,14 @@ load_bulletin_timeseries <- function(
         snowbull_timeseries$swe$basins$metadata$x <- basin_coords[, 1]
         snowbull_timeseries$swe$basins$metadata$y <- basin_coords[, 2]
 
+        distance_correction <- get_km_to_crs_correction(epsg)
+
         snowbull_timeseries$swe$basins$metadata$x_adjusted <- snowbull_timeseries$swe$basins$metadata$x +
             vapply(
                 snowbull_timeseries$swe$basins$metadata$name,
                 function(n) {
                     if (n %in% names(basin_adjustments)) {
-                        basin_adjustments[[n]]$x / 111.32 # convert km -> degrees (approx)
+                        basin_adjustments[[n]]$x / distance_correction # convert km -> degrees (approx)
                     } else {
                         0
                     }
@@ -2239,7 +2439,7 @@ load_bulletin_timeseries <- function(
                 snowbull_timeseries$swe$basins$metadata$name,
                 function(n) {
                     if (n %in% names(basin_adjustments)) {
-                        basin_adjustments[[n]]$y / 111.32 # convert km -> degrees (approx)
+                        basin_adjustments[[n]]$y / distance_correction # convert km -> degrees (approx)
                     } else {
                         0
                     }
@@ -2252,59 +2452,44 @@ load_bulletin_timeseries <- function(
         precip_data <- download_continuous_ts(
             con,
             parameter_name = "precipitation",
-            start_date = "1980-01-01"
+            start_date = "1980-01-01",
+            epsg = epsg
         )
 
-        # aggregate to monthly totals (data on 1st of month of sum of previous month)
-        monthly_precip <- resample_timeseries(
-            precip_data$timeseries$data,
-            frequency = "monthly",
-            func = "sum"
+        norms <- get_norms(
+            start_year_historical = 1991,
+            end_year_historical = 2020,
+            ts = precip_data$timeseries$data,
+            parameter = "precipitation"
         )
-
-        ret = calculate_historic_daily_median(
-            monthly_precip,
-            lookback_start = 1980,
-            lookback_end = 2020
-        )
-
-        precip_data$timeseries$historic_median <- ret$historic_median
-        precip_data$timeseries$relative_to_med <- ret$relative_to_med
-        precip_data$timeseries$percentile <- ret$percentile
 
         snowbull_timeseries$precipitation <- precip_data
+        snowbull_timeseries$precipitation$norms <- norms
     } # end load_precip
 
     if (load_temp) {
         temp_data <- download_continuous_ts(
             con,
             parameter_name = "temperature",
-            start_date = "1980-01-01"
+            start_date = "1980-01-01",
+            epsg = epsg
         )
 
-        # aggregate to monthly totals (data on 1st of month of sum of previous month)
-        monthly_temp <- resample_timeseries(
-            temp_data$timeseries$data,
-            frequency = "monthly",
-            func = "mean"
+        norms <- get_norms(
+            start_year_historical = 1991,
+            end_year_historical = 2020,
+            ts = temp_data$timeseries$data,
+            parameter = "temperature"
         )
-
-        ret = calculate_historic_daily_median(
-            monthly_temp,
-            lookback_start = 1980,
-            lookback_end = 2020
-        )
-
-        temp_data$timeseries$historic_median <- ret$historic_median
-        temp_data$timeseries$relative_to_med <- ret$relative_to_med
-        temp_data$timeseries$percentile <- ret$percentile
 
         snowbull_timeseries$temperature <- temp_data
+        snowbull_timeseries$temperature$norms <- norms
     } # end load_temp
+
     return(snowbull_timeseries)
 }
 
-load_bulletin_shapefiles <- function(con) {
+load_bulletin_shapefiles <- function(con, epsg = 4326) {
     snowbull_shapefiles <- list()
 
     # If we can read basin polygons from shapefile now (so basin names exist), prefer them
@@ -2330,7 +2515,8 @@ load_bulletin_shapefiles <- function(con) {
     prov_sf <- download_spatial_layer(
         con,
         "Provincial/Territorial Boundaries",
-        additional_query = "AND feature_name = 'Yukon'"
+        additional_query = "AND feature_name = 'Yukon'",
+        epsg = epsg
     )
     # Ensure CRS is WGS84 for leaflet
     if (!is.null(prov_sf) && sf::st_crs(prov_sf)$epsg != 4326) {
@@ -2365,25 +2551,24 @@ load_bulletin_shapefiles <- function(con) {
     roads <- download_spatial_layer(
         con = con,
         layer_name = "Roads",
-        additional_query = "AND description IN ('Primary Highway', 'Secondary Highway')"
+        additional_query = "AND description IN ('Primary Highway', 'Secondary Highway')",
+        epsg = epsg
     )
-    # Ensure CRS is WGS84 for leaflet
-    roads <- sf::st_transform(roads, 4326)
 
     # Clip roads to basin boundaries if both exist
     # Ensure both have the same CRS
-    # if (sf::st_crs(roads) != sf::st_crs(basins_shp)) {
-    #     roads <- sf::st_transform(roads, sf::st_crs(basins_shp))
-    # }
+    if (sf::st_crs(roads) != sf::st_crs(basins_shp)) {
+        roads <- sf::st_transform(roads, sf::st_crs(basins_shp))
+    }
 
     # Buffer basin boundaries by 10km and clip roads to buffered area
-    # basins_buffered <- sf::st_buffer(sf::st_union(basins_shp), dist = 100000) # 10km in meters
-    # roads <- sf::st_intersection(roads, basins_buffered)
+    basins_buffered <- sf::st_buffer(sf::st_union(basins_shp), dist = 100000) # 10km in meters
+    roads <- sf::st_intersection(roads, basins_buffered)
 
     # Ensure 'roads' is an sf object (sometimes st_intersection drops class)
-    # if (!inherits(roads, "sf")) {
-    #     roads <- sf::st_as_sf(roads)
-    # }
+    if (!inherits(roads, "sf")) {
+        roads <- sf::st_as_sf(roads)
+    }
 
     snowbull_shapefiles$roads <- roads
 
@@ -2405,11 +2590,12 @@ load_bulletin_shapefiles <- function(con) {
     )
     communities <- download_spatial_layer(
         con = con,
-        layer_name = "Communities"
+        layer_name = "Communities",
+        epsg = epsg
     )
     # Ensure CRS is WGS84 for leaflet
     #if (!is.null(communities) && sf::st_crs(communities)$epsg != 4326) {
-    communities <- sf::st_transform(communities, 4326)
+    # communities <- sf::st_transform(communities, 4326)
     #}
 
     # Add popup, annotate, and annotation columns to communities
@@ -2445,7 +2631,7 @@ load_bulletin_shapefiles <- function(con) {
             communities$feature_name
         )
 
-        # Customize specific communities
+        # Customize specific communities (these correctons are in KM, and need to be converted to the correct crs)
         community_adjustments[["Whitehorse"]] <- list(x = 0, y = 10)
         community_adjustments[["Dawson City"]] <- list(x = 0, y = 0)
         community_adjustments[["Watson Lake"]] <- list(x = 60, y = -55)
@@ -2467,12 +2653,15 @@ load_bulletin_shapefiles <- function(con) {
 
         communities$x <- comm_coords[, 1]
         communities$y <- comm_coords[, 2]
+
+        distance_correction <- get_km_to_crs_correction(epsg)
+
         communities$x_adjusted <- communities$x +
             vapply(
                 communities$feature_name,
                 function(n) {
                     if (n %in% names(community_adjustments)) {
-                        community_adjustments[[n]]$x / 111.32 # convert km -> degrees (approx)
+                        community_adjustments[[n]]$x / distance_correction # convert km -> degrees (approx)
                     } else {
                         0
                     }
@@ -2484,7 +2673,7 @@ load_bulletin_shapefiles <- function(con) {
                 communities$feature_name,
                 function(n) {
                     if (n %in% names(community_adjustments)) {
-                        community_adjustments[[n]]$y / 111.32 # convert km -> degrees (approx)
+                        community_adjustments[[n]]$y / distance_correction # convert km -> degrees (approx)
                     } else {
                         0
                     }
@@ -2492,14 +2681,14 @@ load_bulletin_shapefiles <- function(con) {
                 numeric(1)
             )
     }
-    communities <- sf::st_transform(communities, 4326)
+
     snowbull_shapefiles$communities <- communities
 
-    # Ensure all shapefiles are in WGS84 (EPSG:4326)
+    # Ensure all shapefiles are set to desired EPSG
     for (nm in names(snowbull_shapefiles)) {
         shp <- snowbull_shapefiles[[nm]]
-        if (inherits(shp, "sf") && sf::st_crs(shp)$epsg != 4326) {
-            snowbull_shapefiles[[nm]] <- sf::st_transform(shp, 4326)
+        if (inherits(shp, "sf") && sf::st_crs(shp)$epsg != epsg) {
+            snowbull_shapefiles[[nm]] <- sf::st_transform(shp, epsg)
         }
     }
 
@@ -3473,7 +3662,7 @@ make_snowbull_map <- function(
 
     parameter_name <- standardize_parameter_name(parameter_name)
 
-    STATISTICS <- c("data", "relative_to_med", "percentile")
+    STATISTICS <- c("data", "relative_to_med", "percentile", "anomalies")
     statistic <- match.arg(
         statistic,
         choices = STATISTICS
@@ -3483,6 +3672,14 @@ make_snowbull_map <- function(
     format <- match.arg(
         format,
         choices = FORMATS
+    )
+
+    # infer epsg code based on format
+    epsg <- switch(
+        format,
+        "ggplot" = 3579, # NAD83 / Yukon (ft)
+        "leaflet" = 4326, # WGS84
+        "shiny" = 4326 # WGS84
     )
 
     dynamic_style_elements <- get_dynamic_style_elements(
@@ -3509,14 +3706,16 @@ make_snowbull_map <- function(
             con,
             load_swe = parameter_name == "swe",
             load_precip = parameter_name == "precipitation",
-            load_temp = parameter_name == "temperature"
+            load_temp = parameter_name == "temperature",
+            epsg = epsg
         )
     }
 
     # Load snowbull_data if not provided
     if (is.null(snowbull_shapefiles)) {
         snowbull_shapefiles <- load_bulletin_shapefiles(
-            con
+            con,
+            epsg = epsg
         )
     }
 
