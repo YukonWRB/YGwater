@@ -34,7 +34,7 @@ snowInfo(
 
 \item{quiet}{Suppresses most messages and warnings.}
 
-\item{headers}{Choose from 'file', 'object', 'both', or 'none'. Specifies whether to include headers (metadata about the data pull) in the saved files, the returned R objects, or both. Default is 'file' (i.e., only in the saved file).}
+\item{headers}{Choose from 'file', 'object', 'both', or 'none'. Specifies whether to include headers (metadata about the data pull) in the saved files, the returned R objects (as a separate list), or both. Default is 'file' (i.e., only in the saved file).}
 
 \item{con}{A connection to the aquacache. Leave as NULL to use \code{\link[=AquaConnect]{AquaConnect()}} to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.}
 }
