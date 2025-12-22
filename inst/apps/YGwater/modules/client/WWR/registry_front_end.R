@@ -230,7 +230,7 @@ wellRegistry <- function(id, language) {
           .GlobalEnv
         },
         fetch_fun = function() {
-          # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
+          # Create popup text for each well. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
           # Get well names
           popup_names <- moduleData$wells[, .(
             borehole_id,
@@ -240,15 +240,18 @@ wellRegistry <- function(id, language) {
               borehole_name
             )
           )]
-          # drill date for each location
+          # drill date for each well
           drill_date <- moduleData$wells[, .(
             borehole_id,
             completion_date = fifelse(
               is.na(completion_date),
-              "Unknown",
+              tr("unknown", language$language),
               as.character(completion_date)
             )
           )]
+          docs_count <- moduleData$boreholes_docs[, .(
+            document_count = .N
+          ), by = borehole_id]
 
           # Combine all the data
           tmp <- data.table::copy(popup_names) # Use copy to avoid modifying the original data table
@@ -257,50 +260,12 @@ wellRegistry <- function(id, language) {
             on = .(borehole_id),
             drill_date := completion_date
           ] # Join drill_date
-
-          # TODO: links to download documents
-          tmp[, popup_links := "THIS WILL BE A LINK"]
-          # tmp[,
-          #   popup_links := {
-          #     links <- character(0)
-          #     if (isTRUE(has_discrete)) {
-          #       links <- c(
-          #         links,
-          #         sprintf(
-          #           "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_discrete\", \"%s\"); return false;'>%s</a>",
-          #           location_id,
-          #           tr("dl_data_discrete", language$language)
-          #         ),
-          #         sprintf(
-          #           "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_discrete\", \"%s\"); return false;'>%s</a>",
-          #           location_id,
-          #           tr("view_plots_discrete", language$language)
-          #         )
-          #       )
-          #     }
-          #     if (isTRUE(has_continuous)) {
-          #       links <- c(
-          #         links,
-          #         sprintf(
-          #           "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_dl_data_continuous\", \"%s\"); return false;'>%s</a>",
-          #           location_id,
-          #           tr("dl_data_continuous", language$language)
-          #         ),
-          #         sprintf(
-          #           "<a href='#' onclick='changeTab(\"mapLocs-\", \"clicked_view_plots_continuous\", \"%s\"); return false;'>%s</a>",
-          #           location_id,
-          #           tr("view_plots_continuous", language$language)
-          #         )
-          #       )
-          #     }
-          #     if (length(links) > 0) {
-          #       paste0("<br/>", paste(links, collapse = "<br/>"), "<br/>")
-          #     } else {
-          #       ""
-          #     }
-          #   },
-          #   by = borehole_id
-          # ]
+          tmp[
+            docs_count,
+            on = .(borehole_id),
+            document_count := i.document_count
+          ]
+          tmp[is.na(document_count), document_count := 0]
 
           tmp[,
             popup_html := paste0(
@@ -308,8 +273,9 @@ wellRegistry <- function(id, language) {
               popup_name,
               "</strong><br/>",
               substr(drill_date, 1, 10),
-              "<br/><br/>",
-              popup_links
+              "<br/>",
+              "Documents: ",
+              document_count
             )
           ]
 
@@ -460,99 +426,59 @@ wellRegistry <- function(id, language) {
     observe({
       req(input$map_zoom, popupData(), language$language)
       popup_data <- popupData()
-      if (!is.null(input$data_type)) {
-        if (length(input$data_type) > 1) {
-          timeseries.sub <- moduleData$timeseries[
-            moduleData$timeseries$data_type %in% input$data_type,
-          ]
-        } else {
-          if (input$data_type == "all") {
-            timeseries.sub <- moduleData$timeseries
-          } else {
-            timeseries.sub <- moduleData$timeseries[
-              moduleData$timeseries$data_type == input$data_type,
-            ]
-          }
-        }
-      } else {
-        timeseries.sub <- moduleData$timeseries
-      }
 
-      if (!is.null(input$media_type)) {
-        if (length(input$media_type) > 1) {
-          timeseries.sub <- timeseries.sub[
-            timeseries.sub$media_id %in% input$media_type,
-          ]
-        } else {
-          if (input$media_type != "all") {
-            timeseries.sub <- timeseries.sub[
-              timeseries.sub$media_id == input$media_type,
-            ]
-          }
-        }
-      }
-
-      if (!is.null(input$param_group)) {
-        if (length(input$param_group) > 1) {
-          select.params <- moduleData$parameters[
-            moduleData$parameters$group_id %in% input$param_group,
-            "parameter_id"
-          ]$parameter_id
-          timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
-        } else {
-          if (input$param_group != "all") {
-            select.params <- moduleData$parameters[
-              moduleData$parameters$group_id == input$param_group,
-              "parameter_id"
-            ]$parameter_id
-            if (length(select.params) > 1) {
-              timeseries.sub <- timeseries.sub[
-                parameter_id %in% select.params,
-              ]
-            } else {
-              timeseries.sub <- timeseries.sub[parameter_id == select.params, ]
-            }
-          }
-        }
-      }
-
-      if (!is.null(input$param)) {
-        if (length(input$param) > 1) {
-          timeseries.sub <- timeseries.sub[parameter_id %in% input$param, ]
-        } else {
-          if (input$param != "all") {
-            timeseries.sub <- timeseries.sub[parameter_id == input$param, ]
-          }
-        }
-      }
-      if (!is.null(input$yrs)) {
-        timeseries.sub <- timeseries.sub[
-          timeseries.sub$start_datetime <=
-            as.POSIXct(paste0(input$yrs[2], "-12-31 23:59:59"), tz = "UTC") &
-            timeseries.sub$end_datetime >=
-              as.POSIXct(paste0(input$yrs[1], "-01-01 00:00"), tz = "UTC"),
-        ]
-      }
-
-      loc.sub <- moduleData$locations[
-        moduleData$locations$location_id %in% timeseries.sub$location_id,
+      wells_sub <- data.table::copy(moduleData$wells)
+      wells_sub[moduleData$purposes,
+        on = .(borehole_well_purpose_id),
+        purpose_name := i.purpose_name
       ]
-      loc.sub <- loc.sub[
+
+      if (!is.null(input$purpose)) {
+        selected_purposes <- suppressWarnings(as.numeric(input$purpose))
+        if (length(input$purpose) > 1) {
+          wells_sub <- wells_sub[
+            borehole_well_purpose_id %in% selected_purposes
+          ]
+        } else if (input$purpose != "all") {
+          wells_sub <- wells_sub[
+            borehole_well_purpose_id == selected_purposes
+          ]
+        }
+      }
+
+      if (!is.null(input$yrs)) {
+        wells_sub[, completion_year := lubridate::year(completion_date)]
+        if (isTRUE(input$include_unknown_completion)) {
+          wells_sub <- wells_sub[
+            is.na(completion_year) |
+              (completion_year >= input$yrs[1] &
+                completion_year <= input$yrs[2])
+          ]
+        } else {
+          wells_sub <- wells_sub[
+            !is.na(completion_year) &
+              completion_year >= input$yrs[1] &
+              completion_year <= input$yrs[2]
+          ]
+        }
+      }
+
+      wells_sub <- wells_sub[!is.na(latitude) & !is.na(longitude)]
+
+      wells_sub <- wells_sub[
         popup_data,
-        on = .(location_id),
+        on = .(borehole_id),
         popup_html := popup_html
       ]
 
-      type_col <- if (language$abbrev == "fr") "type_fr" else "type"
       unknown_label <- tr("unknown", language$language)
-      loc.sub[, type_label := get(type_col)]
-      loc.sub[
+      wells_sub[, type_label := purpose_name]
+      wells_sub[
         is.na(type_label) | trimws(type_label) == "",
         type_label := unknown_label
       ]
-      loc.sub[, type_label := type_label]
 
-      loc_types <- sort(unique(loc.sub$type_label))
+      loc_types <- sort(unique(wells_sub$type_label))
 
       shape_choices <- c("circle", "square", "diamond")
 
@@ -597,7 +523,7 @@ wellRegistry <- function(id, language) {
         ]
       )
 
-      loc.sub[
+      wells_sub[
         type_map,
         on = .(type_label),
         `:=`(
@@ -609,14 +535,14 @@ wellRegistry <- function(id, language) {
       map_proxy <- leaflet::leafletProxy("map", session = session) %>%
         leaflet::clearMarkers() %>%
         leaflet::clearMarkerClusters() %>%
-        leaflet::removeControl("location_type_legend")
+        leaflet::removeControl("well_purpose_legend")
 
-      if (nrow(loc.sub) > 0) {
-        # Build per-row SVG data URIs (matches nrow(loc.sub))
+      if (nrow(wells_sub) > 0) {
+        # Build per-row SVG data URIs (matches nrow(wells_sub))
         icon_urls <- mapply(
           svg_data_uri,
-          shape = loc.sub$shape,
-          fill = loc.sub$color_hex,
+          shape = wells_sub$shape,
+          fill = wells_sub$color_hex,
           MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
           USE.NAMES = FALSE
         )
@@ -629,15 +555,15 @@ wellRegistry <- function(id, language) {
           iconHeight = 15,
           className = paste0(
             "loc-type-",
-            slug(loc.sub$type_label),
+            slug(wells_sub$type_label),
             " loc-col-",
-            gsub("#", "", loc.sub$color_hex)
+            gsub("#", "", wells_sub$color_hex)
           )
         )
 
         map_proxy <- map_proxy %>%
           leaflet::addMarkers(
-            data = loc.sub,
+            data = wells_sub,
             lng = ~longitude,
             lat = ~latitude,
             popup = ~popup_html,
@@ -651,11 +577,11 @@ wellRegistry <- function(id, language) {
           leaflet::addControl(
             build_symbol_legend(
               type_map,
-              title = tr("location_type_legend", language$language),
+              title = tr("well_purpose", language$language),
               stroke = "#244C5A" # same stroke as for markers
             ),
             position = "bottomright",
-            layerId = "location_type_legend",
+            layerId = "well_purpose_legend",
             className = "custom-legend"
           )
       }
