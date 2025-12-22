@@ -276,6 +276,11 @@ add_subplot,,Add subplot,Ajouter un sous-graphe
 modify_subplot,,Modify subplot,Modifier le sous-graphe
 remove_subplot,,Remove subplot,Enlever le sous-graphe
 add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the same plot, or 'Add subplot' to create a separate panel.","Cliquez sur « Ajouter un tracé » pour superposer une nouvelle série temporelle sur le même graphique, ou sur « Ajouter un sous-graphe » pour créer un panneau séparé."
+Well Registyry module,,,
+well_purpose,,Well purpose,Usage du puits
+well_completion_yr,,Well completion year,Année de complétion du puits
+include_unknown_completion,,Include wells with unknown completion year,Inclure les puits avec année de complétion inconnue
+borehole_unnamed,,Unnamed well,Puits sans nom
 About view module,,,
 licence_title,,Using data from this application,Utilisation des données de cette application
 licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont licenciés sous la "

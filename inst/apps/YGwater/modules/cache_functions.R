@@ -465,7 +465,7 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
         # Merge boreholes and wells tables on borehole_id, discarding boreholes with no wells
         wells = dbGetQueryDT(
           con,
-          "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.borehole_well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.depth_to_bedrock_m FROM boreholes AS b JOIN wells AS w ON b.borehole_id = w.borehole_id"
+          "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.borehole_well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.depth_to_bedrock_m, b.borehole_id FROM boreholes AS b JOIN wells AS w ON b.borehole_id = w.borehole_id"
         )
       )
     },

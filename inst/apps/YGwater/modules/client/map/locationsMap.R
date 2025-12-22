@@ -411,7 +411,6 @@ mapLocs <- function(id, language) {
             location_id,
             popup_name = get(tr("generic_name_col", language$language))
           )]
-          popup_names[, popup_name := popup_name]
           # Aggregate time range for each location
           time_range <- moduleData$timeseries[,
             .(
@@ -471,8 +470,7 @@ mapLocs <- function(id, language) {
           ]
 
           # Combine all the data
-          tmp <- data.table::copy(moduleData$locations)[, "location_id"] # Use copy to avoid modifying the original data table
-          tmp[popup_names, on = .(location_id), popup_name := popup_name] # Join popup_name
+          tmp <- data.table::copy(popup_names) # Use copy to avoid modifying the original data table
           tmp[
             time_range,
             on = .(location_id),
