@@ -138,6 +138,9 @@ snowInfo <- function(
     con,
     "SELECT media_id FROM media_types WHERE media_type = 'snow'"
   )[1, 1]
+  if (is.na(snow_id)) {
+    stop("snowInfo: could not find media_id for 'snow' in media_types table.")
+  }
   samples <- DBI::dbGetQuery(
     con,
     paste0(
