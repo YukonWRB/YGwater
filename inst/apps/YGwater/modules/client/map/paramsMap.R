@@ -665,16 +665,16 @@ mapParams <- function(id, language) {
       mapping_data[, percent_historic_range_capped := percent_historic_range]
 
       if (input$mapType == "actual") {
-        abs_vals <- abs(mapping_data$value)
+        actual_vals <- mapping_data$value
 
-        if (length(abs_vals) == 0) {
+        if (length(actual_vals) == 0) {
           leaflet::leafletProxy("map", session) %>%
             leaflet::clearMarkers() %>%
             leaflet::clearControls()
           return()
         }
 
-        abs_range <- range(abs_vals, na.rm = TRUE)
+        abs_range <- range(actual_vals, na.rm = TRUE)
 
         # Handle case where all values are identical or range is zero
         if (
@@ -698,12 +698,12 @@ mapParams <- function(id, language) {
 
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
-          domain = abs_vals,
+          domain = actual_vals,
           bins = abs_bins,
           pretty = FALSE,
           na.color = "#808080"
         )
-        map_values <- abs_vals
+        map_values <- actual_vals
         legend_digits <- function(vals) {
           if (length(vals) == 0 || all(!is.finite(vals))) {
             return(0)
@@ -717,7 +717,7 @@ mapParams <- function(id, language) {
             return(2)
           }
         }
-        lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
+        lab_format <- leaflet::labelFormat(digits = legend_digits(actual_vals))
         legend_title <- sprintf(
           "%s (%s)",
           moduleData$parameters[
@@ -752,14 +752,14 @@ mapParams <- function(id, language) {
           lat = ~latitude,
           fillColor = ~ value_palette(
             if (input$mapType == "actual") {
-              abs(value)
+              value
             } else {
               percent_historic_range_capped
             }
           ),
           color = ~ value_palette(
             if (input$mapType == "actual") {
-              abs(value)
+              value
             } else {
               percent_historic_range_capped
             }
