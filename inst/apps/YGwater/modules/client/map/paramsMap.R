@@ -41,7 +41,7 @@ mapParams <- function(id, language) {
               ns("mapType"),
               label = tr("map_mapType", language$language),
               choices = stats::setNames(
-                c("range", "abs"),
+                c("range", "actual"),
                 c(
                   tr("map_relative", language$language),
                   tr("map_actual_values", language$language)
@@ -329,7 +329,7 @@ mapParams <- function(id, language) {
     observeEvent(
       input$mapType,
       {
-        if (input$mapType == "abs" || config$public) {
+        if (input$mapType == "actual" || config$public) {
           shinyjs::hide("secondary_param")
           shinyjs::hide("edit_secondary_param")
         } else {
@@ -664,7 +664,7 @@ mapParams <- function(id, language) {
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
 
-      if (input$mapType == "abs") {
+      if (input$mapType == "actual") {
         abs_vals <- abs(mapping_data$value)
 
         if (length(abs_vals) == 0) {
@@ -751,14 +751,14 @@ mapParams <- function(id, language) {
           lng = ~longitude,
           lat = ~latitude,
           fillColor = ~ value_palette(
-            if (input$mapType == "abs") {
+            if (input$mapType == "actual") {
               abs(value)
             } else {
               percent_historic_range_capped
             }
           ),
           color = ~ value_palette(
-            if (input$mapType == "abs") {
+            if (input$mapType == "actual") {
               abs(value)
             } else {
               percent_historic_range_capped
