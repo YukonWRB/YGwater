@@ -177,6 +177,27 @@ YGwater_globals <- function(
 
     # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
     options(shiny.maxRequestSize = 1024 * 1024^2)
+
+    # define some functions for later use
+    parse_share_with <<- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        return(character())
+      }
+      if (is.list(value)) {
+        value <- value[[1]]
+      }
+      value <- gsub("[{}\"]", "", value)
+      out <- trimws(unlist(strsplit(value, ",")))
+      out[nzchar(out)]
+    }
+
+    format_share_with <<- function(groups) {
+      if (is.null(groups) || !length(groups) || all(!nzchar(groups))) {
+        groups <- "public_reader"
+      }
+      groups <- gsub('"', '\\"', groups, fixed = TRUE)
+      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
+    }
   }
 
   # 'client' side modules #####

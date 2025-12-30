@@ -37,23 +37,6 @@ visit <- function(id) {
     )
 
     # Functions for reuse within the module
-    format_share_with <- function(groups) {
-      if (is.null(groups) || length(groups) == 0) {
-        groups <- "public_reader"
-      }
-      groups <- gsub('"', '\\"', groups, fixed = TRUE)
-      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
-    }
-
-    parse_share_with <- function(value) {
-      if (is.null(value) || !length(value) || all(is.na(value))) {
-        return(character())
-      }
-      value <- gsub("[{}\"]", "", value)
-      out <- trimws(unlist(strsplit(value, ",")))
-      out[nzchar(out)]
-    }
-
     convert_to_utc <- function(datetime_value, tz_offset) {
       if (is.null(datetime_value) || all(is.na(datetime_value))) {
         return(NA)

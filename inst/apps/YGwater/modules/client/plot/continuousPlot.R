@@ -449,6 +449,19 @@ contPlot <- function(id, language, windowDims, inputs) {
                   ns("entire_record"),
                   tr("plot_all_record", language$language)
                 ),
+                selectizeInput(
+                  ns("plot_timezone"),
+                  label = tr("plot_timezone_offset", language$language),
+                  choices = -12:14,
+                  selected = -7,
+                  multiple = FALSE,
+                  options = list(
+                    placeholder = tr(
+                      "plot_timezone_offset_placeholder",
+                      language$language
+                    )
+                  )
+                ),
                 selectInput(
                   ns("plot_resolution"),
                   label = tr("plot_resolution_lab", language$language),
@@ -753,7 +766,8 @@ contPlot <- function(id, language, windowDims, inputs) {
         approvals = input$show_approvals,
         qualifiers = input$show_qualifiers,
         lang = language$abbrev,
-        plot_resolution = input$plot_resolution
+        plot_resolution = input$plot_resolution,
+        plot_timezone = input$plot_timezone
       )
     })
 
@@ -788,7 +802,7 @@ contPlot <- function(id, language, windowDims, inputs) {
             con = con,
             data = TRUE,
             slider = FALSE,
-            tzone = "MST",
+            req$plot_timezone,
             resolution = req$plot_resolution
           )
           return(plot)

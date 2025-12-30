@@ -487,10 +487,22 @@ app_server <- function(input, output, session) {
       tr("plots", languageSelection$language)
     })
     output$plotsNavDiscTitle <- renderUI({
-      tr("discrete", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("discrete", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_discrete", languageSelection$language)
+      )
     })
     output$plotsNavContTitle <- renderUI({
-      tr("continuous", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("continuous", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_continuous", languageSelection$language)
+      )
     })
     output$plotsNavContOldTitle <- renderUI({
       tr("plots_continuous_old", languageSelection$language)
@@ -516,10 +528,22 @@ app_server <- function(input, output, session) {
       tr("data", languageSelection$language)
     })
     output$dataNavDiscTitle <- renderUI({
-      tr("discrete", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("discrete", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_discrete", languageSelection$language)
+      )
     })
     output$dataNavContTitle <- renderUI({
-      tr("continuous", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("continuous", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_continuous", languageSelection$language)
+      )
     })
 
     output$imagesNavMenuTitle <- renderUI({

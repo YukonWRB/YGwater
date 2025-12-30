@@ -98,7 +98,9 @@ loc_modal,button text for modal,Filter by network/project,Filtrer par réseau/pr
 tooltip_reset,tooltip text for resetting filters,Filters affect each other by limiting subsequent options. Reset to clear all filters.,Les filtres s'affectent mutuellement en limitant les options suivantes. Réinitialiser pour effacer tous les filtres.
 year_filter,year filter title,With data between…,Avec des données entre...
 choose_locs,location selection title,Or choose one of more locations,Ou choisissez une ou plusieurs stations
-tooltip_discrete_continuous,tool tips,Continuous = recorded at regular intervals automatically; Discrete = measurements or samples at variable intervals.,Continues = enregistré à intervalles réguliers automatiquement; Discrètes = mesures ou échantillons à intervalles variables.
+tooltip_discrete_continuous,tool tips,Continuous = recorded at regular intervals automatically; Discrete = measurements or samples at variable intervals,Continues = enregistré à intervalles réguliers automatiquement; Discrètes = mesures ou échantillons à intervalles variables
+tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,Mesures ou échantillons pris à des intervalles variables
+tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
 tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Type de média dans lequel l'échantillon ou la mesure a été collecté
 tooltip_utc7,table tool tips,UTC-7,UTC-7
 filters,,Filters,Filtres
@@ -144,6 +146,8 @@ plot_resolution_lab,,Data resolution,Résolution des données
 plot_resolution_max,,Maximum,Maximum
 plot_resolution_hourly,,Hourly,Horaire
 plot_resolution_daily,,Daily,Journalière
+plot_timezone_offset,,Plot time zone (UTC offset),Fuseau horaire du graphique (décalage UTC)
+plot_timezone_offset_placeholder,,Select UTC offset,Choisir le décalage UTC
 plot_type_ts,,Timeseries,Série temporelle
 plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec

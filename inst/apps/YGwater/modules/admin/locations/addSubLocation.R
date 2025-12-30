@@ -30,7 +30,7 @@ addSubLocation <- function(id, inputs) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations"
+        "SELECT location_id, name FROM locations"
       )
       moduleData$exist_sub_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -180,7 +180,7 @@ addSubLocation <- function(id, inputs) {
           updateSelectizeInput(
             session,
             "share_with",
-            selected = details$share_with
+            selected = parse_share_with(details$share_with)
           )
           updateTextInput(session, "sub_loc_note", value = details$note)
         }
