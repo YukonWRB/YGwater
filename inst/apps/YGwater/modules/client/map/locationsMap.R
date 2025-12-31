@@ -568,7 +568,7 @@ mapLocs <- function(id, language) {
               "<strong>",
               tr("project(s)", language$language),
               ":</strong><br/><i>",
-              ifelse(
+              data.table::fifelse(
                 is.na(projects),
                 "N/A",
                 paste(projects, collapse = "<br/>")

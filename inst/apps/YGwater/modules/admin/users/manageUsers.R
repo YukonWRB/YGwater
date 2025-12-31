@@ -216,7 +216,7 @@ WHERE schema_name NOT LIKE 'pg_%'
 
       tryCatch(
         {
-          DBI::dbExecute(con, "BEGIN;")
+          DBI::dbExecute(session$userData$AquaCache, "BEGIN;")
           sql <- paste0(
             "CREATE ROLE ",
             input$group_name,
@@ -303,7 +303,7 @@ WHERE schema_name NOT LIKE 'pg_%'
             grant_table_permissions(input$table_permission_delete, "DELETE")
           }
 
-          DBI::dbExecute(con, "COMMIT;")
+          DBI::dbExecute(session$userData$AquaCache, "COMMIT;")
 
           load_roles()
           output$status <- renderText(sprintf(
@@ -313,11 +313,11 @@ WHERE schema_name NOT LIKE 'pg_%'
         },
         error = function(e) {
           output$status <- renderText(e$message)
-          DBI::dbExecute(con, "ROLLBACK;")
+          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK;")
         },
         warning = function(w) {
           output$status <- renderText(w$message)
-          DBI::dbExecute(con, "ROLLBACK;")
+          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK;")
         }
       )
     })

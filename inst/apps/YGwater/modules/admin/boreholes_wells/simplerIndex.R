@@ -907,7 +907,7 @@ simplerIndex <- function(id) {
       } else {
         NULL
       }
-      assigned_flag <- ifelse(
+      assigned_flag <- data.table::fifelse(
         is.na(rv$files_df$borehole_id) | rv$files_df$borehole_id == "",
         1,
         0
@@ -1604,7 +1604,7 @@ simplerIndex <- function(id) {
         rv$borehole_data <- new_borehole_data
 
         if (!is.null(rv$files_df)) {
-          rv$files_df$borehole_id <- ifelse(
+          rv$files_df$borehole_id <- data.table::fifelse(
             rv$files_df$borehole_id %in% new_ids,
             rv$files_df$borehole_id,
             NA_character_
@@ -2141,7 +2141,11 @@ simplerIndex <- function(id) {
                   new_id <- as.character(new_id)
                 }
                 prev_id <- rv$files_df$borehole_id[row_index]
-                prev_id_normalized <- ifelse(is.na(prev_id), "", prev_id)
+                prev_id_normalized <- data.table::fifelse(
+                  is.na(prev_id),
+                  "",
+                  prev_id
+                )
                 if (identical(prev_id_normalized, new_id)) {
                   return()
                 }

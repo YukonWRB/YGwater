@@ -234,7 +234,7 @@ wellRegistry <- function(id, language) {
           # Get well names
           popup_names <- moduleData$wells[, .(
             borehole_id,
-            popup_name = fifelse(
+            popup_name = data.table::fifelse(
               is.na(borehole_name),
               tr("borehole_unnamed", language$language),
               borehole_name
@@ -243,15 +243,18 @@ wellRegistry <- function(id, language) {
           # drill date for each well
           drill_date <- moduleData$wells[, .(
             borehole_id,
-            completion_date = fifelse(
+            completion_date = data.table::fifelse(
               is.na(completion_date),
               tr("unknown", language$language),
               as.character(completion_date)
             )
           )]
-          docs_count <- moduleData$boreholes_docs[, .(
-            document_count = .N
-          ), by = borehole_id]
+          docs_count <- moduleData$boreholes_docs[,
+            .(
+              document_count = .N
+            ),
+            by = borehole_id
+          ]
 
           # Combine all the data
           tmp <- data.table::copy(popup_names) # Use copy to avoid modifying the original data table
@@ -428,7 +431,8 @@ wellRegistry <- function(id, language) {
       popup_data <- popupData()
 
       wells_sub <- data.table::copy(moduleData$wells)
-      wells_sub[moduleData$purposes,
+      wells_sub[
+        moduleData$purposes,
         on = .(borehole_well_purpose_id),
         purpose_name := i.purpose_name
       ]

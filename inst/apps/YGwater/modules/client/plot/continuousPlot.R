@@ -802,7 +802,7 @@ contPlot <- function(id, language, windowDims, inputs) {
             con = con,
             data = TRUE,
             slider = FALSE,
-            req$plot_timezone,
+            tzone = req$plot_timezone,
             resolution = req$plot_resolution
           )
           return(plot)

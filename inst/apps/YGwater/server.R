@@ -424,13 +424,19 @@ app_server <- function(input, output, session) {
       updateActionButton(
         session,
         "language_button",
-        label = ifelse(selected_lang == "English", "Français", "English")
+        label = data.table::fifelse(
+          selected_lang == "English",
+          "Français",
+          "English"
+        )
       )
 
       # Update the HTML <head> for language settings
       session$sendCustomMessage(
         type = 'updateLang',
-        message = list(lang = ifelse(lang_code == "fr", "fr", "en"))
+        message = list(
+          lang = data.table::fifelse(lang_code == "fr", "fr", "en")
+        )
       )
     },
     ignoreInit = TRUE,
@@ -451,12 +457,14 @@ app_server <- function(input, output, session) {
     updateActionButton(
       session,
       "language_button",
-      label = ifelse(new_lang == "English", "Français", "English")
+      label = data.table::fifelse(new_lang == "English", "Français", "English")
     )
 
     session$sendCustomMessage(
       type = 'updateLang',
-      message = list(lang = ifelse(new_lang == "Français", "fr", "en"))
+      message = list(
+        lang = data.table::fifelse(new_lang == "Français", "fr", "en")
+      )
     )
   })
 

@@ -219,8 +219,7 @@ addContData <- function(id) {
         data$upload_raw <- openxlsx::read.xlsx(input$file$datapath, sheet = 1)
       } else if (ext == "csv") {
         data$upload_raw <- utils::read.csv(
-          input$file$datapath,
-          show_col_types = FALSE
+          input$file$datapath
         )
       } else {
         showNotification(
@@ -348,7 +347,11 @@ addContData <- function(id) {
           upload_data <- data$df
           upload_data$datetime <- upload_data$datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC 0
-          data$no_update <- ifelse(input$no_update == "yes", TRUE, FALSE)
+          data$no_update <- data.table::fifelse(
+            input$no_update == "yes",
+            TRUE,
+            FALSE
+          )
           AquaCache::addNewContinuous(
             tsid = timeseries(),
             df = upload_data,
@@ -406,7 +409,11 @@ addContData <- function(id) {
           upload_data <- data$df
           upload_data$datetime <- upload_data$datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
-          data$no_update <- ifelse(input$no_update == "yes", TRUE, FALSE)
+          data$no_update <- data.table::fifelse(
+            input$no_update == "yes",
+            TRUE,
+            FALSE
+          )
           AquaCache::addNewContinuous(
             tsid = timeseries(),
             df = upload_data,
@@ -465,7 +472,11 @@ addContData <- function(id) {
           upload_data <- data$df
           upload_data$datetime <- upload_data$datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
-          data$no_update <- ifelse(input$no_update == "yes", TRUE, FALSE)
+          data$no_update <- data.table::fifelse(
+            input$no_update == "yes",
+            TRUE,
+            FALSE
+          )
           AquaCache::addNewContinuous(
             tsid = timeseries(),
             df = upload_data,
