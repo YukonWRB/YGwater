@@ -97,7 +97,7 @@ snowInfoMod <- function(id, language) {
             c("combined", "separate"),
             c(
               tr("gen_snowInfo_ptype_combine", language$language),
-              tr("gen_snowInfo_ptype_separate", language$language)
+              tr("separate", language$language)
             )
           ),
           selected = selections$plot_type,

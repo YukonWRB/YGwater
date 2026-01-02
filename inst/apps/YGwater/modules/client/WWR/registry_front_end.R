@@ -433,7 +433,7 @@ wellRegistry <- function(id, language) {
       wells_sub <- data.table::copy(moduleData$wells)
       wells_sub[
         moduleData$purposes,
-        on = .(borehole_well_purpose_id),
+        on = .(well_purpose_id = borehole_well_purpose_id),
         purpose_name := i.purpose_name
       ]
 
@@ -441,11 +441,11 @@ wellRegistry <- function(id, language) {
         selected_purposes <- suppressWarnings(as.numeric(input$purpose))
         if (length(input$purpose) > 1) {
           wells_sub <- wells_sub[
-            borehole_well_purpose_id %in% selected_purposes
+            well_purpose_id %in% selected_purposes
           ]
         } else if (input$purpose != "all") {
           wells_sub <- wells_sub[
-            borehole_well_purpose_id == selected_purposes
+            well_purpose_id == selected_purposes
           ]
         }
       }

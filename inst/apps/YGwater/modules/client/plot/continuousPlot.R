@@ -579,17 +579,17 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       column_labels <- c(
         timeseries_id = "timeseries_id",
-        location = tr("cont_table_col_location", language$language),
-        sub_location = tr("cont_table_col_sub_location", language$language),
+        location = tr("loc", language$language),
+        sub_location = tr("sub_loc", language$language),
         loc_code = tr("loc_code_code", language$language),
-        parameter = tr("cont_table_col_parameter", language$language),
-        media = tr("cont_table_col_media", language$language),
-        aggregation = tr("cont_table_col_aggregation", language$language),
+        parameter = tr("parameter", language$language),
+        media = tr("media", language$language),
+        aggregation = tr("aggregation", language$language),
         z = tr("z", language$language),
         networks = tr("network", language$language),
         projects = tr("project", language$language),
-        start_date = tr("cont_table_col_start_date", language$language),
-        end_date = tr("cont_table_col_end_date", language$language)
+        start_date = tr("start_date", language$language),
+        end_date = tr("end_date", language$language)
       )
 
       visible_cols <- names(ts)

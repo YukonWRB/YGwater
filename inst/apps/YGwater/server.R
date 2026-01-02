@@ -664,7 +664,7 @@ app_server <- function(input, output, session) {
             ),
             actionButton(
               "submit_feedback",
-              tr("feedback_submit", languageSelection$language),
+              tr("submit", languageSelection$language),
               class = "btn btn-primary"
             )
           )
@@ -686,7 +686,7 @@ app_server <- function(input, output, session) {
           ),
           actionButton(
             "submit_feedback",
-            tr("feedback_submit", languageSelection$language),
+            tr("submit", languageSelection$language),
             class = "btn btn-primary"
           )
         )
@@ -728,7 +728,7 @@ app_server <- function(input, output, session) {
             ),
             actionButton(
               "submit_feedback",
-              tr("feedback_submit", languageSelection$language),
+              tr("submit", languageSelection$language),
               class = "btn btn-primary"
             )
           )
@@ -750,7 +750,7 @@ app_server <- function(input, output, session) {
           ),
           actionButton(
             "submit_feedback",
-            tr("feedback_submit", languageSelection$language),
+            tr("submit", languageSelection$language),
             class = "btn btn-primary"
           )
         )

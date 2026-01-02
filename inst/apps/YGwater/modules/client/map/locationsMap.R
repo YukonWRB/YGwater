@@ -191,7 +191,7 @@ mapLocs <- function(id, language) {
               ns("media_type"),
               label = tooltip(
                 trigger = list(
-                  tr("cont_table_col_media", language$language),
+                  tr("media", language$language),
                   bsicons::bs_icon("info-circle-fill")
                 ),
                 tr("tooltip_sample_media", language$language),

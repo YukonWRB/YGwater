@@ -105,7 +105,7 @@ mapParams <- function(id, language) {
       tagList(
         h4(
           if (config$public) {
-            tr("map_primary_param_solo", language$language)
+            tr("parameter", language$language)
           } else {
             tr("map_primary_param", language$language)
           }

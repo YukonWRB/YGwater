@@ -1877,7 +1877,7 @@ simplerIndex <- function(id) {
       new_purpose_id <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "INSERT INTO boreholes.borehole_well_purposes (purpose_name, description)
-   VALUES ($1,$2) RETURNING borehole_well_purpose_id",
+   VALUES ($1, $2) RETURNING borehole_well_purpose_id",
         params = list(input$new_purpose_name, input$new_purpose_description)
       )[1, 1]
 

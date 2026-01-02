@@ -710,7 +710,7 @@ contData <- function(id, language, inputs) {
         title = tr("param_modal", language$language),
         selectizeInput(
           ns("pGrps"),
-          label = tr("param_group(s)", language$language),
+          label = tr("param_groups", language$language),
           choices = stats::setNames(
             c("all", filteredData$param_groups$group_id),
             c(
@@ -726,7 +726,7 @@ contData <- function(id, language, inputs) {
         ),
         selectizeInput(
           ns("pSubGrps"),
-          label = tr("param_sub_group(s)", language$language),
+          label = tr("param_sub_groups", language$language),
           choices = stats::setNames(
             c("all", filteredData$param_sub_groups$sub_group_id),
             c(
