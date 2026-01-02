@@ -267,9 +267,10 @@ modify_subplot,,Modify subplot,Modifier le sous-graphe
 remove_subplot,,Remove subplot,Enlever le sous-graphe
 add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the same plot, or 'Add subplot' to create a separate panel.","Cliquez sur « Ajouter un tracé » pour superposer une nouvelle série temporelle sur le même graphique, ou sur « Ajouter un sous-graphe » pour créer un panneau séparé."
 well_purpose,,Well purpose,Usage du puits
-well_completion_yr,,Well completion year,Année de complétion du puits
-include_unknown_completion,,Include wells with unknown completion year,Inclure les puits avec année de complétion inconnue
+well_completion_yr,,Well completion year,Année d'achèvement des puits
+include_unknown_completion,,Include wells with unknown completion year,Inclure les puits avec année d'achèvement inconnue
 borehole_unnamed,,Unnamed well,Puits sans nom
+borehole_well_purpose_col,,purpose_name,purpose_name_fr
 licence_title,,Using data from this application,Utilisation des données de l'application
 licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont régis par la "
 licence2,,Open Government Licence,licence ouverte du gouvernement du Yukon
@@ -333,6 +334,8 @@ reset,direct translation,Reset,Réinitialiser
 reset_view,,Reset view,Réinitialiser la vue
 refresh_images,,Refresh images,Rafraîchir les images
 all,direct translation,All,Toutes
+all_f,,All,Toutes
+all_m,,All,Tous
 all_locs,,All locations,Tous les endroits
 from,direct translation,from,de
 to,direct translations,to,à

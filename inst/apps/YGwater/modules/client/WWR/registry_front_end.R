@@ -129,11 +129,7 @@ wellRegistry <- function(id, language) {
         }
       })
     }
-    # TODO: change based on new filter names
     observeFilterInput("purpose")
-    # observeFilterInput("media_type")
-    # observeFilterInput("param_group")
-    # observeFilterInput("param")
 
     # Create UI elements #####
     output$sidebar_page <- renderUI({
@@ -150,9 +146,12 @@ wellRegistry <- function(id, language) {
               choices = stats::setNames(
                 c("all", moduleData$purposes$borehole_well_purpose_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   # TODO add column, reference in translation file
-                  moduleData$purposes$purpose_name
+                  moduleData$purposes[[tr(
+                    "borehole_well_purpose_col",
+                    language$language
+                  )]]
                 )
               ),
               multiple = TRUE
@@ -434,7 +433,10 @@ wellRegistry <- function(id, language) {
       wells_sub[
         moduleData$purposes,
         on = .(well_purpose_id = borehole_well_purpose_id),
-        purpose_name := i.purpose_name
+        purpose_name := get(paste0(
+          "i.",
+          tr("borehole_well_purpose_col", language$language)
+        ))
       ]
 
       if (!is.null(input$purpose)) {

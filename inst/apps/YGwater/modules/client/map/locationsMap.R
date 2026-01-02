@@ -178,7 +178,7 @@ mapLocs <- function(id, language) {
               choices = stats::setNames(
                 c("all", "discrete", "continuous"),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   c(
                     tr("discrete", language$language),
                     tr("continuous", language$language)
@@ -199,7 +199,7 @@ mapLocs <- function(id, language) {
               choices = stats::setNames(
                 c("all", moduleData$media_types$media_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$media_types[[tr(
                     "media_type_col",
                     language$language
@@ -214,7 +214,7 @@ mapLocs <- function(id, language) {
               choices = stats::setNames(
                 c("all", moduleData$parameter_groups$group_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$parameter_groups[[tr(
                     "param_group_col",
                     language$language
@@ -229,7 +229,7 @@ mapLocs <- function(id, language) {
               choices = stats::setNames(
                 c("all", moduleData$parameters$parameter_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$parameters[[tr(
                     "param_name_col",
                     language$language
@@ -244,7 +244,7 @@ mapLocs <- function(id, language) {
               choices = stats::setNames(
                 c("all", moduleData$projects$project_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$projects[[tr(
                     "generic_name_col",
                     language$language
@@ -259,7 +259,7 @@ mapLocs <- function(id, language) {
               choices = stats::setNames(
                 c("all", moduleData$networks$network_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$networks[[tr(
                     "generic_name_col",
                     language$language
@@ -307,7 +307,7 @@ mapLocs <- function(id, language) {
         choices = stats::setNames(
           c("all", "discrete", "continuous"),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             c(
               tr("discrete", language$language),
               tr("continuous", language$language)
@@ -321,7 +321,7 @@ mapLocs <- function(id, language) {
         choices = stats::setNames(
           c("all", moduleData$media_types$media_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$media_types[[tr("media_type_col", language$language)]]
           )
         )
@@ -332,7 +332,7 @@ mapLocs <- function(id, language) {
         choices = stats::setNames(
           c("all", moduleData$parameter_groups$group_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$parameter_groups[[tr(
               "param_group_col",
               language$language
@@ -346,7 +346,7 @@ mapLocs <- function(id, language) {
         choices = stats::setNames(
           c("all", moduleData$parameters$parameter_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$parameters[[tr("param_name_col", language$language)]]
           )
         )
@@ -357,7 +357,7 @@ mapLocs <- function(id, language) {
         choices = stats::setNames(
           c("all", moduleData$projects$project_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$projects[[tr("generic_name_col", language$language)]]
           )
         ),
@@ -368,7 +368,7 @@ mapLocs <- function(id, language) {
         choices = stats::setNames(
           c("all", moduleData$networks$network_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$networks[[tr("generic_name_col", language$language)]]
           )
         )

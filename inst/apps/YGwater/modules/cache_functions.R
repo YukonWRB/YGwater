@@ -455,7 +455,7 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
       list(
         purposes = dbGetQueryDT(
           con,
-          "SELECT borehole_well_purpose_id, purpose_name, description FROM borehole_well_purposes"
+          "SELECT borehole_well_purpose_id, purpose_name, purpose_name_fr, description FROM borehole_well_purposes"
         ),
         boreholes_docs = dbGetQueryDT(con, "SELECT * FROM boreholes_documents"),
         casing_materials = dbGetQueryDT(
