@@ -449,6 +449,19 @@ contPlot <- function(id, language, windowDims, inputs) {
                   ns("entire_record"),
                   tr("plot_all_record", language$language)
                 ),
+                selectizeInput(
+                  ns("plot_timezone"),
+                  label = tr("plot_timezone_offset", language$language),
+                  choices = -12:14,
+                  selected = -7,
+                  multiple = FALSE,
+                  options = list(
+                    placeholder = tr(
+                      "plot_timezone_offset_placeholder",
+                      language$language
+                    )
+                  )
+                ),
                 selectInput(
                   ns("plot_resolution"),
                   label = tr("plot_resolution_lab", language$language),
@@ -566,17 +579,17 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       column_labels <- c(
         timeseries_id = "timeseries_id",
-        location = tr("cont_table_col_location", language$language),
-        sub_location = tr("cont_table_col_sub_location", language$language),
+        location = tr("loc", language$language),
+        sub_location = tr("sub_loc", language$language),
         loc_code = tr("loc_code_code", language$language),
-        parameter = tr("cont_table_col_parameter", language$language),
-        media = tr("cont_table_col_media", language$language),
-        aggregation = tr("cont_table_col_aggregation", language$language),
+        parameter = tr("parameter", language$language),
+        media = tr("media", language$language),
+        aggregation = tr("aggregation", language$language),
         z = tr("z", language$language),
         networks = tr("network", language$language),
         projects = tr("project", language$language),
-        start_date = tr("cont_table_col_start_date", language$language),
-        end_date = tr("cont_table_col_end_date", language$language)
+        start_date = tr("start_date", language$language),
+        end_date = tr("end_date", language$language)
       )
 
       visible_cols <- names(ts)
@@ -753,7 +766,8 @@ contPlot <- function(id, language, windowDims, inputs) {
         approvals = input$show_approvals,
         qualifiers = input$show_qualifiers,
         lang = language$abbrev,
-        plot_resolution = input$plot_resolution
+        plot_resolution = input$plot_resolution,
+        plot_timezone = input$plot_timezone
       )
     })
 
@@ -788,7 +802,7 @@ contPlot <- function(id, language, windowDims, inputs) {
             con = con,
             data = TRUE,
             slider = FALSE,
-            tzone = "MST",
+            tzone = req$plot_timezone,
             resolution = req$plot_resolution
           )
           return(plot)

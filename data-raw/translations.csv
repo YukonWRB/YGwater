@@ -1,11 +1,10 @@
 id,description,English,Français
 titleCase,Sets language to use in titleCase function,en,fr
 title,the page/website title,Yukon Water Data Explorer,Explorateur des données sur l’eau du Yukon
-Nav menu titles,,,
 home,homeNavTitle,Home,Accueil
 maps,mapsNavMenuTitle,Maps,Cartes
-maps_locs,mapsNavLocsTitle,Monitoring locations,Emplacements de surveillance
-maps_params,mapsNavParamsTitle,Current/past conditions,Conditions présentes/historiques
+maps_locs,mapsNavLocsTitle,Monitoring locations,Points de surveillance
+maps_params,mapsNavParamsTitle,Current/past conditions,Données passées/actuelles
 maps_raster,mapsNavRastersTitle,Rasters,Rasters
 maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
 plots,plotsNavMenuTitle,Plots,Graphiques
@@ -19,26 +18,23 @@ reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
 data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
-images_table,imagesNavTableTitle,Table selection,Sélection par tableau
-images_map,imagesNavMapTitle,Map selection,Sélection par carte
+images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
+images_map,imagesNavMapTitle,Map selection,À partir de la carte
 info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
-info_news,infoNavNewsTitle,Updates and changes,Mises à jour et changements
+info_news,infoNavNewsTitle,Updates and changes,Mises à jour
 fod_comments,FODNavTitle,Forecaster comments,Commentaires du prévisionniste
-Home module,,,
-betaTitle,beta version warning,🚧 Notice: this web site is under construction 🚧,🚧 Avis: ce site web est en état de construction. 🚧
-betaText,beta version warning,"<br>We're testing this site with the public and will launch soon! Use the thumbs up or down at the bottom of any page to share feedback. This will track which page you're on, but please add a descriptive comment before submitting.<br><br>We will keep improving the site during this time, including adding missing translations, updating the interface, and fixing bugs.","<br>Nous sommes désormais en phase de tests externes - le développement est presque terminé! Vous trouverez une interface pour nous faire part de vos retours en bas de chaque page. <br><br>Certains éléments de l’application continueront d’être améliorés pendant cette phase de test, notamment les traductions manquantes en français, l'améliorations de l’interface utilisateur, ainsi que la réparation de 'bugs'."
-homeTitle,Home page welcome message heading,Welcome to the Yukon Water Data Explorer,Bienvenue à l'explorateur de données sur l'eau du Yukon
-homeText,Home page welcome message,"This application hosts real-time and historic water and climate data for the Yukon and surrounding regions gathered by the Government of Yukon and partners. You'll find data related to water quality (temperature, chemistry) and quantity (level/flow) along with snowpack measurements, precipitation, temperature data - and more.","Cette application met à disposition des données hydrologiques et climatiques, en temps réel et historiques, pour le Yukon et les régions environnantes. Ces données sont recueillies par le gouvernement du Yukon et ses partenaires. Vous y trouverez notamment des renseignements sur la qualité de l’eau (température, composition chimique) et la quantité d’eau (niveaux, débits), ainsi que sur l’enneigement, les précipitations, la température — et davantage encore."
+wwr_title,Well Registry title,Water Well Registry,Registre des puits d'eau
+homeTitle,Home page welcome message heading,Welcome to the Yukon Water Data Explorer,Bienvenue sur l'explorateur de données sur l'eau du Yukon
+homeText,Home page welcome message,"This application hosts real-time and historic water and climate data for the Yukon and surrounding regions gathered by the Government of Yukon and partners. You'll find data related to water quality (temperature, chemistry) and quantity (level/flow) along with snowpack measurements, precipitation, temperature data - and more.","Cette application donne accès à des données hydrologiques et climatiques passées et en temps réel pour le Yukon et les régions environnantes. Ces données sont recueillies par le gouvernement du Yukon et ses partenaires. Elle réunit des données sur la qualité de l’eau (température, composition chimique) et la quantité d’eau (niveaux, débits), ainsi que sur l’enneigement, les précipitations et la température, entre autres mesures."
 home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organisation de nos données
-home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:<ul><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li></ul><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.<br><br>","Nous classifions les données en <b>discrètes</b> ou <b>continues</b>. Cette classification dépend de :<ul><li>la fréquence des mesures</li><li>la méthode de mesure</li><li>autres métadonnées pertinentes</li></ul><br><b>Qu’est-ce que les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (p. ex. profondeur de neige) ou par analyse en laboratoire. Ces données doivent comporter une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Qu’est-ce que les données continues ?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (p. ex. horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument et les conditions d’enregistrement.<br><br>"
-home_map_locs_btn,button text,See a map of available data,Voir une carte des données disponibles
-home_map_params_btn,button text,See a map of current or past conditions,Voir une carte des conditions actuelles ou passées
+home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:<ul><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li></ul><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.<br><br>","Les données sont classées en deux catégories : <b>discrètes</b> ou <b>continues</b>. Leur classement dépend de plusieurs facteurs :<ul><li>la fréquence des mesures;</li><li>la méthode des mesure;</li><li>d'autres métadonnées pertinentes.</li></ul><br><b>Que sont les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (ex. profondeur de neige) ou par analyse en laboratoire. Elles doivent être accompagnées d’une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Que sont les données continues?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (ex. fréquence horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument utilisé et les conditions d’enregistrement.<br><br>"
+home_map_locs_btn,button text,See a map of monitoring locations,Consulter la carte des points de surveillance
+home_map_params_btn,button text,See a map of current or past conditions,Consulter la carte des conditions passées et actuelles
 feedback_text,thumbs up down button text,Was this page helpful?,Avez-vous trouvé cette page utile?
-feedback_submit,submit button text,Send feedback,Envoyer vos commentaires
-feedback_placeholder_up,placeholder text,Optional: how did this page help you?,Facultatif: en quoi cette page vous a-t-elle été utile?
-feedback_placeholder_down,placeholder text,Optional: how can we improve this page?,Facultatif: comment peut-on améliorer cette page?
-Login pop-up,,,
+submit,submit button text,Submit,Soumettre
+feedback_placeholder_up,placeholder text,Optional: how did this page help you?,En quoi cette page vous a-t-elle été utile? (Facultatif)
+feedback_placeholder_down,placeholder text,Optional: how can we improve this page?,Comment peut-on améliorer cette page? (Facultatif)
 login_txt,Body text for pop-up,Log in to add/modify data and administer assets.,Connectez vous pour ajouter/modifier des données.
 un,username,Username,Nom d'utilisateur
 pwd,password,Password,Mot de passe
@@ -54,17 +50,16 @@ logout,button text,Logout,Déconnexion
 error,,Error,Erreur
 errorModalTitle,pop-up error message title,Our apologies!,Désolé!
 errorModalMsg,pop-up error message body,The feature you selected could not be loaded.,La fonctionnalité que vous avez sélectionnée n'a pas pu être chargée.
-Data view module,,,
-instructions,,How to use this interface,Comment utiliser cette interface
-view_data_instructions_discrete,instructions,"<li>(Optional) Change the drop-down menus to narrow the list of samples.</li><li>Click 'Show samples' to view them in a table.</li><li>Select the samples you need, or use the button below the table to select all, then choose 'View X sample results' to go to the download screen.</li>","<li>(Facultatif) Changez les menus déroulants pour réduire la liste d’échantillons.</li><li>Cliquez sur « Afficher les échantillons » pour les voir dans un tableau.</li><li>Sélectionnez les échantillons voulus ou utilisez le bouton sous le tableau pour tout sélectionner, puis choisissez « Voir les détails de X échantillons » pour aller à l’écran de téléchargement.</li>"
-view_data_instructions_continuous,instructions,"<li>(Optional) Change the drop-down menus to narrow the timeseries list.</li><li>Click 'Show timeseries' to view them in a table.</li><li>Select the timeseries you need, or use the button below the table to select all, then choose 'View X timeseries details' to go to the download screen.</li>","<li>(Facultatif) Changez les menus déroulants pour réduire la liste de séries temporelles.</li><li>Cliquez sur « Afficher les séries temporelles » pour les voir dans un tableau.</li><li>Sélectionnez les séries voulues ou utilisez le bouton sous le tableau pour tout sélectionner, puis choisissez « Voir les détails de X séries temporelles » pour aller à l’écran de téléchargement.</li>"
-dl_data,download data button,Download data,Télécharger les données
-dl_num_rows,advice about number of rows selected (modal),Number of rows which will be returned:,Nombre de rangées à télécharger:
-dl_num_results,,Number of results which will be returned:,Nombre de résultats à télécharger:
-frequency,modal selection title,Frequency:,Résolution:
+instructions,,How to use this interface,Utilisation de l'interface
+view_data_instructions_discrete,instructions,"<li>(Optional) Change the drop-down menus to narrow the list of samples.</li><li>Click 'Show samples' to view them in a table.</li><li>Select the samples you need, or use the button below the table to select all, then choose 'View X sample results' to go to the download screen.</li>","<li>Sélectionnez des valeurs dans les menus déroulants pour réduire la liste d’échantillons. (Facultatif)</li><li>Cliquez sur « Afficher les échantillons » pour les visualiser dans un tableau.</li><li>Sélectionnez les échantillons dont vous avez besoin ou cliquez sur le bouton « Tout sélectionner » sous le tableau, puis sur « Afficher X échantillons » pour accéder à l’écran de téléchargement.</li>"
+view_data_instructions_continuous,instructions,"<li>(Optional) Change the drop-down menus to narrow the timeseries list.</li><li>Click 'Show timeseries' to view them in a table.</li><li>Select the timeseries you need, or use the button below the table to select all, then choose 'View X timeseries details' to go to the download screen.</li>","<li>Sélectionnez des valeurs dans les menus déroulants pour réduire la liste de séries temporelles. (Facultatif)</li><li>Cliquez sur « Afficher les séries temporelles » pour les visualiser dans un tableau.</li><li>Sélectionnez les séries temporelles dont vous avez besoin ou cliquez sur le bouton « Tout sélectionner » sous le tableau, puis sur « Afficher X séries temporelles » pour accéder à l’écran de téléchargement.</li>"
+dl_data,download data button,Download data,Télécharger des données
+dl_num_rows,advice about number of rows selected (modal),Number of rows which will be returned:,Nombre de rangées à télécharger :
+dl_num_results,,Number of results which will be returned:,Nombre de résultats à télécharger :
+frequency,modal selection title,Frequency:,Résolution :
 daily,modal selection,Daily (with statistics),Journalière (avec statistiques)
 hourly,modal selection,Hourly + daily (with stats),Horaire + journalière (avec stats)
-max,modal selection,Max + daily (with stats),Maximum + journalière (avec stats)
+max,modal selection,Max + daily (with stats),Maximale + journalière (avec stats)
 ts_subset_msg,modal message,Subset of data (first and last measurement per timeseries),Sous-ensemble de données (première et dernière mesures)
 discrete_subset_msg,modal message,Subset of data (up to 3 results per sample),Sous-ensemble de données (jusqu'à 3 résultats par échantillon)
 loc_meta_msg,modal message,Subset of location metadata (up to first three locations),Sous-ensemble des métadonnées des sites (jusqu'aux trois premiers endroits)
@@ -77,72 +72,73 @@ dl_format_xlsx,modal selection,.xlsx (Microsoft Excel workbook),.xlsx (fichier M
 dl_format_csv,modal selection,.csv (multiple zipped files),.csv (multiples fichiers zippés)
 dl_format_sqlite,modal selection,.sqlite (database),.sqlite (base de données)
 dl_prep,notification for download,Preparing download...,Préparation du téléchargement...
-no_samps_locs,notification of automatic reset,"This selection results in 0 corresponding measurements, location selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection pour l'endroit a été réinitialisé à sa valeur précédente."
-no_samps_sub_locs,notification of automatic reset,"This selection results in 0 corresponding measurements, sub-location selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection de sous-endroit a été réinitialisé à sa valeur précédente."
-no_samps_medias,notification of automatic reset,"This selection results in 0 corresponding measurements, media type selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection de type de média a été réinitialisé à sa valeur précédente."
-no_samps_types,notification of automatic reset,"This selection results in 0 corresponding measurements, sample type selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection de type d'échantillon a été réinitialisé à sa valeur précédente."
-no_ts_locs,notification of automatic reset,"This selection results in 0 corresponding timeseries, location selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection pour l'endroit a été réinitialisé à sa valeur précédente."
-no_ts_sub_locs,notification of automatic reset,"This selection results in 0 corresponding timeseries, sub-location selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de sous-endroit a été réinitialisé à sa valeur précédente."
+no_samps_locs,notification of automatic reset,"This selection results in 0 corresponding measurements, location selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection du point de surveillance a été réinitialisé à sa valeur précédente."
+no_samps_sub_locs,notification of automatic reset,"This selection results in 0 corresponding measurements, sub-location selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection de point de surveillance secondiare a été réinitialisé à sa valeur précédente."
+no_samps_medias,notification of automatic reset,"This selection results in 0 corresponding measurements, media type selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection de la matrice d'échantillonage a été réinitialisé à sa valeur précédente."
+no_samps_types,notification of automatic reset,"This selection results in 0 corresponding measurements, sample type selector reset to its previous value.","Cette sélection ne correspond à aucune mesure, la sélection du type d'échantillon a été réinitialisé à sa valeur précédente."
+no_ts_locs,notification of automatic reset,"This selection results in 0 corresponding timeseries, location selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection du point de surveillance a été réinitialisé à sa valeur précédente."
+no_ts_sub_locs,notification of automatic reset,"This selection results in 0 corresponding timeseries, sub-location selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection du point de surveillance secondaire a été réinitialisé à sa valeur précédente."
 no_ts_z,notification of automatic reset,"This selection results in 0 corresponding timeseries, depth/height selector reset to its previous value","Cette sélection ne correspond à aucune série temporelle, la sélection de la profondeur/hauteur a été réinitialisé à sa valeur précédente."
-no_ts_medias,notification of automatic reset,"This selection results in 0 corresponding timeseries, media type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type de média a été réinitialisé à sa valeur précédente."
-no_ts_agg,notification of automatic reset,"This selection results in 0 corresponding timeseries, aggregation type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type d'aggrégation a été réinitialisé à sa valeur précédente."
-no_ts_rate,notification of automatic reset,"This selection results in 0 corresponding timeseries, recording rate selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection du rythme d'enregistrement a été réinitialisé à sa valeur précédente."
+no_ts_medias,notification of automatic reset,"This selection results in 0 corresponding timeseries, media type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de la matrice d'échantillonage a été réinitialisé à sa valeur précédente."
+no_ts_agg,notification of automatic reset,"This selection results in 0 corresponding timeseries, aggregation type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type d'agrégation a été réinitialisé à sa valeur précédente."
+no_ts_rate,notification of automatic reset,"This selection results in 0 corresponding timeseries, recording rate selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de la fréquence d'enregistrement nominale a été réinitialisé à sa valeur précédente."
 continuous_subset_msg,,Subset of daily mean data (first and last result per timeseries),Sous-ensemble des moyennes journalières (premier et dernier résultat par série temporelle)
-dl_additional_data,,"Tables for grades, approvals, and qualifiers will also be included as part of your download.","Des tableaux pour les qualificatifs, cotes, et niveaux d'approbations feront parti de votre téléchargement."
-Map/data/plot module common,,,
+dl_additional_data,,"Tables for grades, approvals, and qualifiers will also be included as part of your download.","Des tableaux pour les qualificatifs, cotes de qualité, et niveaux d'approbations feront parti de votre téléchargement."
 filter,,Filter,Filtrer
 apply,,Apply,Appliquer
 param_modal,button text for modal,Filter by group/sub-group,Filtrer par groupe/sous-groupe
 loc_modal,button text for modal,Filter by network/project,Filtrer par réseau/projet
 tooltip_reset,tooltip text for resetting filters,Filters affect each other by limiting subsequent options. Reset to clear all filters.,Les filtres s'affectent mutuellement en limitant les options suivantes. Réinitialiser pour effacer tous les filtres.
-year_filter,year filter title,With data between…,Avec des données entre...
+year_filter,year filter title,Temporal range,Intervalle de temps
 choose_locs,location selection title,Or choose one of more locations,Ou choisissez une ou plusieurs stations
-tooltip_discrete_continuous,tool tips,Continuous = recorded at regular intervals automatically; Discrete = measurements or samples at variable intervals.,Continues = enregistré à intervalles réguliers automatiquement; Discrètes = mesures ou échantillons à intervalles variables.
-tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Type de média dans lequel l'échantillon ou la mesure a été collecté
+tooltip_discrete_continuous,tool tips,Continuous = recorded at regular intervals automatically; Discrete = measurements or samples at variable intervals,Continues : enregistrées automatiquement à intervalles réguliers; Discrètes : mesures ou échantillons pris à intervalles variables
+tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,Mesures ou échantillons pris à des intervalles variables
+tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
+tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Lieu de la prise de la mesure ou de l’échantillon
 tooltip_utc7,table tool tips,UTC-7,UTC-7
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
-view_samples,,Show samples,Voir les échantillons
-view_timeseries,,Show timeseries,Voir les séries temporelles
-view_data,text or button,View data,Voir les données
-dl_data_discrete,,Download discrete (sample) data,Télécharger les données discrètes
-dl_data_continuous,,Download continuous data,Télécharger les données continues
-view_data1,"text, part 1",View,Voir les détails de
+view_samples,,Show samples,Afficher les échantillons
+view_timeseries,,Show timeseries,Afficher les séries temporelles
+view_data,text or button,View data,Afficher les données
+dl_data_discrete,,Download discrete (sample) data,Télécharger des données discrètes (échantillons)
+dl_data_continuous,,Download continuous data,Télécharger des données continues
+view_data1,"text, part 1",View,Afficher les détails de
 view_data2_discrete,"text, part 2",sample results,échantillons
 view_data2_continuous,"text, part2",timeseries details,séries temporelles
 select_all,button text,Select/deselect all,Sélectionner/dé-sélectionner tout
 view_plots,button text,View plots,Voir les graphiques
-view_plots_discrete,,Plot discrete (sample) data,Tracer les données discrètes
-view_plots_continuous,,Plot continuous data,Tracer les données continues
-nominal_rate,,Nominal recording rate,Rythme d'enregistrement nominal
+view_plots_discrete,,Plot discrete (sample) data,Tracer des données discrètes (échantillons)
+view_plots_continuous,,Plot continuous data,Tracer des données continues
+nominal_rate,,Nominal recording rate,Fréquence d'enregistrement nominale
 loc_groups,,Location groups,Groupes d'endroits
 select_loc_group,,Select a location group,Sélectionnez un groupe d'endroits
 select_param_group,,Select a parameter group,Sélectionnez un groupe de paramètres
 select_loc_group_msg,,Please select one location group.,Choisissez un groupe d'endroits.
 select_param_group_msg,,Please select one parameter group.,Choisissez un groupe de paramètres.
 select_standard_opt,,Select a standard to apply (optional),Choisir une norme à appliquer (facultatif)
-standard_warning,,Warning: this adds a lot of time for plot generation!,Attention: cela augmente beaucoup le temps de génération du graphique!
+standard_warning,,Warning: this adds a lot of time for plot generation!,Attention : cela augmente beaucoup le temps de génération du graphique!
 EQWin_db,,EQWin database,Base de données EQWin
-Image view module,,,
 img_type_lab,input label,Image Type,Type d'image
 img_tags_lab,input label,Tags,Étiquettes
 img_type_auto,input choice,Automatic (series),Automatique (série)
 img_type_man,input choice,Manual (one-off),Manuelle (non-série)
 map_options,,Map options,Options de la carte
 map_load_addtional_layers,,Load additional layers,Charger des couches supplémentaires
-date_range_lab,input label,Date Range,Plage temporelle
+date_range_lab,input label,Date Range,Intervalle de dates
 date_sep,dateRangeInput separator, to , à 
-Visualize/plot module,,,
 plot_type,,Plot type,Type de graphique
-plot_type_tooltip,,Timeseries plots show changes over time and can display multiple traces or subplots. Overlapping years plots help compare data from different years at the same location.,Les graphiques de longues séries temporelles montrent les changements au fil du temps et peuvent afficher plusieurs tracés ou sous-graphiques. Les graphiques d’années superposées permettent de comparer les données de différentes années pour un même emplacement.
+plot_type_tooltip,,Timeseries plots show changes over time and can display multiple traces or subplots. Overlapping years plots help compare data from different years at the same location.,Les graphiques de longues séries temporelles montrent les changements au fil du temps et peuvent afficher plusieurs tracés ou sous-graphiques. Les graphiques d’années superposées permettent de comparer les données de différentes années pour un même point de surveillance.
 plot_type_overlap,,Overlapping years,Années superposées
 plot_select_years,,Select years to plot,Sélectionnez les années à tracer
 plot_select_yrs,,"For periods overlapping the new year, select the December year","Pour les périodes chevauchant la nouvelle année, sélectionnez l’année de décembre."
-plot_long_time_to_plot,,Plotting can take a while for large time ranges at max resolution.,Le tracé peut prendre un certain temps pour de grandes plages temporelles à la résolution maximale.
+plot_long_time_to_plot,,Plotting can take a while for large time ranges at max resolution.,La génération du graphique peut prendre un certain temps pour les longs intervalles de temps à résolution maximale.
 plot_resolution_lab,,Data resolution,Résolution des données
-plot_resolution_max,,Maximum,Maximum
+plot_resolution_max,,Maximum,Maximale
 plot_resolution_hourly,,Hourly,Horaire
 plot_resolution_daily,,Daily,Journalière
+plot_timezone_offset,,Plot time zone (UTC offset),Fuseau horaire du graphique (décalage UTC)
+plot_timezone_offset_placeholder,,Select UTC offset,Choisir le décalage UTC
 plot_type_ts,,Timeseries,Série temporelle
 plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec
@@ -150,27 +146,24 @@ plot_hist_range_select_tooltip,,Choose whether the historic range should include
 plot_extra_options,,Extra options,Options supplémentaires
 plot_apply_vert_datum,,Apply vertical datum,Appliquer le référentiel vertical
 plot_filter,,Filter extreme values,Filtrer les valeurs extrêmes
-plot_show_unusable,,Show unusable data,Montrer les données inutilisables
-plot_show_grades,,Show grades,Montrer les cotes
-plot_show_approvals,,Show approval levels,Montrer les niveaux d'approbations
-plot_show_qualifiers,,Show qualifiers,Montrer les qualificatifs
-plot_last_30,,Last 30 days,Derniers 30 jours
+plot_show_unusable,,Show unusable data,Afficher les données inutilisables
+plot_show_grades,,Show grades,Afficher les cotes de qualité
+plot_show_approvals,,Show approval levels,Afficher les niveaux d'approbations
+plot_show_qualifiers,,Show qualifiers,Afficher les qualificatifs
+plot_last_30,,Last 30 days,30 derniers jours
 plot_all_record,,Entire record,Période entière
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
 cont_table_heading,,Available timeseries,Séries chronologiques disponibles
 cont_table_plot_heading,,Plot,Graphique
-cont_table_col_location,,Location,Emplacement
-cont_table_col_sub_location,,Sub-location,Sous-emplacement
-cont_table_col_parameter,,Parameter,Paramètre
-cont_table_col_media,,Media,Média
-cont_table_col_aggregation,,Aggregation,Agrégation
+media,,Media,Matrice
+aggregation,,Aggregation,Agrégation
 cont_table_col_record_rate,,Record rate,Fréquence d'enregistrement
-cont_table_col_start_date,,Start date,Date de début
-cont_table_col_end_date,,End date,Date de fin
+start_date,,Start date,Date de début
+end_date,,End date,Date de fin
 facet_on,,Split plots by,Diviser les graphiques par
 facet_on_tooltip,,"Creates multiple plots, each showing one location or one parameter. The other variable appears as separate lines or points.","Crée plusieurs graphiques, chacun montrant un seul emplacement ou un seul paramètre. L’autre variable apparaît sous forme de lignes ou de points distincts."
 use_log_scale,,Use logarithmic scale,Utiliser une échelle logarithmique
-log_scale_warning,,Warning: points with negative values will be removed for log transformation.,Attention: les points ayant des valeurs négatives ne sont pas représentés avec l'échelle logarithmique.
+log_scale_warning,,Warning: points with negative values will be removed for log transformation.,Attention : les points ayant des valeurs négatives ne sont pas représentés avec l'échelle logarithmique.
 share_x_axis,,Use the same X-axis bounds for all plots (dates line up),Utiliser le même axe X pour tous les graphiques (dates alignées)
 share_y_axis,,Use the same Y-axis bounds for all plots (values are aligned),Utiliser le même axe Y pour tous les graphiques (valeurs alignées)
 share_x_axis_tooltip,,Aligns the X-axis for all plots to make it easier to compare trends over time.,Aligne l'axe X de tous les graphiques pour faciliter la comparaison des tendances dans le temps.
@@ -193,7 +186,7 @@ point_scale,,Point size factor,Facteur de taille des points
 line_scale,,Line scale factor,Facteur de taille des lignes
 modal_select_multi_not_null,,Please narrow selections to a single timeseries before adding another.,SVP sélectionner une seule sélection avant d'ajouter une nouvelle série temporelle.
 modal_error_multi_trace,,"There are duplicate traces. Each trace must have a unique combination of location, sub-location, Z (height/depth), recording rate, aggregation type, parameter, and lead/lag","Des tracés en double ont été trouvés. Chaque tracé doit avoir une combinaison unique d’emplacement, de sous-emplacement, de Z (hauteur/profondeur), de fréquence d’enregistrement, de type d’agrégation, de paramètre et d’avance/retard."
-first_plot_hints_standards,,"<p><strong>This plot is interactive.</strong> You can zoom or move it with the buttons at the top left, or by clicking and dragging with your mouse.</p><ul><li>Double-click a legend entry to show only that series of timeseries; double-click again to show all.</li><li>Click a legend entry once to hide or show a timeseries.</li></ul><p><strong>Symbols:</strong></p><ul><li>Values above/below the detection limit → <strong>stars</strong> (✱)</li><li>Standard/guideline values → <strong>lines</strong></li></ul>","<p><strong>Ce graphique est interactif.</strong> Vous pouvez zoomer ou le déplacer avec les boutons en haut à gauche, ou en cliquant et en faisant glisser la souris.</p><ul><li>Double-cliquez un élément de la légende pour n’afficher que cette série; double-cliquez de nouveau pour tout afficher.</li><li>Cliquez une fois sur un élément de la légende pour masquer ou afficher une série.</li></ul><p><strong>Symboles&nbsp;:</strong></p><ul><li>Valeurs au-dessus/en dessous de la limite de détection → <strong>étoiles</strong> (✱)</li><li>Valeurs de référence/normes → <strong>lignes</strong></li>"
+first_plot_hints_standards,,"<p><strong>This plot is interactive.</strong> You can zoom or move it with the buttons at the top left, or by clicking and dragging with your mouse.</p><ul><li>Double-click a legend entry to show only that series of timeseries; double-click again to show all.</li><li>Click a legend entry once to hide or show a timeseries.</li></ul><p><strong>Symbols:</strong></p><ul><li>Values above/below the detection limit → <strong>stars</strong> (✱)</li><li>Standard/guideline values → <strong>lines</strong></li></ul>","<p><strong>Ce graphique est interactif.</strong> Vous pouvez zoomer ou le déplacer avec les boutons en haut à gauche, ou en cliquant et en faisant glisser la souris.</p><ul><li>Double-cliquez un élément de la légende pour n’afficher que cette série; double-cliquez de nouveau pour tout afficher.</li><li>Cliquez une fois sur un élément de la légende pour masquer ou afficher une série.</li></ul><p><strong>Symboles&nbsp; :</strong></p><ul><li>Valeurs au-dessus/en dessous de la limite de détection → <strong>étoiles</strong> (✱)</li><li>Valeurs de référence/normes → <strong>lignes</strong></li>"
 first_plot_hints_no_standards,,"<p><strong>This plot is interactive.</strong> You can zoom or move it with the buttons at the top left, or by clicking and dragging with your mouse.</p><ul><li>Double-click a legend entry to show only that series of timeseries; double-click again to show all.</li><li>Click a legend entry once to hide or show a timeseries.</li></ul>","<p><strong>Ce graphique est interactif.</strong> Vous pouvez zoomer ou le déplacer avec les boutons en haut à gauche, ou en cliquant et en faisant glisser la souris.</p><ul><li>Double-cliquez un élément de la légende pour n’afficher que cette série; double-cliquez de nouveau pour tout afficher.</li><li>Cliquez une fois sur un élément de la légende pour masquer ou afficher une série.</li></ul>"
 first_plot_hints_standards_short,,<p>Values above/below the detection limit are shown with <strong>stars</strong> (✱).<br><br>Standard/guideline values are shown with <strong>lines</strong>.</p>,<p>Les valeurs au-dessus/en dessous de la limite de détection sont affichées avec des <strong>étoiles</strong> (✱).<br><br>Les valeurs de référence/normes sont affichées avec des <strong>lignes</strong>.</p>
 lead_lag,,Lead/lag in hours,Avance/retard en heures
@@ -223,7 +216,6 @@ map_two_parameter,,Two parameters,Deux paramètres
 map_latest_measurements,,Latest measurements,Plus récentes mesures
 map_latest_measurements_modal,,"<b>Note</b>: Latest measurements are compared to the <i>average</i> values for the same day in past years. Keep this in mind for parameters that change a lot during the day, like temperature.","<b>Remarque</b> : Les mesures les plus récentes sont comparées aux valeurs <i>moyennes</i> de la même journée dans les années passées. Ceci impacte surtout les paramètres qui varient beaucoup au cours d’une journée, comme la température."
 map_primary_param,,Primary parameter,Paramètre primaire
-map_primary_param_solo,single parameter (public facing),Parameter,Paramètre
 map_edit_primary_param,,Edit primary parameter,Modifer paramètre primaire
 map_edit_primary_param_solo,,Edit parameter,Modifier le paramètre
 map_second_param,,Secondary parameter,Paramètre secondaire
@@ -244,12 +236,11 @@ gen_waterInfo_prct_miss,,Max % missing data to retain annual value (in months of
 gen_generate_plots,,Generate plots,Générer les graphiques
 gen_waterInfo_ptype,,Min/max on single plot or separate,Min/max sur le même graphique ou séparé
 gen_waterInfo_ptype_combine,,Single,même
-gen_waterInfo_ptype_separate,,Separate,séparés
+separate,,Separate,séparés
 gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (EEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
 gen_snowInfo_inactive,,Include inactive locations,Inclure les emplacements inactifs
 gen_snowInfo_complete,,Complete years only,Années complètes seulement
 gen_snowInfo_ptype,,Combined or separate plots,Graphiques séparés ou combinés
-gen_snowInfo_ptype_separate,,Separate,séparés
 gen_snowInfo_ptype_combine,,Combined,combinés
 gen_snowBul_info,,"This function allows you to create Excel workbooks with the statistics used in creating the Snow Bulletin, or to create the entire Snow Bulletin Word document.","Cette fonction vous permet de créer des documents Excel qui contiennent les statistics utilisées lors de la création du bulletin de conditions de neige, ou de créer le bulletin de neige en document Word."
 gen_snowBul_toggle_stats,,Statistics,Statistiques
@@ -260,7 +251,7 @@ gen_snowBul_basins,,Basins,Basins versants
 gen_snowBul_lang,,Bulletin language,Langue du bulletin
 gen_snowBul_precip_period,,Period of record for precip stats,Période à utiliser pour les statistiques de précipitation
 gen_snowBul_cddf_period,,Period of record for CDDF stats,Période à utiliser pour les statistiques de DJGC
-gen_snowBul_period1,,Last 40 years,Derniers 40 ans
+gen_snowBul_period1,,Last 40 years,40 dernières années
 all_yrs_record,,All years of record,Toutes les années disponibles
 last_yr_only,,Up to last plotted year,Jusqu'à la dernière année tracée
 gen_snowBul_period3,,1981-2010,1981-2010
@@ -275,52 +266,53 @@ add_subplot,,Add subplot,Ajouter un sous-graphe
 modify_subplot,,Modify subplot,Modifier le sous-graphe
 remove_subplot,,Remove subplot,Enlever le sous-graphe
 add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the same plot, or 'Add subplot' to create a separate panel.","Cliquez sur « Ajouter un tracé » pour superposer une nouvelle série temporelle sur le même graphique, ou sur « Ajouter un sous-graphe » pour créer un panneau séparé."
-About view module,,,
-licence_title,,Using data from this application,Utilisation des données de cette application
-licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont licenciés sous la "
-licence2,,Open Government Licence,licence de gouvernement ouvert du Yukon
+well_purpose,,Well purpose,Usage du puits
+well_completion_yr,,Well completion year,Année d'achèvement des puits
+include_unknown_completion,,Include wells with unknown completion year,Inclure les puits avec année d'achèvement inconnue
+borehole_unnamed,,Unnamed well,Puits sans nom
+borehole_well_purpose_col,,purpose_name,purpose_name_fr
+licence_title,,Using data from this application,Utilisation des données de l'application
+licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont régis par la "
+licence2,,Open Government Licence,licence ouverte du gouvernement du Yukon
 licence_url,,https://yukon.ca/en/your-government/open-government/open-government-licence-yukon,https://yukon.ca/fr/votre-gouvernement/gouvernement-ouvert/gouvernement-ouvert-licence-du-yukon
-licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms, which apply in addition to the Yukon Government licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains ensembles de données fournis par cette application proviennent d’organisations externes (p. ex. le relevé hydrométrique du Canada). Ces données peuvent être assujetties à leurs propres conditions de licence, qui s’appliquent en plus de la licence du gouvernement du Yukon. Il incombe aux utilisateurs de prendre connaissance des licences de tiers applicables et de s’y conformer."
-about_title2,title,About this application,À propos cette application
-about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strenghts in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Ce site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour la gestion et la visualisation des données. Le code de l’application est regroupé dans un package contenant de nombreuses autres fonctions utiles, au-delà de celles présentées ici, accessible publiquement au "
-about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base de données maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre package R disponible ici : "
-about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time.","Cette base de données contient des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales, divers types de métadonnées et plus encore, ce qui nous aide à dresser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
-about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3, so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux packages R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
+licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms, which apply in addition to the Yukon Government licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains jeux de données consultables à partir de l’application proviennent de sources externes (ex. Relevés hydrologiques du Canada). Par conséquent, ces données peuvent être assujetties à d’autres conditions, qui s’appliquent en plus de celles prévues par la licence du gouvernement du Yukon. Il incombe à l’utilisateur de prendre connaissance des licences de tiers applicables et de s’y conformer."
+about_title2,title,About this application,À propos de l'application
+about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strenghts in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Le site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour le traitement et la visualisation des données. Le progiciel qui contient le code de l’application regroupe de nombreuses autres fonctions utiles, au-delà de celles présentées ici. Il est accessible publiquement au "
+about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre progiciel R, disponible au "
+about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time.","Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
+about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3, so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux progiciels R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
 about_url_ygwater,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
 about_url_aquacache,url,https://github.com/YukonWRB/AquaCache,https://github.com/YukonWRB/AquaCache
 current_software,,Current software and database status:,État actuel du logiciel et de la base de données
 app_version1,,Application version,Application version
 app_version2,,connected to AquaCache database revision ,connectée à la base de données AquaCache révision
 app_version3,,revision,révision
-Generic labels,,,
 data_type,direct translation,Data Type,Types de données
-data_format,direct translation,Data Format,Format de données
+data_format,direct translation,Data Format,Format des données
 unknown,,Unknown,Inconnu
 cluster_points_label,,Cluster points,Regrouper les points
 location_type_legend,,Location type,Type d’emplacement
 loc,direct translation,Location,Emplacement
-locs,,Locations,Endroits
-loc(s),,Location(s),Emplacement(s)
-select_locs,,Select locations,Sélectionnez des emplacements
-pl_select_loc,,Please select a location.,SVP sélectionner un emplacement
+locs,,Locations,Point de surveillance
+loc(s),,Location(s),Points de surveillance
+select_locs,,Select locations,Sélectionnez des points de surveillance
+pl_select_loc,,Please select a location.,SVP sélectionner un point de surveillance
 pl_select_param,,Please select a parameter,SVP sélectionner un paramètre
-sub_loc,,Sub-location,Sous-emplacement
-sub_loc(s),,Sub-location(s),Sous-emplacements(s)
+sub_loc,,Sub-location,Point secondaire
+sub_loc(s),,Sub-location(s),Points secondaires
 z,,Depth/height (meters),Profondeur/hauteur (mètres)
 continuous,direct translation,Continuous,Continues
 discrete,direct translation,Discrete,Discrètes
 type,direct translation,Type,Type
-media_type,,Sample media,Média d'échantillonage
-media_type(s),direct translation,Sample media(s),Média(s) d'échantillonage
+media_type,,Sample media,Matrice de l'échantillon
+media_type(s),direct translation,Sample media(s),Matrices des échantillons
 sample_type(s),,Sample type(s),Type d'échantillon
 aggregation_type,,Aggregation type,Type d'agrégation des mesures
 aggregation_type(s),,Aggregation type(s),Type d'agrégation des mesures
-param_group,direct translation,Parameter group,Groupe de paramètre
+param_group,direct translation,Parameter group,Groupe de paramètres
 param_groups,direct translation,Parameter groups,Groupes de paramètres
-param_group(s),direct translation,Parameter group(s),Groupe(s) de paramètre(s)
-param_sub_group,direct translation,Parameter sub-group,Sous-groupe de paramètre
+param_sub_group,direct translation,Parameter sub-group,Sous-groupe de paramètres
 param_sub_groups,direct translation,Parameter sub-groups,Sous-groupes de paramètres
-param_sub_group(s),direct translation,Parameter sub-group(s),Sous-groupe(s) de paramètre(s)
 group,direct translation,Group,Groupe
 parameter,direct translation,Parameter,Paramètre
 parameters,direct translation,Parameters,Paramètres
@@ -341,7 +333,9 @@ measurement_type,,Measurement type (frequency),Type de mesure (fréquence)
 reset,direct translation,Reset,Réinitialiser
 reset_view,,Reset view,Réinitialiser la vue
 refresh_images,,Refresh images,Rafraîchir les images
-all,direct translation,All,Tout
+all,direct translation,All,Toutes
+all_f,,All,Toutes
+all_m,,All,Tous
 all_locs,,All locations,Tous les endroits
 from,direct translation,from,de
 to,direct translations,to,à
@@ -376,7 +370,6 @@ dec,,December,décembre
 generating_working,,Working…,Travail en cours…
 english,,English,Anglais
 francais,,French,Français
-DT internationalization,,,
 tbl_info,DT internationalization, _TOTAL_ records total,_TOTAL_ éléments au total
 tbl_info_empty,DT internationalization,No records to show!,Rien à voir ici!
 tbl_prev,DT internationalization,Previous,Précédent
@@ -385,7 +378,6 @@ tbl_search,DT internationalization,Search:,Recherche
 tbl_length,DT internationalization,Show _MENU_ records,Montrer _MENU_ éléments
 tbl_filtered,DT internationalization,(filtered from _MAX_ records),(filtrées de _MAX_ éléments)
 tbl_zero,DT internationalization,No matching records found,Aucunes données existantes
-Database columns and table names,,,
 param_name_col,DB column selection ,param_name,param_name_fr
 media_type_col,DB column selection ,media_type,media_type_fr
 param_group_col,DB column selection ,group_name,group_name_fr

@@ -265,13 +265,18 @@ app_ui <- function(request) {
           )
         ), # End data nav_menu
         if (!config$public & config$g_drive) {
-          # if public or if g drive access is not possible, don't show the tab
+          # if public or if g drive access is not possible, don't show the tab for FOD reports
           nav_panel(
             title = uiOutput("FODNavTitle"),
             value = "FOD",
             uiOutput("fod_ui")
           )
         },
+        nav_panel(
+          title = uiOutput("WWRNavTitle"),
+          value = "WWR",
+          uiOutput("WWR_ui")
+        ),
         nav_menu(
           title = uiOutput("infoNavMenuTitle"),
           value = "info",

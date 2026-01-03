@@ -95,7 +95,7 @@ snowBulletinMod <- function(id, language) {
               "Alsek"
             ),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               "Upper Yukon",
               "Teslin",
               "Central Yukon",

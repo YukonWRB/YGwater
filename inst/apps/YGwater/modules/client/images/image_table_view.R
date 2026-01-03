@@ -70,7 +70,7 @@ imgTableView <- function(id, language) {
       loc_choices <- stats::setNames(
         c("All", imgs$img_meta$location_id),
         c(
-          tr("all", language$language),
+          tr("all_m", language$language),
           imgs$img_meta[[tr("generic_name_col", language$language)]]
         )
       )
@@ -126,7 +126,7 @@ imgTableView <- function(id, language) {
       df <- imgs$imgs_types[imgs$imgs_types$image_type_id %in% types_present, ]
       choices <- stats::setNames(
         c("all", df$image_type_id),
-        c(tr("all", language$language), df$image_type)
+        c(tr("all_m", language$language), df$image_type)
       )
       selected <- if (
         !is.null(input$type) && input$type %in% df$image_type_id

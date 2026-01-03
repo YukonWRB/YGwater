@@ -199,7 +199,7 @@ addTimeseries <- function(id) {
           ),
           textInput(
             ns("record_rate"),
-            "Rough record rate, as  '5 minutes', '1 hour', '1 day', '1 week', '4 weeks', '1 month', etc.",
+            "Rough record rate (5 minutes, 1 hour, 1 day, 1 week, etc.)",
             value = "",
             width = "100%"
           )
@@ -725,7 +725,7 @@ addTimeseries <- function(id) {
         data,
         share_with
       ) {
-        promises::future_promise({
+        promises::future_promise(seed = TRUE, expr = {
           tryCatch(
             {
               # Make a connection
@@ -864,7 +864,11 @@ addTimeseries <- function(id) {
                     paste0("= ", df$sub_location_id)
                   ),
                   " AND z_id ",
-                  ifelse(is.na(df$z_id), "IS NULL", paste0("= ", df$z_id)),
+                  ifelse(
+                    is.na(df$z_id),
+                    "IS NULL",
+                    paste0("= ", df$z_id)
+                  ),
                   " AND parameter_id = ",
                   df$parameter_id,
                   " AND media_id = ",
@@ -878,9 +882,18 @@ addTimeseries <- function(id) {
                   "'",
                   " AND default_owner = ",
                   df$default_owner,
-                  " AND end_datetime = '",
-                  df$end_datetime,
-                  "'"
+                  " AND end_datetime ",
+                  ifelse(
+                    is.na(df$end_datetime),
+                    "IS NULL",
+                    paste0("= '", df$end_datetime, "'")
+                  ),
+                  " AND source_fx ",
+                  ifelse(
+                    is.na(df$source_fx),
+                    "IS NULL",
+                    paste0("= '", df$source_fx, "'")
+                  )
                 )
               )[1, 1]
 
@@ -926,53 +939,57 @@ addTimeseries <- function(id) {
                     ))
                   }
                 }
+
+                # Ensure that there are records in measurements_continuous and/or measurements_calculated_daily
+                mcd <- DBI::dbGetQuery(
+                  con,
+                  paste0(
+                    "SELECT MIN(date) FROM measurements_calculated_daily WHERE timeseries_id = ",
+                    new_timeseries_id
+                  )
+                )[1, 1]
+                mc <- DBI::dbGetQuery(
+                  con,
+                  paste0(
+                    "SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = ",
+                    new_timeseries_id
+                  )
+                )[1, 1]
+
+                if (is.na(mcd) && is.na(mc)) {
+                  stop(
+                    "Could not find any data for this timeseries. Try different parameters."
+                  )
+                }
+
+                # Now calculate stats
+                if (
+                  lubridate::period(df$record_rate) <=
+                    lubridate::period("1 day")
+                ) {
+                  AquaCache::calculate_stats(
+                    timeseries_id = new_timeseries_id,
+                    con = con,
+                    start_recalc = NULL
+                  )
+                }
+                DBI::dbCommit(con)
+                return("success")
+              } else {
+                DBI::dbCommit(con)
+                return("successNoData")
               }
-
-              # Ensure that there are records in measurements_continuous and/or measurements_calculated_daily
-              mcd <- DBI::dbGetQuery(
-                con,
-                paste0(
-                  "SELECT MIN(date) FROM measurements_calculated_daily WHERE timeseries_id = ",
-                  new_timeseries_id
-                )
-              )[1, 1]
-              mc <- DBI::dbGetQuery(
-                con,
-                paste0(
-                  "SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = ",
-                  new_timeseries_id
-                )
-              )[1, 1]
-
-              if (is.na(mcd) && is.na(mc)) {
-                stop(
-                  "Could not find any data for this timeseries. Try different parameters."
-                )
-              }
-
-              # Now calculate stats
-              if (
-                lubridate::period(df$record_rate) <= lubridate::period("1 day")
-              ) {
-                AquaCache::calculate_stats(
-                  timeseries_id = new_timeseries_id,
-                  con = con,
-                  start_recalc = NULL
-                )
-              }
-
-              DBI::dbCommit(con)
-              return("success")
             },
             error = function(e) {
               DBI::dbRollback(con)
-              DBI::dbDisconnect(con)
               return(paste("Error adding timeseries:", e$message))
             },
             warning = function(w) {
               DBI::dbRollback(con)
-              DBI::dbDisconnect(con)
-              return(paste("Error adding timeseries:", w$message))
+              return(paste(
+                "Failure due to warning when adding timeseries:",
+                w$message
+              ))
             }
           )
         })
@@ -1028,11 +1045,18 @@ addTimeseries <- function(id) {
     observeEvent(addNewTimeseries$result(), {
       if (is.null(addNewTimeseries$result())) {
         return() # No result yet, do nothing
-      } else if (addNewTimeseries$result() != "success") {
+      } else if (
+        !addNewTimeseries$result() %in% c("successNoData", "success")
+      ) {
         # If the result is not "success", show an error notification
         showNotification(addNewTimeseries$result(), type = "error")
         return()
-      } else {
+      } else if (addNewTimeseries$result() == "successNoData") {
+        showNotification(
+          "Timeseries added successfully with no data fetched. REMEMBER TO ADD DATA NOW.",
+          type = "warning"
+        )
+      } else if (addNewTimeseries$result() == "success") {
         # If the result is "success", show a success notification
         showNotification(
           "Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.",

@@ -34,7 +34,7 @@
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
 #' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
-#' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
+#' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
@@ -139,6 +139,24 @@ plotTimeseries <- function(
 
   if (tzone == "auto") {
     tzone <- Sys.timezone()
+  }
+
+  if (is.character(tzone)) {
+    numeric_tzone <- suppressWarnings(as.numeric(tzone))
+    if (!is.na(numeric_tzone) && grepl("^[-+]?\\d+$", trimws(tzone))) {
+      tzone <- numeric_tzone
+    }
+  }
+
+  if (is.numeric(tzone)) {
+    if (length(tzone) != 1 || is.na(tzone) || tzone %% 1 != 0) {
+      stop("Numeric timezone offsets must be a single whole hour value.")
+    }
+    if (tzone == 0) {
+      tzone <- "UTC"
+    } else {
+      tzone <- sprintf("Etc/GMT%+d", -as.integer(tzone))
+    }
   }
 
   if (!is.null(parameter)) {

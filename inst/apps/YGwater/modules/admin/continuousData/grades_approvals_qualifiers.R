@@ -143,9 +143,6 @@ grades_approvals_qualifiers <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    con <- session$userData$AquaCache
-    req(con)
-
     parse_datetime <- function(value) {
       if (is.null(value) || !nzchar(value)) {
         return(NA)
@@ -201,7 +198,7 @@ grades_approvals_qualifiers <- function(id) {
         has_table_privilege(current_user, 'continuous.qualifiers', 'INSERT') AS qualifier_insert, \
         has_table_privilege(current_user, 'continuous.qualifiers', 'UPDATE') AS qualifier_update, \
         has_table_privilege(current_user, 'continuous.qualifiers', 'DELETE') AS qualifier_delete"
-      DBI::dbGetQuery(con, query)
+      DBI::dbGetQuery(session$userData$AquaCache, query)
     }
 
     privileges_row <- load_privileges()
@@ -228,19 +225,19 @@ grades_approvals_qualifiers <- function(id) {
     module_data <- reactiveValues(
       grade_types = safe_query(
         DBI::dbGetQuery(
-          con,
+          session$userData$AquaCache,
           "SELECT grade_type_id, grade_type_description, COALESCE(color_code, '#4E79A7') AS color_code FROM grade_types ORDER BY grade_type_description"
         )
       ),
       approval_types = safe_query(
         DBI::dbGetQuery(
-          con,
+          session$userData$AquaCache,
           "SELECT approval_type_id, approval_type_description, COALESCE(color_code, '#F28E2B') AS color_code FROM approval_types ORDER BY approval_type_description"
         )
       ),
       qualifier_types = safe_query(
         DBI::dbGetQuery(
-          con,
+          session$userData$AquaCache,
           "SELECT qualifier_type_id, qualifier_type_description, COALESCE(color_code, '#E15759') AS color_code FROM qualifier_types ORDER BY qualifier_type_description"
         )
       ),
@@ -249,7 +246,7 @@ grades_approvals_qualifiers <- function(id) {
 
     ts_meta <- reactive({
       dbGetQueryDT(
-        con,
+        session$userData$AquaCache,
         paste(
           "SELECT timeseries_id, location_name AS location, parameter_name AS parameter,",
           "media_type AS media, aggregation_type AS aggregation, recording_rate,",
@@ -312,7 +309,7 @@ grades_approvals_qualifiers <- function(id) {
 
           range_info <- safe_query(
             DBI::dbGetQuery(
-              con,
+              session$userData$AquaCache,
               "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
               params = list(tsid)
             )
@@ -409,7 +406,11 @@ grades_approvals_qualifiers <- function(id) {
         approval = "SELECT a.approval_id AS record_id, a.approval_type_id AS type_id, at.approval_type_description AS description, COALESCE(at.color_code, '#F28E2B') AS color_code, a.start_dt, a.end_dt, a.created, a.updated FROM continuous.approvals a LEFT JOIN approval_types at ON a.approval_type_id = at.approval_type_id WHERE a.timeseries_id = $1 ORDER BY a.start_dt",
         qualifier = "SELECT q.qualifier_id AS record_id, q.qualifier_type_id AS type_id, qt.qualifier_type_description AS description, COALESCE(qt.color_code, '#E15759') AS color_code, q.start_dt, q.end_dt, q.created, q.updated FROM continuous.qualifiers q LEFT JOIN qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE q.timeseries_id = $1 ORDER BY q.start_dt"
       )
-      df <- safe_query(DBI::dbGetQuery(con, query, params = list(tsid)))
+      df <- safe_query(DBI::dbGetQuery(
+        session$userData$AquaCache,
+        query,
+        params = list(tsid)
+      ))
       if (!nrow(df)) {
         return(df)
       }
@@ -448,7 +449,7 @@ grades_approvals_qualifiers <- function(id) {
       }
       df <- safe_query(
         DBI::dbGetQuery(
-          con,
+          session$userData$AquaCache,
           "SELECT datetime, value_raw, value_corrected FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime",
           params = list(selected_ts(), start_dt, end_dt)
         )
@@ -765,7 +766,7 @@ grades_approvals_qualifiers <- function(id) {
         )
         res <- tryCatch(
           DBI::dbExecute(
-            con,
+            session$userData$AquaCache,
             query,
             params = list(selected_ts(), as.integer(type_id), start_dt, end_dt)
           ),
@@ -797,7 +798,7 @@ grades_approvals_qualifiers <- function(id) {
         )
         res <- tryCatch(
           DBI::dbExecute(
-            con,
+            session$userData$AquaCache,
             query,
             params = list(as.integer(type_id), start_dt, end_dt, record$id)
           ),
@@ -845,7 +846,11 @@ grades_approvals_qualifiers <- function(id) {
       )
       query <- sprintf("DELETE FROM %s WHERE %s = $1", table_name, id_col)
       res <- tryCatch(
-        DBI::dbExecute(con, query, params = list(record$id)),
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          query,
+          params = list(record$id)
+        ),
         error = function(e) {
           showNotification(conditionMessage(e), type = "error")
           NULL
