@@ -260,6 +260,25 @@ app_server <- function(input, output, session) {
   )
 
   updating_from_url <- reactiveVal(FALSE)
+  build_query_string <- function(page = NULL, lang = NULL) {
+    params <- list()
+    if (!is.null(page)) {
+      params$page <- page
+    }
+    if (!is.null(lang)) {
+      params$lang <- lang
+    }
+    if (!length(params)) {
+      return("")
+    }
+    paste0("?", httpuv::encodeQueryString(params))
+  }
+  get_lang_code <- function() {
+    if (is.null(languageSelection$language)) {
+      return(NULL)
+    }
+    if (languageSelection$language == "Français") "fr" else "en"
+  }
 
   observeEvent(session$clientData$url_search, ignoreNULL = FALSE, {
     updating_from_url(TRUE)
@@ -291,11 +310,11 @@ app_server <- function(input, output, session) {
       if (is.null(input$navbar)) {
         return()
       }
-      if (input$navbar %in% bookmarkable_tabs) {
-        updateQueryString(paste0("?page=", input$navbar), mode = "push")
-      } else {
-        updateQueryString("", mode = "push")
-      }
+      page <- if (input$navbar %in% bookmarkable_tabs) input$navbar else NULL
+      updateQueryString(
+        build_query_string(page = page, lang = get_lang_code()),
+        mode = "push"
+      )
     },
     ignoreNULL = TRUE
   )
@@ -462,6 +481,25 @@ app_server <- function(input, output, session) {
     next_lang <- if (languageSelection$language == "English") "fr" else "en"
     set_language_selection(next_lang)
   })
+
+  observeEvent(
+    languageSelection$language,
+    {
+      if (updating_from_url()) {
+        return()
+      }
+      page <- if (!is.null(input$navbar) && input$navbar %in% bookmarkable_tabs) {
+        input$navbar
+      } else {
+        NULL
+      }
+      updateQueryString(
+        build_query_string(page = page, lang = get_lang_code()),
+        mode = "replace"
+      )
+    },
+    ignoreInit = TRUE
+  )
 
   # Render UI text based on the selected language
   observeEvent(languageSelection$language, {
