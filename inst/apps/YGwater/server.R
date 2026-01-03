@@ -271,7 +271,15 @@ app_server <- function(input, output, session) {
     if (!length(params)) {
       return("")
     }
-    paste0("?", httpuv::encodeQueryString(params))
+    encoded <- vapply(
+      names(params),
+      function(name) {
+        value <- params[[name]]
+        paste0(name, "=", utils::URLencode(value, reserved = TRUE))
+      },
+      character(1)
+    )
+    paste0("?", paste(encoded, collapse = "&"))
   }
   get_lang_code <- function() {
     if (is.null(languageSelection$language)) {
