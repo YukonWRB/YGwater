@@ -260,12 +260,44 @@ app_server <- function(input, output, session) {
   )
 
   updating_from_url <- reactiveVal(FALSE)
+  build_query_string <- function(page = NULL, lang = NULL) {
+    params <- list()
+    if (!is.null(page)) {
+      params$page <- page
+    }
+    if (!is.null(lang)) {
+      params$lang <- lang
+    }
+    if (!length(params)) {
+      return("")
+    }
+    encoded <- vapply(
+      names(params),
+      function(name) {
+        value <- params[[name]]
+        paste0(name, "=", utils::URLencode(value, reserved = TRUE))
+      },
+      character(1)
+    )
+    paste0("?", paste(encoded, collapse = "&"))
+  }
+  get_lang_code <- function() {
+    if (is.null(languageSelection$language)) {
+      return(NULL)
+    }
+    if (languageSelection$language == "Français") "fr" else "en"
+  }
 
   observeEvent(session$clientData$url_search, ignoreNULL = FALSE, {
     updating_from_url(TRUE)
     on.exit(updating_from_url(FALSE))
     query <- shiny::parseQueryString(isolate(session$clientData$url_search))
     page <- query[["page"]]
+    lang <- query[["lang"]]
+    if (!is.null(lang) && nzchar(lang)) {
+      language_override(TRUE)
+      set_language_selection(lang)
+    }
     if (
       !is.null(page) &&
         page %in% bookmarkable_tabs &&
@@ -286,11 +318,11 @@ app_server <- function(input, output, session) {
       if (is.null(input$navbar)) {
         return()
       }
-      if (input$navbar %in% bookmarkable_tabs) {
-        updateQueryString(paste0("?page=", input$navbar), mode = "push")
-      } else {
-        updateQueryString("", mode = "push")
-      }
+      page <- if (input$navbar %in% bookmarkable_tabs) input$navbar else NULL
+      updateQueryString(
+        build_query_string(page = page, lang = get_lang_code()),
+        mode = "push"
+      )
     },
     ignoreNULL = TRUE
   )
@@ -395,6 +427,33 @@ app_server <- function(input, output, session) {
 
   # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
   languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
+  language_override <- reactiveVal(FALSE)
+
+  set_language_selection <- function(lang_code) {
+    lang_code <- tolower(if (is.null(lang_code)) "en" else lang_code)
+    lang_code <- if (grepl("^fr", lang_code)) "fr" else "en"
+
+    selected_lang <- if (lang_code == "fr") "Français" else "English"
+
+    languageSelection$language <- selected_lang
+    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+
+    updateActionButton(
+      session,
+      "language_button",
+      label = data.table::fifelse(
+        selected_lang == "English",
+        "Français",
+        "English"
+      )
+    )
+
+    # Update the HTML <head> for language settings
+    session$sendCustomMessage(
+      type = 'updateLang',
+      message = list(lang = lang_code)
+    )
+  }
 
   # Populate the language selection dropdown
   # Determine user's browser language. This should only run once when the app is loaded.
@@ -413,31 +472,12 @@ app_server <- function(input, output, session) {
   observeEvent(
     input$userLang,
     {
+      if (language_override()) {
+        return()
+      }
       # userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
       lang_code <- substr(input$userLang, 1, 2)
-
-      selected_lang <- if (lang_code == "fr") "Français" else "English"
-
-      languageSelection$language <- selected_lang
-      languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-
-      updateActionButton(
-        session,
-        "language_button",
-        label = data.table::fifelse(
-          selected_lang == "English",
-          "Français",
-          "English"
-        )
-      )
-
-      # Update the HTML <head> for language settings
-      session$sendCustomMessage(
-        type = 'updateLang',
-        message = list(
-          lang = data.table::fifelse(lang_code == "fr", "fr", "en")
-        )
-      )
+      set_language_selection(lang_code)
     },
     ignoreInit = TRUE,
     ignoreNULL = TRUE,
@@ -446,27 +486,28 @@ app_server <- function(input, output, session) {
 
   # Toggle language when the button is pressed
   observeEvent(input$language_button, {
-    new_lang <- if (languageSelection$language == "English") {
-      "Français"
-    } else {
-      "English"
-    }
-    languageSelection$language <- new_lang
-    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-
-    updateActionButton(
-      session,
-      "language_button",
-      label = data.table::fifelse(new_lang == "English", "Français", "English")
-    )
-
-    session$sendCustomMessage(
-      type = 'updateLang',
-      message = list(
-        lang = data.table::fifelse(new_lang == "Français", "fr", "en")
-      )
-    )
+    next_lang <- if (languageSelection$language == "English") "fr" else "en"
+    set_language_selection(next_lang)
   })
+
+  observeEvent(
+    languageSelection$language,
+    {
+      if (updating_from_url()) {
+        return()
+      }
+      page <- if (!is.null(input$navbar) && input$navbar %in% bookmarkable_tabs) {
+        input$navbar
+      } else {
+        NULL
+      }
+      updateQueryString(
+        build_query_string(page = page, lang = get_lang_code()),
+        mode = "replace"
+      )
+    },
+    ignoreInit = TRUE
+  )
 
   # Render UI text based on the selected language
   observeEvent(languageSelection$language, {
