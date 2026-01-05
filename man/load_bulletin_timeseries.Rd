@@ -8,7 +8,8 @@ load_bulletin_timeseries(
   con,
   load_swe = TRUE,
   load_precip = FALSE,
-  load_temp = FALSE
+  load_temp = FALSE,
+  epsg = 4326
 )
 }
 \arguments{

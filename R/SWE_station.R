@@ -168,6 +168,7 @@ SWE_station <- function(
     Meas <- Meas %>%
       tidyr::pivot_wider(names_from = "parameter", values_from = "value")
     # calculate density
+
     Meas$density <- round(Meas$SWE / Meas$`snow depth` * 10, 2)
     # Reformat into long format
     Meas <- Meas %>%

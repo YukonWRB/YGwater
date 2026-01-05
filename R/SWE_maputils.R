@@ -1162,7 +1162,6 @@ download_discrete_ts <- function(
 
     for (i in seq_along(ts_ids)) {
         loc_id <- ts_ids[i]
-
         ts_query <- sprintf(
             "SELECT s.datetime, s.target_datetime, r.result
              FROM discrete.samples s

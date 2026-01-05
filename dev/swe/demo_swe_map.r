@@ -1,11 +1,19 @@
 load_all()
+
 con <- AquaCache::AquaConnect(
     name = "aquacache",
-    host = "10.250.12.154",
-    port = 5432,
-    user = "public_reader",
-    password = "aquacache"
+    host = Sys.getenv("aquacacheHostProd"),
+    port = Sys.getenv("aquacachePortProd"),
+    user = Sys.getenv("aquacacheUserProd"),
+    password = Sys.getenv("aquacachePassProd")
 )
+locations <- DBI::dbReadTable(con, "locations")
+
+
+snowbull_timeseries <- load_bulletin_timeseries(
+    con = con
+)
+
 
 on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -21,11 +29,6 @@ month <- 3
 language <- "English"
 statistic <- "relative_to_med"
 parameter_name <- "swe"
-
-# snowbull_timeseries <- load_bulletin_timeseries(
-#     con = con,
-#     load_temp = TRUE
-# )
 
 # This code calculates aggregated statistics (mean or sum) for each station over historical water years.
 # - The `statistic` variable determines whether to compute the mean or sum.

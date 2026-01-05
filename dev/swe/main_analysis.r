@@ -184,7 +184,7 @@ xlim <- lims$xlim
 ylim <- lims$ylim
 
 # Plot ERA5 median SWE with zoomed extents
-plot(
+terra::plot(
     era5_relative_change,
     main = paste(
         "ERA5 SWE Relative to historic median (1980-2024) on",
@@ -213,7 +213,7 @@ text(
 )
 
 
-plot(
+terra::plot(
     era5_recent * 1000,
     main = "ERA5 Median SWE",
     col = terrain.colors(100),

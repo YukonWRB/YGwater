@@ -9,7 +9,8 @@ download_continuous_ts(
   start_date = sprintf("\%d-01-01", 1950),
   end_date = sprintf("\%d-01-01", 2100),
   resolution = "daily",
-  parameter_name = "swe"
+  parameter_name = "swe",
+  epsg = 4326
 )
 }
 \arguments{
