@@ -41,7 +41,7 @@ docTableView <- function(id, language) {
         session$userData$AquaCache,
         paste0(
           "SELECT d.document_id, d.name, d.publish_date, d.description, ",
-          "d.format, d.url, d.authors, d.tags, ",
+          "d.format, d.authors, d.tags, ",
           "dt.document_type_en, dt.document_type_fr, ",
           "o.name AS owner_name, c.name AS contributor_name ",
           "FROM files.documents d ",
@@ -102,11 +102,14 @@ docTableView <- function(id, language) {
         publish_date,
         description,
         format,
-        url,
         owner,
         contributor,
         tags
       )]
+
+      # Make 'type' a factor for filtering
+      tbl[, type := factor(type)]
+      tbl[, format := factor(format)]
 
       tbl[, sort_date := publish_date]
       data.table::setorder(tbl, -sort_date, name)
@@ -131,44 +134,32 @@ docTableView <- function(id, language) {
     })
 
     output$page <- renderUI({
-      tagList(
-        layout_sidebar(
-          sidebar = sidebar(
-            width = "35%",
-            bg = config$sidebar_bg,
-            open = TRUE,
-            fillable = TRUE,
-            fillable_mobile = TRUE,
-            h4(tr("documents_heading", language$language)),
-            DT::dataTableOutput(ns("documents_table")),
-            downloadButton(
-              ns("download_document"),
-              tr("document_download", language$language)
-            ),
-            uiOutput(ns("document_details"))
-          ),
-          uiOutput(ns("document_preview")),
-          height = "1000px"
-        )
-      )
+      tags <- tagList(
+        h4(tr("documents", language$language)),
+        DT::dataTableOutput(ns("documents_table")),
+        downloadButton(
+          ns("download_document"),
+          tr("document_download", language$language)
+        ),
+        uiOutput(ns("document_details"))
+      ) # End tagList
+      return(tags)
     }) %>%
       bindEvent(language$language)
 
     output$documents_table <- DT::renderDataTable({
-      tbl <- table_data()
+      tbl <- table_data()[, -"contributor"]
 
       col_labels <- c(
         document_id = "document_id",
-        name = tr("document_name", language$language),
-        type = tr("document_type", language$language),
+        name = tr("name", language$language),
+        type = tr("type", language$language),
         authors = tr("document_authors", language$language),
         publish_date = tr("document_published", language$language),
         description = tr("document_description", language$language),
         format = tr("document_format", language$language),
-        url = tr("document_url", language$language),
         owner = tr("document_owner", language$language),
-        contributor = tr("document_contributor", language$language),
-        tags = tr("document_tags", language$language),
+        tags = tr("tags", language$language),
         sort_date = "sort_date"
       )
 
@@ -260,22 +251,11 @@ docTableView <- function(id, language) {
         )
       }
 
-      url_block <- if (!is.null(doc$url) && nzchar(doc$url)) {
-        tags$a(
-          href = doc$url,
-          target = "_blank",
-          rel = "noopener",
-          tr("document_open_url", language$language)
-        )
-      } else {
-        NULL
-      }
-
       tagList(
         tags$hr(),
-        tags$strong(tr("document_name", language$language)),
+        tags$strong(tr("name", language$language)),
         tags$p(doc$name),
-        tags$strong(tr("document_type", language$language)),
+        tags$strong(tr("type", language$language)),
         tags$p(doc$type),
         tags$strong(tr("document_authors", language$language)),
         tags$p(ifelse(is.na(doc$authors), "", doc$authors)),
@@ -289,9 +269,8 @@ docTableView <- function(id, language) {
         tags$p(ifelse(is.na(doc$owner), "", doc$owner)),
         tags$strong(tr("document_contributor", language$language)),
         tags$p(ifelse(is.na(doc$contributor), "", doc$contributor)),
-        tags$strong(tr("document_tags", language$language)),
+        tags$strong(tr("tags", language$language)),
         tags$p(ifelse(is.na(doc$tags), "", doc$tags)),
-        url_block
       )
     })
 
@@ -316,66 +295,6 @@ docTableView <- function(id, language) {
       }
 
       doc
-    })
-
-    guess_content_type <- function(format) {
-      format <- tolower(format)
-      switch(
-        format,
-        pdf = "application/pdf",
-        png = "image/png",
-        jpg = "image/jpeg",
-        jpeg = "image/jpeg",
-        gif = "image/gif",
-        tif = "image/tiff",
-        tiff = "image/tiff",
-        "application/octet-stream"
-      )
-    }
-
-    output$document_preview <- renderUI({
-      doc <- document_content()
-      if (is.null(doc)) {
-        return(
-          div(
-            class = "text-muted",
-            h4(tr("document_preview_heading", language$language)),
-            tr("document_select_prompt", language$language)
-          )
-        )
-      }
-
-      format <- doc$format
-      content_type <- guess_content_type(format)
-      raw_content <- doc$document[[1]]
-      data_uri <- paste0(
-        "data:",
-        content_type,
-        ";base64,",
-        base64enc::base64encode(raw_content)
-      )
-
-      preview <- if (content_type == "application/pdf") {
-        tags$iframe(
-          src = data_uri,
-          style = "width: 100%; height: 900px; border: none;"
-        )
-      } else if (startsWith(content_type, "image/")) {
-        tags$img(
-          src = data_uri,
-          style = "max-width: 100%; height: auto;"
-        )
-      } else {
-        div(
-          class = "text-muted",
-          tr("document_no_preview", language$language)
-        )
-      }
-
-      tagList(
-        h4(tr("document_preview_heading", language$language)),
-        preview
-      )
     })
 
     output$download_document <- downloadHandler(

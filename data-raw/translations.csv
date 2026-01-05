@@ -20,25 +20,18 @@ data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
-documents,documentsNavMenuTitle,Documents,Documents
-documents_heading,documentsModuleTitle,Documents,Documents
-document_preview_heading,documentsModulePreviewHeading,Document preview,Aperçu du document
-document_select_prompt,documentsModuleSelectPrompt,Select a document to preview.,Sélectionnez un document à prévisualiser.
+documents,translation,Documents,Documents
 document_download,documentsModuleDownload,Download document,Télécharger le document
-document_name,documentsModuleColName,Name,Nom
-document_type,documentsModuleColType,Type,Type
 document_authors,documentsModuleColAuthors,Authors,Auteurs
 document_published,documentsModuleColPublished,Published,Date de publication
 document_description,documentsModuleColDescription,Description,Description
 document_format,documentsModuleColFormat,Format,Format
-document_url,documentsModuleColUrl,URL,URL
 document_owner,documentsModuleColOwner,Owner,Propriétaire
 document_contributor,documentsModuleColContributor,Contributor,Contributeur
-document_tags,documentsModuleColTags,Tags,Étiquettes
-document_share_with,documentsModuleColShareWith,Shared with,Partagé avec
+document_select_prompt,documentsModuleSelectPrompt,Select a document to view details.,Sélectionnez un document pour voir ses détails.
+tags,,Tags,Étiquettes
 document_no_preview,documentsModuleNoPreview,Preview not available for this file type.,Aucun aperçu disponible pour ce type de fichier.
-document_open_url,documentsModuleOpenUrl,Open source link,Ouvrir le lien source
-document_type_col,,document_type_en,document_type_en
+document_type_col,,document_type_en,document_type_fr
 info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,Updates and changes,Mises à jour
@@ -139,7 +132,6 @@ select_standard_opt,,Select a standard to apply (optional),Choisir une norme à 
 standard_warning,,Warning: this adds a lot of time for plot generation!,Attention : cela augmente beaucoup le temps de génération du graphique!
 EQWin_db,,EQWin database,Base de données EQWin
 img_type_lab,input label,Image Type,Type d'image
-img_tags_lab,input label,Tags,Étiquettes
 img_type_auto,input choice,Automatic (series),Automatique (série)
 img_type_man,input choice,Manual (one-off),Manuelle (non-série)
 map_options,,Map options,Options de la carte
@@ -188,8 +180,8 @@ share_y_axis,,Use the same Y-axis bounds for all plots (values are aligned),Util
 share_x_axis_tooltip,,Aligns the X-axis for all plots to make it easier to compare trends over time.,Aligne l'axe X de tous les graphiques pour faciliter la comparaison des tendances dans le temps.
 share_y_axis_tooltip,,Aligns the Y-axis for all plots to make it easier to compare values across locations or parameters.,Aligne l’axe Y de tous les graphiques pour faciliter la comparaison des valeurs entre emplacements ou paramètres.
 loc_code,,Choose how to display location names/codes,Choisissez comment montrer le nom/code des emplacements
-loc_code_name,,Name,Nom
-loc_code_code,,Code,Code
+name,,Name,Nom
+code,,Code,Code
 loc_code_nameCode,,Name (code),Nom (code)
 loc_code_codeName,,Code (name),Code (nom)
 target_datetime,,Use target date/time,Utiliser la date/le temps cible

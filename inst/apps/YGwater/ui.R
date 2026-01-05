@@ -251,12 +251,6 @@ app_ui <- function(request) {
           )
         ),
 
-        nav_panel(
-          title = uiOutput("documentsNavMenuTitle"),
-          value = "docTableView",
-          uiOutput("docTableView_ui")
-        ),
-
         nav_menu(
           title = uiOutput("dataNavMenuTitle"),
           value = "data",
@@ -279,11 +273,19 @@ app_ui <- function(request) {
             uiOutput("fod_ui")
           )
         },
+
         nav_panel(
           title = uiOutput("WWRNavTitle"),
           value = "WWR",
           uiOutput("WWR_ui")
         ),
+
+        nav_panel(
+          title = uiOutput("documentsNavMenuTitle"),
+          value = "docTableView",
+          uiOutput("docTableView_ui")
+        ),
+
         nav_menu(
           title = uiOutput("infoNavMenuTitle"),
           value = "info",
@@ -298,6 +300,7 @@ app_ui <- function(request) {
             uiOutput("news_ui")
           )
         ),
+
         if (!config$public) {
           nav_menu(
             title = "Continuous data",
@@ -339,6 +342,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Discrete data",
@@ -375,6 +379,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Locations",
@@ -391,6 +396,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Files/Docs",
@@ -412,6 +418,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Field",
@@ -428,6 +435,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Equipment",
@@ -439,6 +447,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Boreholes/wells",
@@ -450,6 +459,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(title = "Metadata", value = "metadataTasks")
         },
@@ -480,7 +490,7 @@ app_ui <- function(request) {
             )
           )
         },
-        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
+        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language on the right side of the navbar
         nav_spacer(),
         # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
         nav_item(actionButton(
