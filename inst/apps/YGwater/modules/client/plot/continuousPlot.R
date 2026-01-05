@@ -581,7 +581,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         timeseries_id = "timeseries_id",
         location = tr("loc", language$language),
         sub_location = tr("sub_loc", language$language),
-        loc_code = tr("loc_code_code", language$language),
+        loc_code = tr("code", language$language),
         parameter = tr("parameter", language$language),
         media = tr("media", language$language),
         aggregation = tr("aggregation", language$language),

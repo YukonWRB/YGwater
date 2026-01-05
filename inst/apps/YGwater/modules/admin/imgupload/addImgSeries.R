@@ -317,11 +317,17 @@ addImgSeries <- function(id) {
           },
           note = if (isTruthy(input$contact_note)) input$contact_note else NA
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "organizations",
-          df,
-          append = TRUE
+          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6);",
+          params = list(
+            df$name,
+            df$name_fr,
+            df$contact_name,
+            df$phone,
+            df$email,
+            df$note
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -434,13 +440,21 @@ addImgSeries <- function(id) {
                 active = TRUE,
                 last_img = start
               )
-              DBI::dbAppendTable(con, "image_series", df)
 
-              # Get the new image_meta_id
-              new_id <- DBI::dbGetQuery(
+              new_id <- DBI::dbExecute(
                 con,
-                "SELECT MAX(img_series_id) AS id FROM files.image_series;"
-              )$id
+                "INSERT INTO image_series (location_id, owner, description, share_with, source_fx, source_fx_args, active, last_img) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING img_series_id;",
+                params = list(
+                  df$location_id,
+                  df$owner,
+                  df$description,
+                  DBI::SQL(df$share_with),
+                  df$source_fx,
+                  if (nzchar(source_fx_args)) df$source_fx_args else NULL,
+                  df$active,
+                  df$last_img
+                )
+              )[1, 1]
 
               # fetch images
               AquaCache::getNewImages(image_meta_ids = new_id, con = con)

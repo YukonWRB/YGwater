@@ -226,8 +226,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             choices = stats::setNames(
               c("name", "code", "nameCode", "codeName"),
               c(
-                tr("loc_code_name", language$language),
-                tr("loc_code_code", language$language),
+                tr("name", language$language),
+                tr("code", language$language),
                 tr("loc_code_nameCode", language$language),
                 tr("loc_code_codeName", language$language)
               )

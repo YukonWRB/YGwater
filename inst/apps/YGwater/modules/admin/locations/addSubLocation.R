@@ -577,22 +577,23 @@ addSubLocation <- function(id, inputs) {
 
       tryCatch(
         {
-          # Make a data.frame to pass in using dbAppendTable
-          df <- data.frame(
-            location_id = input$location,
-            sub_location_name = input$subloc_name,
-            sub_location_name_fr = input$subloc_name_fr,
-            latitude = input$lat,
-            longitude = input$lon,
-            share_with = paste0(
-              "{",
-              paste(input$share_with, collapse = ", "),
-              "}"
-            ),
-            note = if (isTruthy(input$subloc_note)) input$subloc_note else NA
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "INSERT INTO sub_locations (location_id, sub_location_name, sub_location_name_fr, latitude, longitude, share_with, note) VALUES ($1, $2, $3, $4, $5, $6, $7);",
+            params = list(
+              input$location,
+              input$subloc_name,
+              input$subloc_name_fr,
+              input$lat,
+              input$lon,
+              paste0(
+                "{",
+                paste(input$share_with, collapse = ", "),
+                "}"
+              ),
+              if (isTruthy(input$subloc_note)) input$subloc_note else NA
+            )
           )
-
-          DBI::dbAppendTable(session$userData$AquaCache, "sub_locations", df)
 
           # Show a modal to the user that the location was added
           showModal(modalDialog(

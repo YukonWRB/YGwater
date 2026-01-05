@@ -822,21 +822,18 @@ app_server <- function(input, output, session) {
   # Handle feedback submission
   observeEvent(input$submit_feedback, {
     # Save feedback to the database
-
-    df <- data.frame(
-      sentiment = feedback$type,
-      comment = input$feedback_text,
-      page = input$navbar,
-      app_state = jsonlite::toJSON(
-        reactiveValuesToList(input),
-        auto_unbox = TRUE
+    DBI::dbExecute(
+      session$userData$AquaCache,
+      "INSERT INTO application.feedback (sentiment, comment, page, app_state) VALUES ($1, $2, $3, $4);",
+      params = list(
+        feedback$type,
+        input$feedback_text,
+        input$navbar,
+        jsonlite::toJSON(
+          reactiveValuesToList(input),
+          auto_unbox = TRUE
       )
     )
-
-    # Drop the feedback_text portion from the app_sate column
-    # df$app_state <- gsub('"feedback_text":\\s*".*?"(,\\s*)?', '', df$app_state)
-
-    DBI::dbAppendTable(session$userData$AquaCache, "feedback", df)
 
     # Reset feedback
     shinyjs::hide("feedback_text")

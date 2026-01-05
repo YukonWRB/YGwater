@@ -50,10 +50,17 @@ syncCont <- function(id) {
     }
 
     ts_meta <- reactive({
-      dbGetQueryDT(
+      res <- dbGetQueryDT(
         session$userData$AquaCache,
         "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS nominal_record_rate, note FROM continuous.timeseries_metadata_en"
       )
+      # Make columns factors for better filtering in DT
+      res[, location := as.factor(location)]
+      res[, parameter := as.factor(parameter)]
+      res[, media := as.factor(media)]
+      res[, aggregation := as.factor(aggregation)]
+      res[, nominal_record_rate := as.factor(nominal_record_rate)]
+      res
     })
 
     output$ts_table <- DT::renderDT({
