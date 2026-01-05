@@ -832,6 +832,7 @@ app_server <- function(input, output, session) {
         jsonlite::toJSON(
           reactiveValuesToList(input),
           auto_unbox = TRUE
+        )
       )
     )
 
