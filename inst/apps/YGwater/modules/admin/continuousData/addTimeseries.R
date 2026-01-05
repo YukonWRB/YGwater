@@ -635,6 +635,7 @@ addTimeseries <- function(id) {
       ignoreInit = TRUE,
       ignoreNULL = TRUE
     )
+
     observeEvent(
       input$add_owner,
       {
@@ -832,15 +833,15 @@ addTimeseries <- function(id) {
               }
 
               # Make a new entry to the timeseries table
-              new_timeseries_id <- DBI::dbExecute(
+              new_timeseries_id <- DBI::dbGetQuery(
                 con,
                 "INSERT INTO continuous.timeseries (location, location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
                 params = list(
                   loc_code,
                   as.numeric(loc),
-                  ifelse(is.na(sub_loc), NULL, sub_loc),
+                  ifelse(is.na(sub_loc), NA, sub_loc),
                   as.numeric(tz),
-                  ifelse(is.na(existing_z), NULL, existing_z),
+                  ifelse(is.na(existing_z), NA, existing_z),
                   as.numeric(parameter),
                   as.numeric(media),
                   as.numeric(priority),
@@ -852,10 +853,10 @@ addTimeseries <- function(id) {
                     paste(share_with, collapse = ","),
                     "}"
                   ),
-                  ifelse(is.na(source_fx), NULL, source_fx),
-                  ifelse(is.na(source_fx_args), NULL, source_fx_args),
+                  ifelse(is.na(source_fx), NA, source_fx),
+                  ifelse(is.na(args), NA, args),
                   if (nzchar(note)) note else NA,
-                  ifelse(is.na(end_datetime), NULL, end_datetime)
+                  ifelse(is.na(end_datetime), NA, end_datetime)
                 )
               )[1, 1]
 
@@ -977,6 +978,22 @@ addTimeseries <- function(id) {
         )
         return()
       }
+
+      print(input$location)
+      print(input$sub_location)
+      print(input$tz)
+      print(input$z)
+      print(input$z_specify)
+      print(input$parameter)
+      print(input$media)
+      print(input$sensor_priority)
+      print(input$aggregation_type)
+      print(input$record_rate)
+      print(input$default_owner)
+      print(input$note)
+      print(input$source_fx)
+      print(input$source_fx_args)
+      print(input$share_with)
 
       # Call the extendedTask to add a new timeseries
       addNewTimeseries$invoke(

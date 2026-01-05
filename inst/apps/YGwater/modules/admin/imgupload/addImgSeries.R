@@ -441,7 +441,7 @@ addImgSeries <- function(id) {
                 last_img = start
               )
 
-              new_id <- DBI::dbExecute(
+              new_id <- DBI::dbGetQuery(
                 con,
                 "INSERT INTO image_series (location_id, owner, description, share_with, source_fx, source_fx_args, active, last_img) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING img_series_id;",
                 params = list(
@@ -450,7 +450,7 @@ addImgSeries <- function(id) {
                   df$description,
                   DBI::SQL(df$share_with),
                   df$source_fx,
-                  if (nzchar(source_fx_args)) df$source_fx_args else NULL,
+                  if (nzchar(source_fx_args)) df$source_fx_args else NA,
                   df$active,
                   df$last_img
                 )

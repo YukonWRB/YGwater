@@ -1049,9 +1049,9 @@ addLocation <- function(id, inputs) {
           "INSERT INTO networks (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
           params = list(
             df$name,
-            ifelse(is.na(df$name_fr), NULL, df$name_fr),
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
             df$description,
-            ifelse(is.na(df$description_fr), NULL, df$description_fr),
+            ifelse(is.na(df$description_fr), NA, df$description_fr),
             df$type
           )
         )
@@ -1172,9 +1172,9 @@ addLocation <- function(id, inputs) {
           "INSERT INTO projects (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
           params = list(
             df$name,
-            ifelse(is.na(df$name_fr), NULL, df$name_fr),
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
             df$description,
-            ifelse(is.na(df$description_fr), NULL, df$description_fr),
+            ifelse(is.na(df$description_fr), NA, df$description_fr),
             df$type
           )
         )
@@ -1276,11 +1276,11 @@ addLocation <- function(id, inputs) {
           "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
           params = list(
             df$name,
-            ifelse(is.na(df$name_fr), NULL, df$name_fr),
-            ifelse(is.na(df$contact_name), NULL, df$contact_name),
-            ifelse(is.na(df$phone), NULL, df$phone),
-            ifelse(is.na(df$email), NULL, df$email),
-            ifelse(is.na(df$note), NULL, df$note)
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            ifelse(is.na(df$contact_name), NA, df$contact_name),
+            ifelse(is.na(df$phone), NA, df$phone),
+            ifelse(is.na(df$email), NA, df$email),
+            ifelse(is.na(df$note), NA, df$note)
           )
         )
 
