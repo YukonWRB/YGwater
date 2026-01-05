@@ -134,6 +134,9 @@ wellRegistry <- function(id, language) {
     # Create UI elements #####
     output$sidebar_page <- renderUI({
       req(moduleData, language)
+      purposes_sorted <- moduleData$purposes[order(get(
+        tr("borehole_well_purpose_col", language$language)
+      ))]
       page_sidebar(
         sidebar = sidebar(
           title = NULL,
@@ -144,11 +147,10 @@ wellRegistry <- function(id, language) {
               ns("purpose"),
               label = tr("well_purpose", language$language),
               choices = stats::setNames(
-                c("all", moduleData$purposes$borehole_well_purpose_id),
+                c("all", purposes_sorted$borehole_well_purpose_id),
                 c(
                   tr("all_m", language$language),
-                  # TODO add column, reference in translation file
-                  moduleData$purposes[[tr(
+                  purposes_sorted[[tr(
                     "borehole_well_purpose_col",
                     language$language
                   )]]
