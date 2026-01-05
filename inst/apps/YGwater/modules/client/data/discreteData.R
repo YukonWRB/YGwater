@@ -297,7 +297,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$locs$location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$locs[, tr("generic_name_col", language$language)]
             )
           ),
@@ -322,7 +322,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sub_locs[, tr("sub_location_col", language$language)]
             )
           ),
@@ -336,7 +336,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[, tr("media_type_col", language$language)]
             )
           ),
@@ -350,7 +350,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sample_types$sample_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sample_types[, tr(
                 "sample_type_col",
                 language$language
@@ -366,7 +366,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[, tr("param_name_col", language$language)]
             )
           ),
@@ -488,7 +488,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$locs$location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$locs[, tr("generic_name_col", language$language)]
             )
           ),
@@ -500,7 +500,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$sub_locs[, tr("sub_location_col", language$language)]
             )
           ),
@@ -512,7 +512,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$media[, tr("media_type_col", language$language)]
             )
           ),
@@ -524,7 +524,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$sample_types$sample_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$sample_types[, tr(
                 "sample_type_col",
                 language$language
@@ -539,7 +539,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$params[, tr("param_name_col", language$language)]
             )
           ),
@@ -575,7 +575,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$networks$network_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$networks[, tr("generic_name_col", language$language)]
             )
           ),
@@ -588,7 +588,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$projects$project_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$projects[, tr("generic_name_col", language$language)]
             )
           ),
@@ -600,6 +600,11 @@ discData <- function(id, language, inputs) {
           modalButton(tr("close", language$language))
         )
       ))
+    })
+
+    # Observer for the modal close button
+    observeEvent(input$modal_close, {
+      removeModal()
     })
 
     # Observer for the locations modal filter button
@@ -633,7 +638,7 @@ discData <- function(id, language, inputs) {
         choices = stats::setNames(
           c("all", remain_locs$location_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             remain_locs[, tr("generic_name_col", language$language)]
           )
         ),
@@ -648,11 +653,11 @@ discData <- function(id, language, inputs) {
         title = tr("param_modal", language$language),
         selectizeInput(
           ns("pGrps"),
-          label = tr("param_group(s)", language$language),
+          label = tr("param_groups", language$language),
           choices = stats::setNames(
             c("all", filteredData$param_groups$group_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$param_groups[, tr(
                 "param_group_col",
                 language$language
@@ -664,11 +669,11 @@ discData <- function(id, language, inputs) {
         ),
         selectizeInput(
           ns("pSubGrps"),
-          label = tr("param_sub_group(s)", language$language),
+          label = tr("param_sub_groups", language$language),
           choices = stats::setNames(
             c("all", filteredData$param_sub_groups$sub_group_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$param_sub_groups[, tr(
                 "param_sub_group_col",
                 language$language
@@ -718,7 +723,7 @@ discData <- function(id, language, inputs) {
         choices = stats::setNames(
           c("all", remain_params$parameter_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             remain_params[, tr("param_name_col", language$language)]
           )
         ),
@@ -871,7 +876,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$locs$location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$locs[, tr("generic_name_col", language$language)]
             )
           ),
@@ -887,7 +892,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sub_locs[, tr("sub_location_col", language$language)]
             )
           ),
@@ -905,7 +910,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[, tr("media_type_col", language$language)]
             )
           ),
@@ -921,7 +926,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sample_types$sample_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sample_types[, tr(
                 "sample_type_col",
                 language$language
@@ -942,7 +947,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[, tr("param_name_col", language$language)]
             )
           ),
@@ -1090,7 +1095,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sub_locs[, tr("sub_location_col", language$language)]
             )
           ),
@@ -1108,7 +1113,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[, tr("media_type_col", language$language)]
             )
           ),
@@ -1124,7 +1129,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sample_types$sample_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sample_types[, tr(
                 "sample_type_col",
                 language$language
@@ -1145,7 +1150,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[, tr("param_name_col", language$language)]
             )
           ),
@@ -1280,7 +1285,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[, tr("media_type_col", language$language)]
             )
           ),
@@ -1296,7 +1301,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sample_types$sample_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sample_types[, tr(
                 "sample_type_col",
                 language$language
@@ -1317,7 +1322,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[, tr("param_name_col", language$language)]
             )
           ),
@@ -1445,7 +1450,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sample_types$sample_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sample_types[, tr(
                 "sample_type_col",
                 language$language
@@ -1466,7 +1471,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[, tr("param_name_col", language$language)]
             )
           ),
@@ -1594,7 +1599,7 @@ discData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[, tr("param_name_col", language$language)]
             )
           ),
@@ -1713,11 +1718,11 @@ discData <- function(id, language, inputs) {
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "}"
@@ -1829,10 +1834,10 @@ discData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -1881,10 +1886,10 @@ discData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -1935,12 +1940,12 @@ discData <- function(id, language, inputs) {
           selected = "xlsx"
         ),
         footer = tagList(
-          modalButton(tr("close", language$language)),
-          actionButton(
+          downloadButton(
             ns("download"),
             tr("dl_data", language$language),
             icon = icon("download")
-          )
+          ),
+          actionButton(ns("modal_close"), tr("close", language$language))
         ),
         size = "xl"
       ))

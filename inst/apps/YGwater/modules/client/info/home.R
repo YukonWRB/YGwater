@@ -2,21 +2,16 @@ homeUI <- function(id) {
   ns <- NS(id)
   tagList()
   verticalLayout(
-    htmlOutput(ns("betaTitle")), # TO BE REMOVED once testing is complete
-    tags$div(style = "height: 10px;"), # TO BE REMOVED once testing is complete
-    htmlOutput(ns("betaText")), # TO BE REMOVED once testing is complete
-    hr(), # TO BE REMOVED once testing is complete
-
-    tags$div(style = "height: 30px;"), # ADJUST once testing is complete
-    htmlOutput(ns("title")),
+    tags$div(style = "height: 20px;"), # break between navbar and content
+    htmlOutput(ns("title")), # Title
     tags$div(style = "height: 10px;"),
-    htmlOutput(ns("main_text")),
+    htmlOutput(ns("main_text")), # Main descriptive text
     tags$div(style = "height: 30px;"),
-    uiOutput(ns("map_buttons")),
+    uiOutput(ns("map_buttons")), # Map view buttons
     tags$div(style = "height: 20px;"),
-    uiOutput(ns("plot_buttons")),
+    uiOutput(ns("plot_buttons")), # Plot view buttons
     tags$div(style = "height: 20px;"),
-    uiOutput(ns("data_buttons")),
+    uiOutput(ns("data_buttons")), # Data download buttons
     tags$div(style = "height: 20px;"),
     htmlOutput(ns("discrete_continuous_title")), # Title for discrete vs continuous data
     tags$div(style = "height: 10px;"),
@@ -33,20 +28,6 @@ home <- function(id, language) {
 
     observe({
       req(language$language)
-      output$betaTitle <- renderUI({
-        HTML(paste0(
-          '<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',
-          tr("betaTitle", language$language),
-          '</div>'
-        ))
-      })
-      output$betaText <- renderUI({
-        HTML(paste0(
-          '<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
-          tr("betaText", language$language),
-          '</div>'
-        ))
-      })
       output$title <- renderUI({
         HTML(paste0(
           '<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',
@@ -164,10 +145,10 @@ home <- function(id, language) {
       outputs$change_tab <- "contData"
     })
     observeEvent(input$map_locs, {
-      outputs$change_tab <- "monitoringLocations"
+      outputs$change_tab <- "monitoringLocationsMap"
     })
     observeEvent(input$map_params, {
-      outputs$change_tab <- "parameterValues"
+      outputs$change_tab <- "parameterValuesMap"
     })
 
     return(outputs)

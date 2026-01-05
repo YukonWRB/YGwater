@@ -226,8 +226,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             choices = stats::setNames(
               c("name", "code", "nameCode", "codeName"),
               c(
-                tr("loc_code_name", language$language),
-                tr("loc_code_code", language$language),
+                tr("name", language$language),
+                tr("code", language$language),
                 tr("loc_code_nameCode", language$language),
                 tr("loc_code_codeName", language$language)
               )
@@ -257,6 +257,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           input_task_button(
             ns("make_plot"),
             label = tr("create_plot", language$language),
+            label_busy = tr("processing", language$language),
             style = "display: block; width: 100%;", # Ensure block display and full width
             class = "btn btn-primary"
           )

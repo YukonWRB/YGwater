@@ -41,10 +41,10 @@ mapParams <- function(id, language) {
               ns("mapType"),
               label = tr("map_mapType", language$language),
               choices = stats::setNames(
-                c("range", "abs"),
+                c("range", "actual"),
                 c(
                   tr("map_relative", language$language),
-                  tr("map_absolute1", language$language)
+                  tr("map_actual_values", language$language)
                 )
               ),
               selected = "range",
@@ -105,7 +105,7 @@ mapParams <- function(id, language) {
       tagList(
         h4(
           if (config$public) {
-            tr("map_primary_param_solo", language$language)
+            tr("parameter", language$language)
           } else {
             tr("map_primary_param", language$language)
           }
@@ -329,7 +329,7 @@ mapParams <- function(id, language) {
     observeEvent(
       input$mapType,
       {
-        if (input$mapType == "abs" || config$public) {
+        if (input$mapType == "actual" || config$public) {
           shinyjs::hide("secondary_param")
           shinyjs::hide("edit_secondary_param")
         } else {
@@ -664,17 +664,17 @@ mapParams <- function(id, language) {
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
 
-      if (input$mapType == "abs") {
-        abs_vals <- abs(mapping_data$value)
+      if (input$mapType == "actual") {
+        actual_vals <- mapping_data$value
 
-        if (length(abs_vals) == 0) {
+        if (length(actual_vals) == 0) {
           leaflet::leafletProxy("map", session) %>%
             leaflet::clearMarkers() %>%
             leaflet::clearControls()
           return()
         }
 
-        abs_range <- range(abs_vals, na.rm = TRUE)
+        abs_range <- range(actual_vals, na.rm = TRUE)
 
         # Handle case where all values are identical or range is zero
         if (
@@ -698,12 +698,12 @@ mapParams <- function(id, language) {
 
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
-          domain = abs_vals,
+          domain = actual_vals,
           bins = abs_bins,
           pretty = FALSE,
           na.color = "#808080"
         )
-        map_values <- abs_vals
+        map_values <- actual_vals
         legend_digits <- function(vals) {
           if (length(vals) == 0 || all(!is.finite(vals))) {
             return(0)
@@ -717,7 +717,7 @@ mapParams <- function(id, language) {
             return(2)
           }
         }
-        lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
+        lab_format <- leaflet::labelFormat(digits = legend_digits(actual_vals))
         legend_title <- sprintf(
           "%s (%s)",
           moduleData$parameters[
@@ -751,15 +751,15 @@ mapParams <- function(id, language) {
           lng = ~longitude,
           lat = ~latitude,
           fillColor = ~ value_palette(
-            if (input$mapType == "abs") {
-              abs(value)
+            if (input$mapType == "actual") {
+              value
             } else {
               percent_historic_range_capped
             }
           ),
           color = ~ value_palette(
-            if (input$mapType == "abs") {
-              abs(value)
+            if (input$mapType == "actual") {
+              value
             } else {
               percent_historic_range_capped
             }
@@ -787,7 +787,7 @@ mapParams <- function(id, language) {
             ": ",
             round(percent_historic_range, 2),
             "% <br/>",
-            tr("map_absolute2", language$language),
+            tr("value", language$language),
             ": ",
             round(value, 2),
             " ",

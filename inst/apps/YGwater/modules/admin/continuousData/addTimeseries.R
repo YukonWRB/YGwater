@@ -199,7 +199,7 @@ addTimeseries <- function(id) {
           ),
           textInput(
             ns("record_rate"),
-            "Rough record rate, as  '5 minutes', '1 hour', '1 day', '1 week', '4 weeks', '1 month', etc.",
+            "Rough record rate (5 minutes, 1 hour, 1 day, 1 week, etc.)",
             value = "",
             width = "100%"
           )
@@ -668,11 +668,17 @@ addTimeseries <- function(id) {
           },
           note = if (isTruthy(input$contact_note)) input$contact_note else NA
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "organizations",
-          df,
-          append = TRUE
+          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6);",
+          params = list(
+            df$name,
+            df$name_fr,
+            df$contact_name,
+            df$phone,
+            df$email,
+            df$note
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -725,7 +731,7 @@ addTimeseries <- function(id) {
         data,
         share_with
       ) {
-        promises::future_promise({
+        promises::future_promise(seed = TRUE, expr = {
           tryCatch(
             {
               # Make a connection
@@ -826,61 +832,30 @@ addTimeseries <- function(id) {
               }
 
               # Make a new entry to the timeseries table
-              df <- data.frame(
-                location = loc_code,
-                location_id = as.numeric(loc),
-                sub_location_id = sub_loc,
-                timezone_daily_calc = as.numeric(tz),
-                z_id = existing_z,
-                parameter_id = as.numeric(parameter),
-                media_id = as.numeric(media),
-                sensor_priority = as.numeric(priority),
-                aggregation_type_id = as.numeric(agg_type),
-                record_rate = rate,
-                default_owner = as.numeric(owner),
-                share_with = paste0(
-                  "{",
-                  paste(share_with, collapse = ","),
-                  "}"
-                ),
-                source_fx = source_fx,
-                source_fx_args = args,
-                note = if (nzchar(note)) note else NA,
-                end_datetime = end_datetime
-              )
-
-              DBI::dbAppendTable(con, "timeseries", df)
-
-              # Get the new timeseries_id
-              new_timeseries_id <- DBI::dbGetQuery(
+              new_timeseries_id <- DBI::dbExecute(
                 con,
-                paste0(
-                  "SELECT timeseries_id FROM timeseries WHERE location_id = ",
-                  df$location_id,
-                  " AND sub_location_id ",
-                  ifelse(
-                    is.na(df$sub_location_id),
-                    "IS NULL",
-                    paste0("= ", df$sub_location_id)
+                "INSERT INTO continuous.timeseries (location, location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
+                params = list(
+                  loc_code,
+                  as.numeric(loc),
+                  ifelse(is.na(sub_loc), NULL, sub_loc),
+                  as.numeric(tz),
+                  ifelse(is.na(existing_z), NULL, existing_z),
+                  as.numeric(parameter),
+                  as.numeric(media),
+                  as.numeric(priority),
+                  as.numeric(agg_type),
+                  rate,
+                  as.numeric(owner),
+                  paste0(
+                    "{",
+                    paste(share_with, collapse = ","),
+                    "}"
                   ),
-                  " AND z_id ",
-                  ifelse(is.na(df$z_id), "IS NULL", paste0("= ", df$z_id)),
-                  " AND parameter_id = ",
-                  df$parameter_id,
-                  " AND media_id = ",
-                  df$media_id,
-                  " AND aggregation_type_id = ",
-                  df$aggregation_type_id,
-                  " AND sensor_priority = ",
-                  df$sensor_priority,
-                  " AND record_rate = '",
-                  df$record_rate,
-                  "'",
-                  " AND default_owner = ",
-                  df$default_owner,
-                  " AND end_datetime = '",
-                  df$end_datetime,
-                  "'"
+                  ifelse(is.na(source_fx), NULL, source_fx),
+                  ifelse(is.na(source_fx_args), NULL, source_fx_args),
+                  if (nzchar(note)) note else NA,
+                  ifelse(is.na(end_datetime), NULL, end_datetime)
                 )
               )[1, 1]
 
@@ -915,7 +890,7 @@ addTimeseries <- function(id) {
                 # Now conditionally check for HYDAT historical data
                 if (source_fx == "downloadWSC") {
                   param_name <- data$parameters[
-                    data$parameters$parameter_id == df$parameter_id,
+                    data$parameters$parameter_id == parameter,
                     "param_name"
                   ]
                   if (param_name %in% c("water level", "water flow")) {
@@ -926,53 +901,54 @@ addTimeseries <- function(id) {
                     ))
                   }
                 }
+
+                # Ensure that there are records in measurements_continuous and/or measurements_calculated_daily
+                mcd <- DBI::dbGetQuery(
+                  con,
+                  paste0(
+                    "SELECT MIN(date) FROM measurements_calculated_daily WHERE timeseries_id = ",
+                    new_timeseries_id
+                  )
+                )[1, 1]
+                mc <- DBI::dbGetQuery(
+                  con,
+                  paste0(
+                    "SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = ",
+                    new_timeseries_id
+                  )
+                )[1, 1]
+
+                if (is.na(mcd) && is.na(mc)) {
+                  stop(
+                    "Could not find any data for this timeseries. Try different parameters."
+                  )
+                }
+
+                # Now calculate stats
+                if (lubridate::period(rate) <= lubridate::period("1 day")) {
+                  AquaCache::calculate_stats(
+                    timeseries_id = new_timeseries_id,
+                    con = con,
+                    start_recalc = NULL
+                  )
+                }
+                DBI::dbCommit(con)
+                return("success")
+              } else {
+                DBI::dbCommit(con)
+                return("successNoData")
               }
-
-              # Ensure that there are records in measurements_continuous and/or measurements_calculated_daily
-              mcd <- DBI::dbGetQuery(
-                con,
-                paste0(
-                  "SELECT MIN(date) FROM measurements_calculated_daily WHERE timeseries_id = ",
-                  new_timeseries_id
-                )
-              )[1, 1]
-              mc <- DBI::dbGetQuery(
-                con,
-                paste0(
-                  "SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = ",
-                  new_timeseries_id
-                )
-              )[1, 1]
-
-              if (is.na(mcd) && is.na(mc)) {
-                stop(
-                  "Could not find any data for this timeseries. Try different parameters."
-                )
-              }
-
-              # Now calculate stats
-              if (
-                lubridate::period(df$record_rate) <= lubridate::period("1 day")
-              ) {
-                AquaCache::calculate_stats(
-                  timeseries_id = new_timeseries_id,
-                  con = con,
-                  start_recalc = NULL
-                )
-              }
-
-              DBI::dbCommit(con)
-              return("success")
             },
             error = function(e) {
               DBI::dbRollback(con)
-              DBI::dbDisconnect(con)
               return(paste("Error adding timeseries:", e$message))
             },
             warning = function(w) {
               DBI::dbRollback(con)
-              DBI::dbDisconnect(con)
-              return(paste("Error adding timeseries:", w$message))
+              return(paste(
+                "Failure due to warning when adding timeseries:",
+                w$message
+              ))
             }
           )
         })
@@ -1028,11 +1004,18 @@ addTimeseries <- function(id) {
     observeEvent(addNewTimeseries$result(), {
       if (is.null(addNewTimeseries$result())) {
         return() # No result yet, do nothing
-      } else if (addNewTimeseries$result() != "success") {
+      } else if (
+        !addNewTimeseries$result() %in% c("successNoData", "success")
+      ) {
         # If the result is not "success", show an error notification
         showNotification(addNewTimeseries$result(), type = "error")
         return()
-      } else {
+      } else if (addNewTimeseries$result() == "successNoData") {
+        showNotification(
+          "Timeseries added successfully with no data fetched. REMEMBER TO ADD DATA NOW.",
+          type = "warning"
+        )
+      } else if (addNewTimeseries$result() == "success") {
         # If the result is "success", show a success notification
         showNotification(
           "Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.",
@@ -1172,24 +1155,19 @@ addTimeseries <- function(id) {
                     selected_timeseries$z_id
                   )
                   # Create a new entry in locations_z
-                  df <- data.frame(
-                    location_id = as.numeric(input$location),
-                    sub_location_id = if (
-                      !is.na(input$sub_location) && nzchar(input$sub_location)
-                    ) {
-                      as.numeric(input$sub_location)
-                    } else {
-                      NA
-                    },
-                    z_meters = input$z
-                  )
                   new_z_id <- DBI::dbGetQuery(
                     session$userData$AquaCache,
                     "INSERT INTO locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
                     params = list(
-                      df$location_id,
-                      df$sub_location_id,
-                      df$z_meters
+                      as.numeric(input$location),
+                      if (
+                        !is.na(input$sub_location) && nzchar(input$sub_location)
+                      ) {
+                        as.numeric(input$sub_location)
+                      } else {
+                        NA
+                      },
+                      input$z
                     )
                   )[1, 1]
                   DBI::dbExecute(
@@ -1205,24 +1183,19 @@ addTimeseries <- function(id) {
               } else {
                 # No existing entry
                 # Create a new entry in locations_z
-                df <- data.frame(
-                  location_id = as.numeric(input$location),
-                  sub_location_id = if (
-                    !is.na(input$sub_location) && nzchar(input$sub_location)
-                  ) {
-                    as.numeric(input$sub_location)
-                  } else {
-                    NA
-                  },
-                  z_meters = input$z
-                )
                 new_z_id <- DBI::dbGetQuery(
                   session$userData$AquaCache,
                   "INSERT INTO locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
                   params = list(
-                    df$location_id,
-                    df$sub_location_id,
-                    df$z_meters
+                    as.numeric(input$location),
+                    if (
+                      !is.na(input$sub_location) && nzchar(input$sub_location)
+                    ) {
+                      as.numeric(input$sub_location)
+                    } else {
+                      NA
+                    },
+                    input$z
                   )
                 )[1, 1]
                 DBI::dbExecute(

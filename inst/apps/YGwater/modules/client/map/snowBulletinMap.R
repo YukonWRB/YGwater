@@ -119,7 +119,7 @@ mapSnowbull <- function(id, language) {
         div(
           style = "margin-bottom: 15px;",
           tags$label(
-            tr("gen_snowBul_month", language$language),
+            tr("month", language$language),
             style = "display: block; margin-bottom: 5px;"
           ),
           selectInput(

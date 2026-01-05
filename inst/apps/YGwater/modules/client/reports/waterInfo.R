@@ -162,7 +162,7 @@ waterInfoMod <- function(id, language) {
             c("combined", "separate"),
             c(
               tr("gen_waterInfo_ptype_combine", language$language),
-              tr("gen_waterInfo_ptype_separate", language$language)
+              tr("separate", language$language)
             )
           ),
           selected = selections$ptype,

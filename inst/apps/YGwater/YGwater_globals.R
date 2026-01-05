@@ -177,6 +177,27 @@ YGwater_globals <- function(
 
     # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
     options(shiny.maxRequestSize = 1024 * 1024^2)
+
+    # define some functions for later use
+    parse_share_with <<- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        return(character())
+      }
+      if (is.list(value)) {
+        value <- value[[1]]
+      }
+      value <- gsub("[{}\"]", "", value)
+      out <- trimws(unlist(strsplit(value, ",")))
+      out[nzchar(out)]
+    }
+
+    format_share_with <<- function(groups) {
+      if (is.null(groups) || !length(groups) || all(!nzchar(groups))) {
+        groups <- "public_reader"
+      }
+      groups <- gsub('"', '\\"', groups, fixed = TRUE)
+      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
+    }
   }
 
   # 'client' side modules #####
@@ -236,14 +257,22 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/snowBulletinMap.R",
     package = "YGwater"
   ))
+  source(system.file(
+    "apps/YGwater/modules/client/WWR/registry_front_end.R",
+    package = "YGwater"
+  ))
 
-  # Image modules
+  # Image and document modules
   source(system.file(
     "apps/YGwater/modules/client/images/image_table_view.R",
     package = "YGwater"
   ))
   source(system.file(
     "apps/YGwater/modules/client/images/image_map_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/documents/document_table_view.R",
     package = "YGwater"
   ))
 
@@ -270,34 +299,6 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/info/about.R",
     package = "YGwater"
   ))
-
-  # # Load translations infrastructure to the global environment
-
-  # translations <- data.table::fread(
-  #   system.file(
-  #     "apps/YGwater/translations.csv",
-  #     package = "YGwater"
-  #   ),
-  #   encoding = "UTF-8"
-  # )
-  # # Build a list from the data.frame
-  # translation_cache <<- lapply(
-  #   setdiff(names(translations[, -2]), "id"),
-  #   function(lang) {
-  #     # Removes the second, "description" column, builds lists for each language
-  #     setNames(translations[[lang]], translations$id)
-  #   }
-  # )
-  # names(translation_cache) <<- setdiff(names(translations)[-2], "id")
-
-  # # Make a helper function, send to global environment
-  # tr <<- function(key, lang) {
-  #   # Ensure that 'key' is a value in the 'id' column of the translations data.frame
-  #   if (!key %in% translations$id) {
-  #     stop(paste("Translation key", key, "not found in translations data."))
-  #   }
-  #   translation_cache[[lang]][[key]] # list 'lang', item 'key'
-  # }
 
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements

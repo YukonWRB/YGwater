@@ -144,12 +144,12 @@ mapLocs <- function(id, language) {
         }
       })
     }
-    observeFilterInput("type")
-    observeFilterInput("pType")
-    observeFilterInput("pGrp")
+    observeFilterInput("data_type")
+    observeFilterInput("media_type")
+    observeFilterInput("param_group")
     observeFilterInput("param")
-    observeFilterInput("proj")
-    observeFilterInput("net")
+    observeFilterInput("project")
+    observeFilterInput("network")
 
     # Create UI elements #####
 
@@ -167,12 +167,18 @@ mapLocs <- function(id, language) {
             #   value = FALSE
             # ),
             selectizeInput(
-              ns("type"),
-              label = tr("data_type", language$language),
+              ns("data_type"),
+              label = tooltip(
+                trigger = list(
+                  tr("data_format", language$language),
+                  bsicons::bs_icon("info-circle-fill")
+                ),
+                tr("tooltip_discrete_continuous", language$language),
+              ),
               choices = stats::setNames(
                 c("all", "discrete", "continuous"),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   c(
                     tr("discrete", language$language),
                     tr("continuous", language$language)
@@ -182,12 +188,18 @@ mapLocs <- function(id, language) {
               multiple = TRUE
             ),
             selectizeInput(
-              ns("pType"),
-              label = tr("type", language$language),
+              ns("media_type"),
+              label = tooltip(
+                trigger = list(
+                  tr("media", language$language),
+                  bsicons::bs_icon("info-circle-fill")
+                ),
+                tr("tooltip_sample_media", language$language),
+              ),
               choices = stats::setNames(
                 c("all", moduleData$media_types$media_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$media_types[[tr(
                     "media_type_col",
                     language$language
@@ -197,12 +209,12 @@ mapLocs <- function(id, language) {
               multiple = TRUE
             ),
             selectizeInput(
-              ns("pGrp"),
+              ns("param_group"),
               label = tr("param_group", language$language),
               choices = stats::setNames(
                 c("all", moduleData$parameter_groups$group_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$parameter_groups[[tr(
                     "param_group_col",
                     language$language
@@ -217,7 +229,7 @@ mapLocs <- function(id, language) {
               choices = stats::setNames(
                 c("all", moduleData$parameters$parameter_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$parameters[[tr(
                     "param_name_col",
                     language$language
@@ -227,12 +239,12 @@ mapLocs <- function(id, language) {
               multiple = TRUE
             ),
             selectizeInput(
-              ns("proj"),
+              ns("project"),
               label = tr("project", language$language),
               choices = stats::setNames(
                 c("all", moduleData$projects$project_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$projects[[tr(
                     "generic_name_col",
                     language$language
@@ -242,12 +254,12 @@ mapLocs <- function(id, language) {
               multiple = TRUE
             ),
             selectizeInput(
-              ns("net"),
+              ns("network"),
               label = tr("network", language$language),
               choices = stats::setNames(
                 c("all", moduleData$networks$network_id),
                 c(
-                  tr("all", language$language),
+                  tr("all_m", language$language),
                   moduleData$networks[[tr(
                     "generic_name_col",
                     language$language
@@ -291,11 +303,11 @@ mapLocs <- function(id, language) {
       req(moduleData)
       updateSelectizeInput(
         session,
-        "type",
+        "data_type",
         choices = stats::setNames(
           c("all", "discrete", "continuous"),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             c(
               tr("discrete", language$language),
               tr("continuous", language$language)
@@ -305,22 +317,22 @@ mapLocs <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "pType",
+        "media_type",
         choices = stats::setNames(
           c("all", moduleData$media_types$media_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$media_types[[tr("media_type_col", language$language)]]
           )
         )
       )
       updateSelectizeInput(
         session,
-        "pGrp",
+        "param_group",
         choices = stats::setNames(
           c("all", moduleData$parameter_groups$group_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$parameter_groups[[tr(
               "param_group_col",
               language$language
@@ -334,29 +346,29 @@ mapLocs <- function(id, language) {
         choices = stats::setNames(
           c("all", moduleData$parameters$parameter_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$parameters[[tr("param_name_col", language$language)]]
           )
         )
       )
       updateSelectizeInput(
         session,
-        "proj",
+        "project",
         choices = stats::setNames(
           c("all", moduleData$projects$project_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$projects[[tr("generic_name_col", language$language)]]
           )
         ),
       )
       updateSelectizeInput(
         session,
-        "net",
+        "network",
         choices = stats::setNames(
           c("all", moduleData$networks$network_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             moduleData$networks[[tr("generic_name_col", language$language)]]
           )
         )
@@ -399,7 +411,6 @@ mapLocs <- function(id, language) {
             location_id,
             popup_name = get(tr("generic_name_col", language$language))
           )]
-          popup_names[, popup_name := popup_name]
           # Aggregate time range for each location
           time_range <- moduleData$timeseries[,
             .(
@@ -459,8 +470,7 @@ mapLocs <- function(id, language) {
           ]
 
           # Combine all the data
-          tmp <- data.table::copy(moduleData$locations)[, "location_id"] # Use copy to avoid modifying the original data table
-          tmp[popup_names, on = .(location_id), popup_name := popup_name] # Join popup_name
+          tmp <- data.table::copy(popup_names) # Use copy to avoid modifying the original data table
           tmp[
             time_range,
             on = .(location_id),
@@ -558,7 +568,7 @@ mapLocs <- function(id, language) {
               "<strong>",
               tr("project(s)", language$language),
               ":</strong><br/><i>",
-              ifelse(
+              data.table::fifelse(
                 is.na(projects),
                 "N/A",
                 paste(projects, collapse = "<br/>")
@@ -714,17 +724,17 @@ mapLocs <- function(id, language) {
     observe({
       req(input$map_zoom, popupData(), language$language)
       popup_data <- popupData()
-      if (!is.null(input$type)) {
-        if (length(input$type) > 1) {
+      if (!is.null(input$data_type)) {
+        if (length(input$data_type) > 1) {
           timeseries.sub <- moduleData$timeseries[
-            moduleData$timeseries$data_type %in% input$type,
+            moduleData$timeseries$data_type %in% input$data_type,
           ]
         } else {
-          if (input$type == "all") {
+          if (input$data_type == "all") {
             timeseries.sub <- moduleData$timeseries
           } else {
             timeseries.sub <- moduleData$timeseries[
-              moduleData$timeseries$data_type == input$type,
+              moduleData$timeseries$data_type == input$data_type,
             ]
           }
         }
@@ -732,31 +742,31 @@ mapLocs <- function(id, language) {
         timeseries.sub <- moduleData$timeseries
       }
 
-      if (!is.null(input$pType)) {
-        if (length(input$pType) > 1) {
+      if (!is.null(input$media_type)) {
+        if (length(input$media_type) > 1) {
           timeseries.sub <- timeseries.sub[
-            timeseries.sub$media_id %in% input$pType,
+            timeseries.sub$media_id %in% input$media_type,
           ]
         } else {
-          if (input$pType != "all") {
+          if (input$media_type != "all") {
             timeseries.sub <- timeseries.sub[
-              timeseries.sub$media_id == input$pType,
+              timeseries.sub$media_id == input$media_type,
             ]
           }
         }
       }
 
-      if (!is.null(input$pGrp)) {
-        if (length(input$pGrp) > 1) {
+      if (!is.null(input$param_group)) {
+        if (length(input$param_group) > 1) {
           select.params <- moduleData$parameters[
-            moduleData$parameters$group_id %in% input$pGrp,
+            moduleData$parameters$group_id %in% input$param_group,
             "parameter_id"
           ]$parameter_id
           timeseries.sub <- timeseries.sub[parameter_id %in% select.params, ]
         } else {
-          if (input$pGrp != "all") {
+          if (input$param_group != "all") {
             select.params <- moduleData$parameters[
-              moduleData$parameters$group_id == input$pGrp,
+              moduleData$parameters$group_id == input$param_group,
               "parameter_id"
             ]$parameter_id
             if (length(select.params) > 1) {
@@ -780,10 +790,10 @@ mapLocs <- function(id, language) {
         }
       }
 
-      if (!is.null(input$proj)) {
-        if (length(input$proj) > 1) {
+      if (!is.null(input$project)) {
+        if (length(input$project) > 1) {
           ids <- moduleData$locations_projects[
-            moduleData$locations_projects$project_id %in% input$proj,
+            moduleData$locations_projects$project_id %in% input$project,
             "location_id"
           ]$location_id
           if (length(ids) > 1) {
@@ -796,9 +806,9 @@ mapLocs <- function(id, language) {
             ]
           }
         } else {
-          if (input$proj != "all") {
+          if (input$project != "all") {
             ids <- moduleData$locations_projects[
-              moduleData$locations_projects$project_id == input$proj,
+              moduleData$locations_projects$project_id == input$project,
               "location_id"
             ]$location_id
             if (length(ids) > 1) {
@@ -814,10 +824,10 @@ mapLocs <- function(id, language) {
         }
       }
 
-      if (!is.null(input$net)) {
-        if (length(input$net) > 1) {
+      if (!is.null(input$network)) {
+        if (length(input$network) > 1) {
           ids <- moduleData$locations_networks[
-            moduleData$locations_networks$network_id %in% input$net,
+            moduleData$locations_networks$network_id %in% input$network,
             "location_id"
           ]$location_id
           if (length(ids) > 1) {
@@ -830,9 +840,9 @@ mapLocs <- function(id, language) {
             ]
           }
         } else {
-          if (input$net != "all") {
+          if (input$network != "all") {
             ids <- moduleData$locations_networks[
-              moduleData$locations_networks$network_id == input$net,
+              moduleData$locations_networks$network_id == input$network,
               "location_id"
             ]$location_id
             if (length(ids) > 1) {

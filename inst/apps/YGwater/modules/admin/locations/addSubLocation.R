@@ -30,7 +30,7 @@ addSubLocation <- function(id, inputs) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations"
+        "SELECT location_id, name FROM locations"
       )
       moduleData$exist_sub_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -180,7 +180,7 @@ addSubLocation <- function(id, inputs) {
           updateSelectizeInput(
             session,
             "share_with",
-            selected = details$share_with
+            selected = parse_share_with(details$share_with)
           )
           updateTextInput(session, "sub_loc_note", value = details$note)
         }
@@ -577,22 +577,23 @@ addSubLocation <- function(id, inputs) {
 
       tryCatch(
         {
-          # Make a data.frame to pass in using dbAppendTable
-          df <- data.frame(
-            location_id = input$location,
-            sub_location_name = input$subloc_name,
-            sub_location_name_fr = input$subloc_name_fr,
-            latitude = input$lat,
-            longitude = input$lon,
-            share_with = paste0(
-              "{",
-              paste(input$share_with, collapse = ", "),
-              "}"
-            ),
-            note = if (isTruthy(input$subloc_note)) input$subloc_note else NA
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "INSERT INTO sub_locations (location_id, sub_location_name, sub_location_name_fr, latitude, longitude, share_with, note) VALUES ($1, $2, $3, $4, $5, $6, $7);",
+            params = list(
+              input$location,
+              input$subloc_name,
+              input$subloc_name_fr,
+              input$lat,
+              input$lon,
+              paste0(
+                "{",
+                paste(input$share_with, collapse = ", "),
+                "}"
+              ),
+              if (isTruthy(input$subloc_note)) input$subloc_note else NA
+            )
           )
-
-          DBI::dbAppendTable(session$userData$AquaCache, "sub_locations", df)
 
           # Show a modal to the user that the location was added
           showModal(modalDialog(

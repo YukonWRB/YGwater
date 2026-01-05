@@ -415,6 +415,7 @@ contPlotOld <- function(id, language, windowDims, inputs) {
         input_task_button(
           ns("make_plot"),
           label = tr("create_plot", language$language),
+          label_busy = tr("processing", language$language),
           style = "display: block; width: 100%;",
           class = "btn btn-primary"
         )
@@ -462,7 +463,7 @@ contPlotOld <- function(id, language, windowDims, inputs) {
           choices = stats::setNames(
             c("all", moduleData$networks$network_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$networks[[tr("generic_name_col", language$language)]]
             )
           ),
@@ -475,7 +476,7 @@ contPlotOld <- function(id, language, windowDims, inputs) {
           choices = stats::setNames(
             c("all", moduleData$projects$project_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$projects[[tr("generic_name_col", language$language)]]
             )
           ),

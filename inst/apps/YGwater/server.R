@@ -20,7 +20,17 @@ app_server <- function(input, output, session) {
   # Show relevant tabs for viz mode
   showViz <- function(show = TRUE) {
     nav_fun <- if (show) nav_show else nav_hide
-    tabs <- c("home", "plot", "maps", "reports", "images", "data", "info")
+    tabs <- c(
+      "home",
+      "plot",
+      "maps",
+      "reports",
+      "images",
+      "documents",
+      "data",
+      "info",
+      "WWR"
+    )
     for (tab in tabs) {
       nav_fun(id = "navbar", target = tab)
     }
@@ -243,19 +253,53 @@ app_server <- function(input, output, session) {
     "snowBulletin",
     "imgTableView",
     "imgMapView",
+    "docTableView",
     "discData",
     "contData",
+    "WWR",
     "news",
     "about"
   )
 
   updating_from_url <- reactiveVal(FALSE)
+  build_query_string <- function(page = NULL, lang = NULL) {
+    params <- list()
+    if (!is.null(page)) {
+      params$page <- page
+    }
+    if (!is.null(lang)) {
+      params$lang <- lang
+    }
+    if (!length(params)) {
+      return("")
+    }
+    encoded <- vapply(
+      names(params),
+      function(name) {
+        value <- params[[name]]
+        paste0(name, "=", utils::URLencode(value, reserved = TRUE))
+      },
+      character(1)
+    )
+    paste0("?", paste(encoded, collapse = "&"))
+  }
+  get_lang_code <- function() {
+    if (is.null(languageSelection$language)) {
+      return(NULL)
+    }
+    if (languageSelection$language == "Français") "fr" else "en"
+  }
 
   observeEvent(session$clientData$url_search, ignoreNULL = FALSE, {
     updating_from_url(TRUE)
     on.exit(updating_from_url(FALSE))
     query <- shiny::parseQueryString(isolate(session$clientData$url_search))
     page <- query[["page"]]
+    lang <- query[["lang"]]
+    if (!is.null(lang) && nzchar(lang)) {
+      language_override(TRUE)
+      set_language_selection(lang)
+    }
     if (
       !is.null(page) &&
         page %in% bookmarkable_tabs &&
@@ -276,11 +320,11 @@ app_server <- function(input, output, session) {
       if (is.null(input$navbar)) {
         return()
       }
-      if (input$navbar %in% bookmarkable_tabs) {
-        updateQueryString(paste0("?page=", input$navbar), mode = "push")
-      } else {
-        updateQueryString("", mode = "push")
-      }
+      page <- if (input$navbar %in% bookmarkable_tabs) input$navbar else NULL
+      updateQueryString(
+        build_query_string(page = page, lang = get_lang_code()),
+        mode = "push"
+      )
     },
     ignoreNULL = TRUE
   )
@@ -307,12 +351,14 @@ app_server <- function(input, output, session) {
     ui_loaded$FOD <- FALSE
     ui_loaded$imgTableView <- FALSE
     ui_loaded$imgMapView <- FALSE
+    ui_loaded$docTableView <- FALSE
     ui_loaded$snowInfo <- FALSE
     ui_loaded$waterInfo <- FALSE
     ui_loaded$WQReport <- FALSE
     ui_loaded$snowBulletin <- FALSE
     ui_loaded$discData <- FALSE
     ui_loaded$contData <- FALSE
+    ui_loaded$WWR <- FALSE
     ui_loaded$news <- FALSE
     ui_loaded$about <- FALSE
 
@@ -384,6 +430,33 @@ app_server <- function(input, output, session) {
 
   # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
   languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
+  language_override <- reactiveVal(FALSE)
+
+  set_language_selection <- function(lang_code) {
+    lang_code <- tolower(if (is.null(lang_code)) "en" else lang_code)
+    lang_code <- if (grepl("^fr", lang_code)) "fr" else "en"
+
+    selected_lang <- if (lang_code == "fr") "Français" else "English"
+
+    languageSelection$language <- selected_lang
+    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
+
+    updateActionButton(
+      session,
+      "language_button",
+      label = data.table::fifelse(
+        selected_lang == "English",
+        "Français",
+        "English"
+      )
+    )
+
+    # Update the HTML <head> for language settings
+    session$sendCustomMessage(
+      type = 'updateLang',
+      message = list(lang = lang_code)
+    )
+  }
 
   # Populate the language selection dropdown
   # Determine user's browser language. This should only run once when the app is loaded.
@@ -402,25 +475,12 @@ app_server <- function(input, output, session) {
   observeEvent(
     input$userLang,
     {
+      if (language_override()) {
+        return()
+      }
       # userLang is the language of the user's browser. input$userLang is created by the runjs function above and not in the UI.
       lang_code <- substr(input$userLang, 1, 2)
-
-      selected_lang <- if (lang_code == "fr") "Français" else "English"
-
-      languageSelection$language <- selected_lang
-      languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-
-      updateActionButton(
-        session,
-        "language_button",
-        label = ifelse(selected_lang == "English", "Français", "English")
-      )
-
-      # Update the HTML <head> for language settings
-      session$sendCustomMessage(
-        type = 'updateLang',
-        message = list(lang = ifelse(lang_code == "fr", "fr", "en"))
-      )
+      set_language_selection(lang_code)
     },
     ignoreInit = TRUE,
     ignoreNULL = TRUE,
@@ -429,25 +489,30 @@ app_server <- function(input, output, session) {
 
   # Toggle language when the button is pressed
   observeEvent(input$language_button, {
-    new_lang <- if (languageSelection$language == "English") {
-      "Français"
-    } else {
-      "English"
-    }
-    languageSelection$language <- new_lang
-    languageSelection$abbrev <- tr("titleCase", languageSelection$language)
-
-    updateActionButton(
-      session,
-      "language_button",
-      label = ifelse(new_lang == "English", "Français", "English")
-    )
-
-    session$sendCustomMessage(
-      type = 'updateLang',
-      message = list(lang = ifelse(new_lang == "Français", "fr", "en"))
-    )
+    next_lang <- if (languageSelection$language == "English") "fr" else "en"
+    set_language_selection(next_lang)
   })
+
+  observeEvent(
+    languageSelection$language,
+    {
+      if (updating_from_url()) {
+        return()
+      }
+      page <- if (
+        !is.null(input$navbar) && input$navbar %in% bookmarkable_tabs
+      ) {
+        input$navbar
+      } else {
+        NULL
+      }
+      updateQueryString(
+        build_query_string(page = page, lang = get_lang_code()),
+        mode = "replace"
+      )
+    },
+    ignoreInit = TRUE
+  )
 
   # Render UI text based on the selected language
   observeEvent(languageSelection$language, {
@@ -476,10 +541,22 @@ app_server <- function(input, output, session) {
       tr("plots", languageSelection$language)
     })
     output$plotsNavDiscTitle <- renderUI({
-      tr("plots_discrete", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("discrete", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_discrete", languageSelection$language)
+      )
     })
     output$plotsNavContTitle <- renderUI({
-      tr("plots_continuous", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("continuous", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_continuous", languageSelection$language)
+      )
     })
     output$plotsNavContOldTitle <- renderUI({
       tr("plots_continuous_old", languageSelection$language)
@@ -505,10 +582,22 @@ app_server <- function(input, output, session) {
       tr("data", languageSelection$language)
     })
     output$dataNavDiscTitle <- renderUI({
-      tr("data_discrete", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("discrete", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_discrete", languageSelection$language)
+      )
     })
     output$dataNavContTitle <- renderUI({
-      tr("data_continuous", languageSelection$language)
+      bslib::tooltip(
+        trigger = list(
+          tr("continuous", languageSelection$language),
+          bsicons::bs_icon("info-circle-fill")
+        ),
+        tr("tooltip_continuous", languageSelection$language)
+      )
     })
 
     output$imagesNavMenuTitle <- renderUI({
@@ -521,6 +610,10 @@ app_server <- function(input, output, session) {
       tr("images_map", languageSelection$language)
     })
 
+    output$documentsNavMenuTitle <- renderUI({
+      tr("documents", languageSelection$language)
+    })
+
     output$infoNavMenuTitle <- renderUI({
       tr("info", languageSelection$language)
     })
@@ -529,6 +622,9 @@ app_server <- function(input, output, session) {
     })
     output$infoNavAboutTitle <- renderUI({
       tr("info_about", languageSelection$language)
+    })
+    output$WWRNavTitle <- renderUI({
+      tr("wwr_title", languageSelection$language)
     })
     output$changePwdNavTitle <- renderUI({
       tr("changepwd_nav", languageSelection$language)
@@ -618,7 +714,7 @@ app_server <- function(input, output, session) {
             ),
             actionButton(
               "submit_feedback",
-              tr("feedback_submit", languageSelection$language),
+              tr("submit", languageSelection$language),
               class = "btn btn-primary"
             )
           )
@@ -640,7 +736,7 @@ app_server <- function(input, output, session) {
           ),
           actionButton(
             "submit_feedback",
-            tr("feedback_submit", languageSelection$language),
+            tr("submit", languageSelection$language),
             class = "btn btn-primary"
           )
         )
@@ -682,7 +778,7 @@ app_server <- function(input, output, session) {
             ),
             actionButton(
               "submit_feedback",
-              tr("feedback_submit", languageSelection$language),
+              tr("submit", languageSelection$language),
               class = "btn btn-primary"
             )
           )
@@ -704,7 +800,7 @@ app_server <- function(input, output, session) {
           ),
           actionButton(
             "submit_feedback",
-            tr("feedback_submit", languageSelection$language),
+            tr("submit", languageSelection$language),
             class = "btn btn-primary"
           )
         )
@@ -726,21 +822,19 @@ app_server <- function(input, output, session) {
   # Handle feedback submission
   observeEvent(input$submit_feedback, {
     # Save feedback to the database
-
-    df <- data.frame(
-      sentiment = feedback$type,
-      comment = input$feedback_text,
-      page = input$navbar,
-      app_state = jsonlite::toJSON(
-        reactiveValuesToList(input),
-        auto_unbox = TRUE
+    DBI::dbExecute(
+      session$userData$AquaCache,
+      "INSERT INTO application.feedback (sentiment, comment, page, app_state) VALUES ($1, $2, $3, $4);",
+      params = list(
+        feedback$type,
+        input$feedback_text,
+        input$navbar,
+        jsonlite::toJSON(
+          reactiveValuesToList(input),
+          auto_unbox = TRUE
+        )
       )
     )
-
-    # Drop the feedback_text portion from the app_sate column
-    # df$app_state <- gsub('"feedback_text":\\s*".*?"(,\\s*)?', '', df$app_state)
-
-    DBI::dbAppendTable(session$userData$AquaCache, "feedback", df)
 
     # Reset feedback
     shinyjs::hide("feedback_text")
@@ -1149,14 +1243,14 @@ $(document).keyup(function(event) {
           "snowBulletin",
           "imgTableView",
           "imgMapView",
+          "docTableView",
           "about",
           "news",
           "discData",
           "contData",
-          "feedback"
+          "WWR"
         )
     ) {
-      # !!! the feedback tab is only for testing purposes and will be removed once the app is ready for production
       # User is in viz mode
       last_viz_tab(input$navbar)
     } else if (
@@ -1349,6 +1443,15 @@ $(document).keyup(function(event) {
       }
     }
 
+    ### Document nav_menu ##########################
+    if (input$navbar == "docTableView") {
+      if (!ui_loaded$docTableView) {
+        output$docTableView_ui <- renderUI(docTableViewUI("docTableView"))
+        ui_loaded$docTableView <- TRUE
+        docTableView("docTableView", language = languageSelection)
+      }
+    }
+
     ### Reports nav_menu ##########################
     if (input$navbar == "snowInfo") {
       if (!ui_loaded$snowInfo) {
@@ -1415,6 +1518,18 @@ $(document).keyup(function(event) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
+      }
+    }
+
+    ### Water Well Registry
+    if (input$navbar == "WWR") {
+      if (!ui_loaded$WWR) {
+        output$WWR_ui <- renderUI(wellRegistryUI("wellRegistry"))
+        ui_loaded$WWR <- TRUE
+        wellRegistry(
+          "wellRegistry",
+          language = languageSelection
+        ) # Call the server
       }
     }
 

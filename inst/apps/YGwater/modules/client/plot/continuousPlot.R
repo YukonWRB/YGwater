@@ -448,7 +448,43 @@ contPlot <- function(id, language, windowDims, inputs) {
                 actionButton(
                   ns("entire_record"),
                   tr("plot_all_record", language$language)
-                )
+                ),
+                selectizeInput(
+                  ns("plot_timezone"),
+                  label = tr("plot_timezone_offset", language$language),
+                  choices = -12:14,
+                  selected = -7,
+                  multiple = FALSE,
+                  options = list(
+                    placeholder = tr(
+                      "plot_timezone_offset_placeholder",
+                      language$language
+                    )
+                  )
+                ),
+                selectInput(
+                  ns("plot_resolution"),
+                  label = tr("plot_resolution_lab", language$language),
+                  choices = stats::setNames(
+                    c("max", "hour", "day"),
+                    c(
+                      tr("plot_resolution_max", language$language),
+                      tr("plot_resolution_hourly", language$language),
+                      tr("plot_resolution_daily", language$language)
+                    )
+                  ),
+                  selected = "day"
+                ) |>
+                  tooltip(
+                    id = ns("plot_resolution_tooltip"),
+                    # tr("plot_long_time_to_plot", language$language),
+                    div(
+                      class = "text-warning",
+                      shiny::icon("triangle-exclamation"),
+                      tr("plot_long_time_to_plot", language$language)
+                    ),
+                    placement = "right"
+                  )
               ),
               column(
                 width = 6,
@@ -481,6 +517,7 @@ contPlot <- function(id, language, windowDims, inputs) {
               input_task_button(
                 ns("make_plot"),
                 label = tr("create_plot", language$language),
+                label_busy = tr("processing", language$language),
                 class = "btn btn-primary"
               )
             )
@@ -498,25 +535,11 @@ contPlot <- function(id, language, windowDims, inputs) {
       {
         ts <- timeseries_table_reactive()
         current <- selected_timeseries_id()
+
         if (!is.null(current) && current %in% ts$timeseries_id) {
           return()
         }
-        if (nrow(ts) > 0) {
-          preferred_row <- NULL
-
-          if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
-            matches <- which(ts$location %in% location_filter_value())
-            if (length(matches) > 0) {
-              preferred_row <- matches[1]
-            }
-          }
-
-          fallback_row <- if (is.null(preferred_row)) 1 else preferred_row
-
-          selected_timeseries_id(ts$timeseries_id[fallback_row])
-        } else {
-          selected_timeseries_id(NULL)
-        }
+        selected_timeseries_id(NULL)
       },
       ignoreNULL = FALSE
     )
@@ -532,6 +555,8 @@ contPlot <- function(id, language, windowDims, inputs) {
         selected_timeseries_id(ts$timeseries_id[
           input$timeseries_table_rows_selected
         ])
+      } else {
+        selected_timeseries_id(NULL)
       }
       # Update the date range input to reflect the selected timeseries
       selected_id <- selected_timeseries_id()
@@ -554,17 +579,17 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       column_labels <- c(
         timeseries_id = "timeseries_id",
-        location = tr("cont_table_col_location", language$language),
-        sub_location = tr("cont_table_col_sub_location", language$language),
-        loc_code = tr("loc_code_code", language$language),
-        parameter = tr("cont_table_col_parameter", language$language),
-        media = tr("cont_table_col_media", language$language),
-        aggregation = tr("cont_table_col_aggregation", language$language),
+        location = tr("loc", language$language),
+        sub_location = tr("sub_loc", language$language),
+        loc_code = tr("code", language$language),
+        parameter = tr("parameter", language$language),
+        media = tr("media", language$language),
+        aggregation = tr("aggregation", language$language),
         z = tr("z", language$language),
         networks = tr("network", language$language),
         projects = tr("project", language$language),
-        start_date = tr("cont_table_col_start_date", language$language),
-        end_date = tr("cont_table_col_end_date", language$language)
+        start_date = tr("start_date", language$language),
+        end_date = tr("end_date", language$language)
       )
 
       visible_cols <- names(ts)
@@ -635,10 +660,18 @@ contPlot <- function(id, language, windowDims, inputs) {
             zeroRecords = tr("tbl_zero", language$language)
           ),
           order = order_columns,
-          stateSave = TRUE
+          stateSave = FALSE
         ),
         colnames = c("timeseries_id", col_names),
-        filter = "top"
+        filter = "top",
+        # Code below can add simple hover tooltips, but a) needs to be customized for each column, b) needs to be namespaced, and c) needs apdapting to work not just on hover for touch screen devices
+        # callback = htmlwidgets::JS(
+        #   "var tips = ['tooltip1', 'tooltip2', 'tooltip3', 'tooltip4', 'tooltip5'],
+        # firstRow = $('#contPlot-timeseries_table thead tr th');
+        # for (var i = 0; i < tips.length; i++) {
+        #   $(firstRow[i]).attr('title', tips[i]);
+        # }"
+        # )
       )
       dt
     })
@@ -716,9 +749,10 @@ contPlot <- function(id, language, windowDims, inputs) {
       } else {
         NULL
       }
-      if (length(selected_row) == 0) {
-        selected_row <- 1
-      }
+      validate(need(
+        !is.null(selected_row) && length(selected_row) > 0,
+        "Please select a row in the table before creating a plot."
+      ))
 
       req(input$date_range)
 
@@ -731,7 +765,9 @@ contPlot <- function(id, language, windowDims, inputs) {
         grades = input$show_grades,
         approvals = input$show_approvals,
         qualifiers = input$show_qualifiers,
-        lang = language$abbrev
+        lang = language$abbrev,
+        plot_resolution = input$plot_resolution,
+        plot_timezone = input$plot_timezone
       )
     })
 
@@ -766,7 +802,8 @@ contPlot <- function(id, language, windowDims, inputs) {
             con = con,
             data = TRUE,
             slider = FALSE,
-            tzone = "MST"
+            tzone = req$plot_timezone,
+            resolution = req$plot_resolution
           )
           return(plot)
         },
@@ -781,6 +818,18 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
+      if (is.null(selected_timeseries_id())) {
+        showModal(modalDialog(
+          title = tr("error", language$language),
+          tr("cont_table_intro", language$language),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton(tr("close", language$language))
+          )
+        ))
+        return()
+      }
+
       if (plot_created()) {
         shinyjs::hide("full_screen_ui")
       }
@@ -920,9 +969,8 @@ contPlot <- function(id, language, windowDims, inputs) {
           "%Y-%m-%d %H:%M"
         )
         date_range_end <- format(
-          max(out$trace_data$datetime),
-          "%Y-%m-%d %H:%M",
-          na.rm = TRUE
+          max(out$trace_data$datetime, na.rm = TRUE),
+          "%Y-%m-%d %H:%M"
         )
         hist_range_start <- as.character(moduleData$timeseries[
           timeseries_id == timeseries,

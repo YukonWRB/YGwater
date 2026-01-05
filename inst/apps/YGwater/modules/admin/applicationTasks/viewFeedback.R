@@ -8,12 +8,12 @@ viewFeedbackUI <- function(id) {
 viewFeedback <- function(id) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
-    
+
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT has_table_privilege(current_user, 'application.feedback', 'SELECT') AS can_select"
     )
-    
+
     if (!check$can_select) {
       showModal(modalDialog(
         title = 'Insufficient Privileges',
@@ -23,14 +23,18 @@ viewFeedback <- function(id) {
       ))
       return()
     }
-    
+
     feedback_data <- reactiveVal(DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT * FROM application.feedback ORDER BY timestamp DESC"
     ))
-    
+
     output$feedback_table <- DT::renderDT({
-      DT::datatable(feedback_data(), rownames = FALSE, options = list(scrollX = TRUE))
+      DT::datatable(
+        feedback_data(),
+        rownames = FALSE,
+        options = list(scrollX = TRUE)
+      )
     })
   })
 }

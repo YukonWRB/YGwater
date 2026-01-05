@@ -106,7 +106,7 @@ plotTimeseries(
 
 \item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
-\item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
+\item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).}
 
 \item{raw}{Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.}
 

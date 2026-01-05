@@ -8,13 +8,9 @@ addDocsUI <- function(id) {
 }
 
 addDocs <- function(id) {
-  
   moduleServer(id, function(input, output, session) {
-    
     ns <- session$ns
-    
+
     output$placeholder <- renderText("Placeholder for documents main module")
-    
-    
   }) # End of moduleServer
 }

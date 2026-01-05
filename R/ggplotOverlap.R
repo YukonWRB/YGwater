@@ -789,7 +789,7 @@ ggplotOverlap <- function(
           if (realtime$md[i] %in% md_sequence) last_year else last_year + 1,
           realtime$datetime[i]
         )
-        fake_datetime <- ifelse(
+        fake_datetime <- data.table::fifelse(
           nchar(fake_datetime) > 11,
           fake_datetime,
           paste0(fake_datetime, " 00:00:00")
@@ -805,7 +805,7 @@ ggplotOverlap <- function(
       #Does not overlap the new year
       realtime$plot_year <- as.character(realtime$year)
       realtime$fake_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
-      realtime$fake_datetime <- ifelse(
+      realtime$fake_datetime <- data.table::fifelse(
         nchar(realtime$fake_datetime) > 11,
         realtime$fake_datetime,
         paste0(realtime$fake_datetime, " 00:00:00")

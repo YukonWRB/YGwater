@@ -82,7 +82,19 @@ addLocation <- function(id, inputs) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, location, name, name_fr, latitude, longitude, note, contact, share_with, location_type, data_sharing_agreement_id, install_purpose, current_purpose, location_images, jurisdictional_relevance, anthropogenic_influence, sentinel_location FROM locations"
+        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.location_images, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
+        FROM locations l
+        LEFT JOIN location_types lt ON l.location_type = lt.type_id
+        LEFT JOIN locations_networks ln ON l.location_id = ln.location_id
+        LEFT JOIN networks n ON ln.network_id = n.network_id
+        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.location_images, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
+      )
+      moduleData$exist_locs$network <- factor(
+        ifelse(
+          is.na(moduleData$exist_locs$network),
+          "",
+          moduleData$exist_locs$network
+        )
       )
       moduleData$loc_types = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -336,12 +348,12 @@ addLocation <- function(id, inputs) {
           ))),
           checkboxInput(
             ns("loc_jurisdictional_relevance"),
-            "Check if this location is publicly relevant to your jurisdiction (i.e. should be seen by the public)",
+            "Publicly relevant (i.e. should be seen by the public)",
             value = TRUE
           ),
           checkboxInput(
             ns("loc_anthropogenic_influence"),
-            "Check if this location is influenced by human activity (dams, upstream mining, etc.)",
+            "Influenced by human activity (dams, upstream mining, etc.)",
             value = FALSE
           )
         ),
@@ -371,7 +383,7 @@ addLocation <- function(id, inputs) {
         moduleData$exist_locs,
         selection = "single",
         options = list(
-          columnDefs = list(list(targets = 0, visible = FALSE)),
+          columnDefs = list(list(targets = c(0, 0), visible = FALSE)), # Hide location_id and network_id columns
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             "function(settings, json) {",
@@ -412,14 +424,14 @@ addLocation <- function(id, inputs) {
           updateSelectizeInput(
             session,
             "loc_type",
-            selected = details$location_type
+            selected = details$location_type_id
           )
           updateNumericInput(session, "lat", value = details$latitude)
           updateNumericInput(session, "lon", value = details$longitude)
           updateSelectizeInput(
             session,
             "share_with",
-            selected = details$share_with
+            selected = parse_share_with(details$share_with)
           )
           updateSelectizeInput(session, "loc_owner", selected = details$owner)
           updateTextInput(session, "loc_contact", value = details$contact)
@@ -493,6 +505,7 @@ addLocation <- function(id, inputs) {
         updateTextInput(session, "loc_name", label = "Location name")
         updateTextInput(session, "loc_name_fr", label = "French location name")
       } else {
+        # Adding a new station
         updateActionButton(session, "add_loc", label = "Add location")
         updateTextInput(
           session,
@@ -509,7 +522,69 @@ addLocation <- function(id, inputs) {
           "loc_name_fr",
           label = "French location name (must not exist already)"
         )
+
+        # If was on 'modify' prior, show a modal to the user asking if they want to clear fields
+        if (!is.null(selected_loc())) {
+          showModal(modalDialog(
+            title = "Clear fields?",
+            "You have switched to 'add new' mode. Do you want to clear all fields to add a new location?",
+            easyClose = TRUE,
+            footer = tagList(
+              actionButton(ns("close"), "No, keep current values"),
+              actionButton(
+                ns("confirm_clear_fields"),
+                "Yes, clear fields"
+              )
+            )
+          ))
+        }
       }
+    })
+
+    observeEvent(input$confirm_clear_fields, {
+      # Clear all fields
+      updateTextInput(session, "loc_code", value = "")
+      updateTextInput(session, "loc_name", value = "")
+      updateTextInput(session, "loc_name_fr", value = "")
+      updateNumericInput(session, "lat", value = NA)
+      updateNumericInput(session, "lon", value = NA)
+      updateSelectizeInput(session, "loc_type", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "share_with",
+        selected = "public_reader"
+      )
+      updateSelectizeInput(session, "loc_owner", selected = character(0))
+      updateTextInput(session, "loc_contact", value = "")
+      updateSelectizeInput(
+        session,
+        "data_sharing_agreement",
+        selected = character(0)
+      )
+      updateSelectizeInput(session, "datum_id_from", selected = 10)
+      updateSelectizeInput(session, "datum_id_to", selected = character(0))
+      updateNumericInput(session, "elev", value = NA)
+      updateSelectizeInput(session, "network", selected = character(0))
+      updateSelectizeInput(session, "project", selected = character(0))
+      updateCheckboxInput(
+        session,
+        "loc_jurisdictional_relevance",
+        value = TRUE
+      )
+      updateCheckboxInput(
+        session,
+        "loc_anthropogenic_influence",
+        value = FALSE
+      )
+      updateTextInput(session, "loc_install_purpose", value = "")
+      updateTextInput(session, "loc_current_purpose", value = "")
+      updateTextInput(session, "loc_note", value = "")
+      removeModal()
+      selected_loc(NULL)
+    })
+
+    observeEvent(input$close, {
+      removeModal()
     })
 
     ## Hydat fill ###############################################################
@@ -969,11 +1044,16 @@ addLocation <- function(id, inputs) {
           },
           type = input$network_type
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "networks",
-          df,
-          append = TRUE
+          "INSERT INTO networks (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NULL, df$name_fr),
+            df$description,
+            ifelse(is.na(df$description_fr), NULL, df$description_fr),
+            df$type
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -1087,11 +1167,16 @@ addLocation <- function(id, inputs) {
           },
           type = input$project_type
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "projects",
-          df,
-          append = TRUE
+          "INSERT INTO projects (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NULL, df$name_fr),
+            df$description,
+            ifelse(is.na(df$description_fr), NULL, df$description_fr),
+            df$type
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -1186,11 +1271,17 @@ addLocation <- function(id, inputs) {
           },
           note = if (isTruthy(input$contact_note)) input$contact_note else NA
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "organizations",
-          df,
-          append = TRUE
+          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NULL, df$name_fr),
+            ifelse(is.na(df$contact_name), NULL, df$contact_name),
+            ifelse(is.na(df$phone), NULL, df$phone),
+            ifelse(is.na(df$email), NULL, df$email),
+            ifelse(is.na(df$note), NULL, df$note)
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -1607,15 +1698,13 @@ addLocation <- function(id, inputs) {
                 )
               )
               if (length(desired_networks)) {
-                network_df <- data.frame(
-                  network_id = desired_networks,
-                  location_id = rep(selected_loc(), length(desired_networks))
-                )
-                DBI::dbAppendTable(
+                DBI::dbExecute(
                   session$userData$AquaCache,
-                  "locations_networks",
-                  network_df,
-                  append = TRUE
+                  "INSERT INTO locations_networks (network_id, location_id) VALUES ($1, $2)",
+                  params = list(
+                    desired_networks,
+                    rep(selected_loc(), length(desired_networks))
+                  )
                 )
               }
             }
@@ -1639,15 +1728,13 @@ addLocation <- function(id, inputs) {
                 )
               )
               if (length(desired_projects)) {
-                project_df <- data.frame(
-                  project_id = desired_projects,
-                  location_id = rep(selected_loc(), length(desired_projects))
-                )
-                DBI::dbAppendTable(
+                DBI::dbExecute(
                   session$userData$AquaCache,
-                  "locations_projects",
-                  project_df,
-                  append = TRUE
+                  "INSERT INTO locations_projects (project_id, location_id) VALUES ($1, $2)",
+                  params = list(
+                    desired_projects,
+                    rep(selected_loc(), length(desired_projects))
+                  )
                 )
               }
             }
@@ -1980,15 +2067,13 @@ addLocation <- function(id, inputs) {
               )
             )
             if (length(network_ids)) {
-              network_df <- data.frame(
-                network_id = network_ids,
-                location_id = rep(new_loc_id, length(network_ids))
-              )
-              DBI::dbAppendTable(
+              DBI::dbExecute(
                 session$userData$AquaCache,
-                "locations_networks",
-                network_df,
-                append = TRUE
+                "INSERT INTO locations_networks (network_id, location_id) VALUES ($1, $2)",
+                params = list(
+                  network_ids,
+                  rep(new_loc_id, length(network_ids))
+                )
               )
             }
             DBI::dbExecute(
@@ -1999,15 +2084,13 @@ addLocation <- function(id, inputs) {
               )
             )
             if (length(project_ids)) {
-              project_df <- data.frame(
-                project_id = project_ids,
-                location_id = rep(new_loc_id, length(project_ids))
-              )
-              DBI::dbAppendTable(
+              DBI::dbExecute(
                 session$userData$AquaCache,
-                "locations_projects",
-                project_df,
-                append = TRUE
+                "INSERT INTO locations_projects (project_id, location_id) VALUES ($1, $2)",
+                params = list(
+                  project_ids,
+                  rep(new_loc_id, length(project_ids))
+                )
               )
             }
           }

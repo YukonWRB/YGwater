@@ -128,26 +128,6 @@ addSamples <- function(id) {
       }
     }
 
-    format_share_with <- function(groups) {
-      if (is.null(groups) || !length(groups) || all(!nzchar(groups))) {
-        groups <- "public_reader"
-      }
-      groups <- gsub('"', '\\"', groups, fixed = TRUE)
-      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
-    }
-
-    parse_share_with <- function(value) {
-      if (is.null(value) || !length(value) || all(is.na(value))) {
-        return(character())
-      }
-      if (is.list(value)) {
-        value <- value[[1]]
-      }
-      value <- gsub("[{}\"]", "", value)
-      out <- trimws(unlist(strsplit(value, ",")))
-      out[nzchar(out)]
-    }
-
     format_integer_array <- function(values) {
       if (is.null(values) || !length(values)) {
         return(NA)

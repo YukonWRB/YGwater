@@ -476,16 +476,16 @@ plotDiscrete <- function(
     # Sometimes the "." is a "," in the result, so we need to replace it
     data$result <- gsub(",", ".", data$result)
     #result_condition should get < DL, > DL, or NA depending on if '<' or '>' show up in columns 'result'
-    data$result_condition <- ifelse(
+    data$result_condition <- data.table::fifelse(
       grepl("<", data$result),
       "< DL",
-      ifelse(grepl(">", data$result), "> DL", NA)
+      data.table::fifelse(grepl(">", data$result), "> DL", NA)
     )
     #result_condition_value should get the numeric portion of the string in 'result' only if '<' or '>' show up in columns 'result'
-    data$result_condition_value <- ifelse(
+    data$result_condition_value <- data.table::fifelse(
       grepl("<", data$result),
       as.numeric(gsub("<", "", data$result)),
-      ifelse(
+      data.table::fifelse(
         grepl(">", data$result),
         as.numeric(gsub(">", "", data$result)),
         NA
@@ -930,7 +930,7 @@ WHERE
           "(",
           locIds$location_id,
           ", ",
-          ifelse(
+          data.table::fifelse(
             is.na(subLocIds$sub_location_id),
             -1,
             subLocIds$sub_location_id
@@ -963,13 +963,13 @@ AND s.datetime > '",
 
     # Merge columns for location name and sub_location name (where not null)
     if (lang == "en") {
-      samples$name <- ifelse(
+      samples$name <- data.table::fifelse(
         is.na(samples$sub_location_name),
         samples$name,
         paste0(samples$name, " - ", samples$sub_location_name)
       )
     } else {
-      samples$name <- ifelse(
+      samples$name <- data.table::fifelse(
         is.na(samples$sub_location_name_fr),
         samples$name_fr,
         paste0(samples$name_fr, " - ", samples$sub_location_name_fr)
@@ -1029,10 +1029,10 @@ AND s.datetime > '",
 
     # Now make result_condition column understandable
     #result_condition should get < DL, > DL, or NA depending on if 1 or 2 show up in column 'result_condition'
-    data$result_condition <- ifelse(
+    data$result_condition <- data.table::fifelse(
       grepl("1", data$result_condition),
       "< DL",
-      ifelse(grepl("2", data$result_condition), "> DL", NA)
+      data.table::fifelse(grepl("2", data$result_condition), "> DL", NA)
     )
 
     # Retain columns depending on if 'fr' or 'en', rename cols to match EQWin output
@@ -1281,7 +1281,7 @@ AND s.datetime > '",
         legendgroup = ~ get(color_by),
         showlegend = (i == 1),
         marker = list(
-          opacity = ifelse(all(df$result == -Inf), 0, 1),
+          opacity = data.table::fifelse(all(df$result == -Inf), 0, 1),
           symbol = "circle",
           size = point_scale * 7,
           line = list(width = 0.2, color = grDevices::rgb(0, 0, 0))

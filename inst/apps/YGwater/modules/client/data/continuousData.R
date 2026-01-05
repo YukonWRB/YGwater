@@ -308,7 +308,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$locs$location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$locs[[tr("generic_name_col", language$language)]]
             )
           ),
@@ -333,7 +333,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
@@ -346,7 +346,7 @@ contData <- function(id, language, inputs) {
           label = tr("z", language$language),
           choices = stats::setNames(
             c("all", filteredData$z),
-            c(tr("all", language$language), filteredData$z)
+            c(tr("all_m", language$language), filteredData$z)
           ),
           multiple = TRUE,
           selected = "all"
@@ -358,7 +358,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
@@ -372,7 +372,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
@@ -388,7 +388,7 @@ contData <- function(id, language, inputs) {
           label = tr("nominal_rate", language$language),
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[["period"]])
+            c(tr("all_m", language$language), filteredData$rates[["period"]])
           ),
           multiple = TRUE,
           selected = "all"
@@ -399,7 +399,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -528,7 +528,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$locs$location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$locs[[tr("generic_name_col", language$language)]]
             )
           ),
@@ -540,7 +540,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
@@ -552,7 +552,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$media[[tr("media_type_col", language$language)]]
             )
           ),
@@ -563,7 +563,7 @@ contData <- function(id, language, inputs) {
           "z",
           choices = stats::setNames(
             c("all", moduleData$z),
-            c(tr("all", language$language), moduleData$z)
+            c(tr("all_m", language$language), moduleData$z)
           ),
           selected = "all"
         )
@@ -573,7 +573,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$aggregation_types$aggregation_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
@@ -587,7 +587,7 @@ contData <- function(id, language, inputs) {
           "rate",
           choices = stats::setNames(
             c("all", moduleData$rates$seconds),
-            c(tr("all", language$language), moduleData$rates[, "period"])
+            c(tr("all_m", language$language), moduleData$rates[, "period"])
           ),
           selected = "all"
         )
@@ -597,7 +597,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", moduleData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               moduleData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -637,7 +637,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$networks$network_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$networks[[tr("generic_name_col", language$language)]]
             )
           ),
@@ -650,7 +650,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$projects$project_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$projects[[tr("generic_name_col", language$language)]]
             )
           ),
@@ -695,7 +695,7 @@ contData <- function(id, language, inputs) {
         choices = stats::setNames(
           c("all", remain_locs$location_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             remain_locs[[tr("generic_name_col", language$language)]]
           )
         ),
@@ -710,11 +710,11 @@ contData <- function(id, language, inputs) {
         title = tr("param_modal", language$language),
         selectizeInput(
           ns("pGrps"),
-          label = tr("param_group(s)", language$language),
+          label = tr("param_groups", language$language),
           choices = stats::setNames(
             c("all", filteredData$param_groups$group_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$param_groups[[tr(
                 "param_group_col",
                 language$language
@@ -726,11 +726,11 @@ contData <- function(id, language, inputs) {
         ),
         selectizeInput(
           ns("pSubGrps"),
-          label = tr("param_sub_group(s)", language$language),
+          label = tr("param_sub_groups", language$language),
           choices = stats::setNames(
             c("all", filteredData$param_sub_groups$sub_group_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$param_sub_groups[[tr(
                 "param_sub_group_col",
                 language$language
@@ -780,7 +780,7 @@ contData <- function(id, language, inputs) {
         choices = stats::setNames(
           c("all", remain_params$parameter_id),
           c(
-            tr("all", language$language),
+            tr("all_m", language$language),
             remain_params[[tr("param_name_col", language$language)]]
           )
         ),
@@ -944,7 +944,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$locs$location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$locs[[tr("generic_name_col", language$language)]]
             )
           ),
@@ -960,7 +960,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
@@ -977,7 +977,7 @@ contData <- function(id, language, inputs) {
           "z",
           choices = stats::setNames(
             c("all", filteredData$z),
-            c(tr("all", language$language), filteredData$z)
+            c(tr("all_m", language$language), filteredData$z)
           ),
           selected = if (input$z %in% filteredData$z) input$z else "all"
         )
@@ -987,7 +987,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
@@ -1003,7 +1003,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
@@ -1024,7 +1024,7 @@ contData <- function(id, language, inputs) {
           "rate",
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[, "period"])
+            c(tr("all_m", language$language), filteredData$rates[, "period"])
           ),
           selected = if (input$rate %in% filteredData$rates$seconds) {
             input$rate
@@ -1038,7 +1038,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -1177,7 +1177,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$sub_locs$sub_location_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$sub_locs[[tr("sub_location_col", language$language)]]
             )
           ),
@@ -1195,7 +1195,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
@@ -1210,7 +1210,7 @@ contData <- function(id, language, inputs) {
           "z",
           choices = stats::setNames(
             c("all", filteredData$z),
-            c(tr("all", language$language), filteredData$z)
+            c(tr("all_m", language$language), filteredData$z)
           ),
           selected = if (input$z %in% filteredData$z) input$z else "all"
         )
@@ -1220,7 +1220,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
@@ -1241,7 +1241,7 @@ contData <- function(id, language, inputs) {
           "rate",
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[, "period"])
+            c(tr("all_m", language$language), filteredData$rates[, "period"])
           ),
           selected = if (input$rate %in% filteredData$rates$seconds) {
             input$rate
@@ -1255,7 +1255,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -1379,7 +1379,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
@@ -1394,7 +1394,7 @@ contData <- function(id, language, inputs) {
           "z",
           choices = stats::setNames(
             c("all", filteredData$z),
-            c(tr("all", language$language), filteredData$z)
+            c(tr("all_m", language$language), filteredData$z)
           ),
           selected = if (input$z %in% filteredData$z) input$z else "all"
         )
@@ -1404,7 +1404,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
@@ -1425,7 +1425,7 @@ contData <- function(id, language, inputs) {
           "rate",
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[, "period"])
+            c(tr("all_m", language$language), filteredData$rates[, "period"])
           ),
           selected = if (input$rate %in% filteredData$rates$seconds) {
             input$rate
@@ -1439,7 +1439,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -1559,7 +1559,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$media$media_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$media[[tr("media_type_col", language$language)]]
             )
           ),
@@ -1575,7 +1575,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
@@ -1596,7 +1596,7 @@ contData <- function(id, language, inputs) {
           "rate",
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[, "period"])
+            c(tr("all_m", language$language), filteredData$rates[, "period"])
           ),
           selected = if (input$rate %in% filteredData$rates$seconds) {
             input$rate
@@ -1610,7 +1610,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -1731,7 +1731,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$aggregation_types$aggregation_type_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$aggregation_types[[tr(
                 "aggregation_type_col",
                 language$language
@@ -1752,7 +1752,7 @@ contData <- function(id, language, inputs) {
           "rate",
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[, "period"])
+            c(tr("all_m", language$language), filteredData$rates[, "period"])
           ),
           selected = if (input$rate %in% filteredData$rates$seconds) {
             input$rate
@@ -1766,7 +1766,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -1883,7 +1883,7 @@ contData <- function(id, language, inputs) {
           "rate",
           choices = stats::setNames(
             c("all", filteredData$rates$seconds),
-            c(tr("all", language$language), filteredData$rates[, "period"])
+            c(tr("all_m", language$language), filteredData$rates[, "period"])
           ),
           selected = if (input$rate %in% filteredData$rates$seconds) {
             input$rate
@@ -1897,7 +1897,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -2007,7 +2007,7 @@ contData <- function(id, language, inputs) {
           choices = stats::setNames(
             c("all", filteredData$params$parameter_id),
             c(
-              tr("all", language$language),
+              tr("all_m", language$language),
               filteredData$params[[tr("param_name_col", language$language)]]
             )
           ),
@@ -2136,11 +2136,11 @@ contData <- function(id, language, inputs) {
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             # "  'font-family': 'montserrat'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             # "  'font-family': 'nunito-sans'", # Unfortunately this isn't as readable as the default font. Left just in case it's needed later.
             "});",
             "}"
@@ -2269,10 +2269,10 @@ contData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -2321,10 +2321,10 @@ contData <- function(id, language, inputs) {
               "$(this.api().table().header()).css({",
               "  'background-color': '#079',",
               "  'color': '#fff',",
-              "  'font-size': '100%',",
+              "  'font-size': '90%',",
               "});",
               "$(this.api().table().body()).css({",
-              "  'font-size': '90%',",
+              "  'font-size': '80%',",
               "});",
               "}"
             ),
@@ -2632,10 +2632,10 @@ contData <- function(id, language, inputs) {
                   "$(this.api().table().header()).css({",
                   "  'background-color': '#079',",
                   "  'color': '#fff',",
-                  "  'font-size': '100%',",
+                  "  'font-size': '90%',",
                   "});",
                   "$(this.api().table().body()).css({",
-                  "  'font-size': '90%',",
+                  "  'font-size': '80%',",
                   "});",
                   "}"
                 ),

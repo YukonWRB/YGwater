@@ -1,6 +1,6 @@
-#Shortcut script for (re)creating sysdata.rda
+# Shortcut script for (re)creating sysdata.rda
 
-#IMPORTANT NOTE: spatial data doesn't behave well as internal package data. See the file data_load in the /R folder for a better way to do this. Non-spatial data can almost all be incorporated using  internal data though.
+# IMPORTANT NOTE: spatial data doesn't behave well as internal package data. See the file data_load in the /R folder for a better way to do this. Non-spatial data can almost all be incorporated using  internal data though.
 
 # DO NOT DO THE FOLLOWING FOR SPATIAL DATA:
 # prov_buff <- sf::read_sf(dsn = "dev/prov_buffers", layer = "Provinces_buffered_300km")
@@ -30,6 +30,35 @@ translations_df <- data.table::fread(
   ),
   encoding = "UTF-8"
 )
+
+# Check for ids which are the same
+dup_ids <- translations_df$id[duplicated(translations_df$id)]
+if (length(dup_ids) > 0) {
+  stop(
+    "Duplicate translation IDs found in translations.csv: ",
+    paste(dup_ids, collapse = ", ")
+  )
+}
+
+# Check for completely duplicated rows
+dups_rows_all <- duplicated(translations_df$id)
+if (any(dups_rows_all)) {
+  stop(
+    "Duplicate rows found in translations.csv. Duplicate rows: ",
+    paste(which(dups_rows_all), collapse = ", ")
+  )
+}
+
+# Check for identical rows, not including the ids
+dup_rows_no_id <- duplicated(translations_df[, -1])
+if (any(dup_rows_no_id)) {
+  warning(
+    "Identical translation rows found in translations.csv (excluding IDs). Rows: ",
+    paste(which(dup_rows_no_id), collapse = ", ")
+  )
+}
+
+
 # Build a list from the data.frame
 translations <- lapply(
   setdiff(names(translations_df[, -2]), "id"),
@@ -39,6 +68,28 @@ translations <- lapply(
   }
 )
 names(translations) <- setdiff(names(translations_df)[-2], "id")
+
+
+# Now call each element of all list elements to see if any fails:
+for (lang in names(translations)) {
+  for (id in names(translations[[lang]])) {
+    tryCatch(
+      {
+        print(translations[[lang]][[id]])
+      },
+      error = function(e) {
+        stop(
+          "Error in translation for language '",
+          lang,
+          "', id '",
+          id,
+          "': ",
+          e$message
+        )
+      }
+    )
+  }
+}
 
 data <- list(
   level_returns_max = level_returns_max,
@@ -54,4 +105,4 @@ data <- list(
 
 usethis::use_data(data, internal = TRUE, overwrite = TRUE)
 
-devtools::load_all()
+load_all()
