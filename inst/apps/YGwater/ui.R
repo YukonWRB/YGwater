@@ -251,6 +251,15 @@ app_ui <- function(request) {
           )
         ),
         nav_menu(
+          title = uiOutput("documentsNavMenuTitle"),
+          value = "documents",
+          nav_panel(
+            title = uiOutput("documentsNavTableTitle"),
+            value = "docTableView",
+            uiOutput("docTableView_ui")
+          )
+        ),
+        nav_menu(
           title = uiOutput("dataNavMenuTitle"),
           value = "data",
           nav_panel(

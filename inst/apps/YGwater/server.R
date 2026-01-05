@@ -26,6 +26,7 @@ app_server <- function(input, output, session) {
       "maps",
       "reports",
       "images",
+      "documents",
       "data",
       "info",
       "WWR"
@@ -252,6 +253,7 @@ app_server <- function(input, output, session) {
     "snowBulletin",
     "imgTableView",
     "imgMapView",
+    "docTableView",
     "discData",
     "contData",
     "WWR",
@@ -349,6 +351,7 @@ app_server <- function(input, output, session) {
     ui_loaded$FOD <- FALSE
     ui_loaded$imgTableView <- FALSE
     ui_loaded$imgMapView <- FALSE
+    ui_loaded$docTableView <- FALSE
     ui_loaded$snowInfo <- FALSE
     ui_loaded$waterInfo <- FALSE
     ui_loaded$WQReport <- FALSE
@@ -603,6 +606,12 @@ app_server <- function(input, output, session) {
     })
     output$imagesNavMapTitle <- renderUI({
       tr("images_map", languageSelection$language)
+    })
+    output$documentsNavMenuTitle <- renderUI({
+      tr("documents", languageSelection$language)
+    })
+    output$documentsNavTableTitle <- renderUI({
+      tr("documents_table", languageSelection$language)
     })
 
     output$infoNavMenuTitle <- renderUI({
@@ -1236,6 +1245,7 @@ $(document).keyup(function(event) {
           "snowBulletin",
           "imgTableView",
           "imgMapView",
+          "docTableView",
           "about",
           "news",
           "discData",
@@ -1432,6 +1442,13 @@ $(document).keyup(function(event) {
         ui_loaded$imgMapView <- TRUE
         # Call the server
         imgMapView("imgMapView", language = languageSelection)
+      }
+    }
+    if (input$navbar == "docTableView") {
+      if (!ui_loaded$docTableView) {
+        output$docTableView_ui <- renderUI(docTableViewUI("docTableView"))
+        ui_loaded$docTableView <- TRUE
+        docTableView("docTableView", language = languageSelection)
       }
     }
 

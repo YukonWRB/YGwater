@@ -20,6 +20,8 @@ data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
+documents,documentsNavMenuTitle,Documents,Documents
+documents_table,documentsNavTableTitle,Table selection,À partir d'un tableau
 documents_heading,documentsModuleTitle,Documents,Documents
 document_preview_heading,documentsModulePreviewHeading,Document preview,Aperçu du document
 document_select_prompt,documentsModuleSelectPrompt,Select a document to preview.,Sélectionnez un document à prévisualiser.

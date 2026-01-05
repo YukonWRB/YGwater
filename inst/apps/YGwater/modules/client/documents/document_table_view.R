@@ -41,7 +41,7 @@ docTableView <- function(id, language) {
         session$userData$AquaCache,
         paste0(
           "SELECT d.document_id, d.name, d.publish_date, d.description, ",
-          "d.format, d.url, d.authors, d.tags, d.share_with, ",
+          "d.format, d.url, d.authors, d.tags, ",
           "dt.document_type_en, dt.document_type_fr, ",
           "o.name AS owner_name, c.name AS contributor_name ",
           "FROM files.documents d ",
@@ -93,7 +93,6 @@ docTableView <- function(id, language) {
       tbl[, type := .SD[[type_col]], .SDcols = type_col]
       tbl[, authors := format_array(authors)]
       tbl[, tags := format_array(tags)]
-      tbl[, share_with := format_array(share_with)]
       tbl[, publish_date := as.Date(publish_date)]
       tbl[, owner := owner_name]
       tbl[, contributor := contributor_name]
@@ -109,8 +108,7 @@ docTableView <- function(id, language) {
         url,
         owner,
         contributor,
-        tags,
-        share_with
+        tags
       )]
 
       tbl[, sort_date := publish_date]
@@ -174,7 +172,6 @@ docTableView <- function(id, language) {
         owner = tr("document_owner", language$language),
         contributor = tr("document_contributor", language$language),
         tags = tr("document_tags", language$language),
-        share_with = tr("document_share_with", language$language),
         sort_date = "sort_date"
       )
 
@@ -297,8 +294,6 @@ docTableView <- function(id, language) {
         tags$p(ifelse(is.na(doc$contributor), "", doc$contributor)),
         tags$strong(tr("document_tags", language$language)),
         tags$p(ifelse(is.na(doc$tags), "", doc$tags)),
-        tags$strong(tr("document_share_with", language$language)),
-        tags$p(ifelse(is.na(doc$share_with), "", doc$share_with)),
         url_block
       )
     })
