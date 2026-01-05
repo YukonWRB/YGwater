@@ -20,6 +20,25 @@ data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
+documents,documentsNavMenuTitle,Documents,Documents
+documents_heading,documentsModuleTitle,Documents,Documents
+document_preview_heading,documentsModulePreviewHeading,Document preview,Aperçu du document
+document_select_prompt,documentsModuleSelectPrompt,Select a document to preview.,Sélectionnez un document à prévisualiser.
+document_download,documentsModuleDownload,Download document,Télécharger le document
+document_name,documentsModuleColName,Name,Nom
+document_type,documentsModuleColType,Type,Type
+document_authors,documentsModuleColAuthors,Authors,Auteurs
+document_published,documentsModuleColPublished,Published,Date de publication
+document_description,documentsModuleColDescription,Description,Description
+document_format,documentsModuleColFormat,Format,Format
+document_url,documentsModuleColUrl,URL,URL
+document_owner,documentsModuleColOwner,Owner,Propriétaire
+document_contributor,documentsModuleColContributor,Contributor,Contributeur
+document_tags,documentsModuleColTags,Tags,Étiquettes
+document_share_with,documentsModuleColShareWith,Shared with,Partagé avec
+document_no_preview,documentsModuleNoPreview,Preview not available for this file type.,Aucun aperçu disponible pour ce type de fichier.
+document_open_url,documentsModuleOpenUrl,Open source link,Ouvrir le lien source
+document_type_col,,document_type_en,document_type_en
 info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,Updates and changes,Mises à jour

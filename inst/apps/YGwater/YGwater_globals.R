@@ -262,13 +262,17 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
-  # Image modules
+  # Image and document modules
   source(system.file(
     "apps/YGwater/modules/client/images/image_table_view.R",
     package = "YGwater"
   ))
   source(system.file(
     "apps/YGwater/modules/client/images/image_map_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/documents/document_table_view.R",
     package = "YGwater"
   ))
 

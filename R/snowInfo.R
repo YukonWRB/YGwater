@@ -153,7 +153,7 @@ snowInfo <- function(
       " AND collection_method = 1 ",
       "ORDER BY location_id, target_datetime;"
     )
-  ) # media = 'atmospheric', collection_method = 'observation'
+  ) # media = 'snow', collection_method = 'observation'
 
   if (!nrow(samples)) {
     stop("No snow survey measurements were found for the selected locations.")
