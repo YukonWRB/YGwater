@@ -8,7 +8,8 @@ download_discrete_ts(
   con,
   start_date = sprintf("\%d-01-01", 1950),
   end_date = sprintf("\%d-01-01", 2100),
-  parameter_name = "snow water equivalent"
+  parameter_name = "swe",
+  epsg = 4326
 )
 }
 \arguments{

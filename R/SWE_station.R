@@ -13,6 +13,8 @@
 #' @param aquaCon A connection to the aquacache database. If NULL, a new connection will be created with [AquaConnect()] and automatically closed.
 #' @param snowCon A connection to the snow database. If NULL, a new connection will be created with [snowConnect()] and automatically closed. If aquaCon is not NULL but snowCon is NULL, connection to the snow DB will be attempted at the same host and port as the aquacache connection.
 #' @param summarise TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.
+#' @param historical_start_year The first year to include in the historical statistics. If NULL, all years prior to 'year' are included.
+#' @param historical_end_year The last year to include in the historical statistics. If NULL
 #' @param save_path The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.
 #'
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
@@ -31,6 +33,8 @@ SWE_station <- function(
   aquaCon = NULL,
   snowCon = NULL,
   summarise = TRUE,
+  historical_start_year = NULL,
+  historical_end_year = NULL,
   save_path = "choose"
 ) {
   # parameters for testing
@@ -74,6 +78,15 @@ SWE_station <- function(
         stop("The save path you specified does not exist.")
       }
     }
+  }
+
+  # set defaults for historical range
+  if (is.null(historical_start_year)) {
+    historical_start_year <- 1900
+  }
+
+  if (is.null(historical_end_year)) {
+    historical_end_year <- year - 1
   }
 
   # First retrieve location-basin info from snow db
@@ -155,6 +168,7 @@ SWE_station <- function(
     Meas <- Meas %>%
       tidyr::pivot_wider(names_from = "parameter", values_from = "value")
     # calculate density
+
     Meas$density <- round(Meas$SWE / Meas$`snow depth` * 10, 2)
     # Reformat into long format
     Meas <- Meas %>%
@@ -321,14 +335,21 @@ SWE_station <- function(
       if (length(swe_prevyear) == 0) {
         swe_prevyear <- NA
       }
+
       # Get median swe for target month not including year of interest.
       swe_med <- round(
         stats::median(
-          tab[tab$yr != year & tab$parameter == "SWE", "value"],
+          tab[
+            tab$yr >= historical_start_year &
+              tab$yr <= historical_end_year &
+              tab$parameter == "SWE",
+            "value"
+          ],
           na.rm = TRUE
         ),
         0
       )
+
       if (length(swe_med) == 0) {
         swe_med <- NA
       }

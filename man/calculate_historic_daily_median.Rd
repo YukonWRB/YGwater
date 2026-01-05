@@ -19,6 +19,8 @@ calculate_historic_daily_median(
 \item{lookback_start}{Integer year to start lookback period from (e.g., 1980) (optional)}
 
 \item{lookback_end}{Integer year to end lookback period (optional, defaults to current year - 1)}
+
+\item{parameter}{Character string specifying the parameter name.}
 }
 \value{
 A list with two elements:
@@ -28,9 +30,7 @@ A list with two elements:
 }
 }
 \description{
-For each measurement, calculates the historic median for the same day-of-year
-using data from previous years within the lookback period. Supports both
-fixed lookback periods and rolling windows.
+Calculate historic daily median and relative change for timeseries
 }
 \details{
 The function handles special cases for relative SWE calculation:

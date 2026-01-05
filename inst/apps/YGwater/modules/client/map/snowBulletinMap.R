@@ -93,7 +93,8 @@ mapSnowbull <- function(id, language) {
     months <- snowbull_months(short = TRUE)
 
     con <- session$userData$AquaCache
-    snowbull_data <- load_bulletin_data(con)
+    snowbull_shapefiles <- load_bulletin_shapefiles(con)
+    snowbull_timeseries <- load_bulletin_timeseries(con)
 
     static_style_elements <- get_static_style_elements()
 
@@ -144,7 +145,7 @@ mapSnowbull <- function(id, language) {
             style = "display: block; margin-bottom: 5px;"
           ),
           radioButtons(
-            ns("value_type"),
+            ns("statistic"),
             label = NULL,
             choices = setNames(
               c("relative_to_med", "data", "percentile"),
@@ -169,11 +170,12 @@ mapSnowbull <- function(id, language) {
     processed_data <- shiny::reactive({
       shiny::req(input$year, input$month)
 
-      get_processed_data(
+      get_display_data(
         year = input$year,
         month = input$month,
-        snowbull_data = snowbull_data,
+        snowbull_timeseries = snowbull_timeseries,
         shiny = TRUE,
+        statistic = input$statistic,
         language = language$language
       )
     })
@@ -182,9 +184,10 @@ mapSnowbull <- function(id, language) {
     map_output <- shiny::reactive({
       make_leaflet_map(
         data = processed_data(),
-        value_type = input$value_type,
+        statistic = input$statistic,
         language = language$language,
-        snowbull_data = snowbull_data,
+        snowbull_timeseries = snowbull_timeseries,
+        snowbull_shapefiles = snowbull_shapefiles,
         month = as.integer(input$month),
         year = as.integer(input$year)
       )
@@ -210,8 +213,8 @@ mapSnowbull <- function(id, language) {
       plot_html <-
         if (input$generate_plot$type == "pillow") {
           create_continuous_plot_popup(
-            timeseries = snowbull_data$pillows$timeseries$data[
-              snowbull_data$pillows$timeseries$data$datetime <=
+            timeseries = snowbull_timeseries$swe$pillows$timeseries$data[
+              snowbull_timeseries$swe$pillows$timeseries$data$datetime <=
                 as.Date(paste0(input$year, "-12-31")),
               c("datetime", as.character(input$generate_plot$station_id))
             ],
@@ -222,8 +225,8 @@ mapSnowbull <- function(id, language) {
           )
         } else if (input$generate_plot$type == "survey") {
           create_discrete_plot_popup(
-            timeseries = snowbull_data$surveys$timeseries$data[
-              snowbull_data$surveys$timeseries$data$datetime <=
+            timeseries = snowbull_timeseries$swe$surveys$timeseries$data[
+              snowbull_timeseries$swe$surveys$timeseries$data$datetime <=
                 as.Date(paste0(input$year, "-12-31")),
               c("datetime", as.character(input$generate_plot$station_id))
             ],
@@ -232,8 +235,8 @@ mapSnowbull <- function(id, language) {
           )
         } else if (input$generate_plot$type == "basin") {
           create_discrete_plot_popup(
-            timeseries = snowbull_data$basins$timeseries$data[
-              snowbull_data$basins$timeseries$data$datetime <=
+            timeseries = snowbull_timeseries$swe$basins$timeseries$data[
+              snowbull_timeseries$swe$basins$timeseries$data$datetime <=
                 as.Date(paste0(input$year, "-12-31")),
               c(
                 "datetime",

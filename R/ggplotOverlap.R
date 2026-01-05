@@ -22,6 +22,7 @@
 #'
 #' @param location The location for which you want a plot.
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
+#' @param units The units to display on the y-axis. Default is "" and the function will attempt to find the appropriate units from the database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
 #' @param startDay The start day of year for the plot x-axis. Can be specified as a number from 1 to 365, as a character string of form "yyyy-mm-dd", or as a date object. Either way the day of year is the only portion used, specify years to plot under parameter `years`.
 #' @param endDay The end day of year for the plot x-axis. As per `startDay`.
@@ -86,6 +87,7 @@
 ggplotOverlap <- function(
   location,
   parameter,
+  units = "",
   record_rate = NULL,
   startDay = 1,
   endDay = 365,
@@ -341,61 +343,61 @@ ggplotOverlap <- function(
     )
   }
 
-  #Confirm parameter and location exist in the database and that there is only one entry
-  if (inherits(parameter, "character")) {
-    escaped_parameter <- gsub("'", "''", parameter)
-    parameter_tbl <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '",
-        escaped_parameter,
-        "' OR param_name_fr = '",
-        escaped_parameter,
-        "';"
+  #### ------------------------- Data is not provided ---------------------- ####
+  if (is.null(continuous_data)) {
+    #Confirm parameter and location exist in the database and that there is only one entry
+    if (inherits(parameter, "character")) {
+      escaped_parameter <- gsub("'", "''", parameter)
+      parameter_tbl <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '",
+          escaped_parameter,
+          "' OR param_name_fr = '",
+          escaped_parameter,
+          "';"
+        )
       )
-    )
-    parameter_code <- parameter_tbl$parameter_id[1]
-    if (is.na(parameter_code)) {
-      stop("The parameter you entered does not exist in the database.")
+      parameter_code <- parameter_tbl$parameter_id[1]
+      if (is.na(parameter_code)) {
+        stop("The parameter you entered does not exist in the database.")
+      }
+    } else if (inherits(parameter, "numeric")) {
+      parameter_tbl <- dbGetQueryDT(
+        con,
+        paste0(
+          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ",
+          parameter,
+          ";"
+        )
+      )
+      if (nrow(parameter_tbl) == 0) {
+        stop("The parameter you entered does not exist in the database.")
+      }
+      parameter_code <- parameter
     }
-  } else if (inherits(parameter, "numeric")) {
-    parameter_tbl <- dbGetQueryDT(
+    # Default to the english name if the french name is not available
+    parameter_tbl[
+      is.na(parameter_tbl$param_name_fr),
+      "param_name_fr"
+    ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
+
+    if (lang == "fr") {
+      parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
+    } else if (lang == "en" || is.na(parameter_name)) {
+      parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
+    }
+
+    # Find the ts units
+    units <- dbGetQueryDT(
       con,
       paste0(
-        "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ",
-        parameter,
+        "SELECT unit_default FROM parameters WHERE parameter_id = ",
+        parameter_code,
         ";"
       )
     )
-    if (nrow(parameter_tbl) == 0) {
-      stop("The parameter you entered does not exist in the database.")
-    }
-    parameter_code <- parameter
-  }
-  # Default to the english name if the french name is not available
-  parameter_tbl[
-    is.na(parameter_tbl$param_name_fr),
-    "param_name_fr"
-  ] <- parameter_tbl[is.na(parameter_tbl$param_name_fr), "param_name"]
 
-  if (lang == "fr") {
-    parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-  } else if (lang == "en" || is.na(parameter_name)) {
-    parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
-  }
-
-  # Find the ts units
-  units <- dbGetQueryDT(
-    con,
-    paste0(
-      "SELECT unit_default FROM parameters WHERE parameter_id = ",
-      parameter_code,
-      ";"
-    )
-  )
-
-  #### ------------------------- Data is not provided ---------------------- ####
-  if (is.null(continuous_data)) {
     location_id <- dbGetQueryDT(
       con,
       paste0(

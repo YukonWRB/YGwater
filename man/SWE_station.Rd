@@ -15,6 +15,8 @@ SWE_station(
   aquaCon = NULL,
   snowCon = NULL,
   summarise = TRUE,
+  historical_start_year = NULL,
+  historical_end_year = NULL,
   save_path = "choose"
 )
 }
@@ -38,6 +40,10 @@ SWE_station(
 \item{snowCon}{A connection to the snow database. If NULL, a new connection will be created with \code{\link[=snowConnect]{snowConnect()}} and automatically closed. If aquaCon is not NULL but snowCon is NULL, connection to the snow DB will be attempted at the same host and port as the aquacache connection.}
 
 \item{summarise}{TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.}
+
+\item{historical_start_year}{The first year to include in the historical statistics. If NULL, all years prior to 'year' are included.}
+
+\item{historical_end_year}{The last year to include in the historical statistics. If NULL}
 
 \item{save_path}{The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.}
 }
