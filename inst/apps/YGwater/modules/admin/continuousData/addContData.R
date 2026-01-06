@@ -237,14 +237,14 @@ addContData <- function(id) {
           selectizeInput(
             ns('upload_datetime_col'),
             'Select the column for datetime:',
-            choices = names(df),
-            selected = names(df)[1]
+            choices = names(data$upload_raw),
+            selected = names(data$upload_raw)[1]
           ),
           selectizeInput(
             ns('upload_value_col'),
             'Select the column for value:',
-            choices = names(df),
-            selected = names(df)[2]
+            choices = names(data$upload_raw),
+            selected = names(data$upload_raw)[2]
           ),
           easyClose = FALSE,
           footer = tagList(
