@@ -152,7 +152,8 @@ wellRegistry <- function(id, language) {
                   )]]
                 )
               ),
-              multiple = TRUE
+              multiple = TRUE,
+              selected = "all"
             ),
             sliderInput(
               ns("yrs"),
@@ -175,9 +176,33 @@ wellRegistry <- function(id, language) {
             # Add checkboxInput for wells with no known completion date
             checkboxInput(
               ns("include_unknown_completion"),
-              label = tr("include_unknown_completion", language$language),
+              label = tr("include_unknown_well_completion", language$language),
               value = TRUE
             ),
+            # Checkbox for missing well depth
+            checkboxInput(
+              ns("include_missing_depth"),
+              label = tr("include_missing_well_depth", language$language),
+              value = TRUE
+            ),
+            # Checkbox for wells with missing depth to water
+            checkboxInput(
+              ns("include_missing_depth_to_water"),
+              label = tr(
+                "include_missing_well_depth_to_water",
+                language$language
+              ),
+              value = TRUE
+            ),
+            # # Checkbox for wells with missing depth to bedrock
+            # checkboxInput(
+            #   ns("include_missing_depth_to_bedrock"),
+            #   label = tr(
+            #     "include_missing_well_depth_to_bedrock",
+            #     language$language
+            #   ),
+            #   value = TRUE
+            # ),
             actionButton(
               ns("reset"),
               tr("reset", language$language),
@@ -211,6 +236,21 @@ wellRegistry <- function(id, language) {
         "include_unknown_completion",
         value = TRUE
       )
+      updateCheckboxInput(
+        session,
+        "include_missing_depth",
+        value = TRUE
+      )
+      updateCheckboxInput(
+        session,
+        "include_missing_depth_to_water",
+        value = TRUE
+      )
+      # updateCheckboxInput(
+      #   session,
+      #   "include_missing_depth_to_bedrock",
+      #   value = TRUE
+      # )
     }) # End of observeEvent for reset filters button
 
     # Update map popup based on language ###########################################
@@ -616,6 +656,17 @@ wellRegistry <- function(id, language) {
           ]
         }
       }
+      out <<- wells_sub
+
+      if (isFALSE(input$include_missing_depth)) {
+        wells_sub <- wells_sub[!is.na(depth_m)]
+      }
+      if (isFALSE(input$include_missing_depth_to_water)) {
+        wells_sub <- wells_sub[!is.na(static_water_level_m)]
+      }
+      # if (isFALSE(input$include_missing_depth_to_bedrock)) {
+      #   wells_sub <- wells_sub[!is.na(depth_to_bedrock_m)]
+      # }
 
       wells_sub <- wells_sub[!is.na(latitude) & !is.na(longitude)]
 
@@ -740,6 +791,7 @@ wellRegistry <- function(id, language) {
       map_proxy
     }) # End of observe for map filters and rendering location points
 
+    # Create document download handlers ############################
     observeEvent(
       list(moduleData$documents, moduleData$boreholes_docs),
       {

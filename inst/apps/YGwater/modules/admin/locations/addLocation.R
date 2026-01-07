@@ -198,16 +198,22 @@ addLocation <- function(id, inputs) {
           cellWidths = c("50%", "50%"),
           numericInput(
             ns("lat"),
-            "Latitude (decimal degrees)",
+            "Latitude (decimal degrees, WGS84)",
             value = NA,
             width = "100%"
-          ),
+          ) |>
+            tooltip(
+              "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
+            ),
           numericInput(
             ns("lon"),
-            "Longitude (decimal degrees)",
+            "Longitude (decimal degrees, WGS84)",
             value = NA,
-            width = "100%"
-          )
+            width = "100%",
+          ) |>
+            tooltip(
+              "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
+            )
         ),
         uiOutput(ns("lat_warning")),
         uiOutput(ns("lon_warning")),
@@ -264,11 +270,10 @@ addLocation <- function(id, inputs) {
             moduleData$agreements$name
           ),
           options = list(
-            placeholder = "Optional - add the document first if needed",
-            maxItems = 1
+            placeholder = "Optional - add the document first if needed"
           ),
           width = "100%",
-          multiple = TRUE # This is to force a default of nothing selected - overridden with options
+          multiple = FALSE
         ),
 
         splitLayout(
@@ -278,29 +283,35 @@ addLocation <- function(id, inputs) {
           ))),
           selectizeInput(
             ns("datum_id_from"),
-            "Datum ID from (Assumed datum is station 0)",
+            "Vertical datum from (Assumed datum is station 0)",
+            choices = stats::setNames(
+              moduleData$datums$datum_id,
+              titleCase(moduleData$datums$datum_name_en, "en")
+            ),
+            selected = 10,
+            width = "100%",
+            multiple = FALSE
+          ) |>
+            tooltip(
+              "This should almost always be 'Assumed Datum', the local measurements."
+            ),
+          selectizeInput(
+            ns("datum_id_to"),
+            "Vertical datum to (Use assumed datum if no conversion to apply)",
             choices = stats::setNames(
               moduleData$datums$datum_id,
               titleCase(moduleData$datums$datum_name_en, "en")
             ),
             selected = 10,
             width = "100%"
-          ),
-          selectizeInput(
-            ns("datum_id_to"),
-            "Datum ID to (Use assumed datum if no conversion to apply)",
-            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-            choices = stats::setNames(
-              moduleData$datums$datum_id,
-              titleCase(moduleData$datums$datum_name_en, "en")
+          ) |>
+            tooltip(
+              "This is the datum you want to convert to. Use 'Assumed Datum' if no conversion is needed."
             ),
-            options = list(maxItems = 1), # Overrides multiple selection
-            width = "100%"
-          ),
           numericInput(
             ns("elev"),
             "Elevation conversion (meters, use 0 if not converting)",
-            value = NA,
+            value = 0,
             width = "100%"
           )
         ),
@@ -370,7 +381,12 @@ addLocation <- function(id, inputs) {
           placeholder = "Optional",
           width = "100%"
         ),
-        textInput(ns("loc_note"), "Location note", width = "100%"),
+        textInput(
+          ns("loc_note"),
+          "Location note",
+          placeholder = "Optional",
+          width = "100%"
+        ),
         actionButton(ns("add_loc"), "Add location", width = "100%")
       )
     })

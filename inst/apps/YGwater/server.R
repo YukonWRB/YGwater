@@ -993,7 +993,16 @@ $(document).keyup(function(event) {
             )
           }
           session$userData$admin_privs <- list(
-            addLocation = has_priv("public", "locations"),
+            addLocation = has_priv(
+              "public",
+              c(
+                "locations",
+                "locations_networks",
+                "locations_projects",
+                "networks",
+                "projects"
+              )
+            ),
             addSubLocation = has_priv("public", "sub_locations"),
             calibrate = has_priv("instruments", "calibrations"),
             deploy_recover = has_priv(

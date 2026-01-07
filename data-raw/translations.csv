@@ -279,7 +279,10 @@ remove_subplot,,Remove subplot,Enlever le sous-graphe
 add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the same plot, or 'Add subplot' to create a separate panel.","Cliquez sur « Ajouter un tracé » pour superposer une nouvelle série temporelle sur le même graphique, ou sur « Ajouter un sous-graphe » pour créer un panneau séparé."
 well_purpose,,Well purpose,Usage des puits
 well_completion_yr,,Well completion year,Année d'achèvement des puits
-include_unknown_completion,,Include wells with unknown completion year,Inclure les puits ou l'année d'achèvement est inconnue
+include_unknown_well_completion,,Include wells with unknown completion year,Inclure les puits ou l'année d'achèvement est inconnue
+include_missing_well_depth,,Include wells with missing depth,Inclure les puits où la profondeur est manquante
+include_missing_well_depth_to_water,,Include wells with missing depth to water,Inclure les puits où la profondeur
+include_missing_well_depth_to_bedrock,,Include wells with missing depth to bedrock,Inclure les puits où la profondeur jusqu'au substratum rocheux est manquante
 borehole_unnamed,,Unnamed well,Puits sans nom
 borehole_well_purpose_col,,purpose_name,purpose_name_fr
 licence_title,,Using data from this application,Utilisation des données de l'application
