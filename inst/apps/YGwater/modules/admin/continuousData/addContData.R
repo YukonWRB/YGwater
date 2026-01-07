@@ -263,10 +263,10 @@ addContData <- function(id) {
       input$confirm_mapping,
       {
         removeModal() # Close the modal dialog
-        req(input$datetime_col, input$value_col)
+        req(input$upload_datetime_col, input$upload_value_col)
         df_mapped <- data.frame(
-          datetime = data$upload_raw[[input$datetime_col]],
-          value = data$upload_raw[[input$value_col]]
+          datetime = data$upload_raw[[input$upload_datetime_col]],
+          value = data$upload_raw[[input$upload_value_col]]
         )
         data$df <- df_mapped
       },
