@@ -459,6 +459,10 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
           "SELECT p.borehole_well_purpose_id, p.purpose_name, p.purpose_name_fr, p.description FROM borehole_well_purposes AS p WHERE p.borehole_well_purpose_id IN (SELECT DISTINCT well_purpose_id FROM wells);"
         ),
         boreholes_docs = dbGetQueryDT(con, "SELECT * FROM boreholes_documents"),
+        documents = dbGetQueryDT(
+          con,
+          "SELECT document_id, name, format FROM files.documents"
+        ),
         # Merge boreholes and wells tables on borehole_id, discarding boreholes with no wells
         wells = dbGetQueryDT(
           con,

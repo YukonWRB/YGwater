@@ -1,8 +1,3 @@
-# Dev notes:
-
-# Keep same map feel/look as monitoring locations. Include pie chart markers, spider on max zoom
-# Keep sidebar layout, fewer filters than locations map
-
 wellRegistryUI <- function(id) {
   ns <- NS(id)
 
@@ -107,6 +102,7 @@ wellRegistry <- function(id, language) {
       wells = cached$wells,
       casing_materials = cached$casing_materials,
       boreholes_docs = cached$boreholes_docs,
+      documents = cached$documents,
       purposes = cached$purposes
     )
 
@@ -241,12 +237,65 @@ wellRegistry <- function(id, language) {
               borehole_name
             )
           )]
+          unknown_label <- tr("unknown", language$language)
+          docs_by_borehole <- data.table::copy(moduleData$boreholes_docs)[
+            moduleData$documents,
+            on = .(document_id),
+            `:=`(
+              document_name = i.name,
+              document_format = i.format,
+              download_id = paste0("download_document_", i.document_id)
+            )
+          ]
+
+          # Create download links for documents
+          doc_links <- docs_by_borehole[,
+            .(
+              document_count = .N,
+              document_links = paste0(
+                "<li>",
+                vapply(
+                  seq_len(.N),
+                  function(idx) {
+                    doc_label <- document_name[idx]
+                    if (is.na(doc_label) || !nzchar(doc_label)) {
+                      doc_label <- paste(
+                        tr("document_download", language$language),
+                        document_id[idx]
+                      )
+                    }
+                    if (
+                      !is.na(document_format[idx]) &&
+                        nzchar(document_format[idx])
+                    ) {
+                      doc_label <- paste0(
+                        doc_label,
+                        " (",
+                        document_format[idx],
+                        ")"
+                      )
+                    }
+                    as.character(
+                      shiny::downloadLink(
+                        ns(download_id[idx]),
+                        label = htmltools::htmlEscape(doc_label)
+                      )
+                    )
+                  },
+                  character(1)
+                ),
+                "</li>",
+                collapse = ""
+              )
+            ),
+            by = borehole_id
+          ]
           # drill date for each well
           drill_date <- moduleData$wells[, .(
             borehole_id,
             completion_date = data.table::fifelse(
               is.na(completion_date),
-              tr("unknown", language$language),
+              unknown_label,
               as.character(completion_date)
             )
           )]
@@ -257,6 +306,13 @@ wellRegistry <- function(id, language) {
             by = borehole_id
           ]
 
+          purposes_lookup <- moduleData$purposes[, .(
+            borehole_well_purpose_id,
+            purpose_name = get(
+              tr("borehole_well_purpose_col", language$language)
+            )
+          )]
+
           # Combine all the data
           tmp <- data.table::copy(popup_names) # Use copy to avoid modifying the original data table
           tmp[
@@ -265,9 +321,34 @@ wellRegistry <- function(id, language) {
             drill_date := completion_date
           ] # Join drill_date
           tmp[
+            moduleData$wells,
+            on = .(borehole_id),
+            `:=`(
+              depth_m = i.depth_m,
+              depth_to_bedrock_m = i.depth_to_bedrock_m,
+              static_water_level_m = i.static_water_level_m,
+              estimated_yield_lps = i.estimated_yield_lps,
+              casing_diameter_mm = i.casing_diameter_mm,
+              latitude = i.latitude,
+              longitude = i.longitude,
+              well_purpose_id = i.well_purpose_id
+            )
+          ] # Join other well info
+          tmp[
+            purposes_lookup,
+            on = .(well_purpose_id = borehole_well_purpose_id),
+            purpose_name := i.purpose_name
+          ] # Join purpose name
+          tmp[
             docs_count,
             on = .(borehole_id),
             document_count := i.document_count
+          ] # Join document count
+
+          tmp[
+            doc_links,
+            on = .(borehole_id),
+            document_links := i.document_links
           ]
           tmp[is.na(document_count), document_count := 0]
 
@@ -276,13 +357,69 @@ wellRegistry <- function(id, language) {
               "<strong>",
               popup_name,
               "</strong><br/>",
-              substr(drill_date, 1, 10),
-              "<br/>",
-              "Documents: ",
-              document_count
+              "<div><strong>Year drilled:</strong> ",
+              drill_date,
+              "</div>",
+              "<div><strong>Well purpose:</strong> ",
+              data.table::fifelse(
+                is.na(purpose_name) | !nzchar(purpose_name),
+                unknown_label,
+                purpose_name
+              ),
+              "</div>",
+              "<div><strong>Depth (m):</strong> ",
+              data.table::fifelse(
+                is.na(depth_m),
+                unknown_label,
+                as.character(round(depth_m, 4))
+              ),
+              "</div>",
+              "<div><strong>Depth to bedrock (m):</strong> ",
+              data.table::fifelse(
+                is.na(depth_to_bedrock_m),
+                unknown_label,
+                as.character(round(depth_to_bedrock_m, 4))
+              ),
+              "</div>",
+              "<div><strong>Static water level (m):</strong> ",
+              data.table::fifelse(
+                is.na(static_water_level_m),
+                unknown_label,
+                as.character(round(static_water_level_m, 4))
+              ),
+              "</div>",
+              "<div><strong>Estimated yield (L/s):</strong> ",
+              data.table::fifelse(
+                is.na(estimated_yield_lps),
+                unknown_label,
+                as.character(round(estimated_yield_lps, 2))
+              ),
+              "</div>",
+              "<div><strong>Casing diameter (mm):</strong> ",
+              data.table::fifelse(
+                is.na(casing_diameter_mm),
+                unknown_label,
+                as.character(round(casing_diameter_mm, 1))
+              ),
+              "</div>",
+              "<div><strong>Latitude:</strong> ",
+              round(latitude, 4),
+              "</div>",
+              "<div><strong>Longitude:</strong> ",
+              round(longitude, 4),
+              "</div>",
+              "<div><strong>",
+              tr("documents", language$language),
+              ":</strong> ",
+              document_count,
+              "</div>",
+              data.table::fifelse(
+                document_count > 0,
+                paste0("<ul>", document_links, "</ul>"),
+                ""
+              )
             )
           ]
-
           tmp
         },
         ttl = 60 * 60 * 24
@@ -293,7 +430,7 @@ wellRegistry <- function(id, language) {
     output$map <- leaflet::renderLeaflet({
       leaflet::leaflet(
         options = leaflet::leafletOptions(
-          maxZoom = 15,
+          maxZoom = 17,
           zoomSnap = 0.5,
           zoomDelta = 0.5,
           zoomPxPerZoomLevel = 120
@@ -314,9 +451,18 @@ wellRegistry <- function(id, language) {
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5) %>% # Center on Yukon
         htmlwidgets::onRender(
-          "function(el, x) {
-          L.control.zoom({position:'bottomright'}).addTo(this);
-        }"
+          "
+        function(el, x) {
+          var map = this;
+          L.control.zoom({position:'bottomright'}).addTo(map);
+  
+          map.on('popupopen', function(e) {
+            if (window.Shiny && e.popup && e.popup.getElement) {
+              Shiny.bindAll(e.popup.getElement());
+            }
+          });
+        }
+      "
         )
     }) |>
       bindEvent(language$language)
@@ -478,12 +624,10 @@ wellRegistry <- function(id, language) {
         on = .(borehole_id),
         popup_html := popup_html
       ]
-
-      unknown_label <- tr("unknown", language$language)
       wells_sub[, type_label := purpose_name]
       wells_sub[
         is.na(type_label) | trimws(type_label) == "",
-        type_label := unknown_label
+        type_label := tr("unknown", language$language)
       ]
 
       loc_types <- sort(unique(wells_sub$type_label))
@@ -595,5 +739,57 @@ wellRegistry <- function(id, language) {
       }
       map_proxy
     }) # End of observe for map filters and rendering location points
-  })
+
+    observeEvent(
+      list(moduleData$documents, moduleData$boreholes_docs),
+      {
+        req(moduleData$documents, moduleData$boreholes_docs)
+        doc_ids <- unique(moduleData$boreholes_docs$document_id)
+        if (length(doc_ids) == 0) {
+          return()
+        }
+        for (doc_id in doc_ids) {
+          local({
+            doc_id_local <- doc_id
+            output[[paste0("download_document_", doc_id_local)]] <-
+              downloadHandler(
+                filename = function() {
+                  doc <- DBI::dbGetQuery(
+                    session$userData$AquaCache,
+                    paste0(
+                      "SELECT name, format FROM files.documents ",
+                      "WHERE document_id = ",
+                      doc_id_local,
+                      ";"
+                    )
+                  )
+                  if (nrow(doc) != 1) {
+                    return("document")
+                  }
+                  name <- gsub("[^A-Za-z0-9_-]", "_", doc$name)
+                  format <- doc$format
+                  paste0(name, ".", format)
+                },
+                content = function(file) {
+                  doc <- DBI::dbGetQuery(
+                    session$userData$AquaCache,
+                    paste0(
+                      "SELECT document FROM files.documents ",
+                      "WHERE document_id = ",
+                      doc_id_local,
+                      ";"
+                    )
+                  )
+                  if (nrow(doc) != 1) {
+                    return(NULL)
+                  }
+                  writeBin(doc$document[[1]], file)
+                }
+              )
+          })
+        }
+      },
+      ignoreInit = FALSE
+    )
+  }) # End of moduleServer
 }
