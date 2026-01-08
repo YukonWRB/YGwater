@@ -230,15 +230,14 @@ WHERE schema_name NOT LIKE 'pg_%'
               length(input$schema_permissions) > 0
           ) {
             for (schema in input$schema_permissions) {
-              sql <- paste0(sprintf(
-                "GRANT USAGE ON SCHEMA %s TO %s;",
-                DBI::dbQuoteIdentifier(session$userData$AquaCache, schema),
-                DBI::dbQuoteIdentifier(
-                  session$userData$AquaCache,
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "GRANT USAGE ON SCHEMA $1 TO $2;",
+                params = list(
+                  schema,
                   input$group_name
                 )
-              ))
-              DBI::dbExecute(session$userData$AquaCache, sql)
+              )
             }
           }
 
@@ -248,31 +247,26 @@ WHERE schema_name NOT LIKE 'pg_%'
               for (table in tables) {
                 if (table == "All tables") {
                   for (schema in input$schema_permissions) {
-                    sql <- sprintf(
-                      "GRANT %s ON ALL TABLES IN SCHEMA %s TO %s;",
-                      permission,
-                      DBI::dbQuoteIdentifier(
-                        session$userData$AquaCache,
-                        schema
-                      ),
-                      DBI::dbQuoteIdentifier(
-                        session$userData$AquaCache,
+                    DBI::dbExecute(
+                      session$userData$AquaCache,
+                      "GRANT $1 ON ALL TABLES IN SCHEMA $2 TO $3;",
+                      params = list(
+                        permission,
+                        schema,
                         input$group_name
                       )
                     )
-                    DBI::dbExecute(session$userData$AquaCache, sql)
                   }
                 } else {
-                  sql <- sprintf(
-                    "GRANT %s ON TABLE %s TO %s;",
-                    permission,
-                    DBI::dbQuoteIdentifier(session$userData$AquaCache, table),
-                    DBI::dbQuoteIdentifier(
-                      session$userData$AquaCache,
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    "GRANT $1 ON TABLE $2 TO $3;",
+                    params = list(
+                      permission,
+                      table,
                       input$group_name
                     )
                   )
-                  DBI::dbExecute(session$userData$AquaCache, sql)
                 }
               }
             }
@@ -348,18 +342,14 @@ WHERE schema_name NOT LIKE 'pg_%'
       req(input$existing_user, input$existing_group)
       tryCatch(
         {
-          sql <- sprintf(
-            "GRANT %s TO %s;",
-            DBI::dbQuoteIdentifier(
-              session$userData$AquaCache,
-              input$existing_group
-            ),
-            DBI::dbQuoteIdentifier(
-              session$userData$AquaCache,
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "GRANT $1 TO $2;",
+            params = list(
+              input$existing_group,
               input$existing_user
             )
           )
-          DBI::dbExecute(session$userData$AquaCache, sql)
           output$status <- renderText(sprintf(
             "Added '%s' to '%s'",
             input$existing_user,
