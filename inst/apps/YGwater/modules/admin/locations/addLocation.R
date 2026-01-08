@@ -193,9 +193,8 @@ addLocation <- function(id, inputs) {
             width = "100%"
           )
         ),
-
         splitLayout(
-          cellWidths = c("50%", "50%"),
+          cellWidths = c("40%", "40%", "20%"),
           numericInput(
             ns("lat"),
             "Latitude (decimal degrees, WGS84)",
@@ -213,10 +212,21 @@ addLocation <- function(id, inputs) {
           ) |>
             tooltip(
               "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
-            )
+            ),
+          actionButton(
+            ns("open_map"),
+            "Choose or show coordinates on map",
+            icon = icon("map-location-dot"),
+            width = "100%",
+            # Bump it down a bit to align with numericInputs
+            style = "margin-top: 30px;"
+          )
         ),
-        uiOutput(ns("lat_warning")),
-        uiOutput(ns("lon_warning")),
+        splitLayout(
+          cellWidths = c("40%", "40%", "20%"),
+          uiOutput(ns("lat_warning")),
+          uiOutput(ns("lon_warning"))
+        ),
 
         selectizeInput(
           ns("loc_type"),
@@ -927,7 +937,6 @@ addLocation <- function(id, inputs) {
       }
     })
     # Update reactive values for longitude warning
-
     observe({
       req(input$lon)
       if (input$lon < -180 || input$lon > 180) {
@@ -951,7 +960,151 @@ addLocation <- function(id, inputs) {
         )
       }
     })
+    output$lon_warning <- renderUI({
+      if (!is.null(warnings$lon)) {
+        div(
+          style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
+          warnings$lon
+        )
+      }
+    })
 
+    ## Map picker ##############################################################
+    map_center <- reactiveVal(list(lat = 64.0, lon = -135.0, zoom = 4))
+    map_selection <- reactiveVal(NULL)
+
+    output$location_map <- leaflet::renderLeaflet({
+      center <- map_center()
+      sel <- isolate(map_selection())
+
+      m <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 19)) %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>%
+        leaflet::addProviderTiles(
+          leaflet::providers$Esri.WorldImagery,
+          group = "Satellite"
+        ) %>%
+        leaflet::addLayersControl(
+          baseGroups = c("Esri.WorldTopoMap", "Satellite"),
+          options = leaflet::layersControlOptions(collapsed = FALSE)
+        ) %>%
+        leaflet::addScaleBar(
+          options = leaflet::scaleBarOptions(imperial = FALSE)
+        ) %>%
+        leaflet::setView(lng = center$lon, lat = center$lat, zoom = center$zoom)
+
+      if (!is.null(sel)) {
+        m <- m %>%
+          leaflet::addCircleMarkers(
+            lng = sel$lon,
+            lat = sel$lat,
+            radius = 6,
+            color = "#007B8A",
+            fillOpacity = 0.9,
+            group = "selected_point"
+          )
+      }
+
+      m
+    }) %>%
+      bindEvent(input$open_map)
+
+    draw_selected_point <- function() {
+      sel <- isolate(map_selection())
+      if (is.null(sel)) {
+        print("No selection to draw")
+        return(invisible(NULL))
+      }
+      print("Drawing selected point on map")
+
+      leaflet::leafletProxy(ns("location_map"), session = session) %>%
+        leaflet::clearGroup("selected_point") %>%
+        leaflet::addCircleMarkers(
+          lng = sel$lon,
+          lat = sel$lat,
+          radius = 6,
+          color = "#007B8A",
+          fillOpacity = 0.9,
+          group = "selected_point"
+        )
+    }
+
+    output$map_zoom_note <- renderUI({
+      zoom <- input$location_map_zoom
+      if (is.null(zoom)) {
+        return(NULL)
+      }
+      if (zoom < 14) {
+        div(
+          style = "color: #b42318; font-size: 14px; margin-top: 8px;",
+          "Zoom in to level 14 or higher to save this location."
+        )
+      } else {
+        div(
+          style = "color: #027a48; font-size: 14px; margin-top: 8px;",
+          "Zoom level is sufficient to save."
+        )
+      }
+    })
+
+    observeEvent(input$open_map, {
+      current_lat <- input$lat
+      current_lon <- input$lon
+
+      if (isTruthy(current_lat) && isTruthy(current_lon)) {
+        map_center(list(lat = current_lat, lon = current_lon, zoom = 12))
+        map_selection(list(lat = current_lat, lon = current_lon))
+      } else {
+        map_center(list(lat = 64.0, lon = -135.0, zoom = 4))
+        map_selection(NULL)
+      }
+
+      showModal(modalDialog(
+        title = "Select location on map",
+        leaflet::leafletOutput(ns("location_map"), height = "400px"),
+        uiOutput(ns("map_zoom_note")),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_location_map"), "Use selected location")
+        ),
+        size = "l",
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$location_map_click, {
+      click <- input$location_map_click
+      map_selection(list(lat = click$lat, lon = click$lng))
+      draw_selected_point()
+    })
+
+    observeEvent(input$location_map_zoom, {
+      req(input$location_map_zoom)
+      if (input$location_map_zoom < 15) {
+        shinyjs::disable("save_location_map")
+      } else {
+        shinyjs::enable("save_location_map")
+      }
+    })
+
+    observeEvent(input$save_location_map, {
+      if (is.null(input$location_map_zoom) || input$location_map_zoom < 15) {
+        showNotification(
+          "Zoom in to level 15 or higher before saving.",
+          type = "warning"
+        )
+        return()
+      }
+      selection <- map_selection()
+      if (is.null(selection)) {
+        showNotification("Click a point on the map to select a location.")
+        return()
+      }
+      updateNumericInput(session, "lat", value = selection$lat)
+      updateNumericInput(session, "lon", value = selection$lon)
+      removeModal()
+    })
+
+    # Elevation conversion warning ################################################
     observe({
       req(input$datum_id_from, input$datum_id_to, input$elev)
       if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
@@ -962,21 +1115,11 @@ addLocation <- function(id, inputs) {
         warnings$elev <- NULL
       }
     })
-
     output$elev_warning <- renderUI({
       if (!is.null(warnings$elev)) {
         div(
           style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
           warnings$elev
-        )
-      }
-    })
-
-    output$lon_warning <- renderUI({
-      if (!is.null(warnings$lon)) {
-        div(
-          style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
-          warnings$lon
         )
       }
     })
