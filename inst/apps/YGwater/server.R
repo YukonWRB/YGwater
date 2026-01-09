@@ -415,7 +415,7 @@ app_server <- function(input, output, session) {
   )
 
   # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
-  session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues from Shiny Server
+  session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues when viewing plotly plots on Android devices
 
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$AquaCache)
@@ -963,47 +963,85 @@ $(document).keyup(function(event) {
           session$userData$table_privs <- DBI::dbGetQuery(
             session$userData$AquaCache,
             sql,
-            params = list(session$userData$config$dbUser) # or any role name
+            params = list(session$userData$config$dbUser)
+          )
+          # Create a qualified name column for easier filtering
+          session$userData$table_privs$qual_name <- paste0(
+            session$userData$table_privs$schema,
+            ".",
+            session$userData$table_privs$table_name
           )
 
           # If application.feedback is present but only has INSERT privileges, remove it
           if (
-            "application" %in%
-              session$userData$table_privs$schema &
-              "feedback" %in% session$userData$table_privs$table_name &
-              all(
-                session$userData$table_privs$extra_privileges[
-                  session$userData$table_privs$schema == "application" &
-                    session$userData$table_privs$table_name == "feedback"
-                ] ==
-                  "INSERT"
-              )
+            session$userData$table_privs$extra_privileges[
+              session$userData$table_privs$qual_name == "application.feedback"
+            ] ==
+              "INSERT"
           ) {
             session$userData$table_privs <- session$userData$table_privs[
-              !(session$userData$table_privs$schema == "application" &
-                session$userData$table_privs$table_name == "feedback"),
+              !session$userData$table_privs$qual_name == "application.feedback",
             ]
           }
 
           # Derive privilege flags for each admin nav_panel
-          has_priv <- function(schema, tables) {
-            any(
-              session$userData$table_privs$schema == schema &
-                session$userData$table_privs$table_name %in% tables
-            )
+          # @param qual_names A character vector of qualified table names (schema.table)
+          # @param priv A list of character vectors of privileges to check for each table in 'qual_names'. If length(priv) == 1, the same privileges are checked for all tables.
+          has_priv <- function(
+            qual_names,
+            priv = list(c(
+              "DELETE",
+              "INSERT",
+              "UPDATE"
+            ))
+          ) {
+            if (length(priv) > 1) {
+              # Ensure length 'priv' is same length as 'qual_names'
+              if (length(priv) != length(qual_names)) {
+                stop(
+                  "Length of 'priv' must be 1 or equal to length of 'qual_names'"
+                )
+              }
+            } else {
+              # Replicate 'priv' to match length of 'qual_names'
+              priv <- rep(priv, length(qual_names))
+            }
+            # Ensure the user has ALL of the specified privileges on ALL of the specified tables
+            for (i in seq_along(qual_names)) {
+              qn <- qual_names[i]
+              p <- priv[[i]]
+              user_privs <- session$userData$table_privs$extra_privileges[
+                session$userData$table_privs$qual_name == qn
+              ]
+              if (length(user_privs) == 0) {
+                return(FALSE)
+              }
+              user_privs_vec <- unlist(strsplit(user_privs, ", "))
+              if (!all(p %in% user_privs_vec)) {
+                return(FALSE)
+              }
+            }
           }
           session$userData$admin_privs <- list(
             addLocation = has_priv(
-              "public",
               c(
-                "locations",
-                "locations_networks",
-                "locations_projects",
-                "networks",
-                "projects"
+                "public.locations",
+                "public.locations_networks",
+                "public.locations_projects",
+                "public.networks",
+                "public.projects"
               )
             ),
-            addSubLocation = has_priv("public", "sub_locations"),
+            addSubLocation = has_priv(
+              c("public.sub_locations", "public.locations"),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("SELECT")
+              )
+            ),
             calibrate = has_priv("instruments", "calibrations"),
             deploy_recover = has_priv(
               "instruments",

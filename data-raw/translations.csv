@@ -225,6 +225,8 @@ map_actual_hist_range,,Historic range,Plage historique
 map_one_parameter,,One parameter,Un paramètre
 map_two_parameter,,Two parameters,Deux paramètres
 map_latest_measurements,,Latest measurements,Plus récentes mesures
+map_latest_auto_update,,Update every 15 minutes,Actualiser toutes les 15 minutes
+map_auto_update_notification,,Measurements updated,Mesures actualisées
 map_latest_measurements_modal,,"<b>Note</b>: Latest measurements are compared to the <i>average</i> values for the same day in past years. Keep this in mind for parameters that change a lot during the day, like temperature.","<b>Remarque</b> : Les mesures les plus récentes sont comparées aux valeurs <i>moyennes</i> de la même journée dans les années passées. Ceci impacte surtout les paramètres qui varient beaucoup au cours d’une journée, comme la température."
 map_primary_param,,Primary parameter,Paramètre primaire
 map_edit_primary_param,,Edit primary parameter,Modifer paramètre primaire

@@ -63,6 +63,15 @@ mapParams <- function(id, language) {
               tr("map_latest_measurements", language$language),
               value = FALSE
             ),
+            conditionalPanel(
+              condition = "input.latest == true",
+              ns = ns,
+              checkboxInput(
+                ns("auto_update_latest"),
+                tr("map_latest_auto_update", language$language),
+                value = FALSE
+              )
+            ),
             htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
             actionButton(
               ns("edit_primary_param"),
@@ -194,6 +203,7 @@ mapParams <- function(id, language) {
         map_params$latest <- TRUE
         map_params$target <- Sys.Date()
       } else {
+        updateCheckboxInput(session, "auto_update_latest", value = FALSE)
         map_params$latest <- FALSE
         map_params$target <- input$target
       }
@@ -854,6 +864,25 @@ mapParams <- function(id, language) {
       map
     }) |>
       bindEvent(language$language) # Re-render the map if the language changes
+
+    # Auto-update for latest measurements every 15 minutes
+    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000, session)
+
+    observeEvent(autoUpdateTimer(), {
+      req(mapCreated())
+      if (!map_params$latest || !isTRUE(input$auto_update_latest)) {
+        return()
+      }
+      updateDateInput(session, "target", value = Sys.Date())
+      map_params$target <- Sys.Date()
+      updateMap()
+      print("Auto-updated latest measurements map")
+      showNotification(
+        tr("map_auto_update_notification", language$language),
+        type = "message",
+        duration = 5
+      )
+    })
 
     # Observe the map being created and update it when the parameters change
     observe({

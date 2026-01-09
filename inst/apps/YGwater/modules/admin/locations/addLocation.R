@@ -1011,10 +1011,8 @@ addLocation <- function(id, inputs) {
     draw_selected_point <- function() {
       sel <- isolate(map_selection())
       if (is.null(sel)) {
-        print("No selection to draw")
         return(invisible(NULL))
       }
-      print("Drawing selected point on map")
 
       leaflet::leafletProxy(ns("location_map"), session = session) %>%
         leaflet::clearGroup("selected_point") %>%
@@ -2218,13 +2216,6 @@ addLocation <- function(id, inputs) {
             )
           )$location_id
           if (length(new_loc_id) == 1) {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              glue::glue_sql(
-                "DELETE FROM locations_networks WHERE location_id = {new_loc_id};",
-                .con = session$userData$AquaCache
-              )
-            )
             if (length(network_ids)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -2235,13 +2226,6 @@ addLocation <- function(id, inputs) {
                 )
               )
             }
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              glue::glue_sql(
-                "DELETE FROM locations_projects WHERE location_id = {new_loc_id};",
-                .con = session$userData$AquaCache
-              )
-            )
             if (length(project_ids)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
