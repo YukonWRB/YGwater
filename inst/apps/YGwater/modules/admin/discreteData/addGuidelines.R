@@ -1042,7 +1042,7 @@ FROM vals -- from the 'vals' CTE"
              VALUES ($1,$2,$3,$4,$5,$6)",
                 params = list(
                   sample_id,
-                  2, # result_type: adjust if your schema differs
+                  2,
                   req_df$parameter_id[i],
                   req_df$sample_fraction_id[i],
                   req_df$result_speciation_id[i],

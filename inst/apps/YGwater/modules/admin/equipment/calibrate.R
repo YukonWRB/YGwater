@@ -1058,14 +1058,11 @@ table.on("click", "tr", function() {
         # Add the new observer to the database
         DBI::dbExecute(
           session$userData$AquaCache,
-          paste0(
-            "INSERT INTO observers (observer_first, observer_last, organization) VALUES ('",
+          "INSERT INTO observers (observer_first, observer_last, organization) VALUES ($1, $2, $3)",
+          params = list(
             input$new_observer_first,
-            "', '",
             input$new_observer_last,
-            "', '",
-            input$new_observer_org,
-            "')"
+            input$new_observer_org
           )
         )
         # Update the observers data.frame and selectizeInputs
@@ -1163,12 +1160,10 @@ table.on("click", "tr", function() {
         }
         DBI::dbExecute(
           session$userData$AquaCache,
-          paste0(
-            "INSERT INTO instrument_make (make, description) VALUES ('",
+          "INSERT INTO instrument_make (make, description) VALUES ($1, $2)",
+          params = list(
             input$new_make,
-            "', '",
-            input$new_make_desc,
-            "')"
+            input$new_make_desc
           )
         )
         instruments_data$makes <- DBI::dbGetQuery(
@@ -1222,13 +1217,11 @@ table.on("click", "tr", function() {
           return()
         }
         DBI::dbExecute(
-          session$userData$AquaCache,
-          paste0(
-            "INSERT INTO instrument_model (model, description) VALUES ('",
+          con,
+          "INSERT INTO instrument_model (model, description) VALUES ($1, $2)",
+          params = list(
             input$new_model,
-            "', '",
-            input$new_model_desc,
-            "')"
+            input$new_model_desc
           )
         )
         instruments_data$models <- DBI::dbGetQuery(
@@ -1361,12 +1354,10 @@ table.on("click", "tr", function() {
         }
         DBI::dbExecute(
           session$userData$AquaCache,
-          paste0(
-            "INSERT INTO instrument_type (type, description) VALUES ('",
+          "INSERT INTO instrument_type (type, description) VALUES ($1, $2)",
+          params = list(
             input$new_type,
-            "', '",
-            input$new_type_desc,
-            "')"
+            input$new_type_desc
           )
         )
         instruments_data$types <- DBI::dbGetQuery(
@@ -1403,30 +1394,17 @@ table.on("click", "tr", function() {
           )
           return()
         }
-        if (input$new_sensor_desc == "") {
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            paste0(
-              "INSERT INTO sensor_types (sensor_type) VALUES ('",
-              input$new_sensor_type,
-              "')"
-            )
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO sensor_types (sensor_type) VALUES ($1, $2)",
+          params = list(
+            input$new_sensor_type,
+            if (input$new_sensor_desc == "") NA else input$new_sensor_desc
           )
-        } else {
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            paste0(
-              "INSERT INTO sensor_types (sensor_type, sensor_type_description) VALUES ('",
-              input$new_sensor_type,
-              "', '",
-              input$new_sensor_desc,
-              "')"
-            )
-          )
-        }
+        )
         sensors_data$sensor_types <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          paste0("SELECT * FROM sensor_types")
+          "SELECT * FROM sensor_types"
         )
         tmp <- setNames(
           c(sensors_data$sensor_types$sensor_type_id, "new"),
