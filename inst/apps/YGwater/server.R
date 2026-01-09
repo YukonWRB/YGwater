@@ -1031,6 +1031,22 @@ $(document).keyup(function(event) {
                 "public.locations_projects",
                 "public.networks",
                 "public.projects"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT")
               )
             ),
             addSubLocation = has_priv(

@@ -1847,6 +1847,7 @@ addLocation <- function(id, inputs) {
             )$network_id
             existing_networks <- parse_ids(existing_networks)
             if (!identical(sort(existing_networks), sort(desired_networks))) {
+              # NOTE: This will fail if the user doesn't have DELETE privileges on locations_networks. The main server checks DO NOT verify for this privilege to not otherwise block the rest of the module's functionality.
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
@@ -1877,6 +1878,7 @@ addLocation <- function(id, inputs) {
             )$project_id
             existing_projects <- parse_ids(existing_projects)
             if (!identical(sort(existing_projects), sort(desired_projects))) {
+              # NOTE: This will fail if the user doesn't have DELETE privileges on locations_projects. The main server checks DO NOT verify for this privilege to not otherwise block the rest of the module's functionality.
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
