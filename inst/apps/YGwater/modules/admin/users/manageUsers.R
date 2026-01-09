@@ -29,7 +29,7 @@ manageUsersUI <- function(id) {
       conditionalPanel(
         condition = "input.group_user == 'users_to_groups'",
         ns = ns,
-        h4(
+        h5(
           "Add user to a group. They'll inherit that the group's default permissions on schemas and tables as well as see records restricted to that group. You can add users to multiple groups as needed."
         ),
         selectInput(ns("existing_user"), "User", choices = NULL),
@@ -61,7 +61,7 @@ WHERE schema_name NOT LIKE 'pg_%'
     load_roles <- function() {
       roles <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname !~ '^pg_' ORDER BY rolname"
+        "SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname !~ '^pg_' AND rolname NOT IN ('admin', 'postgres') ORDER BY rolname"
       )
       users <- roles$rolname[roles$rolcanlogin]
       groups <- roles$rolname[!roles$rolcanlogin]

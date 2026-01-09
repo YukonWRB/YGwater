@@ -866,7 +866,7 @@ mapParams <- function(id, language) {
       bindEvent(language$language) # Re-render the map if the language changes
 
     # Auto-update for latest measurements every 15 minutes
-    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000, session)
+    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000) # 15 minutes in milliseconds
 
     observeEvent(autoUpdateTimer(), {
       req(mapCreated())
@@ -876,7 +876,6 @@ mapParams <- function(id, language) {
       updateDateInput(session, "target", value = Sys.Date())
       map_params$target <- Sys.Date()
       updateMap()
-      print("Auto-updated latest measurements map")
       showNotification(
         tr("map_auto_update_notification", language$language),
         type = "message",

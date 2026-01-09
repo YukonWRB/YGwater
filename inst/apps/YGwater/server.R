@@ -26,7 +26,7 @@ app_server <- function(input, output, session) {
       "maps",
       "reports",
       "images",
-      "documents",
+      "docTableView",
       "data",
       "info",
       "WWR"
@@ -948,13 +948,13 @@ $(document).keyup(function(event) {
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p')
-            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments')
+            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments', 'field')
         )
         SELECT t.schema,
                t.table_name,
                string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
         FROM tbls t
-        CROSS JOIN LATERAL unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
+        CROSS JOIN LATERAL unnest(ARRAY['SELECT', 'INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
         WHERE has_table_privilege($1, t.tbl_oid, p.priv)
         GROUP BY t.schema, t.table_name
         ORDER BY t.schema, t.table_name;"
@@ -1021,6 +1021,7 @@ $(document).keyup(function(event) {
                 return(FALSE)
               }
             }
+            return(TRUE)
           }
           session$userData$admin_privs <- list(
             addLocation = has_priv(
@@ -1042,70 +1043,344 @@ $(document).keyup(function(event) {
                 c("SELECT")
               )
             ),
-            calibrate = has_priv("instruments", "calibrations"),
-            deploy_recover = has_priv(
-              "instruments",
+            calibrate = has_priv(
               c(
-                "instruments",
-                "instrument_maintenance",
-                "array_maintenance_changes"
+                "instruments.calibrations",
+                "instruments.calibrate_ph",
+                "instruments.calibrate_temperature",
+                "instruments.calibrate_orp",
+                "instruments.calibrate_specific_conductance",
+                "instruments.calibrate_turbidity",
+                "instruments.calibrate_dissolved_oxygen",
+                "instruments.calibrate_depth",
+                "instruments.instruments",
+                "instruments.instrument_maintenance",
+                "instruments.array_maintenance_changes",
+                "instruments.sensors",
+                "instruments.sensor_types",
+                "instruments.instrument_make",
+                "instruments.instrument_model",
+                "instruments.instrument_type",
+                "instruments.observers",
+                "public.organizations"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT")
               )
             ),
-            addContData = has_priv(
-              "continuous",
-              c("measurements_continuous", "timeseries")
+            deploy_recover = has_priv(
+              c(
+                "instruments.instruments",
+                "instruments.instrument_maintenance",
+                "instruments.array_maintenance_changes"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                )
+              )
             ),
+            addContData = has_priv("continuous.measurements_continuous"),
             editContData = has_priv(
-              "continuous",
-              c("measurements_continuous", "timeseries")
+              "continuous.measurements_continuous",
+              list(c(
+                "UPDATE",
+                "DELETE"
+              ))
             ),
-            continuousCorrections = has_priv("continuous", "corrections"),
+            continuousCorrections = has_priv(
+              "continuous.corrections",
+              list(c("INSERT"))
+            ),
             imputeMissing = has_priv(
-              "continuous",
-              c("measurements_continuous")
+              "continuous.measurements_continuous"
             ),
             grades_approvals_qualifiers = has_priv(
-              "continuous",
-              c("grades", "approvals", "qualifiers")
-            ),
-            addTimeseries = has_priv("continuous", "timeseries"),
-            syncCont = has_priv(
-              "continuous",
               c(
-                "measurents_continuous",
-                "measurements_calculated_daily",
-                "timeseries"
+                "continuous.grades",
+                "continuous.approvals",
+                "continuous.qualifiers"
               )
             ),
-            addDiscData = has_priv("discrete", c("results", "samples")),
-            addSamples = has_priv("discrete", "samples"),
-            editDiscData = has_priv("discrete", c("results", "samples")),
-            addSampleSeries = has_priv("discrete", "sample_series"),
-            syncDisc = has_priv(
-              "discrete",
-              c("results", "samples", "sample_series")
-            ),
-            addGuidelines = has_priv("discrete", c("guidelines")),
-            addDocs = has_priv("files", "documents"),
-            addImgs = has_priv("files", "images"),
-            addImgSeries = has_priv("files", "image_series"),
-            boreholes_wells = has_priv("boreholes", c("boreholes", "wells")),
-            visit = has_priv(
-              "public",
+            addTimeseries = has_priv(
               c(
-                "locations_metadata_access",
-                "locations_metadata_infrastructure"
+                "continuous.timeseries",
+                "public.locations_z",
+                "public.organizations"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                ),
+                c("INSERT")
+              )
+            ),
+            syncCont = has_priv(
+              c(
+                "continuous.measurements_continuous",
+                "continuous.measurements_calculated_daily",
+                "continuous.timeseries"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("UPDATE")
+              )
+            ),
+            addDiscData = has_priv(
+              c(
+                "application.discrete_mappings",
+                "files.documents",
+                "discrete.samples",
+                "discrete.results"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            addSamples = has_priv(
+              "discrete.samples",
+              list(c(
+                "INSERT",
+                "UPDATE"
+              ))
+            ),
+            editDiscData = has_priv(
+              c("discrete.samples", "discrete.results"),
+              list(
+                c(
+                  "UPDATE",
+                  "DELETE"
+                ),
+                c(
+                  "UPDATE",
+                  "DELETE"
+                )
+              )
+            ),
+            addSampleSeries = has_priv(
+              c("discrete.sample_series", "public.organizations"),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT")
+              )
+            ),
+            syncDisc = has_priv(
+              c(
+                "discrete.sample_series",
+                "discrete.samples",
+                "discrete.results"
+              ),
+              list(
+                c("UPDATE"),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                )
+              )
+            ),
+            addGuidelines = has_priv(
+              c(
+                "discrete.guidelines",
+                "discrete.samples",
+                "discrete.results"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            addDocs = has_priv(
+              "files.documents",
+              list(c("INSERT"))
+            ),
+            addImgs = has_priv(
+              "files.images",
+              list(c("INSERT"))
+            ),
+            addImgSeries = has_priv(
+              c("files.image_series", "public.organizations"),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT")
+              )
+            ),
+            boreholes_wells = has_priv(
+              c(
+                "boreholes.boreholes",
+                "boreholes.wells",
+                "boreholes.drillers",
+                "boreholes.borehole_well_purposes"
+              ),
+              list(
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            visit = has_priv(
+              c(
+                "field.field_visits",
+                "field.field_visit_instruments"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                )
               )
             ),
             manageNewsContent = has_priv(
-              "application",
-              c("images", "text", "page_content")
+              c(
+                "application.images",
+                "application.text",
+                "application.page_content"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                )
+              )
             ),
-            viewFeedback = has_priv("application", "feedback")
+            viewFeedback = has_priv(
+              "application.feedback",
+              list(c("SELECT"))
+            )
           )
 
           # IF the user has more than SELECT privileges on any tables, show the 'admin' button
+          has_admin_privs <- FALSE
           if (nrow(session$userData$table_privs) > 0) {
+            has_admin_privs <- any(vapply(
+              session$userData$table_privs$extra_privileges,
+              function(privs) {
+                priv_list <- unlist(strsplit(privs, ", "))
+                any(priv_list != "SELECT")
+              },
+              logical(1)
+            ))
+          }
+          if (has_admin_privs) {
             # Create the new element for the 'admin' mode
             # Other tabs are created if/when the user clicks on the 'admin' actionButton
             nav_insert(

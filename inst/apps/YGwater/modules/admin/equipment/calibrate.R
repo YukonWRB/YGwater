@@ -67,10 +67,6 @@ calibrateUI <- function(id) {
         text = instrSelectBGCol,
         functions = c("backgroundCol")
       ),
-
-      # Title
-      titlePanel("Instrument Calibration and Tracking"),
-
       # Tabs
       tabsetPanel(
         id = ns("tab_panel"),
