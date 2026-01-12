@@ -1227,30 +1227,25 @@ addTimeseries <- function(id) {
                 )[1, 1]
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  paste0(
-                    "UPDATE timeseries SET z_id = ",
-                    new_z_id,
-                    " WHERE timeseries_id = ",
-                    selected_timeseries$timeseries_id
-                  )
+                  "UPDATE timeseries SET z_id = $1 WHERE timeseries_id = $2",
+                  params = list(new_z_id, selected_timeseries$timeseries_id)
                 )
               }
             } else {
               # Delete the entry in table locations_z if it exists, which will cascade delete the z_id in timeseries
               DBI::dbExecute(
                 con,
-                "DELETE FROM locations_z WHERE z_id = ",
-                selected_timeseries$z_id
+                "DELETE FROM locations_z WHERE z_id = $1",
+                params = list(selected_timeseries$z_id)
               )
             }
 
             if (input$parameter != selected_timeseries$parameter_id) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE timeseries SET parameter_id = '",
+                "UPDATE timeseries SET parameter_id = $1 WHERE timeseries_id = $2",
+                params = list(
                   input$parameter,
-                  "' WHERE timeseries_id = ",
                   selected_timeseries$timeseries_id
                 )
               )

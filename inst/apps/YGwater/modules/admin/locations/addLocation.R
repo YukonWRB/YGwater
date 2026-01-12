@@ -2225,7 +2225,7 @@ addLocation <- function(id, inputs) {
           )$location_id
           if (length(new_loc_id) == 1) {
             if (length(network_ids)) {
-              for (i in seq_along(networks_ids)) {
+              for (i in seq_along(network_ids)) {
                 net <- network_ids[i]
                 DBI::dbExecute(
                   session$userData$AquaCache,
