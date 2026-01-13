@@ -836,9 +836,27 @@ contPlot <- function(id, language, windowDims, inputs) {
       long_ts_plot$invoke(plot_request())
     })
 
-    # Render from the task result
-    output$plot <- plotly::renderPlotly({
-      plot <- long_ts_plot$result()$plot
+    observeEvent(input$cancel, {
+      removeModal()
+    })
+
+    observeEvent(long_ts_plot$result(), {
+      if (inherits(long_ts_plot$result(), "character")) {
+        showModal(modalDialog(
+          title = tr("error", language$language),
+          long_ts_plot$result(),
+          footer = tagList(
+            actionButton(ns("cancel"), tr("cancel", language$language))
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      # Render from the task result
+      output$plot <- plotly::renderPlotly({
+        isolate(long_ts_plot$result()$plot)
+      })
 
       # Create a full screen button if necessary
       if (!plot_created()) {
@@ -867,8 +885,6 @@ contPlot <- function(id, language, windowDims, inputs) {
         shinyjs::show("full_screen_ui")
       }
       plot_created(TRUE)
-
-      return(plot)
     }) # End renderPlotly
 
     # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
