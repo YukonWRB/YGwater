@@ -473,6 +473,8 @@ addLocation <- function(id, inputs) {
       tbl$name <- as.factor(tbl$name)
       tbl$name_fr <- as.factor(tbl$name_fr)
       tbl$location_type <- as.factor(tbl$location_type)
+      # Truncate the notes to 30 characters
+      tbl$note <- paste0(substr(tbl$note), "...")
       DT::datatable(
         moduleData$exist_locs,
         selection = "single",
@@ -663,6 +665,7 @@ addLocation <- function(id, inputs) {
             moduleData$organizations$organization_id,
             moduleData$organizations$name
           ),
+          multiple = TRUE,
           options = list(maxItems = 1),
           width = "100%"
         ),
@@ -673,6 +676,7 @@ addLocation <- function(id, inputs) {
             moduleData$organizations$organization_id,
             moduleData$organizations$name
           ),
+          multiple = TRUE,
           options = list(maxItems = 1),
           width = "100%"
         ),
