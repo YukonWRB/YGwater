@@ -82,12 +82,12 @@ addLocation <- function(id, inputs) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.location_images, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
+        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
         FROM locations l
         LEFT JOIN location_types lt ON l.location_type = lt.type_id
         LEFT JOIN locations_networks ln ON l.location_id = ln.location_id
         LEFT JOIN networks n ON ln.network_id = n.network_id
-        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.location_images, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
+        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
       )
       moduleData$exist_locs$network <- factor(
         ifelse(
@@ -102,7 +102,7 @@ addLocation <- function(id, inputs) {
       )
       moduleData$organizations = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT * FROM organizations"
+        "SELECT organization_id, name FROM organizations"
       )
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
       moduleData$agreements = DBI::dbGetQuery(
@@ -405,21 +405,26 @@ addLocation <- function(id, inputs) {
     selected_loc <- reactiveVal(NULL)
 
     output$loc_table <- DT::renderDT({
+      tbl <- moduleData$exist_locs
+      tbl$location <- as.factor(tbl$location)
+      tbl$name <- as.factor(tbl$name)
+      tbl$name_fr <- as.factor(tbl$name_fr)
+      tbl$location_type <- as.factor(tbl$location_type)
       DT::datatable(
         moduleData$exist_locs,
         selection = "single",
         options = list(
-          columnDefs = list(list(targets = c(0, 0), visible = FALSE)), # Hide location_id and network_id columns
+          columnDefs = list(list(targets = c(0, 9), visible = FALSE)), # Hide location_id and location_type_id columns
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             "function(settings, json) {",
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             "});",
             "}"
           )
@@ -459,6 +464,7 @@ addLocation <- function(id, inputs) {
             "share_with",
             selected = parse_share_with(details$share_with)
           )
+
           updateSelectizeInput(session, "loc_owner", selected = details$owner)
           updateTextInput(session, "loc_contact", value = details$contact)
           updateSelectizeInput(
@@ -551,18 +557,22 @@ addLocation <- function(id, inputs) {
 
         # If was on 'modify' prior, show a modal to the user asking if they want to clear fields
         if (!is.null(selected_loc())) {
-          showModal(modalDialog(
-            title = "Clear fields?",
-            "You have switched to 'add new' mode. Do you want to clear all fields to add a new location?",
-            easyClose = TRUE,
-            footer = tagList(
-              actionButton(ns("close"), "No, keep current values"),
-              actionButton(
-                ns("confirm_clear_fields"),
-                "Yes, clear fields"
+          if (!just_updated()) {
+            showModal(modalDialog(
+              title = "Clear fields?",
+              "You have switched to 'add new' mode. Do you want to clear all fields to add a new location?",
+              easyClose = TRUE,
+              footer = tagList(
+                actionButton(ns("close"), "No, keep current values"),
+                actionButton(
+                  ns("confirm_clear_fields"),
+                  "Yes, clear fields"
+                )
               )
-            )
-          ))
+            ))
+          } else {
+            just_updated(FALSE)
+          }
         }
       }
     })
@@ -1504,6 +1514,7 @@ addLocation <- function(id, inputs) {
 
     ## Observe the add_location click #################
     # Run checks, if everything passes call AquaCache::addACLocation or update the location details
+    just_updated <- reactiveVal(FALSE) # Prevents showing superfluous message of mode change after modification
     observeEvent(input$add_loc, {
       # Disable the button to prevent multiple clicks
       shinyjs::disable("add_loc")
@@ -2069,6 +2080,7 @@ addLocation <- function(id, inputs) {
             DBI::dbCommit(session$userData$AquaCache)
 
             # Update the moduleData reactiveValues
+            just_updated(TRUE) # Prevents superfluous message of mode change and reset
             getModuleData() # This should trigger an update to the table
           },
           error = function(e) {
@@ -2084,6 +2096,7 @@ addLocation <- function(id, inputs) {
         return()
       }
 
+      # At this point we're not modifying, we're creating
       if (!isTruthy(input$loc_code)) {
         showModal(modalDialog(
           "Location code is mandatory",

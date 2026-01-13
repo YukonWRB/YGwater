@@ -30,11 +30,11 @@ addSubLocation <- function(id, inputs) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, name, latitude, longitude FROM locations"
+        "SELECT location_id, name, latitude, longitude FROM locations ORDER BY name"
       )
       moduleData$exist_sub_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT sub_location_id, location_id, sub_location_name, sub_location_name_fr, latitude, longitude, note, share_with FROM sub_locations;"
+        "SELECT sub_location_id, location_id, sub_location_name, sub_location_name_fr, latitude, longitude, note, share_with FROM sub_locations ORDER BY sub_location_name;"
       )
       moduleData$users = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -84,7 +84,7 @@ addSubLocation <- function(id, inputs) {
             moduleData$exist_locs$location_id,
             moduleData$exist_locs$name
           ),
-          multiple = FALSE,
+          multiple = TRUE,
           options = list(maxItems = 1),
           width = "100%"
         ),
@@ -330,6 +330,7 @@ addSubLocation <- function(id, inputs) {
 
     primary_location <- reactive({
       req(moduleData$exist_locs)
+      req(!is.null(input$location))
       location_id <- suppressWarnings(as.integer(input$location))
       if (is.na(location_id)) {
         return(NULL)

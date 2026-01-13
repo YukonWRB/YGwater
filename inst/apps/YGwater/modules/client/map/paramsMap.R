@@ -294,7 +294,6 @@ mapParams <- function(id, language) {
         ),
         numericInput(
           ns("days"),
-          label = tr("map_date_within", language$language),
           label = tooltip(
             trigger = list(
               tr("map_date_within", language$language),

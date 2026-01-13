@@ -109,8 +109,8 @@ tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,M
 tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
 tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Lieu de la prise de la mesure ou de l’échantillon
 tooltip_utc7,table tool tips,UTC-7,UTC-7
-tooltip_params_map_min_yrs,,Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.,Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données.
-tooltip_params_map_date_within,,Maximum number of days from the target date to include a measurement. Use a lower threshold for parameters that change quickly (e.g., temperature).,Nombre maximum de jours à partir de la date ciblée pour inclure une mesure. Utilisez un seuil plus bas pour les paramètres qui changent rapidement (par exemple, la température).
+tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données".
+tooltip_params_map_date_within,,"Maximum number of days from the target date to include a measurement. Use a lower threshold for parameters that change quickly (e.g., temperature).","Nombre maximum de jours à partir de la date ciblée pour inclure une mesure. Utilisez un seuil plus bas pour les paramètres qui changent rapidement (par exemple, la température)."
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
 view_samples,,Show samples,Afficher les échantillons
