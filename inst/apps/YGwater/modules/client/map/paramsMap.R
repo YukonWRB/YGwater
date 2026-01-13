@@ -1,9 +1,41 @@
 mapParamsUI <- function(id) {
   ns <- NS(id)
 
-  # All UI elements rendered in server function to allow multi-language functionality
-  bslib::page_fluid(
-    uiOutput(ns("sidebar_page"))
+  tagList(
+    tags$style(
+      HTML(
+        "/* Make the ...preparing download... notification stand out more */
+        .shiny-notification {
+          font-size: 24px;
+          font-weight: bold;
+          background-color: #f9f9f9;  /* Light grey background */
+          color: #333;  /* Dark grey text */
+          padding: 15px;  /* Larger padding for more space */
+          border-left: 5px solid #007BFF;  /* Blue left border */
+          border-right: 5px solid #007BFF;  /* Blue right border */
+          border-top: 5px solid #007BFF;  /* Blue top border */
+          border-bottom: 5px solid #007BFF;  /* Blue bottom border */
+          border-radius: 10px;  /* Rounded corners */
+        }"
+      ),
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ",
+        ns("accordion")
+      ))
+    ),
+    # All UI elements rendered in server function to allow multi-language functionality
+    uiOutput(ns("top")),
+    uiOutput(ns("main"))
   )
 } # End of mapParamsUI
 
@@ -28,7 +60,25 @@ mapParams <- function(id, language) {
 
     mapCreated <- reactiveVal(FALSE) # Track whether the map has been initialized on the client
 
-    output$sidebar_page <- renderUI({
+    output$top <- renderUI({
+      tagList(
+        accordion(
+          id = ns("accordion"),
+          open = TRUE,
+          accordion_panel(
+            title = tr("instructions", language$language),
+            tags$p(HTML(tr(
+              "params_map_module_instructions",
+              language$language
+            ))),
+            tags$div(style = "height: 10px;")
+          )
+        )
+      )
+    }) |> # End of renderUI for instructions
+      bindEvent(language$language)
+
+    output$main <- renderUI({
       req(moduleData, language)
       mapCreated(FALSE)
       page_sidebar(
@@ -230,7 +280,13 @@ mapParams <- function(id, language) {
         ),
         numericInput(
           ns("yrs"),
-          label = tr("map_min_yrs", language$language),
+          label = tooltip(
+            trigger = list(
+              tr("map_min_yrs", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("tooltip_params_map_min_yrs", language$language),
+          ),
           value = map_params$yrs1,
           min = 3,
           max = 100,
@@ -239,6 +295,13 @@ mapParams <- function(id, language) {
         numericInput(
           ns("days"),
           label = tr("map_date_within", language$language),
+          label = tooltip(
+            trigger = list(
+              tr("map_date_within", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("tooltip_params_map_date_within", language$language),
+          ),
           value = map_params$days1,
           min = 0,
           max = 365,
