@@ -30,7 +30,7 @@ addSubLocation <- function(id, inputs) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, name FROM locations"
+        "SELECT location_id, name, latitude, longitude FROM locations"
       )
       moduleData$exist_sub_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -90,18 +90,32 @@ addSubLocation <- function(id, inputs) {
         ),
 
         splitLayout(
-          cellWidths = c("50%", "50%"),
+          cellWidths = c("40%", "40%", "20%"),
           numericInput(
             ns("lat"),
-            "Latitude (decimal degrees)",
+            "Latitude (decimal degrees, WGS84)",
             value = NA,
             width = "100%"
-          ),
+          ) |>
+            tooltip(
+              "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
+            ),
           numericInput(
             ns("lon"),
-            "Longitude (decimal degrees)",
+            "Longitude (decimal degrees, WGS84)",
             value = NA,
             width = "100%"
+          ) |>
+            tooltip(
+              "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate west of the prime meridian."
+            ),
+          actionButton(
+            ns("open_map"),
+            "Choose or show coordinates on map",
+            icon = icon("map-location-dot"),
+            width = "100%",
+            # Bump it down a bit to align with numericInputs
+            style = "margin-top: 30px;"
           )
         ),
         uiOutput(ns("lat_warning")),
@@ -308,6 +322,198 @@ addSubLocation <- function(id, inputs) {
           warnings$lon
         )
       }
+    })
+
+    ## Map picker ##############################################################
+    map_center <- reactiveVal(list(lat = 64.0, lon = -135.0, zoom = 4))
+    map_selection <- reactiveVal(NULL)
+
+    primary_location <- reactive({
+      req(moduleData$exist_locs)
+      location_id <- suppressWarnings(as.integer(input$location))
+      if (is.na(location_id)) {
+        return(NULL)
+      }
+      loc <- moduleData$exist_locs[
+        moduleData$exist_locs$location_id == location_id,
+      ]
+      if (nrow(loc) == 0 || is.na(loc$latitude) || is.na(loc$longitude)) {
+        return(NULL)
+      }
+      list(lat = loc$latitude, lon = loc$longitude, name = loc$name)
+    })
+
+    output$location_map <- leaflet::renderLeaflet({
+      center <- map_center()
+      sel <- isolate(map_selection())
+      primary <- isolate(primary_location())
+
+      m <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 19)) %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>%
+        leaflet::addProviderTiles(
+          leaflet::providers$Esri.WorldImagery,
+          group = "Satellite"
+        ) %>%
+        leaflet::addLayersControl(
+          baseGroups = c("Esri.WorldTopoMap", "Satellite"),
+          options = leaflet::layersControlOptions(collapsed = FALSE)
+        ) %>%
+        leaflet::addScaleBar(
+          options = leaflet::scaleBarOptions(imperial = FALSE)
+        ) %>%
+        leaflet::setView(lng = center$lon, lat = center$lat, zoom = center$zoom)
+
+      if (!is.null(primary)) {
+        m <- m %>%
+          leaflet::addCircleMarkers(
+            lng = primary$lon,
+            lat = primary$lat,
+            radius = 7,
+            color = "#b42318",
+            fillOpacity = 0.9,
+            group = "primary_point",
+            label = primary$name
+          )
+      }
+
+      if (!is.null(sel)) {
+        m <- m %>%
+          leaflet::addCircleMarkers(
+            lng = sel$lon,
+            lat = sel$lat,
+            radius = 6,
+            color = "#007B8A",
+            fillOpacity = 0.9,
+            group = "selected_point"
+          )
+      }
+
+      m
+    }) %>%
+      bindEvent(input$open_map)
+
+    draw_selected_point <- function() {
+      sel <- isolate(map_selection())
+      if (is.null(sel)) {
+        return(invisible(NULL))
+      }
+
+      leaflet::leafletProxy(ns("location_map"), session = session) %>%
+        leaflet::clearGroup("selected_point") %>%
+        leaflet::addCircleMarkers(
+          lng = sel$lon,
+          lat = sel$lat,
+          radius = 6,
+          color = "#007B8A",
+          fillOpacity = 0.9,
+          group = "selected_point"
+        )
+    }
+
+    draw_primary_point <- function() {
+      primary <- isolate(primary_location())
+      proxy <- leaflet::leafletProxy(ns("location_map"), session = session) %>%
+        leaflet::clearGroup("primary_point")
+      if (is.null(primary)) {
+        return(invisible(NULL))
+      }
+      proxy %>%
+        leaflet::addCircleMarkers(
+          lng = primary$lon,
+          lat = primary$lat,
+          radius = 7,
+          color = "#b42318",
+          fillOpacity = 0.9,
+          group = "primary_point",
+          label = primary$name
+        )
+    }
+
+    output$map_zoom_note <- renderUI({
+      zoom <- input$location_map_zoom
+      if (is.null(zoom)) {
+        return(NULL)
+      }
+      if (zoom < 14) {
+        div(
+          style = "color: #b42318; font-size: 14px; margin-top: 8px;",
+          "Zoom in to level 14 or higher to save this location."
+        )
+      } else {
+        div(
+          style = "color: #027a48; font-size: 14px; margin-top: 8px;",
+          "Zoom level is sufficient to save."
+        )
+      }
+    })
+
+    observeEvent(input$open_map, {
+      current_lat <- input$lat
+      current_lon <- input$lon
+      primary <- primary_location()
+
+      if (isTruthy(current_lat) && isTruthy(current_lon)) {
+        map_center(list(lat = current_lat, lon = current_lon, zoom = 12))
+        map_selection(list(lat = current_lat, lon = current_lon))
+      } else if (!is.null(primary)) {
+        map_center(list(lat = primary$lat, lon = primary$lon, zoom = 12))
+        map_selection(NULL)
+      } else {
+        map_center(list(lat = 64.0, lon = -135.0, zoom = 4))
+        map_selection(NULL)
+      }
+
+      showModal(modalDialog(
+        title = "Select sub-location on map",
+        leaflet::leafletOutput(ns("location_map"), height = "400px"),
+        uiOutput(ns("map_zoom_note")),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_location_map"), "Use selected location")
+        ),
+        size = "l",
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$location_map_click, {
+      click <- input$location_map_click
+      map_selection(list(lat = click$lat, lon = click$lng))
+      draw_selected_point()
+    })
+
+    observeEvent(primary_location(), {
+      if (is.null(input$open_map) || input$open_map == 0) {
+        return()
+      }
+      draw_primary_point()
+    })
+
+    observeEvent(input$location_map_zoom, {
+      req(input$location_map_zoom)
+      if (input$location_map_zoom < 14) {
+        shinyjs::disable("save_location_map")
+      } else {
+        shinyjs::enable("save_location_map")
+      }
+    })
+
+    observeEvent(input$save_location_map, {
+      if (is.null(input$location_map_zoom) || input$location_map_zoom < 14) {
+        showNotification(
+          "Zoom in to level 14 or higher before saving.",
+          type = "warning"
+        )
+        return()
+      }
+      selection <- map_selection()
+      if (is.null(selection)) {
+        showNotification("Click a point on the map to select a location.")
+        return()
+      }
+      updateNumericInput(session, "lat", value = selection$lat)
+      updateNumericInput(session, "lon", value = selection$lon)
+      removeModal()
     })
 
     ### Observe the share_with selectizeInput for new user groups ##############################

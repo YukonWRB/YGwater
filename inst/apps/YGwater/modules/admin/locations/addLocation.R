@@ -1077,7 +1077,7 @@ addLocation <- function(id, inputs) {
 
     observeEvent(input$location_map_zoom, {
       req(input$location_map_zoom)
-      if (input$location_map_zoom < 15) {
+      if (input$location_map_zoom < 14) {
         shinyjs::disable("save_location_map")
       } else {
         shinyjs::enable("save_location_map")
@@ -1085,9 +1085,9 @@ addLocation <- function(id, inputs) {
     })
 
     observeEvent(input$save_location_map, {
-      if (is.null(input$location_map_zoom) || input$location_map_zoom < 15) {
+      if (is.null(input$location_map_zoom) || input$location_map_zoom < 14) {
         showNotification(
-          "Zoom in to level 15 or higher before saving.",
+          "Zoom in to level 14 or higher before saving.",
           type = "warning"
         )
         return()

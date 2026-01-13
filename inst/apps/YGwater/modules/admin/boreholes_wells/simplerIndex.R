@@ -3249,7 +3249,11 @@ simplerIndex <- function(id) {
           updateTextInput(session, "name", value = "")
           updateTextInput(session, "notes_borehole", value = "")
           updateTextInput(session, "notes_well", value = "")
-          updateSelectizeInput(session, "location_source", selected = "GPS")
+          updateSelectizeInput(
+            session,
+            "location_source",
+            selected = "GPS, uncorrected"
+          )
           updateSelectizeInput(session, "utm_zone", selected = "8N")
           updateSelectizeInput(session, "purpose_of_borehole", selected = NULL)
           updateRadioButtons(
