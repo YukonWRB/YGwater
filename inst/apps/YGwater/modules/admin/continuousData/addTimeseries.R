@@ -979,21 +979,31 @@ addTimeseries <- function(id) {
         return()
       }
 
-      print(input$location)
-      print(input$sub_location)
-      print(input$tz)
-      print(input$z)
-      print(input$z_specify)
-      print(input$parameter)
-      print(input$media)
-      print(input$sensor_priority)
-      print(input$aggregation_type)
-      print(input$record_rate)
-      print(input$default_owner)
-      print(input$note)
-      print(input$source_fx)
-      print(input$source_fx_args)
-      print(input$share_with)
+      # if input$source_fx_args is not blank, validate that it is in the correct format.
+      # Should have no =, no "" or '', and have : separating key and value
+      if (nzchar(input$source_fx_args)) {
+        if (grepl("=", input$source_fx_args)) {
+          showNotification(
+            "Source function arguments should use ':' to separate keys and values, not '='.",
+            type = "error"
+          )
+          return()
+        }
+        if (grepl("\"|'", input$source_fx_args)) {
+          showNotification(
+            "Source function arguments should not contain quotes (\") or (').",
+            type = "error"
+          )
+          return()
+        }
+        if (!all(grepl(":", unlist(strsplit(input$source_fx_args, ",\\s*"))))) {
+          showNotification(
+            "Source function arguments should use ':' to separate keys and values.",
+            type = "error"
+          )
+          return()
+        }
+      }
 
       # Call the extendedTask to add a new timeseries
       addNewTimeseries$invoke(
@@ -1217,30 +1227,25 @@ addTimeseries <- function(id) {
                 )[1, 1]
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  paste0(
-                    "UPDATE timeseries SET z_id = ",
-                    new_z_id,
-                    " WHERE timeseries_id = ",
-                    selected_timeseries$timeseries_id
-                  )
+                  "UPDATE timeseries SET z_id = $1 WHERE timeseries_id = $2",
+                  params = list(new_z_id, selected_timeseries$timeseries_id)
                 )
               }
             } else {
               # Delete the entry in table locations_z if it exists, which will cascade delete the z_id in timeseries
               DBI::dbExecute(
                 con,
-                "DELETE FROM locations_z WHERE z_id = ",
-                selected_timeseries$z_id
+                "DELETE FROM locations_z WHERE z_id = $1",
+                params = list(selected_timeseries$z_id)
               )
             }
 
             if (input$parameter != selected_timeseries$parameter_id) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE timeseries SET parameter_id = '",
+                "UPDATE timeseries SET parameter_id = $1 WHERE timeseries_id = $2",
+                params = list(
                   input$parameter,
-                  "' WHERE timeseries_id = ",
                   selected_timeseries$timeseries_id
                 )
               )
