@@ -273,6 +273,44 @@ simplerIndexUI <- function(id) {
             "Borehole/well name *",
             placeholder = "Enter name"
           ),
+          checkboxInput(
+            ns("associate_loc_with_borehole"),
+            "Associate monitoring location with borehole",
+            value = FALSE
+          ),
+          conditionalPanel(
+            condition = "input.associate_loc_with_borehole == true",
+            ns = ns,
+            numericInput(
+              ns("location_search_radius"),
+              "Search radius for nearby locations (meters)",
+              value = 500,
+              min = 0
+            ),
+            actionButton(
+              ns("find_nearby_locations"),
+              "Find nearby locations",
+              width = "100%"
+            ),
+            uiOutput(ns("nearby_locations_count")),
+            selectizeInput(
+              ns("associated_location"),
+              "Associate with location (optional)",
+              choices = NULL,
+              selected = NULL,
+              options = list(
+                placeholder = "Choose a nearby location",
+                maxItems = 1
+              )
+            ),
+            actionButton(
+              ns("clear_location_association"),
+              "Clear location association",
+              class = "btn btn-outline-secondary",
+              width = "100%"
+            )
+          ),
+
           textInput(
             ns("notes_borehole"),
             "Boreholes notes",
@@ -922,6 +960,7 @@ simplerIndex <- function(id) {
 
     well_fields <- c(
       "name",
+      "location_id",
       "notes_well",
       "notes_borehole",
       "share_with_well",
@@ -1267,6 +1306,7 @@ simplerIndex <- function(id) {
         metadata$name,
         empty_to_null = TRUE
       )
+      sanitized$location_id <- parse_numeric(metadata$location_id)
       sanitized$notes_borehole <- parse_character_scalar(
         metadata$notes_borehole,
         empty_to_null = TRUE
@@ -1447,6 +1487,168 @@ simplerIndex <- function(id) {
       # If we got to here, return TRUE
       return(TRUE)
     }
+
+    # Bits to associate the borehole/well with a location
+    resolve_current_coords <- function() {
+      lat <- input$latitude
+      lon <- input$longitude
+      if (isTruthy(lat) && isTruthy(lon)) {
+        return(list(latitude = lat, longitude = lon))
+      }
+      if (
+        identical(tolower(input$coordinate_system), "utm") &&
+          isTruthy(input$easting) &&
+          isTruthy(input$northing) &&
+          isTruthy(input$utm_zone)
+      ) {
+        latlon <- convert_utm_to_ll(
+          input$easting,
+          input$northing,
+          input$utm_zone
+        )
+        return(list(latitude = latlon$latitude, longitude = latlon$longitude))
+      }
+      NULL
+    }
+
+    format_location_label <- function(row, include_distance = TRUE) {
+      name <- if (is.na(row$name) || !nzchar(row$name)) {
+        "Unnamed location"
+      } else {
+        row$name
+      }
+      label <- paste0(row$location, " - ", name)
+      if (include_distance && !is.na(row$distance_m)) {
+        label <- paste0(label, " (", round(row$distance_m), " m)")
+      }
+      label
+    }
+
+    update_location_choices <- function(locations_df, selected_id = NULL) {
+      choices <- NULL
+      if (!is.null(locations_df) && nrow(locations_df) > 0) {
+        labels <- vapply(
+          seq_len(nrow(locations_df)),
+          function(i) format_location_label(locations_df[i, ]),
+          character(1)
+        )
+        choices <- stats::setNames(locations_df$location_id, labels)
+      }
+
+      if (
+        isTruthy(selected_id) &&
+          (is.null(choices) || !selected_id %in% names(choices))
+      ) {
+        extra_location <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT location_id, location, name, latitude, longitude FROM public.locations WHERE location_id = $1",
+          params = list(selected_id)
+        )
+        if (nrow(extra_location) > 0) {
+          extra_labels <- stats::setNames(
+            extra_location$location_id,
+            vapply(
+              seq_len(nrow(extra_location)),
+              function(i) {
+                format_location_label(
+                  extra_location[i, ],
+                  include_distance = FALSE
+                )
+              },
+              character(1)
+            )
+          )
+          choices <- c(choices, extra_labels)
+        }
+      }
+
+      updateSelectizeInput(
+        session,
+        "associated_location",
+        choices = choices,
+        selected = selected_id,
+        options = list(
+          placeholder = "Choose a nearby location",
+          maxItems = 1
+        )
+      )
+    }
+
+    nearby_locations <- reactiveVal(data.frame())
+
+    observeEvent(input$find_nearby_locations, {
+      coords <- resolve_current_coords()
+      if (is.null(coords)) {
+        showNotification(
+          "Enter coordinates before searching for nearby locations.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      radius <- suppressWarnings(as.numeric(input$location_search_radius))
+      if (is.na(radius) || radius <= 0) {
+        showNotification(
+          "Enter a valid radius (meters) before searching.",
+          type = "error",
+          duration = 5
+        )
+        return()
+      }
+      locations <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        glue::glue_sql(
+          "SELECT location_id,
+                  location,
+                  name,
+                  latitude,
+                  longitude,
+                  ST_Distance(
+                    ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
+                    ST_SetSRID(ST_MakePoint({coords$longitude}, {coords$latitude}), 4326)::geography
+                  ) AS distance_m
+           FROM locations
+           WHERE latitude IS NOT NULL
+             AND longitude IS NOT NULL
+             AND ST_DWithin(
+               ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
+               ST_SetSRID(ST_MakePoint({coords$longitude}, {coords$latitude}), 4326)::geography,
+               {radius}
+             )
+           ORDER BY distance_m;",
+          .con = session$userData$AquaCache
+        )
+      )
+      nearby_locations(locations)
+      update_location_choices(
+        locations,
+        selected_id = input$associated_location
+      )
+      if (nrow(locations) == 0) {
+        showNotification(
+          "No locations found within the selected radius.",
+          type = "message",
+          duration = 5
+        )
+      }
+    })
+
+    output$nearby_locations_count <- renderUI({
+      locations <- nearby_locations()
+      if (is.null(locations) || nrow(locations) == 0) {
+        return(div("Nearby locations: 0"))
+      }
+      div(sprintf("Nearby locations: %d", nrow(locations)))
+    })
+
+    observeEvent(input$clear_location_association, {
+      updateSelectizeInput(
+        session,
+        "associated_location",
+        selected = character(0)
+      )
+    })
+    # End bits to associate the borehole/well with a location
 
     update_borehole_details_selector <- function(preferred = NULL) {
       choices <- names(rv$borehole_data)
@@ -2888,6 +3090,7 @@ simplerIndex <- function(id) {
       rv$borehole_data[[well_id]]$metadata <- list(
         borehole_id = well_id,
         name = input$name,
+        location_id = input$associated_location,
         notes_borehole = input$notes_borehole,
         notes_well = input$notes_well,
         coordinate_system = input$coordinate_system,
@@ -2947,6 +3150,10 @@ simplerIndex <- function(id) {
             session,
             "name",
             value = get_meta_value("name", metadata = metadata)
+          )
+          update_location_choices(
+            nearby_locations(),
+            selected_id = get_meta_value("location_id", metadata = metadata)
           )
           updateTextInput(
             session,
@@ -3247,6 +3454,10 @@ simplerIndex <- function(id) {
           loading_metadata(TRUE)
 
           updateTextInput(session, "name", value = "")
+          update_location_choices(
+            nearby_locations(),
+            selected_id = NULL
+          )
           updateTextInput(session, "notes_borehole", value = "")
           updateTextInput(session, "notes_well", value = "")
           updateSelectizeInput(
@@ -3389,6 +3600,7 @@ simplerIndex <- function(id) {
               con = session$userData$AquaCache,
               path = pdf_file_path,
               well_name = metadata[["name"]],
+              location_id = metadata[["location_id"]],
               latitude = metadata[["latitude"]],
               longitude = metadata[["longitude"]],
               location_source = metadata[["location_source"]],
@@ -3530,6 +3742,7 @@ simplerIndex <- function(id) {
               con = session$userData$AquaCache,
               path = pdf_file_path,
               well_name = metadata[["name"]],
+              location_id = metadata[["location_id"]],
               latitude = metadata[["latitude"]],
               longitude = metadata[["longitude"]],
               location_source = metadata[["location_source"]],
