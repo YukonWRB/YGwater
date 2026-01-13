@@ -92,6 +92,7 @@ addLocation <- function(id, inputs) {
           WHERE lmoo.location_id = l.location_id
             AND lmoo.start_datetime <= NOW()
             AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
+            AND sub_location_id IS NULL
           ORDER BY lmoo.start_datetime DESC
           LIMIT 1
         ) lmo ON TRUE
@@ -155,6 +156,7 @@ addLocation <- function(id, inputs) {
            WHERE lmoo.location_id = {location_id}
              AND lmoo.start_datetime <= NOW()
              AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
+             AND sub_location_id IS NULL
            ORDER BY lmoo.start_datetime DESC
            LIMIT 1;",
           .con = session$userData$AquaCache
@@ -613,6 +615,7 @@ addLocation <- function(id, inputs) {
            LEFT JOIN organizations owner_org ON owner_org.organization_id = lmoo.owner
            LEFT JOIN organizations operator_org ON operator_org.organization_id = lmoo.operator
            WHERE lmoo.location_id = {selected_loc()}
+           AND sub_location_id IS NULL
            ORDER BY lmoo.start_datetime;",
           .con = session$userData$AquaCache
         )
