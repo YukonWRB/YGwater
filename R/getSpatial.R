@@ -419,6 +419,7 @@ getRaster <- function(
 #' @param schema The schema in which the target 'table' is located. Default is 'spatial'. Note that this is NOT the default for [rpostgis::pgGetGeom()].
 #' @param geom_col The name of the database table column which holds the geometry object.
 #' @param silent Should the function suppress all messages?
+#' @param additional_query Additional SQL clauses to append to the WHERE clause of the query. Must begin with AND or OR and be formatted as a valid SQL clause. For example, "AND description LIKE 'River%'".
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return If successful, a terra object. If unsuccessful because the query targets more than 1 geometry types, a table showing you the result of the query.
@@ -442,6 +443,7 @@ getVector <- function(
   schema = "spatial",
   geom_col = "geom",
   silent = FALSE,
+  additional_query = NULL,
   con = NULL
 ) {
   if (is.null(con)) {
@@ -530,11 +532,26 @@ getVector <- function(
       "') AND"
     )
   }
+
+  # Trim the trailing AND if exists
   query <- gsub("\\s+AND$", "", query)
+
+  if (!is.null(additional_query) && nzchar(additional_query)) {
+    # Ensure additional_query starts with AND or OR
+    if (!grepl("^(AND|OR)\\s", additional_query, ignore.case = TRUE)) {
+      stop("additional_query must begin with AND or OR.")
+    }
+    query <- paste(query, additional_query)
+  }
+
   tbl <- DBI::dbGetQuery(con, query)
 
   if (nrow(tbl) == 0) {
-    stop("Your query returned no results (even before bounds were applied).")
+    stop(
+      "Your query ",
+      query,
+      " returned no results (even before bounds were applied)."
+    )
   }
 
   # Check if query resulted in multiple geom_types

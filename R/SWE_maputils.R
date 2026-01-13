@@ -183,7 +183,7 @@ get_static_style_elements <- function() {
             iconWidth = 16,
             iconHeight = 16,
             labelColor = "#222",
-            labelFontSize = "13px",
+            labelFontSize = "18px",
             labelFontWeight = "bold",
             labelFontStyle = "italic",
             labelTextShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
@@ -760,6 +760,102 @@ download_spatial_layer <- function(
     sf::st_sf(data, geometry = geom, crs = epsg)
 }
 
+#' @param con DBI database connection object
+#' @param parameter_name_long Character string of the parameter name to check
+#' @param epsg Integer EPSG code for coordinate transformation (default 4326)
+#' @return terra sf object with station locations
+#' @noRd
+download_continuous_ts_locations <- function(
+    con,
+    param_name_long,
+    epsg = 4326
+) {
+    # Build metadata query for continuous SWE timeseries
+    md_query <- paste0(
+        "SELECT
+            t.timeseries_id,
+            t.location_id,
+            l.location,
+            l.name,
+            l.latitude,
+            l.longitude,
+            dc.conversion_m
+         FROM continuous.timeseries t
+         JOIN public.locations l ON t.location_id = l.location_id
+         LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
+         WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters
+             WHERE param_name = %s)",
+        DBI::dbQuoteString(con, param_name_long)
+    )
+
+    md_continuous_df <- DBI::dbGetQuery(con, md_query)
+    if (nrow(md_continuous_df) == 0) {
+        warning("No continuous data stations found")
+        return(list(
+            timeseries = data.frame(datetime = as.POSIXct(character(0))),
+            metadata = NULL
+        ))
+    }
+
+    # Convert metadata to sf (WGS84)
+    md_continuous <- sf::st_as_sf(
+        md_continuous_df,
+        coords = c("longitude", "latitude"),
+        crs = 4326,
+        remove = FALSE
+    )
+}
+
+#' @param con DBI database connection object
+#' @param parameter_name_long Character string of the parameter name to check
+#' @param epsg Integer EPSG code for coordinate transformation (default 4326)
+#' @return terra sf object with station locations
+#' @noRd
+download_discrete_ts_locations <- function(con, param_name_long, epsg = 4326) {
+    # Build metadata query for discrete SWE timeseries
+    md_discrete_df <- DBI::dbGetQuery(
+        con,
+        sprintf(
+            "SELECT DISTINCT
+      l.location_id,
+      l.latitude,
+      l.longitude,
+      l.location,
+      l.name,
+      dc.conversion_m
+       FROM discrete.samples s
+       JOIN discrete.results r ON s.sample_id = r.sample_id
+       JOIN public.locations l ON s.location_id = l.location_id
+       LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
+       WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters
+             WHERE param_name = %s)",
+            DBI::dbQuoteString(con, param_name_long)
+        )
+    )
+
+    if (nrow(md_discrete_df) == 0) {
+        warning("No discrete SWE stations found")
+        return(list(
+            timeseries = list(
+                swe = data.frame(datetime = as.POSIXct(character(0)))
+            ),
+            metadata = NULL
+        ))
+    }
+
+    # Convert metadata to sf (WGS84)
+    md_discrete <- sf::st_as_sf(
+        md_discrete_df,
+        coords = c("longitude", "latitude"),
+        crs = 4326,
+        remove = FALSE
+    )
+
+    md_discrete <- sf::st_transform(md_discrete, crs = epsg)
+    return(md_discrete)
+}
+
+
 #' Retrieve continuous SWE timeseries and station metadata
 #'
 #' @param con DBI database connection object
@@ -771,6 +867,8 @@ download_spatial_layer <- function(
 #' @param end_date Character date string (YYYY-MM-DD) for filtering data
 #' @param resolution Character, either "daily" or "monthly" for data aggregation
 #' @param parameter_name Character string of the parameter name to retrieve
+#' @param epsg Integer EPSG code for coordinate transformation (default 4326)
+#' @param record_rate Character string for record rate filtering (default "01:00:00")
 #' @return A list with two elements:
 #' \describe{
 #'   \item{timeseries}{Named list containing a 'swe' data.frame with datetime and station columns}
@@ -800,7 +898,8 @@ download_continuous_ts <- function(
     end_date = sprintf("%d-01-01", 2100),
     resolution = "daily",
     parameter_name = "swe",
-    epsg = 4326
+    epsg = 4326,
+    record_rate = "01:00:00"
 ) {
     param_name_long <- standardize_parameter_name(parameter_name, long = TRUE)
 
@@ -818,44 +917,11 @@ download_continuous_ts <- function(
         ))
     }
 
-    # Build metadata query for continuous SWE timeseries
-    md_query <- paste0(
-        "SELECT
-            t.timeseries_id,
-            t.location_id,
-            l.location,
-            l.name,
-            l.latitude,
-            l.longitude,
-            dc.conversion_m
-         FROM continuous.timeseries t
-         JOIN public.locations l ON t.location_id = l.location_id
-         LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
-         WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters
-                                 WHERE param_name = ",
-        DBI::dbQuoteString(con, param_name_long),
-        ")"
+    md_continuous <- download_continuous_ts_locations(
+        con,
+        param_name_long,
+        epsg = epsg
     )
-
-    md_continuous_df <- DBI::dbGetQuery(con, md_query)
-
-    if (nrow(md_continuous_df) == 0) {
-        warning("No continuous data stations found")
-        return(list(
-            timeseries = data.frame(datetime = as.POSIXct(character(0))),
-            metadata = NULL
-        ))
-    }
-
-    # Convert metadata to sf (WGS84)
-    md_continuous <- sf::st_as_sf(
-        md_continuous_df,
-        coords = c("longitude", "latitude"),
-        crs = 4326,
-        remove = FALSE
-    )
-
-    md_continuous <- sf::st_transform(md_continuous, crs = epsg)
 
     ts_ids <- unique(md_continuous$timeseries_id)
     # Temporary list to hold per-station data.frames for latest-date calculation
@@ -1066,6 +1132,7 @@ check_parameter_exists <- function(con, parameter_name) {
 #' @param start_date Character date string (YYYY-MM-DD) for filtering data
 #' @param end_date Character date string (YYYY-MM-DD) for filtering data
 #' @param parameter_name Character string of the parameter name to retrieve
+#' @param epsg Integer EPSG code for coordinate transformation (default 4326)
 #' @return A list with two elements:
 #' \describe{
 #'   \item{timeseries}{Named list containing a 'swe' data.frame with datetime and station columns}
@@ -1113,46 +1180,11 @@ download_discrete_ts <- function(
         ))
     }
 
-    # Build metadata query for discrete SWE timeseries
-    md_discrete_df <- DBI::dbGetQuery(
+    md_discrete <- download_discrete_ts_locations(
         con,
-        sprintf(
-            "SELECT DISTINCT
-            l.location_id,
-            l.latitude,
-            l.longitude,
-            l.location,
-            l.name,
-            dc.conversion_m
-             FROM discrete.samples s
-             JOIN discrete.results r ON s.sample_id = r.sample_id
-             JOIN public.locations l ON s.location_id = l.location_id
-             LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
-             WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters
-                         WHERE param_name = %s)",
-            DBI::dbQuoteString(con, param_name_long)
-        )
+        param_name_long,
+        epsg = epsg
     )
-
-    if (nrow(md_discrete_df) == 0) {
-        warning("No discrete SWE stations found")
-        return(list(
-            timeseries = list(
-                swe = data.frame(datetime = as.POSIXct(character(0)))
-            ),
-            metadata = NULL
-        ))
-    }
-
-    # Convert metadata to sf (WGS84)
-    md_discrete <- sf::st_as_sf(
-        md_discrete_df,
-        coords = c("longitude", "latitude"),
-        crs = 4326,
-        remove = FALSE
-    )
-
-    md_discrete <- sf::st_transform(md_discrete, crs = epsg)
 
     ts_ids <- unique(md_discrete$location_id)
     ts_list_temp <- vector("list", length(ts_ids))
@@ -1480,7 +1512,12 @@ get_norms <- function(
     }
 
     # Calculate median (norm) for each station and month
-    station_norms <- apply(historical_distr, c(2, 3), median, na.rm = TRUE)
+    station_norms <- apply(
+        historical_distr,
+        c(2, 3),
+        stats::median,
+        na.rm = TRUE
+    )
     # station_norms: months x stations
 
     list(
@@ -1502,12 +1539,13 @@ apply_norms <- function(
     period <- get_period_dates(bulletin_year, bulletin_month)
     idx <- get_indices(parameter, ts, period$start_date, period$end_date)
 
-    station_current <- setNames(
+    station_current <- stats::setNames(
         sapply(station_names, function(station) aggr_fun(ts[idx, station])),
         station_names
     )
     # Save current_aggr in the same format as station_norms (named numeric vector)
     station_current <- as.numeric(station_current)
+    station_current[is.nan(station_current)] <- NA
     names(station_current) <- station_names
 
     norms_for_month <- norms$station_norms[
@@ -1517,6 +1555,15 @@ apply_norms <- function(
     relative_to_norm <- 100 *
         (station_current /
             norms_for_month)
+
+    snow_present <- !is.na(station_current) & station_current > 0
+    snow_not_present <- !is.na(station_current) & station_current == 0
+
+    median_is_zero <- !is.na(norms_for_month) & norms_for_month == 0
+    median_is_nonzero <- !is.na(norms_for_month) & norms_for_month > 0
+
+    relative_to_norm[median_is_zero & snow_not_present] <- -2
+    relative_to_norm[median_is_zero & snow_present] <- -1
 
     anomalies <- station_current -
         norms_for_month
@@ -1545,294 +1592,294 @@ apply_norms <- function(
 }
 
 
-#' Calculate historic daily median and relative change for timeseries
-#'
-#' @param ts Wide-format data.frame with 'datetime' column and station columns
-#' @param lookback_length Integer number of years to look back from each measurement (optional)
-#' @param lookback_start Integer year to start lookback period from (e.g., 1980) (optional)
-#' @param lookback_end Integer year to end lookback period (optional, defaults to current year - 1)
-#' @return A list with two elements:
-#' \describe{
-#'   \item{historic_median}{data.frame with historic median values for each date/station}
-#'   \item{relative_to_med}{data.frame with current values as percentage of historic median}
-#' }
-#'
-#' @param parameter Character string specifying the parameter name.
-#'
-#' @details
-#' The function handles special cases for relative SWE calculation:
-#' \itemize{
-#'   \item Standard percentage when historic median > 0
-#'   \item Value of -2 when both current and historic are zero
-#'   \item Value of -1 when current > 0 but historic is zero
-#' }
-#'
-#' Data is filtered to February-May and snapped to the 1st of each month for
-#' consistency with snow bulletin reporting periods.
-#'
-#' @examples
-#' \dontrun{
-#' # Calculate using fixed lookback year
-#' result <- calculate_historic_daily_median(ts_data, lookback_start = 1980)
-#'
-#' # Calculate using rolling 30-year window
-#' result <- calculate_historic_daily_median(ts_data, lookback_length = 30)
-#' }
+# #' Calculate historic daily median and relative change for timeseries
+# #'
+# #' @param ts Wide-format data.frame with 'datetime' column and station columns
+# #' @param lookback_length Integer number of years to look back from each measurement (optional)
+# #' @param lookback_start Integer year to start lookback period from (e.g., 1980) (optional)
+# #' @param lookback_end Integer year to end lookback period (optional, defaults to current year - 1)
+# #' @return A list with two elements:
+# #' \describe{
+# #'   \item{historic_median}{data.frame with historic median values for each date/station}
+# #'   \item{relative_to_med}{data.frame with current values as percentage of historic median}
+# #' }
+# #'
+# #' @param parameter Character string specifying the parameter name.
+# #'
+# #' @details
+# #' The function handles special cases for relative SWE calculation:
+# #' \itemize{
+# #'   \item Standard percentage when historic median > 0
+# #'   \item Value of -2 when both current and historic are zero
+# #'   \item Value of -1 when current > 0 but historic is zero
+# #' }
+# #'
+# #' Data is filtered to February-May and snapped to the 1st of each month for
+# #' consistency with snow bulletin reporting periods.
+# #'
+# #' @examples
+# #' \dontrun{
+# #' # Calculate using fixed lookback year
+# #' result <- calculate_historic_daily_median(ts_data, lookback_start = 1980)
+# #'
+# #' # Calculate using rolling 30-year window
+# #' result <- calculate_historic_daily_median(ts_data, lookback_length = 30)
+# #' }
 
-calculate_historic_daily_median <- function(
-    ts,
-    lookback_length = NULL,
-    lookback_start = NULL,
-    lookback_end = NULL
-) {
-    # Default behaviour if neither provided
-    if (is.null(lookback_start) && is.null(lookback_length)) {
-        lookback_start <- 1980
-    } else if (!is.null(lookback_start) && !is.null(lookback_length)) {
-        stop("Specify either lookback_start or lookback_length, not both.")
-    }
+# calculate_historic_daily_median <- function(
+#     ts,
+#     lookback_length = NULL,
+#     lookback_start = NULL,
+#     lookback_end = NULL
+# ) {
+#     # Default behaviour if neither provided
+#     if (is.null(lookback_start) && is.null(lookback_length)) {
+#         lookback_start <- 1980
+#     } else if (!is.null(lookback_start) && !is.null(lookback_length)) {
+#         stop("Specify either lookback_start or lookback_length, not both.")
+#     }
 
-    # Warning if lookback_end is not provided when using lookback_start
-    if (!is.null(lookback_start) && is.null(lookback_end)) {
-        warning(
-            "lookback_end not provided when using lookback_start. Defaulting to most recent historical value (current year - 1)."
-        )
-        lookback_end <- as.integer(format(Sys.Date(), "%Y")) - 1
-    }
+#     # Warning if lookback_end is not provided when using lookback_start
+#     if (!is.null(lookback_start) && is.null(lookback_end)) {
+#         warning(
+#             "lookback_end not provided when using lookback_start. Defaulting to most recent historical value (current year - 1)."
+#         )
+#         lookback_end <- as.integer(format(Sys.Date(), "%Y")) - 1
+#     }
 
-    if (!"datetime" %in% names(ts)) {
-        stop(sprintf(
-            "Input timeseries must contain 'datetime' column. Found columns: %s",
-            paste(names(ts), collapse = ", ")
-        ))
-    }
+#     if (!"datetime" %in% names(ts)) {
+#         stop(sprintf(
+#             "Input timeseries must contain 'datetime' column. Found columns: %s",
+#             paste(names(ts), collapse = ", ")
+#         ))
+#     }
 
-    if (lookback_start >= lookback_end && !is.null(lookback_end)) {
-        stop("lookback_start must be less than lookback_end.")
-    }
+#     if (lookback_start >= lookback_end && !is.null(lookback_end)) {
+#         stop("lookback_start must be less than lookback_end.")
+#     }
 
-    if (!is.null(lookback_start) && !is.null(lookback_end)) {
-        if (
-            lookback_start < 1800 ||
-                lookback_end < 1800 ||
-                lookback_start > as.integer(format(Sys.Date(), "%Y")) ||
-                lookback_end > as.integer(format(Sys.Date(), "%Y"))
-        ) {
-            stop(
-                "lookback_start and lookback_end must be valid years (>= 1800 and <= current year)."
-            )
-        }
-    }
+#     if (!is.null(lookback_start) && !is.null(lookback_end)) {
+#         if (
+#             lookback_start < 1800 ||
+#                 lookback_end < 1800 ||
+#                 lookback_start > as.integer(format(Sys.Date(), "%Y")) ||
+#                 lookback_end > as.integer(format(Sys.Date(), "%Y"))
+#         ) {
+#             stop(
+#                 "lookback_start and lookback_end must be valid years (>= 1800 and <= current year)."
+#             )
+#         }
+#     }
 
-    # For each unique year/month, if no value exists exactly on the 1st, grab the nearest value within 5 days
-    if ("datetime" %in% names(ts)) {
-        ts$year <- as.integer(format(ts$datetime, "%Y"))
-        ts$month <- as.integer(format(ts$datetime, "%m"))
-        ts$day <- as.integer(format(ts$datetime, "%d"))
+#     # For each unique year/month, if no value exists exactly on the 1st, grab the nearest value within 5 days
+#     if ("datetime" %in% names(ts)) {
+#         ts$year <- as.integer(format(ts$datetime, "%Y"))
+#         ts$month <- as.integer(format(ts$datetime, "%m"))
+#         ts$day <- as.integer(format(ts$datetime, "%d"))
 
-        # Only keep Feb-May
-        ts <- ts[ts$month %in% 2:5, , drop = FALSE]
+#         # Only keep Feb-May
+#         ts <- ts[ts$month %in% 2:5, , drop = FALSE]
 
-        # For each year/month, ensure a value exists for the 1st (or nearest within 5 days)
-        keep_rows <- logical(nrow(ts))
-        # Track which rows are snapped (not on the 1st)
-        snapped_rows <- logical(nrow(ts))
-        unique_ym <- unique(ts[, c("year", "month")])
-        for (i in seq_len(nrow(unique_ym))) {
-            y <- unique_ym$year[i]
-            m <- unique_ym$month[i]
-            idx <- which(ts$year == y & ts$month == m)
-            # Prefer day==1
-            idx1 <- idx[ts$day[idx] == 1]
-            if (length(idx1) > 0) {
-                keep_rows[idx1] <- TRUE
-            } else {
-                # Find nearest to 1st within 5 days
-                days_from_first <- abs(ts$day[idx] - 1)
-                min_diff <- min(days_from_first)
-                if (min_diff <= 5) {
-                    nearest_idx <- idx[which.min(days_from_first)]
-                    keep_rows[nearest_idx] <- TRUE
-                    snapped_rows[nearest_idx] <- TRUE
-                }
-            }
-        }
-        # Snap datetime to 1st of month for snapped rows
-        if (any(snapped_rows)) {
-            ts$datetime[snapped_rows] <- as.POSIXct(
-                sprintf(
-                    "%d-%02d-01",
-                    ts$year[snapped_rows],
-                    ts$month[snapped_rows]
-                ),
-                tz = "UTC"
-            )
-            ts$day[snapped_rows] <- 1
-        }
-        ts <- ts[keep_rows, , drop = FALSE]
-        # Remove extra columns
-        ts$year <- NULL
-        ts$month <- NULL
-        ts$day <- NULL
-        ts$date_first_of_month <- NULL
-        ts$date_diff_days <- NULL
-    }
+#         # For each year/month, ensure a value exists for the 1st (or nearest within 5 days)
+#         keep_rows <- logical(nrow(ts))
+#         # Track which rows are snapped (not on the 1st)
+#         snapped_rows <- logical(nrow(ts))
+#         unique_ym <- unique(ts[, c("year", "month")])
+#         for (i in seq_len(nrow(unique_ym))) {
+#             y <- unique_ym$year[i]
+#             m <- unique_ym$month[i]
+#             idx <- which(ts$year == y & ts$month == m)
+#             # Prefer day==1
+#             idx1 <- idx[ts$day[idx] == 1]
+#             if (length(idx1) > 0) {
+#                 keep_rows[idx1] <- TRUE
+#             } else {
+#                 # Find nearest to 1st within 5 days
+#                 days_from_first <- abs(ts$day[idx] - 1)
+#                 min_diff <- min(days_from_first)
+#                 if (min_diff <= 5) {
+#                     nearest_idx <- idx[which.min(days_from_first)]
+#                     keep_rows[nearest_idx] <- TRUE
+#                     snapped_rows[nearest_idx] <- TRUE
+#                 }
+#             }
+#         }
+#         # Snap datetime to 1st of month for snapped rows
+#         if (any(snapped_rows)) {
+#             ts$datetime[snapped_rows] <- as.POSIXct(
+#                 sprintf(
+#                     "%d-%02d-01",
+#                     ts$year[snapped_rows],
+#                     ts$month[snapped_rows]
+#                 ),
+#                 tz = "UTC"
+#             )
+#             ts$day[snapped_rows] <- 1
+#         }
+#         ts <- ts[keep_rows, , drop = FALSE]
+#         # Remove extra columns
+#         ts$year <- NULL
+#         ts$month <- NULL
+#         ts$day <- NULL
+#         ts$date_first_of_month <- NULL
+#         ts$date_diff_days <- NULL
+#     }
 
-    # Wide timeseries: datetime + one column per station (stations as columns)
-    if ("datetime" %in% names(ts)) {
-        ts$datetime <- as.POSIXct(ts$datetime, tz = "UTC")
-        n <- nrow(ts)
-        day <- as.integer(format(ts$datetime, "%d"))
-        month <- as.integer(format(ts$datetime, "%m"))
-        year <- as.integer(format(ts$datetime, "%Y"))
+#     # Wide timeseries: datetime + one column per station (stations as columns)
+#     if ("datetime" %in% names(ts)) {
+#         ts$datetime <- as.POSIXct(ts$datetime, tz = "UTC")
+#         n <- nrow(ts)
+#         day <- as.integer(format(ts$datetime, "%d"))
+#         month <- as.integer(format(ts$datetime, "%m"))
+#         year <- as.integer(format(ts$datetime, "%Y"))
 
-        #doy <- snap_doy(doy)
+#         #doy <- snap_doy(doy)
 
-        # station columns are everything except datetime (and any preexisting doy/year)
-        station_cols <- setdiff(names(ts), c("datetime", "doy", "year"))
-        # prepare output data.frames
-        hist_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
-        rel_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
-        perc_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+#         # station columns are everything except datetime (and any preexisting doy/year)
+#         station_cols <- setdiff(names(ts), c("datetime", "doy", "year"))
+#         # prepare output data.frames
+#         hist_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+#         rel_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
+#         perc_df <- data.frame(datetime = ts$datetime, stringsAsFactors = FALSE)
 
-        # Vectorized and grouped computation for speed
-        p <- length(station_cols)
-        if (p > 0) {
-            vals_mat <- as.matrix(ts[, station_cols, drop = FALSE]) # n x p
-            hist_mat <- matrix(NA_real_, nrow = n, ncol = p)
-            rel_mat <- matrix(NA_real_, nrow = n, ncol = p)
-            perc_mat <- matrix(NA_real_, nrow = n, ncol = p)
+#         # Vectorized and grouped computation for speed
+#         p <- length(station_cols)
+#         if (p > 0) {
+#             vals_mat <- as.matrix(ts[, station_cols, drop = FALSE]) # n x p
+#             hist_mat <- matrix(NA_real_, nrow = n, ncol = p)
+#             rel_mat <- matrix(NA_real_, nrow = n, ncol = p)
+#             perc_mat <- matrix(NA_real_, nrow = n, ncol = p)
 
-            # Group by month-day (usually day==1 after snapping), compute per group
-            grp <- paste(month, day, sep = "-")
-            ug <- unique(grp)
-            for (group_month_day in ug) {
-                group_indices <- which(grp == group_month_day)
-                # Ensure chronological order within group
-                group_indices <- group_indices[order(year[group_indices])]
+#             # Group by month-day (usually day==1 after snapping), compute per group
+#             grp <- paste(month, day, sep = "-")
+#             ug <- unique(grp)
+#             for (group_month_day in ug) {
+#                 group_indices <- which(grp == group_month_day)
+#                 # Ensure chronological order within group
+#                 group_indices <- group_indices[order(year[group_indices])]
 
-                # Precompute years vector for the group
-                group_years <- year[group_indices]
+#                 # Precompute years vector for the group
+#                 group_years <- year[group_indices]
 
-                for (current_idx in seq_along(group_indices)) {
-                    current_row <- group_indices[current_idx]
+#                 for (current_idx in seq_along(group_indices)) {
+#                     current_row <- group_indices[current_idx]
 
-                    # if lookback_start is provided, use that as fixed start year
-                    # default to the current year - 1 as lookback_end
-                    if (!is.null(lookback_start)) {
-                        historical_indices <- group_indices[which(
-                            group_years < group_years[current_idx] &
-                                group_years >= lookback_start &
-                                group_years <= lookback_end
-                        )]
+#                     # if lookback_start is provided, use that as fixed start year
+#                     # default to the current year - 1 as lookback_end
+#                     if (!is.null(lookback_start)) {
+#                         historical_indices <- group_indices[which(
+#                             group_years < group_years[current_idx] &
+#                                 group_years >= lookback_start &
+#                                 group_years <= lookback_end
+#                         )]
 
-                        # # if lookback_end is provided, apply that
-                        # if (!is.null(lookback_end)) {
-                        #     historical_indices <- historical_indices[which(
-                        #         group_years[historical_indices] <= lookback_end
-                        #     )]
-                        # }
+#                         # # if lookback_end is provided, apply that
+#                         # if (!is.null(lookback_end)) {
+#                         #     historical_indices <- historical_indices[which(
+#                         #         group_years[historical_indices] <= lookback_end
+#                         #     )]
+#                         # }
 
-                        # if lookback_length is provided, apply that. Note, this is secondary to lookback_start
-                    } else {
-                        historical_indices <- group_indices[which(
-                            group_years < group_years[current_idx] &
-                                group_years >=
-                                    (group_years[current_idx] - lookback_length)
-                        )]
-                    }
+#                         # if lookback_length is provided, apply that. Note, this is secondary to lookback_start
+#                     } else {
+#                         historical_indices <- group_indices[which(
+#                             group_years < group_years[current_idx] &
+#                                 group_years >=
+#                                     (group_years[current_idx] - lookback_length)
+#                         )]
+#                     }
 
-                    if (length(historical_indices) > 0) {
-                        historical_values <- vals_mat[
-                            historical_indices,
-                            ,
-                            drop = FALSE
-                        ]
-                        hist_mat[current_row, ] <- apply(
-                            historical_values,
-                            2,
-                            stats::median,
-                            na.rm = TRUE
-                        )
+#                     if (length(historical_indices) > 0) {
+#                         historical_values <- vals_mat[
+#                             historical_indices,
+#                             ,
+#                             drop = FALSE
+#                         ]
+#                         hist_mat[current_row, ] <- apply(
+#                             historical_values,
+#                             2,
+#                             stats::median,
+#                             na.rm = TRUE
+#                         )
 
-                        # Calculate percentile: what % of historical values are <= current value
-                        if (length(historical_indices) >= 4) {
-                            current_values <- vals_mat[current_row, ]
-                            if (all(is.na(current_values))) {
-                                perc_mat[current_row, ] <- NA_real_
-                            } else {
-                                perc_mat[current_row, ] <- (colSums(
-                                    historical_values <=
-                                        matrix(
-                                            current_values,
-                                            nrow = nrow(historical_values),
-                                            ncol = ncol(historical_values),
-                                            byrow = TRUE
-                                        ),
-                                    na.rm = TRUE
-                                ) /
-                                    colSums(
-                                        !is.na(historical_values),
-                                        na.rm = TRUE
-                                    )) *
-                                    100
-                            }
-                        }
-                    }
-                }
-            }
+#                         # Calculate percentile: what % of historical values are <= current value
+#                         if (length(historical_indices) >= 4) {
+#                             current_values <- vals_mat[current_row, ]
+#                             if (all(is.na(current_values))) {
+#                                 perc_mat[current_row, ] <- NA_real_
+#                             } else {
+#                                 perc_mat[current_row, ] <- (colSums(
+#                                     historical_values <=
+#                                         matrix(
+#                                             current_values,
+#                                             nrow = nrow(historical_values),
+#                                             ncol = ncol(historical_values),
+#                                             byrow = TRUE
+#                                         ),
+#                                     na.rm = TRUE
+#                                 ) /
+#                                     colSums(
+#                                         !is.na(historical_values),
+#                                         na.rm = TRUE
+#                                     )) *
+#                                     100
+#                             }
+#                         }
+#                     }
+#                 }
+#             }
 
-            # Compute relative SWE in a fully vectorized way
-            cur <- vals_mat
-            hist <- hist_mat
+#             # Compute relative SWE in a fully vectorized way
+#             cur <- vals_mat
+#             hist <- hist_mat
 
-            # Case 1: standard percentage where historic median != 0
-            mask1 <- !is.na(hist) & !is.na(cur) & (hist != 0)
-            rel_mat[mask1] <- 100 * cur[mask1] / hist[mask1]
+#             # Case 1: standard percentage where historic median != 0
+#             mask1 <- !is.na(hist) & !is.na(cur) & (hist != 0)
+#             rel_mat[mask1] <- 100 * cur[mask1] / hist[mask1]
 
-            # Case 2: both zero => -2
-            mask2 <- !is.na(cur) & (cur == 0) & !is.na(hist) & (hist == 0)
-            rel_mat[mask2] <- -2
+#             # Case 2: both zero => -2
+#             mask2 <- !is.na(cur) & (cur == 0) & !is.na(hist) & (hist == 0)
+#             rel_mat[mask2] <- -2
 
-            # Case 3: current > 0, historic == 0 => -1
-            mask3 <- !is.na(cur) & (cur > 0) & !is.na(hist) & (hist == 0)
-            rel_mat[mask3] <- -1
+#             # Case 3: current > 0, historic == 0 => -1
+#             mask3 <- !is.na(cur) & (cur > 0) & !is.na(hist) & (hist == 0)
+#             rel_mat[mask3] <- -1
 
-            colnames(hist_mat) <- station_cols
-            colnames(rel_mat) <- station_cols
+#             colnames(hist_mat) <- station_cols
+#             colnames(rel_mat) <- station_cols
 
-            hist_df[station_cols] <- as.data.frame(
-                hist_mat,
-                stringsAsFactors = FALSE
-            )
-            rel_df[station_cols] <- as.data.frame(
-                rel_mat,
-                stringsAsFactors = FALSE
-            )
+#             hist_df[station_cols] <- as.data.frame(
+#                 hist_mat,
+#                 stringsAsFactors = FALSE
+#             )
+#             rel_df[station_cols] <- as.data.frame(
+#                 rel_mat,
+#                 stringsAsFactors = FALSE
+#             )
 
-            colnames(perc_mat) <- station_cols
-            perc_df[station_cols] <- as.data.frame(
-                perc_mat,
-                stringsAsFactors = FALSE
-            )
-        }
+#             colnames(perc_mat) <- station_cols
+#             perc_df[station_cols] <- as.data.frame(
+#                 perc_mat,
+#                 stringsAsFactors = FALSE
+#             )
+#         }
 
-        # ensure ordering by datetime
-        hist_df <- hist_df[order(hist_df$datetime), , drop = FALSE]
-        rel_df <- rel_df[order(rel_df$datetime), , drop = FALSE]
-        perc_df <- perc_df[order(perc_df$datetime), , drop = FALSE]
+#         # ensure ordering by datetime
+#         hist_df <- hist_df[order(hist_df$datetime), , drop = FALSE]
+#         rel_df <- rel_df[order(rel_df$datetime), , drop = FALSE]
+#         perc_df <- perc_df[order(perc_df$datetime), , drop = FALSE]
 
-        return(list(
-            historic_median = hist_df,
-            relative_to_med = rel_df,
-            percentile = perc_df
-        ))
-    }
+#         return(list(
+#             historic_median = hist_df,
+#             relative_to_med = rel_df,
+#             percentile = perc_df
+#         ))
+#     }
 
-    stop(
-        "Input timeseries must contain a 'datetime' column (and either 'value' for single-station or station columns for wide format)."
-    )
-}
+#     stop(
+#         "Input timeseries must contain a 'datetime' column (and either 'value' for single-station or station columns for wide format)."
+#     )
+# }
 
 split_communities <- function(communities) {
     # Assume input is a comma-separated string of community names
@@ -1849,7 +1896,6 @@ split_communities <- function(communities) {
 #' @param data List containing timeseries and metadata from download functions
 #' @param year Integer target year for data extraction
 #' @param month Integer target month for data extraction
-#' @param key Character name of the key column in metadata (e.g., "timeseries_id", "location_id")
 #' @return data.frame subset of metadata with additional SWE value columns:
 #' \describe{
 #'   \item{swe}{Absolute SWE value in mm}
@@ -2136,17 +2182,28 @@ create_discrete_plot_popup <- function(
 }
 
 
+#' @param epsg Numeric EPSG code for the coordinate reference system
+#' @return Numeric distance correction factor
+#'
+#' @description
+#' converts distances from kilometers to the units of the specified CRS
+#' NOTE: ES - the 1.4* is a roughn manual tweak
+# The adjustment distances were determined in epsg:4326. When converting to other CRSs, the adjustments were not accurate.
+# Instead of redoing the adjustment distances, we apply a fudge-factor so that the labels more or less end up where they should
+#'
+#' @noRd
 get_km_to_crs_correction <- function(epsg) {
     distance_correction <- switch(
         as.character(epsg),
         "4326" = 111.32, # degrees to km
-        "3857" = 1 / 1000, # meters to km
-        "3577" = 1 / 1000, # meters to km
-        "3579" = 1 / 1000, # meters to km
+        "3857" = 1.4 * 1 / 1000, # meters to km
+        "3577" = 1.4 * 1 / 1000, # meters to km
+        "3579" = 1.4 * 1 / 1000, # meters to km
         111.32 # default to degrees to km
     )
     return(distance_correction)
 }
+
 
 #' Load all base data for the SWE mapping application
 #'
@@ -2154,6 +2211,7 @@ get_km_to_crs_correction <- function(epsg) {
 #' @param load_swe Logical indicating whether to load SWE data (default TRUE)
 #' @param load_precip Logical indicating whether to load precipitation data (default FALSE)
 #' @param load_temp Logical indicating whether to load temperature data (default FALSE)
+#' @param epsg Numeric EPSG code for coordinate reference system (default 4326)
 #' @return A list containing all loaded base data:
 #' \describe{
 #'   \item{pillows}{List with continuous station timeseries and metadata}
@@ -2452,7 +2510,8 @@ load_bulletin_timeseries <- function(
             con,
             parameter_name = "precipitation",
             start_date = "1980-01-01",
-            epsg = epsg
+            epsg = epsg,
+            record_rate = "1 day"
         )
 
         norms <- get_norms(
@@ -2695,7 +2754,6 @@ load_bulletin_shapefiles <- function(con, epsg = 4326) {
 }
 
 # ' Generate HTML content for SWE map popups
-#'' @param type Character string indicating station type ("basin", "survey", "pillow")
 #' @param swe Numeric SWE value at the station
 #' @param relative_to_med Numeric percent of median SWE value
 #' @param historic_median Numeric historical median SWE value
@@ -2703,6 +2761,8 @@ load_bulletin_shapefiles <- function(con, epsg = 4326) {
 #' @param location Optional character string for station location description
 #' @param id Optional character string for station ID (used for plot generation)
 #' @param percentile Optional numeric percentile value for the station
+#' @param language Character string for language ("English" or "French")
+#' @param label Character string indicating data type label for translation
 #' @return Character string containing HTML content for the popup
 #' @description
 #' Generates HTML content for leaflet map popups displaying SWE information
@@ -2719,7 +2779,6 @@ generate_popup_content <- function(
     id = "",
     percentile = NA,
     language = "English",
-    shiny = TRUE,
     label = ""
 ) {
     language <- lengthenLanguage(language)
@@ -2738,27 +2797,10 @@ generate_popup_content <- function(
         "<br>"
     )
 
-    name <- gsub("_", " ", name)
-
-    # if it's shiny, add a plot button (plot functions are located in the Shiny script)
-    plot_button <- if (shiny) {
-        paste(
-            "<button onclick='generatePlot(\"",
-            datatype_label,
-            "\", \"",
-            id,
-            "\", \"",
-            name,
-            "\")' style='margin-top: 12px; font-size: 16px; padding: 10px 18px; border-radius: 6px; background-color: #337ab7; color: #fff; border: none; cursor: pointer; display: flex; align-items: center;'>",
-            # SVG icon of a bar chart
-            "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' style='margin-right: 8px; vertical-align: middle;' viewBox='0 0 20 20'><rect x='3' y='10' width='3' height='7' fill='#fff' stroke='#337ab7' stroke-width='1'/><rect x='8' y='6' width='3' height='11' fill='#fff' stroke='#337ab7' stroke-width='1'/><rect x='13' y='2' width='3' height='15' fill='#fff' stroke='#337ab7' stroke-width='1'/></svg>",
-            "</button>",
-            sep = ""
-        )
-    } else {
-        ""
-    }
-    location_html <- if (!is.null(location)) {
+    # Robust handling of location (avoid NULL/NA)
+    location_str <- if (
+        !is.null(location) && !is.na(location) && nzchar(location)
+    ) {
         paste0(
             "<span style='font-size: 12px; color: #666;'>",
             location,
@@ -2768,12 +2810,13 @@ generate_popup_content <- function(
         "<br>"
     }
 
+    # Always return a character string
     paste0(
         "<div style='text-align: left; padding: 10px; width: 300px;'>",
         "<b style='font-size: 16px;'>",
         name,
         "</b><br>",
-        location_html,
+        location_str,
         datatype_label,
         "<br>",
         "<b>SWE Value:</b> ",
@@ -2805,8 +2848,6 @@ generate_popup_content <- function(
         } else {
             "No data"
         },
-        "<br>",
-        plot_button,
         "</div>"
     )
 }
@@ -2833,7 +2874,6 @@ filter_stations_by_latest_date <- function(df, input_date, cutoff_days) {
 #' @param year Integer year for data extraction
 #' @param month Integer month for data extraction
 #' @param snowbull_timeseries List containing all loaded base data
-#' @param shiny Logical indicating if running in Shiny app context (default TRUE)
 #' @return A list containing processed SWE data at basins, surveys, and pillows
 #'
 #' @description
@@ -2847,7 +2887,6 @@ get_display_data <- function(
     year,
     month,
     statistic,
-    shiny = TRUE,
     language = "English"
 ) {
     lang <- shortenLanguage(language)
@@ -2871,28 +2910,29 @@ get_display_data <- function(
     )
 
     # generate popup content for each station/basin
-    dataset_state$popup_content <- mapply(
-        function(
-            data,
-            relative_to_med,
-            historic_median,
-            percentile
-        ) {
+    dataset_state$popup_content <- rep(NA_character_, nrow(dataset_state))
+
+    # Ensure all required columns exist and are character/numeric as needed
+    # Use as.character/as.numeric to avoid factor/list issues
+    dataset_state$popup_content <- vapply(
+        seq_len(nrow(dataset_state)),
+        function(i) {
             generate_popup_content(
-                swe = data,
-                relative_to_med = relative_to_med,
-                historic_median = historic_median,
-                percentile = percentile,
+                swe = as.numeric(dataset_state$data[i]),
+                relative_to_med = as.numeric(dataset_state$relative_to_med[i]),
+                historic_median = as.numeric(dataset_state$historic_median[i]),
+                name = as.character(dataset_state$name[i]),
+                location = if ("location" %in% names(dataset_state)) {
+                    as.character(dataset_state$location[i])
+                } else {
+                    ""
+                },
+                percentile = as.numeric(dataset_state$percentile[i]),
                 language = lang,
-                shiny = shiny,
                 label = label
             )
         },
-        dataset_state$data,
-        dataset_state$relative_to_med,
-        dataset_state$historic_median,
-        dataset_state$percentile,
-        SIMPLIFY = FALSE
+        character(1)
     )
 
     # if point-source data, remove stations with no recent data
@@ -2950,7 +2990,7 @@ make_leaflet_map <- function(
     poly_data = NULL,
     point_data_secondary = NULL,
     snowbull_shapefiles = NULL,
-    statistic = NULL,
+    statistic = "relative_to_med",
     language = "English",
     month = NULL,
     year = NULL,
@@ -2971,7 +3011,7 @@ make_leaflet_map <- function(
     # legend created dynamically based on inputs
     legend_title <- paste0(
         "<b>",
-        tr("maps_snowbull", language),
+        tr("snowbull_symbols", language),
         "</b><br>",
         switch(
             statistic,
@@ -3289,7 +3329,7 @@ make_ggplot_map <- function(
     year = NULL,
     filename = NULL,
     dpi = 300,
-    height = 8,
+    height = 14,
     width = 8
 ) {
     requireNamespace("ggplot2")
@@ -3543,23 +3583,45 @@ make_ggplot_map <- function(
             legend.justification = c("left", "top")
         )
 
+    # Save plot bounds before adding dummy legend geom
+
     # Add a dummy invisible geom for legend
     p <- p +
         ggplot2::geom_point(
             data = legend_df,
-            ggplot2::aes(x = Inf, y = Inf, fill = label),
+            ggplot2::aes(x = 99, y = 99, fill = legend_df$label),
             shape = 21,
             size = 5,
             show.legend = TRUE
         ) +
         ggplot2::scale_fill_manual(
             name = subtitle,
-            values = setNames(legend_df$color, levels(legend_df$label)),
+            values = stats::setNames(legend_df$color, levels(legend_df$label)),
             drop = FALSE,
             guide = ggplot2::guide_legend(
                 override.aes = list(shape = 21, size = 5)
             )
         )
+
+    basin_bbox <- sf::st_bbox(snowbull_shapefiles$basins)
+    yukon_bbox <- sf::st_bbox(snowbull_shapefiles$yukon)
+
+    # Combine both bounding boxes and add a buffer (in CRS units)
+    buffer_amount <- 25000 # 50 km buffer; adjust as needed for your CRS (meters for EPSG:3579)
+    plot_bbox <- c(
+        xmin = min(basin_bbox["xmin"], yukon_bbox["xmin"]) - buffer_amount,
+        xmax = max(basin_bbox["xmax"], yukon_bbox["xmax"]) + buffer_amount,
+        ymin = min(basin_bbox["ymin"], yukon_bbox["ymin"]) - buffer_amount,
+        ymax = max(basin_bbox["ymax"], yukon_bbox["ymax"]) + buffer_amount
+    )
+
+    p <- p +
+        ggplot2::coord_sf(
+            xlim = plot_bbox[c("xmin", "xmax")],
+            ylim = plot_bbox[c("ymin", "ymax")],
+            expand = FALSE
+        )
+
     # # Add coordinate system
     # # Calculate basin extents with 50km buffer
     # basin_bbox <- sf::st_bbox(snowbull_shapefiles$basins)
@@ -3606,7 +3668,8 @@ make_ggplot_map <- function(
 #'
 #' @param year Integer year (e.g., 2025)
 #' @param month Integer month (e.g., 3 for March)
-#' @param snowbull_data Optional preloaded snowbull_data from \code{load_bulletin_data()}, otherwise loads from default connection
+#' @param snowbull_shapefiles shapefiles, loaded from load_bulletin_shapefiles()
+#' @param snowbull_timeseries timeseries data, loaded from load_bulletin_timeseries()
 #' @param width Numeric width of the plot in inches (default: 12)
 #' @param height Numeric height of the plot in inches (default: 8)
 #' @param filename Optional character string for PNG output file path
@@ -3614,6 +3677,9 @@ make_ggplot_map <- function(
 #' @param parameter_name Character, parameter to plot (default: "swe")
 #' @param statistic Character, "absolute", "relative", or "percentile" (default: "relative")
 #' @param language Character string indicating the language for labels and legends. Default is "English".
+#' @param con Optional database connection, if not provided a default connection will be used
+#' @param format Character string indicating the output format: "ggplot", "leaflet", or "shiny"
+#'
 #' (default: "English")
 #' @return A ggplot2 object with SWE basins and stations
 #'
@@ -3673,6 +3739,19 @@ make_snowbull_map <- function(
         choices = FORMATS
     )
 
+    # Set file extension based on format if filename is provided
+    if (!is.null(filename)) {
+        ext <- tools::file_ext(filename)
+        if (format == "ggplot" && tolower(ext) != "png") {
+            stop("For ggplot format, filename must have .png extension")
+        }
+        if (format %in% c("leaflet", "shiny") && tolower(ext) != "html") {
+            stop(
+                "For leaflet or shiny format, filename must have .html extension"
+            )
+        }
+    }
+
     # infer epsg code based on format
     epsg <- switch(
         format,
@@ -3686,7 +3765,7 @@ make_snowbull_map <- function(
         language = language
     )
 
-    static_style_elements <- get_static_style_elements()
+    # static_style_elements <- get_static_style_elements()
 
     if (is.null(con)) {
         con <- AquaCache::AquaConnect(
@@ -3757,7 +3836,6 @@ make_snowbull_map <- function(
                 year = year,
                 month = month,
                 dataset = timeseries_data[[data_type]],
-                shiny = FALSE,
                 statistic = statistic,
                 language = language
             )

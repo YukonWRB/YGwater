@@ -20,6 +20,8 @@ download_discrete_ts(
 \item{end_date}{Character date string (YYYY-MM-DD) for filtering data}
 
 \item{parameter_name}{Character string of the parameter name to retrieve}
+
+\item{epsg}{Integer EPSG code for coordinate transformation (default 4326)}
 }
 \value{
 A list with two elements:

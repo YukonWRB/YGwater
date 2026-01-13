@@ -20,6 +20,8 @@ load_bulletin_timeseries(
 \item{load_precip}{Logical indicating whether to load precipitation data (default FALSE)}
 
 \item{load_temp}{Logical indicating whether to load temperature data (default FALSE)}
+
+\item{epsg}{Numeric EPSG code for coordinate reference system (default 4326)}
 }
 \value{
 A list containing all loaded base data:

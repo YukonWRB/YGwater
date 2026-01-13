@@ -10,7 +10,8 @@ download_continuous_ts(
   end_date = sprintf("\%d-01-01", 2100),
   resolution = "daily",
   parameter_name = "swe",
-  epsg = 4326
+  epsg = 4326,
+  record_rate = "01:00:00"
 )
 }
 \arguments{
@@ -23,6 +24,10 @@ download_continuous_ts(
 \item{resolution}{Character, either "daily" or "monthly" for data aggregation}
 
 \item{parameter_name}{Character string of the parameter name to retrieve}
+
+\item{epsg}{Integer EPSG code for coordinate transformation (default 4326)}
+
+\item{record_rate}{Character string for record rate filtering (default "01:00:00")}
 }
 \value{
 A list with two elements:

@@ -49,7 +49,6 @@ SWE_basin <- function(
       "SELECT media_id FROM media_types WHERE media_type = 'snow'"
     )[1, 1]
 
-    obs_id
     samples <- DBI::dbGetQuery(
       con,
       paste0(

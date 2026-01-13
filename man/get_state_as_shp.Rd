@@ -12,8 +12,6 @@ get_state_as_shp(data, year, month)
 \item{year}{Integer target year for data extraction}
 
 \item{month}{Integer target month for data extraction}
-
-\item{key}{Character name of the key column in metadata (e.g., "timeseries_id", "location_id")}
 }
 \value{
 data.frame subset of metadata with additional SWE value columns:

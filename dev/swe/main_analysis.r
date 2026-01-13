@@ -4,32 +4,33 @@ library(DBI)
 library(plotly)
 library(leaflet)
 library(sf)
+config <- list(
+    dbName = "aquacache",
+    dbHost = Sys.getenv("aquacacheHostProd"),
+    dbPort = Sys.getenv("aquacachePortProd"),
+    dbUser = Sys.getenv("aquacacheUserProd"),
+    dbPass = Sys.getenv("aquacachePassProd")
+)
+
+con <- AquaConnect(
+    name = config$dbName,
+    host = config$dbHost,
+    port = config$dbPort,
+    user = config$dbUser,
+    pass = config$dbPass
+)
+
 
 run_swe_analysis <- function(
     crs = 4326,
     historical_start_year = 1991,
     historical_end_year = 2020,
     query_date = as.Date("2025-12-25"),
-    basin_shp,
-    filename,
-    upsample_factor = 16
+    basin_shp_list, # now expects a list of shapefiles
+    filenames, # now expects a vector of filenames, one per shapefile
+    upsample_factor = 16,
+    con = con
 ) {
-    config <- list(
-        dbName = "aquacache",
-        dbHost = Sys.getenv("aquacacheHostProd"),
-        dbPort = Sys.getenv("aquacachePortProd"),
-        dbUser = Sys.getenv("aquacacheUserProd"),
-        dbPass = Sys.getenv("aquacachePassProd")
-    )
-
-    con2 <- AquaConnect(
-        name = config$dbName,
-        host = config$dbHost,
-        port = config$dbPort,
-        user = config$dbUser,
-        pass = config$dbPass
-    )
-
     download_spatial_layer <- function(
         con,
         layer_name,
@@ -56,23 +57,13 @@ run_swe_analysis <- function(
         sf::st_sf(data, geometry = geom, crs = 4326)
     }
 
-    place_types <- c("City", "Town", "Village") # Filter to major communities only
+    place_types <- c("City", "Town", "Village", "Hamlet") # Filter to major communities only
     communities <- download_spatial_layer(
-        con2,
+        con,
         "Communities",
-        additional_query = sprintf(
-            "AND (description IN (%s) OR feature_name IN ('Old Crow', 'Beaver Creek'))",
-            paste(
-                sapply(
-                    place_types,
-                    function(x) DBI::dbQuoteString(con2, x)
-                ),
-                collapse = ", "
-            )
-        )
     )
 
-    # Single query to get raster values for ERA5 model
+    # Download rasters ONCE
     era5_query <- "
     SELECT 
         r.reference_id,
@@ -82,12 +73,8 @@ run_swe_analysis <- function(
     JOIN spatial.rasters r ON r.reference_id = rr.reference_id
     WHERE rsi.model = 'ERA5_land'
     ORDER BY rr.valid_from, r.reference_id"
-    era5_raster_data <- DBI::dbGetQuery(con2, era5_query)
-
-    # Convert to time series object
+    era5_raster_data <- DBI::dbGetQuery(con, era5_query)
     era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
-
-    # Filter for records that match the day of year of query_date
     query_day_of_year <- as.numeric(format(query_date, "%j"))
     era5_raster_data$day_of_year <- as.numeric(format(
         era5_raster_data$datetime,
@@ -115,7 +102,7 @@ run_swe_analysis <- function(
     for (i in 1:nrow(era5_raster_data)) {
         rid <- era5_raster_data$reference_id[i]
         rast <- YGwater::getRaster(
-            con = con2,
+            con = con,
             clauses = paste0("WHERE reference_id = ", rid)
         )
         era5_rasters[[i]] <- rast
@@ -151,28 +138,7 @@ run_swe_analysis <- function(
     # Calculate relative change: most recent divided by median
     era5_relative_change <- 100 * era5_recent / era5_median
 
-    # Use provided basin_shp and transform to requested CRS
-    selected_basin <- sf::st_transform(basin_shp, crs = crs)
-
-    # Upsample raster to higher resolution (e.g., 2x finer)
-    raster_upsampled <- terra::disagg(
-        era5_relative_change,
-        fact = upsample_factor,
-        method = "bilinear"
-    )
-
-    # Clip (crop and mask) the upsampled raster by the polygon
-    raster_clipped <- terra::crop(raster_upsampled, selected_basin)
-    raster_clipped <- terra::mask(raster_clipped, selected_basin)
-
-    # Get mean raster value within the polygon (ignoring NA)
-    mean_value <- terra::global(raster_clipped, fun = "mean", na.rm = TRUE)$mean
-
-    cat("Mean raster value within polygon:", mean_value, "\n")
-
-    # Plot ERA5 median SWE as base layer
-
-    # Function to get plot limits from geometry with buffer
+    # Helper for plot limits
     get_lims_from_geom <- function(geom, buffer_m = 5000) {
         # Get extents of geometry
         geom_bbox <- sf::st_bbox(geom)
@@ -198,94 +164,183 @@ run_swe_analysis <- function(
         return(list(xlim = xlim, ylim = ylim))
     }
 
-    # Get extents of selected basin with 500m buffer
-    lims <- get_lims_from_geom(selected_basin, buffer_m = 5000)
-    xlim <- lims$xlim
-    ylim <- lims$ylim
+    # Loop over each basin shapefile and generate a map
+    results <- vector("list", length(basin_shp_list))
+    for (i in seq_along(basin_shp_list)) {
+        basin_shp <- basin_shp_list[[i]]
+        filename <- filenames[i]
 
-    # Save plot as PNG, add margin for metadata
-    png(filename = filename, width = 1200, height = 1050) # reduce height for less space
-    # Reduce bottom margin so metadata is closer to x tick labels
-    old_par <- par(mar = c(11, 10, 4, 2) + 0.1) # bottom, left, top, right
+        selected_basin <- sf::st_transform(basin_shp, crs = crs)
 
-    # Plot with larger axis and legend tick font sizes, and extra margin for y-axis ticks
-    terra::plot(
-        raster_upsampled,
-        main = paste(
-            "ERA5 SWE Relative to historic median",
-            sprintf("(%d-%d)", historical_start_year, historical_end_year),
-            "on",
-            format(query_date, "%Y-%m-%d"),
-            sprintf("(Mean in basin: %.1f%%)", mean_value)
-        ),
-        # xlab = "Longitude",
-        # ylab = "Latitude",
-        range = c(0, 200),
-        xlim = xlim,
-        ylim = ylim,
-        col = colorRampPalette(c("red", "white", "blue"))(100),
-        legend = TRUE,
-        pax = list(
-            cex.axis = 1.4, # Adjusts the axis tick text size
-            cex.lab = 1.8 # Adjusts the axis label text size
-        ),
-        plg = list(
-            cex = 2 # Adjusts the legend text size
+        # Upsample raster to higher resolution (e.g., 2x finer)
+        raster_upsampled <- terra::disagg(
+            era5_relative_change,
+            fact = upsample_factor,
+            method = "bilinear"
         )
-    )
 
-    plot(selected_basin$geometry, border = "darkblue", lwd = 2, add = TRUE)
-    plot(communities$geometry, pch = 16, bg = "orange", cex = 2.5, add = TRUE)
-    text(
-        sf::st_coordinates(communities),
-        labels = communities$feature_name,
-        pos = 1,
-        cex = 1.2
-    )
+        # Clip (crop and mask) the upsampled raster by the polygon
+        raster_clipped <- terra::crop(raster_upsampled, selected_basin)
+        raster_clipped <- terra::mask(raster_clipped, selected_basin)
 
-    # Add metadata text box below the plot, in the bottom margin
-    meta_text <- paste(
-        "Data source: ERA5 Land Reanalysis\n",
-        sprintf(
-            "Historical period: %d-%d",
-            historical_start_year,
-            historical_end_year
-        ),
-        "\n",
-        sprintf("Query date: %s", format(query_date, "%Y-%m-%d")),
-        "\n",
-        sprintf("Mean relative SWE in basin: %.1f%%", mean_value),
-        "\n",
-        "Projection: EPSG:",
-        crs,
-        "\n",
-        sprintf("Raster upsampling: bilinear (factor %d)", upsample_factor),
-        "\n",
-        sprintf("Generated on: %s", format(Sys.Date(), "%Y-%m-%d"))
-    )
-    # Use mtext to add metadata in the bottom margin, left-aligned, closer to axis
-    mtext(
-        meta_text,
-        side = 1,
-        line = 10,
-        adj = 0,
-        cex = 1.05,
-        col = "black",
-        font = 2
-    )
+        # Get mean raster value within the polygon (ignoring NA)
+        mean_value <- terra::global(
+            raster_clipped,
+            fun = "mean",
+            na.rm = TRUE
+        )$mean
 
-    par(old_par)
-    dev.off()
+        cat("Mean raster value within polygon:", mean_value, "\n")
 
-    return(list(
-        era5_relative_change = era5_relative_change,
-        selected_basin = selected_basin,
-        communities = communities,
-        era5_stack = era5_stack,
-        era5_median = era5_median,
-        era5_recent = era5_recent,
-        time_vector = time_vector
-    ))
+        lims <- get_lims_from_geom(selected_basin, buffer_m = 5000)
+        xlim <- lims$xlim
+        ylim <- lims$ylim
+
+        # Save plot as PNG, add margin for metadata
+        png(filename = filename, width = 1200, height = 1050) # reduce height for less space
+        # Reduce bottom margin so metadata is closer to x tick labels
+        old_par <- par(mar = c(11, 10, 4, 2) + 0.1) # bottom, left, top, right
+
+        # Plot with larger axis and legend tick font sizes, and extra margin for y-axis ticks
+        terra::plot(
+            raster_upsampled,
+            main = paste(
+                "ERA5 SWE Relative to historic median",
+                sprintf("(%d-%d)", historical_start_year, historical_end_year),
+                "on",
+                format(query_date, "%Y-%m-%d"),
+                sprintf("(Mean in basin: %.1f%%)", mean_value)
+            ),
+            # xlab = "Longitude",
+            # ylab = "Latitude",
+            range = c(0, 200),
+            xlim = xlim,
+            ylim = ylim,
+            col = colorRampPalette(c("red", "grey", "blue"))(100),
+            legend = TRUE,
+            pax = list(
+                cex.axis = 1.4, # Adjusts the axis tick text size
+                cex.lab = 1.8 # Adjusts the axis label text size
+            ),
+            plg = list(
+                cex = 2 # Adjusts the legend text size
+            )
+        )
+
+        # Add a scale bar in km
+        if (requireNamespace("fields", quietly = TRUE)) {
+            # Use fields::image.plot's scalebar if available
+            # But for base plot, add a simple scalebar manually
+            # Calculate a reasonable length (e.g., 20 km)
+            lon_range <- diff(xlim)
+            lat_range <- diff(ylim)
+            # Approximate km per degree longitude at center latitude
+            lat_center <- mean(ylim)
+            km_per_deg_lon <- 111.32 * cos(lat_center * pi / 180)
+            km_per_deg_lat <- 110.57
+            # Choose a scale bar length (e.g., 20 km)
+            bar_length_km <- 20
+            bar_length_deg <- bar_length_km / km_per_deg_lon
+
+            # Place scale bar at lower left
+            x_start <- xlim[1] + 0.02 * lon_range
+            x_end <- x_start + bar_length_deg
+            y_pos <- ylim[1] + 0.03 * lat_range
+
+            segments(x_start, y_pos, x_end, y_pos, lwd = 4, col = "black")
+            text(
+                mean(c(x_start, x_end)),
+                y_pos - 0.01 * lat_range,
+                paste(bar_length_km, "km"),
+                cex = 1.3,
+                adj = c(0.5, 1)
+            )
+        } else {
+            # Fallback: just draw a line with label
+            lon_range <- diff(xlim)
+            lat_range <- diff(ylim)
+            lat_center <- mean(ylim)
+            km_per_deg_lon <- 111.32 * cos(lat_center * pi / 180)
+            bar_length_km <- 20
+            bar_length_deg <- bar_length_km / km_per_deg_lon
+
+            x_start <- xlim[1] + 0.02 * lon_range
+            x_end <- x_start + bar_length_deg
+            y_pos <- ylim[1] + 0.03 * lat_range
+
+            segments(x_start, y_pos, x_end, y_pos, lwd = 4, col = "black")
+            text(
+                mean(c(x_start, x_end)),
+                y_pos - 0.01 * lat_range,
+                paste(bar_length_km, "km"),
+                cex = 1.3,
+                adj = c(0.5, 1)
+            )
+        }
+
+        plot(selected_basin$geometry, border = "darkblue", lwd = 2, add = TRUE)
+        plot(
+            communities$geometry,
+            pch = 16,
+            bg = "orange",
+            cex = 2.5,
+            add = TRUE
+        )
+        text(
+            sf::st_coordinates(communities),
+            labels = communities$feature_name,
+            pos = 1,
+            cex = 1.2
+        )
+
+        # Add metadata text box below the plot, in the bottom margin
+        meta_text <- paste(
+            "Data source: ERA5 Land Reanalysis\n",
+            sprintf(
+                "Historical period: %d-%d",
+                historical_start_year,
+                historical_end_year
+            ),
+            "\n",
+            sprintf("Query date: %s", format(query_date, "%Y-%m-%d")),
+            "\n",
+            sprintf("Mean relative SWE in basin: %.1f%%", mean_value),
+            "\n",
+            "Projection: EPSG:",
+            crs,
+            "\n",
+            sprintf("Raster upsampling: bilinear (factor %d)", upsample_factor),
+            "\n",
+            sprintf("Generated on: %s", format(Sys.Date(), "%Y-%m-%d"))
+        )
+        # # Use mtext to add metadata in the bottom margin, left-aligned, closer to axis
+        # mtext(
+        #     meta_text,
+        #     side = 1,
+        #     line = 10,
+        #     adj = 0,
+        #     cex = 1.05,
+        #     col = "black",
+        #     font = 2
+        # )
+
+        par(old_par)
+        dev.off()
+
+        results[[i]] <- list(
+            era5_relative_change = era5_relative_change,
+            selected_basin = selected_basin,
+            communities = communities,
+            era5_stack = era5_stack,
+            era5_median = era5_median,
+            era5_recent = era5_recent,
+            time_vector = time_vector,
+            mean_value = mean_value,
+            filename = filename
+        )
+    }
+
+    return(results)
 }
 
 
@@ -302,39 +357,36 @@ era5_query <- sprintf(
     LIMIT 1
     "
 )
-query_date <- DBI::dbGetQuery(con2, era5_query)$datetime
+query_date <- DBI::dbGetQuery(con, era5_query)$datetime
 
 
 # Example usage:
-hybas_shapefile <- sf::st_read(
-    "H:/esniede/data/HydroSheds/hybas_ar_lev01-12_v1c/hybas_ar_lev07_v1c.shp"
+# Prepare a list of shapefiles and filenames
+basins_shp <- sf::st_read(
+    system.file(
+        "snow_survey/swe_basins/swe_basins.shp",
+        package = "YGwater",
+        mustWork = TRUE
+    ),
+    quiet = TRUE
 )
+basin_names <- unique(basins_shp$SWE_Basin)
 
-# hydrorivers_shapefile <- sf::st_read(
-#     "H:/esniede/data/HydroSheds/HydroRIVERS_v10_ar_shp/HydroRIVERS_v10_ar.shp"
-# )
+basin_shp_list <- lapply(basin_names, function(nm) {
+    b <- basins_shp[basins_shp$SWE_Basin == nm, ]
+    sf::st_make_valid(b)
+})
+filenames <- file.path("dev/swe/exports", paste0(tolower(basin_names), ".png"))
 
-hybas_id <- 8070212940 #mayo
-# hybas_id <- 8070274780 #whitehorse
-
-basin_shp <- hybas_shapefile[hybas_shapefile$HYBAS_ID == hybas_id, ]
-
-# Fix invalid geometries before intersection
-basin_shp <- sf::st_make_valid(basin_shp)
-# hydrorivers_shapefile <- sf::st_make_valid(hydrorivers_shapefile)
-
-# Clip hydrorivers to basin_shp
-# hydrorivers_clipped <- sf::st_intersection(hydrorivers_shapefile, basin_shp)
-
-# plot(hydrorivers_clipped$geometry)
-
-result <- run_swe_analysis(
+result_list <- run_swe_analysis(
     crs = 4326,
-    historical_start_year = 2018,
+    historical_start_year = 1991,
     historical_end_year = 2020,
     query_date = as.Date(query_date),
-    basin_shp = basin_shp,
-    filename = "swe_relative_change_basin.png"
+    basin_shp_list = basin_shp_list,
+    filenames = filenames,
+    upsample_factor = 16,
+    con = con
 )
 
 # # Function to get the most recent September 1st given a date
@@ -576,7 +628,7 @@ result <- run_swe_analysis(
 # }
 # # Merged query to get ERA5 land SWE values at specific coordinates
 # result <- getRasterSeriesAtPoint(
-#     con2,
+#     con,
 #     model = "ERA5_land",
 #     parameter = "snow water equivalent",
 #     lon = coord[1],
@@ -674,7 +726,7 @@ result <- run_swe_analysis(
 
 # # Example: Get raster data and plot it
 # # Get the raster data
-# raster_data <- getRasterData(con2, "ERA5_land", "snow water equivalent")
+# raster_data <- getRasterData(con, "ERA5_land", "snow water equivalent")
 
 # if (!is.null(raster_data)) {
 #     cat("Successfully retrieved raster with", nrow(raster_data), "pixels\n")

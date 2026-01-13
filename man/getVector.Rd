@@ -15,6 +15,7 @@ getVector(
   schema = "spatial",
   geom_col = "geom",
   silent = FALSE,
+  additional_query = NULL,
   con = NULL
 )
 }
@@ -38,6 +39,8 @@ getVector(
 \item{geom_col}{The name of the database table column which holds the geometry object.}
 
 \item{silent}{Should the function suppress all messages?}
+
+\item{additional_query}{Additional SQL clauses to append to the WHERE clause of the query. Must begin with AND or OR and be formatted as a valid SQL clause. For example, "AND description LIKE 'River\%'".}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }

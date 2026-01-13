@@ -27,6 +27,10 @@ make_snowbull_map(
 
 \item{filename}{Optional character string for PNG output file path}
 
+\item{snowbull_shapefiles}{shapefiles, loaded from load_bulletin_shapefiles()}
+
+\item{snowbull_timeseries}{timeseries data, loaded from load_bulletin_timeseries()}
+
 \item{width}{Numeric width of the plot in inches (default: 12)}
 
 \item{height}{Numeric height of the plot in inches (default: 8)}
@@ -37,10 +41,13 @@ make_snowbull_map(
 
 \item{statistic}{Character, "absolute", "relative", or "percentile" (default: "relative")}
 
-\item{language}{Character string indicating the language for labels and legends. Default is "English".
-(default: "English")}
+\item{language}{Character string indicating the language for labels and legends. Default is "English".}
 
-\item{snowbull_data}{Optional preloaded snowbull_data from \code{load_bulletin_data()}, otherwise loads from default connection}
+\item{con}{Optional database connection, if not provided a default connection will be used}
+
+\item{format}{Character string indicating the output format: "ggplot", "leaflet", or "shiny"
+
+(default: "English")}
 }
 \value{
 A ggplot2 object with SWE basins and stations
