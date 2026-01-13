@@ -78,16 +78,26 @@ addLocation <- function(id, inputs) {
     pending_network_new <- reactiveVal(NULL)
     pending_project_selection <- reactiveVal(character(0))
     pending_project_new <- reactiveVal(NULL)
+    ownership_refresh <- reactiveVal(0)
 
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
+        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, lmo.owner AS owner, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
         FROM locations l
         LEFT JOIN location_types lt ON l.location_type = lt.type_id
+        LEFT JOIN LATERAL (
+          SELECT lmoo.owner
+          FROM locations_metadata_owners_operators lmoo
+          WHERE lmoo.location_id = l.location_id
+            AND lmoo.start_datetime <= NOW()
+            AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
+          ORDER BY lmoo.start_datetime DESC
+          LIMIT 1
+        ) lmo ON TRUE
         LEFT JOIN locations_networks ln ON l.location_id = ln.location_id
         LEFT JOIN networks n ON ln.network_id = n.network_id
-        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
+        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, lmo.owner"
       )
       moduleData$exist_locs$network <- factor(
         ifelse(
@@ -132,6 +142,38 @@ addLocation <- function(id, inputs) {
     }
 
     getModuleData() # Initial data load
+
+    current_owner_for_location <- function(location_id) {
+      if (!isTruthy(location_id)) {
+        return(NA_integer_)
+      }
+      owner_row <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        glue::glue_sql(
+          "SELECT lmoo.owner
+           FROM locations_metadata_owners_operators lmoo
+           WHERE lmoo.location_id = {location_id}
+             AND lmoo.start_datetime <= NOW()
+             AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
+           ORDER BY lmoo.start_datetime DESC
+           LIMIT 1;",
+          .con = session$userData$AquaCache
+        )
+      )
+      if (nrow(owner_row) == 0) {
+        NA_integer_
+      } else {
+        owner_row$owner[1]
+      }
+    }
+
+    update_current_owner <- function(location_id) {
+      updateSelectizeInput(
+        session,
+        "loc_owner",
+        selected = current_owner_for_location(location_id)
+      )
+    }
 
     output$ui <- renderUI({
       req(
@@ -271,6 +313,16 @@ addLocation <- function(id, inputs) {
             width = "100%"
           )
         ),
+        conditionalPanel(
+          condition = "input.mode == 'modify'",
+          ns = ns,
+          actionButton(
+            ns("manage_ownership"),
+            "Manage ownership history",
+            icon = icon("clock-rotate-left"),
+            width = "100%"
+          )
+        ),
 
         selectizeInput(
           ns("data_sharing_agreement"),
@@ -403,6 +455,17 @@ addLocation <- function(id, inputs) {
 
     ## Observers to modify existing entry ##########################################
     selected_loc <- reactiveVal(NULL)
+    ownership_edit_id <- reactiveVal(NULL)
+
+    shinyjs::disable("manage_ownership")
+
+    observe({
+      if (input$mode == "modify" && !is.null(selected_loc())) {
+        shinyjs::enable("manage_ownership")
+      } else {
+        shinyjs::disable("manage_ownership")
+      }
+    })
 
     output$loc_table <- DT::renderDT({
       tbl <- moduleData$exist_locs
@@ -465,7 +528,7 @@ addLocation <- function(id, inputs) {
             selected = parse_share_with(details$share_with)
           )
 
-          updateSelectizeInput(session, "loc_owner", selected = details$owner)
+          update_current_owner(loc_id)
           updateTextInput(session, "loc_contact", value = details$contact)
           updateSelectizeInput(
             session,
@@ -528,6 +591,245 @@ addLocation <- function(id, inputs) {
       } else {
         selected_loc(NULL)
       }
+    })
+
+    ownership_records <- reactive({
+      ownership_refresh()
+      req(selected_loc())
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        glue::glue_sql(
+          "SELECT lmoo.id,
+                  lmoo.owner,
+                  owner_org.name AS owner_name,
+                  lmoo.operator,
+                  operator_org.name AS operator_name,
+                  lmoo.start_datetime,
+                  lmoo.end_datetime,
+                  lmoo.note
+           FROM locations_metadata_owners_operators lmoo
+           LEFT JOIN organizations owner_org ON owner_org.organization_id = lmoo.owner
+           LEFT JOIN organizations operator_org ON operator_org.organization_id = lmoo.operator
+           WHERE lmoo.location_id = {selected_loc()}
+           ORDER BY lmoo.start_datetime;",
+          .con = session$userData$AquaCache
+        )
+      )
+    })
+
+    output$ownership_table <- DT::renderDT({
+      tbl <- ownership_records()
+      DT::datatable(
+        tbl,
+        selection = "single",
+        options = list(
+          columnDefs = list(
+            list(targets = c(0, 1, 3), visible = FALSE)
+          ),
+          pageLength = 8,
+          scrollX = TRUE
+        ),
+        rownames = FALSE
+      )
+    })
+
+    show_ownership_history_modal <- function() {
+      showModal(modalDialog(
+        title = "Ownership history",
+        DT::DTOutput(ns("ownership_table")),
+        footer = tagList(
+          actionButton(ns("add_ownership"), "Add period"),
+          actionButton(ns("edit_ownership"), "Edit selected"),
+          modalButton("Close")
+        ),
+        size = "l",
+        easyClose = TRUE
+      ))
+    }
+
+    observeEvent(input$manage_ownership, {
+      req(selected_loc())
+      show_ownership_history_modal()
+    })
+
+    observeEvent(input$add_ownership, {
+      ownership_edit_id(NULL)
+      showModal(modalDialog(
+        title = "Add ownership period",
+        selectizeInput(
+          ns("ownership_owner"),
+          "Owner",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        selectizeInput(
+          ns("ownership_operator"),
+          "Operator",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        dateInput(
+          ns("ownership_start"),
+          "Start date",
+          value = Sys.Date()
+        ),
+        dateInput(
+          ns("ownership_end"),
+          "End date (leave blank if ongoing)",
+          value = NA
+        ),
+        textInput(
+          ns("ownership_note"),
+          "Note (optional)"
+        ),
+        footer = tagList(
+          actionButton(ns("save_ownership"), "Save"),
+          modalButton("Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$edit_ownership, {
+      req(selected_loc())
+      selected_row <- input$ownership_table_rows_selected
+      if (length(selected_row) == 0) {
+        showModal(modalDialog(
+          "Select an ownership period to edit.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+      record <- ownership_records()[selected_row, ]
+      ownership_edit_id(record$id)
+      showModal(modalDialog(
+        title = "Edit ownership period",
+        selectizeInput(
+          ns("ownership_owner"),
+          "Owner",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = record$owner,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        selectizeInput(
+          ns("ownership_operator"),
+          "Operator",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = record$operator,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        dateInput(
+          ns("ownership_start"),
+          "Start date",
+          value = as.Date(record$start_datetime)
+        ),
+        dateInput(
+          ns("ownership_end"),
+          "End date (leave blank if ongoing)",
+          value = as.Date(record$end_datetime)
+        ),
+        textInput(
+          ns("ownership_note"),
+          "Note (optional)",
+          value = record$note
+        ),
+        footer = tagList(
+          actionButton(ns("save_ownership"), "Save"),
+          modalButton("Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$save_ownership, {
+      req(selected_loc())
+      if (!isTruthy(input$ownership_owner)) {
+        showModal(modalDialog(
+          "Owner is required.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      owner_id <- as.integer(input$ownership_owner)
+      operator_id <- if (isTruthy(input$ownership_operator)) {
+        as.integer(input$ownership_operator)
+      } else {
+        owner_id
+      }
+      start_dt <- as.POSIXct(input$ownership_start, tz = "UTC")
+      end_dt <- if (isTruthy(input$ownership_end)) {
+        as.POSIXct(input$ownership_end, tz = "UTC")
+      } else {
+        NA
+      }
+
+      if (!is.na(end_dt) && end_dt <= start_dt) {
+        showModal(modalDialog(
+          "End date must be after the start date.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      note_sql <- if (isTruthy(input$ownership_note)) {
+        input$ownership_note
+      } else {
+        DBI::SQL("NULL")
+      }
+      end_dt_sql <- if (is.na(end_dt)) {
+        DBI::SQL("NULL")
+      } else {
+        end_dt
+      }
+
+      if (is.null(ownership_edit_id())) {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          glue::glue_sql(
+            "INSERT INTO locations_metadata_owners_operators
+              (location_id, owner, operator, start_datetime, end_datetime, note)
+             VALUES
+              ({selected_loc()}, {owner_id}, {operator_id}, {start_dt}, {end_dt_sql}, {note_sql});",
+            .con = session$userData$AquaCache
+          )
+        )
+      } else {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          glue::glue_sql(
+            "UPDATE locations_metadata_owners_operators
+             SET owner = {owner_id},
+                 operator = {operator_id},
+                 start_datetime = {start_dt},
+                 end_datetime = {end_dt_sql},
+                 note = {note_sql}
+             WHERE id = {ownership_edit_id()};",
+            .con = session$userData$AquaCache
+          )
+        )
+      }
+
+      ownership_refresh(ownership_refresh() + 1)
+      update_current_owner(selected_loc())
+      ownership_edit_id(NULL)
+      show_ownership_history_modal()
     })
 
     observeEvent(input$mode, {
