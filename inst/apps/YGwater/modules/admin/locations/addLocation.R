@@ -476,9 +476,9 @@ addLocation <- function(id, inputs) {
       tbl$name_fr <- as.factor(tbl$name_fr)
       tbl$location_type <- as.factor(tbl$location_type)
       # Truncate the notes to 30 characters
-      tbl$note <- paste0(substr(tbl$note), "...")
+      tbl$note <- paste0(substr(tbl$note, 1, 30), "...")
       DT::datatable(
-        moduleData$exist_locs,
+        tbl,
         selection = "single",
         options = list(
           columnDefs = list(list(targets = c(0, 9), visible = FALSE)), # Hide location_id and location_type_id columns
