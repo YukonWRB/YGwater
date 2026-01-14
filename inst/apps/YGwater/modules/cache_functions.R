@@ -453,14 +453,15 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
     env = env,
     fetch_fun = function() {
       list(
+        # Only get borehole purposes that are used in the wells table
         purposes = dbGetQueryDT(
           con,
-          "SELECT borehole_well_purpose_id, purpose_name, purpose_name_fr, description FROM borehole_well_purposes"
+          "SELECT p.borehole_well_purpose_id, p.purpose_name, p.purpose_name_fr, p.description FROM borehole_well_purposes AS p WHERE p.borehole_well_purpose_id IN (SELECT DISTINCT well_purpose_id FROM wells);"
         ),
         boreholes_docs = dbGetQueryDT(con, "SELECT * FROM boreholes_documents"),
-        casing_materials = dbGetQueryDT(
+        documents = dbGetQueryDT(
           con,
-          "SELECT casing_material_id, material_name, material_name_fr FROM casing_materials"
+          "SELECT document_id, name, format FROM files.documents"
         ),
         # Merge boreholes and wells tables on borehole_id, discarding boreholes with no wells
         wells = dbGetQueryDT(

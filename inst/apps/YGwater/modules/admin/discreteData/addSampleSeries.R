@@ -491,7 +491,20 @@ addSampleSeries <- function(id) {
           },
           note = if (isTruthy(input$contact_note)) input$contact_note else NA
         )
-        DBI::dbAppendTable(session$userData$AquaCache, "organizations", df)
+
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6);",
+          params = list(
+            df$name,
+            df$name_fr,
+            df$contact_name,
+            df$phone,
+            df$email,
+            df$note
+          )
+        )
+
         moduleData$organizations <- DBI::dbGetQuery(
           session$userData$AquaCache,
           "SELECT organization_id, name FROM organizations ORDER BY name ASC"
@@ -708,8 +721,7 @@ addSampleSeries <- function(id) {
         showNotification(args$error, type = "error")
         return()
       }
-      con <- session$userData$AquaCache
-      DBI::dbBegin(con)
+      DBI::dbBegin(session$userData$AquaCache)
       sub_loc <- if (
         length(input$sub_location) == 0 || !nzchar(input$sub_location[1])
       ) {
@@ -718,7 +730,7 @@ addSampleSeries <- function(id) {
         as.numeric(input$sub_location[1])
       }
       sql <- DBI::sqlInterpolate(
-        con,
+        session$userData$AquaCache,
         "INSERT INTO discrete.sample_series (location_id, sub_location_id, synch_from, synch_to, default_owner, default_contributor, active, source_fx, source_fx_args, note) VALUES (?loc, ?sub_loc, ?synch_from, ?synch_to, ?default_owner, ?default_contributor, ?active, ?source_fx, CAST(?source_fx_args AS jsonb), ?note) RETURNING sample_series_id;",
         loc = as.numeric(input$location),
         sub_loc = sub_loc,
@@ -739,9 +751,9 @@ addSampleSeries <- function(id) {
         note = if (isTruthy(input$note)) input$note else NA
       )
       res <- tryCatch(
-        DBI::dbGetQuery(con, sql),
+        DBI::dbGetQuery(session$userData$AquaCache, sql),
         error = function(e) {
-          DBI::dbRollback(con)
+          DBI::dbRollback(session$userData$AquaCache)
           showNotification(
             paste("Error adding sample series:", e$message),
             type = "error"
@@ -750,7 +762,7 @@ addSampleSeries <- function(id) {
         }
       )
       if (!is.null(res)) {
-        DBI::dbCommit(con)
+        DBI::dbCommit(session$userData$AquaCache)
         showNotification("Sample series added successfully.", type = "message")
         getModuleData()
         updateSelectizeInput(session, "location", selected = character(0))
@@ -810,8 +822,7 @@ addSampleSeries <- function(id) {
         showNotification(args$error, type = "error")
         return()
       }
-      con <- session$userData$AquaCache
-      DBI::dbBegin(con)
+      DBI::dbBegin(session$userData$AquaCache)
       sub_loc <- if (
         length(input$sub_location) == 0 || !nzchar(input$sub_location[1])
       ) {
@@ -820,7 +831,7 @@ addSampleSeries <- function(id) {
         as.numeric(input$sub_location[1])
       }
       sql <- DBI::sqlInterpolate(
-        con,
+        session$userData$AquaCache,
         "UPDATE discrete.sample_series SET location_id = ?loc, sub_location_id = ?sub_loc, synch_from = ?synch_from, synch_to = ?synch_to, default_owner = ?default_owner, default_contributor = ?default_contributor, active = ?active, source_fx = ?source_fx, source_fx_args = CAST(?source_fx_args AS jsonb), note = ?note WHERE sample_series_id = ?id;",
         loc = as.numeric(input$location),
         sub_loc = sub_loc,
@@ -843,11 +854,11 @@ addSampleSeries <- function(id) {
       )
       res <- tryCatch(
         {
-          DBI::dbExecute(con, sql)
+          DBI::dbExecute(session$userData$AquaCache, sql)
           TRUE
         },
         error = function(e) {
-          DBI::dbRollback(con)
+          DBI::dbRollback(session$userData$AquaCache)
           showNotification(
             paste("Error modifying sample series:", e$message),
             type = "error"
@@ -856,7 +867,7 @@ addSampleSeries <- function(id) {
         }
       )
       if (isTRUE(res)) {
-        DBI::dbCommit(con)
+        DBI::dbCommit(session$userData$AquaCache)
         showNotification(
           "Sample series updated successfully.",
           type = "message"

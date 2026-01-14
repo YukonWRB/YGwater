@@ -154,7 +154,7 @@ imgMapView <- function(id, language) {
               style = "vertical-align: top; display: inline-flex;",
               selectizeInput(
                 ns("tags"),
-                label = tr("img_tags_lab", language$language),
+                label = tr("tags", language$language),
                 choices = unique(unlist(images$images$tags_list)),
                 selected = NULL,
                 multiple = TRUE

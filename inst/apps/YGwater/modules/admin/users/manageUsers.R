@@ -29,7 +29,7 @@ manageUsersUI <- function(id) {
       conditionalPanel(
         condition = "input.group_user == 'users_to_groups'",
         ns = ns,
-        h4(
+        h5(
           "Add user to a group. They'll inherit that the group's default permissions on schemas and tables as well as see records restricted to that group. You can add users to multiple groups as needed."
         ),
         selectInput(ns("existing_user"), "User", choices = NULL),
@@ -61,7 +61,7 @@ WHERE schema_name NOT LIKE 'pg_%'
     load_roles <- function() {
       roles <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname !~ '^pg_' ORDER BY rolname"
+        "SELECT rolname, rolcanlogin FROM pg_roles WHERE rolname !~ '^pg_' AND rolname NOT IN ('admin', 'postgres') ORDER BY rolname"
       )
       users <- roles$rolname[roles$rolcanlogin]
       groups <- roles$rolname[!roles$rolcanlogin]
@@ -230,15 +230,18 @@ WHERE schema_name NOT LIKE 'pg_%'
               length(input$schema_permissions) > 0
           ) {
             for (schema in input$schema_permissions) {
-              sql <- paste0(sprintf(
-                "GRANT USAGE ON SCHEMA %s TO %s;",
+              sql <- sprintf(
+                "GRANT USAGE ON SCHEMA %s TO %s",
                 DBI::dbQuoteIdentifier(session$userData$AquaCache, schema),
                 DBI::dbQuoteIdentifier(
                   session$userData$AquaCache,
                   input$group_name
                 )
-              ))
-              DBI::dbExecute(session$userData$AquaCache, sql)
+              )
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                sql
+              )
             }
           }
 
@@ -249,7 +252,7 @@ WHERE schema_name NOT LIKE 'pg_%'
                 if (table == "All tables") {
                   for (schema in input$schema_permissions) {
                     sql <- sprintf(
-                      "GRANT %s ON ALL TABLES IN SCHEMA %s TO %s;",
+                      "GRANT %s ON ALL TABLES IN SCHEMA %s TO %s",
                       permission,
                       DBI::dbQuoteIdentifier(
                         session$userData$AquaCache,
@@ -260,19 +263,31 @@ WHERE schema_name NOT LIKE 'pg_%'
                         input$group_name
                       )
                     )
-                    DBI::dbExecute(session$userData$AquaCache, sql)
+                    DBI::dbExecute(
+                      session$userData$AquaCache,
+                      sql
+                    )
                   }
                 } else {
                   sql <- sprintf(
-                    "GRANT %s ON TABLE %s TO %s;",
-                    permission,
-                    DBI::dbQuoteIdentifier(session$userData$AquaCache, table),
+                    "GRANT %s ON TABLE %s TO %s",
+                    DBI::dbQuoteIdentifier(
+                      session$userData$AquaCache,
+                      permission
+                    ),
+                    DBI::dbQuoteIdentifier(
+                      session$userData$AquaCache,
+                      table
+                    ),
                     DBI::dbQuoteIdentifier(
                       session$userData$AquaCache,
                       input$group_name
                     )
                   )
-                  DBI::dbExecute(session$userData$AquaCache, sql)
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    sql
+                  )
                 }
               }
             }
@@ -349,7 +364,7 @@ WHERE schema_name NOT LIKE 'pg_%'
       tryCatch(
         {
           sql <- sprintf(
-            "GRANT %s TO %s;",
+            "GRANT %s TO %s",
             DBI::dbQuoteIdentifier(
               session$userData$AquaCache,
               input$existing_group
@@ -359,7 +374,9 @@ WHERE schema_name NOT LIKE 'pg_%'
               input$existing_user
             )
           )
+
           DBI::dbExecute(session$userData$AquaCache, sql)
+
           output$status <- renderText(sprintf(
             "Added '%s' to '%s'",
             input$existing_user,

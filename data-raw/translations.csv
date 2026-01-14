@@ -20,6 +20,18 @@ data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
+documents,translation,Documents,Documents
+document_download,documentsModuleDownload,Download document,Télécharger le document
+document_authors,documentsModuleColAuthors,Authors,Auteurs
+document_published,documentsModuleColPublished,Published,Date de publication
+document_description,documentsModuleColDescription,Description,Description
+document_format,documentsModuleColFormat,Format,Format
+document_owner,documentsModuleColOwner,Owner,Propriétaire
+document_contributor,documentsModuleColContributor,Contributor,Contributeur
+document_select_prompt,documentsModuleSelectPrompt,Select a document to view details.,Sélectionnez un document pour voir ses détails.
+tags,,Tags,Étiquettes
+document_no_preview,documentsModuleNoPreview,Preview not available for this file type.,Aucun aperçu disponible pour ce type de fichier.
+document_type_col,,document_type_en,document_type_fr
 info,infoNavMenuTitle,Info,Info
 info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,Updates and changes,Mises à jour
@@ -51,6 +63,7 @@ error,,Error,Erreur
 errorModalTitle,pop-up error message title,Our apologies!,Désolé!
 errorModalMsg,pop-up error message body,The feature you selected could not be loaded.,La fonctionnalité que vous avez sélectionnée n'a pas pu être chargée.
 instructions,,How to use this interface,Utilisation de l'interface
+params_map_module_instructions,,"This module shows you conditions as actual values or as a percentage of the historic range for that day of year. Switch between actual or historic range values usng the drop-down menu, and change the parameter displayed using the 'Edit parameter' button.","Ce module vous montre les conditions soit en valeurs réelles, soit en pourcentage de la plage historique pour ce jour de l'année. Basculez entre les valeurs réelles ou de la plage historique à l'aide du menu déroulant, et changez le paramètre affiché en utilisant le bouton « Modifier le paramètre »."
 view_data_instructions_discrete,instructions,"<li>(Optional) Change the drop-down menus to narrow the list of samples.</li><li>Click 'Show samples' to view them in a table.</li><li>Select the samples you need, or use the button below the table to select all, then choose 'View X sample results' to go to the download screen.</li>","<li>Sélectionnez des valeurs dans les menus déroulants pour réduire la liste d’échantillons. (Facultatif)</li><li>Cliquez sur « Afficher les échantillons » pour les visualiser dans un tableau.</li><li>Sélectionnez les échantillons dont vous avez besoin ou cliquez sur le bouton « Tout sélectionner » sous le tableau, puis sur « Afficher X échantillons » pour accéder à l’écran de téléchargement.</li>"
 view_data_instructions_continuous,instructions,"<li>(Optional) Change the drop-down menus to narrow the timeseries list.</li><li>Click 'Show timeseries' to view them in a table.</li><li>Select the timeseries you need, or use the button below the table to select all, then choose 'View X timeseries details' to go to the download screen.</li>","<li>Sélectionnez des valeurs dans les menus déroulants pour réduire la liste de séries temporelles. (Facultatif)</li><li>Cliquez sur « Afficher les séries temporelles » pour les visualiser dans un tableau.</li><li>Sélectionnez les séries temporelles dont vous avez besoin ou cliquez sur le bouton « Tout sélectionner » sous le tableau, puis sur « Afficher X séries temporelles » pour accéder à l’écran de téléchargement.</li>"
 dl_data,download data button,Download data,Télécharger des données
@@ -96,6 +109,8 @@ tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,M
 tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
 tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Lieu de la prise de la mesure ou de l’échantillon
 tooltip_utc7,table tool tips,UTC-7,UTC-7
+tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données".
+tooltip_params_map_date_within,,"Maximum number of days from the target date to include a measurement. Use a lower threshold for parameters that change quickly (e.g., temperature).","Nombre maximum de jours à partir de la date ciblée pour inclure une mesure. Utilisez un seuil plus bas pour les paramètres qui changent rapidement (par exemple, la température)."
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
 view_samples,,Show samples,Afficher les échantillons
@@ -120,7 +135,6 @@ select_standard_opt,,Select a standard to apply (optional),Choisir une norme à 
 standard_warning,,Warning: this adds a lot of time for plot generation!,Attention : cela augmente beaucoup le temps de génération du graphique!
 EQWin_db,,EQWin database,Base de données EQWin
 img_type_lab,input label,Image Type,Type d'image
-img_tags_lab,input label,Tags,Étiquettes
 img_type_auto,input choice,Automatic (series),Automatique (série)
 img_type_man,input choice,Manual (one-off),Manuelle (non-série)
 map_options,,Map options,Options de la carte
@@ -169,8 +183,8 @@ share_y_axis,,Use the same Y-axis bounds for all plots (values are aligned),Util
 share_x_axis_tooltip,,Aligns the X-axis for all plots to make it easier to compare trends over time.,Aligne l'axe X de tous les graphiques pour faciliter la comparaison des tendances dans le temps.
 share_y_axis_tooltip,,Aligns the Y-axis for all plots to make it easier to compare values across locations or parameters.,Aligne l’axe Y de tous les graphiques pour faciliter la comparaison des valeurs entre emplacements ou paramètres.
 loc_code,,Choose how to display location names/codes,Choisissez comment montrer le nom/code des emplacements
-loc_code_name,,Name,Nom
-loc_code_code,,Code,Code
+name,,Name,Nom
+code,,Code,Code
 loc_code_nameCode,,Name (code),Nom (code)
 loc_code_codeName,,Code (name),Code (nom)
 target_datetime,,Use target date/time,Utiliser la date/le temps cible
@@ -214,6 +228,8 @@ map_actual_hist_range,,Historic range,Plage historique
 map_one_parameter,,One parameter,Un paramètre
 map_two_parameter,,Two parameters,Deux paramètres
 map_latest_measurements,,Latest measurements,Plus récentes mesures
+map_latest_auto_update,,Update every 15 minutes,Actualiser toutes les 15 minutes
+map_auto_update_notification,,Measurements updated,Mesures actualisées
 map_latest_measurements_modal,,"<b>Note</b>: Latest measurements are compared to the <i>average</i> values for the same day in past years. Keep this in mind for parameters that change a lot during the day, like temperature.","<b>Remarque</b> : Les mesures les plus récentes sont comparées aux valeurs <i>moyennes</i> de la même journée dans les années passées. Ceci impacte surtout les paramètres qui varient beaucoup au cours d’une journée, comme la température."
 map_primary_param,,Primary parameter,Paramètre primaire
 map_edit_primary_param,,Edit primary parameter,Modifer paramètre primaire
@@ -266,18 +282,25 @@ add_subplot,,Add subplot,Ajouter un sous-graphe
 modify_subplot,,Modify subplot,Modifier le sous-graphe
 remove_subplot,,Remove subplot,Enlever le sous-graphe
 add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the same plot, or 'Add subplot' to create a separate panel.","Cliquez sur « Ajouter un tracé » pour superposer une nouvelle série temporelle sur le même graphique, ou sur « Ajouter un sous-graphe » pour créer un panneau séparé."
-well_purpose,,Well purpose,Usage du puits
+well_purpose,,Well purpose,Usage des puits
 well_completion_yr,,Well completion year,Année d'achèvement des puits
-include_unknown_completion,,Include wells with unknown completion year,Inclure les puits avec année d'achèvement inconnue
+include_unknown_well_completion,,Include wells with unknown completion year,Inclure les puits ou l'année d'achèvement est inconnue
+include_missing_well_depth,,Include wells with missing depth,Inclure les puits où la profondeur est manquante
+include_missing_well_depth_to_water,,Include wells with missing depth to water,Inclure les puits où la profondeur
+include_missing_well_depth_to_bedrock,,Include wells with missing depth to bedrock,Inclure les puits où la profondeur jusqu'au substratum rocheux est manquante
 borehole_unnamed,,Unnamed well,Puits sans nom
 borehole_well_purpose_col,,purpose_name,purpose_name_fr
 licence_title,,Using data from this application,Utilisation des données de l'application
-licence1,,"The data, reports, and plots generated from this application are licenced under the Yukon Government's ","Les données, rapports et graphiques générés par cette application sont régis par la "
+licence1,,"The data, reports, and plots generated from this application are licenced under the Government of Yukon's ","Les données, rapports et graphiques générés par cette application sont régis par la "
 licence2,,Open Government Licence,licence ouverte du gouvernement du Yukon
 licence_url,,https://yukon.ca/en/your-government/open-government/open-government-licence-yukon,https://yukon.ca/fr/votre-gouvernement/gouvernement-ouvert/gouvernement-ouvert-licence-du-yukon
-licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms, which apply in addition to the Yukon Government licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains jeux de données consultables à partir de l’application proviennent de sources externes (ex. Relevés hydrologiques du Canada). Par conséquent, ces données peuvent être assujetties à d’autres conditions, qui s’appliquent en plus de celles prévues par la licence du gouvernement du Yukon. Il incombe à l’utilisateur de prendre connaissance des licences de tiers applicables et de s’y conformer."
+licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms, which apply in addition to the Government of Yukon licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains jeux de données consultables à partir de l’application proviennent de sources externes (ex. Relevés hydrologiques du Canada). Par conséquent, ces données peuvent être assujetties à d’autres conditions, qui s’appliquent en plus de celles prévues par la licence du gouvernement du Yukon. Il incombe à l’utilisateur de prendre connaissance des licences de tiers applicables et de s’y conformer."
 about_title2,title,About this application,À propos de l'application
-about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strenghts in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Le site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour le traitement et la visualisation des données. Le progiciel qui contient le code de l’application regroupe de nombreuses autres fonctions utiles, au-delà de celles présentées ici. Il est accessible publiquement au "
+about_fun_facts_title,title,Fun facts,Quelques faits amusants
+about_fun_fact_timeseries,content,"We host %s timeseries with about %s measurements.","Nous hébergeons %s séries temporelles avec environ %s mesures."
+about_fun_fact_samples,content,"We have %s samples with about %s associated results.","Nous avons %s échantillons avec environ %s résultats associés."
+about_fun_fact_wells,content,"The Water Well Registry includes %s water wells.","Le registre des puits d'eau comprend %s puits d'eau."
+about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strengths in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Le site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour le traitement et la visualisation des données. Le progiciel qui contient le code de l’application regroupe de nombreuses autres fonctions utiles, au-delà de celles présentées ici. Il est accessible publiquement au "
 about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre progiciel R, disponible au "
 about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time.","Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
 about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3, so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux progiciels R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
@@ -396,6 +419,7 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median (%),Pourcentage de la médiane historique (%)
+snowbull_historical_median,,Historical median (mm),Médiane historique (mm)
 snowbull_swe,,Snow water equivalent (mm),Équivalent en eau de neige (mm)
 snowbull_percentile,,Percentile (%),Percentile (%)
 snowbull_values,,Values,Valeurs
@@ -420,3 +444,6 @@ snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
 snowbull_elevation,,Elevation,Altitude
 snowbull_coordinates,,Coordinates,Coordonnées
+missing_disc_data_banner,,"<b>Notice:</b> Water quality results submitted by water-use licensees are not yet available in this application. If you require access to these data, please contact <a href='mailto:waterresources@yukon.ca'>waterresources@yukon.ca</a>.","<b>Avis :</b> Les résultats de qualité de l’eau soumis par les titulaires de permis d’utilisation de l’eau ne sont pas encore disponibles dans cette application. Pour obtenir l’accès à ces données, veuillez communiquer avec <a href='mailto:waterresources@yukon.ca'>waterresources@yukon.ca</a>."
+snowbull_isocontours,,Isocontours,Isocontours
+snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille

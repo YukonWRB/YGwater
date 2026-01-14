@@ -674,10 +674,9 @@ addDiscData <- function(id) {
 
           samples <- unique(data$df[, c("sample", "datetime")])
           for (i in seq_len(nrow(samples))) {
-            q <- "INSERT INTO discrete.samples (location_id, sub_location_id, media_id, datetime, collection_method, sample_type, owner, documents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::integer[]) RETURNING sample_id"
             sid <- DBI::dbGetQuery(
               con,
-              q,
+              "INSERT INTO discrete.samples (location_id, sub_location_id, media_id, datetime, collection_method, sample_type, owner, documents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::integer[]) RETURNING sample_id",
               params = list(
                 as.integer(input$location),
                 if (nzchar(input$sublocation)) {

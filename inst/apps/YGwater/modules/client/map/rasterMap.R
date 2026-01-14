@@ -1,679 +1,461 @@
-mapRasterUI <- function(id) {
-  ns <- NS(id)
+# library(shiny)
+# library(leaflet)
+# library(raster)
+# library(YGwater)
+# library(terra)
+# library(sf)
 
-  # All UI elements rendered in server function to allow multi-language functionality
-  page_fluid(
-    uiOutput(ns("sidebar_page"))
+# con <- AquaCache::AquaConnect(
+#   name = "aquacache",
+#   host = Sys.getenv("aquacacheHostProd"),
+#   port = Sys.getenv("aquacachePortProd"),
+#   user = Sys.getenv("aquacacheUserProd"),
+#   password = Sys.getenv("aquacachePassProd")
+# )
+
+download_spatial_layer <- function(
+  con,
+  layer_name,
+  additional_query = NULL
+) {
+  query <- sprintf(
+    "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
+         FROM spatial.vectors 
+         WHERE layer_name = %s",
+    DBI::dbQuoteString(con, layer_name)
   )
-} # End of mapRasterUI
+
+  if (!is.null(additional_query) && nzchar(additional_query)) {
+    query <- paste(query, additional_query)
+  }
+
+  data <- DBI::dbGetQuery(con, query)
+  if (nrow(data) == 0) {
+    warning(sprintf("No data found for layer: %s", layer_name))
+    return(NULL)
+  }
+
+  geom <- sf::st_as_sfc(data$geom_4326, crs = 4326)
+  sf::st_sf(data, geometry = geom, crs = 4326)
+}
+
+getRasterRefID <- function(ref_table, datetime) {
+  ref_id <- ref_table$reference_id[which.min(abs(
+    as.numeric(ref_table$datetime - as.POSIXct(datetime, tz = "UTC"))
+  ))]
+  return(ref_id)
+}
+
+getRasterSWE <- function(con, reference_id) {
+  r <- getRaster(
+    con = con,
+    tbl_name = c("spatial", "rasters"),
+    clauses = sprintf("WHERE reference_id = %d", reference_id),
+    bands = 1
+  )
+  terra::crs(r) <- "EPSG:4326"
+  r <- r * 1000 # Convert from meters to mm
+  return(r)
+}
+
+getPillowSWE <- function(con, stations_sf, date) {
+  stations_sf$swe <- NA_real_
+
+  ts_query <- sprintf(
+    "SELECT DISTINCT ON (timeseries_id) timeseries_id, date, value 
+       FROM continuous.measurements_calculated_daily_corrected
+       WHERE timeseries_id IN (%s) AND value IS NOT NULL AND date = '%s'
+       ORDER BY timeseries_id, date DESC",
+    paste(stations_sf$timeseries_id, collapse = ","),
+    as.Date(Sys.Date())
+  )
+
+  ts_data <- DBI::dbGetQuery(con, ts_query)
+  # Match ts_data with stations_sf based on timeseries_id
+  for (i in seq_len(nrow(stations_sf))) {
+    match_idx <- which(
+      ts_data$timeseries_id == stations_sf$timeseries_id[i]
+    )
+    if (length(match_idx) > 0) {
+      stations_sf$swe[i] <- ts_data$value[match_idx[1]]
+    }
+  }
+  return(stations_sf)
+}
+
+
+getSurveySWE <- function(con, stations_sf, date) {
+  stations_sf$swe <- NA_real_
+
+  ts_query <- sprintf(
+    "SELECT s.target_datetime, r.result as value, s.location_id
+       FROM discrete.samples s
+       JOIN discrete.results r ON s.sample_id = r.sample_id
+       WHERE s.location_id IN (%s)
+       AND r.parameter_id = (SELECT parameter_id FROM public.parameters
+                   WHERE param_name = 'snow water equivalent')
+       AND r.result IS NOT NULL
+       AND DATE(s.target_datetime) = '%s'
+       ORDER BY s.location_id, s.target_datetime DESC",
+    paste(stations_sf$location_id, collapse = ","),
+    as.Date(date)
+  )
+
+  ts_data <- DBI::dbGetQuery(con, ts_query)
+  # Match ts_data with stations_sf based on location_id
+  for (i in seq_len(nrow(stations_sf))) {
+    match_idx <- which(
+      ts_data$location_id == stations_sf$location_id[i]
+    )
+    if (length(match_idx) > 0) {
+      stations_sf$swe[i] <- ts_data$value[match_idx[1]]
+    }
+  }
+  return(stations_sf)
+}
+
+
+# UI using bslib::page_fluid and dynamic sidebar via uiOutput
+
+mapRasterUI <- function(id) {
+  ns <- shiny::NS(id)
+  bslib::page_fluid(
+    shiny::uiOutput(ns("sidebar_page")) # <-- add ns() here
+  )
+}
 
 mapRaster <- function(id, language) {
-  moduleServer(id, function(input, output, session) {
-    ns <- session$ns
+  shiny::moduleServer(id, function(input, output, session) {
+    ns <- session$ns # ensure ns is available
 
-    if (session$userData$user_logged_in) {
-      cached <- map_params_module_data(
-        con = session$userData$AquaCache,
-        env = session$userData$app_cache
-      )
-    } else {
-      cached <- map_params_module_data(con = session$userData$AquaCache)
-    }
-
-    # Query available raster models and their types from raster_series_index
-    models_types <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT DISTINCT model, type FROM spatial.raster_series_index"
-    )
-    models_types$model_type <- paste0(
-      models_types$model,
-      " (",
-      models_types$type,
-      ")"
+    communities <- download_spatial_layer(
+      con = session$userData$AquaCache,
+      layer_name = "Communities"
     )
 
-    moduleData <- reactiveValues(
-      locations = cached$locations,
-      timeseries = cached$timeseries,
-      parameters = cached$parameters
+    swe_pillow_stations <- download_continuous_ts_locations(
+      con = con,
+      param_name_long = "snow water equivalent"
     )
 
-    mapCreated <- reactiveVal(FALSE)
+    swe_survey_stations <- download_discrete_ts_locations(
+      con = session$userData$AquaCache,
+      param_name_long = "snow water equivalent"
+    )
 
-    output$sidebar_page <- renderUI({
-      req(moduleData, language)
-      mapCreated(FALSE)
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          bg = config$sidebar_bg, # Set in globals file
-          open = list(mobile = "always-above"),
-          tagList(
-            selectizeInput(
-              ns("param"),
-              label = tr("parameter", language$language),
-              choices = stats::setNames(
-                moduleData$parameters$parameter_id,
-                moduleData$parameters[[tr(
-                  "param_name_col",
-                  language$language
-                )]]
-              ),
-              selected = map_params$point_id,
-              multiple = FALSE
+    era5_query <- "
+    SELECT 
+        r.reference_id,
+        rr.valid_from as datetime
+    FROM spatial.raster_series_index rsi
+    JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
+    JOIN spatial.rasters r ON r.reference_id = rr.reference_id
+    WHERE rsi.model = 'ERA5_land'
+    ORDER BY rr.valid_from, r.reference_id"
+    era5_raster_data <- DBI::dbGetQuery(session$userData$AquaCache, era5_query)
+    era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
+    # Place this in your server function to generate the sidebar layout dynamically
+    output$sidebar_page <- shiny::renderUI({
+      bslib::page_sidebar(
+        sidebar = bslib::sidebar(
+          shiny::dateInput(
+            ns("date"), # already namespaced
+            "Date",
+            value = max(era5_raster_data$datetime),
+            min = min(era5_raster_data$datetime),
+            max = max(era5_raster_data$datetime)
+          ),
+          shiny::selectInput(
+            ns("shapefile"), # already namespaced
+            tr("gen_snowBul_basins", language$language),
+            choices = c(
+              "swe_basins" = "swe_basins"
             ),
-
-            # selectizeInput(
-            #   ns("mapType"),
-            #   label = tr("map_mapType", language$language),
-            #   choices = stats::setNames(
-            #     c("range", "abs"),
-            #     c(tr("map_relative", language$language), tr("map_absolute1", language$language))
-            #   ),
-            #   selected = "range",
-            #   multiple = FALSE
-            # ),
-
-            dateInput(
-              ns("target"),
-              label = tr("map_target_date", language$language),
-              value = Sys.Date(),
-              max = Sys.Date(),
-              format = "yyyy-mm-dd",
-              language = language$abbrev
-            ),
-
-            checkboxInput(
-              ns("latest"),
-              tr("map_latest_measurements", language$language),
-              value = FALSE
-            ),
-
-            numericInput(
-              ns("days"),
-              label = tr("map_date_within", language$language),
-              value = map_params$days,
-              min = 0,
-              max = 365,
-              step = 1
-            ),
-
-            selectizeInput(
-              ns("targetDataset"),
-              label = "Raster dataset",
-              choices = stats::setNames(
-                models_types$model,
-                models_types$model_type
-              ),
-              selected = "",
-              multiple = FALSE
-            ),
-            selectizeInput(
-              ns("targetParam"),
-              label = "Raster parameter",
-              choices = "",
-              selected = "",
-              multiple = FALSE
-            )
+            selected = "swe_basins"
+          ),
+          shiny::tags$details(
+            tags$summary(tr("snowbull_details", language$language)),
+            shiny::uiOutput(ns("map_details"))
           )
         ),
-        # Main panel (left)
-        leaflet::leafletOutput(ns("map"), height = '80vh')
+        leaflet::leafletOutput(ns("swe_map"), height = 800) # already namespaced
       )
-    }) |>
-      bindEvent(language$language)
+    })
 
-    output$primary_param <- renderUI({
-      req(map_params, language)
-      tagList(
-        h4(
-          if (config$public) {
-            tr("map_primary_param_solo", language$language)
-          } else {
-            tr("map_primary_param", language$language)
-          }
-        ), # Text for primary parameter
-        p(
-          moduleData$parameters[
-            moduleData$parameters$parameter_id == map_params$point_id,
-            get(tr("param_name_col", language$language))
-          ]
-        ), # Name of primary parameter
-        p(
-          tr("map_min_yrs_selected1", language$language),
-          " ",
-          map_params$yrs,
-          " ",
-          tr("map_min_yrs_selected2", language$language), # Text for min years selected
-          tr("map_date_within_selected1", language$language),
-          map_params$days,
-          tr("map_date_within_selected2", language$language) # Text for within x days
+    basins_shp <- shiny::reactive({
+      if (input$shapefile == "swe_basins") {
+        # input IDs are already namespaced in modules
+        shp <- sf::st_read(
+          system.file(
+            "snow_survey/swe_basins/swe_basins.shp",
+            package = "YGwater",
+            mustWork = TRUE
+          ),
+          quiet = TRUE
         )
+        sf::st_transform(shp, crs = 4326)
+      } else {
+        NULL
+      }
+    })
+
+    # Permanent snow mask
+    permenent_snow_date <- as.Date("2025-09-01")
+    ref_id_perm <- getRasterRefID(era5_raster_data, permenent_snow_date)
+    r_db_perm <- getRasterSWE(session$userData$AquaCache, ref_id_perm)
+    swe_mask <- !is.na(r_db_perm) & (r_db_perm <= 10)
+
+    swe_map_data <- shiny::reactive({
+      shiny::req(input$date)
+
+      swe_pillows <- getPillowSWE(
+        con = session$userData$AquaCache,
+        stations_sf = swe_pillow_stations,
+        date = input$date
       )
-    }) |>
-      bindEvent(map_params$point_id, language$language)
 
-    # PLACEHOLDER OUTPUT RASTER
-
-    # Create the filter inputs ############################################################################
-    map_params <- reactiveValues(
-      point_id = 1150, # Water flow
-      point_name = 'Flow',
-      point_units = 'm3/s',
-      raster_id = NULL,
-      raster_name = '',
-      raster_units = '',
-      yrs = 10,
-      days = 1,
-      latest = FALSE,
-      target = Sys.Date(),
-      params = 1,
-      bins = c(-Inf, 0, 20, 40, 60, 80, 100, Inf),
-      colors = c(
-        "#8c510a",
-        "#d8b365",
-        "#FEE090",
-        "#74ADD1",
-        "#4575D2",
-        "#313695",
-        "#A50026"
+      swe_surveys <- getSurveySWE(
+        con = session$userData$AquaCache,
+        stations_sf = swe_survey_stations,
+        date = input$date
       )
-    )
 
-    observeEvent(input$param, {
-      map_params$point_id <- input$param
+      # Query raster for selected date
+      ref_id <- getRasterRefID(era5_raster_data, input$date)
+      r_db <- getRasterSWE(session$userData$AquaCache, ref_id)
+      r_db <- terra::mask(r_db, swe_mask, maskvalue = FALSE)
+      # Basins
+      basins <- basins_shp()
+      if (is.null(basins)) {
+        return(NULL)
+      }
+      basin_means <- terra::extract(r_db, basins, fun = mean, na.rm = TRUE)
+      basins$mean_raster <- basin_means[, 2]
 
-      map_params$point_name <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$point_id,
-        get(tr("param_name_col", language$language))
-      ]
+      # Contours
+      contour_levels <- seq(0, 1000, by = 50)
+      contours <- terra::as.contour(r_db, levels = contour_levels)
+      contours_sf <- sf::st_as_sf(contours)
 
-      map_params$point_units <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$point_id,
-        "unit_default"
-      ]
+      # Set colorbar limits
+      colorbar_min <- 0
+      colorbar_max <- 250
+
+      # Mask raster values above 250 for colorbar/legend
+      values_r <- terra::values(r_db)
+      values_r[values_r > colorbar_max] <- colorbar_max
+
+      pal <- leaflet::colorNumeric(
+        palette = rev(c(
+          "#6772F7", # Blue (extremely high)
+          "#85B4F8", # Light blue (very high)
+          "#8CEFE1", # Cyan (high)
+          "#6CFC88", # Green (well above normal)
+          "#C1FB80", # Light green (above normal)
+          "#EEE383", # Yellow (normal)
+          "#EBB966" # Orange (near normal)
+        )),
+        domain = c(colorbar_min, colorbar_max),
+        na.color = "transparent"
+      )
+      contours_sf$col <- pal(pmin(contours_sf$level, colorbar_max))
+
+      list(
+        r_db = r_db,
+        basins = basins,
+        contours_sf = contours_sf,
+        pal = pal,
+        swe_pillows = swe_pillows,
+        swe_surveys = swe_surveys,
+        colorbar_min = colorbar_min,
+        colorbar_max = colorbar_max
+      )
     })
 
-    observeEvent(input$targetParam, {
-      map_params$raster_id <- input$targetParam
+    output$swe_map <- leaflet::renderLeaflet({
+      map_data <- swe_map_data()
+      shiny::req(map_data)
+      r_db <- map_data$r_db
+      basins_shp <- map_data$basins
+      contours_sf <- map_data$contours_sf
+      pillows <- map_data$swe_pillows
+      surveys <- map_data$swe_surveys
+      pal <- map_data$pal
+      colorbar_min <- map_data$colorbar_min
+      colorbar_max <- map_data$colorbar_max
 
-      if (!is.null(map_params$raster_id) && nzchar(map_params$raster_id)) {
-        map_params$raster_name <- dbGetQueryDT(
-          session$userData$AquaCache,
-          sprintf(
-            "SELECT parameter FROM spatial.raster_series_index WHERE raster_series_id = %s LIMIT 1",
-            as.character(map_params$raster_id)
-          )
-        )
-
-        units <- dbGetQueryDT(
-          session$userData$AquaCache,
-          sprintf(
-            "SELECT units FROM spatial.rasters_reference WHERE raster_series_id = %s LIMIT 1",
-            as.character(map_params$raster_id)
-          )
-        )
-        if (nrow(units) > 0) {
-          map_params$raster_units <- units$units[1]
-        } else {
-          map_params$raster_units <- ""
-        }
-      } else {
-        map_params$raster_name <- ""
-        map_params$raster_units <- ""
-      }
-    })
-
-    # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
-    observeEvent(input$latest, {
-      if (input$latest) {
-        # Show the user a modal that explains that the most recent values will be compared against daily means
-        showModal(modalDialog(
-          tr("map_latest_measurements_modal", language$language),
-          easyClose = TRUE,
-          footer = modalButton(tr("close", language$language))
-        ))
-        updateDateInput(session, "target", value = Sys.Date())
-        map_params$latest <- TRUE
-        map_params$target <- Sys.Date()
-      } else {
-        map_params$latest <- FALSE
-        map_params$target <- input$target
-      }
-    })
-
-    # remove any modal
-    observeEvent(input$close, {
-      removeModal()
-    })
-
-    observeEvent(input$target, {
-      map_params$target <- input$target
-    })
-
-    observeEvent(input$targetDataset, {
-      req(input$targetDataset)
-      # Update the targetParam choices based on the selected dataset
-      selected_model <- models_types[
-        models_types$model == input$targetDataset,
-      ]
-      if (nrow(selected_model) > 0) {
-        params <- dbGetQueryDT(
-          session$userData$AquaCache,
-          sprintf(
-            "SELECT parameter, raster_series_id FROM spatial.raster_series_index WHERE model = '%s' AND type = '%s'",
-            selected_model$model,
-            selected_model$type
-          )
-        )
-
-        updateSelectizeInput(
-          session,
-          "targetParam",
-          choices = stats::setNames(params$raster_series_id, params$parameter),
-          selected = ""
-        )
-      } else {
-        updateSelectizeInput(
-          session,
-          "targetParam",
-          choices = character(0),
-          selected = ""
-        )
-      }
-    })
-
-    # Listen for input changes and update the map ########################################################
-    updateMap <- function() {
-      leaflet::leafletProxy("map", session) %>% leaflet::clearControls()
-
-      # integrity checks
-      if (is.na(map_params$yrs) || is.na(map_params$days)) {
-        return()
-      }
-
-      # Stop if the parameter does not exist; it's possible that the user typed something in themselves
-      if (!map_params$point_id %in% moduleData$parameters$parameter_id) {
-        return()
-      }
-
-      # Deal with parameter 1
-      tsids1 <- dbGetQueryDT(
-        session$userData$AquaCache,
-        sprintf(
-          "SELECT timeseries_id FROM timeseries WHERE parameter_id = %s;",
-          map_params$point_id
-        )
-      )$timeseries_id
-      if (length(tsids1) == 0) {
-        return()
-      }
-
-      # Deal with raster
-      # Query valid_from, valid_to, and reference_id for the selected raster series
-      if (!is.null(map_params$raster_id) && nzchar(map_params$raster_id)) {
-        raster_dates <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT valid_from, valid_to, reference_id FROM spatial.rasters_reference WHERE raster_series_id = ",
-            as.character(map_params$raster_id)
-          )
-        )
-        # Convert valid_from and valid_to to POSIXct datetime array (if not already)
-
-        # Calculate midpoint date as average of valid_from and valid_to
-        if (exists("raster_dates") && nrow(raster_dates) > 0) {
-          raster_dates$valid_from <- as.POSIXct(
-            raster_dates$valid_from,
-            tz = "UTC"
-          )
-          raster_dates$valid_to <- as.POSIXct(raster_dates$valid_to, tz = "UTC")
-          raster_dates$midpoint <- as.POSIXct(
-            (as.numeric(raster_dates$valid_from) +
-              as.numeric(raster_dates$valid_to)) /
-              2,
-            origin = "1970-01-01",
-            tz = "UTC"
-          )
-        }
-
-        # Calculate the difference in days between valid_from and map_params$target
-        raster_dates$date_diff_days <- as.numeric(difftime(
-          map_params$target,
-          raster_dates$valid_from,
-          units = "days"
-        ))
-        raster_dates <- raster_dates[order(abs(raster_dates$date_diff_days)), ]
-        if (nrow(raster_dates) > 0) {
-          selected_reference_id <- raster_dates$reference_id[1]
-          date_diff <- raster_dates$date_diff_days[1]
-        } else {
-          selected_reference_id <- NA
-          date_diff <- NA
-        }
-
-        if (!is.na(selected_reference_id)) {
-          r_db <- getRaster(
-            con = session$userData$AquaCache,
-            tbl_name = c("spatial", "rasters"),
-            clauses = sprintf("WHERE reference_id = %d", selected_reference_id),
-            bands = 1
-          )
-
-          if (!is.null(r_db)) {
-            legend_title <- paste0(
-              map_params$raster_name,
-              " (",
-              map_params$raster_units,
-              ")"
+      leaflet::leaflet() %>%
+        leaflet::addTiles() %>%
+        leaflet::addRasterImage(
+          r_db,
+          colors = pal,
+          opacity = 0.7,
+          project = TRUE,
+          group = tr("snowbull_raster", language$language)
+        ) %>%
+        leaflet::addPolylines(
+          data = contours_sf,
+          color = ~col,
+          weight = 3,
+          opacity = 0.85,
+          group = tr("snowbull_isocontours", language$language)
+        ) %>%
+        leaflet::addPolygons(
+          data = basins_shp,
+          fillColor = "transparent",
+          color = "black",
+          weight = 2,
+          fillOpacity = 0.6,
+          group = tr("gen_snowBul_basins", language$language)
+        ) %>%
+        leaflet::addPolygons(
+          data = basins_shp,
+          fillColor = ~ pal(pmin(mean_raster, colorbar_max)),
+          color = "black",
+          weight = 2,
+          fillOpacity = 0.6,
+          label = ~ paste0(
+            "Mean Value: ",
+            ifelse(
+              mean_raster > colorbar_max,
+              paste0(colorbar_max, "+"),
+              round(mean_raster, 2)
             )
-
-            leaflet::leafletProxy("map", session) %>%
-              leaflet::clearImages() %>%
-              leaflet::addRasterImage(
-                r_db,
-                colors = leaflet::colorNumeric(
-                  palette = "viridis",
-                  domain = raster::values(r_db),
-                  na.color = "#808080"
-                ),
-                opacity = 0.9,
-                project = TRUE,
-                options = leaflet::pathOptions(pane = "overlay"),
-                layerId = "rasterLayer"
-              ) %>%
-              leaflet::addLegend(
-                position = "bottomleft",
-                pal = leaflet::colorNumeric(
-                  palette = "viridis",
-                  domain = raster::values(r_db),
-                  na.color = "#808080"
-                ),
-                values = raster::values(r_db),
-                title = legend_title
-              )
-          }
-          # You can add further processing of r_db here if needed
-        }
-      }
-
-      if (map_params$latest) {
-        # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days1 days
-        closest_measurements1 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "WITH ranked_data AS (
-              SELECT 
-                timeseries_id, 
-                datetime, 
-                value_corrected AS value,
-                ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY datetime DESC) AS row_num
-              FROM 
-                measurements_continuous_corrected
-              WHERE 
-                timeseries_id IN (",
-            paste(tsids1, collapse = ","),
-            ") 
-                AND datetime > '",
-            as.POSIXct(Sys.time(), tz = "UTC") -
-              as.numeric(map_params$days) -
-              60 * 60 * 24,
-            "'
+          ),
+          group = tr("snowbull_swe_basin", language$language)
+        ) %>%
+        leaflet::addLabelOnlyMarkers(
+          data = basins_shp,
+          lng = sf::st_coordinates(sf::st_centroid(basins_shp))[, 1],
+          lat = sf::st_coordinates(sf::st_centroid(basins_shp))[, 2],
+          label = ~ ifelse(
+            mean_raster > colorbar_max,
+            paste0(colorbar_max, "+"),
+            round(mean_raster, 1)
+          ),
+          labelOptions = leaflet::labelOptions(
+            noHide = TRUE,
+            direction = "center",
+            textOnly = TRUE,
+            style = list(
+              "font-weight" = "bold",
+              "color" = "black",
+              "font-size" = "12px"
             )
-            SELECT 
-              timeseries_id, datetime, value
-            FROM 
-              ranked_data
-            WHERE 
-              row_num = 1;"
-          )
-        )
-
-        # For timeseries where there was a measurement above, get historical range data and add
-        range1 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "WITH ranked_data AS (
-              SELECT
-                timeseries_id, 
-                max, 
-                min, 
-                doy_count,
-                ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
-              FROM 
-                measurements_calculated_daily_corrected 
-              WHERE 
-                doy_count >= ",
-            as.numeric(map_params$yrs),
-            " 
-                AND timeseries_id IN (",
-            paste(closest_measurements1$timeseries_id, collapse = ","),
-            ")
-            )
-            SELECT 
-              timeseries_id, max, min, doy_count 
-            FROM 
-              ranked_data
-            WHERE 
-              row_num = 1;"
-          )
-        )
-
-        # Merge the two sets on timeseries_id so as to get historic range data for each timeseries (this will drop records where there were not enough years of record)
-        closest_measurements1 <- merge(
-          closest_measurements1,
-          range1,
-          by = "timeseries_id",
-          all.y = TRUE
-        )
-        # Calculate the percent of the historic range using the value, max and min
-        closest_measurements1[,
-          percent_historic_range := 100 * (value - min) / (max - min)
-        ]
-      } else {
-        # not requesting latest measurements
-        range1 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily_corrected WHERE doy_count >= ",
-            as.numeric(map_params$yrs),
-            " AND timeseries_id IN (",
-            paste(tsids1, collapse = ","),
-            ") AND date BETWEEN '",
-            map_params$target - as.numeric(map_params$days),
-            "' AND '",
-            map_params$target + as.numeric(map_params$days),
-            "';"
-          )
-        )
-
-        # Calculate the absolute difference in days between each date and the target date
-        range1[, date_diff := abs(date - map_params$target)]
-
-        # Order the data by 'timeseries_id' and 'date_diff'
-        data.table::setorder(range1, timeseries_id, date_diff)
-
-        # For each 'timeseries_id', select the row with the smallest 'date_diff'
-        closest_measurements1 <- range1[, .SD[1], by = timeseries_id]
-      }
-
-      locs_tsids1 <- merge(
-        moduleData$locations[, c(
-          "latitude",
-          "longitude",
-          "location_id",
-          "name",
-          "name_fr"
-        )],
-        moduleData$timeseries[
-          moduleData$timeseries$timeseries_id %in%
-            closest_measurements1$timeseries_id,
-          c("timeseries_id", "location_id")
-        ],
-        by = "location_id"
-      )
-      locs_tsids1$param_name <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$point_id,
-        get(tr("param_name_col", language$language))
-      ]
-      locs_tsids1$param_unit <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$point_id,
-        "unit_default"
-      ]
-
-      # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
-
-      mapping_data <- merge(
-        closest_measurements1,
-        locs_tsids1,
-        by = "timeseries_id",
-        all.x = TRUE
-      )
-      mapping_data[, percent_historic_range_capped := percent_historic_range]
-
-      abs_vals <- abs(mapping_data$value)
-
-      if (length(abs_vals) == 0) {
-        leaflet::leafletProxy("map", session) %>%
-          leaflet::clearMarkers() %>%
-          leaflet::clearControls()
-        return()
-      }
-
-      abs_range <- range(abs_vals, na.rm = TRUE)
-      abs_bins <- seq(
-        abs_range[1],
-        abs_range[2],
-        length.out = length(map_params$colors) + 1
-      )
-
-      value_palette <- leaflet::colorBin(
-        palette = map_params$colors,
-        domain = abs_vals,
-        bins = abs_bins,
-        pretty = FALSE,
-        na.color = "#808080"
-      )
-
-      map_values <- abs_vals
-      legend_digits <- function(vals) {
-        if (length(vals) == 0 || all(!is.finite(vals))) {
-          return(0)
-        }
-        max_val <- max(abs(vals), na.rm = TRUE)
-        if (max_val >= 100) {
-          return(0)
-        } else if (max_val >= 10) {
-          return(1)
-        } else {
-          return(2)
-        }
-      }
-      lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
-      legend_title <- sprintf(
-        "%s (%s)",
-        map_params$point_name,
-        map_params$point_units
-      )
-
-      leaflet::leafletProxy("map", session) %>%
-        leaflet::clearMarkers() %>%
+          ),
+          group = tr("snowbull_swe_basin", language$language)
+        ) %>%
         leaflet::addCircleMarkers(
-          data = mapping_data,
+          data = communities,
+          lng = ~ sf::st_coordinates(geometry)[, 1],
+          lat = ~ sf::st_coordinates(geometry)[, 2],
+          radius = 2,
+          color = "black",
+          fillColor = "black",
+          fillOpacity = 1,
+          opacity = 1,
+          label = ~feature_name,
+          group = tr("snowbull_communities", language$language)
+        ) %>%
+        leaflet::addLabelOnlyMarkers(
+          data = communities,
+          lng = ~ sf::st_coordinates(geometry)[, 1],
+          lat = ~ sf::st_coordinates(geometry)[, 2],
+          label = ~feature_name,
+          labelOptions = leaflet::labelOptions(
+            noHide = TRUE,
+            direction = "top",
+            textOnly = TRUE,
+            style = list(
+              "font-weight" = "bold",
+              "color" = "black",
+              "font-size" = "10px"
+            )
+          ),
+          group = tr("snowbull_communities", language$language)
+        ) %>%
+        leaflet::addCircleMarkers(
+          data = pillows[!is.na(pillows$swe), ],
           lng = ~longitude,
           lat = ~latitude,
-          fillColor = ~ value_palette(abs(value)),
-          color = ~ value_palette(abs(value)),
+          fillColor = ~ pal(pmin(swe, colorbar_max)),
+          color = "black",
+          weight = 2,
           fillOpacity = 1,
-          stroke = TRUE,
-          weight = 1,
+          opacity = 1,
           radius = 8,
-          options = leaflet::pathOptions(pane = "overlay"),
-          popup = ~ paste0(
-            "<strong>",
-            get(tr("generic_name_col", language$language)),
-            "</strong><br/>",
-            param_name,
-            "<br>",
-            tr("map_actual_date", language$language),
+          label = ~ paste0(
+            name,
             ": ",
-            if (map_params$latest) {
-              paste0(datetime, " UTC")
-            } else {
-              paste0(date, " (daily mean)")
-            },
-            "<br/>",
-            tr("map_relative", language$language),
-            ": ",
-            round(percent_historic_range, 2),
-            "% <br/>",
-            tr("map_absolute2", language$language),
-            ": ",
-            round(value, 2),
-            " ",
-            param_unit,
-            "<br/>",
-            tr("map_actual_hist_range", language$language),
-            ": ",
-            round(min, 2),
-            " ",
-            tr("to", language$language),
-            " ",
-            round(max, 2),
-            " ",
-            param_unit,
-            "<br/>",
-            tr("map_actual_yrs", language$language),
-            ": ",
-            doy_count
-          )
+            ifelse(
+              swe > colorbar_max,
+              paste0(colorbar_max, "+"),
+              round(swe, 1)
+            ),
+            " mm"
+          ),
+          group = tr("snowbull_snow_pillow", language$language)
         ) %>%
+        leaflet::addCircleMarkers(
+          data = surveys[!is.na(surveys$swe), ],
+          lng = ~longitude,
+          lat = ~latitude,
+          fillColor = ~ pal(pmin(swe, colorbar_max)),
+          color = "blue",
+          weight = 2,
+          fillOpacity = 1,
+          opacity = 1,
+          radius = 6,
+          label = ~ paste0(
+            name,
+            ": ",
+            ifelse(
+              swe > colorbar_max,
+              paste0(colorbar_max, "+"),
+              round(swe, 1)
+            ),
+            " mm"
+          ),
+          group = tr("snowbull_snow_survey", language$language)
+        ) %>%
+        # --- Add colorbar legend for raster ---
         leaflet::addLegend(
           position = "bottomright",
-          pal = value_palette,
-          values = map_values,
-          title = legend_title,
-          labFormat = lab_format,
-          opacity = 1
-        )
-    }
-
-    # Create the basic map
-    mapCreated <- reactiveVal(FALSE) # Used to track map creation so that points show up right away with defaults
-    output$map <- leaflet::renderLeaflet({
-      map <- leaflet::leaflet(
-        options = leaflet::leafletOptions(maxZoom = 15)
-      ) %>%
-        leaflet::addMapPane("basemap", zIndex = 410) %>%
-        leaflet::addMapPane("overlay", zIndex = 420) %>%
-        leaflet::addTiles(options = leaflet::tileOptions(pane = "basemap")) %>%
-        leaflet::addProviderTiles(
-          "Esri.WorldTopoMap",
-          group = "Topographic",
-          options = leaflet::providerTileOptions(pane = "basemap")
-        ) %>%
-        leaflet::addProviderTiles(
-          "Esri.WorldImagery",
-          group = "Satellite",
-          options = leaflet::providerTileOptions(pane = "basemap")
+          pal = pal,
+          values = c(colorbar_min, colorbar_max),
+          title = "SWE (mm)",
+          opacity = 1,
+          labFormat = function(type, cuts, p) {
+            cuts <- round(cuts)
+            labels <- as.character(cuts)
+            labels[length(labels)] <- paste0(colorbar_max, "+")
+            labels
+          }
         ) %>%
         leaflet::addLayersControl(
-          baseGroups = c("Topographic", "Satellite")
+          overlayGroups = c(
+            tr("snowbull_raster", language$language),
+            tr("snowbull_snow_pillow", language$language),
+            tr("snowbull_snow_survey", language$language),
+            tr("gen_snowBul_basins", language$language),
+            tr("snowbull_swe_basin", language$language),
+            tr("snowbull_communities", language$language),
+            tr("snowbull_isocontours", language$language)
+          ),
+          options = leaflet::layersControlOptions(collapsed = FALSE)
         ) %>%
-        leaflet::addScaleBar(
-          position = "topleft",
-          options = leaflet::scaleBarOptions(imperial = FALSE)
-        ) %>%
-        leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
-
-      mapCreated(TRUE)
-      map
+        leaflet::hideGroup(tr("snowbull_swe_basin", language$language)) %>%
+        leaflet::hideGroup(tr("snowbull_isocontours", language$language))
     })
 
-    # Observe the map being created and update it when the parameters change
-    observe({
-      req(mapCreated(), map_params, language$language) # Ensure the map has been created before updating
-      updateMap() # Call the updateMap function to refresh the map with the current parameters
+    # --- Render selected date text with details ---
+    output$map_details <- shiny::renderUI({
+      shiny::HTML(paste0(
+        "<b>",
+        tr("app_version", language$language),
+        "</b> ",
+        as.character(utils::packageVersion("YGwater"))
+      ))
     })
-  }) # End of moduleServer
-} # End of mapParams server function
+  })
+}

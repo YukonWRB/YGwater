@@ -44,19 +44,25 @@ SWE_basin <- function(
       on.exit(DBI::dbDisconnect(con), add = TRUE)
     }
 
+    snow_id <- DBI::dbGetQuery(
+      con,
+      "SELECT media_id FROM media_types WHERE media_type = 'snow'"
+    )[1, 1]
+
     samples <- DBI::dbGetQuery(
       con,
       paste0(
         "SELECT s.sample_id, l.location, s.target_datetime 
                                FROM samples s 
                                INNER JOIN locations l ON l.location_id = s.location_id 
-                               WHERE media_id = 7 
-                               AND collection_method = 1
+                               WHERE media_id = ",
+        snow_id,
+        " AND collection_method = 1
                                AND target_datetime >= '",
         year - lookback,
         "-01-01';"
       )
-    ) # media = 'atmospheric', collection_method = 'observation'
+    ) # media = 'snow', collection_method = 'observation'
 
     Meas <- DBI::dbGetQuery(
       con,

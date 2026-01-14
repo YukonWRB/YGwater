@@ -26,6 +26,7 @@ app_server <- function(input, output, session) {
       "maps",
       "reports",
       "images",
+      "docTableView",
       "data",
       "info",
       "WWR"
@@ -252,6 +253,7 @@ app_server <- function(input, output, session) {
     "snowBulletin",
     "imgTableView",
     "imgMapView",
+    "docTableView",
     "discData",
     "contData",
     "WWR",
@@ -349,6 +351,7 @@ app_server <- function(input, output, session) {
     ui_loaded$FOD <- FALSE
     ui_loaded$imgTableView <- FALSE
     ui_loaded$imgMapView <- FALSE
+    ui_loaded$docTableView <- FALSE
     ui_loaded$snowInfo <- FALSE
     ui_loaded$waterInfo <- FALSE
     ui_loaded$WQReport <- FALSE
@@ -412,7 +415,7 @@ app_server <- function(input, output, session) {
   )
 
   # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
-  session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues from Shiny Server
+  session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues when viewing plotly plots on Android devices
 
   session$onUnhandledError(function() {
     DBI::dbDisconnect(session$userData$AquaCache)
@@ -496,7 +499,9 @@ app_server <- function(input, output, session) {
       if (updating_from_url()) {
         return()
       }
-      page <- if (!is.null(input$navbar) && input$navbar %in% bookmarkable_tabs) {
+      page <- if (
+        !is.null(input$navbar) && input$navbar %in% bookmarkable_tabs
+      ) {
         input$navbar
       } else {
         NULL
@@ -603,6 +608,10 @@ app_server <- function(input, output, session) {
     })
     output$imagesNavMapTitle <- renderUI({
       tr("images_map", languageSelection$language)
+    })
+
+    output$documentsNavMenuTitle <- renderUI({
+      tr("documents", languageSelection$language)
     })
 
     output$infoNavMenuTitle <- renderUI({
@@ -813,21 +822,19 @@ app_server <- function(input, output, session) {
   # Handle feedback submission
   observeEvent(input$submit_feedback, {
     # Save feedback to the database
-
-    df <- data.frame(
-      sentiment = feedback$type,
-      comment = input$feedback_text,
-      page = input$navbar,
-      app_state = jsonlite::toJSON(
-        reactiveValuesToList(input),
-        auto_unbox = TRUE
+    DBI::dbExecute(
+      session$userData$AquaCache,
+      "INSERT INTO application.feedback (sentiment, comment, page, app_state) VALUES ($1, $2, $3, $4);",
+      params = list(
+        feedback$type,
+        input$feedback_text,
+        input$navbar,
+        jsonlite::toJSON(
+          reactiveValuesToList(input),
+          auto_unbox = TRUE
+        )
       )
     )
-
-    # Drop the feedback_text portion from the app_sate column
-    # df$app_state <- gsub('"feedback_text":\\s*".*?"(,\\s*)?', '', df$app_state)
-
-    DBI::dbAppendTable(session$userData$AquaCache, "feedback", df)
 
     # Reset feedback
     shinyjs::hide("feedback_text")
@@ -941,13 +948,13 @@ $(document).keyup(function(event) {
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p')
-            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments')
+            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments', 'field')
         )
         SELECT t.schema,
                t.table_name,
                string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
         FROM tbls t
-        CROSS JOIN LATERAL unnest(ARRAY['INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
+        CROSS JOIN LATERAL unnest(ARRAY['SELECT', 'INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
         WHERE has_table_privilege($1, t.tbl_oid, p.priv)
         GROUP BY t.schema, t.table_name
         ORDER BY t.schema, t.table_name;"
@@ -956,102 +963,431 @@ $(document).keyup(function(event) {
           session$userData$table_privs <- DBI::dbGetQuery(
             session$userData$AquaCache,
             sql,
-            params = list(session$userData$config$dbUser) # or any role name
+            params = list(session$userData$config$dbUser)
+          )
+          # Create a qualified name column for easier filtering
+          session$userData$table_privs$qual_name <- paste0(
+            session$userData$table_privs$schema,
+            ".",
+            session$userData$table_privs$table_name
           )
 
           # If application.feedback is present but only has INSERT privileges, remove it
           if (
-            "application" %in%
-              session$userData$table_privs$schema &
-              "feedback" %in% session$userData$table_privs$table_name &
-              all(
-                session$userData$table_privs$extra_privileges[
-                  session$userData$table_privs$schema == "application" &
-                    session$userData$table_privs$table_name == "feedback"
-                ] ==
-                  "INSERT"
-              )
+            session$userData$table_privs$extra_privileges[
+              session$userData$table_privs$qual_name == "application.feedback"
+            ] ==
+              "INSERT"
           ) {
             session$userData$table_privs <- session$userData$table_privs[
-              !(session$userData$table_privs$schema == "application" &
-                session$userData$table_privs$table_name == "feedback"),
+              !session$userData$table_privs$qual_name == "application.feedback",
             ]
           }
 
-          # Derive privilege flags for each admin nav_panel
-          has_priv <- function(schema, tables) {
-            any(
-              session$userData$table_privs$schema == schema &
-                session$userData$table_privs$table_name %in% tables
-            )
-          }
           session$userData$admin_privs <- list(
-            addLocation = has_priv("public", "locations"),
-            addSubLocation = has_priv("public", "sub_locations"),
-            calibrate = has_priv("instruments", "calibrations"),
-            deploy_recover = has_priv(
-              "instruments",
+            addLocation = has_priv(
+              tbl = session$userData$table_privs,
               c(
-                "instruments",
-                "instrument_maintenance",
-                "array_maintenance_changes"
+                "public.locations",
+                "public.locations_networks",
+                "public.locations_projects",
+                "public.networks",
+                "public.projects"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            addSubLocation = has_priv(
+              tbl = session$userData$table_privs,
+              c("public.sub_locations", "public.locations"),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("SELECT")
+              )
+            ),
+            calibrate = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.calibrations",
+                "instruments.calibrate_ph",
+                "instruments.calibrate_temperature",
+                "instruments.calibrate_orp",
+                "instruments.calibrate_specific_conductance",
+                "instruments.calibrate_turbidity",
+                "instruments.calibrate_dissolved_oxygen",
+                "instruments.calibrate_depth",
+                "instruments.instruments",
+                "instruments.instrument_maintenance",
+                "instruments.array_maintenance_changes",
+                "instruments.sensors",
+                "instruments.sensor_types",
+                "instruments.instrument_make",
+                "instruments.instrument_model",
+                "instruments.instrument_type",
+                "instruments.observers",
+                "public.organizations"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            deploy_recover = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.instruments",
+                "instruments.instrument_maintenance",
+                "instruments.array_maintenance_changes"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE"
+                )
               )
             ),
             addContData = has_priv(
-              "continuous",
-              c("measurements_continuous", "timeseries")
+              tbl = session$userData$table_privs,
+              "continuous.measurements_continuous",
+              list(c(
+                "INSERT",
+                "UPDATE"
+              ))
             ),
             editContData = has_priv(
-              "continuous",
-              c("measurements_continuous", "timeseries")
+              tbl = session$userData$table_privs,
+              "continuous.measurements_continuous",
+              list(c(
+                "UPDATE",
+                "DELETE"
+              ))
             ),
-            continuousCorrections = has_priv("continuous", "corrections"),
+            continuousCorrections = has_priv(
+              tbl = session$userData$table_privs,
+              "continuous.corrections",
+              list(c("INSERT", "UPDATE"))
+            ),
             imputeMissing = has_priv(
-              "continuous",
-              c("measurements_continuous")
+              tbl = session$userData$table_privs,
+              "continuous.measurements_continuous"
             ),
             grades_approvals_qualifiers = has_priv(
-              "continuous",
-              c("grades", "approvals", "qualifiers")
-            ),
-            addTimeseries = has_priv("continuous", "timeseries"),
-            syncCont = has_priv(
-              "continuous",
+              tbl = session$userData$table_privs,
               c(
-                "measurents_continuous",
-                "measurements_calculated_daily",
-                "timeseries"
+                "continuous.grades",
+                "continuous.approvals",
+                "continuous.qualifiers"
               )
             ),
-            addDiscData = has_priv("discrete", c("results", "samples")),
-            addSamples = has_priv("discrete", "samples"),
-            editDiscData = has_priv("discrete", c("results", "samples")),
-            addSampleSeries = has_priv("discrete", "sample_series"),
-            syncDisc = has_priv(
-              "discrete",
-              c("results", "samples", "sample_series")
-            ),
-            addGuidelines = has_priv("discrete", c("guidelines")),
-            addDocs = has_priv("files", "documents"),
-            addImgs = has_priv("files", "images"),
-            addImgSeries = has_priv("files", "image_series"),
-            boreholes_wells = has_priv("boreholes", c("boreholes", "wells")),
-            visit = has_priv(
-              "public",
+            addTimeseries = has_priv(
+              tbl = session$userData$table_privs,
               c(
-                "locations_metadata_access",
-                "locations_metadata_infrastructure"
+                "continuous.timeseries",
+                "public.locations_z",
+                "public.organizations"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                ),
+                c("INSERT")
+              )
+            ),
+            syncCont = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "continuous.measurements_continuous",
+                "continuous.measurements_calculated_daily",
+                "continuous.timeseries"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("UPDATE")
+              )
+            ),
+            addDiscData = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "application.discrete_mappings",
+                "files.documents",
+                "discrete.samples",
+                "discrete.results"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            addSamples = has_priv(
+              tbl = session$userData$table_privs,
+              "discrete.samples",
+              list(c(
+                "INSERT",
+                "UPDATE"
+              ))
+            ),
+            editDiscData = has_priv(
+              tbl = session$userData$table_privs,
+              c("discrete.samples", "discrete.results"),
+              list(
+                c(
+                  "UPDATE",
+                  "DELETE"
+                ),
+                c(
+                  "UPDATE",
+                  "DELETE"
+                )
+              )
+            ),
+            addSampleSeries = has_priv(
+              tbl = session$userData$table_privs,
+              c("discrete.sample_series", "public.organizations"),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT")
+              )
+            ),
+            syncDisc = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "discrete.sample_series",
+                "discrete.samples",
+                "discrete.results"
+              ),
+              list(
+                c("UPDATE"),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                )
+              )
+            ),
+            addGuidelines = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "discrete.guidelines",
+                "discrete.samples",
+                "discrete.results"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            addDocs = has_priv(
+              tbl = session$userData$table_privs,
+              "files.documents",
+              list(c("INSERT"))
+            ),
+            addImgs = has_priv(
+              tbl = session$userData$table_privs,
+              "files.images",
+              list(c("INSERT"))
+            ),
+            addImgSeries = has_priv(
+              tbl = session$userData$table_privs,
+              c("files.image_series", "public.organizations"),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("INSERT")
+              )
+            ),
+            boreholes_wells = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "boreholes.boreholes",
+                "boreholes.wells",
+                "boreholes.drillers",
+                "boreholes.borehole_well_purposes"
+              ),
+              list(
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT"),
+                c("INSERT")
+              )
+            ),
+            visit = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "field.field_visits",
+                "field.field_visit_instruments"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                )
               )
             ),
             manageNewsContent = has_priv(
-              "application",
-              c("images", "text", "page_content")
+              tbl = session$userData$table_privs,
+              c(
+                "application.images",
+                "application.text",
+                "application.page_content"
+              ),
+              list(
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                )
+              )
             ),
-            viewFeedback = has_priv("application", "feedback")
+            viewFeedback = has_priv(
+              tbl = session$userData$table_privs,
+              "application.feedback",
+              list(c("SELECT"))
+            )
           )
 
           # IF the user has more than SELECT privileges on any tables, show the 'admin' button
+          has_admin_privs <- FALSE
           if (nrow(session$userData$table_privs) > 0) {
+            has_admin_privs <- any(vapply(
+              session$userData$table_privs$extra_privileges,
+              function(privs) {
+                priv_list <- unlist(strsplit(privs, ", "))
+                any(priv_list != "SELECT")
+              },
+              logical(1)
+            ))
+          }
+          if (has_admin_privs) {
             # Create the new element for the 'admin' mode
             # Other tabs are created if/when the user clicks on the 'admin' actionButton
             nav_insert(
@@ -1236,6 +1572,7 @@ $(document).keyup(function(event) {
           "snowBulletin",
           "imgTableView",
           "imgMapView",
+          "docTableView",
           "about",
           "news",
           "discData",
@@ -1432,6 +1769,15 @@ $(document).keyup(function(event) {
         ui_loaded$imgMapView <- TRUE
         # Call the server
         imgMapView("imgMapView", language = languageSelection)
+      }
+    }
+
+    ### Document nav_menu ##########################
+    if (input$navbar == "docTableView") {
+      if (!ui_loaded$docTableView) {
+        output$docTableView_ui <- renderUI(docTableViewUI("docTableView"))
+        ui_loaded$docTableView <- TRUE
+        docTableView("docTableView", language = languageSelection)
       }
     }
 

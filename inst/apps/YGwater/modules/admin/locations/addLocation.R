@@ -78,16 +78,27 @@ addLocation <- function(id, inputs) {
     pending_network_new <- reactiveVal(NULL)
     pending_project_selection <- reactiveVal(character(0))
     pending_project_new <- reactiveVal(NULL)
+    ownership_refresh <- reactiveVal(0)
 
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.location_images, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
+        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, lmo.owner AS owner, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
         FROM locations l
         LEFT JOIN location_types lt ON l.location_type = lt.type_id
+        LEFT JOIN LATERAL (
+          SELECT lmoo.owner
+          FROM locations_metadata_owners_operators lmoo
+          WHERE lmoo.location_id = l.location_id
+            AND lmoo.start_datetime <= NOW()
+            AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
+            AND sub_location_id IS NULL
+          ORDER BY lmoo.start_datetime DESC
+          LIMIT 1
+        ) lmo ON TRUE
         LEFT JOIN locations_networks ln ON l.location_id = ln.location_id
         LEFT JOIN networks n ON ln.network_id = n.network_id
-        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.location_images, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
+        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, lmo.owner"
       )
       moduleData$exist_locs$network <- factor(
         ifelse(
@@ -102,7 +113,7 @@ addLocation <- function(id, inputs) {
       )
       moduleData$organizations = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT * FROM organizations"
+        "SELECT organization_id, name FROM organizations"
       )
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
       moduleData$agreements = DBI::dbGetQuery(
@@ -132,6 +143,39 @@ addLocation <- function(id, inputs) {
     }
 
     getModuleData() # Initial data load
+
+    current_owner_for_location <- function(location_id) {
+      if (!isTruthy(location_id)) {
+        return(NA_integer_)
+      }
+      owner_row <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        glue::glue_sql(
+          "SELECT lmoo.owner
+           FROM locations_metadata_owners_operators lmoo
+           WHERE lmoo.location_id = {location_id}
+             AND lmoo.start_datetime <= NOW()
+             AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
+             AND sub_location_id IS NULL
+           ORDER BY lmoo.start_datetime DESC
+           LIMIT 1;",
+          .con = session$userData$AquaCache
+        )
+      )
+      if (nrow(owner_row) == 0) {
+        NA_integer_
+      } else {
+        owner_row$owner[1]
+      }
+    }
+
+    update_current_owner <- function(location_id) {
+      updateSelectizeInput(
+        session,
+        "loc_owner",
+        selected = current_owner_for_location(location_id)
+      )
+    }
 
     output$ui <- renderUI({
       req(
@@ -193,24 +237,40 @@ addLocation <- function(id, inputs) {
             width = "100%"
           )
         ),
-
         splitLayout(
-          cellWidths = c("50%", "50%"),
+          cellWidths = c("40%", "40%", "20%"),
           numericInput(
             ns("lat"),
-            "Latitude (decimal degrees)",
+            "Latitude (decimal degrees, WGS84)",
             value = NA,
             width = "100%"
-          ),
+          ) |>
+            tooltip(
+              "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
+            ),
           numericInput(
             ns("lon"),
-            "Longitude (decimal degrees)",
+            "Longitude (decimal degrees, WGS84)",
             value = NA,
-            width = "100%"
+            width = "100%",
+          ) |>
+            tooltip(
+              "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
+            ),
+          actionButton(
+            ns("open_map"),
+            "Choose or show coordinates on map",
+            icon = icon("map-location-dot"),
+            width = "100%",
+            # Bump it down a bit to align with numericInputs
+            style = "margin-top: 30px;"
           )
         ),
-        uiOutput(ns("lat_warning")),
-        uiOutput(ns("lon_warning")),
+        splitLayout(
+          cellWidths = c("40%", "40%", "20%"),
+          uiOutput(ns("lat_warning")),
+          uiOutput(ns("lon_warning"))
+        ),
 
         selectizeInput(
           ns("loc_type"),
@@ -255,6 +315,16 @@ addLocation <- function(id, inputs) {
             width = "100%"
           )
         ),
+        conditionalPanel(
+          condition = "input.mode == 'modify'",
+          ns = ns,
+          actionButton(
+            ns("manage_ownership"),
+            "Manage ownership history",
+            icon = icon("clock-rotate-left"),
+            width = "100%"
+          )
+        ),
 
         selectizeInput(
           ns("data_sharing_agreement"),
@@ -264,11 +334,10 @@ addLocation <- function(id, inputs) {
             moduleData$agreements$name
           ),
           options = list(
-            placeholder = "Optional - add the document first if needed",
-            maxItems = 1
+            placeholder = "Optional - add the document first if needed"
           ),
           width = "100%",
-          multiple = TRUE # This is to force a default of nothing selected - overridden with options
+          multiple = FALSE
         ),
 
         splitLayout(
@@ -278,29 +347,35 @@ addLocation <- function(id, inputs) {
           ))),
           selectizeInput(
             ns("datum_id_from"),
-            "Datum ID from (Assumed datum is station 0)",
+            "Vertical datum from (Assumed datum is station 0)",
+            choices = stats::setNames(
+              moduleData$datums$datum_id,
+              titleCase(moduleData$datums$datum_name_en, "en")
+            ),
+            selected = 10,
+            width = "100%",
+            multiple = FALSE
+          ) |>
+            tooltip(
+              "This should almost always be 'Assumed Datum', the local measurements."
+            ),
+          selectizeInput(
+            ns("datum_id_to"),
+            "Vertical datum to (Use assumed datum if no conversion to apply)",
             choices = stats::setNames(
               moduleData$datums$datum_id,
               titleCase(moduleData$datums$datum_name_en, "en")
             ),
             selected = 10,
             width = "100%"
-          ),
-          selectizeInput(
-            ns("datum_id_to"),
-            "Datum ID to (Use assumed datum if no conversion to apply)",
-            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-            choices = stats::setNames(
-              moduleData$datums$datum_id,
-              titleCase(moduleData$datums$datum_name_en, "en")
+          ) |>
+            tooltip(
+              "This is the datum you want to convert to. Use 'Assumed Datum' if no conversion is needed."
             ),
-            options = list(maxItems = 1), # Overrides multiple selection
-            width = "100%"
-          ),
           numericInput(
             ns("elev"),
             "Elevation conversion (meters, use 0 if not converting)",
-            value = NA,
+            value = 0,
             width = "100%"
           )
         ),
@@ -370,30 +445,53 @@ addLocation <- function(id, inputs) {
           placeholder = "Optional",
           width = "100%"
         ),
-        textInput(ns("loc_note"), "Location note", width = "100%"),
+        textInput(
+          ns("loc_note"),
+          "Location note",
+          placeholder = "Optional",
+          width = "100%"
+        ),
         actionButton(ns("add_loc"), "Add location", width = "100%")
       )
     })
 
     ## Observers to modify existing entry ##########################################
     selected_loc <- reactiveVal(NULL)
+    ownership_edit_id <- reactiveVal(NULL)
+
+    shinyjs::disable("manage_ownership")
+
+    observe({
+      if (input$mode == "modify" && !is.null(selected_loc())) {
+        shinyjs::enable("manage_ownership")
+      } else {
+        shinyjs::disable("manage_ownership")
+      }
+    })
 
     output$loc_table <- DT::renderDT({
+      tbl <- moduleData$exist_locs
+      tbl$location <- as.factor(tbl$location)
+      tbl$name <- as.factor(tbl$name)
+      tbl$name_fr <- as.factor(tbl$name_fr)
+      tbl$location_type <- as.factor(tbl$location_type)
+      # Truncate the notes to 30 characters
+      tbl$note <- paste0(substr(tbl$note, 1, 30), "...")
       DT::datatable(
-        moduleData$exist_locs,
+        tbl,
         selection = "single",
         options = list(
-          columnDefs = list(list(targets = c(0, 0), visible = FALSE)), # Hide location_id and network_id columns
+          columnDefs = list(list(targets = c(0, 9), visible = FALSE)), # Hide location_id and location_type_id columns
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             "function(settings, json) {",
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             "});",
             "}"
           )
@@ -433,7 +531,8 @@ addLocation <- function(id, inputs) {
             "share_with",
             selected = parse_share_with(details$share_with)
           )
-          updateSelectizeInput(session, "loc_owner", selected = details$owner)
+
+          update_current_owner(loc_id)
           updateTextInput(session, "loc_contact", value = details$contact)
           updateSelectizeInput(
             session,
@@ -498,6 +597,248 @@ addLocation <- function(id, inputs) {
       }
     })
 
+    ownership_records <- reactive({
+      ownership_refresh()
+      req(selected_loc())
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        glue::glue_sql(
+          "SELECT lmoo.id,
+                  lmoo.owner,
+                  owner_org.name AS owner_name,
+                  lmoo.operator,
+                  operator_org.name AS operator_name,
+                  lmoo.start_datetime,
+                  lmoo.end_datetime,
+                  lmoo.note
+           FROM locations_metadata_owners_operators lmoo
+           LEFT JOIN organizations owner_org ON owner_org.organization_id = lmoo.owner
+           LEFT JOIN organizations operator_org ON operator_org.organization_id = lmoo.operator
+           WHERE lmoo.location_id = {selected_loc()}
+           AND sub_location_id IS NULL
+           ORDER BY lmoo.start_datetime;",
+          .con = session$userData$AquaCache
+        )
+      )
+    })
+
+    output$ownership_table <- DT::renderDT({
+      tbl <- ownership_records()
+      DT::datatable(
+        tbl,
+        selection = "single",
+        options = list(
+          columnDefs = list(
+            list(targets = c(0, 1, 3), visible = FALSE)
+          ),
+          pageLength = 8,
+          scrollX = TRUE
+        ),
+        rownames = FALSE
+      )
+    })
+
+    show_ownership_history_modal <- function() {
+      showModal(modalDialog(
+        title = "Ownership history",
+        DT::DTOutput(ns("ownership_table")),
+        footer = tagList(
+          actionButton(ns("add_ownership"), "Add period"),
+          actionButton(ns("edit_ownership"), "Edit selected"),
+          modalButton("Close")
+        ),
+        size = "l",
+        easyClose = TRUE
+      ))
+    }
+
+    observeEvent(input$manage_ownership, {
+      req(selected_loc())
+      show_ownership_history_modal()
+    })
+
+    observeEvent(input$add_ownership, {
+      ownership_edit_id(NULL)
+      showModal(modalDialog(
+        title = "Add ownership period",
+        selectizeInput(
+          ns("ownership_owner"),
+          "Owner",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          multiple = TRUE,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        selectizeInput(
+          ns("ownership_operator"),
+          "Operator",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          multiple = TRUE,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        dateInput(
+          ns("ownership_start"),
+          "Start date",
+          value = Sys.Date()
+        ),
+        dateInput(
+          ns("ownership_end"),
+          "End date (leave blank if ongoing)",
+          value = NA
+        ),
+        textInput(
+          ns("ownership_note"),
+          "Note (optional)"
+        ),
+        footer = tagList(
+          actionButton(ns("save_ownership"), "Save"),
+          modalButton("Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$edit_ownership, {
+      req(selected_loc())
+      selected_row <- input$ownership_table_rows_selected
+      if (length(selected_row) == 0) {
+        showModal(modalDialog(
+          "Select an ownership period to edit.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+      record <- ownership_records()[selected_row, ]
+      ownership_edit_id(record$id)
+      showModal(modalDialog(
+        title = "Edit ownership period",
+        selectizeInput(
+          ns("ownership_owner"),
+          "Owner",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = record$owner,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        selectizeInput(
+          ns("ownership_operator"),
+          "Operator",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = record$operator,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+        dateInput(
+          ns("ownership_start"),
+          "Start date",
+          value = as.Date(record$start_datetime)
+        ),
+        dateInput(
+          ns("ownership_end"),
+          "End date (leave blank if ongoing)",
+          value = as.Date(record$end_datetime)
+        ),
+        textInput(
+          ns("ownership_note"),
+          "Note (optional)",
+          value = record$note
+        ),
+        footer = tagList(
+          actionButton(ns("save_ownership"), "Save"),
+          modalButton("Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$save_ownership, {
+      req(selected_loc())
+      if (!isTruthy(input$ownership_owner)) {
+        showModal(modalDialog(
+          "Owner is required.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      owner_id <- as.integer(input$ownership_owner)
+      operator_id <- if (isTruthy(input$ownership_operator)) {
+        as.integer(input$ownership_operator)
+      } else {
+        owner_id
+      }
+      start_dt <- as.POSIXct(input$ownership_start, tz = "UTC")
+      end_dt <- if (isTruthy(input$ownership_end)) {
+        as.POSIXct(input$ownership_end, tz = "UTC")
+      } else {
+        NA
+      }
+
+      if (!is.na(end_dt) && end_dt <= start_dt) {
+        showModal(modalDialog(
+          "End date must be after the start date.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      note_sql <- if (isTruthy(input$ownership_note)) {
+        input$ownership_note
+      } else {
+        DBI::SQL("NULL")
+      }
+      end_dt_sql <- if (is.na(end_dt)) {
+        DBI::SQL("NULL")
+      } else {
+        end_dt
+      }
+
+      if (is.null(ownership_edit_id())) {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          glue::glue_sql(
+            "INSERT INTO locations_metadata_owners_operators
+              (location_id, owner, operator, start_datetime, end_datetime, note)
+             VALUES
+              ({selected_loc()}, {owner_id}, {operator_id}, {start_dt}, {end_dt_sql}, {note_sql});",
+            .con = session$userData$AquaCache
+          )
+        )
+      } else {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          glue::glue_sql(
+            "UPDATE locations_metadata_owners_operators
+             SET owner = {owner_id},
+                 operator = {operator_id},
+                 start_datetime = {start_dt},
+                 end_datetime = {end_dt_sql},
+                 note = {note_sql}
+             WHERE id = {ownership_edit_id()};",
+            .con = session$userData$AquaCache
+          )
+        )
+      }
+
+      ownership_refresh(ownership_refresh() + 1)
+      update_current_owner(selected_loc())
+      ownership_edit_id(NULL)
+      show_ownership_history_modal()
+    })
+
     observeEvent(input$mode, {
       if (input$mode == "modify") {
         updateActionButton(session, "add_loc", label = "Update location")
@@ -525,18 +866,22 @@ addLocation <- function(id, inputs) {
 
         # If was on 'modify' prior, show a modal to the user asking if they want to clear fields
         if (!is.null(selected_loc())) {
-          showModal(modalDialog(
-            title = "Clear fields?",
-            "You have switched to 'add new' mode. Do you want to clear all fields to add a new location?",
-            easyClose = TRUE,
-            footer = tagList(
-              actionButton(ns("close"), "No, keep current values"),
-              actionButton(
-                ns("confirm_clear_fields"),
-                "Yes, clear fields"
+          if (!just_updated()) {
+            showModal(modalDialog(
+              title = "Clear fields?",
+              "You have switched to 'add new' mode. Do you want to clear all fields to add a new location?",
+              easyClose = TRUE,
+              footer = tagList(
+                actionButton(ns("close"), "No, keep current values"),
+                actionButton(
+                  ns("confirm_clear_fields"),
+                  "Yes, clear fields"
+                )
               )
-            )
-          ))
+            ))
+          } else {
+            just_updated(FALSE)
+          }
         }
       }
     })
@@ -911,7 +1256,6 @@ addLocation <- function(id, inputs) {
       }
     })
     # Update reactive values for longitude warning
-
     observe({
       req(input$lon)
       if (input$lon < -180 || input$lon > 180) {
@@ -935,7 +1279,149 @@ addLocation <- function(id, inputs) {
         )
       }
     })
+    output$lon_warning <- renderUI({
+      if (!is.null(warnings$lon)) {
+        div(
+          style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
+          warnings$lon
+        )
+      }
+    })
 
+    ## Map picker ##############################################################
+    map_center <- reactiveVal(list(lat = 64.0, lon = -135.0, zoom = 4))
+    map_selection <- reactiveVal(NULL)
+
+    output$location_map <- leaflet::renderLeaflet({
+      center <- map_center()
+      sel <- isolate(map_selection())
+
+      m <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 19)) %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>%
+        leaflet::addProviderTiles(
+          leaflet::providers$Esri.WorldImagery,
+          group = "Satellite"
+        ) %>%
+        leaflet::addLayersControl(
+          baseGroups = c("Esri.WorldTopoMap", "Satellite"),
+          options = leaflet::layersControlOptions(collapsed = FALSE)
+        ) %>%
+        leaflet::addScaleBar(
+          options = leaflet::scaleBarOptions(imperial = FALSE)
+        ) %>%
+        leaflet::setView(lng = center$lon, lat = center$lat, zoom = center$zoom)
+
+      if (!is.null(sel)) {
+        m <- m %>%
+          leaflet::addCircleMarkers(
+            lng = sel$lon,
+            lat = sel$lat,
+            radius = 6,
+            color = "#007B8A",
+            fillOpacity = 0.9,
+            group = "selected_point"
+          )
+      }
+
+      m
+    }) %>%
+      bindEvent(input$open_map)
+
+    draw_selected_point <- function() {
+      sel <- isolate(map_selection())
+      if (is.null(sel)) {
+        return(invisible(NULL))
+      }
+
+      leaflet::leafletProxy(ns("location_map"), session = session) %>%
+        leaflet::clearGroup("selected_point") %>%
+        leaflet::addCircleMarkers(
+          lng = sel$lon,
+          lat = sel$lat,
+          radius = 6,
+          color = "#007B8A",
+          fillOpacity = 0.9,
+          group = "selected_point"
+        )
+    }
+
+    output$map_zoom_note <- renderUI({
+      zoom <- input$location_map_zoom
+      if (is.null(zoom)) {
+        return(NULL)
+      }
+      if (zoom < 14) {
+        div(
+          style = "color: #b42318; font-size: 14px; margin-top: 8px;",
+          "Zoom in to level 14 or higher to save this location."
+        )
+      } else {
+        div(
+          style = "color: #027a48; font-size: 14px; margin-top: 8px;",
+          "Zoom level is sufficient to save."
+        )
+      }
+    })
+
+    observeEvent(input$open_map, {
+      current_lat <- input$lat
+      current_lon <- input$lon
+
+      if (isTruthy(current_lat) && isTruthy(current_lon)) {
+        map_center(list(lat = current_lat, lon = current_lon, zoom = 12))
+        map_selection(list(lat = current_lat, lon = current_lon))
+      } else {
+        map_center(list(lat = 64.0, lon = -135.0, zoom = 4))
+        map_selection(NULL)
+      }
+
+      showModal(modalDialog(
+        title = "Select location on map",
+        leaflet::leafletOutput(ns("location_map"), height = "400px"),
+        uiOutput(ns("map_zoom_note")),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_location_map"), "Use selected location")
+        ),
+        size = "l",
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$location_map_click, {
+      click <- input$location_map_click
+      map_selection(list(lat = click$lat, lon = click$lng))
+      draw_selected_point()
+    })
+
+    observeEvent(input$location_map_zoom, {
+      req(input$location_map_zoom)
+      if (input$location_map_zoom < 14) {
+        shinyjs::disable("save_location_map")
+      } else {
+        shinyjs::enable("save_location_map")
+      }
+    })
+
+    observeEvent(input$save_location_map, {
+      if (is.null(input$location_map_zoom) || input$location_map_zoom < 14) {
+        showNotification(
+          "Zoom in to level 14 or higher before saving.",
+          type = "warning"
+        )
+        return()
+      }
+      selection <- map_selection()
+      if (is.null(selection)) {
+        showNotification("Click a point on the map to select a location.")
+        return()
+      }
+      updateNumericInput(session, "lat", value = selection$lat)
+      updateNumericInput(session, "lon", value = selection$lon)
+      removeModal()
+    })
+
+    # Elevation conversion warning ################################################
     observe({
       req(input$datum_id_from, input$datum_id_to, input$elev)
       if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
@@ -946,21 +1432,11 @@ addLocation <- function(id, inputs) {
         warnings$elev <- NULL
       }
     })
-
     output$elev_warning <- renderUI({
       if (!is.null(warnings$elev)) {
         div(
           style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
           warnings$elev
-        )
-      }
-    })
-
-    output$lon_warning <- renderUI({
-      if (!is.null(warnings$lon)) {
-        div(
-          style = "color: red; font-size: 12px; margin-top: -10px; margin-bottom: 10px;",
-          warnings$lon
         )
       }
     })
@@ -1044,11 +1520,16 @@ addLocation <- function(id, inputs) {
           },
           type = input$network_type
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "networks",
-          df,
-          append = TRUE
+          "INSERT INTO networks (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            df$description,
+            ifelse(is.na(df$description_fr), NA, df$description_fr),
+            df$type
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -1162,11 +1643,16 @@ addLocation <- function(id, inputs) {
           },
           type = input$project_type
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "projects",
-          df,
-          append = TRUE
+          "INSERT INTO projects (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            df$description,
+            ifelse(is.na(df$description_fr), NA, df$description_fr),
+            df$type
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -1261,11 +1747,17 @@ addLocation <- function(id, inputs) {
           },
           note = if (isTruthy(input$contact_note)) input$contact_note else NA
         )
-        DBI::dbAppendTable(
+        DBI::dbExecute(
           session$userData$AquaCache,
-          "organizations",
-          df,
-          append = TRUE
+          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            ifelse(is.na(df$contact_name), NA, df$contact_name),
+            ifelse(is.na(df$phone), NA, df$phone),
+            ifelse(is.na(df$email), NA, df$email),
+            ifelse(is.na(df$note), NA, df$note)
+          )
         )
 
         # Update the moduleData reactiveValues
@@ -1331,6 +1823,7 @@ addLocation <- function(id, inputs) {
 
     ## Observe the add_location click #################
     # Run checks, if everything passes call AquaCache::addACLocation or update the location details
+    just_updated <- reactiveVal(FALSE) # Prevents showing superfluous message of mode change after modification
     observeEvent(input$add_loc, {
       # Disable the button to prevent multiple clicks
       shinyjs::disable("add_loc")
@@ -1674,6 +2167,7 @@ addLocation <- function(id, inputs) {
             )$network_id
             existing_networks <- parse_ids(existing_networks)
             if (!identical(sort(existing_networks), sort(desired_networks))) {
+              # NOTE: This will fail if the user doesn't have DELETE privileges on locations_networks. The main server checks DO NOT verify for this privilege to not otherwise block the rest of the module's functionality.
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
@@ -1682,16 +2176,17 @@ addLocation <- function(id, inputs) {
                 )
               )
               if (length(desired_networks)) {
-                network_df <- data.frame(
-                  network_id = desired_networks,
-                  location_id = rep(selected_loc(), length(desired_networks))
-                )
-                DBI::dbAppendTable(
-                  session$userData$AquaCache,
-                  "locations_networks",
-                  network_df,
-                  append = TRUE
-                )
+                for (i in seq_along(desired_networks)) {
+                  net <- desired_networks[i]
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    "INSERT INTO locations_networks (network_id, location_id) VALUES ($1, $2)",
+                    params = list(
+                      net,
+                      selected_loc()
+                    )
+                  )
+                }
               }
             }
 
@@ -1706,6 +2201,7 @@ addLocation <- function(id, inputs) {
             )$project_id
             existing_projects <- parse_ids(existing_projects)
             if (!identical(sort(existing_projects), sort(desired_projects))) {
+              # NOTE: This will fail if the user doesn't have DELETE privileges on locations_projects. The main server checks DO NOT verify for this privilege to not otherwise block the rest of the module's functionality.
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
@@ -1714,16 +2210,17 @@ addLocation <- function(id, inputs) {
                 )
               )
               if (length(desired_projects)) {
-                project_df <- data.frame(
-                  project_id = desired_projects,
-                  location_id = rep(selected_loc(), length(desired_projects))
-                )
-                DBI::dbAppendTable(
-                  session$userData$AquaCache,
-                  "locations_projects",
-                  project_df,
-                  append = TRUE
-                )
+                for (i in seq_along(desired_projects)) {
+                  proj <- desired_projects[i]
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    "INSERT INTO locations_projects (project_id, location_id) VALUES ($1, $2)",
+                    params = list(
+                      proj,
+                      selected_loc()
+                    )
+                  )
+                }
               }
             }
 
@@ -1892,6 +2389,7 @@ addLocation <- function(id, inputs) {
             DBI::dbCommit(session$userData$AquaCache)
 
             # Update the moduleData reactiveValues
+            just_updated(TRUE) # Prevents superfluous message of mode change and reset
             getModuleData() # This should trigger an update to the table
           },
           error = function(e) {
@@ -1907,6 +2405,7 @@ addLocation <- function(id, inputs) {
         return()
       }
 
+      # At this point we're not modifying, we're creating
       if (!isTruthy(input$loc_code)) {
         showModal(modalDialog(
           "Location code is mandatory",
@@ -2034,61 +2533,8 @@ addLocation <- function(id, inputs) {
 
       tryCatch(
         {
-          # Start a transaction
-          DBI::dbBegin(session$userData$AquaCache)
-
+          # addACLocation is all done within a transaction, including additions to accessory tables
           AquaCache::addACLocation(con = session$userData$AquaCache, df = df)
-
-          new_loc_id <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            glue::glue_sql(
-              "SELECT location_id FROM locations WHERE location = {input$loc_code};",
-              .con = session$userData$AquaCache
-            )
-          )$location_id
-          if (length(new_loc_id) == 1) {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              glue::glue_sql(
-                "DELETE FROM locations_networks WHERE location_id = {new_loc_id};",
-                .con = session$userData$AquaCache
-              )
-            )
-            if (length(network_ids)) {
-              network_df <- data.frame(
-                network_id = network_ids,
-                location_id = rep(new_loc_id, length(network_ids))
-              )
-              DBI::dbAppendTable(
-                session$userData$AquaCache,
-                "locations_networks",
-                network_df,
-                append = TRUE
-              )
-            }
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              glue::glue_sql(
-                "DELETE FROM locations_projects WHERE location_id = {new_loc_id};",
-                .con = session$userData$AquaCache
-              )
-            )
-            if (length(project_ids)) {
-              project_df <- data.frame(
-                project_id = project_ids,
-                location_id = rep(new_loc_id, length(project_ids))
-              )
-              DBI::dbAppendTable(
-                session$userData$AquaCache,
-                "locations_projects",
-                project_df,
-                append = TRUE
-              )
-            }
-          }
-
-          # Close transaction
-          DBI::dbCommit(session$userData$AquaCache)
 
           # Show a modal to the user that the location was added
           showModal(modalDialog(

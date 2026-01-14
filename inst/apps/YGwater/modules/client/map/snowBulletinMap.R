@@ -47,18 +47,19 @@ mapSnowbullUI <- function(id) {
         var popup = document.querySelector('.leaflet-popup-content');
         if (popup) {
           // Show loading and widen only this popup immediately on button press
-          popup.innerHTML = '<div style=\"text-align: center; padding: 20px;\"><b>' + 
-            stationName + '</b><br><br>Loading plot...<br>' + 
+          popup.innerHTML = '<div style=\"text-align: center; padding: 20px;\"><b>' +
+            stationName + '</b><br><br>Loading plot...<br>' +
             '<div style=\"margin-top: 10px;\">⏳</div></div>';
           var wrapper = popup.closest('.leaflet-popup-content-wrapper');
           if (wrapper) wrapper.style.maxWidth = '720px';
           popup.style.width = '660px';
         }
+        // Use Shiny.setInputValue with a random value to force event even if args are the same
         Shiny.setInputValue('%s', {
           type: type,
           station_id: stationId,
           station_name: stationName,
-          timestamp: Date.now()
+          nonce: Math.random().toString(36).substring(2)
         });
       }",
       ns("generate_plot")
@@ -93,7 +94,8 @@ mapSnowbull <- function(id, language) {
     months <- snowbull_months(short = TRUE)
 
     con <- session$userData$AquaCache
-    snowbull_data <- load_bulletin_data(con)
+    snowbull_shapefiles <- load_bulletin_shapefiles(con)
+    snowbull_timeseries <- load_bulletin_timeseries(con)
 
     static_style_elements <- get_static_style_elements()
 
@@ -144,7 +146,7 @@ mapSnowbull <- function(id, language) {
             style = "display: block; margin-bottom: 5px;"
           ),
           radioButtons(
-            ns("value_type"),
+            ns("statistic"),
             label = NULL,
             choices = setNames(
               c("relative_to_med", "data", "percentile"),
@@ -165,26 +167,53 @@ mapSnowbull <- function(id, language) {
       )
     })
 
-    # --- Reactive for processed data ---
-    processed_data <- shiny::reactive({
+    # --- Reactive for processed data and map output ---
+    map_output <- shiny::reactive({
       shiny::req(input$year, input$month)
 
-      get_processed_data(
-        year = input$year,
-        month = input$month,
-        snowbull_data = snowbull_data,
-        shiny = TRUE,
+      # get the 'current' data for the specified date, and create the popup data
+      # returns list of sf objects with data columns
+      map_data <- list(
+        point_data = NULL,
+        point_data_secondary = NULL,
+        poly_data = NULL
+      )
+
+      timeseries_data <- list(
+        poly_data = snowbull_timeseries$swe$basins,
+        point_data = snowbull_timeseries$swe$surveys,
+        point_data_secondary = snowbull_timeseries$swe$pillows
+      )
+
+      dynamic_style_elements <- get_dynamic_style_elements(
+        statistic = input$statistic,
         language = language$language
       )
-    })
 
-    # --- Reactive for map output ---
-    map_output <- shiny::reactive({
+      for (data_type in names(map_data)) {
+        if (!is.null(timeseries_data[[data_type]])) {
+          map_data[[data_type]] <- get_display_data(
+            year = as.integer(input$year),
+            month = as.integer(input$month),
+            dataset = timeseries_data[[data_type]],
+            statistic = input$statistic,
+            language = language$language
+          )
+
+          map_data[[data_type]]$fill_colour <- get_state_style_elements(
+            map_data[[data_type]]$value_to_show,
+            style_elements = dynamic_style_elements
+          )
+        }
+      }
+
       make_leaflet_map(
-        data = processed_data(),
-        value_type = input$value_type,
+        point_data = map_data$point_data,
+        poly_data = map_data$poly_data,
+        point_data_secondary = map_data$point_data_secondary,
+        statistic = input$statistic,
         language = language$language,
-        snowbull_data = snowbull_data,
+        snowbull_shapefiles = snowbull_shapefiles,
         month = as.integer(input$month),
         year = as.integer(input$year)
       )
@@ -196,56 +225,39 @@ mapSnowbull <- function(id, language) {
     })
 
     # --- Observer: plot generation requests ---
-    shiny::observeEvent(input$generate_plot, {
-      req(
-        input$generate_plot$type,
-        input$generate_plot$station_id,
-        input$generate_plot$station_name
-      )
+    shiny::observeEvent(
+      input$generate_plot,
+      {
+        req(
+          input$generate_plot$type,
+          input$generate_plot$station_id,
+          input$generate_plot$station_name
+        )
 
-      # --- Popup plotting functionality  ---
-      # here we access the corresponding plot function (continuous or discrete)
-      # the relevant timeseries data is filtered to the selected year
-      # the functions return HTML content for the popup
-      plot_html <-
-        if (input$generate_plot$type == "pillow") {
-          create_continuous_plot_popup(
-            timeseries = snowbull_data$pillows$timeseries$data[
-              snowbull_data$pillows$timeseries$data$datetime <=
-                as.Date(paste0(input$year, "-12-31")),
-              c("datetime", as.character(input$generate_plot$station_id))
-            ],
-            year = as.integer(input$year),
-            con = con,
-            station_name = input$generate_plot$station_name,
-            language = language$language
-          )
-        } else if (input$generate_plot$type == "survey") {
-          create_discrete_plot_popup(
-            timeseries = snowbull_data$surveys$timeseries$data[
-              snowbull_data$surveys$timeseries$data$datetime <=
-                as.Date(paste0(input$year, "-12-31")),
-              c("datetime", as.character(input$generate_plot$station_id))
-            ],
-            station_name = input$generate_plot$station_name,
-            language = language$language
-          )
-        } else if (input$generate_plot$type == "basin") {
-          create_discrete_plot_popup(
-            timeseries = snowbull_data$basins$timeseries$data[
-              snowbull_data$basins$timeseries$data$datetime <=
-                as.Date(paste0(input$year, "-12-31")),
-              c(
-                "datetime",
-                input$generate_plot$station_id
-              )
-            ],
-            station_name = input$generate_plot$station_name,
-            language = language$language
-          )
-        }
-      session$sendCustomMessage("updatePopup", list(html = plot_html))
-    })
+        # --- DEBUGGING CODE: Just show a message, no plot ---
+        debug_message <- sprintf(
+          "<div style='text-align: center; padding: 40px; font-size: 18px; color: #2a5d9f;'>
+          <b>generate_plot event received!</b><br>
+          <br>
+          <b>Type:</b> %s<br>
+          <b>Station ID:</b> %s<br>
+          <b>Station Name:</b> %s<br>
+          <b>Year:</b> %s<br>
+          <b>Month:</b> %s<br>
+          <br>
+          <span style='color: #888;'>If you see this, the button and observer are working.</span>
+        </div>",
+          htmltools::htmlEscape(input$generate_plot$type),
+          htmltools::htmlEscape(input$generate_plot$station_id),
+          htmltools::htmlEscape(input$generate_plot$station_name),
+          htmltools::htmlEscape(isolate(input$year)),
+          htmltools::htmlEscape(isolate(input$month))
+        )
+
+        session$sendCustomMessage("updatePopup", list(html = debug_message))
+      },
+      ignoreInit = TRUE
+    )
 
     # --- Render selected date text with details ---
     output$map_details <- shiny::renderText({

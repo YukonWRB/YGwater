@@ -1,15 +1,20 @@
 discPlotUI <- function(id) {
   ns <- NS(id)
 
-  page_sidebar(
-    sidebar = sidebar(
-      title = NULL,
-      width = 350,
-      bg = config$sidebar_bg,
-      open = list(mobile = "always-above"),
-      uiOutput(ns("sidebar"))
-    ),
-    uiOutput(ns("main"))
+  banner_key <- paste0("discPlot_banner_v2026_01_14__", id)
+
+  tagList(
+    uiOutput(ns("banner")),
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        width = 350,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar"))
+      ),
+      uiOutput(ns("main"))
+    )
   )
 }
 
@@ -34,6 +39,13 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       session$userData$AquaCache,
       "SELECT DISTINCT s.location_id, r.parameter_id FROM samples s INNER JOIN results r ON s.sample_id = r.sample_id"
     )
+
+    output$banner <- renderUI({
+      dismissible_banner_ui(
+        ns = ns,
+        lang = language$language
+      )
+    })
 
     output$sidebar <- renderUI({
       tagList(
@@ -226,8 +238,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             choices = stats::setNames(
               c("name", "code", "nameCode", "codeName"),
               c(
-                tr("loc_code_name", language$language),
-                tr("loc_code_code", language$language),
+                tr("name", language$language),
+                tr("code", language$language),
                 tr("loc_code_nameCode", language$language),
                 tr("loc_code_codeName", language$language)
               )

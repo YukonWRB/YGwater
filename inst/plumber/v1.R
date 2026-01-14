@@ -158,7 +158,7 @@ function(req, res, lang = "en") {
 
 #' Return measurements for a timeseries
 #* @param id Timeseries ID (required).
-#* @param start Start date/time (required, ISO 8601).
+#* @param start Start date/time (required, ISO 8601 i.e. 2025-01-01 00:00).
 #* @param end End date/time (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @get /timeseries/measurements

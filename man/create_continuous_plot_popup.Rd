@@ -42,7 +42,7 @@ The plot shows:
 }
 \examples{
 \dontrun{
-station_ts <- snowbull_data$pillows$timeseries$data[, c("datetime", "123")]
+station_ts <- snowbull_data$swe$pillows$timeseries$data[, c("datetime", "123")]
 popup_html <- create_continuous_plot_popup(station_ts, 2025, con)
 }
 }
