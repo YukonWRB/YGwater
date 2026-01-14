@@ -444,3 +444,5 @@ snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
 snowbull_elevation,,Elevation,Altitude
 snowbull_coordinates,,Coordinates,Coordonnées
+snowbull_isocontours,,Isocontours,Isocontours
+snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille

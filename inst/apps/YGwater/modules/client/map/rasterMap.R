@@ -57,7 +57,72 @@ getRasterSWE <- function(con, reference_id) {
   r <- r * 1000 # Convert from meters to mm
   return(r)
 }
+
+getPillowSWE <- function(con, stations_sf, date) {
+  stations_sf$swe <- NA_real_
+
+  ts_query <- sprintf(
+    "SELECT DISTINCT ON (timeseries_id) timeseries_id, date, value 
+       FROM continuous.measurements_calculated_daily_corrected
+       WHERE timeseries_id IN (%s) AND value IS NOT NULL AND date = '%s'
+       ORDER BY timeseries_id, date DESC",
+    paste(stations_sf$timeseries_id, collapse = ","),
+    as.Date(Sys.Date())
+  )
+
+  ts_data <- DBI::dbGetQuery(con, ts_query)
+  # Match ts_data with stations_sf based on timeseries_id
+  for (i in seq_len(nrow(stations_sf))) {
+    match_idx <- which(
+      ts_data$timeseries_id == stations_sf$timeseries_id[i]
+    )
+    if (length(match_idx) > 0) {
+      stations_sf$swe[i] <- ts_data$value[match_idx[1]]
+    }
+  }
+  return(stations_sf)
+}
+
+
+getSurveySWE <- function(con, stations_sf, date) {
+  stations_sf$swe <- NA_real_
+
+  ts_query <- sprintf(
+    "SELECT s.target_datetime, r.result as value, s.location_id
+       FROM discrete.samples s
+       JOIN discrete.results r ON s.sample_id = r.sample_id
+       WHERE s.location_id IN (%s)
+       AND r.parameter_id = (SELECT parameter_id FROM public.parameters
+                   WHERE param_name = 'snow water equivalent')
+       AND r.result IS NOT NULL
+       AND DATE(s.target_datetime) = '%s'
+       ORDER BY s.location_id, s.target_datetime DESC",
+    paste(stations_sf$location_id, collapse = ","),
+    as.Date(date)
+  )
+
+  ts_data <- DBI::dbGetQuery(con, ts_query)
+  # Match ts_data with stations_sf based on location_id
+  for (i in seq_len(nrow(stations_sf))) {
+    match_idx <- which(
+      ts_data$location_id == stations_sf$location_id[i]
+    )
+    if (length(match_idx) > 0) {
+      stations_sf$swe[i] <- ts_data$value[match_idx[1]]
+    }
+  }
+  return(stations_sf)
+}
+
+
 # UI using bslib::page_fluid and dynamic sidebar via uiOutput
+
+mapRasterUI <- function(id) {
+  ns <- shiny::NS(id)
+  bslib::page_fluid(
+    shiny::uiOutput(ns("sidebar_page")) # <-- add ns() here
+  )
+}
 
 mapRaster <- function(id, language) {
   shiny::moduleServer(id, function(input, output, session) {
@@ -69,15 +134,13 @@ mapRaster <- function(id, language) {
     )
 
     swe_pillow_stations <- download_continuous_ts_locations(
-      con = session$userData$AquaCache,
-      param_name_long = "swe",
-      epsg = 4326
+      con = con,
+      param_name_long = "snow water equivalent"
     )
 
     swe_survey_stations <- download_discrete_ts_locations(
       con = session$userData$AquaCache,
-      param_name_long = "swe_snow_survey",
-      epsg = 4326
+      param_name_long = "snow water equivalent"
     )
 
     era5_query <- "
@@ -92,25 +155,25 @@ mapRaster <- function(id, language) {
     era5_raster_data <- DBI::dbGetQuery(session$userData$AquaCache, era5_query)
     era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
     # Place this in your server function to generate the sidebar layout dynamically
-    output$sidebar_page <- renderUI({
+    output$sidebar_page <- shiny::renderUI({
       bslib::page_sidebar(
         sidebar = bslib::sidebar(
-          dateInput(
+          shiny::dateInput(
             ns("date"), # already namespaced
             "Date",
             value = max(era5_raster_data$datetime),
             min = min(era5_raster_data$datetime),
             max = max(era5_raster_data$datetime)
           ),
-          selectInput(
+          shiny::selectInput(
             ns("shapefile"), # already namespaced
-            "Shapefile",
+            tr("gen_snowBul_basins", language$language),
             choices = c(
               "swe_basins" = "swe_basins"
             ),
             selected = "swe_basins"
           ),
-          tags$details(
+          shiny::tags$details(
             tags$summary(tr("snowbull_details", language$language)),
             shiny::uiOutput(ns("map_details"))
           )
@@ -119,7 +182,7 @@ mapRaster <- function(id, language) {
       )
     })
 
-    basins_shp <- reactive({
+    basins_shp <- shiny::reactive({
       if (input$shapefile == "swe_basins") {
         # input IDs are already namespaced in modules
         shp <- sf::st_read(
@@ -142,8 +205,20 @@ mapRaster <- function(id, language) {
     r_db_perm <- getRasterSWE(session$userData$AquaCache, ref_id_perm)
     swe_mask <- !is.na(r_db_perm) & (r_db_perm <= 10)
 
-    swe_map_data <- reactive({
-      req(input$date)
+    swe_map_data <- shiny::reactive({
+      shiny::req(input$date)
+
+      swe_pillows <- getPillowSWE(
+        con = session$userData$AquaCache,
+        stations_sf = swe_pillow_stations,
+        date = input$date
+      )
+
+      swe_surveys <- getSurveySWE(
+        con = session$userData$AquaCache,
+        stations_sf = swe_survey_stations,
+        date = input$date
+      )
 
       # Query raster for selected date
       ref_id <- getRasterRefID(era5_raster_data, input$date)
@@ -185,30 +260,13 @@ mapRaster <- function(id, language) {
       )
       contours_sf$col <- pal(pmin(contours_sf$level, colorbar_max))
 
-      # Add snow pillow SWE values at input$date
-      swe_pillow_data <- NULL
-      if (!is.null(swe_pillows$timeseries$data)) {
-        ts_data <- swe_pillows$timeseries$data
-        if ("datetime" %in% names(ts_data)) {
-          date_diffs <- abs(as.Date(ts_data$datetime) - as.Date(input$date))
-          idx <- which.min(date_diffs)
-          # Fix: Only assign swe values if idx is valid and within threshold
-          if (length(idx) == 1 && date_diffs[idx] <= 3) {
-            swe_pillow_data <- ts_data[idx, ]
-            swe_pillows$metadata$swe <- as.numeric(swe_pillow_data[-1]) # exclude datetime
-          } else {
-            swe_pillows$metadata$swe <- NA_real_
-          }
-        }
-      }
-
       list(
         r_db = r_db,
         basins = basins,
         contours_sf = contours_sf,
         pal = pal,
-        swe_pillows = swe_pillows$metadata,
-        swe_surveys = swe_surveys$metadata,
+        swe_pillows = swe_pillows,
+        swe_surveys = swe_surveys,
         colorbar_min = colorbar_min,
         colorbar_max = colorbar_max
       )
@@ -233,14 +291,14 @@ mapRaster <- function(id, language) {
           colors = pal,
           opacity = 0.7,
           project = TRUE,
-          group = "ERA5 raster"
+          group = tr("snowbull_raster", language$language)
         ) %>%
         leaflet::addPolylines(
           data = contours_sf,
           color = ~col,
           weight = 3,
           opacity = 0.85,
-          group = "Isocontours"
+          group = tr("snowbull_isocontours", language$language)
         ) %>%
         leaflet::addPolygons(
           data = basins_shp,
@@ -248,7 +306,7 @@ mapRaster <- function(id, language) {
           color = "black",
           weight = 2,
           fillOpacity = 0.6,
-          group = "Basin boundaries"
+          group = tr("gen_snowBul_basins", language$language)
         ) %>%
         leaflet::addPolygons(
           data = basins_shp,
@@ -264,7 +322,7 @@ mapRaster <- function(id, language) {
               round(mean_raster, 2)
             )
           ),
-          group = "Basin averages"
+          group = tr("snowbull_swe_basin", language$language)
         ) %>%
         leaflet::addLabelOnlyMarkers(
           data = basins_shp,
@@ -285,7 +343,7 @@ mapRaster <- function(id, language) {
               "font-size" = "12px"
             )
           ),
-          group = "Basin averages"
+          group = tr("snowbull_swe_basin", language$language)
         ) %>%
         leaflet::addCircleMarkers(
           data = communities,
@@ -297,7 +355,7 @@ mapRaster <- function(id, language) {
           fillOpacity = 1,
           opacity = 1,
           label = ~feature_name,
-          group = "Communities"
+          group = tr("snowbull_communities", language$language)
         ) %>%
         leaflet::addLabelOnlyMarkers(
           data = communities,
@@ -314,12 +372,12 @@ mapRaster <- function(id, language) {
               "font-size" = "10px"
             )
           ),
-          group = "Communities"
+          group = tr("snowbull_communities", language$language)
         ) %>%
         leaflet::addCircleMarkers(
           data = pillows[!is.na(pillows$swe), ],
-          lng = ~x,
-          lat = ~y,
+          lng = ~longitude,
+          lat = ~latitude,
           fillColor = ~ pal(pmin(swe, colorbar_max)),
           color = "black",
           weight = 2,
@@ -336,12 +394,12 @@ mapRaster <- function(id, language) {
             ),
             " mm"
           ),
-          group = "Snow pillows"
+          group = tr("snowbull_snow_pillow", language$language)
         ) %>%
         leaflet::addCircleMarkers(
           data = surveys[!is.na(surveys$swe), ],
-          lng = ~x,
-          lat = ~y,
+          lng = ~longitude,
+          lat = ~latitude,
           fillColor = ~ pal(pmin(swe, colorbar_max)),
           color = "blue",
           weight = 2,
@@ -358,7 +416,7 @@ mapRaster <- function(id, language) {
             ),
             " mm"
           ),
-          group = "Snow surveys"
+          group = tr("snowbull_snow_survey", language$language)
         ) %>%
         # --- Add colorbar legend for raster ---
         leaflet::addLegend(
@@ -376,18 +434,18 @@ mapRaster <- function(id, language) {
         ) %>%
         leaflet::addLayersControl(
           overlayGroups = c(
-            "ERA5 raster",
-            "Snow pillows",
-            "Snow surveys",
-            "Basin boundaries",
-            "Basin averages",
-            "Communities",
-            "Isocontours"
+            tr("snowbull_raster", language$language),
+            tr("snowbull_snow_pillow", language$language),
+            tr("snowbull_snow_survey", language$language),
+            tr("gen_snowBul_basins", language$language),
+            tr("snowbull_swe_basin", language$language),
+            tr("snowbull_communities", language$language),
+            tr("snowbull_isocontours", language$language)
           ),
           options = leaflet::layersControlOptions(collapsed = FALSE)
         ) %>%
-        leaflet::hideGroup("Basin averages") %>%
-        leaflet::hideGroup("Isocontours")
+        leaflet::hideGroup(tr("snowbull_swe_basin", language$language)) %>%
+        leaflet::hideGroup(tr("snowbull_isocontours", language$language))
     })
 
     # --- Render selected date text with details ---

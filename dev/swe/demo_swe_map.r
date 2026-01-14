@@ -52,6 +52,16 @@ print(well_points_new)
 [6] "YOWN-2403S" "YOWN-2403D" "YOWN-2404"  NA
 
 
+
+
+communities <- getVector(
+    con = con,
+    layer_name = "Communities")
+
+
+communities$label <- communities$feature_name
+terra::writeVector(communities, "G:\\water\\Hydrology\\21_Flood_Forecasting\\05-FEWS\\shapefiles\\yukon_communities.geojson", overwrite = TRUE)
+
 terra::writeVector(well_points, "well_points.shp", overwrite = TRUE)
 
 leaflet::leaflet() %>%

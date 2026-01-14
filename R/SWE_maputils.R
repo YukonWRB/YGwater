@@ -219,6 +219,35 @@ get_static_style_elements <- function() {
 }
 
 
+#' Generate dynamic style elements for visualization
+#'
+#' @description
+#' Creates color schemes, bins, and labels for different SWE statistics based on
+#' the selected statistic type and language.
+#'
+#' @param statistic Character string indicating the type of statistic to style.
+#'   Options are "relative_to_med", "data", "percentile", or "anomalies".
+#'   Defaults to "relative_to_med".
+#' @param language Character string for language. Defaults to "English".
+#'
+#' @return A list containing bins, colors, and labels for the specified statistic:
+#' \describe{
+#'   \item{bins}{Numeric vector of bin boundaries}
+#'   \item{colors}{Character vector of color hex codes}
+#'   \item{labels}{Character vector of human-readable labels}
+#' }
+#'
+#' @details
+#' The function provides different styling schemes:
+#' \itemize{
+#'   \item relative_to_med: Percentage of normal SWE with special cases for zero values
+#'   \item data: Absolute SWE values in millimeters
+#'   \item percentile: Percentile rankings from 0-100
+#'   \item anomalies: Deviation from normal in standard deviation units
+#' }
+#'
+#' @noRd
+
 get_dynamic_style_elements <- function(
     statistic = NULL,
     language = "English"
@@ -548,10 +577,37 @@ get_datetime <- function(year, month) {
 
 #' Resample timeseries data by aggregation function and frequency
 #'
+#' @description
+#' Aggregates timeseries data to a specified temporal frequency using various
+#' statistical functions. Handles missing data appropriately.
+#'
 #' @param ts_data data.frame with datetime column and station value columns
 #' @param frequency Character string: "daily", "monthly", or "yearly"
 #' @param func Character string: aggregation function ("sum", "mean", "max", "min")
-#' @return data.frame with resampled timeseries data
+#'
+#' @return data.frame with resampled timeseries data with:
+#' \describe{
+#'   \item{datetime}{POSIXct timestamps for the aggregation periods}
+#'   \item{...}{Aggregated values for each station column}
+#' }
+#'
+#' @details
+#' The function groups data by the specified frequency and applies the aggregation
+#' function to each station column. For temporal aggregation, the datetime is
+#' shifted to represent the end of the aggregation period (e.g., end of month
+#' for monthly aggregation). Missing data (NA/NaN) is handled by returning NA
+#' if all values in a period are missing, otherwise applying the function with
+#' na.rm = TRUE.
+#'
+#' @examples
+#' \dontrun{
+#' # Convert daily to monthly means
+#' monthly_data <- resample_timeseries(daily_ts, "monthly", "mean")
+#'
+#' # Convert hourly to daily sums
+#' daily_sums <- resample_timeseries(hourly_ts, "daily", "sum")
+#' }
+#'
 #' @noRd
 
 resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
@@ -760,18 +816,38 @@ download_spatial_layer <- function(
     sf::st_sf(data, geometry = geom, crs = epsg)
 }
 
+#' Download continuous timeseries station locations
+#'
+#' @description
+#' Retrieves metadata for continuous monitoring stations from the database
+#' and converts to spatial format.
+#'
 #' @param con DBI database connection object
-#' @param parameter_name_long Character string of the parameter name to check
+#' @param param_name_long Character string of the parameter name to check
 #' @param epsg Integer EPSG code for coordinate transformation (default 4326)
-#' @return terra sf object with station locations
-#' @noRd
+#'
+#' @return sf object with station locations and metadata including:
+#' \describe{
+#'   \item{timeseries_id}{Unique identifier for the timeseries}
+#'   \item{location_id}{Station location identifier}
+#'   \item{location}{Station code}
+#'   \item{name}{Station name}
+#'   \item{latitude}{Station latitude}
+#'   \item{longitude}{Station longitude}
+#'   \item{conversion_m}{Datum conversion factor if available}
+#' }
+#'
+#' @details
+#' Queries the continuous.timeseries and public.locations tables to get station
+#' metadata for the specified parameter. Returns NULL if no stations are found.
+#'
 download_continuous_ts_locations <- function(
     con,
     param_name_long,
     epsg = 4326
 ) {
     # Build metadata query for continuous SWE timeseries
-    md_query <- paste0(
+    md_query <- sprintf(
         "SELECT
             t.timeseries_id,
             t.location_id,
@@ -804,13 +880,35 @@ download_continuous_ts_locations <- function(
         crs = 4326,
         remove = FALSE
     )
+
+    return(md_continuous)
 }
 
+#' Download discrete timeseries station locations
+#'
+#' @description
+#' Retrieves metadata for discrete monitoring stations (snow surveys) from the database
+#' and converts to spatial format.
+#'
 #' @param con DBI database connection object
-#' @param parameter_name_long Character string of the parameter name to check
+#' @param param_name_long Character string of the parameter name to check
 #' @param epsg Integer EPSG code for coordinate transformation (default 4326)
-#' @return terra sf object with station locations
-#' @noRd
+#'
+#' @return sf object with station locations and metadata including:
+#' \describe{
+#'   \item{location_id}{Station location identifier}
+#'   \item{latitude}{Station latitude}
+#'   \item{longitude}{Station longitude}
+#'   \item{location}{Station code}
+#'   \item{name}{Station name}
+#'   \item{conversion_m}{Datum conversion factor if available}
+#' }
+#'
+#' @details
+#' Queries the discrete.samples, discrete.results, and public.locations tables
+#' to get station metadata for the specified parameter. Returns NULL if no
+#' stations are found.
+#'
 download_discrete_ts_locations <- function(con, param_name_long, epsg = 4326) {
     # Build metadata query for discrete SWE timeseries
     md_discrete_df <- DBI::dbGetQuery(
@@ -1881,6 +1979,27 @@ apply_norms <- function(
 #     )
 # }
 
+#' Split communities by type for different display scales
+#'
+#' @description
+#' Separates communities into large and small categories for differential
+#' display on maps based on community type.
+#'
+#' @param communities sf object containing community data with a 'description' column
+#'
+#' @return A list with two elements:
+#' \describe{
+#'   \item{large}{sf object with cities and towns}
+#'   \item{small}{sf object with settlements and villages}
+#' }
+#'
+#' @details
+#' Large communities (cities and towns) are displayed at all zoom levels,
+#' while small communities (settlements and villages) are only shown at
+#' higher zoom levels to reduce map clutter.
+#'
+#' @noRd
+
 split_communities <- function(communities) {
     # Assume input is a comma-separated string of community names
     large_types <- c("City", "Town")
@@ -2182,14 +2301,41 @@ create_discrete_plot_popup <- function(
 }
 
 
-#' @param epsg Numeric EPSG code for the coordinate reference system
-#' @return Numeric distance correction factor
+#' Get distance correction factor for coordinate system conversion
 #'
 #' @description
-#' converts distances from kilometers to the units of the specified CRS
-#' NOTE: ES - the 1.4* is a roughn manual tweak
-# The adjustment distances were determined in epsg:4326. When converting to other CRSs, the adjustments were not accurate.
-# Instead of redoing the adjustment distances, we apply a fudge-factor so that the labels more or less end up where they should
+#' Converts distances from kilometers to the units of the specified coordinate
+#' reference system (CRS). Used for label positioning adjustments.
+#'
+#' @param epsg Numeric EPSG code for the coordinate reference system
+#'
+#' @return Numeric distance correction factor for converting km to CRS units:
+#' \describe{
+#'   \item{4326 (WGS84)}{111.32 km per degree}
+#'   \item{3857, 3577, 3579 (Projected)}{0.0014 km per meter (with empirical adjustment)}
+#' }
+#'
+#' @details
+#' Label position adjustments were originally calibrated in EPSG:4326 (degrees).
+#' When using projected coordinate systems, an empirical correction factor (1.4x)
+#' is applied to maintain proper label positioning without recalculating all
+#' adjustment values.
+#'
+#' This is a pragmatic solution to handle coordinate system differences while
+#' preserving the carefully tuned label positions for optimal map readability.
+#'
+#' @examples
+#' \dontrun{
+#' # Get correction for WGS84
+#' wgs84_factor <- get_km_to_crs_correction(4326)  # Returns 111.32
+#'
+#' # Convert 50km adjustment to degrees
+#' offset_degrees <- 50 / wgs84_factor
+#'
+#' # Get correction for projected system
+#' proj_factor <- get_km_to_crs_correction(3579)  # Returns 0.0014
+#' offset_meters <- 50 / proj_factor
+#' }
 #'
 #' @noRd
 get_km_to_crs_correction <- function(epsg) {
@@ -2547,6 +2693,50 @@ load_bulletin_timeseries <- function(
     return(snowbull_timeseries)
 }
 
+#' Load spatial shapefiles for snow bulletin mapping
+#'
+#' @description
+#' Loads all required spatial data layers for snow bulletin map creation,
+#' including basins, territorial boundaries, roads, and communities.
+#'
+#' @param con DBI database connection object
+#' @param epsg Integer EPSG code for coordinate reference system (default 4326)
+#'
+#' @return A list containing spatial data layers:
+#' \describe{
+#'   \item{basins}{sf object with SWE basin polygons}
+#'   \item{yukon}{sf object with Yukon territorial boundary}
+#'   \item{inverted_yukon}{sf object for masking area outside Yukon}
+#'   \item{roads}{sf object with primary and secondary highways}
+#'   \item{communities}{sf object with community locations and adjusted label positions}
+#' }
+#'
+#' @details
+#' The function performs several spatial processing steps:
+#' \enumerate{
+#'   \item Loads SWE basin polygons from package data
+#'   \item Downloads territorial boundaries from database
+#'   \item Creates inverted boundary for masking
+#'   \item Downloads and clips roads to basin area
+#'   \item Downloads communities and calculates label positions
+#'   \item Applies manual position adjustments for optimal display
+#' }
+#'
+#' All spatial data is transformed to the specified CRS and label positions
+#' are pre-calculated with manual adjustments to prevent overlap.
+#'
+#' @examples
+#' \dontrun{
+#' con <- AquaCache::AquaConnect(...)
+#' shapefiles <- load_bulletin_shapefiles(con)
+#'
+#' # Check loaded data
+#' print(names(shapefiles))
+#' print(nrow(shapefiles$basins))  # Number of basins
+#' }
+#'
+#' @noRd
+
 load_bulletin_shapefiles <- function(con, epsg = 4326) {
     snowbull_shapefiles <- list()
 
@@ -2853,6 +3043,40 @@ generate_popup_content <- function(
 }
 
 
+#' Filter stations by data currency
+#'
+#' @description
+#' Removes stations that have no recent data within a specified time window.
+#' Used to exclude stations with stale or discontinued measurements.
+#'
+#' @param df data.frame containing station metadata with a 'latest_date' column
+#' @param input_date POSIXct reference date (typically the current bulletin date)
+#' @param cutoff_days Integer number of days defining the acceptable data age
+#'
+#' @return data.frame with stations filtered to those with recent data
+#'
+#' @details
+#' Stations are kept if:
+#' \itemize{
+#'   \item latest_date is NA (no data filtering applied)
+#'   \item latest_date is within cutoff_days of input_date
+#' }
+#'
+#' This prevents display of stations that appear to have current data but
+#' actually have measurements from previous seasons.
+#'
+#' @examples
+#' \dontrun{
+#' # Keep only stations with data from the last year
+#' current_stations <- filter_stations_by_latest_date(
+#'   station_metadata,
+#'   as.POSIXct("2025-03-01"),
+#'   365
+#' )
+#' }
+#'
+#' @noRd
+
 # Filter out stations with no recent data (more than 1 year old)
 filter_stations_by_latest_date <- function(df, input_date, cutoff_days) {
     df[
@@ -2970,21 +3194,72 @@ get_display_data <- function(
 }
 
 
-# ' Create a Leaflet map visualizing SWE data
-#' @param data List containing processed SWE data at basins, surveys, and pillows
-#' @param statistic Character string indicating which SWE value to visualize
-#' (e.g., "data", "relative_to_med", "percentile")
-#' @param language Character string indicating the language for labels and legends. Default is "English".
-#' @param snowbull_timeseries List containing all loaded base data, returned from load_bulletin_data()
-#' @param snowbull_shapefiles List containing all loaded shapefiles, returned from load_bulletin_shapefiles()
-#' @param month Integer month for map title
-#' @param year Integer year for map title
-#' @return A Leaflet map object visualizing the SWE data'
+#' Create a Leaflet map visualizing SWE data
+#'
 #' @description
-#' Creates a Leaflet map visualizing SWE data at basins, discrete survey stations,
+#' Creates an interactive Leaflet map visualizing SWE data at basins, discrete survey stations,
 #' and continuous pillow stations. The map includes styled polygons and markers,
 #' labels, popups, and a dynamic legend based on the selected value type and date.
+#'
+#' @param point_data sf object containing point-based station data (surveys)
+#' @param poly_data sf object containing polygon-based basin data
+#' @param point_data_secondary sf object containing secondary point data (pillows)
+#' @param snowbull_shapefiles List containing all loaded shapefiles from load_bulletin_shapefiles()
+#' @param statistic Character string indicating which SWE value to visualize
+#'   (e.g., "data", "relative_to_med", "percentile")
+#' @param language Character string indicating the language for labels and legends (default "English")
+#' @param month Integer month for map title
+#' @param year Integer year for map title
+#' @param filename Optional character string for HTML output file path
+#'
+#' @return A Leaflet map object with interactive features:
+#' \describe{
+#'   \item{Base layers}{Satellite imagery background}
+#'   \item{Data layers}{Colored basins, survey points, pillow stations}
+#'   \item{Reference layers}{Territorial boundary, roads, communities}
+#'   \item{Interactive elements}{Popups with station details and plots}
+#'   \item{Legend}{Dynamic legend based on selected statistic}
+#'   \item{Controls}{Layer toggles and zoom controls}
+#' }
+#'
+#' @details
+#' The map includes several interactive features:
+#' \itemize{
+#'   \item Hover labels showing station names and locations
+#'   \item Click popups with detailed information and timeseries plots
+#'   \item Layer controls for toggling different data types
+#'   \item Zoom-dependent visibility for communities
+#'   \item Color-coded styling based on SWE statistics
+#' }
+#'
+#' Colors and symbols are dynamically generated based on the selected statistic
+#' and language settings. The map extent is automatically set to cover the
+#' Yukon Territory with appropriate zoom levels.
+#'
+#' @examples
+#' \dontrun{
+#' # Create interactive map for March 2025
+#' leaflet_map <- make_leaflet_map(
+#'   point_data = survey_data,
+#'   poly_data = basin_data,
+#'   snowbull_shapefiles = shapefiles,
+#'   statistic = "relative_to_med",
+#'   month = 3,
+#'   year = 2025
+#' )
+#'
+#' # Display the map
+#' leaflet_map
+#'
+#' # Save to file
+#' make_leaflet_map(
+#'   ...,
+#'   filename = "march_2025_swe.html"
+#' )
+#' }
+#'
 #' @noRd
+
 make_leaflet_map <- function(
     point_data = NULL,
     poly_data = NULL,
@@ -3317,6 +3592,78 @@ make_leaflet_map <- function(
 
     return(m)
 }
+
+#' Create a static ggplot2 map for SWE data
+#'
+#' @description
+#' Creates a high-quality static map using ggplot2 for publication or printing.
+#' Optimized for professional presentation with proper typography and layout.
+#'
+#' @param point_data sf object containing point-based station data (surveys)
+#' @param poly_data sf object containing polygon-based basin data
+#' @param point_data_secondary sf object containing secondary point data (pillows)
+#' @param statistic Character string indicating which SWE value to visualize
+#' @param snowbull_shapefiles List containing all loaded shapefiles
+#' @param language Character string for language (default "English")
+#' @param month Integer month for map title
+#' @param year Integer year for map title
+#' @param filename Optional character string for PNG output file path
+#' @param dpi Numeric resolution in dots per inch (default 300)
+#' @param height Numeric height in inches (default 14)
+#' @param width Numeric width in inches (default 8)
+#'
+#' @return A ggplot2 object with publication-ready styling:
+#' \describe{
+#'   \item{Background}{Terrain-colored territorial boundary}
+#'   \item{Basins}{Color-coded polygons with optimal labels}
+#'   \item{Stations}{Styled point markers for surveys and pillows}
+#'   \item{Infrastructure}{Roads and community markers}
+#'   \item{Labels}{Shadow text with anti-collision positioning}
+#'   \item{Legend}{Color legend matching the selected statistic}
+#'   \item{Typography}{Professional fonts and sizing}
+#' }
+#'
+#' @details
+#' The static map is optimized for:
+#' \itemize{
+#'   \item High-resolution printing and publication
+#'   \item Professional typography with shadow text
+#'   \item Optimal label positioning to prevent overlap
+#'   \item Consistent symbology across different statistics
+#'   \item Proper coordinate system handling
+#'   \item Scalable vector elements
+#' }
+#'
+#' The map uses a projected coordinate system (typically NAD83 Yukon) for
+#' accurate distance measurements and optimal display of the territory.
+#'
+#' @examples
+#' \dontrun{
+#' # Create publication-ready map
+#' static_map <- make_ggplot_map(
+#'   point_data = survey_data,
+#'   poly_data = basin_data,
+#'   snowbull_shapefiles = shapefiles,
+#'   statistic = "relative_to_med",
+#'   month = 3,
+#'   year = 2025,
+#'   width = 12,
+#'   height = 8,
+#'   dpi = 300
+#' )
+#'
+#' # Display the plot
+#' print(static_map)
+#'
+#' # Save high-resolution PNG
+#' make_ggplot_map(
+#'   ...,
+#'   filename = "march_2025_swe.png",
+#'   dpi = 600
+#' )
+#' }
+#'
+#' @noRd
 
 make_ggplot_map <- function(
     point_data = NULL,
