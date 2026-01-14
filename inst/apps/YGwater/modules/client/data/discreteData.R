@@ -33,6 +33,7 @@ discDataUI <- function(id) {
         ns("accordion")
       ))
     ),
+    uiOutput(ns("banner")),
     uiOutput(ns("top")),
     page_sidebar(
       sidebar = sidebar(
@@ -249,6 +250,13 @@ discData <- function(id, language, inputs) {
       sample_types = FALSE,
       params = FALSE
     )
+
+    output$banner <- renderUI({
+      dismissible_banner_ui(
+        ns = ns,
+        lang = language$language
+      )
+    })
 
     output$top <- renderUI({
       tagList(
