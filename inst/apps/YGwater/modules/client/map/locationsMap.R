@@ -89,9 +89,8 @@ mapLocsUI <- function(id) {
       )
     ),
     # All UI elements rendered in server function to allow multi-language functionality
-    bslib::page_fluid(
-      uiOutput(ns("sidebar_page"))
-    )
+    uiOutput(ns("banner")),
+    uiOutput(ns("sidebar_page"))
   )
 }
 
@@ -152,6 +151,12 @@ mapLocs <- function(id, language) {
     observeFilterInput("network")
 
     # Create UI elements #####
+    output$banner <- renderUI({
+      dismissible_banner_ui(
+        ns = ns,
+        lang = language$language
+      )
+    })
 
     output$sidebar_page <- renderUI({
       req(moduleData, language)
@@ -185,6 +190,7 @@ mapLocs <- function(id, language) {
                   )
                 )
               ),
+              selected = "all",
               multiple = TRUE
             ),
             selectizeInput(
@@ -206,6 +212,7 @@ mapLocs <- function(id, language) {
                   )]]
                 )
               ),
+              selected = "all",
               multiple = TRUE
             ),
             selectizeInput(
@@ -221,6 +228,7 @@ mapLocs <- function(id, language) {
                   )]]
                 )
               ),
+              selected = "all",
               multiple = TRUE
             ),
             selectizeInput(
@@ -236,6 +244,7 @@ mapLocs <- function(id, language) {
                   )]]
                 )
               ),
+              selected = "all",
               multiple = TRUE
             ),
             selectizeInput(
@@ -251,6 +260,7 @@ mapLocs <- function(id, language) {
                   )]]
                 )
               ),
+              selected = "all",
               multiple = TRUE
             ),
             selectizeInput(
@@ -266,6 +276,7 @@ mapLocs <- function(id, language) {
                   )]]
                 )
               ),
+              selected = "all",
               multiple = TRUE
             ),
             sliderInput(
@@ -313,7 +324,8 @@ mapLocs <- function(id, language) {
               tr("continuous", language$language)
             )
           )
-        )
+        ),
+        selected = "all"
       )
       updateSelectizeInput(
         session,
@@ -324,7 +336,8 @@ mapLocs <- function(id, language) {
             tr("all_m", language$language),
             moduleData$media_types[[tr("media_type_col", language$language)]]
           )
-        )
+        ),
+        selected = "all"
       )
       updateSelectizeInput(
         session,
@@ -338,7 +351,8 @@ mapLocs <- function(id, language) {
               language$language
             )]]
           )
-        )
+        ),
+        selected = "all"
       )
       updateSelectizeInput(
         session,
@@ -349,7 +363,8 @@ mapLocs <- function(id, language) {
             tr("all_m", language$language),
             moduleData$parameters[[tr("param_name_col", language$language)]]
           )
-        )
+        ),
+        selected = "all"
       )
       updateSelectizeInput(
         session,
@@ -361,6 +376,7 @@ mapLocs <- function(id, language) {
             moduleData$projects[[tr("generic_name_col", language$language)]]
           )
         ),
+        selected = "all"
       )
       updateSelectizeInput(
         session,
@@ -371,7 +387,8 @@ mapLocs <- function(id, language) {
             tr("all_m", language$language),
             moduleData$networks[[tr("generic_name_col", language$language)]]
           )
-        )
+        ),
+        selected = "all"
       )
       updateSliderInput(
         session,

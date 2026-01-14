@@ -200,6 +200,74 @@ YGwater_globals <- function(
     }
   }
 
+  dismissible_banner_ui <<- function(
+    ns,
+    lang,
+    banner_id = "app_banner",
+    banner_key_prefix = "global_notice",
+    banner_version = "v2026_01_14"
+  ) {
+    banner_dom_id <- ns(banner_id)
+    banner_key <- paste0(banner_key_prefix, "_", banner_version)
+
+    dismiss_fn_name <- paste0("dismiss_", banner_dom_id) # may contain "-" so call via window[...]()
+
+    msg_html <- tr("missing_disc_data_banner", lang)
+
+    tagList(
+      tags$head(
+        tags$style(HTML(sprintf(
+          "#%s { margin-bottom: 1rem; }",
+          banner_dom_id
+        ))),
+        tags$script(HTML(sprintf(
+          "
+          (function () {
+            const bannerId = '%s';
+            const bannerKey = '%s';
+  
+            function hideIfDismissed() {
+              try {
+                if (localStorage.getItem(bannerKey) === '1') {
+                  const el = document.getElementById(bannerId);
+                  if (el) el.style.display = 'none';
+                }
+              } catch (e) {}
+            }
+  
+            window['%s'] = function () {
+              try { localStorage.setItem(bannerKey, '1'); } catch (e) {}
+              const el = document.getElementById(bannerId);
+              if (el) el.style.display = 'none';
+            };
+  
+            document.addEventListener('DOMContentLoaded', hideIfDismissed);
+          })();
+        ",
+          banner_dom_id,
+          banner_key,
+          dismiss_fn_name
+        )))
+      ),
+
+      bslib::card(
+        id = banner_dom_id,
+        class = "mb-3",
+        bslib::card_header(
+          class = "d-flex align-items-start",
+          style = "gap:12px;",
+          tags$div(style = "flex: 1 1 auto; min-width: 0;", HTML(msg_html)),
+          tags$button(
+            type = "button",
+            class = "btn-close ms-auto",
+            `aria-label` = "Dismiss",
+            onclick = sprintf("window['%s']();", dismiss_fn_name)
+          )
+        )
+      )
+    )
+  }
+
   # 'client' side modules #####
   # Plot modules
   source(system.file(
