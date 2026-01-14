@@ -2533,49 +2533,8 @@ addLocation <- function(id, inputs) {
 
       tryCatch(
         {
-          # Start a transaction
-          DBI::dbBegin(session$userData$AquaCache)
-
+          # addACLocation is all done within a transaction, including additions to accessory tables
           AquaCache::addACLocation(con = session$userData$AquaCache, df = df)
-
-          new_loc_id <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            glue::glue_sql(
-              "SELECT location_id FROM locations WHERE location = {input$loc_code};",
-              .con = session$userData$AquaCache
-            )
-          )$location_id
-          if (length(new_loc_id) == 1) {
-            if (length(network_ids)) {
-              for (i in seq_along(network_ids)) {
-                net <- network_ids[i]
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "INSERT INTO locations_networks (network_id, location_id) VALUES ($1, $2)",
-                  params = list(
-                    net,
-                    new_loc_id
-                  )
-                )
-              }
-            }
-            if (length(project_ids)) {
-              for (i in seq_along(project_ids)) {
-                proj <- project_ids[i]
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "INSERT INTO locations_projects (project_id, location_id) VALUES ($1, $2)",
-                  params = list(
-                    proj,
-                    new_loc_id
-                  )
-                )
-              }
-            }
-          }
-
-          # Close transaction
-          DBI::dbCommit(session$userData$AquaCache)
 
           # Show a modal to the user that the location was added
           showModal(modalDialog(
