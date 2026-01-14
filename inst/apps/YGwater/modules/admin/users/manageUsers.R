@@ -236,7 +236,7 @@ WHERE schema_name NOT LIKE 'pg_%'
                 DBI::dbQuoteIdentifier(
                   session$userData$AquaCache,
                   input$group_name
-                ),
+                )
               )
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -253,10 +253,7 @@ WHERE schema_name NOT LIKE 'pg_%'
                   for (schema in input$schema_permissions) {
                     sql <- sprintf(
                       "GRANT %s ON ALL TABLES IN SCHEMA %s TO %s",
-                      DBI::dbQuoteIdentifier(
-                        session$userData$AquaCache,
-                        permission
-                      ),
+                      permission,
                       DBI::dbQuoteIdentifier(
                         session$userData$AquaCache,
                         schema
