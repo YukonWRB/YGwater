@@ -268,6 +268,50 @@ YGwater_globals <- function(
     )
   }
 
+  # Derive privilege flags for each admin nav_panel
+  # @param tbl A table with at minimum columns called 'extra_privileges' with strings such as "SELECT, UPDATE", and column called 'qual_name' containing schema qualified table names such as 'public.table_name'.
+  # @param qual_names A character vector of qualified table names (schema.table)
+  # @param priv A list of character vectors of privileges to check for each table in 'qual_names'. If length(priv) == 1, the same privileges are checked for all tables.
+  # @return Boolean. TRUE if the specified privileges exist for the listed tables, FALSE any privileges missing on any table.
+
+  has_priv <<- function(
+    tbl,
+    qual_names,
+    priv = list(c(
+      "DELETE",
+      "INSERT",
+      "UPDATE"
+    ))
+  ) {
+    if (length(priv) > 1) {
+      # Ensure length 'priv' is same length as 'qual_names'
+      if (length(priv) != length(qual_names)) {
+        stop(
+          "Length of 'priv' must be 1 or equal to length of 'qual_names'"
+        )
+      }
+    } else {
+      # Replicate 'priv' to match length of 'qual_names'
+      priv <- rep(priv, length(qual_names))
+    }
+    # Ensure the user has ALL of the specified privileges on ALL of the specified tables
+    for (i in seq_along(qual_names)) {
+      qn <- qual_names[i]
+      p <- priv[[i]]
+      user_privs <- tbl$extra_privileges[
+        tbl$qual_name == qn
+      ]
+      if (length(user_privs) == 0) {
+        return(FALSE)
+      }
+      user_privs_vec <- unlist(strsplit(user_privs, ", "))
+      if (!all(p %in% user_privs_vec)) {
+        return(FALSE)
+      }
+    }
+    return(TRUE)
+  }
+
   # 'client' side modules #####
   # Plot modules
   source(system.file(
