@@ -11,7 +11,199 @@ simplerIndexUI <- function(id) {
   tagList(
     tags$head(
       tags$style(HTML(paste(css, collapse = "\n"))),
-      tags$script(src = "js/sidebar_resize.js")
+      tags$script(src = "js/sidebar_resize.js"),
+      # Add custom CSS to move all popups to the left side
+      tags$style(HTML(
+        "
+        /* Move Shiny notifications to the bottom left */
+        .shiny-notification {
+          left: 20px !important;
+          right: auto !important;
+          bottom: 20px !important;
+          top: auto !important;
+          max-width: 400px !important;
+          position: fixed !important;
+          z-index: 9999 !important;
+        }
+        
+        /* Stack multiple notifications vertically from bottom */
+        .shiny-notification-content-info,
+        .shiny-notification-content-message,
+        .shiny-notification-content-warning,
+        .shiny-notification-content-error {
+          margin-bottom: 5px !important;
+        }
+        
+        /* Move Bootstrap modals to the left */
+        .modal.fade .modal-dialog {
+          transform: translate(-50%, -50%) !important;
+          margin-left: 25% !important;
+        }
+        
+        .modal-dialog {
+          margin-left: 50px !important;
+          margin-right: auto !important;
+          max-width: 500px !important;
+        }
+        
+        /* Move tooltips to the left when possible */
+        .tooltip {
+          max-width: 300px !important;
+        }
+        
+        .tooltip.bs-tooltip-right .tooltip-arrow {
+          left: 0 !important;
+        }
+        
+        .tooltip.bs-tooltip-left .tooltip-arrow {
+          right: 0 !important;
+        }
+        
+        /* Ensure tooltips don't go off-screen on the left */
+        .tooltip-inner {
+          text-align: left !important;
+          word-wrap: break-word !important;
+        }
+        
+        /* Move any other popover elements to the left */
+        .popover {
+          max-width: 350px !important;
+        }
+        
+        /* Adjust sweetAlert or other alert libraries if used */
+        .swal2-container {
+          padding-left: 50px !important;
+          padding-right: auto !important;
+        }
+        
+        .swal2-popup {
+          margin-left: 0 !important;
+          margin-right: auto !important;
+        }
+        
+        /* Prevent horizontal scrolling on main page */
+        html, body {
+          overflow-x: hidden !important;
+        }
+        
+        /* Ensure main container layout is constrained */
+        .sidebar-layout {
+          height: 100vh !important;
+          display: flex !important;
+        }
+        
+        /* Prevent scroll chaining for specific scrollable containers */
+        .dataTables_scrollBody,
+        #",
+        ns("pdf-container"),
+        " {
+          overscroll-behavior: contain !important;
+          -ms-overflow-style: -ms-autohiding-scrollbar !important;
+        }
+        
+        /* Make sure PDF container handles its own scrolling */
+        #",
+        ns("pdf-container"),
+        " {
+          position: relative !important;
+          overflow: auto !important;
+          scroll-behavior: smooth !important;
+          overscroll-behavior-y: contain !important;
+          overscroll-behavior-x: contain !important;
+        }
+        
+        /* Allow normal scrolling in side panels */
+        .sidebar-panel,
+        .right-panel {
+          overflow-y: auto !important;
+          flex-shrink: 0 !important;
+        }
+        
+        /* Ensure scrollable content in right panel works normally */
+        .scrollable-content {
+          overflow-y: auto !important;
+          overscroll-behavior: auto !important;
+        }
+        
+        /* Prevent momentum scrolling issues on webkit browsers for PDF container only */
+        #",
+        ns("pdf-container"),
+        " {
+          -webkit-overflow-scrolling: touch !important;
+        }
+      "
+      )),
+      # Add JavaScript to prevent scroll propagation only for specific containers
+      tags$script(HTML(sprintf(
+        "
+        $(document).ready(function() {
+          // Function to prevent scroll propagation for specific containers only
+          function preventScrollPropagation(element) {
+            element.addEventListener('wheel', function(e) {
+              var delta = e.deltaY;
+              var scrollTop = this.scrollTop;
+              var scrollHeight = this.scrollHeight;
+              var clientHeight = this.clientHeight;
+              
+              // Check if we're at the top or bottom
+              var atTop = scrollTop === 0;
+              var atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+              
+              // Prevent default scroll behavior if we're at limits
+              if ((atTop && delta < 0) || (atBottom && delta > 0)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }
+            }, { passive: false });
+            
+            // Also handle touch events for mobile
+            var startY = 0;
+            element.addEventListener('touchstart', function(e) {
+              startY = e.touches[0].clientY;
+            }, { passive: false });
+            
+            element.addEventListener('touchmove', function(e) {
+              var currentY = e.touches[0].clientY;
+              var scrollTop = this.scrollTop;
+              var scrollHeight = this.scrollHeight;
+              var clientHeight = this.clientHeight;
+              
+              var atTop = scrollTop === 0;
+              var atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+              
+              // Check scroll direction
+              var scrollingUp = currentY > startY;
+              var scrollingDown = currentY < startY;
+              
+              if ((atTop && scrollingUp) || (atBottom && scrollingDown)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+              }
+            }, { passive: false });
+          }
+          
+          // Apply scroll prevention ONLY to PDF container and DataTables
+          var restrictedContainers = [
+            '#%s',
+            '.dataTables_scrollBody'
+          ];
+          
+          restrictedContainers.forEach(function(selector) {
+            var elements = document.querySelectorAll(selector);
+            elements.forEach(function(el) {
+              if (el) {
+                preventScrollPropagation(el);
+              }
+            });
+          });
+          
+          // Do NOT apply to sidebar panels - let them scroll normally
+        });
+      ",
+        ns("pdf-container")
+      )))
     ),
     div(
       style = "display: flex; align-items: center; gap: 10px;",
@@ -100,13 +292,22 @@ simplerIndexUI <- function(id) {
                 "Enable the selection tool for OCR and content redaction."
               ),
             actionButton(
-              ns("draw_rectangle"),
-              "Redact",
+              ns("redaction_mode"),
+              "Redaction Mode",
               icon("rectangle-xmark"),
               class = "btn-toggle"
             ) |>
               tooltip(
-                "Redact the selected area. Boxes are transparent for usability but will be made opaque on upload."
+                "Toggle redaction mode. When enabled, every selection will be automatically redacted."
+              ),
+            actionButton(
+              ns("delete_redaction"),
+              "Delete",
+              icon("minus-circle"),
+              class = "btn-toggle"
+            ) |>
+              tooltip(
+                "Toggle delete mode. When enabled, drag to select and remove redactions."
               ),
             actionButton(
               ns("clear_rectangles"),
@@ -245,7 +446,7 @@ simplerIndexUI <- function(id) {
         # Scrollable content area
         div(
           class = "scrollable-content",
-          style = "overflow-y: auto; padding: 15px;",
+          style = "overflow-y: auto; padding: 15px; height: calc(100vh - 60px);",
           # Borehole linking controls in scrollable area
           fluidRow(
             column(
@@ -862,6 +1063,10 @@ simplerIndex <- function(id) {
     })
     # Reactive value to control brush mode
     brush_enabled <- reactiveVal(FALSE)
+    # Reactive value to control redaction mode
+    redaction_enabled <- reactiveVal(FALSE)
+    # Reactive value to control delete mode
+    delete_enabled <- reactiveVal(FALSE)
     # Flag to prevent circular updates when loading metadata
     loading_metadata <- reactiveVal(FALSE)
 
@@ -1701,6 +1906,20 @@ simplerIndex <- function(id) {
       # Toggle brush_enabled value
       brush_enabled(!brush_enabled())
 
+      # If enabling brush mode, disable redaction and delete modes
+      if (brush_enabled()) {
+        redaction_enabled(FALSE)
+        delete_enabled(FALSE)
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('redaction_mode')
+        ))
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('delete_redaction')
+        ))
+      }
+
       # Update button appearance based on new state
       if (brush_enabled()) {
         shinyjs::runjs(sprintf(
@@ -1722,6 +1941,100 @@ simplerIndex <- function(id) {
           "$('#%s').css('pointer-events', 'none');",
           ns('plot')
         ))
+      }
+    })
+
+    # Add observer for redaction_mode button
+    observeEvent(input$redaction_mode, {
+      # Toggle redaction_enabled value
+      redaction_enabled(!redaction_enabled())
+
+      # If enabling redaction mode, disable brush and delete modes
+      if (redaction_enabled()) {
+        brush_enabled(FALSE)
+        delete_enabled(FALSE)
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('brush_select')
+        ))
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('delete_redaction')
+        ))
+      }
+
+      # Update button appearance based on new state
+      if (redaction_enabled()) {
+        shinyjs::runjs(sprintf(
+          "$('#%s').addClass('btn-active');",
+          ns('redaction_mode')
+        ))
+
+        # Enable plot interactions for redaction mode
+        shinyjs::runjs(sprintf(
+          "$('#%s').css('pointer-events', 'auto');",
+          ns('plot')
+        ))
+      } else {
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('redaction_mode')
+        ))
+
+        # Disable plot interactions when no mode is active
+        if (!brush_enabled() && !delete_enabled()) {
+          shinyjs::runjs(sprintf(
+            "$('#%s').css('pointer-events', 'none');",
+            ns('plot')
+          ))
+        }
+      }
+    })
+
+    # Add observer for delete_redaction button
+    observeEvent(input$delete_redaction, {
+      # Toggle delete_enabled value
+      delete_enabled(!delete_enabled())
+
+      # If enabling delete mode, disable brush and redaction modes
+      if (delete_enabled()) {
+        brush_enabled(FALSE)
+        redaction_enabled(FALSE)
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('brush_select')
+        ))
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('redaction_mode')
+        ))
+      }
+
+      # Update button appearance based on new state
+      if (delete_enabled()) {
+        shinyjs::runjs(sprintf(
+          "$('#%s').addClass('btn-active');",
+          ns('delete_redaction')
+        ))
+
+        # Enable plot interactions for delete mode
+        shinyjs::runjs(sprintf(
+          "$('#%s').css('pointer-events', 'auto');",
+          ns('plot')
+        ))
+      } else {
+        shinyjs::runjs(sprintf(
+          "$('#%s').removeClass('btn-active');",
+          ns('delete_redaction')
+        ))
+
+        # Disable plot interactions when no mode is active
+        if (!brush_enabled() && !redaction_enabled()) {
+          shinyjs::runjs(sprintf(
+            "$('#%s').css('pointer-events', 'none');",
+            ns('plot')
+          ))
+        }
       }
     })
 
@@ -2212,6 +2525,7 @@ simplerIndex <- function(id) {
       showNotification(
         paste(
           "PDF conversion completed! Generated",
+
           total_pages,
           "page(s) total."
         ),
@@ -2237,6 +2551,7 @@ simplerIndex <- function(id) {
       input$next_pdf,
       {
         req(rv$files_df)
+
         if (rv$pdf_index < nrow(rv$files_df)) {
           rv$pdf_index <- rv$pdf_index + 1
           # Ensure table selection follows
@@ -2646,140 +2961,173 @@ simplerIndex <- function(id) {
       res = 96
     ) # Increased resolution for better text rendering
 
-    # Observer for brush selection to extract text
+    # Observer for brush selection to extract text or redact
     observeEvent(input$pdf_brush, {
       req(input$pdf_brush)
-      req(rv$files_df)
-      req(rv$pdf_index)
-      req(brush_enabled())
-
-      # Get current OCR data
-      ocr_df <- rv$ocr_text[[rv$pdf_index]]
-      if (is.null(ocr_df) || nrow(ocr_df) == 0) {
-        rv$selected_text <- NULL
-        return()
-      }
-
-      # Filter by confidence threshold to match what's displayed
-      # This is the key fix - apply the same confidence filter used for display
-      if (nrow(ocr_df) > 0) {
-        ocr_df <- ocr_df[
-          ocr_df$confidence >= input$confidence_threshold,
-          ,
-          drop = FALSE
-        ]
-      }
-
-      if (nrow(ocr_df) == 0) {
-        showNotification(
-          "No OCR text meets confidence threshold",
-          type = "warning",
-          duration = 2
-        )
-        rv$selected_text <- NULL
-        return()
-      }
-
-      # Get brush coordinates
-      brush <- input$pdf_brush
-
-      # Get image dimensions for coordinate conversion
-      img_path <- rv$files_df$Path[rv$pdf_index]
-      img <- magick::image_read(img_path)
-      info <- magick::image_info(img)
-      img_width <- info$width
-      img_height <- info$height
-
-      # Convert brush coordinates to image coordinates
-      # Note: brush coordinates are in plot space, need to convert to image space
-      brush_xmin <- brush$xmin
-      brush_xmax <- brush$xmax
-      brush_ymin <- img_height - brush$ymax # Flip Y coordinates
-      brush_ymax <- img_height - brush$ymin # Flip Y coordinates
-
-      # Find OCR words within brush selection
-      selected_words <- character(0)
-
-      for (i in seq_len(nrow(ocr_df))) {
-        # Parse bbox coordinates
-        coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
-        word_x1 <- coords[1]
-        word_y1 <- coords[2]
-        word_x2 <- coords[3]
-        word_y2 <- coords[4]
-
-        # Check if word overlaps with brush selection
-        if (
-          word_x2 >= brush_xmin &&
-            word_x1 <= brush_xmax &&
-            word_y2 >= brush_ymin &&
-            word_y1 <= brush_ymax
-        ) {
-          selected_words <- c(selected_words, ocr_df$word[i])
-        }
-      }
-
-      # Update selected text
-      if (length(selected_words) > 0) {
-        rv$selected_text <- selected_words
-
-        # Create notification with the actual text (limit to reasonable length)
-        selected_text <- paste(selected_words, collapse = " ")
-        if (nchar(selected_text) > 100) {
-          selected_text <- paste0(substr(selected_text, 1, 97), "...")
-        }
-        showNotification(
-          paste("Selected:", selected_text),
-          type = "message",
-          duration = 6
-        )
-      } else {
-        rv$selected_text <- NULL
-        showNotification(
-          "No text found in selection",
-          type = "warning",
-          duration = 2
-        )
-      }
-    })
-
-    # --- Rectangle logic: modified to store by file path instead of borehole ID ---
-    observeEvent(input$draw_rectangle, {
-      # Make sure we have a brush selection
-      if (is.null(input$pdf_brush)) {
-        showNotification(
-          "Please make a selection first",
-          type = "warning",
-          duration = 2
-        )
-        return()
-      }
       req(rv$files_df)
       req(rv$pdf_index)
 
       # Get file path as unique identifier
       file_path <- rv$files_df$Path[rv$pdf_index]
 
-      # Get brush coordinates (already in plot coordinates)
-      brush <- input$pdf_brush
+      # If delete mode is enabled, find and delete clicked rectangle
+      if (delete_enabled()) {
+        brush <- input$pdf_brush
+        click_x <- (brush$xmin + brush$xmax) / 2
+        click_y <- (brush$ymin + brush$ymax) / 2
 
-      # Store rectangle data for this file path
-      if (is.null(rv$rectangles[[file_path]])) {
-        rv$rectangles[[file_path]] <- list()
+        rectangles <- rv$rectangles[[file_path]]
+        if (!is.null(rectangles) && length(rectangles) > 0) {
+          # Find which rectangle was clicked
+          for (i in seq_along(rectangles)) {
+            rect <- rectangles[[i]]
+            if (
+              click_x >= rect$xmin &&
+                click_x <= rect$xmax &&
+                click_y >= rect$ymin &&
+                click_y <= rect$ymax
+            ) {
+              # Remove this rectangle
+              rv$rectangles[[file_path]] <- rectangles[-i]
+              showNotification(
+                "Redaction deleted",
+                type = "message",
+                duration = 2
+              )
+              return()
+            }
+          }
+          showNotification(
+            "No redaction found at click location",
+            type = "warning",
+            duration = 2
+          )
+        } else {
+          showNotification(
+            "No redactions to delete",
+            type = "warning",
+            duration = 2
+          )
+        }
+        return()
       }
 
-      new_rect <- list(
-        xmin = brush$xmin,
-        xmax = brush$xmax,
-        ymin = brush$ymin,
-        ymax = brush$ymax,
-        color = "red"
-      )
-      rv$rectangles[[file_path]] <- append(
-        rv$rectangles[[file_path]],
-        list(new_rect)
-      )
-      showNotification("Selection redacted", type = "message", duration = 2)
+      # If redaction mode is enabled, automatically redact the selection
+      if (redaction_enabled()) {
+        # Get brush coordinates (already in plot coordinates)
+        brush <- input$pdf_brush
+
+        # Store rectangle data for this file path
+        if (is.null(rv$rectangles[[file_path]])) {
+          rv$rectangles[[file_path]] <- list()
+        }
+
+        new_rect <- list(
+          xmin = brush$xmin,
+          xmax = brush$xmax,
+          ymin = brush$ymin,
+          ymax = brush$ymax,
+          color = "red"
+        )
+        rv$rectangles[[file_path]] <- append(
+          rv$rectangles[[file_path]],
+          list(new_rect)
+        )
+        showNotification("Selection redacted", type = "message", duration = 2)
+
+        # Exit early to prevent OCR text processing
+        return()
+      }
+
+      # If brush mode is enabled, extract OCR text
+      if (brush_enabled()) {
+        # Get current OCR data
+        ocr_df <- rv$ocr_text[[rv$pdf_index]]
+        if (is.null(ocr_df) || nrow(ocr_df) == 0) {
+          rv$selected_text <- NULL
+          return()
+        }
+
+        # Filter by confidence threshold to match what's displayed
+        if (nrow(ocr_df) > 0) {
+          ocr_df <- ocr_df[
+            ocr_df$confidence >= input$confidence_threshold,
+            ,
+            drop = FALSE
+          ]
+        }
+
+        if (nrow(ocr_df) == 0) {
+          showNotification(
+            "No OCR text meets confidence threshold",
+            type = "warning",
+            duration = 2
+          )
+          rv$selected_text <- NULL
+          return()
+        }
+
+        # Get brush coordinates
+        brush <- input$pdf_brush
+
+        # Get image dimensions for coordinate conversion
+        img_path <- rv$files_df$Path[rv$pdf_index]
+        img <- magick::image_read(img_path)
+        info <- magick::image_info(img)
+        img_width <- info$width
+        img_height <- info$height
+
+        # Convert brush coordinates to image coordinates
+        brush_xmin <- brush$xmin
+        brush_xmax <- brush$xmax
+        brush_ymin <- img_height - brush$ymax # Flip Y coordinates
+        brush_ymax <- img_height - brush$ymin # Flip Y coordinates
+
+        # Find OCR words within brush selection
+        selected_words <- character(0)
+
+        for (i in seq_len(nrow(ocr_df))) {
+          # Parse bbox coordinates
+          coords <- as.numeric(strsplit(ocr_df$bbox[i], ",")[[1]])
+          word_x1 <- coords[1]
+          word_y1 <- coords[2]
+          word_x2 <- coords[3]
+          word_y2 <- coords[4]
+
+          # Check if word overlaps with brush selection
+          if (
+            word_x2 >= brush_xmin &&
+              word_x1 <= brush_xmax &&
+              word_y2 >= brush_ymin &&
+              word_y1 <= brush_ymax
+          ) {
+            selected_words <- c(selected_words, ocr_df$word[i])
+          }
+        }
+
+        # Update selected text
+        if (length(selected_words) > 0) {
+          rv$selected_text <- selected_words
+
+          # Create notification with the actual text (limit to reasonable length)
+          selected_text <- paste(selected_words, collapse = " ")
+          if (nchar(selected_text) > 100) {
+            selected_text <- paste0(substr(selected_text, 1, 97), "...")
+          }
+          showNotification(
+            paste("Selected:", selected_text),
+            type = "message",
+            duration = 12
+          )
+        } else {
+          rv$selected_text <- NULL
+          showNotification(
+            "No text found in selection",
+            type = "warning",
+            duration = 2
+          )
+        }
+      }
     })
 
     observeEvent(input$clear_rectangles, {
@@ -2794,61 +3142,13 @@ simplerIndex <- function(id) {
       showNotification("Rectangles cleared", type = "message", duration = 2)
     })
 
-    # --- Modified save image handler to use the generalized function ---
-    output$save_image <- downloadHandler(
-      filename = function() {
-        req(rv$files_df, rv$pdf_index)
-        borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
-        create_pdf_with_redactions(borehole_id, return_path = FALSE)
-      },
-      content = function(file) {
-        req(rv$files_df, rv$pdf_index)
-        borehole_id <- rv$files_df$borehole_id[rv$pdf_index]
-        showNotification(
-          "Creating PDF with redactions...",
-          type = "message",
-          duration = 2
-        )
-
-        temp_file_path <- create_pdf_with_redactions(
-          borehole_id,
-          return_path = TRUE
-        )
-        if (!is.null(temp_file_path) && file.exists(temp_file_path)) {
-          file.copy(temp_file_path, file)
-
-          # Count OCR words for notification
-          same_bh_rows <- which(rv$files_df$borehole_id == borehole_id)
-          ocr_word_count <- 0
-          for (i in same_bh_rows) {
-            if (!is.null(rv$ocr_text[[i]]) && nrow(rv$ocr_text[[i]]) > 0) {
-              ocr_word_count <- ocr_word_count + nrow(rv$ocr_text[[i]])
-            }
-          }
-
-          if (ocr_word_count > 0) {
-            showNotification(
-              paste(
-                "PDF created with redactions. OCR text contains",
-                ocr_word_count,
-                "words."
-              ),
-              type = "message",
-              duration = 3
-            )
-          } else {
-            showNotification(
-              "PDF created with redactions (no OCR text available)",
-              type = "message",
-              duration = 3
-            )
-          }
-        }
-      }
-    )
-
     # Observer to update input fields with selected OCR text when clicked
     observe({
+      # Only update fields if brush mode is enabled (not redaction mode)
+      if (!brush_enabled() || redaction_enabled()) {
+        return()
+      }
+
       # First check if we have any selected text
       if (is.null(rv$selected_text) || length(rv$selected_text) == 0) {
         return() # Exit early if no text is selected
@@ -3725,7 +4025,7 @@ simplerIndex <- function(id) {
         metadata <- sanitize_metadata_for_insert(metadata)
         if (!validate_metadata_for_upload(metadata)) {
           error_count <- error_count + 1
-          next
+          next()
         }
 
         tryCatch(
@@ -3890,5 +4190,83 @@ simplerIndex <- function(id) {
       }
       txt
     })
+
+    # Download handler for saving redacted PNG
+    output$save_image <- downloadHandler(
+      filename = function() {
+        req(rv$files_df)
+        req(rv$pdf_index)
+
+        # Get base filename without extension
+        base_name <- tools::file_path_sans_ext(rv$files_df$Name[rv$pdf_index])
+        page_num <- rv$files_df$Page[rv$pdf_index]
+
+        paste0(base_name, "_page_", page_num, "_redacted.png")
+      },
+      content = function(file) {
+        req(rv$files_df)
+        req(rv$pdf_index)
+
+        # Get the original image path
+        img_path <- rv$files_df$Path[rv$pdf_index]
+
+        if (!file.exists(img_path)) {
+          showNotification("Image file not found", type = "error", duration = 5)
+          return()
+        }
+
+        tryCatch(
+          {
+            # Read the original image
+            img <- magick::image_read(img_path)
+            info <- magick::image_info(img)
+
+            # Check if there are redactions for this image
+            rectangles <- rv$rectangles[[img_path]]
+
+            if (!is.null(rectangles) && length(rectangles) > 0) {
+              # Create a drawing canvas
+              drawing <- magick::image_draw(img)
+
+              # Draw redaction rectangles
+              for (rect_data in rectangles) {
+                # Convert coordinates (plot coordinates are already correct for image)
+                rect(
+                  rect_data$xmin,
+                  info$height - rect_data$ymax, # Flip Y coordinate
+                  rect_data$xmax,
+                  info$height - rect_data$ymin, # Flip Y coordinate
+                  col = "black",
+                  border = "black"
+                )
+              }
+
+              # Finish drawing
+              dev.off()
+
+              # Write the modified image
+              magick::image_write(drawing, path = file, format = "PNG")
+            } else {
+              # No redactions, just copy the original
+              magick::image_write(img, path = file, format = "PNG")
+            }
+
+            showNotification(
+              "Redacted image saved successfully",
+              type = "message",
+              duration = 3
+            )
+          },
+          error = function(e) {
+            showNotification(
+              paste("Error saving image:", e$message),
+              type = "error",
+              duration = 5
+            )
+          }
+        )
+      },
+      contentType = "image/png"
+    )
   }) # End of moduleServer
 } # End of server

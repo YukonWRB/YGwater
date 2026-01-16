@@ -134,7 +134,7 @@ mapRaster <- function(id, language) {
     )
 
     swe_pillow_stations <- download_continuous_ts_locations(
-      con = con,
+      con = session$userData$AquaCache,
       param_name_long = "snow water equivalent"
     )
 
@@ -163,7 +163,8 @@ mapRaster <- function(id, language) {
             "Date",
             value = max(era5_raster_data$datetime),
             min = min(era5_raster_data$datetime),
-            max = max(era5_raster_data$datetime)
+            max = max(era5_raster_data$datetime),
+            language = language$abbrev
           ),
           shiny::selectInput(
             ns("shapefile"), # already namespaced
@@ -454,7 +455,12 @@ mapRaster <- function(id, language) {
         "<b>",
         tr("app_version", language$language),
         "</b> ",
-        as.character(utils::packageVersion("YGwater"))
+        as.character(utils::packageVersion("YGwater")),
+        "<br/>",
+        "<b>",
+        "Dislaimer:</b> ",
+        tr("snowbull_raster_disclaimer", language$language),
+        "<br/>"
       ))
     })
   })
