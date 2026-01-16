@@ -984,47 +984,9 @@ $(document).keyup(function(event) {
             ]
           }
 
-          # Derive privilege flags for each admin nav_panel
-          # @param qual_names A character vector of qualified table names (schema.table)
-          # @param priv A list of character vectors of privileges to check for each table in 'qual_names'. If length(priv) == 1, the same privileges are checked for all tables.
-          has_priv <- function(
-            qual_names,
-            priv = list(c(
-              "DELETE",
-              "INSERT",
-              "UPDATE"
-            ))
-          ) {
-            if (length(priv) > 1) {
-              # Ensure length 'priv' is same length as 'qual_names'
-              if (length(priv) != length(qual_names)) {
-                stop(
-                  "Length of 'priv' must be 1 or equal to length of 'qual_names'"
-                )
-              }
-            } else {
-              # Replicate 'priv' to match length of 'qual_names'
-              priv <- rep(priv, length(qual_names))
-            }
-            # Ensure the user has ALL of the specified privileges on ALL of the specified tables
-            for (i in seq_along(qual_names)) {
-              qn <- qual_names[i]
-              p <- priv[[i]]
-              user_privs <- session$userData$table_privs$extra_privileges[
-                session$userData$table_privs$qual_name == qn
-              ]
-              if (length(user_privs) == 0) {
-                return(FALSE)
-              }
-              user_privs_vec <- unlist(strsplit(user_privs, ", "))
-              if (!all(p %in% user_privs_vec)) {
-                return(FALSE)
-              }
-            }
-            return(TRUE)
-          }
           session$userData$admin_privs <- list(
             addLocation = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "public.locations",
                 "public.locations_networks",
@@ -1050,6 +1012,7 @@ $(document).keyup(function(event) {
               )
             ),
             addSubLocation = has_priv(
+              tbl = session$userData$table_privs,
               c("public.sub_locations", "public.locations"),
               list(
                 c(
@@ -1060,6 +1023,7 @@ $(document).keyup(function(event) {
               )
             ),
             calibrate = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "instruments.calibrations",
                 "instruments.calibrate_ph",
@@ -1143,6 +1107,7 @@ $(document).keyup(function(event) {
               )
             ),
             deploy_recover = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "instruments.instruments",
                 "instruments.instrument_maintenance",
@@ -1163,8 +1128,16 @@ $(document).keyup(function(event) {
                 )
               )
             ),
-            addContData = has_priv("continuous.measurements_continuous"),
+            addContData = has_priv(
+              tbl = session$userData$table_privs,
+              "continuous.measurements_continuous",
+              list(c(
+                "INSERT",
+                "UPDATE"
+              ))
+            ),
             editContData = has_priv(
+              tbl = session$userData$table_privs,
               "continuous.measurements_continuous",
               list(c(
                 "UPDATE",
@@ -1172,13 +1145,16 @@ $(document).keyup(function(event) {
               ))
             ),
             continuousCorrections = has_priv(
+              tbl = session$userData$table_privs,
               "continuous.corrections",
-              list(c("INSERT"))
+              list(c("INSERT", "UPDATE"))
             ),
             imputeMissing = has_priv(
+              tbl = session$userData$table_privs,
               "continuous.measurements_continuous"
             ),
             grades_approvals_qualifiers = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "continuous.grades",
                 "continuous.approvals",
@@ -1186,6 +1162,7 @@ $(document).keyup(function(event) {
               )
             ),
             addTimeseries = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "continuous.timeseries",
                 "public.locations_z",
@@ -1204,6 +1181,7 @@ $(document).keyup(function(event) {
               )
             ),
             syncCont = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "continuous.measurements_continuous",
                 "continuous.measurements_calculated_daily",
@@ -1224,6 +1202,7 @@ $(document).keyup(function(event) {
               )
             ),
             addDiscData = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "application.discrete_mappings",
                 "files.documents",
@@ -1241,6 +1220,7 @@ $(document).keyup(function(event) {
               )
             ),
             addSamples = has_priv(
+              tbl = session$userData$table_privs,
               "discrete.samples",
               list(c(
                 "INSERT",
@@ -1248,6 +1228,7 @@ $(document).keyup(function(event) {
               ))
             ),
             editDiscData = has_priv(
+              tbl = session$userData$table_privs,
               c("discrete.samples", "discrete.results"),
               list(
                 c(
@@ -1261,6 +1242,7 @@ $(document).keyup(function(event) {
               )
             ),
             addSampleSeries = has_priv(
+              tbl = session$userData$table_privs,
               c("discrete.sample_series", "public.organizations"),
               list(
                 c(
@@ -1271,6 +1253,7 @@ $(document).keyup(function(event) {
               )
             ),
             syncDisc = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "discrete.sample_series",
                 "discrete.samples",
@@ -1291,6 +1274,7 @@ $(document).keyup(function(event) {
               )
             ),
             addGuidelines = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "discrete.guidelines",
                 "discrete.samples",
@@ -1307,14 +1291,17 @@ $(document).keyup(function(event) {
               )
             ),
             addDocs = has_priv(
+              tbl = session$userData$table_privs,
               "files.documents",
               list(c("INSERT"))
             ),
             addImgs = has_priv(
+              tbl = session$userData$table_privs,
               "files.images",
               list(c("INSERT"))
             ),
             addImgSeries = has_priv(
+              tbl = session$userData$table_privs,
               c("files.image_series", "public.organizations"),
               list(
                 c(
@@ -1325,6 +1312,7 @@ $(document).keyup(function(event) {
               )
             ),
             boreholes_wells = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "boreholes.boreholes",
                 "boreholes.wells",
@@ -1339,6 +1327,7 @@ $(document).keyup(function(event) {
               )
             ),
             visit = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "field.field_visits",
                 "field.field_visit_instruments"
@@ -1355,6 +1344,7 @@ $(document).keyup(function(event) {
               )
             ),
             manageNewsContent = has_priv(
+              tbl = session$userData$table_privs,
               c(
                 "application.images",
                 "application.text",
@@ -1379,6 +1369,7 @@ $(document).keyup(function(event) {
               )
             ),
             viewFeedback = has_priv(
+              tbl = session$userData$table_privs,
               "application.feedback",
               list(c("SELECT"))
             )
