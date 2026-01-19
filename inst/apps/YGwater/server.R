@@ -1662,7 +1662,8 @@ $(document).keyup(function(event) {
           "contPlot",
           language = languageSelection,
           windowDims,
-          inputs = moduleOutputs$mapLocs
+          # inputs = moduleOutputs$mapLocs
+          inputs = NULL
         )
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
