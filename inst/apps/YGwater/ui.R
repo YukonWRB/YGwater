@@ -479,6 +479,11 @@ app_ui <- function(request) {
               uiOutput("manageUsers_ui")
             ),
             nav_panel(
+              title = "Manage notifications",
+              value = "manageNotifications",
+              uiOutput("manageNotifications_ui")
+            ),
+            nav_panel(
               title = "Update news page content",
               value = "manageNewsContent",
               uiOutput("manageNewsContent_ui")

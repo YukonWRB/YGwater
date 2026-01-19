@@ -200,6 +200,9 @@ app_server <- function(input, output, session) {
       if (!isTRUE(session$userData$can_create_role)) {
         nav_hide(id = "navbar", target = "manageUsers")
       }
+      if (!isTRUE(session$userData$admin_privs$manageNotifications)) {
+        nav_hide(id = "navbar", target = "manageNotifications")
+      }
       if (!isTRUE(session$userData$admin_privs$manageNewsContent)) {
         nav_hide(id = "navbar", target = "manageNewsContent")
       }
@@ -392,6 +395,7 @@ app_server <- function(input, output, session) {
 
     ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
+    ui_loaded$manageNotifications <- FALSE
     ui_loaded$manageNewsContent <- FALSE
     ui_loaded$viewFeedback <- FALSE
 
@@ -400,6 +404,58 @@ app_server <- function(input, output, session) {
 
   ui_loaded <- reactiveValues()
   reset_ui_loaded() # Initialize the ui_loaded reactive values
+
+  notification_module_choices <- c(
+    "all",
+    "home",
+    "discPlot",
+    "contPlot",
+    "contPlotOld",
+    "mapLocs",
+    "mapParams",
+    "mapRaster",
+    "mapSnowbull",
+    "snowInfo",
+    "waterInfo",
+    "WQReport",
+    "snowBulletin",
+    "imgTableView",
+    "imgMapView",
+    "docTableView",
+    "discData",
+    "contData",
+    "wellRegistry",
+    "news",
+    "about",
+    "FOD",
+    "syncCont",
+    "syncDisc",
+    "addLocation",
+    "addSubLocation",
+    "addTimeseries",
+    "deploy_recover",
+    "calibrate",
+    "addContData",
+    "continuousCorrections",
+    "imputeMissing",
+    "editContData",
+    "grades_approvals_qualifiers",
+    "addDiscData",
+    "addSamples",
+    "addSampleSeries",
+    "editDiscData",
+    "addGuidelines",
+    "addDocs",
+    "addImgs",
+    "addImgSeries",
+    "simplerIndex",
+    "changePwd",
+    "manageUsers",
+    "manageNotifications",
+    "manageNewsContent",
+    "viewFeedback",
+    "visit"
+  )
 
   # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
   session$userData$config <- config
@@ -1368,6 +1424,15 @@ $(document).keyup(function(event) {
                 )
               )
             ),
+            manageNotifications = has_priv(
+              tbl = session$userData$table_privs,
+              "application.notifications",
+              list(c(
+                "INSERT",
+                "SELECT",
+                "UPDATE"
+              ))
+            ),
             viewFeedback = has_priv(
               tbl = session$userData$table_privs,
               "application.feedback",
@@ -1604,6 +1669,7 @@ $(document).keyup(function(event) {
           "addImgs",
           "addImgSeries",
           "manageNewsContent",
+          "manageNotifications",
           "viewFeedback",
           "visit",
           "changePwd",
@@ -2076,6 +2142,16 @@ $(document).keyup(function(event) {
         ))
         ui_loaded$manageNewsContent <- TRUE
         manageNewsContent("manageNewsContent")
+      }
+    }
+    if (input$navbar == "manageNotifications") {
+      if (!ui_loaded$manageNotifications) {
+        output$manageNotifications_ui <- renderUI(manageNotificationsUI(
+          "manageNotifications",
+          notification_module_choices
+        ))
+        ui_loaded$manageNotifications <- TRUE
+        manageNotifications("manageNotifications", notification_module_choices)
       }
     }
     if (input$navbar == "viewFeedback") {
