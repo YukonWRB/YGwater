@@ -150,6 +150,10 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
+      "apps/YGwater/modules/admin/applicationTasks/manageNotifications.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/applicationTasks/viewFeedback.R",
       package = "YGwater"
     ))
