@@ -556,9 +556,16 @@ contPlot <- function(id, language, windowDims, inputs) {
           length(input$timeseries_table_rows_selected) == 1 &&
           nrow(ts) > 0
       ) {
-        selected_timeseries_id(
+        selected_value <- suppressWarnings(
           as.numeric(input$timeseries_table_rows_selected)
         )
+        if (!is.na(selected_value) && selected_value %in% ts$timeseries_id) {
+          selected_timeseries_id(selected_value)
+        } else if (!is.na(selected_value) && selected_value <= nrow(ts)) {
+          selected_timeseries_id(ts$timeseries_id[selected_value])
+        } else {
+          selected_timeseries_id(NULL)
+        }
       } else {
         selected_timeseries_id(NULL)
       }
@@ -626,11 +633,11 @@ contPlot <- function(id, language, windowDims, inputs) {
       dt <- DT::datatable(
         ts,
         rownames = FALSE,
-        rowId = "timeseries_id",
         selection = list(mode = "single"),
         options = list(
           pageLength = 5,
           lengthMenu = c(5, 10, 20),
+          rowId = "timeseries_id",
           columnDefs = list(
             list(visible = FALSE, targets = 0),
             list(
