@@ -19,6 +19,8 @@ imgMapViewUI <- function(id) {
     ))),
     # All UI elements are rendered in the server function to allow multi-language functionality
     page_fluid(
+      # Banner notification
+      uiOutput(ns("banner")),
       # Top row with filters (collapsible using bslib accordion)
       uiOutput(ns("accordion")),
       # Map and selected image in a side-by-side layout, with collapsible map.
@@ -88,6 +90,16 @@ imgMapView <- function(id, language) {
     }
 
     # Render the UI elements, re-rendered on language selection
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "imgMapView"
+      )
+    })
+
     output$accordion <- renderUI({
       accordion(
         id = "accordion",

@@ -30,6 +30,7 @@ mapSnowbullUI <- function(id) {
   ns <- shiny::NS(id)
   shiny::fluidPage(
     # Sidebar + main contentexpandLimits
+    uiOutput(ns("banner")),
     shiny::sidebarLayout(
       shiny::sidebarPanel(
         shiny::uiOutput(ns('sidebar_page')),
@@ -88,7 +89,7 @@ mapSnowbullUI <- function(id) {
 }
 
 mapSnowbull <- function(id, language) {
-  shiny::moduleServer(id, function(input, output, session) {
+  moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     months <- snowbull_months(short = TRUE)
@@ -99,8 +100,17 @@ mapSnowbull <- function(id, language) {
 
     static_style_elements <- get_static_style_elements()
 
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "mapSnowbull"
+      )
+    })
+
     # --- Server-side sidebar UI ---
-    output$sidebar_page <- shiny::renderUI({
+    output$sidebar_page <- renderUI({
       div(
         id = ns("controls_panel"),
         div(

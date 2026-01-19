@@ -75,6 +75,7 @@ wellRegistryUI <- function(id) {
     )),
     # All UI elements rendered in server function to allow multi-language functionality
     bslib::page_fluid(
+      uiOutput(ns("banner")),
       uiOutput(ns("sidebar_page"))
     )
   )
@@ -128,6 +129,16 @@ wellRegistry <- function(id, language) {
     observeFilterInput("purpose")
 
     # Create UI elements #####
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "wellRegistry"
+      )
+    })
+
     output$sidebar_page <- renderUI({
       req(moduleData, language)
       purposes_sorted <- moduleData$purposes[order(get(

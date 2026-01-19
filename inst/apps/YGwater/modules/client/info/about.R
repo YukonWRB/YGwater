@@ -1,6 +1,7 @@
 aboutUI <- function(id) {
   ns <- NS(id)
   verticalLayout(
+    uiOutput(ns("banner")),
     htmlOutput(ns("title_licence")),
     tags$div(style = "height: 10px;"),
     htmlOutput(ns("licence_body")),
@@ -20,6 +21,16 @@ aboutUI <- function(id) {
 about <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     observe({
+      req(language)
+
+      output$banner <- renderUI({
+        application_notifications_ui(
+          ns = ns,
+          lang = language$language,
+          con = session$userData$AquaCache,
+          module_id = "about"
+        )
+      })
       output$title_licence <- renderUI({
         HTML(paste0(
           '<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal;">',

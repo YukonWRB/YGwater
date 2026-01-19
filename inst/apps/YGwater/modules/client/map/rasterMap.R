@@ -1,18 +1,3 @@
-# library(shiny)
-# library(leaflet)
-# library(raster)
-# library(YGwater)
-# library(terra)
-# library(sf)
-
-# con <- AquaCache::AquaConnect(
-#   name = "aquacache",
-#   host = Sys.getenv("aquacacheHostProd"),
-#   port = Sys.getenv("aquacachePortProd"),
-#   user = Sys.getenv("aquacacheUserProd"),
-#   password = Sys.getenv("aquacachePassProd")
-# )
-
 download_spatial_layer <- function(
   con,
   layer_name,
@@ -120,6 +105,7 @@ getSurveySWE <- function(con, stations_sf, date) {
 mapRasterUI <- function(id) {
   ns <- shiny::NS(id)
   bslib::page_fluid(
+    uiOutput(ns("banner")),
     shiny::uiOutput(ns("sidebar_page")) # <-- add ns() here
   )
 }
@@ -154,7 +140,16 @@ mapRaster <- function(id, language) {
     ORDER BY rr.valid_from, r.reference_id"
     era5_raster_data <- DBI::dbGetQuery(session$userData$AquaCache, era5_query)
     era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
-    # Place this in your server function to generate the sidebar layout dynamically
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "mapRaster"
+      )
+    })
+
     output$sidebar_page <- shiny::renderUI({
       bslib::page_sidebar(
         sidebar = bslib::sidebar(

@@ -62,6 +62,7 @@ contPlotUI <- function(id) {
       ns("timeseries_table"),
       ns("timeseries_table")
     ))),
+    uiOutput(ns("banner")),
     uiOutput(ns("main"))
   )
 }
@@ -318,6 +319,15 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       data.table::setorder(ts, location, parameter)
       ts
+    })
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "contPlot"
+      )
     })
 
     output$main <- renderUI({
