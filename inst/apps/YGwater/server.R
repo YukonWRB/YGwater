@@ -196,6 +196,7 @@ app_server <- function(input, output, session) {
       # Admin menu ----------------------------------------------------------
       # Admin menu is always shown because every logged in user can change their own password
       nav_show(id = "navbar", target = "adminTasks")
+      nav_show(id = "navbar", target = "adminHome")
       nav_show(id = "navbar", target = "changePwd")
       if (!isTRUE(session$userData$can_create_role)) {
         nav_hide(id = "navbar", target = "manageUsers")
@@ -398,6 +399,7 @@ app_server <- function(input, output, session) {
     ui_loaded$manageNotifications <- FALSE
     ui_loaded$manageNewsContent <- FALSE
     ui_loaded$viewFeedback <- FALSE
+    ui_loaded$adminHome <- FALSE
 
     ui_loaded$visit <- FALSE
   }
@@ -1576,7 +1578,7 @@ $(document).keyup(function(event) {
 
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home") # Default tab for viz mode
-  last_admin_tab <- reactiveVal("manageNewsContent") # Default tab for admin mode
+  last_admin_tab <- reactiveVal("adminHome") # Default tab for admin mode
 
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
@@ -1650,6 +1652,7 @@ $(document).keyup(function(event) {
     } else if (
       input$navbar %in%
         c(
+          "adminHome",
           "syncCont",
           "syncDisc",
           "addLocation",
@@ -2142,6 +2145,13 @@ $(document).keyup(function(event) {
         ))
         ui_loaded$manageNewsContent <- TRUE
         manageNewsContent("manageNewsContent")
+      }
+    }
+    if (input$navbar == "adminHome") {
+      if (!ui_loaded$adminHome) {
+        output$adminHome_ui <- renderUI(adminLandingUI("adminHome"))
+        ui_loaded$adminHome <- TRUE
+        adminLanding("adminHome")
       }
     }
     if (input$navbar == "manageNotifications") {
