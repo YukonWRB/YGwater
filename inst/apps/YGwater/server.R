@@ -1662,6 +1662,7 @@ $(document).keyup(function(event) {
           "contPlot",
           language = languageSelection,
           windowDims,
+          # inputs temporarily disabled because of issues with narrowing the datatable using inputs.
           # inputs = moduleOutputs$mapLocs
           inputs = NULL
         )
