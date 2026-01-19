@@ -200,19 +200,153 @@ YGwater_globals <- function(
     }
   }
 
-  dismissible_banner_ui <<- function(
+  application_notifications_ui <<- function(
     ns,
     lang,
+    con,
+    module_id, # Set to 'all' to show the notification across all modules
+    banner_key_prefix = "notification",
+    fallback_lang = "English"
+  ) {
+    get_active_notifications <- function(
+      con,
+      module_id,
+      lang,
+      fallback_lang = fallback_lang
+    ) {
+      if (is.null(con) || is.null(module_id) || !nzchar(module_id)) {
+        return(list())
+      }
+      if (
+        !DBI::dbExistsTable(
+          con,
+          DBI::Id(schema = "application", table = "notifications")
+        )
+      ) {
+        return(list())
+      }
+      notifications <- DBI::dbGetQuery(
+        con,
+        "
+        SELECT notification_id, target_module, message
+        FROM application.notifications
+        WHERE active IS TRUE
+          AND ($1 = ANY(target_module) OR 'all' = ANY(target_module))
+        ",
+        params = list(module_id)
+      )
+      if (!nrow(notifications)) {
+        return(list())
+      }
+      results <- list()
+
+      # Helper function to parse the array column of target modules
+      parse_text_array <- function(value) {
+        if (is.null(value) || !length(value) || all(is.na(value))) {
+          return(character())
+        }
+        if (is.list(value)) {
+          value <- value[[1]]
+        }
+        if (length(value) > 1) {
+          return(trimws(value))
+        }
+        value <- gsub("[{}\"]", "", value)
+        if (!nzchar(value)) {
+          return(character())
+        }
+        out <- trimws(unlist(strsplit(value, ",")))
+        out[nzchar(out)]
+      }
+
+      # Helper function to extract and format notification message
+      extract_notification_message <- function(
+        message,
+        lang,
+        fallback_lang = fallback_lang
+      ) {
+        if (is.null(message) || all(is.na(message))) {
+          return(NA_character_)
+        }
+        parsed <- message
+        if (is.character(message)) {
+          parsed <- tryCatch(
+            jsonlite::fromJSON(message),
+            error = function(e) message
+          )
+        }
+        if (is.list(parsed)) {
+          if (!is.null(lang) && lang %in% names(parsed)) {
+            return(parsed[[lang]])
+          }
+          if (fallback_lang %in% names(parsed)) {
+            return(parsed[[fallback_lang]])
+          }
+          if (length(parsed)) {
+            return(unname(parsed[[1]]))
+          }
+        }
+        if (is.character(parsed)) {
+          return(parsed[[1]])
+        }
+        NA_character_
+      }
+
+      for (i in seq_len(nrow(notifications))) {
+        targets <- parse_text_array(notifications$target_module[i])
+
+        if (
+          !length(targets) || !(module_id %in% targets || "all" %in% targets)
+        ) {
+          next
+        }
+        msg <- extract_notification_message(
+          notifications$message[i],
+          lang = lang,
+          fallback_lang = fallback_lang
+        )
+        if (is.na(msg) || !nzchar(msg)) {
+          next
+        }
+        results[[length(results) + 1]] <- list(
+          id = notifications$notification_id[i],
+          message = msg
+        )
+      }
+      return(results)
+    }
+
+    notifications <- get_active_notifications(
+      con = con,
+      module_id = module_id,
+      lang = lang,
+      fallback_lang = fallback_lang
+    )
+
+    if (!length(notifications)) {
+      return(NULL)
+    }
+    tagList(lapply(notifications, function(notification) {
+      dismissible_banner_ui(
+        ns = ns,
+        msg_html = notification$message,
+        banner_id = paste0("notification_", notification$id),
+        banner_key_prefix = paste0(banner_key_prefix, "_", notification$id)
+      )
+    }))
+  }
+
+  dismissible_banner_ui <<- function(
+    ns,
+    msg_html,
     banner_id = "app_banner",
     banner_key_prefix = "global_notice",
-    banner_version = "v2026_01_14"
+    banner_version = utils::packageVersion("YGwater")
   ) {
     banner_dom_id <- ns(banner_id)
     banner_key <- paste0(banner_key_prefix, "_", banner_version)
 
     dismiss_fn_name <- paste0("dismiss_", banner_dom_id) # may contain "-" so call via window[...]()
-
-    msg_html <- tr("missing_disc_data_banner", lang)
 
     tagList(
       tags$head(
@@ -268,7 +402,7 @@ YGwater_globals <- function(
     )
   }
 
-  # Derive privilege flags for each admin nav_panel
+  # Derive privilege flags for tables
   # @param tbl A table with at minimum columns called 'extra_privileges' with strings such as "SELECT, UPDATE", and column called 'qual_name' containing schema qualified table names such as 'public.table_name'.
   # @param qual_names A character vector of qualified table names (schema.table)
   # @param priv A list of character vectors of privileges to check for each table in 'qual_names'. If length(priv) == 1, the same privileges are checked for all tables.

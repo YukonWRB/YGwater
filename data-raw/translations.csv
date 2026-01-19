@@ -444,7 +444,6 @@ snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
 snowbull_elevation,,Elevation,Altitude
 snowbull_coordinates,,Coordinates,Coordonnées
-missing_disc_data_banner,,"<b>Notice:</b> Water quality results submitted by water-use licensees are not yet available in this application. If you require access to these data, please contact <a href='mailto:waterresources@yukon.ca'>waterresources@yukon.ca</a>.","<b>Avis :</b> Les résultats de qualité de l’eau soumis par les titulaires de permis d’utilisation de l’eau ne sont pas encore disponibles dans cette application. Pour obtenir l’accès à ces données, veuillez communiquer avec <a href='mailto:waterresources@yukon.ca'>waterresources@yukon.ca</a>."
 snowbull_isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche EEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
