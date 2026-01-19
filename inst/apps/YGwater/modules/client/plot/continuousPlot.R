@@ -114,6 +114,10 @@ contPlot <- function(id, language, windowDims, inputs) {
     location_network_filter <- reactive({
       loc_ids <- moduleData$locs$location_id
 
+      if (!is.null(moduleInputs$location_id)) {
+        loc_ids <- intersect(loc_ids, moduleInputs$location_id)
+      }
+
       if (!is.null(input$network_filter) && length(input$network_filter) > 0) {
         loc_ids <- intersect(
           loc_ids,
@@ -550,11 +554,11 @@ contPlot <- function(id, language, windowDims, inputs) {
       if (
         !is.null(input$timeseries_table_rows_selected) &&
           length(input$timeseries_table_rows_selected) == 1 &&
-          nrow(ts) >= input$timeseries_table_rows_selected
+          nrow(ts) > 0
       ) {
-        selected_timeseries_id(ts$timeseries_id[
-          input$timeseries_table_rows_selected
-        ])
+        selected_timeseries_id(
+          as.numeric(input$timeseries_table_rows_selected)
+        )
       } else {
         selected_timeseries_id(NULL)
       }
@@ -612,7 +616,9 @@ contPlot <- function(id, language, windowDims, inputs) {
       search_cols <- vector("list", ncol(ts))
       if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
         search_cols[[match("location", names(ts))]] <- list(
-          search = location_filter_value()
+          search = as.character(location_filter_value()),
+          regex = FALSE,
+          smart = FALSE
         )
       }
 
@@ -620,6 +626,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       dt <- DT::datatable(
         ts,
         rownames = FALSE,
+        rowId = "timeseries_id",
         selection = list(mode = "single"),
         options = list(
           pageLength = 5,
