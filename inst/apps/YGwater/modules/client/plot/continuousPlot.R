@@ -114,10 +114,6 @@ contPlot <- function(id, language, windowDims, inputs) {
     location_network_filter <- reactive({
       loc_ids <- moduleData$locs$location_id
 
-      if (!is.null(moduleInputs$location_id)) {
-        loc_ids <- intersect(loc_ids, moduleInputs$location_id)
-      }
-
       if (!is.null(input$network_filter) && length(input$network_filter) > 0) {
         loc_ids <- intersect(
           loc_ids,
