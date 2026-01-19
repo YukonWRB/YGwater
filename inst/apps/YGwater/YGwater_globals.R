@@ -146,6 +146,10 @@ YGwater_globals <- function(
     ))
 
     source(system.file(
+      "apps/YGwater/modules/admin/applicationTasks/adminLanding.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R",
       package = "YGwater"
     ))
