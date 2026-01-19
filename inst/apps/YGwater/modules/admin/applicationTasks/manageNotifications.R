@@ -31,6 +31,7 @@ manageNotificationsUI <- function(id, module_choices) {
       div(
         actionButton(ns("create_notification"), "Add notification"),
         actionButton(ns("update_notification"), "Update selected"),
+        actionButton(ns("delete_notification"), "Delete selected"),
         actionButton(ns("reset_form"), "Reset")
       ),
       verbatimTextOutput(ns("status"))
@@ -42,10 +43,12 @@ manageNotifications <- function(id, module_choices) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    if (!DBI::dbExistsTable(
-      session$userData$AquaCache,
-      DBI::Id(schema = "application", table = "notifications")
-    )) {
+    if (
+      !DBI::dbExistsTable(
+        session$userData$AquaCache,
+        DBI::Id(schema = "application", table = "notifications")
+      )
+    ) {
       showModal(modalDialog(
         title = "Missing table",
         "The application.notifications table is not available.",
@@ -61,7 +64,8 @@ manageNotifications <- function(id, module_choices) {
       SELECT
         has_table_privilege(current_user, 'application.notifications', 'SELECT') AS can_select,
         has_table_privilege(current_user, 'application.notifications', 'INSERT') AS can_insert,
-        has_table_privilege(current_user, 'application.notifications', 'UPDATE') AS can_update
+        has_table_privilege(current_user, 'application.notifications', 'UPDATE') AS can_update,
+        has_table_privilege(current_user, 'application.notifications', 'DELETE') AS can_delete
       "
     )
 
@@ -80,6 +84,9 @@ manageNotifications <- function(id, module_choices) {
     }
     if (!check$can_update) {
       shinyjs::disable("update_notification")
+    }
+    if (!check$can_delete) {
+      shinyjs::disable("delete_notification")
     }
 
     parse_text_array <- function(value) {
@@ -160,7 +167,14 @@ manageNotifications <- function(id, module_choices) {
         "SELECT notification_id, active, target_module, message FROM application.notifications ORDER BY notification_id DESC"
       )
       if (!nrow(raw)) {
-        return(data.frame())
+        return(data.frame(
+          notification_id = integer(),
+          active = logical(),
+          target_module = character(),
+          message_en = character(),
+          message_fr = character(),
+          stringsAsFactors = FALSE
+        ))
       }
       parsed <- lapply(raw$message, parse_message)
       data.frame(
@@ -178,9 +192,11 @@ manageNotifications <- function(id, module_choices) {
     }
 
     notifications <- reactiveVal(load_notifications())
+    table_proxy <- DT::dataTableProxy("notifications_table", session = session)
 
     refresh_notifications <- function() {
       notifications(load_notifications())
+      DT::selectRows(table_proxy, NULL)
     }
 
     status_msg <- reactiveVal("")
@@ -217,8 +233,16 @@ manageNotifications <- function(id, module_choices) {
         "target_module",
         selected = parse_text_array(row$target_module)
       )
-      updateTextAreaInput(session, "message_en", value = row$message_en)
-      updateTextAreaInput(session, "message_fr", value = row$message_fr)
+      updateTextAreaInput(
+        session,
+        "message_en",
+        value = ifelse(is.na(row$message_en), "", row$message_en)
+      )
+      updateTextAreaInput(
+        session,
+        "message_fr",
+        value = ifelse(is.na(row$message_fr), "", row$message_fr)
+      )
     })
 
     observeEvent(input$create_notification, {
@@ -282,6 +306,48 @@ manageNotifications <- function(id, module_choices) {
 
       status_msg("Notification updated.")
       refresh_notifications()
+    })
+
+    pending_delete_id <- reactiveVal(NULL)
+
+    observeEvent(input$delete_notification, {
+      selected <- input$notifications_table_rows_selected
+      if (!length(selected)) {
+        status_msg("Select a notification to delete.")
+        return()
+      }
+      notification_id <- notifications()$notification_id[selected]
+      if (!length(notification_id)) {
+        status_msg("Unable to locate the selected notification.")
+        return()
+      }
+      pending_delete_id(notification_id)
+      showModal(modalDialog(
+        title = "Delete notification?",
+        "This action cannot be undone.",
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("confirm_delete"), "Delete")
+        )
+      ))
+    })
+
+    observeEvent(input$confirm_delete, {
+      notification_id <- pending_delete_id()
+      if (is.null(notification_id)) {
+        removeModal()
+        return()
+      }
+      DBI::dbExecute(
+        session$userData$AquaCache,
+        "DELETE FROM application.notifications WHERE notification_id = $1",
+        params = list(notification_id)
+      )
+      pending_delete_id(NULL)
+      removeModal()
+      status_msg("Notification deleted.")
+      refresh_notifications()
+      reset_form()
     })
 
     observeEvent(input$reset_form, {
