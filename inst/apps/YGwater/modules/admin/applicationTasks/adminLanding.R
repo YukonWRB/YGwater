@@ -4,16 +4,29 @@ adminLandingUI <- function(id) {
     tags$div(
       tags$h2("Admin overview"),
       tags$p(
-        "Welcome to the admin side of YGwater. Use the tabs in the Admin menu to ",
-        "manage data-entry workflows, users, and system content. Some tools are ",
-        "restricted based on your permissions. If you do not see a tab described ",
-        "below, you do not currently have access."
+        "Welcome to the admin side of YGwater. Use the tabs in the Admin menu to manage data-entry workflows, users, and system content. Some tools are restricted based on your permissions. If you do not see a tab described below, you do not currently have access."
       ),
       tags$h3("What you can do here"),
       tags$ul(
         tags$li(
-          tags$strong("Change password"),
+          tags$strong("Change your password"),
           " — update your login credentials."
+        ),
+        tags$li(
+          tags$strong("Add and manage locations"),
+          " — create new locations, modify their metadata including ownership and network associations."
+        ),
+        tags$li(
+          tags$strong("Add and manage timeseries"),
+          " — create new timeseries, modify their metadata including automatic import workflows, or manually add data."
+        ),
+        tags$li(
+          tags$strong("Add and manage samples"),
+          " — add new samples or modify existing ones"
+        ),
+        tags$li(
+          tags$strong("Add and manage images or documents"),
+          " — add new documents or images, linking them spatially to existing locations if needed."
         ),
         tags$li(
           tags$strong("Manage users"),
@@ -40,6 +53,5 @@ adminLandingUI <- function(id) {
 }
 
 adminLanding <- function(id) {
-  moduleServer(id, function(input, output, session) {
-  })
+  moduleServer(id, function(input, output, session) {})
 }
