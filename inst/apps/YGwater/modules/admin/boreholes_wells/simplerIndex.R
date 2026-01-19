@@ -304,10 +304,21 @@ simplerIndexUI <- function(id) {
               ns("delete_redaction"),
               "Delete",
               icon("minus-circle"),
-              class = "btn-toggle"
+              class = "btn-toggle",
+              title = "Remove Selected Redactions"
             ) |>
               tooltip(
                 "Toggle delete mode. When enabled, drag to select and remove redactions."
+              ),
+            actionButton(
+              ns("undo_redaction"),
+              "Undo",
+              icon("undo"),
+              class = "btn btn-outline-warning",
+              title = "Undo last redaction"
+            ) |>
+              tooltip(
+                "Remove the most recently added redaction."
               ),
             actionButton(
               ns("clear_rectangles"),
@@ -1046,7 +1057,8 @@ simplerIndex <- function(id) {
       ocr_display_mode = "none",
       selected_text = NULL,
       rectangles = list(),
-      assign_observers = list()
+      assign_observers = list(),
+      redaction_history = list() # New: Track redaction order for undo functionality
     )
 
     # Reactive expression to get the borehole selected for editing
@@ -2419,6 +2431,7 @@ simplerIndex <- function(id) {
       # Rename uploaded files to their original names with robust path handling
       for (i in seq_len(nrow(uploaded_files))) {
         orig_name <- uploaded_files$name[i]
+
         from_path <- normalizePath(
           uploaded_files$datapath[i],
           winslash = "/",
@@ -2989,6 +3002,20 @@ simplerIndex <- function(id) {
             ) {
               # Remove this rectangle
               rv$rectangles[[file_path]] <- rectangles[-i]
+
+              # Also remove from redaction history
+              if (!is.null(rv$redaction_history[[file_path]])) {
+                # Find the matching redaction in history and remove it
+                history <- rv$redaction_history[[file_path]]
+                for (j in seq_along(history)) {
+                  hist_rect <- history[[j]]
+                  if (identical(hist_rect, rect)) {
+                    rv$redaction_history[[file_path]] <- history[-j]
+                    break
+                  }
+                }
+              }
+
               showNotification(
                 "Redaction deleted",
                 type = "message",
@@ -3033,6 +3060,16 @@ simplerIndex <- function(id) {
           rv$rectangles[[file_path]],
           list(new_rect)
         )
+
+        # Add to redaction history for undo functionality
+        if (is.null(rv$redaction_history[[file_path]])) {
+          rv$redaction_history[[file_path]] <- list()
+        }
+        rv$redaction_history[[file_path]] <- append(
+          rv$redaction_history[[file_path]],
+          list(new_rect)
+        )
+
         showNotification("Selection redacted", type = "message", duration = 2)
 
         # Exit early to prevent OCR text processing
@@ -3130,6 +3167,50 @@ simplerIndex <- function(id) {
       }
     })
 
+    # Observer for undo redaction button
+    observeEvent(input$undo_redaction, {
+      req(rv$files_df)
+      req(rv$pdf_index)
+
+      # Get file path as unique identifier
+      file_path <- rv$files_df$Path[rv$pdf_index]
+
+      # Check if there are redactions to undo
+      if (
+        is.null(rv$redaction_history[[file_path]]) ||
+          length(rv$redaction_history[[file_path]]) == 0
+      ) {
+        showNotification(
+          "No redactions to undo",
+          type = "warning",
+          duration = 2
+        )
+        return()
+      }
+
+      # Get the most recent redaction
+      history <- rv$redaction_history[[file_path]]
+      last_redaction <- history[[length(history)]]
+
+      # Remove from history
+      rv$redaction_history[[file_path]] <- history[-length(history)]
+
+      # Remove from rectangles
+      rectangles <- rv$rectangles[[file_path]]
+      if (!is.null(rectangles) && length(rectangles) > 0) {
+        # Find and remove the matching rectangle
+        for (i in seq_along(rectangles)) {
+          rect <- rectangles[[i]]
+          if (identical(rect, last_redaction)) {
+            rv$rectangles[[file_path]] <- rectangles[-i]
+            break
+          }
+        }
+      }
+
+      showNotification("Last redaction undone", type = "message", duration = 2)
+    })
+
     observeEvent(input$clear_rectangles, {
       req(rv$files_df)
       req(rv$pdf_index)
@@ -3139,6 +3220,8 @@ simplerIndex <- function(id) {
 
       # Clear rectangles for this file path only
       rv$rectangles[[file_path]] <- NULL
+      # Also clear redaction history for this file
+      rv$redaction_history[[file_path]] <- NULL
       showNotification("Rectangles cleared", type = "message", duration = 2)
     })
 
