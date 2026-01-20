@@ -34,6 +34,7 @@ mapParamsUI <- function(id) {
       ))
     ),
     # All UI elements rendered in server function to allow multi-language functionality
+    uiOutput(ns("banner")),
     uiOutput(ns("top")),
     uiOutput(ns("main"))
   )
@@ -60,6 +61,14 @@ mapParams <- function(id, language) {
 
     mapCreated <- reactiveVal(FALSE) # Track whether the map has been initialized on the client
 
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "mapParams"
+      )
+    })
     output$top <- renderUI({
       tagList(
         accordion(

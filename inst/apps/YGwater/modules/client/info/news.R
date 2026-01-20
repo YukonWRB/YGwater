@@ -1,8 +1,7 @@
 newsUI <- function(id) {
   ns <- NS(id)
   verticalLayout(
-    # tags$div(style = "height: 10px;"),
-
+    uiOutput(ns("banner")),
     uiOutput(ns("content"))
   )
 }
@@ -24,6 +23,15 @@ news <- function(id, language) {
           CASE WHEN position NOT IN (1,2,3) THEN position END DESC
         "
       )
+
+      output$banner <- renderUI({
+        application_notifications_ui(
+          ns = ns,
+          lang = language$language,
+          con = session$userData$AquaCache,
+          module_id = "news"
+        )
+      })
 
       # Create a list to hold the UI elements
       ui_elements <- lapply(seq_len(nrow(order)), function(i) {

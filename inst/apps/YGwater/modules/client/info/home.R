@@ -1,7 +1,7 @@
 homeUI <- function(id) {
   ns <- NS(id)
-  tagList()
   verticalLayout(
+    uiOutput(ns("banner")),
     tags$div(style = "height: 20px;"), # break between navbar and content
     htmlOutput(ns("title")), # Title
     tags$div(style = "height: 10px;"),
@@ -28,6 +28,16 @@ home <- function(id, language) {
 
     observe({
       req(language$language)
+
+      output$banner <- renderUI({
+        application_notifications_ui(
+          ns = ns,
+          lang = language$language,
+          con = session$userData$AquaCache,
+          module_id = "home"
+        )
+      })
+
       output$title <- renderUI({
         HTML(paste0(
           '<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',

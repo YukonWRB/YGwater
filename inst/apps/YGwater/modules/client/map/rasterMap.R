@@ -13,44 +13,6 @@
 #   password = Sys.getenv("aquacachePassProd")
 # )
 
-# date <- as.Date("2023-03-15")
-# era5_raster_data <- DBI::dbGetQuery(
-#   con,
-#   "
-#     SELECT
-#         r.reference_id,
-#         rr.valid_from as datetime
-#     FROM spatial.raster_series_index rsi
-#     JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
-#     JOIN spatial.rasters r ON r.reference_id = rr.reference_id
-#     WHERE rsi.model = 'ERA5_land'
-#     ORDER BY rr.valid_from, r.reference_id"
-# )
-# refID <- getRasterRefID(
-#   ref_table = era5_raster_data,
-#   datetime = date
-# )
-
-# raster <- getRasterSWE(
-#   con = con,
-#   reference_id = refID
-# )
-
-# swe_at_pillows <- getPillowSWE(
-#   con = con,
-#   stations_sf = download_continuous_ts_locations(
-#     con = con,
-#     param_name_long = "snow water equivalent"
-#   ),
-#   date = date
-# )
-
-# swe_at_pillows$error <- terra::extract(
-#   raster,
-#   terra::vect(swe_at_pillows)
-# )[, 2] -
-#   swe_at_pillows$swe
-
 download_spatial_layer <- function(
   con,
   layer_name,
@@ -156,6 +118,7 @@ getSurveySWE <- function(con, stations_sf, date) {
 mapRasterUI <- function(id) {
   ns <- shiny::NS(id)
   bslib::page_fluid(
+    uiOutput(ns("banner")),
     shiny::uiOutput(ns("sidebar_page")) # <-- add ns() here
   )
 }
@@ -190,7 +153,16 @@ mapRaster <- function(id, language) {
     ORDER BY rr.valid_from, r.reference_id"
     era5_raster_data <- DBI::dbGetQuery(session$userData$AquaCache, era5_query)
     era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
-    # Place this in your server function to generate the sidebar layout dynamically
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "mapRaster"
+      )
+    })
+
     output$sidebar_page <- shiny::renderUI({
       bslib::page_sidebar(
         sidebar = bslib::sidebar(
