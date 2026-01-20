@@ -4,6 +4,36 @@ addTimeseriesUI <- function(id) {
   ns <- NS(id)
 
   tagList(
+    tags$style(
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #FFFCF5;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #FBE5B2;
+        /* expanded header */
+        --bs-accordion-active-bg:   #FBE5B2;
+      }
+    ",
+        ns("accordion1")
+      )),
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to this module */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ",
+        ns("accordion2")
+      ))
+    ),
     page_fluid(
       uiOutput(ns("banner")),
       uiOutput(ns("ui"))
@@ -30,7 +60,7 @@ addTimeseries <- function(id, language) {
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.source_fx, ts.source_fx_args, ts.note FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.location_id = lz.location_id"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.location_id = lz.location_id"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -64,7 +94,7 @@ addTimeseries <- function(id, language) {
       moduleData$timeseries_display <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "
-        SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, ts.timezone_daily_calc AS time_zone, p.param_name, m.media_type, at.aggregation_type, lz.z_meters AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate
+        SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, ts.timezone_daily_calc AS time_zone, p.param_name AS parameter, m.media_type AS media, at.aggregation_type, lz.z_meters AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate
         FROM timeseries ts
         INNER JOIN locations l ON ts.location_id = l.location_id
         LEFT JOIN sub_locations sl ON ts.sub_location_id = sl.sub_location_id
@@ -98,7 +128,15 @@ addTimeseries <- function(id, language) {
         conditionalPanel(
           condition = "input.mode == 'modify'",
           ns = ns,
-          DT::DTOutput(ns("ts_table"))
+          accordion(
+            id = ns("accordion1"),
+            open = "timeseries_table_panel",
+            accordion_panel(
+              id = ns("timeseries_table_panel"),
+              title = "Select timeseries to modify",
+              DT::DTOutput(ns("ts_table"))
+            )
+          )
         ),
         conditionalPanel(
           condition = "input.mode == 'add'",
@@ -321,10 +359,14 @@ addTimeseries <- function(id, language) {
     output$ts_table <- DT::renderDT({
       # Convert some data types to factors for better filtering in DT
       df <- moduleData$timeseries_display
-      df$record_rate_minutes <- as.factor(df$record_rate)
-      df$media <- as.factor(df$media_type)
-      df$aggregation <- as.factor(df$aggregation_type)
-      df$parameter <- as.factor(df$param_name)
+      df$location_name <- as.factor(df$location_name)
+      df$record_rate <- as.factor(df$record_rate)
+      df$media <- as.factor(df$media)
+      df$aggregation_type <- as.factor(df$aggregation_type)
+      df$parameter <- as.factor(df$parameter)
+      df$owner <- as.factor(df$owner)
+      df$sensor_priority <- as.factor(df$sensor_priority)
+      df$time_zone <- as.factor(df$time_zone)
       df$z_id <- NULL # remove z_id as it's not useful to the user
 
       DT::datatable(
@@ -586,7 +628,7 @@ addTimeseries <- function(id, language) {
           updateSelectizeInput(
             session,
             "share_with",
-            selected = details$share_with
+            selected = parse_share_with(details$share_with)
           )
           updateSelectizeInput(
             session,
@@ -859,11 +901,7 @@ addTimeseries <- function(id, language) {
                   as.numeric(agg_type),
                   rate,
                   as.numeric(owner),
-                  paste0(
-                    "{",
-                    paste(share_with, collapse = ","),
-                    "}"
-                  ),
+                  format_share_with(share_with),
                   ifelse(is.na(source_fx), NA, source_fx),
                   ifelse(is.na(args), NA, args),
                   if (nzchar(note)) note else NA,
@@ -985,7 +1023,8 @@ addTimeseries <- function(id, language) {
         # This is an error: show the user a notification to select 'add' mode
         showNotification(
           "Please select 'Add new' mode to add a timeseries.",
-          type = "error"
+          type = "error",
+          duration = 8,
         )
         return()
       }
@@ -996,21 +1035,24 @@ addTimeseries <- function(id, language) {
         if (grepl("=", input$source_fx_args)) {
           showNotification(
             "Source function arguments should use ':' to separate keys and values, not '='.",
-            type = "error"
+            type = "error",
+            duration = 8,
           )
           return()
         }
         if (grepl("\"|'", input$source_fx_args)) {
           showNotification(
             "Source function arguments should not contain quotes (\") or (').",
-            type = "error"
+            type = "error",
+            duration = 8,
           )
           return()
         }
         if (!all(grepl(":", unlist(strsplit(input$source_fx_args, ",\\s*"))))) {
           showNotification(
             "Source function arguments should use ':' to separate keys and values.",
-            type = "error"
+            type = "error",
+            duration = 8,
           )
           return()
         }
@@ -1051,13 +1093,15 @@ addTimeseries <- function(id, language) {
       } else if (addNewTimeseries$result() == "successNoData") {
         showNotification(
           "Timeseries added successfully with no data fetched. REMEMBER TO ADD DATA NOW.",
-          type = "warning"
+          type = "warning",
+          duration = 10,
         )
       } else if (addNewTimeseries$result() == "success") {
         # If the result is "success", show a success notification
         showNotification(
           "Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.",
-          type = "message"
+          type = "message",
+          duration = 8,
         )
 
         getModuleData()
@@ -1093,7 +1137,8 @@ addTimeseries <- function(id, language) {
           # This is an error: show the user a notification to select 'modify' mode
           showNotification(
             "Please select 'Modify existing' mode to modify a timeseries.",
-            type = "error"
+            type = "error",
+            duration = 8,
           )
           return()
         }
@@ -1102,7 +1147,8 @@ addTimeseries <- function(id, language) {
         if (is.null(selected_row) || length(selected_row) != 1) {
           showNotification(
             "Please select a single timeseries to modify.",
-            type = "error"
+            type = "error",
+            duration = 8,
           )
           return()
         }
@@ -1121,7 +1167,8 @@ addTimeseries <- function(id, language) {
         if (nrow(existing_timeseries) == 0) {
           showNotification(
             "Selected timeseries does not exist in the database.",
-            type = "error"
+            type = "error",
+            duration = 8,
           )
           return()
         }
@@ -1142,8 +1189,30 @@ addTimeseries <- function(id, language) {
                 )
               )
             }
+
+            # Is there an existing sub_location_id? If TRUE, then:
             if (!is.na(selected_timeseries$sub_location_id)) {
-              if (input$sub_location != selected_timeseries$sub_location_id) {
+              if (is.null(input$sub_location)) {
+                # If the new input is NULL or length 0, set NULL
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  paste0(
+                    "UPDATE timeseries SET sub_location_id = NULL WHERE timeseries_id = ",
+                    selected_timeseries$timeseries_id
+                  )
+                )
+              } else if (!nzchar(sub_location)) {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  paste0(
+                    "UPDATE timeseries SET sub_location_id = NULL WHERE timeseries_id = ",
+                    selected_timeseries$timeseries_id
+                  )
+                )
+              } else if (
+                input$sub_location != selected_timeseries$sub_location_id
+              ) {
+                # If old and new are not the same, update with new value
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   paste0(
@@ -1155,16 +1224,20 @@ addTimeseries <- function(id, language) {
                 )
               }
             } else {
-              if (!is.na(input$sub_location) && input$sub_location != "") {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  paste0(
-                    "UPDATE timeseries SET sub_location_id = '",
-                    input$sub_location,
-                    "' WHERE timeseries_id = ",
-                    selected_timeseries$timeseries_id
+              # If there is no pre-existing sub_location_id:
+              if (!is.null(input$sub_location_id)) {
+                # could be NULL if not touched
+                if (!is.na(input$sub_location) && !nzchar(input$sub_location)) {
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    paste0(
+                      "UPDATE timeseries SET sub_location_id = '",
+                      input$sub_location,
+                      "' WHERE timeseries_id = ",
+                      selected_timeseries$timeseries_id
+                    )
                   )
-                )
+                }
               }
             }
 
@@ -1244,11 +1317,18 @@ addTimeseries <- function(id, language) {
               }
             } else {
               # Delete the entry in table locations_z if it exists, which will cascade delete the z_id in timeseries
-              DBI::dbExecute(
-                con,
-                "DELETE FROM locations_z WHERE z_id = $1",
+              exists <- DBI::dbGetQuery(
+                session$userData$AquaCache,
+                "SELECT z_id FROM locations_z WHERE z_id = $1",
                 params = list(selected_timeseries$z_id)
               )
+              if (nrow(exists)) {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "DELETE FROM locations_z WHERE z_id = $1",
+                  params = list(selected_timeseries$z_id)
+                )
+              }
             }
 
             if (input$parameter != selected_timeseries$parameter_id) {
@@ -1383,20 +1463,22 @@ addTimeseries <- function(id, language) {
             }
 
             # Changes to share_with
-            if (
-              !paste0("{", paste(input$share_with, collapse = ","), "}") ==
-                selected_timeseries$timeseries_id
-            ) {
-              share_with_sql <- DBI::SQL(paste0(
-                "{",
-                paste(input$share_with, collapse = ", "),
-                "}"
-              ))
+            print(input$share_with)
+            print(selected_timeseries$share_with)
+            input_share_with <- format_share_with(input$share_with)
+            parsed_exist_share_with <- parse_share_with(
+              selected_timeseries$share_with
+            )
+            print(input_share_with)
+            print(parsed_exist_share_with)
+            print("done printing for now")
+            if (any(input$share_with != parsed_exist_share_with)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE timeseries SET share_with = {share_with_sql} WHERE timeseries_id = {selected_timeseries$timeseries_id};",
-                  .con = session$userData$AquaCache
+                "UPDATE timeseries SET share_with = $1 WHERE timeseries_id = $2;",
+                params = list(
+                  input_share_with,
+                  selected_timeseries$timeseries_id
                 )
               )
             }
@@ -1501,9 +1583,7 @@ addTimeseries <- function(id, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 paste0(
-                  "UPDATE timeseries SET note = '",
-                  input$note,
-                  "' WHERE timeseries_id = ",
+                  "UPDATE timeseries SET note = NULL WHERE timeseries_id = ",
                   selected_timeseries$timeseries_id
                 )
               )
@@ -1517,7 +1597,7 @@ addTimeseries <- function(id, language) {
                 duration = 8,
               )
               earliest <- DBI::dbGetQuery(
-                con,
+                session$userData$AquaCache,
                 "SELECT MIN(datetime) FROM measurements_continuous WHERE timeseries_id = $1",
                 params = selected_timeseries$timeseries_id
               )[1, 1]
@@ -1539,7 +1619,8 @@ addTimeseries <- function(id, language) {
             DBI::dbRollback(session$userData$AquaCache)
             showNotification(
               paste("Error updating timeseries:", e$message),
-              type = "error"
+              type = "error",
+              duration = 10,
             )
           }
         )
