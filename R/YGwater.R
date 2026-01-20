@@ -110,7 +110,8 @@ YGwater <- function(
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
-  con <- AquaConnect(
+  # Connection via AquaCache will also check for updates to apply to the database schema
+  con <- AquaCache::AquaConnect(
     name = dbName,
     host = dbHost,
     port = dbPort,
@@ -120,9 +121,12 @@ YGwater <- function(
   )
 
   # Check that the DB has the 'application' schema
-  if (!DBI::dbExistsTable(con, "page_content", schema = "application")) {
+  if (
+    !DBI::dbExistsTable(con, "page_content", schema = "application") ||
+      !DBI::dbExistsTable(con, "notifications", schema = "application")
+  ) {
     stop(
-      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' table. Refer to the script 'application_tables.R' in this application's folder to create this table. You'll find this script at ",
+      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' or 'notifications' tables. You'll need to bring the AquaCache database up to revision 31 at minimum.",
       appDir,
       "."
     )
@@ -166,11 +170,11 @@ YGwater <- function(
     con,
     "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
   )[1, 1])
-  if (ver < 27) {
+  if (ver < 31) {
     stop(
-      "The aquacache database version is too old. Please update to at least version 27. Current version is ",
+      "The aquacache database version is too old. Please update to at least version 31. Current version is ",
       ver,
-      ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache documentation for more details."
+      ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache::AquaConnect documentation for more details."
     )
   }
 
