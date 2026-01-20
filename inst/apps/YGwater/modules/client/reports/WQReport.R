@@ -1,6 +1,7 @@
 WQReportUI <- function(id) {
   ns <- NS(id)
   tagList(
+    uiOutput(ns("banner")),
     # Custom CSS below is for consistency with the look elsewhere in the app.
     tags$head(tags$link(
       rel = "stylesheet",
@@ -225,6 +226,16 @@ WQReportUI <- function(id) {
 WQReport <- function(id, mdb_files, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns # Used to create UI elements in the server code
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "WQReport"
+      )
+    })
 
     EQWin_selector <- reactiveVal(FALSE)
     observeEvent(input$data_source, {

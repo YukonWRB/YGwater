@@ -67,6 +67,7 @@ calibrateUI <- function(id) {
         text = instrSelectBGCol,
         functions = c("backgroundCol")
       ),
+      uiOutput(ns("banner")),
       # Tabs
       tabsetPanel(
         id = ns("tab_panel"),
@@ -598,9 +599,19 @@ calibrateUI <- function(id) {
   ) # End of tagList
 }
 
-calibrate <- function(id) {
+calibrate <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "calibrate"
+      )
+    })
 
     # Custom alert function using Shiny's showNotification (replaces old shinyAlert dependencies)
     alert <- function(title, text = NULL, type = NULL, timer = 2000) {

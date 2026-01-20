@@ -4,8 +4,8 @@
 #'
 #' @details Insert here what happens to values > DL, where the standards are taken from, etc
 #'
-#' @param EQcode Site code as it appears in EQWin eg. "LOB" or "KNO". Function only works for stations with  designated project code in brackets
-#' @param stationIDs "all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02)
+#' @param EQcode Project code as it appears in EQWin without brackets eg. "LOB" or "KNO". Leave NULL if not applicable.
+#' @param stationIDs "all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02). Specifying `EQcode` will still filter by project code.
 #' @param paramIDs "all" for all parameters (default) OR vector of selected parameters exactly as they appear in the EQWin database
 #' @param dates "all" for all dates (default) OR character vector of length 2 of start and end date in format c("YYYY-MM-DD", "YYYY-MM-DD")
 #' @param BD Treatment of values below detection limits (0 = Set to zero; 1 = Set to NA; 2 = Set to 0.5*(LOD); 3 = Set to sqrt(2)LOD). Above detection values are set to the upper limit of detection.
@@ -17,7 +17,7 @@
 #' @export
 
 eq_fetch <- function(
-  EQcode,
+  EQcode = NULL,
   stationIDs = "all",
   paramIDs = "all",
   dates = "all",
@@ -46,42 +46,69 @@ eq_fetch <- function(
   on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
 
   # Add project code to EQWin stations
-  stationIDs <- paste0("(", EQcode, ")", stationIDs)
+  if (!is.null(EQcode)) {
+    stationIDs <- paste0("(", EQcode, ")", stationIDs)
+  }
 
   # Download stations and filter to user input
-  eqstns <- DBI::dbGetQuery(
-    EQWin,
-    "SELECT StnId, StnCode, StnName, StnType, udf_Stn_Status FROM eqstns WHERE StnCode"
-  )
+  if (stationIDs == "all") {
+    eqstns <- DBI::dbGetQuery(
+      EQWin,
+      "SELECT StnId, StnCode, StnName, StnType, udf_Stn_Status FROM eqstns"
+    )
+  } else {
+    eqstns <- DBI::dbGetQuery(
+      EQWin,
+      paste0(
+        "SELECT StnId, StnCode, StnName, StnType, udf_Stn_Status FROM eqstns WHERE StnCode IN (",
+        paste(stationIDs, sep = ", "),
+        ")"
+      )
+    )
+  }
 
-  if (tolower(paste(stationIDs, collapse = "")) == "all") {
+  if (tolower(paste(stationIDs, collapse = "")) == "all" && !is.null(EQcode)) {
     stns <- eqstns %>%
       dplyr::filter(stringr::str_detect(
         .data$StnCode,
         paste0("^", "\\(", EQcode, "\\)")
       ))
   } else if (all(stationIDs %in% eqstns$StnCode)) {
-    # Optimal case, all requested stations exist in EQWin database
-    stns <- eqstns %>%
-      dplyr::filter(stringr::str_detect(
-        .data$StnCode,
-        paste0("^", "\\(", EQcode, "\\)")
-      )) %>%
-      dplyr::filter(.data$StnCode %in% stationIDs)
+    if (!is.null(EQcode)) {
+      # Optimal case, all requested stations exist in EQWin database
+      stns <- eqstns %>%
+        dplyr::filter(stringr::str_detect(
+          .data$StnCode,
+          paste0("^", "\\(", EQcode, "\\)")
+        )) %>%
+        dplyr::filter(.data$StnCode %in% stationIDs)
+    } else {
+      # Optimal case, all requested stations exist in EQWin database
+      stns <- eqstns %>%
+        dplyr::filter(.data$StnCode %in% stationIDs)
+    }
   } else {
     # If certain stations do not exist, remove and continue but print warning
-    stns <- eqstns %>%
-      dplyr::filter(stringr::str_detect(
-        .data$StnCode,
-        paste0("^", "\\(", EQcode, "\\)")
-      )) %>%
-      dplyr::filter(
-        .data$StnCode %in% stationIDs[stationIDs %in% eqstns$StnCode]
-      )
+    if (!is.null(EQcode)) {
+      stns <- eqstns %>%
+        dplyr::filter(stringr::str_detect(
+          .data$StnCode,
+          paste0("^", "\\(", EQcode, "\\)")
+        )) %>%
+        dplyr::filter(
+          .data$StnCode %in% stationIDs[stationIDs %in% eqstns$StnCode]
+        )
+    } else {
+      stns <- eqstns %>%
+        dplyr::filter(
+          .data$StnCode %in% stationIDs[stationIDs %in% eqstns$StnCode]
+        )
+    }
+
     warning(paste0(
       "The following stations do not match exactly what is in EQWin and were omitted: ",
       paste(setdiff(stationIDs, stns$StnCode), collapse = ", "),
-      ". Check spelling and letter case"
+      ". Check spelling and letter case."
     ))
   }
 

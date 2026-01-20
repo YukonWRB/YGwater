@@ -881,6 +881,8 @@ download_continuous_ts_locations <- function(
         remove = FALSE
     )
 
+    md_continuous <- sf::st_transform(md_continuous, crs = epsg)
+
     return(md_continuous)
 }
 
@@ -966,7 +968,6 @@ download_discrete_ts_locations <- function(con, param_name_long, epsg = 4326) {
 #' @param resolution Character, either "daily" or "monthly" for data aggregation
 #' @param parameter_name Character string of the parameter name to retrieve
 #' @param epsg Integer EPSG code for coordinate transformation (default 4326)
-#' @param record_rate Character string for record rate filtering (default "01:00:00")
 #' @return A list with two elements:
 #' \describe{
 #'   \item{timeseries}{Named list containing a 'swe' data.frame with datetime and station columns}
@@ -996,8 +997,7 @@ download_continuous_ts <- function(
     end_date = sprintf("%d-01-01", 2100),
     resolution = "daily",
     parameter_name = "swe",
-    epsg = 4326,
-    record_rate = "01:00:00"
+    epsg = 4326
 ) {
     param_name_long <- standardize_parameter_name(parameter_name, long = TRUE)
 
@@ -1564,12 +1564,27 @@ get_indices <- function(parameter, ts, start_date, end_date) {
     )
 }
 
+
+#' Calculate historical norms for stations
+#'
+#' @param start_year_historical Integer start year for historical period
+#' @param end_year_historical Integer end year for historical period
+#' @param ts Wide-format data.frame with 'datetime' column and station columns
+#' @param parameter Character string specifying the parameter name.
+#' @param end_months_historical Integer vector of months to calculate norms for
+#' @param completeness_per_aggr_period Numeric (0-1) minimum data completeness
+#'   required for aggregation period (e.g., oct-feb for march bulletin)
+#' @param completeness_per_norm_period Numeric (0-1) minimum data completeness
+#'   required for norm period (e.g., 1991-2020)
+#' @return A list with two elements:
 get_norms <- function(
     start_year_historical,
     end_year_historical,
     ts,
     parameter,
-    end_months_historical = c(2, 3, 4, 5)
+    end_months_historical = c(2, 3, 4, 5),
+    completeness_per_aggr_period = 0.8,
+    completeness_per_norm_period = 0.8
 ) {
     aggr_fun <- get_aggr_fun(parameter)
     station_names <- get_station_names(ts)
@@ -1599,12 +1614,40 @@ get_norms <- function(
                 period$end_date
             )
             for (station in station_names) {
-                aggr_value <- aggr_fun(ts[idx, station])
+                # check data completeness (for an individual year; eg Oct-Feb for March bulletin, or March for April bulletin)
+                vals <- ts[idx, station]
+                if (
+                    sum(!is.na(vals)) >=
+                        completeness_per_aggr_period * length(vals)
+                ) {
+                    aggr_value <- aggr_fun(vals)
+                } else {
+                    aggr_value <- NA
+                }
+
                 historical_distr[
                     as.character(yr),
                     as.character(m),
                     station
                 ] <- aggr_value
+            }
+        }
+    }
+
+    # Check completeness across the historical period for each month/station combination
+    # e.g., for a norm period from 1991-2020, need at least 24 non-NA values to meet 80% completeness
+    for (m_idx in seq_along(end_months_historical)) {
+        for (s_idx in seq_along(station_names)) {
+            # Get all values for this month/station across all years
+            values_for_month_station <- historical_distr[, m_idx, s_idx]
+
+            # Calculate completeness (proportion of non-NA values)
+            completeness <- sum(!is.na(values_for_month_station)) /
+                length(values_for_month_station)
+
+            # If completeness is below threshold, set entire dimension to NA
+            if (completeness < completeness_per_norm_period) {
+                historical_distr[, m_idx, s_idx] <- NA
             }
         }
     }
@@ -2656,8 +2699,7 @@ load_bulletin_timeseries <- function(
             con,
             parameter_name = "precipitation",
             start_date = "1980-01-01",
-            epsg = epsg,
-            record_rate = "1 day"
+            epsg = epsg
         )
 
         norms <- get_norms(
@@ -3779,16 +3821,17 @@ make_ggplot_map <- function(
     }
 
     if (!is.null(point_data)) {
+        point_data <- point_data[!is.na(point_data$historic_median), ]
         p <- p +
             ggplot2::geom_point(
                 data = point_data,
                 ggplot2::aes(
-                    x = .data$x,
-                    y = .data$y
+                    x = point_data$x,
+                    y = point_data$y
                 ),
                 fill = point_data$fill_colour,
                 color = static_style_elements$surveys$color,
-                size = static_style_elements$surveys$radius / 2.5,
+                size = static_style_elements$surveys$radius / 1.5,
                 shape = 21,
                 stroke = static_style_elements$surveys$weight * 0.5
             )

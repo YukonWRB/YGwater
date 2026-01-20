@@ -252,9 +252,11 @@ discData <- function(id, language, inputs) {
     )
 
     output$banner <- renderUI({
-      dismissible_banner_ui(
+      application_notifications_ui(
         ns = ns,
-        lang = language$language
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "discData"
       )
     })
 

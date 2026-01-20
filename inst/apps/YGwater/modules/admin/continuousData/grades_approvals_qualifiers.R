@@ -19,6 +19,7 @@ grades_approvals_qualifiersUI <- function(id) {
       ))
     ),
     page_fluid(
+      uiOutput(ns("banner")),
       accordion(
         id = ns("accordion_ts"),
         open = "ts_panel",
@@ -139,9 +140,19 @@ grades_approvals_qualifiersUI <- function(id) {
   )
 }
 
-grades_approvals_qualifiers <- function(id) {
+grades_approvals_qualifiers <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "grades_approvals_qualifiers"
+      )
+    })
 
     parse_datetime <- function(value) {
       if (is.null(value) || !nzchar(value)) {

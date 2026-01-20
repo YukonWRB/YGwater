@@ -3,6 +3,7 @@
 FODUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     sidebarPanel(
       selectInput(ns("comment_type"), "Select comment type", choices = c("General comments", "Location-specific comments"), selected = "General comments"),
       selectInput(ns("comment_data_type"), "Select a data type", choices = c("All", "Water levels", "Water flows", "Bridge freeboard", "Snow pillows", "Precipitation")),
@@ -17,12 +18,20 @@ FODUI <- function(id) {
   )
 }
 
-FOD <- function(id) {
-  
+FOD <- function(id, language) {
   moduleServer(id, function(input, output, session) {
-    
     ns <- session$ns  # Used for generating UI elements from server
-    
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "FOD"
+      )
+    })
+
     #Create containers
     FOD_comments <- reactiveValues(comments = list(),
                                    dates = vector(),

@@ -1,6 +1,7 @@
 syncContUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     h3("Synchronize continuous timeseries"),
     tooltip(
       checkboxInput(ns("all_ts"), "All timeseries", FALSE),
@@ -30,9 +31,19 @@ syncContUI <- function(id) {
   )
 }
 
-syncCont <- function(id) {
+syncCont <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "syncCont"
+      )
+    })
 
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,

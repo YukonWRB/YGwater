@@ -469,6 +469,11 @@ app_ui <- function(request) {
             title = "Admin",
             value = "adminTasks",
             nav_panel(
+              title = "Admin overview",
+              value = "adminHome",
+              uiOutput("adminHome_ui")
+            ),
+            nav_panel(
               title = uiOutput("changePwdNavTitle"),
               value = "changePwd",
               uiOutput("changePwd_ui")
@@ -477,6 +482,11 @@ app_ui <- function(request) {
               title = "Manage users",
               value = "manageUsers",
               uiOutput("manageUsers_ui")
+            ),
+            nav_panel(
+              title = "Manage notifications",
+              value = "manageNotifications",
+              uiOutput("manageNotifications_ui")
             ),
             nav_panel(
               title = "Update news page content",

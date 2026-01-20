@@ -34,6 +34,8 @@ imgTableViewUI <- function(id) {
     }
   "
     )),
+    # Banner notification
+    uiOutput(ns("banner")),
     uiOutput(ns("page"))
   )
 }
@@ -66,6 +68,15 @@ imgTableView <- function(id, language) {
     tables <- reactiveValues()
 
     # Render the page (sidebar + main image) ------------------------------
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "imgTableView"
+      )
+    })
+
     output$page <- renderUI({
       loc_choices <- stats::setNames(
         c("All", imgs$img_meta$location_id),

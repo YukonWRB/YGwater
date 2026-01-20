@@ -67,7 +67,7 @@ getPillowSWE <- function(con, stations_sf, date) {
        WHERE timeseries_id IN (%s) AND value IS NOT NULL AND date = '%s'
        ORDER BY timeseries_id, date DESC",
     paste(stations_sf$timeseries_id, collapse = ","),
-    as.Date(Sys.Date())
+    as.Date(date)
   )
 
   ts_data <- DBI::dbGetQuery(con, ts_query)
@@ -83,10 +83,8 @@ getPillowSWE <- function(con, stations_sf, date) {
   return(stations_sf)
 }
 
-
 getSurveySWE <- function(con, stations_sf, date) {
   stations_sf$swe <- NA_real_
-
   ts_query <- sprintf(
     "SELECT s.target_datetime, r.result as value, s.location_id
        FROM discrete.samples s
@@ -120,6 +118,7 @@ getSurveySWE <- function(con, stations_sf, date) {
 mapRasterUI <- function(id) {
   ns <- shiny::NS(id)
   bslib::page_fluid(
+    uiOutput(ns("banner")),
     shiny::uiOutput(ns("sidebar_page")) # <-- add ns() here
   )
 }
@@ -134,7 +133,7 @@ mapRaster <- function(id, language) {
     )
 
     swe_pillow_stations <- download_continuous_ts_locations(
-      con = con,
+      con = session$userData$AquaCache,
       param_name_long = "snow water equivalent"
     )
 
@@ -154,7 +153,16 @@ mapRaster <- function(id, language) {
     ORDER BY rr.valid_from, r.reference_id"
     era5_raster_data <- DBI::dbGetQuery(session$userData$AquaCache, era5_query)
     era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
-    # Place this in your server function to generate the sidebar layout dynamically
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "mapRaster"
+      )
+    })
+
     output$sidebar_page <- shiny::renderUI({
       bslib::page_sidebar(
         sidebar = bslib::sidebar(
@@ -163,7 +171,8 @@ mapRaster <- function(id, language) {
             "Date",
             value = max(era5_raster_data$datetime),
             min = min(era5_raster_data$datetime),
-            max = max(era5_raster_data$datetime)
+            max = max(era5_raster_data$datetime),
+            language = language$abbrev
           ),
           shiny::selectInput(
             ns("shapefile"), # already namespaced
@@ -454,7 +463,12 @@ mapRaster <- function(id, language) {
         "<b>",
         tr("app_version", language$language),
         "</b> ",
-        as.character(utils::packageVersion("YGwater"))
+        as.character(utils::packageVersion("YGwater")),
+        "<br/>",
+        "<b>",
+        "Dislaimer:</b> ",
+        tr("snowbull_raster_disclaimer", language$language),
+        "<br/>"
       ))
     })
   })
