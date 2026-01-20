@@ -33,6 +33,7 @@ contDataUI <- function(id) {
         ns("accordion")
       ))
     ),
+    uiOutput(ns("banner")),
     uiOutput(ns("top")),
     page_sidebar(
       sidebar = sidebar(
@@ -50,6 +51,16 @@ contDataUI <- function(id) {
 contData <- function(id, language, inputs) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns # Used to create UI elements within the server code
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "contData"
+      )
+    })
 
     # Functions and data fetch ################
     # Adjust multiple selection based on if 'all' is selected

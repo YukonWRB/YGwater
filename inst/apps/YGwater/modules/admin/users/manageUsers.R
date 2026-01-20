@@ -2,6 +2,7 @@ manageUsersUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     tagList(
+      uiOutput(ns("banner")),
       selectizeInput(
         ns("group_user"),
         NULL,
@@ -41,9 +42,19 @@ manageUsersUI <- function(id) {
   )
 }
 
-manageUsers <- function(id) {
+manageUsers <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "manageUsers"
+      )
+    })
 
     # Fetch the schema names; this is used to grant usage to groups on relevant schemas
     schemas <- DBI::dbGetQuery(

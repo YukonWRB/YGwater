@@ -1,6 +1,7 @@
 manageNewsContentUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     tabsetPanel(
       id = ns("tabs"),
       tabPanel(
@@ -77,9 +78,19 @@ manageNewsContentUI <- function(id) {
   )
 }
 
-manageNewsContent <- function(id) {
+manageNewsContent <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "manageNewsContent"
+      )
+    })
 
     text_df <- reactiveVal(data.frame())
     image_df <- reactiveVal(data.frame())

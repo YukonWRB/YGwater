@@ -1025,17 +1025,28 @@ simplerIndexUI <- function(id) {
             'estimated_yield',
             'notes_well',
             'share_with_well'
-          ))
-        ),
+      ))
+    ),
+    uiOutput(ns("banner")),
         collapse = ','
       )
     )))
   )
 } # End of UI function
 
-simplerIndex <- function(id) {
+simplerIndex <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "simplerIndex"
+      )
+    })
 
     # Load the helper functions
     # local = TRUE ensures the functions are loaded into this module's environment only

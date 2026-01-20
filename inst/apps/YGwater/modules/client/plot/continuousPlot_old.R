@@ -19,6 +19,7 @@ contPlotOldUI <- function(id) {
       ))
     ),
 
+    uiOutput(ns("banner")),
     page_sidebar(
       sidebar = sidebar(
         title = NULL,
@@ -35,6 +36,16 @@ contPlotOldUI <- function(id) {
 contPlotOld <- function(id, language, windowDims, inputs) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns # Used to create UI elements within server
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "contPlotOld"
+      )
+    })
 
     # Adjust multiple selection based on if 'all' is selected
     observeFilterInput <- function(inputId) {

@@ -49,6 +49,7 @@ imputeMissingUI <- function(id) {
     ),
 
     page_fluid(
+      uiOutput(ns("banner")),
       accordion(
         id = ns("accordion1"),
         open = "ts_panel",
@@ -122,9 +123,19 @@ imputeMissingUI <- function(id) {
 }
 
 
-imputeMissing <- function(id) {
+imputeMissing <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "imputeMissing"
+      )
+    })
 
     ts_meta <- reactive({
       dbGetQueryDT(

@@ -1,6 +1,7 @@
 adminLandingUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     tags$div(
       tags$h2("Admin overview"),
       tags$p(
@@ -52,6 +53,18 @@ adminLandingUI <- function(id) {
   )
 }
 
-adminLanding <- function(id) {
-  moduleServer(id, function(input, output, session) {})
+adminLanding <- function(id, language) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "adminHome"
+      )
+    })
+  })
 }
