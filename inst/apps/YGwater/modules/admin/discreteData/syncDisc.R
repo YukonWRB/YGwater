@@ -1,6 +1,7 @@
 syncDiscUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     h3("Synchronize sample series"),
     tooltip(
       checkboxInput(ns("all_ss"), "All sample series", FALSE),
@@ -32,9 +33,19 @@ syncDiscUI <- function(id) {
   )
 }
 
-syncDisc <- function(id) {
+syncDisc <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "syncDisc"
+      )
+    })
 
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,

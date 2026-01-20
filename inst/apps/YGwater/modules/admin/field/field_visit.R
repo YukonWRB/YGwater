@@ -16,6 +16,7 @@
 visitUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     title = "Field Visits",
     p(
       "Field visit module is under development. Anything you see here may not work as expected."
@@ -24,9 +25,19 @@ visitUI <- function(id) {
   ) # End of page_fluid
 }
 
-visit <- function(id) {
+visit <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "visit"
+      )
+    })
 
     moduleData <- reactiveValues()
     visitData <- reactiveValues(

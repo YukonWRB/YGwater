@@ -1,6 +1,7 @@
 changePasswordUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     uiOutput(ns("pwd_ui"))
   )
 }
@@ -9,6 +10,16 @@ changePassword <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     trl <- function(key) tr(key, language$language) # tiny helper
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "changePwd"
+      )
+    })
 
     output$pwd_ui <- renderUI({
       req(language$language)

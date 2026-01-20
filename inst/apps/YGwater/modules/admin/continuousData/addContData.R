@@ -35,6 +35,7 @@ addContDataUI <- function(id) {
     ),
 
     page_fluid(
+      uiOutput(ns("banner")),
       actionButton(
         ns("reload_module"),
         "Reload module data",
@@ -125,9 +126,19 @@ addContDataUI <- function(id) {
   )
 }
 
-addContData <- function(id) {
+addContData <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "addContData"
+      )
+    })
 
     outputs <- reactiveValues() # Used to pass the user on to adding a timeseries directly
 

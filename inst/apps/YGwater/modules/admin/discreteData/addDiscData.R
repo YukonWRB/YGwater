@@ -34,6 +34,7 @@ addDiscDataUI <- function(id) {
     ),
 
     page_fluid(
+      uiOutput(ns("banner")),
       accordion(
         id = ns("accordion1"),
         open = "loc_panel",
@@ -129,9 +130,19 @@ addDiscDataUI <- function(id) {
   )
 }
 
-addDiscData <- function(id) {
+addDiscData <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "addDiscData"
+      )
+    })
 
     outputs <- reactiveValues()
 

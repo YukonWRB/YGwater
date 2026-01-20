@@ -73,6 +73,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
       ))
     ),
 
+    uiOutput(ns("banner")),
     page_sidebar(
       sidebar = sidebar(
         title = NULL,
@@ -244,9 +245,19 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
   )
 }
 
-addGuidelines <- function(id) {
+addGuidelines <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "addGuidelines"
+      )
+    })
 
     moduleData <- reactiveValues(
       guidelines = DBI::dbGetQuery(

@@ -5,14 +5,25 @@ addTimeseriesUI <- function(id) {
 
   tagList(
     page_fluid(
+      uiOutput(ns("banner")),
       uiOutput(ns("ui"))
     )
   )
 }
 
-addTimeseries <- function(id) {
+addTimeseries <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "addTimeseries"
+      )
+    })
 
     moduleData <- reactiveValues()
 

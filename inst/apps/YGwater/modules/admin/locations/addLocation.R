@@ -35,15 +35,26 @@ addLocationUI <- function(id) {
       ))
     ),
     page_fluid(
+      uiOutput(ns("banner")),
       uiOutput(ns("ui"))
     )
   )
 }
 
 
-addLocation <- function(id, inputs) {
+addLocation <- function(id, inputs, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "addLocation"
+      )
+    })
 
     # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
     moduleInputs <- reactiveValues(

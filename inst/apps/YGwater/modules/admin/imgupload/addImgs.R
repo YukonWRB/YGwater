@@ -11,6 +11,7 @@ addImgsUI <- function(id) {
   ns <- NS(id)
 
   page_fluid(
+    uiOutput(ns("banner")),
     br(),
     fluidRow(
       column(
@@ -227,9 +228,19 @@ addImgsUI <- function(id) {
 
 
 # Define the server logic
-addImgs <- function(id) {
+addImgs <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "addImgs"
+      )
+    })
 
     # Define custom functions  #######
     # Render the data table
