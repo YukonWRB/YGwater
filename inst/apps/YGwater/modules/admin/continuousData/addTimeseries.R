@@ -435,6 +435,7 @@ addTimeseries <- function(id, language) {
             moduleData$aggregation_types$aggregation_type
           )
         )
+        updateTextInput(session, "record_rate", value = "")
         updateSelectizeInput(
           session,
           "default_owner",
