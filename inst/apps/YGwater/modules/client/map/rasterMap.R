@@ -13,6 +13,44 @@
 #   password = Sys.getenv("aquacachePassProd")
 # )
 
+# date <- as.Date("2023-03-15")
+# era5_raster_data <- DBI::dbGetQuery(
+#   con,
+#   "
+#     SELECT
+#         r.reference_id,
+#         rr.valid_from as datetime
+#     FROM spatial.raster_series_index rsi
+#     JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
+#     JOIN spatial.rasters r ON r.reference_id = rr.reference_id
+#     WHERE rsi.model = 'ERA5_land'
+#     ORDER BY rr.valid_from, r.reference_id"
+# )
+# refID <- getRasterRefID(
+#   ref_table = era5_raster_data,
+#   datetime = date
+# )
+
+# raster <- getRasterSWE(
+#   con = con,
+#   reference_id = refID
+# )
+
+# swe_at_pillows <- getPillowSWE(
+#   con = con,
+#   stations_sf = download_continuous_ts_locations(
+#     con = con,
+#     param_name_long = "snow water equivalent"
+#   ),
+#   date = date
+# )
+
+# swe_at_pillows$error <- terra::extract(
+#   raster,
+#   terra::vect(swe_at_pillows)
+# )[, 2] -
+#   swe_at_pillows$swe
+
 download_spatial_layer <- function(
   con,
   layer_name,
@@ -67,7 +105,7 @@ getPillowSWE <- function(con, stations_sf, date) {
        WHERE timeseries_id IN (%s) AND value IS NOT NULL AND date = '%s'
        ORDER BY timeseries_id, date DESC",
     paste(stations_sf$timeseries_id, collapse = ","),
-    as.Date(Sys.Date())
+    as.Date(date)
   )
 
   ts_data <- DBI::dbGetQuery(con, ts_query)
@@ -83,10 +121,8 @@ getPillowSWE <- function(con, stations_sf, date) {
   return(stations_sf)
 }
 
-
 getSurveySWE <- function(con, stations_sf, date) {
   stations_sf$swe <- NA_real_
-
   ts_query <- sprintf(
     "SELECT s.target_datetime, r.result as value, s.location_id
        FROM discrete.samples s
