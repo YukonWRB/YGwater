@@ -205,6 +205,7 @@ simplerIndexUI <- function(id) {
         ns("pdf-container")
       )))
     ),
+    uiOutput(ns("banner")),
     div(
       style = "display: flex; align-items: center; gap: 10px;",
       div(
@@ -1025,9 +1026,8 @@ simplerIndexUI <- function(id) {
             'estimated_yield',
             'notes_well',
             'share_with_well'
-      ))
-    ),
-    uiOutput(ns("banner")),
+          ))
+        ),
         collapse = ','
       )
     )))

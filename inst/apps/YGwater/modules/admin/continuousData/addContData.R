@@ -180,6 +180,7 @@ addContData <- function(id, language) {
       # Convert some data types to factors for better filtering in DT
       df <- ts_meta()
       df$record_rate_minutes <- as.factor(df$record_rate_minutes)
+      df$location <- as.factor(df$location)
       df$media <- as.factor(df$media)
       df$aggregation <- as.factor(df$aggregation)
       df$parameter <- as.factor(df$parameter)
