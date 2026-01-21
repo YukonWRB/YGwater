@@ -83,7 +83,9 @@ addContDataUI <- function(id) {
           ),
           # space so the buttons don't overlap the table
           # Text to tell the user they can edit values by clicking on the desired cell
-          tags$div("Hint: click a cell to edit it. Use the row numbers to select rows for deletion."),
+          tags$div(
+            "Hint: click a cell to edit it. Use the row numbers to select rows for deletion."
+          ),
           tags$br(),
           DT::DTOutput(ns("data_table")),
           selectizeInput(
@@ -339,7 +341,11 @@ addContData <- function(id, language) {
         DT::datatable(
           data$df,
           editable = TRUE,
-          selection = list(mode = "multiple", target = "row", selector = "td:first-child"),
+          selection = list(
+            mode = "multiple",
+            target = "row",
+            selector = "td:first-child"
+          ),
           options = list(scrollX = TRUE),
           callback = htmlwidgets::JS(
             "table.on('click.dt', 'tbody td', function() {",
@@ -372,11 +378,40 @@ addContData <- function(id, language) {
         showNotification('Empty data table!', type = 'error')
         return(FALSE)
       }
+
+      # Check for duplicated rows and drop them; warn the user
+      duplicated <- duplicated(data$df)
+      if (nrow(duplicated)) {
+        data$df <- data$df[!duplicated, ]
+        showNotification(
+          paste0(
+            'There were ',
+            nrow(duplicated),
+            ' duplicated (completely identical) rows. Only the first occurence of each unique row was retained'
+          ),
+          type = 'message',
+          duration = 8
+        )
+      }
+      duplicated_datetimes <- data$df$datetime[duplicated(data$df$datetime)]
+      if (length(duplicated_datetimes) < 0) {
+        showNotification(
+          paste0(
+            'There is more than one datetime for ',
+            paste(unique(duplicated_datetimes), collapse = ", ")
+          ),
+          type = 'error',
+          duration = 10
+        )
+        return(FALSE)
+      }
+
       parsed_value <- suppressWarnings(as.numeric(data$df$value))
       if (any(is.na(parsed_value))) {
         showNotification(
           'Value column must be numeric with no missing values.',
-          type = 'error'
+          type = 'error',
+          duration = 8
         )
         return(FALSE)
       }
@@ -385,7 +420,8 @@ addContData <- function(id, language) {
       if (any(is.na(parsed_datetime))) {
         showNotification(
           'Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.',
-          type = 'error'
+          type = 'error',
+          duration = 10
         )
         return(FALSE)
       }

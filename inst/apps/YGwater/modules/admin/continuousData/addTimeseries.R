@@ -1464,15 +1464,10 @@ addTimeseries <- function(id, language) {
             }
 
             # Changes to share_with
-            print(input$share_with)
-            print(selected_timeseries$share_with)
             input_share_with <- format_share_with(input$share_with)
             parsed_exist_share_with <- parse_share_with(
               selected_timeseries$share_with
             )
-            print(input_share_with)
-            print(parsed_exist_share_with)
-            print("done printing for now")
             if (any(input$share_with != parsed_exist_share_with)) {
               DBI::dbExecute(
                 session$userData$AquaCache,

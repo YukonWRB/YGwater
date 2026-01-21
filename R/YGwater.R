@@ -110,7 +110,7 @@ YGwater <- function(
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
-  # Connection via AquaCache will also check for updates to apply to the database schema
+  # Connection via AquaCache package will also check for updates to apply to the database schema
   con <- AquaCache::AquaConnect(
     name = dbName,
     host = dbHost,

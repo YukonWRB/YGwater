@@ -14,7 +14,7 @@
 #' @param snowCon A connection to the snow database. If NULL, a new connection will be created with [snowConnect()] and automatically closed. If aquaCon is not NULL but snowCon is NULL, connection to the snow DB will be attempted at the same host and port as the aquacache connection.
 #' @param summarise TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.
 #' @param historical_start_year The first year to include in the historical statistics. If NULL, all years prior to 'year' are included.
-#' @param historical_end_year The last year to include in the historical statistics. If NULL
+#' @param historical_end_year The last year to include in the historical statistics. If NULL, the year prior to the current year is used.
 #' @param save_path The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.
 #'
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.

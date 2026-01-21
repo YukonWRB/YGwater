@@ -12,9 +12,9 @@
 #'
 #' @param year Year for which the snow bulletin is to be created.
 #' @param month Month for which the snow bulletin is to be created. Options are 3, 4 or 5.
+#' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #' @param scale Scale of the snow bulletin plots. Default is 1. Enter a scale number above or below 1 to get larger or smaller titles and axis labels.
 #' @param basins The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when AquaCache is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
-#' @param save_path The path to the directory (folder) where the report should be saved. Enter the path as a character string.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.
 #' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french" or "francais". Default is "english".
 #' @param precip_period The period to use for precipitation stats. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
@@ -32,9 +32,9 @@
 snowBulletin <- function(
   year,
   month,
+  save_path = 'choose',
   scale = 1,
   basins = NULL,
-  save_path = 'choose',
   synchronize = FALSE,
   language = "english",
   precip_period = "last 40 years",
