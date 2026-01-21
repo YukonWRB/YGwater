@@ -347,6 +347,11 @@ addSampleSeries <- function(id, language) {
         df$synch_to <- format_datetime_input(df$synch_to)
         df$last_new_data <- format_datetime_input(df$last_new_data)
         df$last_synchronize <- format_datetime_input(df$last_synchronize)
+        df$location <- as.factor(df$location)
+        df$sub_location <- as.factor(df$sub_location)
+        df$source_fx <- as.factor(df$source_fx)
+        df$default_owner <- as.factor(df$default_owner)
+        df$default_contributor <- as.factor(df$default_contributor)
       }
       DT::datatable(
         df,
@@ -361,14 +366,16 @@ addSampleSeries <- function(id, language) {
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             "});",
             "}"
           )
-        )
+        ),
+        filter = 'top',
+        rownames = FALSE
       )
     })
 
