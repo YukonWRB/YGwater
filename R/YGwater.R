@@ -12,6 +12,7 @@
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
 #' @param accessPath1 to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
 #' @param accessPath2 Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.
+#' @param logout_timer_min Auto logout timer, in minutes.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
 #' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.
 #'
@@ -28,6 +29,7 @@ YGwater <- function(
   dbPass = Sys.getenv("aquacachePass"),
   accessPath1 = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
   accessPath2 = "//carver/infosys/EQWin",
+  logout_timer_min = 10,
   server = FALSE,
   public = TRUE
 ) {
@@ -106,7 +108,8 @@ YGwater <- function(
     dbPass = dbPass,
     accessPath1 = accessPath1,
     accessPath2 = accessPath2,
-    public = public
+    public = public,
+    logout_timer_min = logout_timer_min
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app

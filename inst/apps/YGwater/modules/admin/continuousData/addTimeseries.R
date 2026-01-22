@@ -148,7 +148,7 @@ addTimeseries <- function(id, language) {
         ),
         fluidRow(
           column(
-            4,
+            width = 4,
             selectizeInput(
               ns("location"),
               "Location (add new under the 'locations' menu)",
@@ -521,13 +521,14 @@ addTimeseries <- function(id, language) {
         moduleData$timeseries$source_fx == input$source_fx,
         "source_fx_args"
       ]
-      ex_args <- ex_args[!is.na(ex_args)][1:5]
+      ex_args <- ex_args[!is.na(ex_args)][1:10]
+      ex_args <- ex_args[nzchar(ex_args)]
       # strip the [], {}, and "" from the json strings
       ex_args <- gsub("\\[|\\]|\\{|\\}|\"", "", ex_args)
       showModal(modalDialog(
         title = paste("Example arguments for", input$source_fx),
         if (length(ex_args) > 0) {
-          paste(unique(ex_args), collapse = "\n\n")
+          tags$pre(paste(unique(ex_args), collapse = "\n"))
         } else {
           "No example arguments found in existing timeseries. Please refer to the AquaCache package documentation for details on the required arguments."
         },
@@ -546,20 +547,33 @@ addTimeseries <- function(id, language) {
       }
       package <- tools::Rd_db("AquaCache")
       file <- paste0(input$source_fx, ".Rd")
-
+      if (!file %in% names(package)) {
+        showModal(modalDialog(
+          "Documentation not found for the selected function.",
+          easyClose = TRUE
+        ))
+        return()
+      }
       # output path under the served directory, set up in globals
       out <- file.path(.rd_dir, paste0(input$source_fx, ".html"))
-
       tools::Rd2HTML(
         package[[file]],
         out,
         no_links = TRUE,
         package = "AquaCache"
       )
-
       # URL that the client can reach
-      url <- paste0("/rdocs/", basename(out)) # not namespaced
-
+      rdoc_url <- function(session, filename) {
+        path <- session$clientData$url_pathname
+        if (is.null(path) || !nzchar(path)) {
+          path <- "/"
+        }
+        if (!grepl("/$", path)) {
+          path <- paste0(path, "/")
+        }
+        paste0(path, "rdocs/", filename)
+      }
+      url <- rdoc_url(session, basename(out)) # not namespaced
       shinyjs::runjs(sprintf("window.open('%s','_blank');", url))
     })
 

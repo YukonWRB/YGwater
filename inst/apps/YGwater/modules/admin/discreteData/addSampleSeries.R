@@ -4,6 +4,9 @@ addSampleSeriesUI <- function(id) {
   ns <- NS(id)
 
   tagList(
+    tags$head(tags$style(HTML(
+      ".shiny-split-layout > div {overflow: visible;}"
+    ))),
     page_fluid(
       uiOutput(ns("banner")),
       uiOutput(ns("ui"))
@@ -165,7 +168,15 @@ addSampleSeries <- function(id, language) {
         conditionalPanel(
           condition = "input.mode == 'modify'",
           ns = ns,
-          DT::DTOutput(ns("ss_table"))
+          accordion(
+            id = ns("accordion1"),
+            open = "sampleseries_table_panel",
+            accordion_panel(
+              id = ns("sampleseries_table_panel"),
+              title = "Select a sample series to modify",
+              DT::DTOutput(ns("ss_table"))
+            )
+          )
         ),
         conditionalPanel(
           condition = "input.mode == 'add'",
@@ -180,7 +191,7 @@ addSampleSeries <- function(id, language) {
             width = 6,
             selectizeInput(
               ns("location"),
-              "Location",
+              "Location (add new under the 'locations' menu)",
               choices = stats::setNames(
                 moduleData$locations$location_id,
                 moduleData$locations$name
@@ -655,22 +666,21 @@ addSampleSeries <- function(id, language) {
         ))
         return()
       }
-      examples <- moduleData$sample_series[
+      ex_args <- moduleData$sample_series[
         moduleData$sample_series$source_fx == input$source_fx,
         "source_fx_args"
       ]
-      examples <- examples[!is.na(examples)][1:5]
-      if (!length(examples)) {
-        showModal(modalDialog(
-          "No example arguments found in existing sample series. Refer to the AquaCache package documentation for details on the required arguments.",
-          easyClose = TRUE
-        ))
-        return()
-      }
-      examples <- unique(vapply(examples, format_source_args, character(1)))
+      ex_args <- ex_args[!is.na(ex_args)][1:10]
+      ex_args <- ex_args[nzchar(ex_args)]
+      # strip the [], {}, and "" from the json strings
+      ex_args <- gsub("\\[|\\]|\\{|\\}|\"", "", ex_args)
       showModal(modalDialog(
         title = paste("Example arguments for", input$source_fx),
-        paste(examples, collapse = "\n\n"),
+        if (length(ex_args) > 0) {
+          tags$pre(paste(unique(ex_args), collapse = "\n"))
+        } else {
+          "No example arguments found in existing timeseries. Please refer to the AquaCache package documentation for details on the required arguments."
+        },
         easyClose = TRUE
       ))
     })
@@ -692,6 +702,7 @@ addSampleSeries <- function(id, language) {
         ))
         return()
       }
+      # output path under the served directory, set up in globals
       out <- file.path(.rd_dir, paste0(input$source_fx, ".html"))
       tools::Rd2HTML(
         package[[file]],
@@ -699,7 +710,18 @@ addSampleSeries <- function(id, language) {
         no_links = TRUE,
         package = "AquaCache"
       )
-      url <- paste0("/rdocs/", basename(out))
+      # URL that the client can reach
+      rdoc_url <- function(session, filename) {
+        path <- session$clientData$url_pathname
+        if (is.null(path) || !nzchar(path)) {
+          path <- "/"
+        }
+        if (!grepl("/$", path)) {
+          path <- paste0(path, "/")
+        }
+        paste0(path, "rdocs/", filename)
+      }
+      url <- rdoc_url(session, basename(out)) # not namespaced
       shinyjs::runjs(sprintf("window.open('%s','_blank');", url))
     })
 
