@@ -7,16 +7,13 @@
 snowBulletin(
   year,
   month,
+  save_path = "choose",
   scale = 1,
   basins = NULL,
-  save_path = "choose",
   synchronize = FALSE,
   language = "english",
   precip_period = "last 40 years",
   cddf_period = "last 40 years",
-  snow_period = "all years",
-  water_period = "all years",
-  lookback = 40,
   con = NULL
 )
 }
@@ -25,11 +22,11 @@ snowBulletin(
 
 \item{month}{Month for which the snow bulletin is to be created. Options are 3, 4 or 5.}
 
+\item{save_path}{The path to the directory (folder) where the report should be saved. Enter the path as a character string.}
+
 \item{scale}{Scale of the snow bulletin plots. Default is 1. Enter a scale number above or below 1 to get larger or smaller titles and axis labels.}
 
 \item{basins}{The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when AquaCache is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.}
-
-\item{save_path}{The path to the directory (folder) where the report should be saved. Enter the path as a character string.}
 
 \item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.}
 
@@ -38,12 +35,6 @@ snowBulletin(
 \item{precip_period}{The period to use for precipitation stats. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".}
 
 \item{cddf_period}{The period to use for the cumulative degree day plot historic range. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".}
-
-\item{snow_period}{The period to use for the snow survey plot historic range. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.}
-
-\item{water_period}{The period to use for the water level/flow historic ranges. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.}
-
-\item{lookback}{The number of past years to consider for all plots and statistics. Default is 30. NOT CURRENTLY USED, but will replace other _period parameters.}
 
 \item{con}{A connection to the AquaCache database. If left NULL connection will be attempted with function \code{\link[=AquaConnect]{AquaConnect()}} using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!}
 }
