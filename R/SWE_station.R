@@ -294,6 +294,7 @@ SWE_station <- function(
           dplyr::group_by(.data$target_date, .data$parameter) %>%
           dplyr::summarise(
             location_name = unique(.data$location_name),
+            location_name_fr = unique(.data$location_name_fr),
             location_id = unique(.data$location_id),
             target_date = unique(.data$target_date),
             sample_date = mean(.data$sample_date),

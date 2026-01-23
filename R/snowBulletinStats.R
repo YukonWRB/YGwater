@@ -87,7 +87,18 @@ snowBulletinStats <- function(
 
   #### ---------------------------- Functions --------------------------- ####
   precipStats <- function() {
-    tsid <- c(663, 665, 666, 668, 664, 671, 667)
+    # ES: removing hardoded tsid (depricated in prod)
+    # tsid <- c(663, 665, 666, 668, 664, 671, 667)
+
+    query <- "
+      SELECT t.timeseries_id
+      FROM continuous.timeseries t
+      INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+      WHERE t.record_rate = '1 day'
+        AND p.param_name = 'precipitation, total'
+    "
+    tsid <- DBI::dbGetQuery(con, query)$timeseries_id
+
     # Should also bring in location ID and name
     tab <- DBI::dbGetQuery(
       con,
@@ -409,6 +420,9 @@ snowBulletinStats <- function(
       }
     }
 
+    if (nrow(cddf) == 0) {
+      return(NA)
+    }
     # Rename columns and remove temp
     cddf <- cddf[, c("datetime", "cddf")]
     colnames(cddf) <- c("datetime", "value")
@@ -416,17 +430,28 @@ snowBulletinStats <- function(
     return(cddf)
   }
   cddfStats <- function(month, year) {
-    tsid <- c(484, 532, 540, 500, 548, 492, 556, 508)
+    # ES: removing hardoded tsid (depricated in prod)
+    # tsid <- c(484, 532, 540, 500, 548, 492, 556, 508)
+
+    query <- "
+      SELECT t.timeseries_id
+      FROM continuous.timeseries t
+      INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+      WHERE p.param_name = 'temperature, air'
+    "
+
+    tsid <- DBI::dbGetQuery(con, query)$timeseries_id
+
     tabl <- DBI::dbGetQuery(
       con,
       paste0(
         "SELECT locations.name AS location_name, 
-                                                locations.location AS location_id,
-                                                datetime, value_corrected AS value
-                                                FROM measurements_continuous_corrected 
-                                                INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
-                                                INNER JOIN locations ON timeseries.location = locations.location
-                                                WHERE measurements_continuous_corrected.timeseries_id IN ('",
+            locations.location AS location_id,
+            datetime, value_corrected AS value
+            FROM measurements_continuous_corrected 
+            INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
+            INNER JOIN locations ON timeseries.location = locations.location
+            WHERE measurements_continuous_corrected.timeseries_id IN ('",
         paste0(tsid, collapse = "', '"),
         "')"
       )
@@ -438,6 +463,11 @@ snowBulletinStats <- function(
     for (l in unique(tabl$location_id)) {
       tab <- tabl[tabl$location_id == l, ]
       cddf_l <- getCDDF(tab, year)
+
+      if (all(is.na(cddf_l))) {
+        next
+      }
+
       cddf_l$location_id <- l
       cddf_l$location_name <- unique(tab$location_name)
       cddf <- rbind(cddf, cddf_l)
