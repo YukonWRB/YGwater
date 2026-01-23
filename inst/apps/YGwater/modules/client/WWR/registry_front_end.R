@@ -150,6 +150,11 @@ wellRegistry <- function(id, language) {
           bg = config$sidebar_bg, # Set in globals file'
           open = list(mobile = "always-above"),
           tagList(
+            checkboxInput(
+              ns("cluster_points"),
+              label = tr("cluster_points_label", language$language),
+              value = TRUE
+            ),
             selectizeInput(
               ns("purpose"),
               label = tr("well_purpose", language$language),
@@ -520,7 +525,7 @@ wellRegistry <- function(id, language) {
 
     # Filter the map data based on user's selection and add points to map ############################
 
-    # ---- helper: build a data-URI SVG icon ----
+    # build SVG icons
     svg_data_uri <- function(
       shape = c("circle", "square", "diamond"),
       fill = "#2C7FB8",
@@ -782,11 +787,15 @@ wellRegistry <- function(id, language) {
             lat = ~latitude,
             popup = ~popup_html,
             icon = icons,
-            clusterOptions = leaflet::markerClusterOptions(
-              iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
-              maxClusterRadius = 80, # cluster radius in pixels
-              spiderfyOnMaxZoom = TRUE
-            )
+            clusterOptions = if (isTRUE(input$cluster_points)) {
+              leaflet::markerClusterOptions(
+                iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
+                maxClusterRadius = 80, # cluster radius in pixels
+                spiderfyOnMaxZoom = TRUE
+              )
+            } else {
+              NULL
+            }
           ) %>%
           leaflet::addControl(
             build_symbol_legend(

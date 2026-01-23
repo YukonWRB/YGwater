@@ -3,6 +3,7 @@
 docTableViewUI <- function(id) {
   ns <- NS(id)
   tagList(
+    uiOutput(ns("banner")),
     tags$style(HTML(sprintf(
       "
       /* Force DT table background to white (scoped to this module/table) */
@@ -35,6 +36,16 @@ docTableViewUI <- function(id) {
 docTableView <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "docTableView"
+      )
+    })
 
     moduleData <- reactiveValues(
       docs = dbGetQueryDT(

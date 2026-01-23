@@ -8,6 +8,7 @@ YGwater_globals <- function(
   RLS_pass,
   accessPath1,
   accessPath2,
+  logout_timer_min,
   public
 ) {
   library(shiny)
@@ -616,6 +617,7 @@ YGwater_globals <- function(
     public = public,
     g_drive = g_drive,
     mdb_files = mdb_files,
+    logout_timer_min = logout_timer_min,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels

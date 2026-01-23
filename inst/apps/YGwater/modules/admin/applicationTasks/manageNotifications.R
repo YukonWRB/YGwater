@@ -2,6 +2,7 @@ manageNotificationsUI <- function(id, module_choices) {
   ns <- NS(id)
   page_fluid(
     tagList(
+      uiOutput(ns("banner")),
       tags$p(
         "Notifications appear in modules by server name. Use 'all' to show a",
         "notification across the entire application."
@@ -39,9 +40,19 @@ manageNotificationsUI <- function(id, module_choices) {
   )
 }
 
-manageNotifications <- function(id, module_choices) {
+manageNotifications <- function(id, module_choices, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "manageNotifications"
+      )
+    })
 
     if (
       !DBI::dbExistsTable(

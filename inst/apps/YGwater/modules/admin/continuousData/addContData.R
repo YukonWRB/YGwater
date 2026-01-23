@@ -35,6 +35,7 @@ addContDataUI <- function(id) {
     ),
 
     page_fluid(
+      uiOutput(ns("banner")),
       actionButton(
         ns("reload_module"),
         "Reload module data",
@@ -81,8 +82,10 @@ addContDataUI <- function(id) {
             tags$br()
           ),
           # space so the buttons don't overlap the table
-          # Text to tell the user they can edit values by double clicking on the desired cell
-          tags$div("Hint: double click on a cell to edit its value."),
+          # Text to tell the user they can edit values by clicking on the desired cell
+          tags$div(
+            "Hint: click a cell to edit it. Use the row numbers to select rows for deletion."
+          ),
           tags$br(),
           DT::DTOutput(ns("data_table")),
           selectizeInput(
@@ -125,9 +128,19 @@ addContDataUI <- function(id) {
   )
 }
 
-addContData <- function(id) {
+addContData <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "addContData"
+      )
+    })
 
     outputs <- reactiveValues() # Used to pass the user on to adding a timeseries directly
 
@@ -169,6 +182,7 @@ addContData <- function(id) {
       # Convert some data types to factors for better filtering in DT
       df <- ts_meta()
       df$record_rate_minutes <- as.factor(df$record_rate_minutes)
+      df$location <- as.factor(df$location)
       df$media <- as.factor(df$media)
       df$aggregation <- as.factor(df$aggregation)
       df$parameter <- as.factor(df$parameter)
@@ -208,9 +222,40 @@ addContData <- function(id) {
     })
 
     data <- reactiveValues(
-      df = data.frame(datetime = as.POSIXct(character()), value = numeric()),
-      upload_raw = NULL
+      df = data.frame(datetime = character(), value = numeric()),
+      upload_raw = NULL,
+      parsed_datetime = NULL,
+      parsed_value = NULL
     )
+
+    parse_datetime <- function(x) {
+      if (inherits(x, "POSIXct")) {
+        return(x)
+      }
+      if (inherits(x, "Date")) {
+        return(as.POSIXct(x, tz = "UTC"))
+      }
+      x <- as.character(x)
+      as.POSIXct(
+        x,
+        tz = "UTC",
+        tryFormats = c(
+          "%Y-%m-%d %H:%M:%S",
+          "%Y-%m-%d %H:%M",
+          "%Y/%m/%d %H:%M:%S",
+          "%Y/%m/%d %H:%M",
+          "%Y-%m-%dT%H:%M:%S",
+          "%Y-%m-%dT%H:%M"
+        )
+      )
+    }
+
+    prepare_table_data <- function(df) {
+      df <- df[, c("datetime", "value")]
+      df$datetime <- as.character(df$datetime)
+      df$value <- suppressWarnings(as.numeric(df$value))
+      df
+    }
 
     observeEvent(input$file, {
       req(input$file)
@@ -255,7 +300,7 @@ addContData <- function(id) {
         # data$df is is this case assigned by observing input$confirm_mapping below
       } else {
         # If the required columns are present, just use them
-        data$df <- data$upload_raw
+        data$df <- prepare_table_data(data$upload_raw)
       }
     })
 
@@ -268,7 +313,7 @@ addContData <- function(id) {
           datetime = data$upload_raw[[input$upload_datetime_col]],
           value = data$upload_raw[[input$upload_value_col]]
         )
-        data$df <- df_mapped
+        data$df <- prepare_table_data(df_mapped)
       },
       ignoreInit = TRUE,
       once = TRUE
@@ -277,7 +322,10 @@ addContData <- function(id) {
     observeEvent(input$add_row, {
       data$df <- rbind(
         data$df,
-        data.frame(datetime = .POSIXct(Sys.time(), tz = "UTC"), value = NA)
+        data.frame(
+          datetime = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+          value = NA_real_
+        )
       )
     })
 
@@ -286,13 +334,26 @@ addContData <- function(id) {
       data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
     })
 
+    data_table_proxy <- DT::dataTableProxy(ns("data_table"))
+
     output$data_table <- DT::renderDT(
       {
         DT::datatable(
           data$df,
           editable = TRUE,
-          selection = "multiple",
-          options = list(scrollX = TRUE)
+          selection = list(
+            mode = "multiple",
+            target = "row",
+            selector = "td:first-child"
+          ),
+          options = list(scrollX = TRUE),
+          callback = htmlwidgets::JS(
+            "table.on('click.dt', 'tbody td', function() {",
+            "  if ($(this).index() === 0) { return; }",
+            "  table.cell(this).edit();",
+            "});"
+          ),
+          rownames = TRUE
         )
       },
       server = FALSE
@@ -300,7 +361,12 @@ addContData <- function(id) {
 
     observeEvent(input$data_table_cell_edit, {
       info <- input$data_table_cell_edit
-      data$df[info$row, info$col] <- info$value
+      data$df <- DT::editData(
+        data$df,
+        info,
+        proxy = data_table_proxy,
+        rownames = TRUE
+      )
     })
 
     check_fx <- function() {
@@ -312,28 +378,55 @@ addContData <- function(id) {
         showNotification('Empty data table!', type = 'error')
         return(FALSE)
       }
-      if (any(is.na(data$df$value))) {
+
+      # Check for duplicated rows and drop them; warn the user
+      duplicated <- duplicated(data$df)
+      if (nrow(duplicated)) {
+        data$df <- data$df[!duplicated, ]
         showNotification(
-          'Data contains NA values. Please fill them in before uploading.',
-          type = 'error'
+          paste0(
+            'There were ',
+            nrow(duplicated),
+            ' duplicated (completely identical) rows. Only the first occurence of each unique row was retained'
+          ),
+          type = 'message',
+          duration = 8
+        )
+      }
+      duplicated_datetimes <- data$df$datetime[duplicated(data$df$datetime)]
+      if (length(duplicated_datetimes) < 0) {
+        showNotification(
+          paste0(
+            'There is more than one datetime for ',
+            paste(unique(duplicated_datetimes), collapse = ", ")
+          ),
+          type = 'error',
+          duration = 10
+        )
+        return(FALSE)
+      }
+
+      parsed_value <- suppressWarnings(as.numeric(data$df$value))
+      if (any(is.na(parsed_value))) {
+        showNotification(
+          'Value column must be numeric with no missing values.',
+          type = 'error',
+          duration = 8
         )
         return(FALSE)
       }
       # Make sure datetime is in POSIXct format or can be converted to it
-      if (!inherits(data$df$datetime, "POSIXct")) {
-        tryCatch(
-          {
-            data$df$datetime <- as.POSIXct(data$df$datetime, tz = "UTC")
-          },
-          error = function(e) {
-            showNotification(
-              'Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.',
-              type = 'error'
-            )
-            return(FALSE)
-          }
+      parsed_datetime <- parse_datetime(data$df$datetime)
+      if (any(is.na(parsed_datetime))) {
+        showNotification(
+          'Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.',
+          type = 'error',
+          duration = 10
         )
+        return(FALSE)
       }
+      data$parsed_datetime <- parsed_datetime
+      data$parsed_value <- parsed_value
       return(TRUE)
     }
 
@@ -345,8 +438,9 @@ addContData <- function(id) {
       tryCatch(
         {
           upload_data <- data$df
-          upload_data$datetime <- upload_data$datetime -
+          upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC 0
+          upload_data$value <- data$parsed_value
           data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
@@ -361,7 +455,7 @@ addContData <- function(id) {
           )
           showNotification('Data added.', type = 'message')
           data$df <- data.frame(
-            datetime = as.POSIXct(character()),
+            datetime = character(),
             value = numeric()
           )
         },
@@ -407,8 +501,9 @@ addContData <- function(id) {
       tryCatch(
         {
           upload_data <- data$df
-          upload_data$datetime <- upload_data$datetime -
+          upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
+          upload_data$value <- data$parsed_value
           data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
@@ -423,7 +518,7 @@ addContData <- function(id) {
           )
           showNotification('Data added with overwrite.', type = 'message')
           data$df <- data.frame(
-            datetime = as.POSIXct(character()),
+            datetime = character(),
             value = numeric()
           )
         },
@@ -470,8 +565,9 @@ addContData <- function(id) {
       tryCatch(
         {
           upload_data <- data$df
-          upload_data$datetime <- upload_data$datetime -
+          upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
+          upload_data$value <- data$parsed_value
           data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
@@ -489,7 +585,7 @@ addContData <- function(id) {
             type = 'message'
           )
           data$df <- data.frame(
-            datetime = as.POSIXct(character()),
+            datetime = character(),
             value = numeric()
           )
         },

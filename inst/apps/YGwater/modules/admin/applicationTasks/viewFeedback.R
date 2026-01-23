@@ -1,13 +1,24 @@
 viewFeedbackUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     DT::DTOutput(ns("feedback_table"))
   )
 }
 
-viewFeedback <- function(id) {
+viewFeedback <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "viewFeedback"
+      )
+    })
 
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,

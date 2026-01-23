@@ -205,6 +205,7 @@ simplerIndexUI <- function(id) {
         ns("pdf-container")
       )))
     ),
+    uiOutput(ns("banner")),
     div(
       style = "display: flex; align-items: center; gap: 10px;",
       div(
@@ -1033,9 +1034,19 @@ simplerIndexUI <- function(id) {
   )
 } # End of UI function
 
-simplerIndex <- function(id) {
+simplerIndex <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "simplerIndex"
+      )
+    })
 
     # Load the helper functions
     # local = TRUE ensures the functions are loaded into this module's environment only

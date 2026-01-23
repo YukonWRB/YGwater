@@ -451,6 +451,7 @@ app_server <- function(input, output, session) {
     "addImgs",
     "addImgSeries",
     "simplerIndex",
+    "adminHome",
     "changePwd",
     "manageUsers",
     "manageNotifications",
@@ -906,6 +907,104 @@ app_server <- function(input, output, session) {
   session$userData$can_create_role <- FALSE # track CREATE ROLE privilege
   session$userData$table_privs <- data.frame() # track table privileges
   session$userData$admin_privs <- list() # store privilege flags for UI filtering
+
+  # Track the user's last activity
+  session$userData$last_activity <- reactiveVal(Sys.time())
+  # 1 minute for testing
+  inactivity_timeout_secs <- config$logout_timer_min * 60
+  # Run a check every 30 seconds
+  inactivity_check <- reactiveTimer(30000, session)
+
+  observeEvent(
+    input$user_last_activity,
+    {
+      session$userData$last_activity(as.POSIXct(
+        input$user_last_activity / 1000,
+        origin = "1970-01-01",
+        tz = "UTC"
+      ))
+    },
+    ignoreInit = TRUE
+  )
+
+  perform_logout <- function(show_idle_modal = FALSE) {
+    if (!isTRUE(session$userData$user_logged_in)) {
+      return()
+    }
+    session$userData$user_logged_in <- FALSE # Set login status to FALSE
+    session$userData$can_create_role <- FALSE
+    session$userData$table_privs <- data.frame() # Reset table privileges
+    session$userData$admin_privs <- list() # Reset privilege flags
+    session$userData$last_activity(NULL)
+
+    if (show_idle_modal) {
+      current_language <- if (!is.null(languageSelection$language)) {
+        languageSelection$language
+      } else {
+        "English"
+      }
+      showModal(modalDialog(
+        title = tr("logout_inactive_title", current_language),
+        tr("logout_inactive_msg", current_language),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", current_language))
+      ))
+    }
+
+    # change the 'Logout' button back to 'Login'
+    shinyjs::hide("logoutBtn")
+    shinyjs::show("loginBtn")
+    # Remove the 'admin' button upon logout
+    removeUI(selector = "button:contains('Switch to ')")
+
+    # Drop old connection
+    DBI::dbDisconnect(session$userData$AquaCache)
+    # Re-create the connection with the base 'config' parameters, no edit privileges
+    session$userData$AquaCache <- AquaConnect(
+      name = config$dbName,
+      host = config$dbHost,
+      port = config$dbPort,
+      username = config$dbUser,
+      password = config$dbPass,
+      silent = TRUE
+    )
+
+    # Reset the session userData with the default credentials
+    session$userData$config$dbUser <- config$dbUser
+    session$userData$config$dbPass <- config$dbPass
+
+    showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
+
+    # Clear the app_cache environment
+    session$userData$app_cache <- new.env(parent = emptyenv())
+    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+    reset_ui_loaded()
+    # Send the user back to the 'home' tab if they were elsewhere
+    updateTabsetPanel(session, "navbar", selected = "home")
+
+    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode and on the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
+    admin_vis_flag("viz")
+    shinyjs::click("admin")
+  }
+
+  observe({
+    inactivity_check()
+    if (!isTRUE(session$userData$user_logged_in)) {
+      return()
+    }
+    last_activity <- session$userData$last_activity()
+    if (is.null(last_activity)) {
+      return()
+    }
+    idle_seconds <- as.numeric(difftime(
+      Sys.time(),
+      last_activity,
+      units = "secs"
+    ))
+    if (!is.na(idle_seconds) && idle_seconds > inactivity_timeout_secs) {
+      perform_logout(show_idle_modal = TRUE)
+    }
+  })
 
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
@@ -1531,45 +1630,7 @@ $(document).keyup(function(event) {
 
   ## Log out #####################################################
   observeEvent(input$logoutBtn, {
-    session$userData$user_logged_in <- FALSE # Set login status to FALSE
-    session$userData$can_create_role <- FALSE
-    session$userData$table_privs <- data.frame() # Reset table privileges
-    session$userData$admin_privs <- list() # Reset privilege flags
-
-    # change the 'Logout' button back to 'Login'
-    shinyjs::hide("logoutBtn")
-    shinyjs::show("loginBtn")
-    # Remove the 'admin' button upon logout
-    removeUI(selector = "button:contains('Switch to ')")
-
-    # Drop old connection
-    DBI::dbDisconnect(session$userData$AquaCache)
-    # Re-create the connection with the base 'config' parameters, no edit privileges
-    session$userData$AquaCache <- AquaConnect(
-      name = config$dbName,
-      host = config$dbHost,
-      port = config$dbPort,
-      username = config$dbUser,
-      password = config$dbPass,
-      silent = TRUE
-    )
-
-    # Reset the session userData with the default credentials
-    session$userData$config$dbUser <- config$dbUser
-    session$userData$config$dbPass <- config$dbPass
-
-    showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
-
-    # Clear the app_cache environment
-    session$userData$app_cache <- new.env(parent = emptyenv())
-    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
-    reset_ui_loaded()
-    # Send the user back to the 'home' tab if they were elsewhere
-    updateTabsetPanel(session, "navbar", selected = "home")
-
-    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode and on the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
-    admin_vis_flag("viz")
-    shinyjs::click("admin")
+    perform_logout(show_idle_modal = FALSE)
   })
 
   # Load modules based on input$navbar ################################
@@ -1749,8 +1810,8 @@ $(document).keyup(function(event) {
         ui_loaded$contPlotOld <- TRUE
         contPlotOld(
           "contPlotOld",
-          windowDims,
           language = languageSelection,
+          windowDims = windowDims,
           inputs = moduleOutputs$mapLocs
         )
         if (!is.null(moduleOutputs$mapLocs)) {
@@ -1822,7 +1883,7 @@ $(document).keyup(function(event) {
         output$fod_ui <- renderUI(FODUI("FOD"))
         ui_loaded$FOD <- TRUE
         # Call the server
-        FOD("FOD")
+        FOD("FOD", language = languageSelection)
       }
     }
     ### Image nav_menu ##########################
@@ -1954,21 +2015,25 @@ $(document).keyup(function(event) {
       if (!ui_loaded$syncCont) {
         output$syncCont_ui <- renderUI(syncContUI("syncCont"))
         ui_loaded$syncCont <- TRUE
-        syncCont("syncCont") # Call the server
+        syncCont("syncCont", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "syncDisc") {
       if (!ui_loaded$syncDisc) {
         output$syncDisc_ui <- renderUI(syncDiscUI("syncDisc"))
         ui_loaded$syncDisc <- TRUE
-        syncDisc("syncDisc") # Call the server
+        syncDisc("syncDisc", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addLocation") {
       if (!ui_loaded$addLocation) {
         output$addLocation_ui <- renderUI(addLocationUI("addLocation"))
         ui_loaded$addLocation <- TRUE
-        addLocation("addLocation", inputs = moduleOutputs$addDiscData) # Call the server
+        addLocation(
+          "addLocation",
+          inputs = moduleOutputs$addDiscData,
+          language = languageSelection
+        ) # Call the server
         if (!is.null(moduleOutputs$addDiscData)) {
           moduleOutputs$addDiscData$location <- NULL
           moduleOutputs$addDiscData$change_tab <- NULL
@@ -1979,7 +2044,11 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addSubLocation) {
         output$addSubLocation_ui <- renderUI(addSubLocationUI("addSubLocation"))
         ui_loaded$addSubLocation <- TRUE
-        addSubLocation("addSubLocation", inputs = moduleOutputs$addDiscData) # Call the server
+        addSubLocation(
+          "addSubLocation",
+          inputs = moduleOutputs$addDiscData,
+          language = languageSelection
+        ) # Call the server
         if (!is.null(moduleOutputs$addDiscData)) {
           moduleOutputs$addDiscData$sublocation <- NULL
           moduleOutputs$addDiscData$change_tab <- NULL
@@ -1990,7 +2059,7 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addTimeseries) {
         output$addTimeseries_ui <- renderUI(addTimeseriesUI("addTimeseries"))
         ui_loaded$addTimeseries <- TRUE
-        addTimeseries("addTimeseries") # Call the server
+        addTimeseries("addTimeseries", language = languageSelection) # Call the server
         if (!is.null(moduleOutputs$addContData)) {
           moduleOutputs$addContData$change_tab <- NULL
         }
@@ -2002,21 +2071,24 @@ $(document).keyup(function(event) {
           "deploy_recover"
         )) # Render the UI
         ui_loaded$deploy_recover <- TRUE
-        deploy_recover("deploy_recover") # Call the server
+        deploy_recover("deploy_recover", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "calibrate") {
       if (!ui_loaded$calibrate) {
         output$calibrate_ui <- renderUI(calibrateUI("calibrate")) # Render the UI
         ui_loaded$calibrate <- TRUE
-        calibrate("calibrate") # Call the server
+        calibrate("calibrate", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addContData") {
       if (!ui_loaded$addContData) {
         output$addContData_ui <- renderUI(addContDataUI("addContData")) # Render the UI
         ui_loaded$addContData <- TRUE
-        moduleOutputs$addContData <- addContData("addContData") # Call the server
+        moduleOutputs$addContData <- addContData(
+          "addContData",
+          language = languageSelection
+        ) # Call the server
       }
       # Observe the change_tab output from the addContData module
       observe({
@@ -2036,21 +2108,24 @@ $(document).keyup(function(event) {
           "continuousCorrections"
         ))
         ui_loaded$continuousCorrections <- TRUE
-        continuousCorrections("continuousCorrections")
+        continuousCorrections(
+          "continuousCorrections",
+          language = languageSelection
+        )
       }
     }
     if (input$navbar == "imputeMissing") {
       if (!ui_loaded$imputeMissing) {
         output$imputeMissing_ui <- renderUI(imputeMissingUI("imputeMissing")) # Render the UI
         ui_loaded$imputeMissing <- TRUE
-        imputeMissing("imputeMissing") # Call the server
+        imputeMissing("imputeMissing", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "editContData") {
       if (!ui_loaded$editContData) {
         output$editContData_ui <- renderUI(editContDataUI("editContData")) # Render the UI
         ui_loaded$editContData <- TRUE
-        editContData("editContData") # Call the server
+        editContData("editContData", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "grades_approvals_qualifiers") {
@@ -2059,14 +2134,20 @@ $(document).keyup(function(event) {
           "grades_approvals_qualifiers"
         )) # Render the UI
         ui_loaded$grades_approvals_qualifiers <- TRUE
-        grades_approvals_qualifiers("grades_approvals_qualifiers") # Call the server
+        grades_approvals_qualifiers(
+          "grades_approvals_qualifiers",
+          language = languageSelection
+        ) # Call the server
       }
     }
     if (input$navbar == "addDiscData") {
       if (!ui_loaded$addDiscData) {
         output$addDiscData_ui <- renderUI(addDiscDataUI("addDiscData")) # Render the UI
         ui_loaded$addDiscData <- TRUE
-        moduleOutputs$addDiscData <- addDiscData("addDiscData") # Call the server
+        moduleOutputs$addDiscData <- addDiscData(
+          "addDiscData",
+          language = languageSelection
+        ) # Call the server
       }
       # Observe the change_tab output from the addDiscData module
       observe({
@@ -2084,21 +2165,21 @@ $(document).keyup(function(event) {
       if (!ui_loaded$addSamples) {
         output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
         ui_loaded$addSamples <- TRUE
-        addSamples("addSamples")
+        addSamples("addSamples", language = languageSelection)
       }
     }
     if (input$navbar == "editDiscData") {
       if (!ui_loaded$editDiscData) {
         output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData")) # Render the UI
         ui_loaded$editDiscData <- TRUE
-        editDiscData("editDiscData") # Call the server
+        editDiscData("editDiscData", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addGuidelines") {
       if (!ui_loaded$addGuidelines) {
         output$addGuidelines_ui <- renderUI(addGuidelinesUI("addGuidelines")) # Render the UI
         ui_loaded$addGuidelines <- TRUE
-        addGuidelines("addGuidelines") # Call the server
+        addGuidelines("addGuidelines", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addSampleSeries") {
@@ -2107,35 +2188,35 @@ $(document).keyup(function(event) {
           "addSampleSeries"
         ))
         ui_loaded$addSampleSeries <- TRUE
-        addSampleSeries("addSampleSeries")
+        addSampleSeries("addSampleSeries", language = languageSelection)
       }
     }
     if (input$navbar == "addDocs") {
       if (!ui_loaded$addDocs) {
         output$addDocs_ui <- renderUI(addDocsUI("addDocs")) # Render the UI
         ui_loaded$addDocs <- TRUE
-        addDocs("addDocs") # Call the server
+        addDocs("addDocs", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addImgs") {
       if (!ui_loaded$addImgs) {
         output$addImgs_ui <- renderUI(addImgsUI("addImgs")) # Render the UI
         ui_loaded$addImgs <- TRUE
-        addImgs("addImgs") # Call the server
+        addImgs("addImgs", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addImgSeries") {
       if (!ui_loaded$addImgSeries) {
         output$addImgSeries_ui <- renderUI(addImgSeriesUI("addImgSeries")) # Render the UI
         ui_loaded$addImgSeries <- TRUE
-        addImgSeries("addImgSeries") # Call the server
+        addImgSeries("addImgSeries", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "simplerIndex") {
       if (!ui_loaded$simplerIndex) {
         output$simplerIndex_ui <- renderUI(simplerIndexUI("simplerIndex")) # Render the UI
         ui_loaded$simplerIndex <- TRUE
-        simplerIndex("simplerIndex") # Call the server
+        simplerIndex("simplerIndex", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "manageNewsContent") {
@@ -2144,14 +2225,14 @@ $(document).keyup(function(event) {
           "manageNewsContent"
         ))
         ui_loaded$manageNewsContent <- TRUE
-        manageNewsContent("manageNewsContent")
+        manageNewsContent("manageNewsContent", language = languageSelection)
       }
     }
     if (input$navbar == "adminHome") {
       if (!ui_loaded$adminHome) {
         output$adminHome_ui <- renderUI(adminLandingUI("adminHome"))
         ui_loaded$adminHome <- TRUE
-        adminLanding("adminHome")
+        adminLanding("adminHome", language = languageSelection)
       }
     }
     if (input$navbar == "manageNotifications") {
@@ -2161,14 +2242,18 @@ $(document).keyup(function(event) {
           notification_module_choices
         ))
         ui_loaded$manageNotifications <- TRUE
-        manageNotifications("manageNotifications", notification_module_choices)
+        manageNotifications(
+          "manageNotifications",
+          notification_module_choices,
+          language = languageSelection
+        )
       }
     }
     if (input$navbar == "viewFeedback") {
       if (!ui_loaded$viewFeedback) {
         output$viewFeedback_ui <- renderUI(viewFeedbackUI("viewFeedback"))
         ui_loaded$viewFeedback <- TRUE
-        viewFeedback("viewFeedback")
+        viewFeedback("viewFeedback", language = languageSelection)
       }
     }
     if (input$navbar == "changePwd") {
@@ -2182,14 +2267,14 @@ $(document).keyup(function(event) {
       if (!ui_loaded$manageUsers) {
         output$manageUsers_ui <- renderUI(manageUsersUI("manageUsers"))
         ui_loaded$manageUsers <- TRUE
-        manageUsers("manageUsers")
+        manageUsers("manageUsers", language = languageSelection)
       }
     }
     if (input$navbar == "visit") {
       if (!ui_loaded$visit) {
         output$visit_ui <- renderUI(visitUI("visit")) # Render the UI
         ui_loaded$visit <- TRUE
-        visit("visit") # Call the server
+        visit("visit", language = languageSelection) # Call the server
       }
     }
   }) # End of observeEvent for loading modules based on navbar
