@@ -656,7 +656,7 @@ addTimeseries <- function(id, language) {
             value = ifelse(
               is.na(details$source_fx_args),
               "",
-              details$source_fx_args
+              parse_source_args(details$source_fx_args)
             )
           )
           updateTextAreaInput(
@@ -833,21 +833,7 @@ addTimeseries <- function(id, language) {
 
               if (!is.null(source_fx_args)) {
                 if (nzchar(source_fx_args)) {
-                  # Make the json object for source_fx_args
-                  # Make the source_fx_args a json object
-                  args <- source_fx_args
-                  # split into "argument1: value1" etc.
-                  args <- strsplit(args, ",\\s*")[[1]]
-
-                  # split only on first colon
-                  keys <- sub(":.*", "", args)
-                  vals <- sub("^[^:]+:\\s*", "", args)
-
-                  # build named list
-                  args <- stats::setNames(as.list(vals), keys)
-
-                  # convert to JSON
-                  args <- jsonlite::toJSON(args, auto_unbox = TRUE)
+                  args <- format_source_args(source_fx_args)
                 } else {
                   args <- NA
                 }
@@ -1051,7 +1037,7 @@ addTimeseries <- function(id, language) {
           showNotification(
             "Source function arguments should use ':' to separate keys and values, not '='.",
             type = "error",
-            duration = 8,
+            duration = 8
           )
           return()
         }
@@ -1059,7 +1045,7 @@ addTimeseries <- function(id, language) {
           showNotification(
             "Source function arguments should not contain quotes (\") or (').",
             type = "error",
-            duration = 8,
+            duration = 8
           )
           return()
         }
@@ -1067,7 +1053,7 @@ addTimeseries <- function(id, language) {
           showNotification(
             "Source function arguments should use ':' to separate keys and values.",
             type = "error",
-            duration = 8,
+            duration = 8
           )
           return()
         }

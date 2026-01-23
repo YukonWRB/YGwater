@@ -1,35 +1,37 @@
 syncDiscUI <- function(id) {
   ns <- NS(id)
-  page_fluid(
-    uiOutput(ns("banner")),
-    h3("Synchronize sample series"),
-    tooltip(
-      checkboxInput(ns("all_ss"), "All sample series", FALSE),
-      "Selects all sample series in the database. If unchecked, you can select specific sample series from the table below.",
-      placement = "right"
-    ),
-    conditionalPanel(
-      condition = "input.all_ss == false",
-      ns = ns,
-      DT::DTOutput(ns("ss_table"))
-    ),
-    dateInput(ns("start"), "Start datetime", value = Sys.Date() - 30),
-    selectInput(
-      ns("active"),
-      "Active status behavior",
-      choices = stats::setNames(
-        c("default", "all"),
-        c("Labelled 'active' = TRUE only", "All")
+  tagList(
+    page_fluid(
+      uiOutput(ns("banner")),
+      h3("Synchronize sample series"),
+      tooltip(
+        checkboxInput(ns("all_ss"), "All sample series", FALSE),
+        "Selects all sample series in the database. If unchecked, you can select specific sample series from the table below.",
+        placement = "right"
       ),
-      selected = "default"
-    ),
-    checkboxInput(
-      ns("delete"),
-      "Delete samples missing from the remote?",
-      FALSE
-    ),
-    input_task_button(ns("run"), "Synchronize"),
-    verbatimTextOutput(ns("result"))
+      conditionalPanel(
+        condition = "input.all_ss == false",
+        ns = ns,
+        DT::DTOutput(ns("ss_table"))
+      ),
+      dateInput(ns("start"), "Start datetime", value = Sys.Date() - 30),
+      selectInput(
+        ns("active"),
+        "Active status behavior",
+        choices = stats::setNames(
+          c("default", "all"),
+          c("Labelled 'active' = TRUE only", "All")
+        ),
+        selected = "default"
+      ),
+      checkboxInput(
+        ns("delete"),
+        "Delete samples missing from the remote?",
+        FALSE
+      ),
+      input_task_button(ns("run"), "Synchronize"),
+      verbatimTextOutput(ns("result"))
+    )
   )
 }
 
@@ -70,27 +72,33 @@ syncDisc <- function(id, language) {
     })
 
     output$ss_table <- DT::renderDT({
+      df <- ss_meta()
+      df$location <- as.factor(df$location)
+      df$sub_location <- as.factor(df$sub_location)
+      df$source_fx <- as.factor(df$source_fx)
       DT::datatable(
-        ss_meta(),
-        selection = 'multiple',
+        df,
+        selection = list(mode = 'multiple'),
         options = list(
+          pageLength = 10,
+          lengthMenu = c(10, 20, 50),
           columnDefs = list(
-            list(targets = 1, visible = FALSE) #Hides the sample_series_id column. Column index numbers start at 0 here!!!
+            list(targets = 0, visible = FALSE) #Hides the sample_series_id column. Column index numbers start at 0 here!!!
           ),
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             "function(settings, json) {",
             "$(this.api().table().header()).css({",
-            "  'background-color': '#079',",
-            "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             "});",
             "}"
           )
-        )
+        ),
+        filter = 'top',
+        rownames = FALSE
       )
     })
 
@@ -99,7 +107,6 @@ syncDisc <- function(id, language) {
       start_dt,
       active,
       del,
-      parallel,
       config
     ) {
       promises::future_promise({
@@ -141,7 +148,6 @@ syncDisc <- function(id, language) {
           input$start,
           input$active,
           input$delete,
-          input$parallel,
           session$userData$config
         )
       },

@@ -209,6 +209,75 @@ YGwater_globals <- function(
     }
   }
 
+  format_source_args <- function(value) {
+    if (
+      is.null(value) ||
+        length(value) == 0 ||
+        all(is.na(value)) ||
+        !nzchar(value)
+    ) {
+      return("")
+    }
+    parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
+    if (is.null(parsed)) {
+      return(value)
+    }
+    if (length(parsed) == 0) {
+      return("")
+    }
+    if (is.list(parsed) && !is.data.frame(parsed)) {
+      parsed <- unlist(parsed)
+    }
+    if (is.null(names(parsed))) {
+      return(paste(parsed, collapse = ", "))
+    }
+    entries <- paste(names(parsed), parsed, sep = ": ")
+    paste(entries, collapse = ", ")
+  }
+
+  # Take the JSON string coming from the DB and make it into a readable text string
+  parse_source_args <<- function(value) {
+    if (
+      is.null(value) ||
+        length(value) == 0 ||
+        all(is.na(value)) ||
+        !nzchar(value)
+    ) {
+      return("")
+    }
+    parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
+    if (is.null(parsed)) {
+      return(value)
+    }
+    if (length(parsed) == 0) {
+      return("")
+    }
+    if (is.list(parsed) && !is.data.frame(parsed)) {
+      parsed <- unlist(parsed)
+    }
+    if (is.null(names(parsed))) {
+      return(paste(parsed, collapse = ", "))
+    }
+    entries <- paste(names(parsed), parsed, sep = ": ")
+    paste(entries, collapse = ", ")
+  }
+
+  # Format source function arguments to JSON for input to database
+  format_source_args <<- function(args) {
+    # split into "argument1: value1" etc.
+    args <- strsplit(args, ",\\s*")[[1]]
+
+    # split only on first colon
+    keys <- sub(":.*", "", args)
+    vals <- sub("^[^:]+:\\s*", "", args)
+
+    # build named list
+    args <- stats::setNames(as.list(vals), keys)
+
+    # convert to JSON
+    args <- jsonlite::toJSON(args, auto_unbox = TRUE)
+  }
+
   application_notifications_ui <<- function(
     ns,
     lang,
