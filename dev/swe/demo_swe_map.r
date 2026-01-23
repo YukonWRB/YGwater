@@ -1,45 +1,18 @@
 load_all()
 
-con <- AquaCache::AquaConnect(
-    name = "aquacache",
-    host = Sys.getenv("aquacacheHost"),
-    port = Sys.getenv("aquacachePort"),
-    user = Sys.getenv("aquacacheUser"),
-    password = Sys.getenv("aquacachePass")
-)
+con <- YGwater::AquaConnect()
+
+
+snow_id <- DBI::dbGetQuery(
+    con,
+    "SELECT media_id FROM media_types WHERE media_type = 'snow'"
+)[1, 1]
+
 
 bulletin_month <- 3
 bulletin_year <- 2024
 
-
-download_spatial_layer
-
-
-make_snowbull_map(
-    con = con,
-    year = 2025,
-    month = 4,
-    format = "ggplot",
-    parameter_name = "temp",
-    statistic = "relative_to_med",
-    language = "English",
-    filename = "dev\\swe\\exports\\swe_bulletin_apr2025.png"
-)
-
-precip_data <- download_continuous_ts(
-    con,
-    parameter_name = "precipitation",
-    start_date = "1980-01-01",
-    record_rate = "1 day"
-)
-
-# locations <- DBI::dbReadTable(con, "locations")
-
-# snowbull_timeseries <- load_bulletin_timeseries(
-#     con = con
-# )
-
-on.exit(DBI::dbDisconnect(con), add = TRUE)
+# on.exit(DBI::dbDisconnect(con), add = TRUE)
 
 snowBulletin(
     year = 2024,
@@ -47,6 +20,37 @@ snowBulletin(
     save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe\\exports",
     con = con
 )
+
+query <- "SELECT locations.name AS location_name, locations.location AS location_id, datetime, value_corrected AS value FROM measurements_continuous_corrected INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id INNER JOIN locations ON timeseries.location = locations.location\n                                           WHERE measurements_continuous_corrected.timeseries_id IN ('663', '665', '666', '668', '664', '671', '667')"
+
+DBI::dbGetQuery(con, query)
+
+
+# download_spatial_layer
+
+# make_snowbull_map(
+#     con = con,
+#     year = 2025,
+#     month = 4,
+#     format = "ggplot",
+#     parameter_name = "temp",
+#     statistic = "relative_to_med",
+#     language = "English",
+#     filename = "dev\\swe\\exports\\swe_bulletin_apr2025.png"
+# )
+
+# precip_data <- download_continuous_ts(
+#     con,
+#     parameter_name = "precipitation",
+#     start_date = "1980-01-01",
+#     record_rate = "1 day"
+# )
+
+# locations <- DBI::dbReadTable(con, "locations")
+
+# snowbull_timeseries <- load_bulletin_timeseries(
+#     con = con
+# )
 
 year <- 2025
 month <- 3

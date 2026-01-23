@@ -40,6 +40,7 @@ SWE_basin <- function(
   ### Retrieve data from aquacache db
   if (source == "aquacache") {
     if (is.null(con)) {
+      print("Connecting to aquacache database...")
       con <- AquaConnect(silent = TRUE)
       on.exit(DBI::dbDisconnect(con), add = TRUE)
     }
