@@ -22,12 +22,12 @@ images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
 documents,translation,Documents,Documents
 document_download,documentsModuleDownload,Download document,Télécharger le document
-document_authors,documentsModuleColAuthors,Authors,Auteurs
+authors,documentsModuleColAuthors,Authors,Auteurs
 document_published,documentsModuleColPublished,Published,Date de publication
-document_description,documentsModuleColDescription,Description,Description
-document_format,documentsModuleColFormat,Format,Format
-document_owner,documentsModuleColOwner,Owner,Propriétaire
-document_contributor,documentsModuleColContributor,Contributor,Contributeur
+description,documentsModuleColDescription,Description,Description
+format,documentsModuleColFormat,Format,Format
+owner,,Owner,Propriétaire
+contributor,documentsModuleColContributor,Contributor,Contributeur
 document_select_prompt,documentsModuleSelectPrompt,Select a document to view details.,Sélectionnez un document pour voir ses détails.
 tags,,Tags,Étiquettes
 document_no_preview,documentsModuleNoPreview,Preview not available for this file type.,Aucun aperçu disponible pour ce type de fichier.
@@ -170,10 +170,25 @@ plot_last_30,,Last 30 days,30 derniers jours
 plot_all_record,,Entire record,Période entière
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
 cont_table_heading,,Available timeseries,Séries chronologiques disponibles
-cont_table_plot_heading,,Plot,Graphique
+cont_table_tooltip1,Tooltip for the table header,"Instantaneous: conditions at the moment of recording. Mean, max, etc. summarize conditions over the interval between points. (min + max)/2 is the historical meteorological mean, based on daily extremes.","Instantané : conditions au moment de l’enregistrement. Moyenne, maximum, etc. : résumé des conditions sur l’intervalle entre les points. (min + max)/2 : moyenne météorologique historique, basée sur les extrêmes quotidiens."
+cont_table_tooltip2,Tooltip for the table header,"Approximate recording rate for recent data. Some time series also include older data recorded at coarser intervals.","Fréquence d’enregistrement approximative pour les données récentes ; certaines séries contiennent aussi des données plus anciennes à des intervalles plus grossiers."
+cont_table_plot_heading,,Plot options,Options du graphique
+metadata,,Metadata,Métadonnées
+location_metadata_heading,,Location metadata,Métadonnées du site
+timeseries_metadata_heading,,Timeseries metadata,Métadonnées de la série chronologique
+ownership_history_heading,,Ownership history,Historique de propriété
+metadata_select_prompt,,Select a timeseries to view metadata.,Sélectionnez une série chronologique pour voir les métadonnées.
+attribute,,Attribute,Attribut
+location_code_label,,Location code,Code du site
+latitude,,Latitude,Latitude
+longitude,,Longitude,Longitude
+elevation_m,,Elevation (m),Altitude (m)
+datum,,Datum,Référentiel
+depth_height_m,,Depth/height (m),Profondeur/hauteur (m)
+note,,Note,Note
 media,,Media,Matrice
 aggregation,,Aggregation,Agrégation
-cont_table_col_record_rate,,Record rate,Fréquence d'enregistrement
+record_rate,,Record rate,Fréquence d'enregistrement
 start_date,,Start date,Date de début
 end_date,,End date,Date de fin
 facet_on,,Split plots by,Diviser les graphiques par
@@ -444,8 +459,8 @@ snowbull_roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles
 snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
-snowbull_elevation,,Elevation,Altitude
-snowbull_coordinates,,Coordinates,Coordonnées
-snowbull_isocontours,,Isocontours,Isocontours
+elevation,,Elevation,Altitude
+coordinates,,Coordinates,Coordonnées
+isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche EEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.

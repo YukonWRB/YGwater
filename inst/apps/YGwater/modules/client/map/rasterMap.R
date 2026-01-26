@@ -307,7 +307,7 @@ mapRaster <- function(id, language) {
           color = ~col,
           weight = 3,
           opacity = 0.85,
-          group = tr("snowbull_isocontours", language$language)
+          group = tr("isocontours", language$language)
         ) %>%
         leaflet::addPolygons(
           data = basins_shp,
@@ -449,12 +449,12 @@ mapRaster <- function(id, language) {
             tr("gen_snowBul_basins", language$language),
             tr("snowbull_swe_basin", language$language),
             tr("snowbull_communities", language$language),
-            tr("snowbull_isocontours", language$language)
+            tr("isocontours", language$language)
           ),
           options = leaflet::layersControlOptions(collapsed = FALSE)
         ) %>%
         leaflet::hideGroup(tr("snowbull_swe_basin", language$language)) %>%
-        leaflet::hideGroup(tr("snowbull_isocontours", language$language))
+        leaflet::hideGroup(tr("isocontours", language$language))
     })
 
     # --- Render selected date text with details ---
