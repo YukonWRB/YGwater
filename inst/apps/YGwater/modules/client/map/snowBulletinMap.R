@@ -205,7 +205,7 @@ mapSnowbull <- function(id, language) {
 
       for (data_type in names(map_data)) {
         if (!is.null(timeseries_data[[data_type]])) {
-          map_data[[data_type]] <- get_display_data(
+          map_data[[data_type]] <- YGwater:::get_display_data(
             year = as.integer(input$year),
             month = as.integer(input$month),
             dataset = timeseries_data[[data_type]],
@@ -213,7 +213,9 @@ mapSnowbull <- function(id, language) {
             language = language$language
           )
 
-          map_data[[data_type]]$fill_colour <- get_state_style_elements(
+          map_data[[
+            data_type
+          ]]$fill_colour <- YGwater:::get_state_style_elements(
             map_data[[data_type]]$value_to_show,
             style_elements = dynamic_style_elements
           )
