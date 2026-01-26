@@ -9,6 +9,8 @@ load_bulletin_timeseries(
   load_swe = TRUE,
   load_precip = FALSE,
   load_temp = FALSE,
+  start_year_historical = 1991,
+  end_year_historical = 2020,
   epsg = 4326
 )
 }

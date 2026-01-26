@@ -5,23 +5,24 @@
 \title{Calculate historical norms for stations}
 \usage{
 get_norms(
-  start_year_historical,
-  end_year_historical,
   ts,
   parameter,
+  start_year_historical = 1991,
+  end_year_historical = 2020,
   end_months_historical = c(2, 3, 4, 5),
+  october_start = FALSE,
   completeness_per_aggr_period = 0.8,
   completeness_per_norm_period = 0.8
 )
 }
 \arguments{
-\item{start_year_historical}{Integer start year for historical period}
-
-\item{end_year_historical}{Integer end year for historical period}
-
 \item{ts}{Wide-format data.frame with 'datetime' column and station columns}
 
 \item{parameter}{Character string specifying the parameter name.}
+
+\item{start_year_historical}{Integer start year for historical period}
+
+\item{end_year_historical}{Integer end year for historical period}
 
 \item{end_months_historical}{Integer vector of months to calculate norms for}
 
@@ -32,7 +33,7 @@ required for aggregation period (e.g., oct-feb for march bulletin)}
 required for norm period (e.g., 1991-2020)}
 }
 \value{
-A list with two elements:
+A list with data.frames (station_norms, historical_distr, etc.)
 }
 \description{
 Calculate historical norms for stations

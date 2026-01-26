@@ -952,6 +952,8 @@ download_spatial_layer <- function(
 #'   \item{conversion_m}{Datum conversion factor if available}
 #' }
 #'
+#' @export
+#'
 #' @details
 #' Queries the continuous.timeseries and public.locations tables to get station
 #' metadata for the specified parameter. Returns NULL if no stations are found.
@@ -1041,6 +1043,8 @@ download_continuous_ts_locations <- function(
 #'   \item{name}{Station name}
 #'   \item{conversion_m}{Datum conversion factor if available}
 #' }
+#'
+#' @export
 #'
 #' @details
 #' Queries the discrete.samples, discrete.results, and public.locations tables

@@ -15,6 +15,8 @@ make_snowbull_map(
   dpi = 300,
   parameter_name = "swe",
   statistic = "relative_to_med",
+  start_year_historical = 1991,
+  end_year_historical = 2020,
   language = "English",
   con = NULL,
   format = "ggplot"
