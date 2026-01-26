@@ -26,14 +26,16 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 300)
 # TODO: assignement of parameters passed on from snowBulletin function to parameters like language_param, etc is not necessary. Can be used directly.
 fig.height_half <- 2.9
 fig.height_full <- 2.7
-language_param <- language
+
+language <- list(language = language, abbrev = tolower(substr(language, 1, 2)))
+
 year_param <- year
 month_param <- month
 scale_param <- scale
-month_names <- if (language == "english") {
-  c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
-} else {
-  c("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre")
+
+month_names <- c("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+for (i in 1:12) {
+  month_names[i] <- tr(month_names[i], lang = language$language)
 }
 
 # Define titles
@@ -118,36 +120,19 @@ textColour <- function(desc) {
 
 #### ------------------------- Conditional text --------------------------- ####
 iceThickness <- function(cddf) {
-  if (language == "english") {
-    if (is.na(cddf)) {
-      ice_thickness <- NA
-    } else if (cddf < 90) {
-      ice_thickness <- "thinner than normal ice thickness"
-    } else if (cddf >= 90 & cddf < 98) {
-      ice_thickness <- "close to normal ice thickness"
-    } else if (cddf >= 98 & cddf <= 102) {
-      ice_thickness <- "normal ice thickness"
-    } else if (cddf >= 103 & cddf <= 109) {
-      ice_thickness <- "close to normal ice thickness"
-    } else if (cddf >= 110) {
-      ice_thickness <- "thicker than normal ice thickness "
-    }
-  } else {
-    if (is.na(cddf)) {
-      ice_thickness <- NA
-    } else if (cddf >= 90 & cddf < 98) {
-      ice_thickness <- "près de l'épaisseur normale"
-    } else if (cddf >= 98 & cddf <= 102) {
-      ice_thickness <- "normale"
-    } else if (cddf >= 103 & cddf <= 109) {
-      ice_thickness <- "près de l'épaisseur normale"
-    } else if (cddf < 90) {
-      ice_thickness <- "plus mince que la normale"
-    } else if (cddf >= 110) {
-      ice_thickness <- "plus épaisse que la normale"
-    }
+  if (is.na(cddf)) {
+    ice_thickness <- NA
+  } else if (cddf < 90) {
+    ice_thickness <- tr("snowbull_rmd_ice_thinner", lang = language$language)
+  } else if (cddf >= 90 && cddf < 98) {
+    ice_thickness <- tr("snowbull_rmd_ice_close", lang = language$language)
+  } else if (cddf >= 98 && cddf <= 102) {
+    ice_thickness <- tr("snowbull_rmd_ice_normal", lang = language$language)
+  } else if (cddf >= 103 && cddf <= 109) {
+    ice_thickness <- tr("snowbull_rmd_ice_close", lang = language$language)
+  } else if (cddf >= 110) {
+    ice_thickness <- tr("snowbull_rmd_ice_thicker", lang = language$language)
   }
-
   return(ice_thickness)
 }
 
@@ -168,18 +153,15 @@ snowbullpillow <- function(location, custom_title, year, month, language = "en",
     legend_scale = scale,
     historic_range = "last",
     snowbulletin = TRUE,
-    lang = language,
+    lang = lang,
     gridx = FALSE,
     gridy = FALSE,
     datum = FALSE
   )
   plot <- plot + ggplot2::theme(legend.position = "none")
 
-  if (language == "fr") {
-    plot <- plot + ggplot2::labs(y = "EEN (mm)")
-  } else {
-    plot <- plot + ggplot2::labs(y = "SWE (mm)")
-  }
+  plot <- plot + ggplot2::labs(y = paste(tr("snowbull_rmd_swe_abbrev", lang = language$language), "(mm)"))
+
 
   return(plot)
 }
@@ -189,12 +171,10 @@ snowbullpillow <- function(location, custom_title, year, month, language = "en",
 snowbullpillow2 <- function(location_pil,
                             location_surv,
                             custom_title,
-                            language = language_param,
+                            language = language$abbrev,
                             year = year_param,
                             scale = scale_param,
                             month = month_param) {
-  lang <- if (language == "french") "fr" else "en"
-
   # Get this years snow pillow
   snow_p <- DBI::dbGetQuery(con, paste0(
     "SELECT date, value FROM measurements_calculated_daily_corrected ",
@@ -227,11 +207,7 @@ snowbullpillow2 <- function(location_pil,
   snow_s$fake_date <- as.POSIXct(snow_s$fake_date)
   plot_scale <- scale
 
-  if (language == "french") {
-    labs <- "%e %b"
-  } else {
-    labs <- "%b %e"
-  }
+  labs <- tr("snowbull_rmd_datefmt", lang = language$language)
 
   # Define a custom date labeling function
   custom_date_labels <- function(x) {
@@ -247,7 +223,7 @@ snowbullpillow2 <- function(location_pil,
     # Remove leading zeros from day numbers
     label <- gsub("\\b0([1-9])", "\\1", label)
 
-    if (lang == "fr") {
+    if (language$abbrev == "fr") {
       # Replace month abbreviations
       for (i in seq_along(eng_months)) {
         label <- gsub(eng_months[i], fr_months[i], label)
@@ -265,11 +241,8 @@ snowbullpillow2 <- function(location_pil,
     ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
     ggplot2::theme(legend.position = "none") +
     ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12 * plot_scale), axis.text.x = ggplot2::element_text(size = 11 * plot_scale), axis.text.y = ggplot2::element_text(size = 11 * plot_scale), plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * plot_scale, face = "bold")) +
-    if (language == "french") {
-      ggplot2::labs(x = NULL, y = "EEN (mm)", title = custom_title)
-    } else {
-      ggplot2::labs(x = NULL, y = "SWE (mm)", title = custom_title)
-    }
+    ggplot2::labs(x = NULL, y = paste(tr("snowbull_rmd_swe_abbrev", lang = language$language), "(mm)"), title = custom_title)
+
 
   return(plot)
 }
@@ -296,16 +269,11 @@ snowbullSWE <- function(loc, basin, year, month, swe_basins, custom_title, scale
     discrete_data = swe_basin,
     con = con,
     plot_scale = scale,
-    lang = if (language == "french") "fr" else "en"
+    lang = language$abbrev
   )
 
   plot <- plot + ggplot2::theme(legend.position = "none")
-
-  if (language == "french") {
-    plot <- plot + ggplot2::labs(y = "EEN (mm)")
-  } else {
-    plot <- plot + ggplot2::labs(y = "SWE (mm)")
-  }
+  plot <- plot + ggplot2::labs(y = tr("snowbull_rmd_swe_abbrev", lang = language$language), "(mm)")
 
   return(plot)
 }
@@ -588,9 +556,10 @@ swe_basins <- SWE_basin(
 # Add datetime to data
 swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
 # Get stats for text
-stats <- snowBulletinStats(year = year_param, 
-  month = month_param, 
-  excel_output = FALSE, 
+stats <- snowBulletinStats(
+  year = year_param,
+  month = month_param,
+  excel_output = FALSE,
   con = con
 )
 # Switch up the columns if french bulletin (prevents having to change all the code)

@@ -3,6 +3,14 @@ load_all()
 con <- YGwater::AquaConnect()
 
 
+con <- YGwater::AquaConnect(
+    name = "aquacache",
+    host = Sys.getenv("aquacacheHostDev"),
+    port = Sys.getenv("aquacachePortDev"),
+    user = Sys.getenv("aquacacheUserDev"),
+    password = Sys.getenv("aquacachePassDev"),
+)
+
 snow_id <- DBI::dbGetQuery(
     con,
     "SELECT media_id FROM media_types WHERE media_type = 'snow'"

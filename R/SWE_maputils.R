@@ -998,6 +998,9 @@ download_continuous_ts_locations <- function(
         DBI::dbQuoteString(con, aggregation_descriptions[[param_name_long]]),
         DBI::dbQuoteString(con, record_rates[[param_name_long]])
     )
+
+    md_continuous_df <- DBI::dbGetQuery(con, md_query)
+
     if (nrow(md_continuous_df) == 0) {
         warning("No continuous data stations found")
         return(list(
