@@ -2588,8 +2588,7 @@ addLocation <- function(id, inputs, language) {
           pending_project_new(NULL)
         },
         error = function(e) {
-          # Rollback the transaction if there was an error
-          DBI::dbRollback(session$userData$AquaCache)
+          # Rollback already happens within AquaCache::addACLocation
           showModal(modalDialog(
             "Error adding location: ",
             e$message

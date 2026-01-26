@@ -998,8 +998,6 @@ download_continuous_ts_locations <- function(
         DBI::dbQuoteString(con, aggregation_descriptions[[param_name_long]]),
         DBI::dbQuoteString(con, record_rates[[param_name_long]])
     )
-
-    md_continuous_df <- DBI::dbGetQuery(con, md_query)
     if (nrow(md_continuous_df) == 0) {
         warning("No continuous data stations found")
         return(list(
@@ -1050,22 +1048,21 @@ download_discrete_ts_locations <- function(con, param_name_long, epsg = 4326) {
     # Build metadata query for discrete SWE timeseries
     md_discrete_df <- DBI::dbGetQuery(
         con,
-        sprintf(
-            "SELECT DISTINCT
-      l.location_id,
-      l.latitude,
-      l.longitude,
-      l.location,
-      l.name,
-      dc.conversion_m
-       FROM discrete.samples s
-       JOIN discrete.results r ON s.sample_id = r.sample_id
-       JOIN public.locations l ON s.location_id = l.location_id
-       LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
-       WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters
-             WHERE param_name = %s)",
-            DBI::dbQuoteString(con, param_name_long)
-        )
+        "SELECT DISTINCT
+        l.location_id,
+        l.latitude,
+        l.longitude,
+        l.location,
+        l.name,
+        dc.conversion_m
+        FROM discrete.samples s
+        JOIN discrete.results r ON s.sample_id = r.sample_id
+        JOIN public.locations l ON s.location_id = l.location_id
+        LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
+        WHERE r.parameter_id = 
+            (SELECT parameter_id FROM public.parameters
+             WHERE param_name = $1)",
+        params = list(param_name_long)
     )
 
     if (nrow(md_discrete_df) == 0) {
@@ -1351,11 +1348,12 @@ download_continuous_ts <- function(
 #' @noRd
 
 check_parameter_exists <- function(con, parameter_name) {
-    param_check_query <- sprintf(
-        "SELECT COUNT(*) as count FROM public.parameters WHERE param_name = %s",
-        DBI::dbQuoteString(con, parameter_name)
-    )
-    param_exists <- DBI::dbGetQuery(con, param_check_query)$count > 0
+    param_exists <- DBI::dbGetQuery(
+        con,
+        "SELECT COUNT(*) as count FROM public.parameters WHERE param_name = $1",
+        params = list(parameter_name)
+    )$count >
+        0
     return(param_exists)
 }
 
@@ -4069,8 +4067,8 @@ make_ggplot_map <- function(
             ggplot2::geom_point(
                 data = point_data,
                 ggplot2::aes(
-                    x = point_data$x,
-                    y = point_data$y
+                    x = .data$x,
+                    y = .data$y
                 ),
                 fill = point_data$fill_colour,
                 color = static_style_elements$surveys$color,
@@ -4224,7 +4222,7 @@ make_ggplot_map <- function(
     p <- p +
         ggplot2::geom_point(
             data = legend_df,
-            ggplot2::aes(x = 99, y = 99, fill = legend_df$label),
+            ggplot2::aes(x = 99, y = 99, fill = .data$label),
             shape = 21,
             size = 5,
             show.legend = TRUE
@@ -4406,13 +4404,7 @@ make_snowbull_map <- function(
     # static_style_elements <- get_static_style_elements()
 
     if (is.null(con)) {
-        con <- AquaCache::AquaConnect(
-            name = "aquacache",
-            host = "10.250.12.154",
-            port = 5432,
-            user = "public_reader",
-            password = "aquacache"
-        )
+        con <- AquaConnect(silent = TRUE)
         on.exit(DBI::dbDisconnect(con))
     }
 

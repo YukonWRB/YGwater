@@ -43,7 +43,7 @@ SWE_station(
 
 \item{historical_start_year}{The first year to include in the historical statistics. If NULL, all years prior to 'year' are included.}
 
-\item{historical_end_year}{The last year to include in the historical statistics. If NULL}
+\item{historical_end_year}{The last year to include in the historical statistics. If NULL, the year prior to the current year is used.}
 
 \item{save_path}{The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.}
 }

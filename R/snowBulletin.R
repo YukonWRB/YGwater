@@ -19,9 +19,6 @@
 #' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french" or "francais". Default is "english".
 #' @param precip_period The period to use for precipitation stats. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
 #' @param cddf_period The period to use for the cumulative degree day plot historic range. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
-#' @param snow_period The period to use for the snow survey plot historic range. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.
-#' @param water_period The period to use for the water level/flow historic ranges. Options are "all years" (all years of record), "last 40 years". Default is "all years". CURRENTLY NOT DOING ANYTHING FOR THE PLOTS, JUST FOR THE TEXT.
-#' @param lookback The number of past years to consider for all plots and statistics. Default is 30. NOT CURRENTLY USED, but will replace other _period parameters.
 #' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #'
 #' @return A snow bulletin in Microsoft Word format.
@@ -39,11 +36,18 @@ snowBulletin <- function(
   language = "english",
   precip_period = "last 40 years",
   cddf_period = "last 40 years",
-  snow_period = "all years",
-  water_period = "all years",
-  lookback = 40,
   con = NULL
 ) {
+  year = 2025
+  month = 3
+  save_path = "C:/Users/gtdelapl/Desktop"
+  scale = 1
+  basins = NULL
+  synchronize = FALSE
+  language = "english"
+  precip_period = "last 40 years"
+  cddf_period = "last 40 years"
+
   #Check parameters
   #Language
   if (!(language %in% c("french", "english", "francais", "fran"))) {
@@ -68,24 +72,6 @@ snowBulletin <- function(
   ) {
     stop(
       "Parameter 'cddf_period' must be one of the options: 'last 40 years', 'all years', '1981-2010', '1991-2020'."
-    )
-  }
-  # snow_period
-  # if (!(snow_period %in% c("last 40 years", "all years", "1981-2010", "1991-2020"))) {
-  #   stop("Parameter 'snow_period' must be one of the options: 'all years', 'last 40 years', '1981-2010', '1991-2020'.")
-  # }
-  if (!(snow_period == "all years")) {
-    stop(
-      "Parameter 'snow_period' must be 'all years', at least until the underlying functions and bulletin code can handle other options."
-    )
-  }
-  # water_period
-  # if (!(water_period %in% c("last 40 years", "all years", "1981-2010", "1991-2020"))) {
-  #   stop("Parameter 'water_period' must be one of the options: 'all years', 'last 40 years', '1981-2010', '1991-2020'.")
-  # }
-  if (!(water_period == "all years")) {
-    stop(
-      "Parameter 'water_period' must be 'all years', at least until the underlying functions and bulletin code can handle other options."
     )
   }
 
@@ -288,9 +274,6 @@ snowBulletin <- function(
       },
       precip_period = precip_period,
       cddf_period = cddf_period,
-      # snow_period = snow_period,
-      # water_period = water_period,
-      # lookback = lookback,
       con = con
     )
   )

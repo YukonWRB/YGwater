@@ -23,8 +23,6 @@ date: "`r if (params$language == 'english') paste0(month.name[params$month],' 1,
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 300)
 # TODO: Deal with commented out code
-# TODO: Add snow_period parameter, akin to precip_period, cddf_period. Requires modification of snowBulletinStats function.
-# TODO: Add periods of 'last 30 years' and 2001-2030 (visible once possible in Shiny apps) for the xxx_period options. Requires modification of snowBulletinStats function.
 # TODO: assignement of parameters passed on from snowBulletin function to parameters like language_param, etc is not necessary. Can be used directly.
 fig.height_half <- 2.9
 fig.height_full <- 2.7
@@ -590,7 +588,11 @@ swe_basins <- SWE_basin(
 # Add datetime to data
 swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
 # Get stats for text
-stats <- snowBulletinStats(year = year_param, month = month_param, excel_output = FALSE, con = con)
+stats <- snowBulletinStats(year = year_param, 
+  month = month_param, 
+  excel_output = FALSE, 
+  con = con
+)
 # Switch up the columns if french bulletin (prevents having to change all the code)
 if (language == "french") {
   stats$basin_stats$description <- NULL
@@ -931,13 +933,15 @@ Le débit hivernal des cours d’eau et le niveau des lacs sont présentés pour
 # Plot SWE
 tryCatch(
   {
+    # TODO: missing full map title
     make_snowbull_map(
       year = year_param,
       month = month_param,
       statistic = "anomalies",
       language = language,
       format = "ggplot",
-      parameter_name = "temperature"
+      parameter_name = "temperature",
+      con = con
     )
   },
   error = function(e) {
@@ -960,7 +964,8 @@ tryCatch(
       statistic = "relative_to_med",
       language = language,
       format = "ggplot",
-      parameter_name = "precip"
+      parameter_name = "precip",
+      con = con
     )
   },
   error = function(e) {
@@ -984,7 +989,8 @@ tryCatch(
       statistic = "relative_to_med",
       language = language,
       format = "ggplot",
-      parameter_name = "swe"
+      parameter_name = "swe",
+      con = con
     )
   },
   error = function(e) {
