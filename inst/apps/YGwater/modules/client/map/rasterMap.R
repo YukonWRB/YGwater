@@ -1,131 +1,114 @@
-# library(shiny)
-# library(leaflet)
-# library(raster)
-# library(YGwater)
-# library(terra)
-# library(sf)
-
-# con <- AquaCache::AquaConnect(
-#   name = "aquacache",
-#   host = Sys.getenv("aquacacheHostProd"),
-#   port = Sys.getenv("aquacachePortProd"),
-#   user = Sys.getenv("aquacacheUserProd"),
-#   password = Sys.getenv("aquacachePassProd")
-# )
-
-download_spatial_layer <- function(
-  con,
-  layer_name,
-  additional_query = NULL
-) {
-  query <- sprintf(
-    "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
-         FROM spatial.vectors 
-         WHERE layer_name = %s",
-    DBI::dbQuoteString(con, layer_name)
-  )
-
-  if (!is.null(additional_query) && nzchar(additional_query)) {
-    query <- paste(query, additional_query)
-  }
-
-  data <- DBI::dbGetQuery(con, query)
-  if (nrow(data) == 0) {
-    warning(sprintf("No data found for layer: %s", layer_name))
-    return(NULL)
-  }
-
-  geom <- sf::st_as_sfc(data$geom_4326, crs = 4326)
-  sf::st_sf(data, geometry = geom, crs = 4326)
-}
-
-getRasterRefID <- function(ref_table, datetime) {
-  ref_id <- ref_table$reference_id[which.min(abs(
-    as.numeric(ref_table$datetime - as.POSIXct(datetime, tz = "UTC"))
-  ))]
-  return(ref_id)
-}
-
-getRasterSWE <- function(con, reference_id) {
-  r <- getRaster(
-    con = con,
-    tbl_name = c("spatial", "rasters"),
-    clauses = sprintf("WHERE reference_id = %d", reference_id),
-    bands = 1
-  )
-  terra::crs(r) <- "EPSG:4326"
-  r <- r * 1000 # Convert from meters to mm
-  return(r)
-}
-
-getPillowSWE <- function(con, stations_sf, date) {
-  stations_sf$swe <- NA_real_
-
-  ts_query <- sprintf(
-    "SELECT DISTINCT ON (timeseries_id) timeseries_id, date, value 
-       FROM continuous.measurements_calculated_daily_corrected
-       WHERE timeseries_id IN (%s) AND value IS NOT NULL AND date = '%s'
-       ORDER BY timeseries_id, date DESC",
-    paste(stations_sf$timeseries_id, collapse = ","),
-    as.Date(date)
-  )
-
-  ts_data <- DBI::dbGetQuery(con, ts_query)
-  # Match ts_data with stations_sf based on timeseries_id
-  for (i in seq_len(nrow(stations_sf))) {
-    match_idx <- which(
-      ts_data$timeseries_id == stations_sf$timeseries_id[i]
-    )
-    if (length(match_idx) > 0) {
-      stations_sf$swe[i] <- ts_data$value[match_idx[1]]
-    }
-  }
-  return(stations_sf)
-}
-
-getSurveySWE <- function(con, stations_sf, date) {
-  stations_sf$swe <- NA_real_
-  ts_query <- sprintf(
-    "SELECT s.target_datetime, r.result as value, s.location_id
-       FROM discrete.samples s
-       JOIN discrete.results r ON s.sample_id = r.sample_id
-       WHERE s.location_id IN (%s)
-       AND r.parameter_id = (SELECT parameter_id FROM public.parameters
-                   WHERE param_name = 'snow water equivalent')
-       AND r.result IS NOT NULL
-       AND DATE(s.target_datetime) = '%s'
-       ORDER BY s.location_id, s.target_datetime DESC",
-    paste(stations_sf$location_id, collapse = ","),
-    as.Date(date)
-  )
-
-  ts_data <- DBI::dbGetQuery(con, ts_query)
-  # Match ts_data with stations_sf based on location_id
-  for (i in seq_len(nrow(stations_sf))) {
-    match_idx <- which(
-      ts_data$location_id == stations_sf$location_id[i]
-    )
-    if (length(match_idx) > 0) {
-      stations_sf$swe[i] <- ts_data$value[match_idx[1]]
-    }
-  }
-  return(stations_sf)
-}
-
-
-# UI using bslib::page_fluid and dynamic sidebar via uiOutput
-
 mapRasterUI <- function(id) {
-  ns <- shiny::NS(id)
+  ns <- NS(id)
   bslib::page_fluid(
     uiOutput(ns("banner")),
-    shiny::uiOutput(ns("sidebar_page")) # <-- add ns() here
+    uiOutput(ns("sidebar_page")) # <-- add ns() here
   )
 }
 
 mapRaster <- function(id, language) {
-  shiny::moduleServer(id, function(input, output, session) {
-    ns <- session$ns # ensure ns is available
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+
+    # Define helper functions
+    download_spatial_layer <- function(
+      con,
+      layer_name,
+      additional_query = NULL
+    ) {
+      query <- sprintf(
+        "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
+             FROM spatial.vectors 
+             WHERE layer_name = %s",
+        DBI::dbQuoteString(con, layer_name)
+      )
+
+      if (!is.null(additional_query) && nzchar(additional_query)) {
+        query <- paste(query, additional_query)
+      }
+
+      data <- DBI::dbGetQuery(con, query)
+      if (nrow(data) == 0) {
+        warning(sprintf("No data found for layer: %s", layer_name))
+        return(NULL)
+      }
+
+      geom <- sf::st_as_sfc(data$geom_4326, crs = 4326)
+      sf::st_sf(data, geometry = geom, crs = 4326)
+    }
+
+    getRasterRefID <- function(ref_table, datetime) {
+      ref_id <- ref_table$reference_id[which.min(abs(
+        as.numeric(ref_table$datetime - as.POSIXct(datetime, tz = "UTC"))
+      ))]
+      return(ref_id)
+    }
+
+    getRasterSWE <- function(con, reference_id) {
+      r <- getRaster(
+        con = con,
+        tbl_name = c("spatial", "rasters"),
+        clauses = sprintf("WHERE reference_id = %d", reference_id),
+        bands = 1
+      )
+      terra::crs(r) <- "EPSG:4326"
+      r <- r * 1000 # Convert from meters to mm
+      return(r)
+    }
+
+    getPillowSWE <- function(con, stations_sf, date) {
+      stations_sf$swe <- NA_real_
+
+      ts_query <- sprintf(
+        "SELECT DISTINCT ON (timeseries_id) timeseries_id, date, value 
+           FROM continuous.measurements_calculated_daily_corrected
+           WHERE timeseries_id IN (%s) AND value IS NOT NULL AND date = '%s'
+           ORDER BY timeseries_id, date DESC",
+        paste(stations_sf$timeseries_id, collapse = ","),
+        as.Date(date)
+      )
+
+      ts_data <- DBI::dbGetQuery(con, ts_query)
+      # Match ts_data with stations_sf based on timeseries_id
+      for (i in seq_len(nrow(stations_sf))) {
+        match_idx <- which(
+          ts_data$timeseries_id == stations_sf$timeseries_id[i]
+        )
+        if (length(match_idx) > 0) {
+          stations_sf$swe[i] <- ts_data$value[match_idx[1]]
+        }
+      }
+      return(stations_sf)
+    }
+
+    getSurveySWE <- function(con, stations_sf, date) {
+      stations_sf$swe <- NA_real_
+      ts_query <- sprintf(
+        "SELECT s.target_datetime, r.result as value, s.location_id
+           FROM discrete.samples s
+           JOIN discrete.results r ON s.sample_id = r.sample_id
+           WHERE s.location_id IN (%s)
+           AND r.parameter_id = (SELECT parameter_id FROM public.parameters
+                       WHERE param_name = 'snow water equivalent')
+           AND r.result IS NOT NULL
+           AND DATE(s.target_datetime) = '%s'
+           ORDER BY s.location_id, s.target_datetime DESC",
+        paste(stations_sf$location_id, collapse = ","),
+        as.Date(date)
+      )
+
+      ts_data <- DBI::dbGetQuery(con, ts_query)
+      # Match ts_data with stations_sf based on location_id
+      for (i in seq_len(nrow(stations_sf))) {
+        match_idx <- which(
+          ts_data$location_id == stations_sf$location_id[i]
+        )
+        if (length(match_idx) > 0) {
+          stations_sf$swe[i] <- ts_data$value[match_idx[1]]
+        }
+      }
+      return(stations_sf)
+    }
 
     communities <- download_spatial_layer(
       con = session$userData$AquaCache,
@@ -163,10 +146,10 @@ mapRaster <- function(id, language) {
       )
     })
 
-    output$sidebar_page <- shiny::renderUI({
+    output$sidebar_page <- renderUI({
       bslib::page_sidebar(
         sidebar = bslib::sidebar(
-          shiny::dateInput(
+          dateInput(
             ns("date"), # already namespaced
             "Date",
             value = max(era5_raster_data$datetime),
@@ -174,7 +157,7 @@ mapRaster <- function(id, language) {
             max = max(era5_raster_data$datetime),
             language = language$abbrev
           ),
-          shiny::selectInput(
+          selectInput(
             ns("shapefile"), # already namespaced
             tr("gen_snowBul_basins", language$language),
             choices = c(
@@ -182,16 +165,16 @@ mapRaster <- function(id, language) {
             ),
             selected = "swe_basins"
           ),
-          shiny::tags$details(
+          tags$details(
             tags$summary(tr("snowbull_details", language$language)),
-            shiny::uiOutput(ns("map_details"))
+            uiOutput(ns("map_details"))
           )
         ),
         leaflet::leafletOutput(ns("swe_map"), height = 800) # already namespaced
       )
     })
 
-    basins_shp <- shiny::reactive({
+    basins_shp <- reactive({
       if (input$shapefile == "swe_basins") {
         # input IDs are already namespaced in modules
         shp <- sf::st_read(
@@ -214,8 +197,8 @@ mapRaster <- function(id, language) {
     r_db_perm <- getRasterSWE(session$userData$AquaCache, ref_id_perm)
     swe_mask <- !is.na(r_db_perm) & (r_db_perm <= 10)
 
-    swe_map_data <- shiny::reactive({
-      shiny::req(input$date)
+    swe_map_data <- reactive({
+      req(input$date)
 
       swe_pillows <- getPillowSWE(
         con = session$userData$AquaCache,
@@ -283,7 +266,7 @@ mapRaster <- function(id, language) {
 
     output$swe_map <- leaflet::renderLeaflet({
       map_data <- swe_map_data()
-      shiny::req(map_data)
+      req(map_data)
       r_db <- map_data$r_db
       basins_shp <- map_data$basins
       contours_sf <- map_data$contours_sf
@@ -458,8 +441,8 @@ mapRaster <- function(id, language) {
     })
 
     # --- Render selected date text with details ---
-    output$map_details <- shiny::renderUI({
-      shiny::HTML(paste0(
+    output$map_details <- renderUI({
+      HTML(paste0(
         "<b>",
         tr("app_version", language$language),
         "</b> ",

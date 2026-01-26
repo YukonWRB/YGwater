@@ -672,7 +672,6 @@ wellRegistry <- function(id, language) {
           ]
         }
       }
-      out <<- wells_sub
 
       if (isFALSE(input$include_missing_depth)) {
         wells_sub <- wells_sub[!is.na(depth_m)]

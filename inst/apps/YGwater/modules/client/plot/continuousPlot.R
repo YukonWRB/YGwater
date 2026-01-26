@@ -380,8 +380,6 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     output$main <- renderUI({
-      out <<- moduleData$timeseries
-
       req(moduleData, language$language)
       network_col <- tr("generic_name_col", language$language)
       project_col <- tr("generic_name_col", language$language)
