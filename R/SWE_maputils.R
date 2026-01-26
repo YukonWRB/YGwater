@@ -897,6 +897,7 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
 #' )
 #' }
 #' @noRd
+#' @keywords internal
 download_spatial_layer <- function(
     con,
     layer_name,
@@ -3521,6 +3522,9 @@ get_display_data <- function(
 #' Colors and symbols are dynamically generated based on the selected statistic
 #' and language settings. The map extent is automatically set to cover the
 #' Yukon Territory with appropriate zoom levels.
+#'
+#'
+#' @export
 #'
 #' @examples
 #' \dontrun{

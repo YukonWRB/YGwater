@@ -10,33 +10,6 @@ mapRaster <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    # Define helper functions
-    download_spatial_layer <- function(
-      con,
-      layer_name,
-      additional_query = NULL
-    ) {
-      query <- sprintf(
-        "SELECT *, ST_AsText(ST_Transform(geom, 4326)) as geom_4326 
-             FROM spatial.vectors 
-             WHERE layer_name = %s",
-        DBI::dbQuoteString(con, layer_name)
-      )
-
-      if (!is.null(additional_query) && nzchar(additional_query)) {
-        query <- paste(query, additional_query)
-      }
-
-      data <- DBI::dbGetQuery(con, query)
-      if (nrow(data) == 0) {
-        warning(sprintf("No data found for layer: %s", layer_name))
-        return(NULL)
-      }
-
-      geom <- sf::st_as_sfc(data$geom_4326, crs = 4326)
-      sf::st_sf(data, geometry = geom, crs = 4326)
-    }
-
     getRasterRefID <- function(ref_table, datetime) {
       ref_id <- ref_table$reference_id[which.min(abs(
         as.numeric(ref_table$datetime - as.POSIXct(datetime, tz = "UTC"))
@@ -110,7 +83,7 @@ mapRaster <- function(id, language) {
       return(stations_sf)
     }
 
-    communities <- download_spatial_layer(
+    communities <- YGwater:::download_spatial_layer(
       con = session$userData$AquaCache,
       layer_name = "Communities"
     )
