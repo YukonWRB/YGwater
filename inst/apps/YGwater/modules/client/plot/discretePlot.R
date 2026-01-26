@@ -86,7 +86,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           radioButtons(
             ns("locs_groups"),
             NULL,
-            choices = setNames(
+            choices = stats::setNames(
               c("locations", "loc_groups"),
               c(
                 tr("locs", language$language),
@@ -115,7 +115,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           radioButtons(
             ns("params_groups"),
             NULL,
-            choices = setNames(
+            choices = stats::setNames(
               c("parameters", "param_groups"),
               c(
                 tr("parameters", language$language),

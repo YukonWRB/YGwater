@@ -1233,7 +1233,10 @@ simplerIndex <- function(id, language) {
     )
 
     empty_well_entry <- function() {
-      metadata <- setNames(as.list(rep(NA, length(well_fields))), well_fields)
+      metadata <- stats::setNames(
+        as.list(rep(NA, length(well_fields))),
+        well_fields
+      )
       list(files = character(), metadata = metadata)
     }
 

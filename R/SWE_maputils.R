@@ -28,6 +28,7 @@
 #' The relative SWE bins are designed to highlight significant departures from normal
 #'
 #' @noRd
+#' @keywords internal
 #'
 snowbull_months <- function(month = NULL, short = FALSE) {
     months = c(

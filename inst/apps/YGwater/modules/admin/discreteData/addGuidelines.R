@@ -331,7 +331,7 @@ addGuidelines <- function(id, language) {
         updateSelectizeInput(
           session,
           "parameter_id",
-          choices = setNames(
+          choices = stats::setNames(
             moduleData$parameters$parameter_id,
             paste0(
               moduleData$parameters$param_name,
@@ -345,7 +345,7 @@ addGuidelines <- function(id, language) {
         updateSelectizeInput(
           session,
           "sample_fraction",
-          choices = setNames(
+          choices = stats::setNames(
             moduleData$sample_fractions$sample_fraction_id,
             moduleData$sample_fractions$sample_fraction
           ),
@@ -354,7 +354,7 @@ addGuidelines <- function(id, language) {
         updateSelectizeInput(
           session,
           "result_speciation",
-          choices = setNames(
+          choices = stats::setNames(
             moduleData$result_speciations$result_speciation_id,
             moduleData$result_speciations$result_speciation
           ),
@@ -545,7 +545,7 @@ addGuidelines <- function(id, language) {
     # ----- Insert PARAMETER -----
     observeEvent(input$insert_parameter, ignoreInit = TRUE, {
       # choices: names = param_name (shown), values = parameter_id (used)
-      ch <- setNames(
+      ch <- stats::setNames(
         moduleData$parameters$parameter_id,
         paste0(
           moduleData$parameters$param_name,
@@ -584,7 +584,7 @@ addGuidelines <- function(id, language) {
 
     # ----- Insert SAMPLE FRACTION -----
     observeEvent(input$insert_fraction, ignoreInit = TRUE, {
-      ch <- setNames(
+      ch <- stats::setNames(
         moduleData$sample_fractions$sample_fraction_id,
         moduleData$sample_fractions$sample_fraction
       )
@@ -614,7 +614,7 @@ addGuidelines <- function(id, language) {
 
     # ----- Insert RESULT SPECIATION -----
     observeEvent(input$insert_speciation, ignoreInit = TRUE, {
-      ch <- setNames(
+      ch <- stats::setNames(
         moduleData$result_speciations$result_speciation_id,
         moduleData$result_speciations$result_speciation
       )

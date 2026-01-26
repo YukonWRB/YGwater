@@ -42,7 +42,7 @@ timeseries_key_to_name <- function(timeseries, metadata) {
     # Exclude datetime column if present
     station_ids <- setdiff(station_ids, "datetime")
     # Create a named vector for renaming
-    rename_map <- setNames(metadata$location_id, metadata$key)
+    rename_map <- stats::setNames(metadata$location_id, metadata$key)
     # Only rename columns that exist in both timeseries and metadata
     common_ids <- intersect(station_ids, names(rename_map))
     names(timeseries)[match(common_ids, names(timeseries))] <- rename_map[

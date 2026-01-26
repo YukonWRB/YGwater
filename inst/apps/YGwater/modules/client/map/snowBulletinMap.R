@@ -27,16 +27,16 @@
 # =============================================================================
 
 mapSnowbullUI <- function(id) {
-  ns <- shiny::NS(id)
-  shiny::fluidPage(
+  ns <- NS(id)
+  fluidPage(
     # Sidebar + main contentexpandLimits
     uiOutput(ns("banner")),
-    shiny::sidebarLayout(
-      shiny::sidebarPanel(
-        shiny::uiOutput(ns('sidebar_page')),
+    sidebarLayout(
+      sidebarPanel(
+        uiOutput(ns('sidebar_page')),
         width = 2
       ),
-      shiny::mainPanel(
+      mainPanel(
         leaflet::leafletOutput(ns("map"), height = "100vh"),
         width = 9
       )
@@ -92,13 +92,16 @@ mapSnowbull <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
-    months <- snowbull_months(short = TRUE)
+    months <- YGwater:::snowbull_months(short = TRUE)
 
-    con <- session$userData$AquaCache
-    snowbull_shapefiles <- load_bulletin_shapefiles(con)
-    snowbull_timeseries <- load_bulletin_timeseries(con)
+    snowbull_shapefiles <- YGwater:::load_bulletin_shapefiles(
+      session$userData$AquaCache
+    )
+    snowbull_timeseries <- YGwater:::load_bulletin_timeseries(
+      session$userData$AquaCache
+    )
 
-    static_style_elements <- get_static_style_elements()
+    static_style_elements <- YGwater:::get_static_style_elements()
 
     output$banner <- renderUI({
       application_notifications_ui(
@@ -136,7 +139,7 @@ mapSnowbull <- function(id, language) {
           selectInput(
             ns("month"),
             label = NULL,
-            choices = setNames(
+            choices = stats::setNames(
               as.character(c(2, 3, 4, 5)),
               c(
                 tr("feb", language$language),
@@ -158,7 +161,7 @@ mapSnowbull <- function(id, language) {
           radioButtons(
             ns("statistic"),
             label = NULL,
-            choices = setNames(
+            choices = stats::setNames(
               c("relative_to_med", "data", "percentile"),
               c(
                 tr("snowbull_relative_median", language$language),
@@ -172,14 +175,14 @@ mapSnowbull <- function(id, language) {
         ),
         tags$details(
           tags$summary(tr("snowbull_details", language$language)),
-          shiny::uiOutput(ns("map_details"))
+          uiOutput(ns("map_details"))
         )
       )
     })
 
     # --- Reactive for processed data and map output ---
-    map_output <- shiny::reactive({
-      shiny::req(input$year, input$month)
+    map_output <- reactive({
+      req(input$year, input$month)
 
       # get the 'current' data for the specified date, and create the popup data
       # returns list of sf objects with data columns
@@ -195,7 +198,7 @@ mapSnowbull <- function(id, language) {
         point_data_secondary = snowbull_timeseries$swe$pillows
       )
 
-      dynamic_style_elements <- get_dynamic_style_elements(
+      dynamic_style_elements <- YGwater:::get_dynamic_style_elements(
         statistic = input$statistic,
         language = language$language
       )
@@ -235,7 +238,7 @@ mapSnowbull <- function(id, language) {
     })
 
     # --- Observer: plot generation requests ---
-    shiny::observeEvent(
+    observeEvent(
       input$generate_plot,
       {
         req(
@@ -270,10 +273,10 @@ mapSnowbull <- function(id, language) {
     )
 
     # --- Render selected date text with details ---
-    output$map_details <- shiny::renderText({
-      shiny::req(input$year, input$month)
+    output$map_details <- renderText({
+      req(input$year, input$month)
       date_obj <- get_datetime(input$year, input$month)
-      shiny::HTML(paste0(
+      HTML(paste0(
         "<b>",
         tr("snowbull_date", language$language),
         ":</b> ",
