@@ -433,12 +433,20 @@ snowBulletinStats <- function(
     # ES: removing hardoded tsid (depricated in prod)
     # tsid <- c(484, 532, 540, 500, 548, 492, 556, 508)
 
-    query <- "
-      SELECT t.timeseries_id
-      FROM continuous.timeseries t
-      INNER JOIN parameters p ON t.parameter_id = p.parameter_id
-      WHERE p.param_name = 'temperature, air'
-    "
+    query <- sprintf(
+      "SELECT t.timeseries_id
+          FROM continuous.timeseries t
+          INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+          WHERE p.param_name = '%s'
+          AND t.aggregation_type_id = (
+            SELECT aggregation_type_id FROM continuous.aggregation_types
+            WHERE aggregation_type = '%s' LIMIT 1
+          )
+          AND t.record_rate = '%s'",
+      "temperature, air",
+      "instantaneous",
+      "01:00:00"
+    )
 
     tsid <- DBI::dbGetQuery(con, query)$timeseries_id
 

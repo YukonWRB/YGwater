@@ -7,6 +7,7 @@
 # Main mapping function (date, parameter, statistic)
 # -- 'load_snowbull_shapefiles' Load static spatial layers from database
 # -- 'load_snowbull_timeseries' Load hydromet timeseries data from database
+# ---- 'get_norms()' Compute norms for each timeseries
 # --
 # -- 'get_display_data' Process timeseries for selected date, parameter, and statistic
 # ---- 'get_state_as_shp' Get shapefile with data fields for selected date (all statistics, to create popups)
@@ -250,6 +251,7 @@ get_static_style_elements <- function() {
 
 get_dynamic_style_elements <- function(
     statistic = NULL,
+    parameter = NULL,
     language = "English"
 ) {
     # VALUE_COL_CHOICES = c("relative_to_med", "absolute", "percentile")
@@ -261,6 +263,12 @@ get_dynamic_style_elements <- function(
     #         )
     #     )
     # }
+
+    if (is.null(parameter)) {
+        parameter <- "swe"
+    }
+    # standardize parameter name for upcoming switch case
+    parameter <- standardize_parameter_name(parameter)
 
     if (is.null(statistic)) {
         statistic <- "relative_to_med"
@@ -389,6 +397,15 @@ get_dynamic_style_elements <- function(
             labels = anomalies_labels
         )
     )
+
+    # for precip, remove the 'no snow' and 'snow present' edge cases
+    if (parameter == "precipitation") {
+        style_choices$relative_to_med <- list(
+            bins = relative_bins[-c(1, 2)], # remove no snow / some snow bins
+            colors = relative_colors[-c(1, 2)], # remove no snow / some snow colors
+            labels = relative_labels[-c(1, 2)] # remove no snow / some snow labels
+        )
+    }
 
     return(style_choices[[statistic]])
 }
@@ -554,6 +571,104 @@ standardize_parameter_name <- function(parameter, long = FALSE) {
 
     return(param_out)
 }
+
+
+#' Calculate historical norms for stations
+#'
+#' @param temperature_data data.frame with 'datetime' column and station columns
+#' @param percent_missing_threshold Numeric (0-1) minimum data completeness in cumulative FDD calculation
+#' @param water_year_start_month Integer month when water year starts (default October = 10)
+#' @return data.frame with cumulative FDD for each station
+calculate_fdd <- function(
+    temperature,
+    percent_missing_threshold = 0.8,
+    water_year_start_month = 10
+) {
+    if ('datetime' %notin% colnames(temperature)) {
+        stop("Input temperature data must have a 'datetime' column")
+    }
+
+    # Get list of stations as all columns except 'datetime'
+    station_list <- setdiff(colnames(temperature), "datetime")
+
+    # Ensure datetime is POSIXct
+    temperature$datetime <- as.POSIXct(temperature$datetime)
+
+    # Calculate Freezing Degree Days (FDD) for each year and station, resetting at the start of each water year (Oct 1)
+    temperature$date_year <- lubridate::year(temperature$datetime)
+    temperature$date_month <- lubridate::month(temperature$datetime)
+    temperature$date_day <- lubridate::day(temperature$datetime)
+    temperature <- temperature[order(temperature$datetime), ]
+
+    # FDD: sum of degrees below 0°C per water year (Oct 1 - Jun 30)
+    temperature$date_water_year <- ifelse(
+        lubridate::month(temperature$datetime) >= water_year_start_month,
+        temperature$date_year + 1,
+        temperature$date_year
+    )
+
+    # Only keep data from October to June (exclude July and August)
+    temperature <- temperature[
+        lubridate::month(temperature$datetime) %in%
+            c(water_year_start_month:12, 1:6),
+    ]
+
+    # Initialize FDD and cumulative_nans data frames
+    fdd <- temperature
+    fdd[station_list] <- NA
+    cumulative_nans <- temperature
+    cumulative_nans[station_list] <- NA
+
+    below_zero <- temperature
+    # Set all values above 0 to 0 for each station
+    below_zero[station_list] <- lapply(below_zero[station_list], function(x) {
+        ifelse(x > 0, 0, x)
+    })
+
+    # Calculate cumulative FDD within each water_year
+    for (station_id in station_list) {
+        fdd[station_id] <- ave(
+            abs(below_zero[[station_id]]),
+            fdd$date_water_year,
+            FUN = function(x) cumsum(ifelse(is.na(x), 0, x))
+        )
+
+        cumulative_nans[station_id] <- ave(
+            is.na(temperature[[station_id]]),
+            temperature$date_water_year,
+            FUN = cumsum
+        )
+    }
+
+    # Add a column for number of days since start of water year as integer
+    temperature$days_from_start <- as.integer(
+        ave(
+            as.numeric(temperature$datetime),
+            temperature$date_water_year,
+            FUN = function(x) as.numeric(difftime(x, min(x), units = "days"))
+        )
+    ) +
+        1
+
+    # Normalize cumulative_nans by days_from_start to get proportion of missing data [0-1]
+    cumulative_nans$days_from_start <- temperature$days_from_start
+    for (station_id in station_list) {
+        cumulative_nans[[station_id]] <- ifelse(
+            cumulative_nans$days_from_start > 0,
+            cumulative_nans[[station_id]] / cumulative_nans$days_from_start,
+            NA
+        )
+    }
+
+    # Set FDD to NA where more than 80% of data is missing
+    for (station_id in station_list) {
+        nan_vector <- cumulative_nans[[station_id]]
+        fdd[[station_id]][nan_vector > percent_missing_threshold] <- NA
+    }
+
+    return(fdd)
+}
+
 
 #' Convert year and month to POSIXct datetime
 #'
@@ -846,6 +961,19 @@ download_continuous_ts_locations <- function(
     param_name_long,
     epsg = 4326
 ) {
+    # mapping aggregation descriptions to parameter names
+    aggregation_descriptions <- list(
+        `temperature, air` = "instantaneous",
+        `precipitation, total` = "sum",
+        `snow water equivalent` = "instantaneous"
+    )
+
+    # mapping record rates to parameter names
+    record_rates <- list(
+        `temperature, air` = "01:00:00",
+        `precipitation, total` = "1 day",
+        `snow water equivalent` = "01:00:00"
+    )
     # Build metadata query for continuous SWE timeseries
     md_query <- sprintf(
         "SELECT
@@ -860,8 +988,15 @@ download_continuous_ts_locations <- function(
          JOIN public.locations l ON t.location_id = l.location_id
          LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
          WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters
-             WHERE param_name = %s)",
-        DBI::dbQuoteString(con, param_name_long)
+             WHERE param_name = %s)
+           AND t.aggregation_type_id = (
+               SELECT aggregation_type_id FROM continuous.aggregation_types
+               WHERE aggregation_type = %s LIMIT 1
+           )
+           AND t.record_rate = %s",
+        DBI::dbQuoteString(con, param_name_long),
+        DBI::dbQuoteString(con, aggregation_descriptions[[param_name_long]]),
+        DBI::dbQuoteString(con, record_rates[[param_name_long]])
     )
 
     md_continuous_df <- DBI::dbGetQuery(con, md_query)
@@ -1521,6 +1656,7 @@ get_aggr_fun <- function(parameter) {
         precipitation = function(x) sum(x, na.rm = TRUE),
         swe = function(x) mean(x, na.rm = TRUE),
         temperature = function(x) mean(x, na.rm = TRUE),
+        fdd = function(x) sum(x, na.rm = TRUE),
         function(x) mean(x, na.rm = TRUE)
     )
 }
@@ -1530,11 +1666,16 @@ get_station_names <- function(ts) {
     setdiff(colnames(ts), "datetime")
 }
 
-# Helper: get start/end dates for a given parameter and year/month
-get_period_dates <- function(year, month) {
+#'  Helper: get start/end dates for a given parameter and year/month
+#'
+#' @param month bulletin month
+#' @param year bulletin year
+#' @param october_start Norm period starts in October of previous year regardless of bulletin month
+#' @return start date and end date for norm calculation period
+get_period_dates <- function(year, month, october_start = FALSE) {
     # for the feb or mar bulletin, start from oct previous year
     # otherwise start from previous month
-    if ((month == 2) || (month == 3)) {
+    if ((month == 2) || (month == 3) || october_start) {
         start_month <- 10
     } else {
         start_month <- month - 1
@@ -1548,10 +1689,14 @@ get_period_dates <- function(year, month) {
 
     start_date <- as.Date(sprintf("%d-%02d-01", start_year, start_month))
     end_date <- as.Date(sprintf("%d-%02d-01", year, month))
+
     list(start_date = start_date, end_date = end_date)
 }
 
 # Helper: get indices for a given parameter and period
+# e.g., for SWE or FDD, just grab the SWE measurement on the period end_date
+# for precipitation/temperature, grab all dates in the range
+# precip gets summed over the period, temp gets averaged
 get_indices <- function(parameter, ts, start_date, end_date) {
     switch(
         parameter,
@@ -1560,6 +1705,9 @@ get_indices <- function(parameter, ts, start_date, end_date) {
         ),
         swe = which(ts$datetime == end_date),
         temperature = which(ts$datetime >= start_date & ts$datetime < end_date),
+        fdd = which(
+            ts$datetime >= start_date & ts$datetime < end_date
+        ),
         which(ts$datetime >= start_date & ts$datetime < end_date)
     )
 }
@@ -1576,13 +1724,14 @@ get_indices <- function(parameter, ts, start_date, end_date) {
 #'   required for aggregation period (e.g., oct-feb for march bulletin)
 #' @param completeness_per_norm_period Numeric (0-1) minimum data completeness
 #'   required for norm period (e.g., 1991-2020)
-#' @return A list with two elements:
+#' @return A list with data.frames (station_norms, historical_distr, etc.)
 get_norms <- function(
-    start_year_historical,
-    end_year_historical,
     ts,
     parameter,
+    start_year_historical = 1991,
+    end_year_historical = 2020,
     end_months_historical = c(2, 3, 4, 5),
+    october_start = FALSE,
     completeness_per_aggr_period = 0.8,
     completeness_per_norm_period = 0.8
 ) {
@@ -1604,9 +1753,12 @@ get_norms <- function(
         )
     )
 
+    # for each year (e.g., 1991-2020) and for each each month (e.g., 2,3,4,5)
+    # get the 'norm' period, aggregate value
+    # output is table [year x month x station]
     for (yr in start_year_historical:end_year_historical) {
         for (m in end_months_historical) {
-            period <- get_period_dates(yr, m)
+            period <- get_period_dates(yr, m, october_start = october_start)
             idx <- get_indices(
                 parameter,
                 ts,
@@ -1667,50 +1819,92 @@ get_norms <- function(
     )
 }
 
-apply_norms <- function(
-    bulletin_month,
-    bulletin_year,
-    ts,
-    norms,
-    parameter
-) {
+
+#' Get bulletin value for each station
+#' @param bulletin_month Integer bulletin month
+#' @param bulletin_year Integer bulletin year
+#' @param ts Wide-format data.frame with 'datetime' column and station columns
+#' @param parameter Character string specifying the parameter name.
+#' @return Named numeric vector of bulletin values for each station
+#'
+get_bulletin_value <- function(bulletin_month, bulletin_year, ts, parameter) {
     aggr_fun <- get_aggr_fun(parameter)
     station_names <- get_station_names(ts)
 
-    period <- get_period_dates(bulletin_year, bulletin_month)
+    if (parameter %in% c("fdd")) {
+        october_start <- TRUE
+    } else {
+        october_start <- FALSE
+    }
+
+    period <- get_period_dates(
+        bulletin_year,
+        bulletin_month,
+        october_start = october_start
+    )
     idx <- get_indices(parameter, ts, period$start_date, period$end_date)
 
     station_current <- stats::setNames(
         sapply(station_names, function(station) aggr_fun(ts[idx, station])),
         station_names
     )
-    # Save current_aggr in the same format as station_norms (named numeric vector)
+
     station_current <- as.numeric(station_current)
     station_current[is.nan(station_current)] <- NA
     names(station_current) <- station_names
 
+    return(station_current)
+}
+
+
+get_normalized_bulletin_values <- function(
+    bulletin_month,
+    bulletin_year,
+    ts,
+    norms,
+    parameter
+) {
+    bulletin_values <- get_bulletin_value(
+        bulletin_month,
+        bulletin_year,
+        ts,
+        parameter
+    )
+
+    last_year_values <- get_bulletin_value(
+        bulletin_month,
+        bulletin_year - 1,
+        ts,
+        parameter
+    )
+
+    station_names <- get_station_names(ts)
+
+    # Extract norms for the bulletin month
     norms_for_month <- norms$station_norms[
-        rownames(norms$station_norms) == bulletin_month,
+        rownames(norms$station_norms) == as.character(bulletin_month),
     ]
     # Calculate the ratio of current_aggr to station_norms for each station
     relative_to_norm <- 100 *
-        (station_current /
+        (bulletin_values /
             norms_for_month)
 
-    snow_present <- !is.na(station_current) & station_current > 0
-    snow_not_present <- !is.na(station_current) & station_current == 0
+    # Handle special cases for SWE
+    if (parameter == "swe") {
+        snow_present <- !is.na(bulletin_values) & bulletin_values > 0
+        snow_not_present <- !is.na(bulletin_values) & bulletin_values == 0
 
-    median_is_zero <- !is.na(norms_for_month) & norms_for_month == 0
-    median_is_nonzero <- !is.na(norms_for_month) & norms_for_month > 0
+        median_is_zero <- !is.na(norms_for_month) & norms_for_month == 0
+        # median_is_nonzero <- !is.na(norms_for_month) & norms_for_month > 0
 
-    relative_to_norm[median_is_zero & snow_not_present] <- -2
-    relative_to_norm[median_is_zero & snow_present] <- -1
+        relative_to_norm[median_is_zero & snow_not_present] <- -2
+        relative_to_norm[median_is_zero & snow_present] <- -1
+    }
 
-    anomalies <- station_current -
-        norms_for_month
+    # Calculate anomalies (current - norm)
+    anomalies <- bulletin_values - norms_for_month
 
-    # Calculate the percentile of station_current within historical values for each
-    # station
+    # Calculate the percentile of bulletin_values within historical values for each station
     station_percentiles <- sapply(station_names, function(station) {
         hist_values <- norms$historical_distr[,
             rownames(norms$station_norms) == bulletin_month,
@@ -1720,15 +1914,16 @@ apply_norms <- function(
         hist_values <- hist_values[!is.na(hist_values)]
 
         # Percentile: proportion of historical values less than or equal to current value
-        mean(hist_values <= station_current[station]) * 100
+        mean(hist_values <= bulletin_values[station]) * 100
     })
 
     list(
-        current = station_current,
+        current = bulletin_values,
         relative_to_norm = relative_to_norm,
         norm = norms_for_month,
         percentiles = station_percentiles,
-        anomalies = anomalies
+        anomalies = anomalies,
+        last_year = last_year_values
     )
 }
 
@@ -2098,7 +2293,7 @@ get_state_as_shp <- function(
     stopifnot("timeseries" %in% names(data))
     stopifnot("metadata" %in% names(data))
 
-    data_stats <- apply_norms(
+    data_stats <- get_normalized_bulletin_values(
         bulletin_month = month,
         bulletin_year = year,
         ts = data$timeseries$data,
@@ -2446,6 +2641,8 @@ load_bulletin_timeseries <- function(
     load_swe = TRUE,
     load_precip = FALSE,
     load_temp = FALSE,
+    start_year_historical = 1991,
+    end_year_historical = 2020,
     epsg = 4326
 ) {
     # Initialize output structure
@@ -2498,8 +2695,8 @@ load_bulletin_timeseries <- function(
         # continuous_data$timeseries$relative_to_med <- ret$relative_to_med
         # continuous_data$timeseries$percentile <- ret$percentile
         norms <- get_norms(
-            start_year_historical = 1991,
-            end_year_historical = 2020,
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical,
             ts = continuous_data$timeseries$data,
             parameter = "swe"
         )
@@ -2511,8 +2708,8 @@ load_bulletin_timeseries <- function(
         discrete_data <- download_discrete_ts(con, epsg = epsg)
 
         norms <- get_norms(
-            start_year_historical = 1991,
-            end_year_historical = 2020,
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical,
             ts = discrete_data$timeseries$data,
             parameter = "swe"
         )
@@ -2601,8 +2798,8 @@ load_bulletin_timeseries <- function(
         # )
 
         norms <- get_norms(
-            start_year_historical = 1991,
-            end_year_historical = 2020,
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical,
             ts = basin_timeseries,
             parameter = "swe"
         )
@@ -2703,8 +2900,8 @@ load_bulletin_timeseries <- function(
         )
 
         norms <- get_norms(
-            start_year_historical = 1991,
-            end_year_historical = 2020,
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical,
             ts = precip_data$timeseries$data,
             parameter = "precipitation"
         )
@@ -2722,14 +2919,49 @@ load_bulletin_timeseries <- function(
         )
 
         norms <- get_norms(
-            start_year_historical = 1991,
-            end_year_historical = 2020,
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical,
             ts = temp_data$timeseries$data,
             parameter = "temperature"
         )
 
         snowbull_timeseries$temperature <- temp_data
         snowbull_timeseries$temperature$norms <- norms
+
+        # fdd <- calculate_fdd(
+        #     temperature = temp_data$timeseries$data,
+        #     percent_missing_threshold = 0.8,
+        #     water_year_start_month = 10
+        # )
+
+        station_list <- names(temp_data$timeseries$data)[
+            names(temp_data$timeseries$data) != "datetime"
+        ]
+        temp_freezing <- temp_data$timeseries$data
+        # Set all values above 0 to 0 for each station
+        temp_freezing[station_list] <- lapply(
+            temp_freezing[station_list],
+            function(x) {
+                ifelse(is.na(x), NA, ifelse(x > 0, 0, abs(x)))
+            }
+        )
+
+        norms <- get_norms(
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical,
+            ts = temp_freezing,
+            october_start = TRUE,
+            parameter = "fdd"
+        )
+
+        snowbull_timeseries$fdd <- list(
+            timeseries = list(data = temp_freezing),
+            parameter = "fdd",
+            continuity = "derived",
+            geom = "point",
+            norms = norms,
+            metadata = temp_data$metadata
+        )
     } # end load_temp
 
     return(snowbull_timeseries)
@@ -3222,8 +3454,14 @@ get_display_data <- function(
         df
     }
 
-    num_cols <- c("data", "relative_to_med", "historic_median", "percentile")
-    dataset_state <- to_numeric_cols(dataset_state, num_cols)
+    numeric_cols <- c(
+        "data",
+        "relative_to_med",
+        "historic_median",
+        "percentile",
+        "anomaly"
+    )
+    dataset_state <- to_numeric_cols(dataset_state, numeric_cols)
 
     # update the annotations to display the value for the selected type
     dataset_state$annotation <- paste0(
@@ -3307,6 +3545,7 @@ make_leaflet_map <- function(
     poly_data = NULL,
     point_data_secondary = NULL,
     snowbull_shapefiles = NULL,
+    parameter_name = NULL,
     statistic = "relative_to_med",
     language = "English",
     month = NULL,
@@ -3322,6 +3561,7 @@ make_leaflet_map <- function(
     # language used for legend text
     dynamic_style_elements <- get_dynamic_style_elements(
         statistic = statistic,
+        parameter = parameter_name,
         language = language
     )
 
@@ -3335,6 +3575,7 @@ make_leaflet_map <- function(
             "relative_to_med" = tr("snowbull_relative_median", language),
             "data" = tr("snowbull_swe", language),
             "percentile" = tr("snowbull_percentile", language),
+            "anomalies" = tr("snowbull_anomalies", language),
             ""
         ),
         "<br>",
@@ -3713,6 +3954,7 @@ make_ggplot_map <- function(
     point_data_secondary = NULL,
     statistic = NULL,
     snowbull_shapefiles,
+    parameter_name = NULL,
     language = "English",
     month = NULL,
     year = NULL,
@@ -3731,6 +3973,7 @@ make_ggplot_map <- function(
     # language used for legend text
     dynamic_style_elements <- get_dynamic_style_elements(
         statistic = statistic,
+        parameter = parameter_name,
         language = language
     )
 
@@ -3934,6 +4177,7 @@ make_ggplot_map <- function(
             "relative_to_med" = tr("snowbull_relative_median", language),
             "data" = tr("snowbull_swe", language),
             "percentile" = tr("snowbull_percentile", language),
+            "anomalies" = tr("snowbull_anomalies", language),
             ""
         ),
         " - ",
@@ -3976,6 +4220,7 @@ make_ggplot_map <- function(
     # Save plot bounds before adding dummy legend geom
 
     # Add a dummy invisible geom for legend
+
     p <- p +
         ggplot2::geom_point(
             data = legend_df,
@@ -4105,6 +4350,8 @@ make_snowbull_map <- function(
     dpi = 300,
     parameter_name = "swe",
     statistic = "relative_to_med",
+    start_year_historical = 1991,
+    end_year_historical = 2020,
     language = "English",
     con = NULL,
     format = "ggplot"
@@ -4152,6 +4399,7 @@ make_snowbull_map <- function(
 
     dynamic_style_elements <- get_dynamic_style_elements(
         statistic = statistic,
+        parameter = parameter_name,
         language = language
     )
 
@@ -4168,14 +4416,19 @@ make_snowbull_map <- function(
         on.exit(DBI::dbDisconnect(con))
     }
 
-    # Load snowbull_data if not provided
+    # Here, we load the continuous timeseries data from the database
+    # it will load all params passed
+    # norms are calculated using load_bulletin_timeseries
+    # it needs norm period specifications, but doesn't need 'bulletin year' information yet
     if (is.null(snowbull_timeseries)) {
         snowbull_timeseries <- load_bulletin_timeseries(
             con,
             load_swe = parameter_name == "swe",
             load_precip = parameter_name == "precipitation",
             load_temp = parameter_name == "temperature",
-            epsg = epsg
+            epsg = epsg,
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical
         )
     }
 
@@ -4186,55 +4439,92 @@ make_snowbull_map <- function(
             epsg = epsg
         )
     }
-
-    switch(
+    # Map snow bulletin data to generic map input arguments (point_data, poly_data, etc.)
+    # This step organizes the loaded timeseries data into a consistent structure for mapping.
+    timeseries_data <- switch(
         parameter_name,
-        "swe" = {
-            timeseries_data <- list(
-                poly_data = snowbull_timeseries$swe$basins,
-                point_data = snowbull_timeseries$swe$surveys,
-                point_data_secondary = snowbull_timeseries$swe$pillows
-            )
-        },
-        "precipitation" = {
-            timeseries_data <- list(
-                poly_data = NULL,
-                point_data = snowbull_timeseries$precipitation,
-                point_data_secondary = NULL
-            )
-        },
-        "temperature" = {
-            timeseries_data <- list(
-                poly_data = NULL,
-                point_data = snowbull_timeseries$temperature,
-                point_data_secondary = NULL
-            )
-        },
+        "swe" = list(
+            poly_data = snowbull_timeseries$swe$basins,
+            point_data = snowbull_timeseries$swe$surveys,
+            point_data_secondary = snowbull_timeseries$swe$pillows
+        ),
+        "precipitation" = list(
+            poly_data = NULL,
+            point_data = snowbull_timeseries$precipitation,
+            point_data_secondary = NULL
+        ),
+        "temperature" = list(
+            poly_data = NULL,
+            point_data = snowbull_timeseries$temperature,
+            point_data_secondary = NULL
+        ),
         stop("Unsupported parameter_name: ", parameter_name)
     )
 
-    # get the 'current' data for the specified date, and create the popup data
-    # returns list of sf objects with data columns
+    # Prepare map_data structure to hold processed data for each layer type
     map_data <- list(
+        poly_data = NULL,
         point_data = NULL,
-        point_data_secondary = NULL,
-        poly_data = NULL
+        point_data_secondary = NULL
     )
+
+    # For each data type, extract display-ready data for the specified date/statistic
     for (data_type in names(map_data)) {
-        if (!is.null(timeseries_data[[data_type]])) {
+        dataset <- timeseries_data[[data_type]]
+        if (!is.null(dataset)) {
             map_data[[data_type]] <- get_display_data(
+                dataset = dataset,
                 year = year,
                 month = month,
-                dataset = timeseries_data[[data_type]],
                 statistic = statistic,
                 language = language
             )
-
             map_data[[data_type]]$fill_colour <- get_state_style_elements(
                 map_data[[data_type]]$value_to_show,
                 style_elements = dynamic_style_elements
             )
         }
+    }
+
+    # Build bulletin_data for downstream use (e.g., export, reporting)
+    bulletin_data <- list(
+        month = month,
+        year = year,
+        parameter_name = parameter_name,
+        statistic = statistic,
+        start_year_historical = start_year_historical,
+        end_year_historical = end_year_historical
+    )
+
+    # Helper to clean up the dataframes before returning them for use in the bulletin markup
+    remove_mapping_fields <- function(df) {
+        remove_fields <- c(
+            "x_adjusted",
+            "y_adjusted",
+            "annotation",
+            "popup_content"
+        )
+        if (!is.null(df) && is.data.frame(df)) {
+            df <- df[, !names(df) %in% c(remove_fields), drop = FALSE]
+        }
+        return(df)
+    }
+
+    # Attach processed map data to bulletin_data by parameter type
+    if (parameter_name == "swe") {
+        bulletin_data$swe_basins <- remove_mapping_fields(map_data$poly_data)
+        bulletin_data$swe_surveys <- remove_mapping_fields(map_data$point_data)
+        bulletin_data$swe_pillows <- remove_mapping_fields(
+            map_data$point_data_secondary
+        )
+    } else if (parameter_name == "precipitation") {
+        bulletin_data$precip_stations <- remove_mapping_fields(
+            map_data$point_data
+        )
+    } else if (parameter_name == "temperature") {
+        bulletin_data$temp_stations <- remove_mapping_fields(
+            map_data$point_data
+        )
     }
 
     switch(
@@ -4254,7 +4544,7 @@ make_snowbull_map <- function(
             ))
         },
         "ggplot" = {
-            return(make_ggplot_map(
+            map <- make_ggplot_map(
                 point_data = map_data$point_data,
                 poly_data = map_data$poly_data,
                 point_data_secondary = map_data$point_data_secondary,
@@ -4263,10 +4553,16 @@ make_snowbull_map <- function(
                 statistic = statistic,
                 month = month,
                 year = year,
+                parameter_name = parameter_name,
                 filename = filename,
                 height = height,
                 width = width,
                 dpi = dpi
+            )
+
+            return(list(
+                map = map,
+                data = bulletin_data
             ))
         },
         stop("Unknown format: ", format)

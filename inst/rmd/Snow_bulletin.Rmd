@@ -2320,13 +2320,10 @@ tryCatch(
       size <- 9
       wdth <- c(1.3, 0.8, 0.7, 0.6, 0.7, 0.7, 0.6)
       # Remove 'Parcours nivométrique' from name
-      tabl[, 1] <- sub("Parcours nivométrique du ", "", tabl[, 1])
-      tabl[, 1] <- sub("Parcours nivométrique de la ", "", tabl[, 1])
-      tabl[, 1] <- sub("Parcours nivométrique de l'", "", tabl[, 1])
-      tabl[, 1] <- sub("Parcours nivométrique de ", "", tabl[, 1])
-      tabl[, 1] <- sub("Parcours nivométrique des ", "", tabl[, 1])
-      tabl[, 1] <- sub("Parcours nivométrique d'", "", tabl[, 1])
-      tabl[, 1] <- sub("Parcours nivométrique ", "", tabl[, 1])
+      tabl[, 1] <- sub("(parcours nivométrique)", "", tabl[, 1])
+      tabl[, 1] <- sub(", composite", "(composite)", tabl[, 1])
+      tabl[, 1] <- sub(" composite", "(composite)", tabl[, 1])
+
       # Capitalize first letter of location name
       tabl[, 1] <- paste0(toupper(substr(tabl$Nom, 1, 1)), substr(tabl$Nom, 2, nchar(tabl$Nom)))
     } else {

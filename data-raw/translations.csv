@@ -421,7 +421,8 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median (%),Pourcentage de la médiane historique (%)
-snowbull_historical_median,,Historical median (mm),Médiane historique (mm)
+snowbull_historical_median,,Historical median,Médiane historique
+snowbull_anomalies,,Anomalies,Anomalies
 snowbull_swe,,Snow water equivalent (mm),Équivalent en eau de neige (mm)
 snowbull_percentile,,Percentile (%),Percentile (%)
 snowbull_values,,Values,Valeurs
