@@ -277,7 +277,7 @@ mapSnowbull <- function(id, language) {
     # --- Render selected date text with details ---
     output$map_details <- renderText({
       req(input$year, input$month)
-      date_obj <- get_datetime(input$year, input$month)
+      date_obj <- YGwater:::get_datetime(input$year, input$month)
       HTML(paste0(
         "<b>",
         tr("snowbull_date", language$language),
