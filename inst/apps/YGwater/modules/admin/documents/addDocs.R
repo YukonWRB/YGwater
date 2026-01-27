@@ -42,13 +42,26 @@ addDocs <- function(id, language) {
       unique(trimws(unlist(strsplit(cleaned, ","))))
     }
 
-    normalize_text_input <- function(value) {
-      if (is.null(value) || !length(value)) {
+    split_comma_text <- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
         return(character(0))
       }
+      if (is.list(value)) {
+        value <- unlist(value)
+      }
       value <- as.character(value)
+      value <- gsub("[{}\"]", "", value)
+      value <- trimws(value)
       value <- value[nzchar(value)]
-      unique(value)
+      if (!length(value)) {
+        return(character(0))
+      }
+      if (length(value) > 1) {
+        return(unique(value))
+      }
+      parts <- trimws(unlist(strsplit(value, ",")))
+      parts <- parts[nzchar(parts)]
+      unique(parts)
     }
 
     parse_integer_input <- function(value) {
@@ -166,7 +179,7 @@ addDocs <- function(id, language) {
           label = "Author(s), separate by commas",
           width = "100%"
         ),
-        selectizeInput(
+        textInput(
           ns("doc_tags"),
           label = "Tag(s), separate by commas",
           width = "100%"
@@ -277,12 +290,12 @@ addDocs <- function(id, language) {
       updateTextInput(
         session,
         "doc_authors",
-        value = doc$authors
+        value = paste(split_comma_text(doc$authors), collapse = ", ")
       )
       updateTextInput(
         session,
         "doc_tags",
-        value = doc$tags
+        value = paste(split_comma_text(doc$tags), collapse = ", ")
       )
       updateDateInput(
         session,
@@ -332,21 +345,33 @@ addDocs <- function(id, language) {
       req(input$doc_name, input$doc_type, input$doc_description)
 
       doc_path <- input$doc_file$datapath
-      tags <- normalize_text_input(input$doc_tags)
-      authors <- normalize_text_input(input$doc_authors)
-      share_with <- normalize_text_input(input$doc_share_with)
+      tags <- split_comma_text(input$doc_tags)
+      authors <- split_comma_text(input$doc_authors)
+      share_with <- split_comma_text(input$doc_share_with)
       geoms <- parse_integer_input(input$doc_geoms)
       if (!length(share_with)) {
         share_with <- "public_reader"
       }
+
       publish_date_value <- input$doc_publish_date
-      if (is.null(publish_date_value) || is.na(publish_date_value)) {
-        publish_date_value <- NULL
+      if (!is.null(publish_date_value)) {
+        if (!length(publish_date_value)) {
+          publish_date_value <- NULL
+        }
+      }
+
+      url_value <- input$doc_url
+      if (!is.null(url_value)) {
+        if (is.na(url_value) || !nzchar(url_value)) {
+          url_value <- NULL
+        }
       }
 
       tryCatch(
         {
-          insertACDocument(
+          # In transaction
+          active <- AquaCache::dbTransBegin(session$userData$AquaCache)
+          AquaCache::insertACDocument(
             path = doc_path,
             name = input$doc_name,
             type = input$doc_type,
@@ -359,13 +384,14 @@ addDocs <- function(id, language) {
             geoms = if (length(geoms)) geoms else NULL,
             con = session$userData$AquaCache
           )
+          DBI::dbExecute(session$userData$AquaCache, "COMMIT")
           showNotification("Document added successfully.", type = "message")
           getModuleData()
           updateTextInput(session, "doc_name", value = "")
           updateSelectizeInput(session, "doc_type", selected = character(0))
           updateTextAreaInput(session, "doc_description", value = "")
-          updateTextInput(session, "doc_authors", selected = character(0))
-          updateTextInput(session, "doc_tags", selected = character(0))
+          updateTextInput(session, "doc_authors", value = "")
+          updateTextInput(session, "doc_tags", value = "")
           updateDateInput(session, "doc_publish_date", value = as.Date(NA))
           updateTextInput(session, "doc_url", value = "")
           updateSelectizeInput(
@@ -376,6 +402,7 @@ addDocs <- function(id, language) {
           updateSelectizeInput(session, "doc_geoms", selected = character(0))
         },
         error = function(err) {
+          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
           showNotification(
             paste("Failed to add document:", err$message),
             type = "error"
@@ -389,7 +416,6 @@ addDocs <- function(id, language) {
       req(doc_id)
       req(input$doc_name, input$doc_type, input$doc_description)
 
-      con <- session$userData$AquaCache
       type_id <- moduleData$doc_types$document_type_id[
         match(input$doc_type, moduleData$doc_types$document_type_en)
       ]
@@ -400,9 +426,9 @@ addDocs <- function(id, language) {
         )
         return()
       }
-      tags <- normalize_text_input(input$doc_tags)
-      authors <- normalize_text_input(input$doc_authors)
-      share_with <- normalize_text_input(input$doc_share_with)
+      tags <- split_comma_text(input$doc_tags)
+      authors <- split_comma_text(input$doc_authors)
+      share_with <- split_comma_text(input$doc_share_with)
       geoms <- parse_integer_input(input$doc_geoms)
 
       if (!length(share_with)) {
@@ -410,45 +436,59 @@ addDocs <- function(id, language) {
       }
 
       publish_date_value <- input$doc_publish_date
-      if (is.null(publish_date_value) || is.na(publish_date_value)) {
-        publish_date_value <- DBI::SQL("NULL")
+      if (!is.null(publish_date_value)) {
+        if (!length(publish_date_value)) {
+          publish_date_value <- NA
+        }
       } else {
-        publish_date_value <- as.character(publish_date_value)
+        publish_date_value <- NA
       }
 
       url_value <- input$doc_url
-      if (is.null(url_value) || !nzchar(url_value)) {
-        url_value <- DBI::SQL("NULL")
+      if (!is.null(url_value)) {
+        if (is.na(url_value) || !nzchar(url_value)) {
+          url_value <- NA
+        }
+      } else {
+        url_value <- NA
       }
-
-      update_sql <- glue::glue_sql(
-        "UPDATE files.documents
-         SET name = {name},
-             description = {description},
-             type = {type_id},
-             publish_date = {publish_date},
-             url = {url_value},
-             authors = {authors_sql},
-             tags = {tags_sql},
-             share_with = {share_with_sql}
-         WHERE document_id = {doc_id};",
-        name = input$doc_name,
-        description = input$doc_description,
-        type_id = type_id,
-        publish_date = publish_date_value,
-        url_value = url_value,
-        authors_sql = format_array_sql(authors, con),
-        tags_sql = format_array_sql(tags, con),
-        share_with_sql = format_array_sql(share_with, con),
-        doc_id = doc_id,
-        .con = con
-      )
 
       tryCatch(
         {
-          DBI::dbExecute(con, update_sql)
           DBI::dbExecute(
-            con,
+            session$userData$AquaCache,
+            "UPDATE files.documents
+            SET name = $1,
+              description = $2,
+              type = $3,
+              publish_date = $4,
+              url = $5,
+              authors = $6,
+              tags = $7,
+              share_with = $8
+            WHERE document_id = $9;",
+            params = list(
+              input$doc_name,
+              input$doc_description,
+              type_id,
+              publish_date_value,
+              url_value,
+              if (is.null(selections_to_array(authors))) {
+                NA
+              } else {
+                selections_to_array(authors)
+              },
+              if (is.null(selections_to_array(tags))) {
+                NA
+              } else {
+                selections_to_array(tags)
+              },
+              share_with_to_array(share_with),
+              doc_id
+            )
+          )
+          DBI::dbExecute(
+            session$userData$AquaCache,
             "DELETE FROM files.documents_spatial WHERE document_id = $1;",
             params = list(doc_id)
           )
@@ -459,7 +499,7 @@ addDocs <- function(id, language) {
               geom_id = geoms
             )
             DBI::dbAppendTable(
-              con,
+              session$userData$AquaCache,
               DBI::Id(schema = "files", table = "documents_spatial"),
               doc_spatial
             )
