@@ -27,8 +27,8 @@
 #' @details
 #' The relative SWE bins are designed to highlight significant departures from normal
 #'
+#' @keywords internal
 #' @noRd
-#'
 snowbull_months <- function(month = NULL, short = FALSE) {
     months = c(
         "January",
@@ -65,9 +65,8 @@ snowbull_months <- function(month = NULL, short = FALSE) {
 #'
 #' @details
 #' The relative SWE bins are designed to highlight significant departures from normal
-#'
+#' @keywords internal
 #' @noRd
-
 get_static_style_elements <- function() {
     # SVG icon for communities
     communities_icon_svg <- "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'><polygon points='8,0 16,8 8,16 0,8' fill='black' stroke='white' stroke-width='2'/></svg>"
@@ -247,6 +246,7 @@ get_static_style_elements <- function() {
 #'   \item anomalies: Deviation from normal in standard deviation units
 #' }
 #'
+#' @keywords internal
 #' @noRd
 
 get_dynamic_style_elements <- function(
@@ -573,102 +573,102 @@ standardize_parameter_name <- function(parameter, long = FALSE) {
 }
 
 
-#' Calculate historical norms for stations
-#'
-#' @param temperature_data data.frame with 'datetime' column and station columns
-#' @param percent_missing_threshold Numeric (0-1) minimum data completeness in cumulative FDD calculation
-#' @param water_year_start_month Integer month when water year starts (default October = 10)
-#' @return data.frame with cumulative FDD for each station
-calculate_fdd <- function(
-    temperature,
-    percent_missing_threshold = 0.8,
-    water_year_start_month = 10
-) {
-    if ('datetime' %notin% colnames(temperature)) {
-        stop("Input temperature data must have a 'datetime' column")
-    }
+# #' Calculate historical norms for stations
+# #'
+# #' @param temperature_data data.frame with 'datetime' column and station columns
+# #' @param percent_missing_threshold Numeric (0-1) minimum data completeness in cumulative FDD calculation
+# #' @param water_year_start_month Integer month when water year starts (default October = 10)
+# #' @return data.frame with cumulative FDD for each station
+# #'
+# calculate_fdd <- function(
+#     temperature,
+#     percent_missing_threshold = 0.8,
+#     water_year_start_month = 10
+# ) {
+#     if ('datetime' %notin% colnames(temperature)) {
+#         stop("Input temperature data must have a 'datetime' column")
+#     }
 
-    # Get list of stations as all columns except 'datetime'
-    station_list <- setdiff(colnames(temperature), "datetime")
+#     # Get list of stations as all columns except 'datetime'
+#     station_list <- setdiff(colnames(temperature), "datetime")
 
-    # Ensure datetime is POSIXct
-    temperature$datetime <- as.POSIXct(temperature$datetime)
+#     # Ensure datetime is POSIXct
+#     temperature$datetime <- as.POSIXct(temperature$datetime)
 
-    # Calculate Freezing Degree Days (FDD) for each year and station, resetting at the start of each water year (Oct 1)
-    temperature$date_year <- lubridate::year(temperature$datetime)
-    temperature$date_month <- lubridate::month(temperature$datetime)
-    temperature$date_day <- lubridate::day(temperature$datetime)
-    temperature <- temperature[order(temperature$datetime), ]
+#     # Calculate Freezing Degree Days (FDD) for each year and station, resetting at the start of each water year (Oct 1)
+#     temperature$date_year <- lubridate::year(temperature$datetime)
+#     temperature$date_month <- lubridate::month(temperature$datetime)
+#     temperature$date_day <- lubridate::day(temperature$datetime)
+#     temperature <- temperature[order(temperature$datetime), ]
 
-    # FDD: sum of degrees below 0°C per water year (Oct 1 - Jun 30)
-    temperature$date_water_year <- ifelse(
-        lubridate::month(temperature$datetime) >= water_year_start_month,
-        temperature$date_year + 1,
-        temperature$date_year
-    )
+#     # FDD: sum of degrees below 0°C per water year (Oct 1 - Jun 30)
+#     temperature$date_water_year <- ifelse(
+#         lubridate::month(temperature$datetime) >= water_year_start_month,
+#         temperature$date_year + 1,
+#         temperature$date_year
+#     )
 
-    # Only keep data from October to June (exclude July and August)
-    temperature <- temperature[
-        lubridate::month(temperature$datetime) %in%
-            c(water_year_start_month:12, 1:6),
-    ]
+#     # Only keep data from October to June (exclude July and August)
+#     temperature <- temperature[
+#         lubridate::month(temperature$datetime) %in%
+#             c(water_year_start_month:12, 1:6),
+#     ]
 
-    # Initialize FDD and cumulative_nans data frames
-    fdd <- temperature
-    fdd[station_list] <- NA
-    cumulative_nans <- temperature
-    cumulative_nans[station_list] <- NA
+#     # Initialize FDD and cumulative_nans data frames
+#     fdd <- temperature
+#     fdd[station_list] <- NA
+#     cumulative_nans <- temperature
+#     cumulative_nans[station_list] <- NA
 
-    below_zero <- temperature
-    # Set all values above 0 to 0 for each station
-    below_zero[station_list] <- lapply(below_zero[station_list], function(x) {
-        ifelse(x > 0, 0, x)
-    })
+#     below_zero <- temperature
+#     # Set all values above 0 to 0 for each station
+#     below_zero[station_list] <- lapply(below_zero[station_list], function(x) {
+#         ifelse(x > 0, 0, x)
+#     })
 
-    # Calculate cumulative FDD within each water_year
-    for (station_id in station_list) {
-        fdd[station_id] <- ave(
-            abs(below_zero[[station_id]]),
-            fdd$date_water_year,
-            FUN = function(x) cumsum(ifelse(is.na(x), 0, x))
-        )
+#     # Calculate cumulative FDD within each water_year
+#     for (station_id in station_list) {
+#         fdd[station_id] <- ave(
+#             abs(below_zero[[station_id]]),
+#             fdd$date_water_year,
+#             FUN = function(x) cumsum(ifelse(is.na(x), 0, x))
+#         )
 
-        cumulative_nans[station_id] <- ave(
-            is.na(temperature[[station_id]]),
-            temperature$date_water_year,
-            FUN = cumsum
-        )
-    }
+#         cumulative_nans[station_id] <- ave(
+#             is.na(temperature[[station_id]]),
+#             temperature$date_water_year,
+#             FUN = cumsum
+#         )
+#     }
 
-    # Add a column for number of days since start of water year as integer
-    temperature$days_from_start <- as.integer(
-        ave(
-            as.numeric(temperature$datetime),
-            temperature$date_water_year,
-            FUN = function(x) as.numeric(difftime(x, min(x), units = "days"))
-        )
-    ) +
-        1
+#     # Add a column for number of days since start of water year as integer
+#     temperature$days_from_start <- as.integer(
+#         ave(
+#             as.numeric(temperature$datetime),
+#             temperature$date_water_year,
+#             FUN = function(x) as.numeric(difftime(x, min(x), units = "days"))
+#         )
+#     ) +
+#         1
 
-    # Normalize cumulative_nans by days_from_start to get proportion of missing data [0-1]
-    cumulative_nans$days_from_start <- temperature$days_from_start
-    for (station_id in station_list) {
-        cumulative_nans[[station_id]] <- ifelse(
-            cumulative_nans$days_from_start > 0,
-            cumulative_nans[[station_id]] / cumulative_nans$days_from_start,
-            NA
-        )
-    }
+#     # Normalize cumulative_nans by days_from_start to get proportion of missing data [0-1]
+#     cumulative_nans$days_from_start <- temperature$days_from_start
+#     for (station_id in station_list) {
+#         cumulative_nans[[station_id]] <- ifelse(
+#             cumulative_nans$days_from_start > 0,
+#             cumulative_nans[[station_id]] / cumulative_nans$days_from_start,
+#             NA
+#         )
+#     }
 
-    # Set FDD to NA where more than 80% of data is missing
-    for (station_id in station_list) {
-        nan_vector <- cumulative_nans[[station_id]]
-        fdd[[station_id]][nan_vector > percent_missing_threshold] <- NA
-    }
+#     # Set FDD to NA where more than 80% of data is missing
+#     for (station_id in station_list) {
+#         nan_vector <- cumulative_nans[[station_id]]
+#         fdd[[station_id]][nan_vector > percent_missing_threshold] <- NA
+#     }
 
-    return(fdd)
-}
-
+#     return(fdd)
+# }
 
 #' Convert year and month to POSIXct datetime
 #'
@@ -963,14 +963,14 @@ download_continuous_ts_locations <- function(
 ) {
     # mapping aggregation descriptions to parameter names
     aggregation_descriptions <- list(
-        `temperature, air` = "instantaneous",
+        `temperature, air` = "(min+max)/2",
         `precipitation, total` = "sum",
         `snow water equivalent` = "instantaneous"
     )
 
     # mapping record rates to parameter names
     record_rates <- list(
-        `temperature, air` = "01:00:00",
+        `temperature, air` = "1 day",
         `precipitation, total` = "1 day",
         `snow water equivalent` = "01:00:00"
     )
@@ -1673,6 +1673,7 @@ get_station_names <- function(ts) {
 #' @param year bulletin year
 #' @param october_start Norm period starts in October of previous year regardless of bulletin month
 #' @return start date and end date for norm calculation period
+#' @noRd
 get_period_dates <- function(year, month, october_start = FALSE) {
     # for the feb or mar bulletin, start from oct previous year
     # otherwise start from previous month
@@ -1726,6 +1727,7 @@ get_indices <- function(parameter, ts, start_date, end_date) {
 #' @param completeness_per_norm_period Numeric (0-1) minimum data completeness
 #'   required for norm period (e.g., 1991-2020)
 #' @return A list with data.frames (station_norms, historical_distr, etc.)
+#' @noRd
 get_norms <- function(
     ts,
     parameter,
@@ -1733,8 +1735,8 @@ get_norms <- function(
     end_year_historical = 2020,
     end_months_historical = c(2, 3, 4, 5),
     october_start = FALSE,
-    completeness_per_aggr_period = 0.8,
-    completeness_per_norm_period = 0.8
+    completeness_per_aggr_period = 0.5,
+    completeness_per_norm_period = 0.5
 ) {
     aggr_fun <- get_aggr_fun(parameter)
     station_names <- get_station_names(ts)
@@ -1827,7 +1829,7 @@ get_norms <- function(
 #' @param ts Wide-format data.frame with 'datetime' column and station columns
 #' @param parameter Character string specifying the parameter name.
 #' @return Named numeric vector of bulletin values for each station
-#'
+#' @noRd
 get_bulletin_value <- function(bulletin_month, bulletin_year, ts, parameter) {
     aggr_fun <- get_aggr_fun(parameter)
     station_names <- get_station_names(ts)
@@ -1863,7 +1865,8 @@ get_normalized_bulletin_values <- function(
     bulletin_year,
     ts,
     norms,
-    parameter
+    parameter,
+    as_table = FALSE
 ) {
     bulletin_values <- get_bulletin_value(
         bulletin_month,
@@ -2287,7 +2290,8 @@ split_communities <- function(communities) {
 get_state_as_shp <- function(
     data,
     year,
-    month
+    month,
+    language
 ) {
     # Assert that data contains timeseries and metadata
     stopifnot(is.list(data))
@@ -2596,6 +2600,9 @@ get_km_to_crs_correction <- function(epsg) {
 #' @param load_swe Logical indicating whether to load SWE data (default TRUE)
 #' @param load_precip Logical indicating whether to load precipitation data (default FALSE)
 #' @param load_temp Logical indicating whether to load temperature data (default FALSE)
+#' @param start_year_historical Integer start year for historical norms (default 1991)
+#' @param end_year_historical Integer end year for historical norms (default 2020)
+#' @param october_start Logical indicating if water year starts in October (default FALSE)
 #' @param epsg Numeric EPSG code for coordinate reference system (default 4326)
 #' @return A list containing all loaded base data:
 #' \describe{
@@ -2644,6 +2651,7 @@ load_bulletin_timeseries <- function(
     load_temp = FALSE,
     start_year_historical = 1991,
     end_year_historical = 2020,
+    october_start = FALSE,
     epsg = 4326
 ) {
     # Initialize output structure
@@ -2698,6 +2706,7 @@ load_bulletin_timeseries <- function(
         norms <- get_norms(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
+            october_start = october_start,
             ts = continuous_data$timeseries$data,
             parameter = "swe"
         )
@@ -2802,6 +2811,7 @@ load_bulletin_timeseries <- function(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
             ts = basin_timeseries,
+            october_start = october_start,
             parameter = "swe"
         )
         snowbull_timeseries$swe$basins$timeseries <- list(
@@ -2904,6 +2914,7 @@ load_bulletin_timeseries <- function(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
             ts = precip_data$timeseries$data,
+            october_start = october_start,
             parameter = "precipitation"
         )
 
@@ -2923,6 +2934,7 @@ load_bulletin_timeseries <- function(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
             ts = temp_data$timeseries$data,
+            october_start = october_start,
             parameter = "temperature"
         )
 
@@ -2947,6 +2959,7 @@ load_bulletin_timeseries <- function(
             }
         )
 
+        # FDD will always have october start - since 1-month FDD doesn't seem super useful
         norms <- get_norms(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
@@ -3396,7 +3409,8 @@ get_display_data <- function(
     dataset_state <- get_state_as_shp(
         data = dataset,
         year = year,
-        month = month
+        month = month,
+        language = language
     )
 
     # create a label with format parameter_geom_continuity (e.g., swe_point_continuous)
@@ -3471,6 +3485,76 @@ get_display_data <- function(
         round(dataset_state[[statistic]], 0),
         "%)"
     )
+
+    # Add a 'description' column to stats_df based on perc_hist_med and language
+    dataset_state$description <- character(nrow(dataset_state))
+    for (i in seq_len(nrow(dataset_state))) {
+        val <- dataset_state$relative_to_med[i]
+        if (is.na(val)) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_no_data",
+                language
+            )
+        } else if (val < 66) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_well_below",
+                language
+            )
+        } else if (val >= 66 && val < 90) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_below",
+                language
+            )
+        } else if (val >= 90 && val < 98) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_close",
+                language
+            )
+        } else if (val >= 98 && val < 103) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_normal",
+                language
+            )
+        } else if (val >= 103 && val < 110) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_close",
+                language
+            )
+        } else if (val >= 110 && val < 135) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_above",
+                language
+            )
+        } else if (val >= 135) {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_well_above",
+                language
+            )
+        } else {
+            dataset_state$description[i] <- tr(
+                "snowbull_rmd_no_data",
+                language
+            )
+        }
+
+        avg_str <- tr("snowbull_rmd_average", language)
+        if (language == "English") {
+            dataset_state$description[i] <- paste(
+                dataset_state$description[i],
+                avg_str,
+                sep = " "
+            )
+        } else if (language %in% c("French", "Français")) {
+            dataset_state$description[i] <- paste(
+                avg_str,
+                dataset_state$description[i],
+                sep = " "
+            )
+        } else {
+            stop("Unsupported language abbreviation: ", language)
+        }
+    }
+
     return(dataset_state)
 }
 
@@ -3947,6 +4031,7 @@ make_leaflet_map <- function(
 #' )
 #' }
 #'
+#' @keywords internal
 #' @noRd
 
 make_ggplot_map <- function(
@@ -4357,8 +4442,6 @@ make_snowbull_map <- function(
     con = NULL,
     format = "ggplot"
 ) {
-    language <- lengthenLanguage(language)
-
     # Load required packages
     requireNamespace("sf")
     requireNamespace("stats")

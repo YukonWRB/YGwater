@@ -3,13 +3,13 @@ load_all()
 con <- YGwater::AquaConnect()
 
 
-con <- YGwater::AquaConnect(
-    name = "aquacache",
-    host = Sys.getenv("aquacacheHostDev"),
-    port = Sys.getenv("aquacachePortDev"),
-    user = Sys.getenv("aquacacheUserDev"),
-    password = Sys.getenv("aquacachePassDev"),
-)
+# con <- YGwater::AquaConnect(
+#     name = "aquacache",
+#     host = Sys.getenv("aquacacheHostDev"),
+#     port = Sys.getenv("aquacachePortDev"),
+#     user = Sys.getenv("aquacacheUserDev"),
+#     password = Sys.getenv("aquacachePassDev"),
+# )
 
 snow_id <- DBI::dbGetQuery(
     con,
@@ -23,18 +23,68 @@ bulletin_year <- 2024
 
 dat <- load_bulletin_timeseries(
     con = con,
-    load_temp = TRUE
+    load_swe = TRUE,
+    load_temp = TRUE,
+    load_precip = TRUE,
+    october_start = TRUE
 )
 
-ok <- get_normalized_bulletin_values(
-    bulletin_month = 4,
+swe_pillows <- get_display_data(
+    dataset = dat$swe$pillows,
+    year = bulletin_year,
+    month = bulletin_month,
+    statistic = "relative_to_med"
+)
+
+swe_basins <- get_display_data(
+    dataset = dat$swe$basins,
+    year = bulletin_year,
+    month = bulletin_month,
+    statistic = "relative_to_med"
+)
+
+precip <- get_display_data(
+    dataset = dat$precipitation,
+    year = bulletin_year,
+    month = bulletin_month,
+    statistic = "relative_to_med"
+)
+
+fdd <- get_display_data(
+    dataset = dat$fdd,
+    year = bulletin_year,
+    month = bulletin_month,
+    statistic = "relative_to_med"
+)
+
+
+swe <- get_normalized_bulletin_values(
+    bulletin_month = 3,
     bulletin_year = 2025,
-    ts = dat$fdd$timeseries$data,
-    parameter = "fdd",
-    norms = dat$fdd$norms
+    ts = dat$swe$basins$timeseries$data,
+    parameter = "swe",
+    norms = dat$swe$basins$norms
 )
 
-timeseries <- dat$fdd$timeseries$data
+
+plot(dat$fdd$timeseries$data[, 'datetime'], dat$fdd$timeseries$data[, '489'])
+
+
+View(p)
+plot(1:10, rnorm(10), main = "Example Plot")
+
+
+get_state_as_shp(
+    con = con,
+    year = 2025,
+    month = 3,
+    parameter_name = "swe",
+    statistic = "relative_to_med"
+)$
+
+swe$relative_to_norm
+
+timeseries <- dat$swe$basins$timeseries$data
 
 
 timeseries_key_to_name <- function(timeseries, metadata) {
@@ -56,6 +106,24 @@ timeseries <- timeseries_key_to_name(
     timeseries = dat$fdd$timeseries$data,
     metadata = dat$fdd$metadata
 )
+
+
+ok <- get_normalized_bulletin_values(
+    bulletin_month = 3,
+    bulletin_year = 2025,
+    ts = dat$swe$basins$timeseries$data,
+    parameter = "swe",
+    norms = dat$swe$basins$norms
+)
+
+
+swe_stats <- as.data.frame(t(do.call(rbind, ok)))
+swe_stats$name <- rownames(swe_stats)
+rownames(swe_stats) <- NULL
+swe_stats <- swe_stats[, c("name", setdiff(names(swe_stats), "name"))]
+
+
+df$description <- description
 
 # on.exit(DBI::dbDisconnect(con), add = TRUE)
 
