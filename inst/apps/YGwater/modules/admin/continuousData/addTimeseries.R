@@ -644,7 +644,7 @@ addTimeseries <- function(id, language) {
           updateSelectizeInput(
             session,
             "share_with",
-            selected = parse_share_with(details$share_with)
+            selected = array_to_text(details$share_with)
           )
           updateSelectizeInput(
             session,
@@ -903,7 +903,7 @@ addTimeseries <- function(id, language) {
                   as.numeric(agg_type),
                   rate,
                   as.numeric(owner),
-                  format_share_with(share_with),
+                  share_with_to_array(share_with),
                   ifelse(is.na(source_fx), NA, source_fx),
                   ifelse(is.na(args), NA, args),
                   if (nzchar(note)) note else NA,
@@ -1465,8 +1465,8 @@ addTimeseries <- function(id, language) {
             }
 
             # Changes to share_with
-            input_share_with <- format_share_with(input$share_with)
-            parsed_exist_share_with <- parse_share_with(
+            input_share_with <- share_with_to_array(input$share_with)
+            parsed_exist_share_with <- array_to_text(
               selected_timeseries$share_with
             )
             if (any(input$share_with != parsed_exist_share_with)) {

@@ -103,7 +103,7 @@ visit <- function(id, language) {
         air_temp = as.numeric(input$air_temp),
         wind = input$weather_wind,
         note = note,
-        share_with = format_share_with(input$share_with)
+        share_with = share_with_to_array(input$share_with)
       )
     }
 
@@ -686,7 +686,7 @@ visit <- function(id, language) {
             "visit_notes",
             value = visit_data$note
           )
-          share_groups <- parse_share_with(visit_data$share_with)
+          share_groups <- array_to_text(visit_data$share_with)
           if (!length(share_groups)) {
             share_groups <- "public_reader"
           }

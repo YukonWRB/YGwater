@@ -188,7 +188,7 @@ YGwater_globals <- function(
     options(shiny.maxRequestSize = 1024 * 1024^2)
 
     # define some functions for later use
-    parse_share_with <<- function(value) {
+    array_to_text <<- function(value) {
       if (is.null(value) || !length(value) || all(is.na(value))) {
         return(character())
       }
@@ -200,40 +200,22 @@ YGwater_globals <- function(
       out[nzchar(out)]
     }
 
-    format_share_with <<- function(groups) {
+    share_with_to_array <<- function(groups) {
       if (is.null(groups) || !length(groups) || all(!nzchar(groups))) {
         groups <- "public_reader"
       }
       groups <- gsub('"', '\\"', groups, fixed = TRUE)
       paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
     }
-  }
 
-  format_source_args <- function(value) {
-    if (
-      is.null(value) ||
-        length(value) == 0 ||
-        all(is.na(value)) ||
-        !nzchar(value)
-    ) {
-      return("")
+    selections_to_array <<- function(groups) {
+      if (is.null(groups) || !length(groups) || all(!nzchar(groups))) {
+        return(NULL)
+      }
+      groups <- gsub('"', '\\"', groups, fixed = TRUE)
+      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
     }
-    parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
-    if (is.null(parsed)) {
-      return(value)
-    }
-    if (length(parsed) == 0) {
-      return("")
-    }
-    if (is.list(parsed) && !is.data.frame(parsed)) {
-      parsed <- unlist(parsed)
-    }
-    if (is.null(names(parsed))) {
-      return(paste(parsed, collapse = ", "))
-    }
-    entries <- paste(names(parsed), parsed, sep = ": ")
-    paste(entries, collapse = ", ")
-  }
+  } # End of if public = FALSE
 
   # Take the JSON string coming from the DB and make it into a readable text string
   parse_source_args <<- function(value) {
