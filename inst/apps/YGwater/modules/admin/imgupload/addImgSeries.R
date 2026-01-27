@@ -208,7 +208,7 @@ addImgSeries <- function(id, language) {
       getModuleData()
       selected_series(NULL)
       # Clear table row selection
-      DT::dataTableProxy("series_table") |> DT::selectRows(NULL)
+      DT::dataTableProxy(ns("series_table")) |> DT::selectRows(NULL)
       updateSelectizeInput(
         session,
         "location",

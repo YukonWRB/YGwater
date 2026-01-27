@@ -533,7 +533,7 @@ grades_approvals_qualifiers <- function(id, language) {
       {
         selected_record(NULL)
         next_edge("start")
-        proxy <- DT::dataTableProxy("active_assignments", session = session)
+        proxy <- DT::dataTableProxy(nS("active_assignments"), session = session)
         DT::selectRows(proxy, NULL)
       },
       ignoreNULL = FALSE
@@ -707,7 +707,7 @@ grades_approvals_qualifiers <- function(id, language) {
 
     observeEvent(input$clear_selection, {
       selected_record(NULL)
-      proxy <- DT::dataTableProxy("active_assignments", session = session)
+      proxy <- DT::dataTableProxy(ns("active_assignments"), session = session)
       DT::selectRows(proxy, NULL)
       updateSelectizeInput(session, "attribute_value", selected = character(0))
     })
@@ -790,7 +790,10 @@ grades_approvals_qualifiers <- function(id, language) {
           showNotification("Attribute added successfully.", type = "message")
           assignment_refresh(assignment_refresh() + 1)
           selected_record(NULL)
-          proxy <- DT::dataTableProxy("active_assignments", session = session)
+          proxy <- DT::dataTableProxy(
+            ns("active_assignments"),
+            session = session
+          )
           DT::selectRows(proxy, NULL)
         }
       } else {
@@ -822,7 +825,10 @@ grades_approvals_qualifiers <- function(id, language) {
           showNotification("Attribute updated successfully.", type = "message")
           assignment_refresh(assignment_refresh() + 1)
           selected_record(NULL)
-          proxy <- DT::dataTableProxy("active_assignments", session = session)
+          proxy <- DT::dataTableProxy(
+            ns("active_assignments"),
+            session = session
+          )
           DT::selectRows(proxy, NULL)
         }
       }
@@ -871,7 +877,7 @@ grades_approvals_qualifiers <- function(id, language) {
         showNotification("Attribute deleted successfully.", type = "message")
         assignment_refresh(assignment_refresh() + 1)
         selected_record(NULL)
-        proxy <- DT::dataTableProxy("active_assignments", session = session)
+        proxy <- DT::dataTableProxy(ns("active_assignments"), session = session)
         DT::selectRows(proxy, NULL)
       }
     })

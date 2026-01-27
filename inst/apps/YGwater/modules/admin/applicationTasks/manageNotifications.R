@@ -203,7 +203,10 @@ manageNotifications <- function(id, module_choices, language) {
     }
 
     notifications <- reactiveVal(load_notifications())
-    table_proxy <- DT::dataTableProxy("notifications_table", session = session)
+    table_proxy <- DT::dataTableProxy(
+      ns("notifications_table"),
+      session = session
+    )
 
     refresh_notifications <- function() {
       notifications(load_notifications())

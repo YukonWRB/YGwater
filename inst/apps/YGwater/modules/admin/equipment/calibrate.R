@@ -2039,7 +2039,7 @@ table.on("click", "tr", function() {
           2
       ) {
         selection <- NULL
-        proxy <- DT::dataTableProxy("my_table")
+        proxy <- DT::dataTableProxy(ns("my_table"))
         DT::selectRows(proxy, selection, selected = FALSE)
         if (initial_instr_table$value) {
           output$calibration_instruments_table <- DT::renderDT(

@@ -130,7 +130,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
           options = list(maxItems = 1)
         ) |>
           tooltip(
-            "Only required for some parameters, e.g. hardness as CaCO3. If visible after selecting a parameter, it's requird."
+            "Only required for some parameters, e.g. hardness as CaCO3. If visible after selecting a parameter, it's required."
           ),
         actionLink(
           ns("open_guideline_help"),
@@ -185,7 +185,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
                 width = "100%"
               ) |>
                 tooltip(
-                  "Select a sample_fraction_id interactively and inserty it where the cursor is in the SQL box."
+                  "Select a sample_fraction_id interactively and insert it where the cursor is in the SQL box."
                 ),
               actionButton(
                 ns("insert_speciation"),
@@ -193,7 +193,7 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
                 width = "100%"
               ) |>
                 tooltip(
-                  "Select a result_speciation_id interactively and inserty it where the cursor is in the SQL box."
+                  "Select a result_speciation_id interactively and insert it where the cursor is in the SQL box."
                 )
             )
           )
@@ -325,7 +325,7 @@ addGuidelines <- function(id, language) {
       list(
         moduleData$parameters,
         moduleData$sample_fractions,
-        moduleData$result_speciation
+        moduleData$result_speciations
       ),
       {
         updateSelectizeInput(
@@ -373,12 +373,14 @@ addGuidelines <- function(id, language) {
         shinyjs::show("result_speciation")
       } else {
         shinyjs::hide("result_speciation")
+        updateSelectizeInput(session, "result_speciation", selected = NULL)
       }
 
       if (param$sample_fraction) {
         shinyjs::show("sample_fraction")
       } else {
         shinyjs::hide("sample_fraction")
+        updateSelectizeInput(session, "sample_fraction", selected = NULL)
       }
     })
 
@@ -409,7 +411,7 @@ addGuidelines <- function(id, language) {
       moduleData$guidelines_temp <- rbind(moduleData$guidelines_temp, new)
 
       # Select the new row in the data.table
-      DT::dataTableProxy("guidelines_table") |>
+      DT::dataTableProxy(ns("guidelines_table")) |>
         DT::selectRows(nrow(moduleData$guidelines))
 
       # Show the user a modal telling them to edit their new guideline to the right
@@ -1002,7 +1004,7 @@ FROM vals -- from the 'vals' CTE"
       }
 
       # if params required but none provided
-      if (all(is.na(req_df$values))) {
+      if (nrow(req_df) > 0 && all(is.na(req_df$values))) {
         output$test_guideline_result <- renderUI({
           div(
             style = "color:red;font-weight:bold;font-size:120%;margin-top:10px;",
@@ -1043,7 +1045,7 @@ FROM vals -- from the 'vals' CTE"
 
             # Insert supplied results
             for (i in 1:nrow(req_df)) {
-              if (is.na(req_df$value[i])) {
+              if (is.na(req_df$values[i])) {
                 next
               }
               DBI::dbExecute(
@@ -1057,7 +1059,7 @@ FROM vals -- from the 'vals' CTE"
                   req_df$parameter_id[i],
                   req_df$sample_fraction_id[i],
                   req_df$result_speciation_id[i],
-                  req_df$value[i]
+                  req_df$values[i]
                 )
               )
             }
@@ -1168,7 +1170,7 @@ FROM vals -- from the 'vals' CTE"
               params = list(
                 guideline$guideline_name,
                 guideline$publisher,
-                guideline$reference,
+                ref,
                 guideline$note,
                 guideline$parameter_id,
                 sf,
@@ -1184,7 +1186,7 @@ FROM vals -- from the 'vals' CTE"
               params = list(
                 guideline$guideline_name,
                 guideline$publisher,
-                guideline$reference,
+                ref,
                 guideline$note,
                 guideline$parameter_id,
                 sf,
@@ -1270,8 +1272,10 @@ FROM vals -- from the 'vals' CTE"
           moduleData$guidelines_temp <- moduleData$guidelines
 
           # Clear table selection and hide save button
-          DT::dataTableProxy("guidelines_table") |> DT::selectRows(NULL)
+          DT::dataTableProxy(ns("guidelines_table")) |>
+            DT::selectRows(NULL)
           shinyjs::hide("save_guideline")
+
           # Reset inputs
           updateTextInput(session, "guideline_name", value = "")
           updateTextInput(session, "publisher", value = "")

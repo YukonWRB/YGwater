@@ -2582,7 +2582,7 @@ simplerIndex <- function(id, language) {
         if (rv$pdf_index < nrow(rv$files_df)) {
           rv$pdf_index <- rv$pdf_index + 1
           # Ensure table selection follows
-          DT::dataTableProxy("pdf_table", session = session) |>
+          DT::dataTableProxy(ns("pdf_table"), session = session) |>
             DT::selectRows(rv$pdf_index)
         }
       },
@@ -2596,7 +2596,7 @@ simplerIndex <- function(id, language) {
         if (rv$pdf_index >= 2) {
           rv$pdf_index <- rv$pdf_index - 1
           # Ensure table selection follows
-          DT::dataTableProxy("pdf_table", session = session) |>
+          DT::dataTableProxy(ns("pdf_table"), session = session) |>
             DT::selectRows(rv$pdf_index)
         } else {
           rv$pdf_index <- 1
@@ -2632,7 +2632,7 @@ simplerIndex <- function(id, language) {
           } else if (rv$pdf_index > nrow(rv$files_df)) {
             rv$pdf_index <- nrow(rv$files_df)
             # Ensure table selection follows
-            DT::dataTableProxy("pdf_table", session = session) |>
+            DT::dataTableProxy(ns("pdf_table"), session = session) |>
               DT::selectRows(rv$pdf_index)
           }
           sort_files_df()
