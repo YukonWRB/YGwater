@@ -2182,7 +2182,7 @@ contData <- function(id, language, inputs) {
     # End of creating and rendering table section
 
     # Create the proxy for datatable manipulations
-    proxy <- DT::dataTableProxy("tbl")
+    proxy <- DT::dataTableProxy(ns("tbl"))
 
     # Show/hide the view button based on if a row is selected #
     observe({

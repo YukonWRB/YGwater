@@ -766,7 +766,7 @@ addImgs <- function(id, language) {
 
     # Observe select all button click and select all rows in the data table
     observeEvent(input$select_all, {
-      proxy <- DT::dataTableProxy("table")
+      proxy <- DT::dataTableProxy(ns("table"))
       DT::selectRows(proxy, seq_len(nrow(dat$df)))
     })
 
@@ -789,7 +789,7 @@ addImgs <- function(id, language) {
 
     # Observe clear selection button click and clear all selected rows in the data table
     observeEvent(input$clear_selection, {
-      proxy <- DT::dataTableProxy("table")
+      proxy <- DT::dataTableProxy(ns("table"))
       DT::selectRows(proxy, NULL)
 
       # Update the map to reflect deselection

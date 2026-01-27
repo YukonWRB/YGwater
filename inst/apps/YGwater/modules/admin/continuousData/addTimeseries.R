@@ -402,7 +402,8 @@ addTimeseries <- function(id, language) {
         getModuleData()
         selected_tsid(NULL)
         # Clear table row selection
-        DT::dataTableProxy("ts_table") |> DT::selectRows(NULL)
+        DT::dataTableProxy(ns("ts_table")) |>
+          DT::selectRows(NULL)
         updateSelectizeInput(
           session,
           "location",
@@ -1531,7 +1532,7 @@ addTimeseries <- function(id, language) {
               keys <- sapply(kv, `[`, 1)
               vals <- sapply(kv, `[`, 2)
               # build a named list and then a one-row data.frame
-              input_df <- setNames(as.list(vals), keys)
+              input_df <- stats::setNames(as.list(vals), keys)
               input_df <- as.data.frame(input_df, stringsAsFactors = FALSE)
               # now `parsed_json` and `input_df` have the same shape
 

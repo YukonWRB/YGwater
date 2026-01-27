@@ -792,7 +792,7 @@ table.on("click", "tr", function() {
       session$userData$AquaCache,
       "SELECT * FROM organizations"
     )
-    select_data$organizations <- setNames(
+    select_data$organizations <- stats::setNames(
       c(instruments_data$organizations$organization_id, "new"),
       c(instruments_data$organizations$name, "Add new organization")
     )
@@ -896,19 +896,19 @@ table.on("click", "tr", function() {
           instruments_data$observers$organization,
           ")"
         )
-        select_data$recorder <- setNames(
+        select_data$recorder <- stats::setNames(
           c(instruments_data$observers$observer_id, "new"),
           c(instruments_data$observers$observer_string, "Add new observer")
         )
-        select_data$makes <- setNames(
+        select_data$makes <- stats::setNames(
           c(instruments_data$makes$make_id, "new"),
           c(instruments_data$makes$make, "Add new make")
         )
-        select_data$models <- setNames(
+        select_data$models <- stats::setNames(
           c(instruments_data$models$model_id, "new"),
           c(instruments_data$models$model, "Add new model")
         )
-        select_data$types <- setNames(
+        select_data$types <- stats::setNames(
           c(instruments_data$types$type_id, "new"),
           c(instruments_data$types$type, "Add new type")
         )
@@ -969,7 +969,7 @@ table.on("click", "tr", function() {
           )
         })
 
-        tmp <- setNames(
+        tmp <- stats::setNames(
           c(sensors_data$sensor_types$sensor_type_id, "new"),
           c(sensors_data$sensor_types$sensor_type, "Add new type")
         )
@@ -1089,7 +1089,7 @@ table.on("click", "tr", function() {
           instruments_data$observers$organization,
           ")"
         )
-        select_data$recorder <- setNames(
+        select_data$recorder <- stats::setNames(
           c(instruments_data$observers$observer_id, "new"),
           c(instruments_data$observers$observer_string, "Add new observer")
         )
@@ -1181,7 +1181,7 @@ table.on("click", "tr", function() {
           session$userData$AquaCache,
           "SELECT * FROM instrument_make"
         )
-        select_data$makes <- setNames(
+        select_data$makes <- stats::setNames(
           c(instruments_data$makes$make_id, "new"),
           c(instruments_data$makes$make, "Add new make")
         )
@@ -1239,7 +1239,7 @@ table.on("click", "tr", function() {
           session$userData$AquaCache,
           "SELECT * FROM instrument_model"
         )
-        select_data$models <- setNames(
+        select_data$models <- stats::setNames(
           c(instruments_data$models$model_id, "new"),
           c(instruments_data$models$model, "Add new model")
         )
@@ -1317,7 +1317,7 @@ table.on("click", "tr", function() {
           session$userData$AquaCache,
           "SELECT * FROM organizations"
         )
-        select_data$organizations <- setNames(
+        select_data$organizations <- stats::setNames(
           c(instruments_data$organizations$organization_id, "new"),
           c(instruments_data$organizations$name, "Add new organization")
         )
@@ -1375,7 +1375,7 @@ table.on("click", "tr", function() {
           session$userData$AquaCache,
           "SELECT * FROM instrument_type"
         )
-        select_data$types <- setNames(
+        select_data$types <- stats::setNames(
           c(instruments_data$types$type_id, "new"),
           c(instruments_data$types$type, "Add new type")
         )
@@ -1417,7 +1417,7 @@ table.on("click", "tr", function() {
           session$userData$AquaCache,
           "SELECT * FROM sensor_types"
         )
-        tmp <- setNames(
+        tmp <- stats::setNames(
           c(sensors_data$sensor_types$sensor_type_id, "new"),
           c(sensors_data$sensor_types$sensor_type, "Add new type")
         )
@@ -2039,7 +2039,7 @@ table.on("click", "tr", function() {
           2
       ) {
         selection <- NULL
-        proxy <- DT::dataTableProxy("my_table")
+        proxy <- DT::dataTableProxy(ns("my_table"))
         DT::selectRows(proxy, selection, selected = FALSE)
         if (initial_instr_table$value) {
           output$calibration_instruments_table <- DT::renderDT(

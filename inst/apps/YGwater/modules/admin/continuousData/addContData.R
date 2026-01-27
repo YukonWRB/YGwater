@@ -367,6 +367,7 @@ addContData <- function(id, language) {
         proxy = data_table_proxy,
         rownames = TRUE
       )
+      print(data$df)
     })
 
     check_fx <- function() {

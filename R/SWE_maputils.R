@@ -29,6 +29,8 @@
 #'
 #' @keywords internal
 #' @noRd
+#' @keywords internal
+#'
 snowbull_months <- function(month = NULL, short = FALSE) {
     months = c(
         "January",
@@ -896,6 +898,7 @@ resample_timeseries <- function(ts_data, frequency = "monthly", func = "sum") {
 #' )
 #' }
 #' @noRd
+#' @keywords internal
 download_spatial_layer <- function(
     con,
     layer_name,
@@ -951,6 +954,8 @@ download_spatial_layer <- function(
 #'   \item{longitude}{Station longitude}
 #'   \item{conversion_m}{Datum conversion factor if available}
 #' }
+#'
+#' @export
 #'
 #' @details
 #' Queries the continuous.timeseries and public.locations tables to get station
@@ -1041,6 +1046,8 @@ download_continuous_ts_locations <- function(
 #'   \item{name}{Station name}
 #'   \item{conversion_m}{Datum conversion factor if available}
 #' }
+#'
+#' @export
 #'
 #' @details
 #' Queries the discrete.samples, discrete.results, and public.locations tables
@@ -3600,6 +3607,9 @@ get_display_data <- function(
 #' Colors and symbols are dynamically generated based on the selected statistic
 #' and language settings. The map extent is automatically set to cover the
 #' Yukon Territory with appropriate zoom levels.
+#'
+#'
+#' @export
 #'
 #' @examples
 #' \dontrun{

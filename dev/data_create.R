@@ -64,7 +64,7 @@ translations <- lapply(
   setdiff(names(translations_df[, -2]), "id"),
   function(lang) {
     # Removes the second, "description" column, builds lists for each language
-    setNames(translations_df[[lang]], translations_df$id)
+    stats::setNames(translations_df[[lang]], translations_df$id)
   }
 )
 names(translations) <- setdiff(names(translations_df)[-2], "id")

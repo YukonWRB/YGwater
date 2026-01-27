@@ -333,7 +333,7 @@ addSampleSeries <- function(id, language) {
       )
     })
 
-    table_proxy <- DT::dataTableProxy("ss_table")
+    table_proxy <- DT::dataTableProxy(ns("ss_table"))
 
     observeEvent(input$reload_module, {
       getModuleData()
