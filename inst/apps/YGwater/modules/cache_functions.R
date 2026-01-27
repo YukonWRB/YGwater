@@ -452,7 +452,7 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
     key = "wwr_module_data",
     env = env,
     fetch_fun = function() {
-      list(
+      res <- list(
         # Only get borehole purposes that are used in the wells table
         purposes = dbGetQueryDT(
           con,
@@ -469,6 +469,8 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
           "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.depth_to_bedrock_m, b.borehole_id FROM boreholes AS b JOIN wells AS w ON b.borehole_id = w.borehole_id"
         )
       )
+      res$wells[, completion_year := lubridate::year(completion_date)]
+      return(res)
     },
     ttl = 60 * 60 * 24
   ) # Cache for 24 hours
