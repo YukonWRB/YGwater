@@ -266,14 +266,8 @@ get_dynamic_style_elements <- function(
     #     )
     # }
 
-    if (!(param_name %in% PARAM_NAME_CHOICES)) {
-        stop(
-            paste0(
-                "Invalid param_name specified; must be one of ",
-                paste(PARAM_NAME_CHOICES, collapse = ", ")
-            )
-        )
-    }
+    param_name <- standardize_param_name(param_name)
+
     # standardize parameter name for upcoming switch case
     # param_name <- standardize_param_name(param_name)
 
@@ -3534,45 +3528,6 @@ get_display_data <- function(
         }
     }
 
-    # Assign text_colour based on preposition tag
-    # TODO: should I remove officer dependency here?
-    dataset_state$text_colour <- vapply(
-        dataset_state$preposition,
-        function(tag) {
-            # Assign color based on tag
-            if (tag %in% c("snowbull_rmd_above", "snowbull_rmd_well_above")) {
-                officer::fp_text_lite(
-                    color = "#0097A9",
-                    bold = TRUE,
-                    font.size = 11
-                )
-            } else if (
-                tag %in% c("snowbull_rmd_below", "snowbull_rmd_well_below")
-            ) {
-                officer::fp_text_lite(
-                    color = "#834333",
-                    bold = TRUE,
-                    font.size = 11
-                )
-            } else if (
-                tag %in% c("snowbull_rmd_normal", "snowbull_rmd_close")
-            ) {
-                officer::fp_text_lite(
-                    color = "#7A9A01",
-                    bold = TRUE,
-                    font.size = 11
-                )
-            } else {
-                officer::fp_text_lite(
-                    color = "black",
-                    bold = TRUE,
-                    font.size = 11
-                )
-            }
-        },
-        officer::fp_text_lite(color = "black", bold = TRUE, font.size = 11)
-    )
-
     # Translate the tags to the appropriate language
     dataset_state$preposition <- vapply(
         dataset_state$preposition,
@@ -3590,15 +3545,13 @@ get_display_data <- function(
     dataset_state$description <- vapply(
         seq_len(nrow(dataset_state)),
         function(i) {
-            officer::ftext(
-                paste0(
-                    dataset_state$preposition[i],
-                    tr(aggr_tag, language)
-                ),
-                dataset_state$text_colour[[i]]
+            paste(
+                dataset_state$preposition[i],
+                tr(aggr_tag, language),
+                sep = " "
             )
         },
-        FUN.VALUE = officer::ftext("dummy", officer::fp_text_lite())
+        FUN.VALUE = character(1)
     )
 
     return(dataset_state)

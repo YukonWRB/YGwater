@@ -21,7 +21,6 @@ bulletin_month <- 3
 bulletin_year <- 2024
 epsg <- "EPSG:3005"
 
-
 snowBulletin(
     year = 2024,
     month = 3,
