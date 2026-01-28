@@ -684,7 +684,7 @@ simplerIndexUI <- function(id) {
                 ns("drill_depth_unit"),
                 "",
                 choices = list("m" = "m", "ft" = "ft"),
-                selected = "ft",
+                selected = "m",
                 inline = TRUE
               )
             )
@@ -708,7 +708,7 @@ simplerIndexUI <- function(id) {
                 ns("surveyed_ground_elev_unit"),
                 "",
                 choices = list("m" = "m", "ft" = "ft"),
-                selected = "ft",
+                selected = "m",
                 inline = TRUE
               )
             )
@@ -733,7 +733,7 @@ simplerIndexUI <- function(id) {
                 ns("depth_to_bedrock_unit"),
                 "",
                 choices = list("m" = "m", "ft" = "ft"),
-                selected = "ft",
+                selected = "m",
                 inline = TRUE
               )
             )
@@ -767,7 +767,7 @@ simplerIndexUI <- function(id) {
                   ns("permafrost_top_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
-                  selected = "ft",
+                  selected = "m",
                   inline = TRUE
                 )
               )
@@ -789,7 +789,7 @@ simplerIndexUI <- function(id) {
                   ns("permafrost_bot_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
-                  selected = "ft",
+                  selected = "m",
                   inline = TRUE
                 )
               )
@@ -857,7 +857,7 @@ simplerIndexUI <- function(id) {
                   ns("top_of_screen_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
-                  selected = "ft",
+                  selected = "m",
                   inline = TRUE
                 )
               )
@@ -880,7 +880,7 @@ simplerIndexUI <- function(id) {
                   ns("bottom_of_screen_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
-                  selected = "ft",
+                  selected = "m",
                   inline = TRUE
                 )
               )
@@ -902,7 +902,7 @@ simplerIndexUI <- function(id) {
                   ns("well_head_stick_up_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
-                  selected = "ft",
+                  selected = "m",
                   inline = TRUE
                 )
               )
@@ -927,7 +927,7 @@ simplerIndexUI <- function(id) {
                   ns("static_water_level_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
-                  selected = "ft",
+                  selected = "m",
                   inline = TRUE
                 )
               )
@@ -1280,15 +1280,15 @@ simplerIndex <- function(id, language) {
         selected = "public_reader"
       )
       updateRadioButtons(session, "coordinate_system", selected = "utm")
-      updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
-      updateRadioButtons(session, "permafrost_top_unit", selected = "ft")
-      updateRadioButtons(session, "permafrost_bot_unit", selected = "ft")
+      updateRadioButtons(session, "depth_to_bedrock_unit", selected = "m")
+      updateRadioButtons(session, "permafrost_top_unit", selected = "m")
+      updateRadioButtons(session, "permafrost_bot_unit", selected = "m")
       updateRadioButtons(session, "casing_od_unit", selected = "inch")
-      updateRadioButtons(session, "drill_depth_unit", selected = "ft")
-      updateRadioButtons(session, "top_of_screen_unit", selected = "ft")
-      updateRadioButtons(session, "bottom_of_screen_unit", selected = "ft")
-      updateRadioButtons(session, "well_head_stick_up_unit", selected = "ft")
-      updateRadioButtons(session, "static_water_level_unit", selected = "ft")
+      updateRadioButtons(session, "drill_depth_unit", selected = "m")
+      updateRadioButtons(session, "top_of_screen_unit", selected = "m")
+      updateRadioButtons(session, "bottom_of_screen_unit", selected = "m")
+      updateRadioButtons(session, "well_head_stick_up_unit", selected = "m")
+      updateRadioButtons(session, "static_water_level_unit", selected = "m")
       updateRadioButtons(
         session,
         "estimated_yield_unit",
@@ -1297,7 +1297,7 @@ simplerIndex <- function(id, language) {
       updateRadioButtons(
         session,
         "surveyed_ground_elev_unit",
-        selected = "ft"
+        selected = "m"
       )
 
       # Clear all numeric inputs
@@ -3841,7 +3841,8 @@ simplerIndex <- function(id, language) {
                 "bottom_of_screen",
                 "well_head_stick_up",
                 "static_water_level",
-                "estimated_yield"
+                "estimated_yield",
+                "surveyed_ground_elev"
               )
           ) {
             # Numeric inputs - extract numbers
