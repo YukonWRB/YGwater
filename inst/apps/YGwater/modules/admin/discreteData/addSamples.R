@@ -286,7 +286,7 @@ addSamples <- function(id, language) {
         comissioning_org = comissioning_org,
         sampling_org = sampling_org,
         documents = format_integer_array(input$documents),
-        share_with = format_share_with(input$share_with),
+        share_with = share_with_to_array(input$share_with),
         import_source = if (isTruthy(input$import_source)) {
           input$import_source
         } else {
@@ -490,7 +490,7 @@ addSamples <- function(id, language) {
       updateSelectizeInput(
         session,
         "share_with",
-        selected = parse_share_with(details$share_with)
+        selected = array_to_text(details$share_with)
       )
       updateTextInput(
         session,

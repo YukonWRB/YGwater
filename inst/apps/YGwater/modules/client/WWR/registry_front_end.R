@@ -592,14 +592,18 @@ wellRegistry <- function(id, language) {
     # Helpers to build legend HTML (default leaflet legend doesn't support shapes)
     build_symbol_legend <- function(type_map, title, stroke = "#244C5A") {
       rows <- mapply(
-        function(shape, fill, label) {
-          icon <- svg_data_uri(
-            shape = shape,
-            fill = fill,
-            size = 14,
-            stroke = stroke,
-            stroke_width = 1
-          )
+        function(shape, fill, label, icon_url) {
+          icon <- if (!is.null(icon_url) && nzchar(icon_url)) {
+            icon_url
+          } else {
+            svg_data_uri(
+              shape = shape,
+              fill = fill,
+              size = 14,
+              stroke = stroke,
+              stroke_width = 1
+            )
+          }
           sprintf(
             "<div style='display:flex;align-items:center;margin:2px 0;'>
            <img src='%s' style='width:14px;height:14px;margin-right:6px;'/>
@@ -612,6 +616,7 @@ wellRegistry <- function(id, language) {
         type_map$shape,
         type_map$color_hex,
         type_map$type_label,
+        type_map$icon_url,
         USE.NAMES = FALSE
       )
 
@@ -657,7 +662,6 @@ wellRegistry <- function(id, language) {
       }
 
       if (!is.null(input$yrs)) {
-        wells_sub[, completion_year := lubridate::year(completion_date)]
         if (isTRUE(input$include_unknown_completion)) {
           wells_sub <- wells_sub[
             is.na(completion_year) |
@@ -741,12 +745,29 @@ wellRegistry <- function(id, language) {
         ]
       )
 
+      type_map[,
+        icon_url := vapply(
+          seq_len(.N),
+          function(idx) {
+            svg_data_uri(
+              shape = shape[idx],
+              fill = color_hex[idx],
+              size = 20,
+              stroke = "#244C5A",
+              stroke_width = 1
+            )
+          },
+          character(1)
+        )
+      ]
+
       wells_sub[
         type_map,
         on = .(type_label),
         `:=`(
           color_hex = i.color_hex,
-          shape = i.shape
+          shape = i.shape,
+          icon_url = i.icon_url
         )
       ]
 
@@ -768,7 +789,7 @@ wellRegistry <- function(id, language) {
         # Create icons with custom class names, used for pie chart cluster icons
         slug <- function(x) gsub("[^A-Za-z0-9_-]", "_", x)
         icons <- leaflet::icons(
-          iconUrl = icon_urls,
+          iconUrl = wells_sub$icon_url,
           iconWidth = 15,
           iconHeight = 15,
           className = paste0(
@@ -791,6 +812,9 @@ wellRegistry <- function(id, language) {
                 iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
                 maxClusterRadius = 80, # cluster radius in pixels
                 spiderfyOnMaxZoom = TRUE
+                # chunkedLoading = TRUE,
+                # chunkInterval = 75,
+                # chunkDelay = 10
               )
             } else {
               NULL

@@ -540,7 +540,7 @@ addLocation <- function(id, inputs, language) {
           updateSelectizeInput(
             session,
             "share_with",
-            selected = parse_share_with(details$share_with)
+            selected = array_to_text(details$share_with)
           )
 
           update_current_owner(loc_id)
