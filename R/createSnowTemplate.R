@@ -40,6 +40,7 @@ createSnowTemplate <- function(
     }
   }
 
+  # Check target_date format
   if (inherits(target_date, "Date")) {
     target_date <- as.character(target_date)
   } else if (!inherits(target_date, "character")) {
@@ -54,7 +55,7 @@ createSnowTemplate <- function(
   if (circuits[1] == "all") {
     circuits <- DBI::dbGetQuery(snowCon, "SELECT * FROM circuits")
   } else {
-    # Make sure that the requested circuit exist in the database
+    # Make sure that the requested circuit exists in the database
     circuits <- DBI::dbGetQuery(
       snowCon,
       paste0(
