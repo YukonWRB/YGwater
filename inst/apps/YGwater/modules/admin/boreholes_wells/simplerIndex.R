@@ -282,9 +282,11 @@ simplerIndexUI <- function(id) {
         br(),
         tags$small(
           class = "text-muted",
-          "Select a row and click ",
-          tags$strong("Show selected page"),
-          " to render it in the center pane."
+          "Select a row and click the ",
+          tags$strong("page button"),
+          " above to show it in the center pane or the ",
+          tags$strong("trash can"),
+          " to delete it."
         ),
         br(),
         DT::DTOutput(ns("pdf_table"))
@@ -608,7 +610,7 @@ simplerIndexUI <- function(id) {
 
           checkboxInput(
             ns("associate_loc_with_borehole"),
-            "Associate monitoring location with borehole",
+            "Associate borehole with monitoring location",
             value = FALSE
           ),
           conditionalPanel(
@@ -2730,8 +2732,10 @@ simplerIndex <- function(id, language) {
             if (rv$display_index > nrow(rv$files_df)) {
               rv$display_index <- nrow(rv$files_df)
             }
-            if (!is.null(rv$selected_index) &&
-              rv$selected_index > nrow(rv$files_df)) {
+            if (
+              !is.null(rv$selected_index) &&
+                rv$selected_index > nrow(rv$files_df)
+            ) {
               rv$selected_index <- nrow(rv$files_df)
             }
           }
