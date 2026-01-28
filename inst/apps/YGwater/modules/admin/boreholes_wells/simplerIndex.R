@@ -1079,6 +1079,7 @@ simplerIndex <- function(id, language) {
       borehole_data = list(), # Named list organized by borehole ID
       display_index = 1, # Index of currently viewed PDF page
       selected_index = NULL, # Index of currently selected table row
+      display_page = NULL, # Data for the currently displayed PDF page
       table_version = 0, # Increment to trigger table re-rendering
       ocr_text = list(),
       ocr_display_mode = "none",
@@ -1187,6 +1188,27 @@ simplerIndex <- function(id, language) {
           borehole_choices(new_choices)
           rv$table_version <- rv$table_version + 1
         }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      list(rv$display_index, rv$table_version),
+      {
+        files_df <- rv$files_df
+        if (is.null(files_df) || nrow(files_df) == 0) {
+          rv$display_page <- NULL
+          return()
+        }
+        if (
+          is.null(rv$display_index) ||
+            rv$display_index < 1 ||
+            rv$display_index > nrow(files_df)
+        ) {
+          rv$display_page <- NULL
+          return()
+        }
+        rv$display_page <- files_df[rv$display_index, , drop = FALSE]
       },
       ignoreInit = TRUE
     )
@@ -2926,12 +2948,11 @@ simplerIndex <- function(id, language) {
     rendered_plot <- reactiveVal(NULL)
     output$plot <- renderPlot(
       expr = {
-        req(rv$files_df)
-        req(rv$display_index)
-        req(nrow(rv$files_df) >= rv$display_index)
+        page <- rv$display_page
+        req(page)
         zoom <- input$zoom_level
         # Load and prepare the image
-        img_path <- rv$files_df$Path[rv$display_index]
+        img_path <- page$Path[1]
         req(file.exists(img_path))
 
         img <- magick::image_read(img_path) |>
@@ -3081,9 +3102,9 @@ simplerIndex <- function(id, language) {
         }
       },
       width = function() {
-        req(rv$files_df)
-        req(rv$display_index)
-        img_path <- rv$files_df$Path[rv$display_index]
+        page <- rv$display_page
+        req(page)
+        img_path <- page$Path[1]
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
@@ -3091,9 +3112,9 @@ simplerIndex <- function(id, language) {
         info$width * input$zoom_level / 2.2
       },
       height = function() {
-        req(rv$files_df)
-        req(rv$display_index)
-        img_path <- rv$files_df$Path[rv$display_index]
+        page <- rv$display_page
+        req(page)
+        img_path <- page$Path[1]
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
