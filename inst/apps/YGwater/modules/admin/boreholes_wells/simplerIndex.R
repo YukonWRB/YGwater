@@ -1079,6 +1079,7 @@ simplerIndex <- function(id, language) {
       borehole_data = list(), # Named list organized by borehole ID
       display_index = 1, # Index of currently viewed PDF page
       selected_index = NULL, # Index of currently selected table row
+      table_version = 0, # Increment to trigger table re-rendering
       ocr_text = list(),
       ocr_display_mode = "none",
       selected_text = NULL,
@@ -1184,10 +1185,15 @@ simplerIndex <- function(id, language) {
         new_choices <- names(rv$borehole_data)
         if (!identical(new_choices, borehole_choices())) {
           borehole_choices(new_choices)
+          rv$table_version <- rv$table_version + 1
         }
       },
       ignoreInit = TRUE
     )
+
+    bump_table_version <- function() {
+      rv$table_version <- rv$table_version + 1
+    }
 
     sort_files_df <- function() {
       if (is.null(rv$files_df)) {
@@ -2567,6 +2573,7 @@ simplerIndex <- function(id, language) {
       }
       rv$files_df$borehole_id <- as.character(rv$files_df$borehole_id)
       sort_files_df()
+      bump_table_version()
 
       rv$display_index <- 1
       rv$selected_index <- 1
@@ -2707,6 +2714,7 @@ simplerIndex <- function(id, language) {
             }
           }
           sort_files_df()
+          bump_table_version()
         }
       },
       ignoreInit = TRUE
@@ -2730,11 +2738,12 @@ simplerIndex <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    # Observe changes to files_df and set up observers for each select input, which are created dynamically on table render
+    # Observe table version changes and set up observers for each select input
     observeEvent(
-      rv$files_df,
+      rv$table_version,
       {
-        if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+        files_df <- isolate(rv$files_df)
+        if (is.null(files_df) || nrow(files_df) == 0) {
           # No files, destroy all observers and exit
           lapply(
             rv$assign_observers,
@@ -2756,9 +2765,9 @@ simplerIndex <- function(id, language) {
             }
           }
         )
-        rv$assign_observers <- vector("list", length = nrow(rv$files_df))
+        rv$assign_observers <- vector("list", length = nrow(files_df))
         # Set up new observers for each row
-        for (i in seq_len(nrow(rv$files_df))) {
+        for (i in seq_len(nrow(files_df))) {
           rv$assign_observers[[i]] <- local({
             row_index <- i
             observeEvent(
@@ -2817,8 +2826,10 @@ simplerIndex <- function(id, language) {
 
     # Render the data table of files
     output$pdf_table <- DT::renderDT({
-      req(rv$files_df)
-      validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
+      rv$table_version
+      files_df <- isolate(rv$files_df)
+      req(files_df)
+      validate(need(nrow(files_df) > 0, "No files uploaded yet"))
 
       current_borehole_choices <- borehole_choices()
       labelled_choices <- if (length(current_borehole_choices) > 0) {
@@ -2831,9 +2842,9 @@ simplerIndex <- function(id, language) {
       }
       # Generate selectInput for each row to assign pages to boreholes
       select_inputs <- vapply(
-        seq_len(nrow(rv$files_df)),
+        seq_len(nrow(files_df)),
         function(i) {
-          selected_value <- rv$files_df$borehole_id[i]
+          selected_value <- files_df$borehole_id[i]
           if (length(selected_value) == 0 || is.na(selected_value)) {
             selected_value <- ""
           }
@@ -2849,8 +2860,8 @@ simplerIndex <- function(id, language) {
       )
 
       dat <- data.frame(
-        row_id = seq_len(nrow(rv$files_df)),
-        tag = rv$files_df$tag,
+        row_id = seq_len(nrow(files_df)),
+        tag = files_df$tag,
         borehole = select_inputs,
         stringsAsFactors = FALSE
       )
