@@ -1240,6 +1240,84 @@ simplerIndex <- function(id, language) {
       rv$table_version <- rv$table_version + 1
     }
 
+    remove_borehole_pages <- function(borehole_id) {
+      if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+        return()
+      }
+      remove_idx <- which(rv$files_df$borehole_id == borehole_id)
+      if (length(remove_idx) == 0) {
+        return()
+      }
+
+      display_tag <- if (
+        !is.null(rv$display_index) &&
+          nrow(rv$files_df) >= rv$display_index
+      ) {
+        rv$files_df$tag[rv$display_index]
+      } else {
+        NULL
+      }
+      selected_tag <- if (
+        !is.null(rv$selected_index) &&
+          nrow(rv$files_df) >= rv$selected_index
+      ) {
+        rv$files_df$tag[rv$selected_index]
+      } else {
+        NULL
+      }
+
+      removed_paths <- rv$files_df$Path[remove_idx]
+      keep_idx <- setdiff(seq_len(nrow(rv$files_df)), remove_idx)
+      rv$files_df <- rv$files_df[keep_idx, , drop = FALSE]
+
+      if (length(rv$ocr_text) > 0) {
+        rv$ocr_text <- rv$ocr_text[keep_idx]
+      }
+
+      if (length(removed_paths) > 0) {
+        cache <- image_cache()
+        for (img_path in removed_paths) {
+          cache[[img_path]] <- NULL
+          rv$rectangles[[img_path]] <- NULL
+          rv$redaction_history[[img_path]] <- NULL
+        }
+        image_cache(cache)
+      }
+
+      if (nrow(rv$files_df) == 0) {
+        rv$display_index <- 1
+        rv$selected_index <- NULL
+        rv$display_page <- NULL
+      } else {
+        display_index <- if (!is.null(display_tag)) {
+          match(display_tag, rv$files_df$tag)
+        } else {
+          NA_integer_
+        }
+        if (is.na(display_index)) {
+          display_index <- min(rv$display_index, nrow(rv$files_df))
+        }
+        rv$display_index <- max(1, display_index)
+
+        selected_index <- if (!is.null(selected_tag)) {
+          match(selected_tag, rv$files_df$tag)
+        } else {
+          NA_integer_
+        }
+        if (is.na(selected_index)) {
+          if (!is.null(rv$selected_index)) {
+            selected_index <- min(rv$selected_index, nrow(rv$files_df))
+          } else {
+            selected_index <- NULL
+          }
+        }
+        rv$selected_index <- selected_index
+      }
+
+      sort_files_df()
+      bump_table_version()
+    }
+
     sort_files_df <- function() {
       if (is.null(rv$files_df)) {
         return()
@@ -1664,6 +1742,12 @@ simplerIndex <- function(id, language) {
         metadata$purpose_of_borehole
       )
       sanitized$purpose_of_well <- parse_numeric(metadata$purpose_of_well)
+      if (
+        is.null(sanitized$purpose_of_well) &&
+          !is.null(sanitized$purpose_of_borehole)
+      ) {
+        sanitized$purpose_of_well <- sanitized$purpose_of_borehole
+      }
 
       sanitized$purpose_borehole_inferred <- parse_logical(
         metadata$purpose_borehole_inferred,
@@ -2285,6 +2369,29 @@ simplerIndex <- function(id, language) {
             "Well sharing options updated to match borehole sharing. You can change well sharing separately if needed.",
             type = "message",
             duration = 10
+          )
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    # Keep purpose_of_well aligned with purpose_of_borehole until explicitly set
+    observeEvent(
+      input$purpose_of_borehole,
+      {
+        if (
+          is.null(input$purpose_of_well) ||
+            length(input$purpose_of_well) == 0
+        ) {
+          updateSelectizeInput(
+            session,
+            "purpose_of_well",
+            selected = input$purpose_of_borehole
+          )
+          showNotification(
+            "Well purpose updated to match borehole purpose. You can change it if needed.",
+            type = "message",
+            duration = 8
           )
         }
       },
@@ -4347,19 +4454,11 @@ simplerIndex <- function(id, language) {
               duration = 5
             )
 
+            remove_borehole_pages(current_borehole_id)
+
             # Remove uploaded borehole from local data to prevent re-upload
             rv$borehole_data[[current_borehole_id]] <- NULL
-            # Update selector choices
-            updateSelectizeInput(
-              session,
-              "borehole_details_selector",
-              choices = names(rv$borehole_data),
-              selected = if (length(names(rv$borehole_data)) > 0) {
-                names(rv$borehole_data)[1]
-              } else {
-                ""
-              }
-            )
+            update_borehole_details_selector()
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
@@ -4497,6 +4596,7 @@ simplerIndex <- function(id, language) {
               type = "message",
               duration = 7
             )
+            remove_borehole_pages(well_id)
             # Remove uploaded borehole from local data to prevent re-upload
             rv$borehole_data[[well_id]] <- NULL
           },
@@ -4539,16 +4639,7 @@ simplerIndex <- function(id, language) {
         )
       }
       # Update selector choices
-      updateSelectizeInput(
-        session,
-        "borehole_details_selector",
-        choices = names(rv$borehole_data),
-        selected = if (length(names(rv$borehole_data)) > 0) {
-          names(rv$borehole_data)[1]
-        } else {
-          ""
-        }
-      )
+      update_borehole_details_selector()
     })
 
     # Add observer for OCR extracted text display
