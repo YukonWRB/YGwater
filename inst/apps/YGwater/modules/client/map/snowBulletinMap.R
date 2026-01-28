@@ -227,6 +227,7 @@ mapSnowbull <- function(id, language) {
         poly_data = map_data$poly_data,
         point_data_secondary = map_data$point_data_secondary,
         statistic = input$statistic,
+        param_name = "snow water equivalent",
         language = language$language,
         snowbull_shapefiles = snowbull_shapefiles,
         month = as.integer(input$month),
