@@ -1091,6 +1091,27 @@ simplerIndex <- function(id, language) {
       redaction_history = list() # New: Track redaction order for undo functionality
     )
     borehole_choices <- reactiveVal(character())
+    image_cache <- reactiveVal(list())
+
+    get_cached_image <- function(img_path) {
+      cache <- image_cache()
+      if (!is.null(cache[[img_path]])) {
+        return(cache[[img_path]])
+      }
+
+      img <- magick::image_read(img_path) |>
+        magick::image_enhance()
+      info <- magick::image_info(img)
+
+      cached <- list(
+        raster = as.raster(img),
+        width = info$width,
+        height = info$height
+      )
+      cache[[img_path]] <- cached
+      image_cache(cache)
+      cached
+    }
 
     # Reactive expression to get the borehole selected for editing
     current_borehole_id <- reactive({
@@ -2786,10 +2807,16 @@ simplerIndex <- function(id, language) {
           }
 
           fname <- rv$files_df$NewFilename[selected_row]
+          img_path <- rv$files_df$Path[selected_row]
 
           # Remove from files_df and OCR text
           rv$files_df <- rv$files_df[-selected_row, ]
           rv$ocr_text <- rv$ocr_text[-selected_row]
+          if (!is.null(img_path)) {
+            cache <- image_cache()
+            cache[[img_path]] <- NULL
+            image_cache(cache)
+          }
 
           # Update well_data structure by removing the filename
           for (well_id in names(rv$borehole_data)) {
@@ -3047,12 +3074,10 @@ simplerIndex <- function(id, language) {
         img_path <- page$Path[1]
         req(file.exists(img_path))
 
-        img <- magick::image_read(img_path) |>
-          magick::image_enhance()
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        img_raster <- as.raster(img)
+        cached_img <- get_cached_image(img_path)
+        img_width <- cached_img$width
+        img_height <- cached_img$height
+        img_raster <- cached_img$raster
 
         # Set up the plot area
         par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
@@ -3200,8 +3225,8 @@ simplerIndex <- function(id, language) {
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
-        info <- magick::image_info(magick::image_read(img_path))
-        info$width * input$zoom_level / 2.2
+        cached_img <- get_cached_image(img_path)
+        cached_img$width * input$zoom_level / 2.2
       },
       height = function() {
         page <- rv$display_page
@@ -3210,8 +3235,8 @@ simplerIndex <- function(id, language) {
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
-        info <- magick::image_info(magick::image_read(img_path))
-        info$height * input$zoom_level / 2.2
+        cached_img <- get_cached_image(img_path)
+        cached_img$height * input$zoom_level / 2.2
       },
       res = 96
     ) # Increased resolution for better text rendering
