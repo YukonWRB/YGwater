@@ -1248,10 +1248,16 @@ simplerIndex <- function(id, language) {
         order(assigned_flag, rv$files_df$borehole_id, decreasing = TRUE),
       ]
       if (!is.null(current_tag)) {
-        rv$display_index <- match(current_tag, rv$files_df$tag)
+        new_index <- match(current_tag, rv$files_df$tag)
+        if (!is.na(new_index)) {
+          rv$display_index <- new_index
+        }
       }
       if (!is.null(selected_tag)) {
-        rv$selected_index <- match(selected_tag, rv$files_df$tag)
+        new_index <- match(selected_tag, rv$files_df$tag)
+        if (!is.na(new_index)) {
+          rv$selected_index <- new_index
+        }
       }
     }
 
@@ -2696,6 +2702,25 @@ simplerIndex <- function(id, language) {
       {
         req(rv$files_df)
         if (nrow(rv$files_df) > 0) {
+          display_tag <- if (
+            !is.null(rv$display_index) &&
+              nrow(rv$files_df) >= rv$display_index
+          ) {
+            rv$files_df$tag[rv$display_index]
+          } else {
+            NULL
+          }
+          selected_tag <- if (
+            !is.null(rv$selected_index) &&
+              nrow(rv$files_df) >= rv$selected_index
+          ) {
+            rv$files_df$tag[rv$selected_index]
+          } else {
+            NULL
+          }
+          display_index_before <- rv$display_index
+          selected_index_before <- rv$selected_index
+
           selected_row <- if (!is.null(rv$selected_index)) {
             rv$selected_index
           } else {
@@ -2729,15 +2754,29 @@ simplerIndex <- function(id, language) {
             rv$display_index <- 1
             rv$selected_index <- NULL
           } else {
-            if (rv$display_index > nrow(rv$files_df)) {
-              rv$display_index <- nrow(rv$files_df)
+            display_index <- if (!is.null(display_tag)) {
+              match(display_tag, rv$files_df$tag)
+            } else {
+              NA_integer_
             }
-            if (
-              !is.null(rv$selected_index) &&
-                rv$selected_index > nrow(rv$files_df)
-            ) {
-              rv$selected_index <- nrow(rv$files_df)
+            if (is.na(display_index)) {
+              display_index <- min(display_index_before, nrow(rv$files_df))
             }
+            rv$display_index <- max(1, display_index)
+
+            selected_index <- if (!is.null(selected_tag)) {
+              match(selected_tag, rv$files_df$tag)
+            } else {
+              NA_integer_
+            }
+            if (is.na(selected_index)) {
+              if (!is.null(selected_index_before)) {
+                selected_index <- min(selected_index_before, nrow(rv$files_df))
+              } else {
+                selected_index <- NULL
+              }
+            }
+            rv$selected_index <- selected_index
           }
           sort_files_df()
           bump_table_version()
