@@ -486,44 +486,6 @@ simplerIndexUI <- function(id) {
             "Borehole/well name *",
             placeholder = "Enter name"
           ),
-          checkboxInput(
-            ns("associate_loc_with_borehole"),
-            "Associate monitoring location with borehole",
-            value = FALSE
-          ),
-          conditionalPanel(
-            condition = "input.associate_loc_with_borehole == true",
-            ns = ns,
-            numericInput(
-              ns("location_search_radius"),
-              "Search radius for nearby locations (meters)",
-              value = 500,
-              min = 0
-            ),
-            actionButton(
-              ns("find_nearby_locations"),
-              "Find nearby locations",
-              width = "100%"
-            ),
-            uiOutput(ns("nearby_locations_count")),
-            selectizeInput(
-              ns("associated_location"),
-              "Associate with location (optional)",
-              choices = NULL,
-              selected = NULL,
-              options = list(
-                placeholder = "Choose a nearby location",
-                maxItems = 1
-              )
-            ),
-            actionButton(
-              ns("clear_location_association"),
-              "Clear location association",
-              class = "btn btn-outline-secondary",
-              width = "100%"
-            )
-          ),
-
           textInput(
             ns("notes_borehole"),
             "Boreholes notes",
@@ -630,6 +592,45 @@ simplerIndexUI <- function(id) {
               maxItems = 1
             )
           ),
+
+          checkboxInput(
+            ns("associate_loc_with_borehole"),
+            "Associate monitoring location with borehole",
+            value = FALSE
+          ),
+          conditionalPanel(
+            condition = "input.associate_loc_with_borehole == true",
+            ns = ns,
+            numericInput(
+              ns("location_search_radius"),
+              "Search radius for nearby locations (meters)",
+              value = 500,
+              min = 0
+            ),
+            actionButton(
+              ns("find_nearby_locations"),
+              "Find nearby locations",
+              width = "100%"
+            ),
+            uiOutput(ns("nearby_locations_count")),
+            selectizeInput(
+              ns("associated_location"),
+              "Associate with location (optional)",
+              choices = NULL,
+              selected = NULL,
+              options = list(
+                placeholder = "Choose a nearby location",
+                maxItems = 1
+              )
+            ),
+            actionButton(
+              ns("clear_location_association"),
+              "Clear location association",
+              class = "btn btn-outline-secondary",
+              width = "100%"
+            )
+          ),
+
           selectizeInput(
             ns("purpose_of_borehole"),
             "Purpose of borehole",
@@ -1071,6 +1072,7 @@ simplerIndex <- function(id, language) {
       assign_observers = list(),
       redaction_history = list() # New: Track redaction order for undo functionality
     )
+    borehole_choices <- reactiveVal(character())
 
     # Reactive expression to get the borehole selected for editing
     current_borehole_id <- reactive({
@@ -1161,6 +1163,17 @@ simplerIndex <- function(id, language) {
         selected = "public_reader"
       )
     })
+
+    observeEvent(
+      rv$borehole_data,
+      {
+        new_choices <- names(rv$borehole_data)
+        if (!identical(new_choices, borehole_choices())) {
+          borehole_choices(new_choices)
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     sort_files_df <- function() {
       if (is.null(rv$files_df)) {
@@ -2581,9 +2594,6 @@ simplerIndex <- function(id, language) {
 
         if (rv$pdf_index < nrow(rv$files_df)) {
           rv$pdf_index <- rv$pdf_index + 1
-          # Ensure table selection follows
-          DT::dataTableProxy(ns("pdf_table"), session = session) |>
-            DT::selectRows(rv$pdf_index)
         }
       },
       ignoreInit = TRUE
@@ -2595,9 +2605,6 @@ simplerIndex <- function(id, language) {
         req(rv$files_df)
         if (rv$pdf_index >= 2) {
           rv$pdf_index <- rv$pdf_index - 1
-          # Ensure table selection follows
-          DT::dataTableProxy(ns("pdf_table"), session = session) |>
-            DT::selectRows(rv$pdf_index)
         } else {
           rv$pdf_index <- 1
         }
@@ -2631,12 +2638,22 @@ simplerIndex <- function(id, language) {
             rv$pdf_index <- 1
           } else if (rv$pdf_index > nrow(rv$files_df)) {
             rv$pdf_index <- nrow(rv$files_df)
-            # Ensure table selection follows
-            DT::dataTableProxy(ns("pdf_table"), session = session) |>
-              DT::selectRows(rv$pdf_index)
           }
           sort_files_df()
         }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      list(rv$files_df, rv$pdf_index),
+      {
+        req(rv$files_df)
+        if (nrow(rv$files_df) == 0) {
+          return()
+        }
+        DT::dataTableProxy("pdf_table", session = session) |>
+          DT::selectRows(rv$pdf_index)
       },
       ignoreInit = TRUE
     )
@@ -2731,7 +2748,15 @@ simplerIndex <- function(id, language) {
       req(rv$files_df)
       validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
 
-      borehole_choices <- names(rv$borehole_data) # Fetch current borehole IDs
+      current_borehole_choices <- borehole_choices()
+      labelled_choices <- if (length(current_borehole_choices) > 0) {
+        stats::setNames(
+          current_borehole_choices,
+          paste("Borehole", current_borehole_choices)
+        )
+      } else {
+        NULL
+      }
       # Generate selectInput for each row to assign pages to boreholes
       select_inputs <- vapply(
         seq_len(nrow(rv$files_df)),
@@ -2739,14 +2764,6 @@ simplerIndex <- function(id, language) {
           selected_value <- rv$files_df$borehole_id[i]
           if (length(selected_value) == 0 || is.na(selected_value)) {
             selected_value <- ""
-          }
-          labelled_choices <- if (length(borehole_choices) > 0) {
-            stats::setNames(
-              borehole_choices,
-              paste("Borehole", borehole_choices)
-            )
-          } else {
-            NULL
           }
           as.character(selectizeInput(
             ns(paste0("bh_select_", i)),
@@ -2767,7 +2784,7 @@ simplerIndex <- function(id, language) {
 
       DT::datatable(
         dat,
-        selection = list(mode = "single", selected = rv$pdf_index),
+        selection = list(mode = "single"),
         escape = FALSE,
         options = list(
           pageLength = 10,
@@ -2778,6 +2795,7 @@ simplerIndex <- function(id, language) {
           ordering = FALSE,
           scrollY = "300px",
           scrollCollapse = TRUE,
+          deferRender = TRUE,
           preDrawCallback = DT::JS(
             'function() { Shiny.unbindAll(this.api().table().node()); }'
           ),
