@@ -1318,7 +1318,7 @@ simplerIndex <- function(id, language) {
         "static_water_level",
         "estimated_yield"
       )) {
-        updateNumericInput(session, field, value = NULL)
+        updateNumericInput(session, field, value = NA)
       }
 
       # Clear checkboxes and date
@@ -1329,7 +1329,7 @@ simplerIndex <- function(id, language) {
       )
       updateCheckboxInput(session, "permafrost_present", value = FALSE)
       updateCheckboxInput(session, "is_well", value = FALSE)
-      updateDateInput(session, "date_drilled", value = NULL)
+      updateDateInput(session, "date_drilled", value = NA)
       updateNumericInput(session, "location_search_radius", value = 500)
       updateSelectizeInput(
         session,
