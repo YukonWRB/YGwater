@@ -1091,6 +1091,27 @@ simplerIndex <- function(id, language) {
       redaction_history = list() # New: Track redaction order for undo functionality
     )
     borehole_choices <- reactiveVal(character())
+    image_cache <- reactiveVal(list())
+
+    get_cached_image <- function(img_path) {
+      cache <- image_cache()
+      if (!is.null(cache[[img_path]])) {
+        return(cache[[img_path]])
+      }
+
+      img <- magick::image_read(img_path) |>
+        magick::image_enhance()
+      info <- magick::image_info(img)
+
+      cached <- list(
+        raster = as.raster(img),
+        width = info$width,
+        height = info$height
+      )
+      cache[[img_path]] <- cached
+      image_cache(cache)
+      cached
+    }
 
     # Reactive expression to get the borehole selected for editing
     current_borehole_id <- reactive({
@@ -2514,86 +2535,121 @@ simplerIndex <- function(id, language) {
       removeModal()
     })
 
+    process_pdf_uploads <- ExtendedTask$new(function(uploaded_files) {
+      promises::future_promise({
+        tryCatch(
+          {
+            if (is.null(uploaded_files) || nrow(uploaded_files) == 0) {
+              return(list(error = "No PDF files were provided."))
+            }
+
+            uploaded_files <- as.data.frame(
+              uploaded_files,
+              stringsAsFactors = FALSE
+            )
+
+            for (i in seq_len(nrow(uploaded_files))) {
+              orig_name <- uploaded_files$name[i]
+              from_path <- normalizePath(
+                uploaded_files$datapath[i],
+                winslash = "/",
+                mustWork = FALSE
+              )
+              orig_path <- file.path(dirname(from_path), orig_name)
+              rename_success <- file.rename(from_path, orig_path)
+              if (!rename_success) {
+                file.copy(from_path, orig_path, overwrite = TRUE)
+                unlink(from_path)
+              }
+              uploaded_files$datapath[i] <- orig_path
+            }
+
+            all_split_files <- NULL
+            file_counts <- list()
+
+            for (i in seq_len(nrow(uploaded_files))) {
+              pdf_path <- uploaded_files$datapath[i][1]
+              orig_name <- uploaded_files$name[i]
+
+              n_pages <- pdftools::pdf_info(pdf_path)$pages
+              base <- tools::file_path_sans_ext(basename(pdf_path))
+              png_tpl <- file.path(
+                tempdir(),
+                sprintf("%s_page_%%d.%%s", base)
+              )
+
+              png_files <- pdftools::pdf_convert(
+                pdf_path,
+                dpi = 300,
+                pages = seq_len(n_pages),
+                format = "png",
+                filenames = png_tpl
+              )
+
+              file_counts[[orig_name]] <- length(png_files)
+              file_info <- file.info(png_files)
+              split_df <- data.frame(
+                Name = rep(orig_name, length(png_files)),
+                Size_KB = round(file_info$size / 1024, 2),
+                Date = as.character(file.info(pdf_path)$mtime),
+                OrigFile = rep(orig_name, length(png_files)),
+                Page = seq_along(png_files),
+                Path = png_files,
+                stringsAsFactors = FALSE
+              )
+              split_df$NewFilename <- file.path(basename(split_df$Path))
+              split_df$tag <- paste0(split_df$Name, "-", split_df$Page)
+              split_df$borehole_id <- NA
+
+              if (is.null(all_split_files)) {
+                all_split_files <- split_df
+              } else {
+                all_split_files <- rbind(all_split_files, split_df)
+              }
+            }
+
+            list(
+              split_df = all_split_files,
+              file_counts = file_counts
+            )
+          },
+          error = function(e) {
+            list(error = e$message)
+          }
+        )
+      })
+    })
+
     # Split PDFs into single-page files on upload
     observeEvent(input$pdf_file, {
       uploaded_files <- input$pdf_file
-      # Rename uploaded files to their original names with robust path handling
-      for (i in seq_len(nrow(uploaded_files))) {
-        orig_name <- uploaded_files$name[i]
+      req(uploaded_files)
+      showNotification(
+        "Processing PDFs in the background. This can take a few minutes.",
+        type = "message",
+        duration = 5
+      )
+      process_pdf_uploads$invoke(uploaded_files)
+    })
 
-        from_path <- normalizePath(
-          uploaded_files$datapath[i],
-          winslash = "/",
-          mustWork = FALSE
-        )
-        orig_path <- file.path(dirname(from_path), orig_name)
-        rename_success <- file.rename(from_path, orig_path)
-        if (!rename_success) {
-          file.copy(from_path, orig_path, overwrite = TRUE)
-          unlink(from_path)
-        }
-        uploaded_files$datapath[i] <- orig_path
+    observeEvent(process_pdf_uploads$result(), {
+      result <- process_pdf_uploads$result()
+      if (is.null(result)) {
+        return()
+      }
+      if (!is.null(result$error)) {
+        showNotification(result$error, type = "error", duration = 6)
+        return()
       }
 
-      # Show initial loading notification
-      total_files <- nrow(uploaded_files)
-
-      for (i in seq_len(nrow(uploaded_files))) {
-        pdf_path <- uploaded_files$datapath[i][1]
-        orig_name <- uploaded_files$name[i]
-
-        # Show progress for current file
+      all_split_files <- result$split_df
+      if (is.null(all_split_files) || nrow(all_split_files) == 0) {
         showNotification(
-          paste("Converting", orig_name, "- File", i, "of", total_files),
-          type = "message",
-          duration = 4
+          "No pages were generated from the uploaded PDFs.",
+          type = "warning",
+          duration = 6
         )
-
-        # Convert PDF to PNG files (one per page) and save to tempdir
-        n_pages <- pdftools::pdf_info(pdf_path)$pages
-        base <- tools::file_path_sans_ext(basename(pdf_path))
-        png_tpl <- file.path(tempdir(), sprintf("%s_page_%%d.%%s", base)) # note %%d and %%s
-
-        png_files <- pdftools::pdf_convert(
-          pdf_path,
-          dpi = 300,
-          pages = seq_len(n_pages),
-          format = "png",
-          filenames = png_tpl
-        )
-
-        file_info <- file.info(png_files)
-        split_df <- data.frame(
-          Name = rep(orig_name, length(png_files)),
-          Size_KB = round(file_info$size / 1024, 2),
-          Date = as.character(file.info(pdf_path)$mtime),
-          OrigFile = rep(orig_name, length(png_files)),
-          Page = seq_along(png_files),
-          Path = png_files,
-          stringsAsFactors = FALSE
-        )
-        split_df$NewFilename <- file.path(basename(split_df$Path))
-        split_df$tag <- paste0(split_df$Name, "-", split_df$Page)
-        split_df$borehole_id <- NA
-
-        if (i == 1) {
-          all_split_files <- split_df
-        } else {
-          all_split_files <- rbind(all_split_files, split_df)
-        }
-
-        # Show completion for current file
-        showNotification(
-          paste(
-            "Completed converting",
-            orig_name,
-            "- Generated",
-            length(png_files),
-            "page(s)"
-          ),
-          type = "message",
-          duration = 5
-        )
+        return()
       }
 
       if (is.null(rv$files_df)) {
@@ -2608,14 +2664,14 @@ simplerIndex <- function(id, language) {
       rv$display_index <- 1
       rv$selected_index <- 1
 
+      new_pages <- nrow(all_split_files)
       if (length(rv$ocr_text) == 0) {
         rv$ocr_text <- vector("list", nrow(rv$files_df))
       } else {
-        rv$ocr_text <- c(rv$ocr_text, vector("list", nrow(all_split_files)))
+        rv$ocr_text <- c(rv$ocr_text, vector("list", new_pages))
       }
       rv$ocr_display_mode <- "none"
 
-      # Reset button states on upload
       brush_enabled(FALSE)
       updateSelectizeInput(session, "ocr_display_mode", selected = "none")
 
@@ -2624,12 +2680,26 @@ simplerIndex <- function(id, language) {
         ns('brush_select')
       ))
 
-      # Show final completion notification
+      if (!is.null(result$file_counts)) {
+        for (file_name in names(result$file_counts)) {
+          showNotification(
+            paste(
+              "Completed converting",
+              file_name,
+              "- Generated",
+              result$file_counts[[file_name]],
+              "page(s)"
+            ),
+            type = "message",
+            duration = 5
+          )
+        }
+      }
+
       total_pages <- nrow(rv$files_df)
       showNotification(
         paste(
           "PDF conversion completed! Generated",
-
           total_pages,
           "page(s) total."
         ),
@@ -2737,10 +2807,16 @@ simplerIndex <- function(id, language) {
           }
 
           fname <- rv$files_df$NewFilename[selected_row]
+          img_path <- rv$files_df$Path[selected_row]
 
           # Remove from files_df and OCR text
           rv$files_df <- rv$files_df[-selected_row, ]
           rv$ocr_text <- rv$ocr_text[-selected_row]
+          if (!is.null(img_path)) {
+            cache <- image_cache()
+            cache[[img_path]] <- NULL
+            image_cache(cache)
+          }
 
           # Update well_data structure by removing the filename
           for (well_id in names(rv$borehole_data)) {
@@ -2998,12 +3074,10 @@ simplerIndex <- function(id, language) {
         img_path <- page$Path[1]
         req(file.exists(img_path))
 
-        img <- magick::image_read(img_path) |>
-          magick::image_enhance()
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        img_raster <- as.raster(img)
+        cached_img <- get_cached_image(img_path)
+        img_width <- cached_img$width
+        img_height <- cached_img$height
+        img_raster <- cached_img$raster
 
         # Set up the plot area
         par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
@@ -3151,8 +3225,8 @@ simplerIndex <- function(id, language) {
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
-        info <- magick::image_info(magick::image_read(img_path))
-        info$width * input$zoom_level / 2.2
+        cached_img <- get_cached_image(img_path)
+        cached_img$width * input$zoom_level / 2.2
       },
       height = function() {
         page <- rv$display_page
@@ -3161,8 +3235,8 @@ simplerIndex <- function(id, language) {
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
-        info <- magick::image_info(magick::image_read(img_path))
-        info$height * input$zoom_level / 2.2
+        cached_img <- get_cached_image(img_path)
+        cached_img$height * input$zoom_level / 2.2
       },
       res = 96
     ) # Increased resolution for better text rendering
