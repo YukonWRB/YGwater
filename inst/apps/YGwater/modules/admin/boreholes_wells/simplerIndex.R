@@ -1671,7 +1671,7 @@ simplerIndex <- function(id, language) {
       )
       inferred_well <- metadata$purpose_well_inferred
       if (is.null(inferred_well)) {
-        inferred_well <- metadata$purpose_of_well_inferred
+        inferred_well <- metadata$purpose_well_inferred
       }
       sanitized$purpose_well_inferred <- parse_logical(
         inferred_well,
@@ -2447,17 +2447,21 @@ simplerIndex <- function(id, language) {
       ) {
         # Create modal dialog
         showModal(modalDialog(
-          title = "New Borehole/Well purpose",
+          title = "New borehole purpose",
           textInput(
-            ns("new_purpose_name"),
+            ns("new_borehole_purpose_name"),
             "Purpose name",
             value = input$purpose_of_borehole
           ),
-          textInput(ns("new_purpose_description"), "Description"),
+          textInput(ns("new_borehole_purpose_description"), "Description"),
 
           footer = tagList(
             modalButton("Cancel"),
-            actionButton(ns("save_new_purpose"), "Save", class = "btn-primary")
+            actionButton(
+              ns("save_new_borehole_purpose"),
+              "Save",
+              class = "btn-primary"
+            )
           )
         ))
       }
@@ -2475,24 +2479,28 @@ simplerIndex <- function(id, language) {
       ) {
         # Create modal dialog
         showModal(modalDialog(
-          title = "New Borehole/Well purpose",
+          title = "New well purpose",
           textInput(
-            ns("new_purpose_name"),
+            ns("new_well_purpose_name"),
             "Purpose name",
             value = input$purpose_of_well
           ),
-          textInput(ns("new_purpose_description"), "Description"),
+          textInput(ns("new_well_purpose_description"), "Description"),
 
           footer = tagList(
             modalButton("Cancel"),
-            actionButton(ns("save_new_purpose"), "Save", class = "btn-primary")
+            actionButton(
+              ns("save_new_well_purpose"),
+              "Save",
+              class = "btn-primary"
+            )
           )
         ))
       }
     })
 
     # Handle the save button for new drillers in the modal
-    observeEvent(input$save_new_purpose, {
+    observeEvent(input$save_new_borehole_purpose, {
       # Ensure that name and description but have at least 3 characters
       if (nchar(trimws(input$new_purpose_name)) < 3) {
         showNotification(
@@ -2515,7 +2523,10 @@ simplerIndex <- function(id, language) {
         session$userData$AquaCache,
         "INSERT INTO boreholes.borehole_well_purposes (purpose_name, description)
    VALUES ($1, $2) RETURNING borehole_well_purpose_id",
-        params = list(input$new_purpose_name, input$new_purpose_description)
+        params = list(
+          input$new_borehole_purpose_name,
+          input$new_borehole_purpose_description
+        )
       )[1, 1]
 
       moduleData$purposes <- DBI::dbGetQuery(
@@ -2526,6 +2537,52 @@ simplerIndex <- function(id, language) {
       updateSelectizeInput(
         session,
         "purpose_of_borehole",
+        choices = stats::setNames(
+          moduleData$purposes$borehole_well_purpose_id,
+          moduleData$purposes$purpose_name
+        ),
+        selected = new_purpose_id
+      )
+      removeModal()
+    })
+
+    observeEvent(input$save_new_well_purpose, {
+      # Ensure that name and description but have at least 3 characters
+      if (nchar(trimws(input$new_well_purpose_name)) < 3) {
+        showNotification(
+          "Purpose name must be at least 3 characters long.",
+          type = "error",
+          duration = 5
+        )
+        return() # Exit the function early
+      }
+      if (nchar(trimws(input$new_well_purpose_description)) < 3) {
+        showNotification(
+          "Purpose description must be at least 3 characters long.",
+          type = "error",
+          duration = 5
+        )
+        return() # Exit the function early
+      }
+
+      new_purpose_id <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "INSERT INTO boreholes.borehole_well_purposes (purpose_name, description)
+    VALUES ($1, $2) RETURNING borehole_well_purpose_id",
+        params = list(
+          input$new_well_purpose_name,
+          input$new_well_purpose_description
+        )
+      )[1, 1]
+
+      moduleData$purposes <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes"
+      )
+
+      updateSelectizeInput(
+        session,
+        "purpose_of_well",
         choices = stats::setNames(
           moduleData$purposes$borehole_well_purpose_id,
           moduleData$purposes$purpose_name
@@ -4254,9 +4311,7 @@ simplerIndex <- function(id, language) {
               latitude = metadata[["latitude"]],
               longitude = metadata[["longitude"]],
               location_source = metadata[["location_source"]],
-              surveyed_ground_elev = metadata[[
-                "surveyed_ground_elev"
-              ]],
+              ground_elev_m = metadata[["surveyed_ground_elev"]],
               purpose_of_borehole = metadata[["purpose_of_borehole"]],
               purpose_borehole_inferred = metadata[[
                 "purpose_borehole_inferred"
