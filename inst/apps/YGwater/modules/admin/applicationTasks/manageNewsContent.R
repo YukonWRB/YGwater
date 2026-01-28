@@ -40,12 +40,13 @@ manageNewsContentUI <- function(id) {
       tabPanel(
         title = "Page Content",
         selectInput(ns("page_select"), "Select page", choices = NULL),
+        tags$div("Positions 1-3 are reserved and hidden from this editor."),
         DT::DTOutput(ns("page_table")),
         numericInput(
           ns("content_position"),
           "Position on page",
-          value = 1,
-          min = 1
+          value = 4,
+          min = 4
         ),
         selectInput(
           ns("content_type"),
@@ -97,6 +98,7 @@ manageNewsContent <- function(id, language) {
     text_ids_val <- reactiveVal(character())
     image_ids_val <- reactiveVal(character())
     preview_data <- reactiveVal(data.frame())
+    reserved_position_max <- 3
 
     # disable buttons if no insert privilege
     check_text <- DBI::dbGetQuery(
@@ -300,9 +302,15 @@ manageNewsContent <- function(id, language) {
       preview_data(df)
     })
 
+    display_preview_data <- reactive({
+      df <- preview_data()
+      df <- df[df$position > reserved_position_max, , drop = FALSE]
+      df[order(-df$position), , drop = FALSE]
+    })
+
     output$page_table <- DT::renderDT({
       DT::datatable(
-        preview_data(),
+        display_preview_data(),
         selection = 'multiple',
         rownames = FALSE,
         options = list(scrollX = TRUE)
@@ -310,7 +318,7 @@ manageNewsContent <- function(id, language) {
     })
 
     output$page_preview <- renderUI({
-      df <- preview_data()
+      df <- display_preview_data()
       if (nrow(df) == 0) {
         return(NULL)
       }
@@ -407,6 +415,13 @@ manageNewsContent <- function(id, language) {
 
     observeEvent(input$add_page_content, {
       req(input$page_select, input$content_id)
+      if (input$content_position <= reserved_position_max) {
+        showNotification(
+          "Positions 1-3 are reserved and cannot be edited here.",
+          type = "error"
+        )
+        return()
+      }
       df <- preview_data()
       new_row <- data.frame(
         page = input$page_select,
@@ -427,7 +442,11 @@ manageNewsContent <- function(id, language) {
     observeEvent(input$delete_page_content, {
       req(input$page_table_rows_selected)
       df <- preview_data()
-      df <- df[-input$page_table_rows_selected, , drop = FALSE]
+      display_indices <- which(df$position > reserved_position_max)
+      display_order <- order(-df$position[display_indices])
+      display_indices <- display_indices[display_order]
+      rows_to_delete <- display_indices[input$page_table_rows_selected]
+      df <- df[-rows_to_delete, , drop = FALSE]
       preview_data(df)
     })
 
