@@ -13,7 +13,7 @@ make_snowbull_map(
   width = 12,
   height = 8,
   dpi = 300,
-  parameter_name = "swe",
+  param_name = NULL,
   statistic = "relative_to_med",
   start_year_historical = 1991,
   end_year_historical = 2020,
@@ -39,7 +39,7 @@ make_snowbull_map(
 
 \item{dpi}{Numeric resolution in dots per inch (default: 300)}
 
-\item{parameter_name}{Character, parameter to plot (default: "swe")}
+\item{param_name}{Character, parameter to plot (default: "swe")}
 
 \item{statistic}{Character, "absolute", "relative", or "percentile" (default: "relative")}
 

@@ -266,12 +266,27 @@ simplerIndexUI <- function(id) {
               title = "Next"
             ),
             actionButton(
+              ns("show_selected_pdf"),
+              icon("file-lines"),
+              class = "nav-btn",
+              title = "Show selected page"
+            ),
+            actionButton(
               ns("remove_pdf"),
               icon("trash"),
               title = "Remove Selected",
               class = "nav-btn"
             )
           )
+        ),
+        br(),
+        tags$small(
+          class = "text-muted",
+          "Select a row and click the ",
+          tags$strong("page button"),
+          " above to show it in the center pane or the ",
+          tags$strong("trash can"),
+          " to delete it."
         ),
         br(),
         DT::DTOutput(ns("pdf_table"))
@@ -486,44 +501,6 @@ simplerIndexUI <- function(id) {
             "Borehole/well name *",
             placeholder = "Enter name"
           ),
-          checkboxInput(
-            ns("associate_loc_with_borehole"),
-            "Associate monitoring location with borehole",
-            value = FALSE
-          ),
-          conditionalPanel(
-            condition = "input.associate_loc_with_borehole == true",
-            ns = ns,
-            numericInput(
-              ns("location_search_radius"),
-              "Search radius for nearby locations (meters)",
-              value = 500,
-              min = 0
-            ),
-            actionButton(
-              ns("find_nearby_locations"),
-              "Find nearby locations",
-              width = "100%"
-            ),
-            uiOutput(ns("nearby_locations_count")),
-            selectizeInput(
-              ns("associated_location"),
-              "Associate with location (optional)",
-              choices = NULL,
-              selected = NULL,
-              options = list(
-                placeholder = "Choose a nearby location",
-                maxItems = 1
-              )
-            ),
-            actionButton(
-              ns("clear_location_association"),
-              "Clear location association",
-              class = "btn btn-outline-secondary",
-              width = "100%"
-            )
-          ),
-
           textInput(
             ns("notes_borehole"),
             "Boreholes notes",
@@ -630,6 +607,45 @@ simplerIndexUI <- function(id) {
               maxItems = 1
             )
           ),
+
+          checkboxInput(
+            ns("associate_loc_with_borehole"),
+            "Associate borehole with monitoring location",
+            value = FALSE
+          ),
+          conditionalPanel(
+            condition = "input.associate_loc_with_borehole == true",
+            ns = ns,
+            numericInput(
+              ns("location_search_radius"),
+              "Search radius for nearby locations (meters)",
+              value = 500,
+              min = 0
+            ),
+            actionButton(
+              ns("find_nearby_locations"),
+              "Find nearby locations",
+              width = "100%"
+            ),
+            uiOutput(ns("nearby_locations_count")),
+            selectizeInput(
+              ns("associated_location"),
+              "Associate with location (optional)",
+              choices = NULL,
+              selected = NULL,
+              options = list(
+                placeholder = "Choose a nearby location",
+                maxItems = 1
+              )
+            ),
+            actionButton(
+              ns("clear_location_association"),
+              "Clear location association",
+              class = "btn btn-outline-secondary",
+              width = "100%"
+            )
+          ),
+
           selectizeInput(
             ns("purpose_of_borehole"),
             "Purpose of borehole",
@@ -1063,7 +1079,10 @@ simplerIndex <- function(id, language) {
     rv <- reactiveValues(
       files_df = NULL, # Data frame with one row per uploaded PDF page
       borehole_data = list(), # Named list organized by borehole ID
-      pdf_index = 1, # Index of currently viewed PDF page
+      display_index = 1, # Index of currently viewed PDF page
+      selected_index = NULL, # Index of currently selected table row
+      display_page = NULL, # Data for the currently displayed PDF page
+      table_version = 0, # Increment to trigger table re-rendering
       ocr_text = list(),
       ocr_display_mode = "none",
       selected_text = NULL,
@@ -1071,6 +1090,28 @@ simplerIndex <- function(id, language) {
       assign_observers = list(),
       redaction_history = list() # New: Track redaction order for undo functionality
     )
+    borehole_choices <- reactiveVal(character())
+    image_cache <- reactiveVal(list())
+
+    get_cached_image <- function(img_path) {
+      cache <- image_cache()
+      if (!is.null(cache[[img_path]])) {
+        return(cache[[img_path]])
+      }
+
+      img <- magick::image_read(img_path) |>
+        magick::image_enhance()
+      info <- magick::image_info(img)
+
+      cached <- list(
+        raster = as.raster(img),
+        width = info$width,
+        height = info$height
+      )
+      cache[[img_path]] <- cached
+      image_cache(cache)
+      cached
+    }
 
     # Reactive expression to get the borehole selected for editing
     current_borehole_id <- reactive({
@@ -1162,14 +1203,60 @@ simplerIndex <- function(id, language) {
       )
     })
 
+    observeEvent(
+      rv$borehole_data,
+      {
+        new_choices <- names(rv$borehole_data)
+        if (!identical(new_choices, borehole_choices())) {
+          borehole_choices(new_choices)
+          rv$table_version <- rv$table_version + 1
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      list(rv$display_index, rv$table_version),
+      {
+        files_df <- rv$files_df
+        if (is.null(files_df) || nrow(files_df) == 0) {
+          rv$display_page <- NULL
+          return()
+        }
+        if (
+          is.null(rv$display_index) ||
+            rv$display_index < 1 ||
+            rv$display_index > nrow(files_df)
+        ) {
+          rv$display_page <- NULL
+          return()
+        }
+        rv$display_page <- files_df[rv$display_index, , drop = FALSE]
+      },
+      ignoreInit = TRUE
+    )
+
+    bump_table_version <- function() {
+      rv$table_version <- rv$table_version + 1
+    }
+
     sort_files_df <- function() {
       if (is.null(rv$files_df)) {
         return()
       }
       current_tag <- if (
-        !is.null(rv$pdf_index) && nrow(rv$files_df) >= rv$pdf_index
+        !is.null(rv$display_index) &&
+          nrow(rv$files_df) >= rv$display_index
       ) {
-        rv$files_df$tag[rv$pdf_index]
+        rv$files_df$tag[rv$display_index]
+      } else {
+        NULL
+      }
+      selected_tag <- if (
+        !is.null(rv$selected_index) &&
+          nrow(rv$files_df) >= rv$selected_index
+      ) {
+        rv$files_df$tag[rv$selected_index]
       } else {
         NULL
       }
@@ -1182,7 +1269,16 @@ simplerIndex <- function(id, language) {
         order(assigned_flag, rv$files_df$borehole_id, decreasing = TRUE),
       ]
       if (!is.null(current_tag)) {
-        rv$pdf_index <- match(current_tag, rv$files_df$tag)
+        new_index <- match(current_tag, rv$files_df$tag)
+        if (!is.na(new_index)) {
+          rv$display_index <- new_index
+        }
+      }
+      if (!is.null(selected_tag)) {
+        new_index <- match(selected_tag, rv$files_df$tag)
+        if (!is.na(new_index)) {
+          rv$selected_index <- new_index
+        }
       }
     }
 
@@ -2439,86 +2535,121 @@ simplerIndex <- function(id, language) {
       removeModal()
     })
 
+    process_pdf_uploads <- ExtendedTask$new(function(uploaded_files) {
+      promises::future_promise({
+        tryCatch(
+          {
+            if (is.null(uploaded_files) || nrow(uploaded_files) == 0) {
+              return(list(error = "No PDF files were provided."))
+            }
+
+            uploaded_files <- as.data.frame(
+              uploaded_files,
+              stringsAsFactors = FALSE
+            )
+
+            for (i in seq_len(nrow(uploaded_files))) {
+              orig_name <- uploaded_files$name[i]
+              from_path <- normalizePath(
+                uploaded_files$datapath[i],
+                winslash = "/",
+                mustWork = FALSE
+              )
+              orig_path <- file.path(dirname(from_path), orig_name)
+              rename_success <- file.rename(from_path, orig_path)
+              if (!rename_success) {
+                file.copy(from_path, orig_path, overwrite = TRUE)
+                unlink(from_path)
+              }
+              uploaded_files$datapath[i] <- orig_path
+            }
+
+            all_split_files <- NULL
+            file_counts <- list()
+
+            for (i in seq_len(nrow(uploaded_files))) {
+              pdf_path <- uploaded_files$datapath[i][1]
+              orig_name <- uploaded_files$name[i]
+
+              n_pages <- pdftools::pdf_info(pdf_path)$pages
+              base <- tools::file_path_sans_ext(basename(pdf_path))
+              png_tpl <- file.path(
+                tempdir(),
+                sprintf("%s_page_%%d.%%s", base)
+              )
+
+              png_files <- pdftools::pdf_convert(
+                pdf_path,
+                dpi = 300,
+                pages = seq_len(n_pages),
+                format = "png",
+                filenames = png_tpl
+              )
+
+              file_counts[[orig_name]] <- length(png_files)
+              file_info <- file.info(png_files)
+              split_df <- data.frame(
+                Name = rep(orig_name, length(png_files)),
+                Size_KB = round(file_info$size / 1024, 2),
+                Date = as.character(file.info(pdf_path)$mtime),
+                OrigFile = rep(orig_name, length(png_files)),
+                Page = seq_along(png_files),
+                Path = png_files,
+                stringsAsFactors = FALSE
+              )
+              split_df$NewFilename <- file.path(basename(split_df$Path))
+              split_df$tag <- paste0(split_df$Name, "-", split_df$Page)
+              split_df$borehole_id <- NA
+
+              if (is.null(all_split_files)) {
+                all_split_files <- split_df
+              } else {
+                all_split_files <- rbind(all_split_files, split_df)
+              }
+            }
+
+            list(
+              split_df = all_split_files,
+              file_counts = file_counts
+            )
+          },
+          error = function(e) {
+            list(error = e$message)
+          }
+        )
+      })
+    })
+
     # Split PDFs into single-page files on upload
     observeEvent(input$pdf_file, {
       uploaded_files <- input$pdf_file
-      # Rename uploaded files to their original names with robust path handling
-      for (i in seq_len(nrow(uploaded_files))) {
-        orig_name <- uploaded_files$name[i]
+      req(uploaded_files)
+      showNotification(
+        "Processing PDFs in the background. This can take a few minutes.",
+        type = "message",
+        duration = 5
+      )
+      process_pdf_uploads$invoke(uploaded_files)
+    })
 
-        from_path <- normalizePath(
-          uploaded_files$datapath[i],
-          winslash = "/",
-          mustWork = FALSE
-        )
-        orig_path <- file.path(dirname(from_path), orig_name)
-        rename_success <- file.rename(from_path, orig_path)
-        if (!rename_success) {
-          file.copy(from_path, orig_path, overwrite = TRUE)
-          unlink(from_path)
-        }
-        uploaded_files$datapath[i] <- orig_path
+    observeEvent(process_pdf_uploads$result(), {
+      result <- process_pdf_uploads$result()
+      if (is.null(result)) {
+        return()
+      }
+      if (!is.null(result$error)) {
+        showNotification(result$error, type = "error", duration = 6)
+        return()
       }
 
-      # Show initial loading notification
-      total_files <- nrow(uploaded_files)
-
-      for (i in seq_len(nrow(uploaded_files))) {
-        pdf_path <- uploaded_files$datapath[i][1]
-        orig_name <- uploaded_files$name[i]
-
-        # Show progress for current file
+      all_split_files <- result$split_df
+      if (is.null(all_split_files) || nrow(all_split_files) == 0) {
         showNotification(
-          paste("Converting", orig_name, "- File", i, "of", total_files),
-          type = "message",
-          duration = 4
+          "No pages were generated from the uploaded PDFs.",
+          type = "warning",
+          duration = 6
         )
-
-        # Convert PDF to PNG files (one per page) and save to tempdir
-        n_pages <- pdftools::pdf_info(pdf_path)$pages
-        base <- tools::file_path_sans_ext(basename(pdf_path))
-        png_tpl <- file.path(tempdir(), sprintf("%s_page_%%d.%%s", base)) # note %%d and %%s
-
-        png_files <- pdftools::pdf_convert(
-          pdf_path,
-          dpi = 300,
-          pages = seq_len(n_pages),
-          format = "png",
-          filenames = png_tpl
-        )
-
-        file_info <- file.info(png_files)
-        split_df <- data.frame(
-          Name = rep(orig_name, length(png_files)),
-          Size_KB = round(file_info$size / 1024, 2),
-          Date = as.character(file.info(pdf_path)$mtime),
-          OrigFile = rep(orig_name, length(png_files)),
-          Page = seq_along(png_files),
-          Path = png_files,
-          stringsAsFactors = FALSE
-        )
-        split_df$NewFilename <- file.path(basename(split_df$Path))
-        split_df$tag <- paste0(split_df$Name, "-", split_df$Page)
-        split_df$borehole_id <- NA
-
-        if (i == 1) {
-          all_split_files <- split_df
-        } else {
-          all_split_files <- rbind(all_split_files, split_df)
-        }
-
-        # Show completion for current file
-        showNotification(
-          paste(
-            "Completed converting",
-            orig_name,
-            "- Generated",
-            length(png_files),
-            "page(s)"
-          ),
-          type = "message",
-          duration = 5
-        )
+        return()
       }
 
       if (is.null(rv$files_df)) {
@@ -2528,17 +2659,19 @@ simplerIndex <- function(id, language) {
       }
       rv$files_df$borehole_id <- as.character(rv$files_df$borehole_id)
       sort_files_df()
+      bump_table_version()
 
-      rv$pdf_index <- 1
+      rv$display_index <- 1
+      rv$selected_index <- 1
 
+      new_pages <- nrow(all_split_files)
       if (length(rv$ocr_text) == 0) {
         rv$ocr_text <- vector("list", nrow(rv$files_df))
       } else {
-        rv$ocr_text <- c(rv$ocr_text, vector("list", nrow(all_split_files)))
+        rv$ocr_text <- c(rv$ocr_text, vector("list", new_pages))
       }
       rv$ocr_display_mode <- "none"
 
-      # Reset button states on upload
       brush_enabled(FALSE)
       updateSelectizeInput(session, "ocr_display_mode", selected = "none")
 
@@ -2547,12 +2680,26 @@ simplerIndex <- function(id, language) {
         ns('brush_select')
       ))
 
-      # Show final completion notification
+      if (!is.null(result$file_counts)) {
+        for (file_name in names(result$file_counts)) {
+          showNotification(
+            paste(
+              "Completed converting",
+              file_name,
+              "- Generated",
+              result$file_counts[[file_name]],
+              "page(s)"
+            ),
+            type = "message",
+            duration = 5
+          )
+        }
+      }
+
       total_pages <- nrow(rv$files_df)
       showNotification(
         paste(
           "PDF conversion completed! Generated",
-
           total_pages,
           "page(s) total."
         ),
@@ -2561,13 +2708,33 @@ simplerIndex <- function(id, language) {
       )
     })
 
-    # Observe table row selection and update pdf_index
+    # Observe table row selection and track the selected row without rendering
     observeEvent(
       input$pdf_table_rows_selected,
       {
         sel <- input$pdf_table_rows_selected
-        if (!is.null(sel) && !identical(sel, rv$pdf_index)) {
-          rv$pdf_index <- sel
+        if (!is.null(sel) && !identical(sel, rv$selected_index)) {
+          rv$selected_index <- sel
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    # Render selected table row when explicitly requested
+    observeEvent(
+      input$show_selected_pdf,
+      {
+        req(rv$files_df)
+        if (is.null(rv$selected_index)) {
+          showNotification(
+            "Select a document page to display.",
+            type = "warning",
+            duration = 4
+          )
+          return()
+        }
+        if (rv$selected_index >= 1 && rv$selected_index <= nrow(rv$files_df)) {
+          rv$display_index <- rv$selected_index
         }
       },
       ignoreInit = TRUE
@@ -2579,11 +2746,8 @@ simplerIndex <- function(id, language) {
       {
         req(rv$files_df)
 
-        if (rv$pdf_index < nrow(rv$files_df)) {
-          rv$pdf_index <- rv$pdf_index + 1
-          # Ensure table selection follows
-          DT::dataTableProxy(ns("pdf_table"), session = session) |>
-            DT::selectRows(rv$pdf_index)
+        if (rv$display_index < nrow(rv$files_df)) {
+          rv$display_index <- rv$display_index + 1
         }
       },
       ignoreInit = TRUE
@@ -2593,31 +2757,66 @@ simplerIndex <- function(id, language) {
       input$prev_pdf,
       {
         req(rv$files_df)
-        if (rv$pdf_index >= 2) {
-          rv$pdf_index <- rv$pdf_index - 1
-          # Ensure table selection follows
-          DT::dataTableProxy(ns("pdf_table"), session = session) |>
-            DT::selectRows(rv$pdf_index)
+        if (rv$display_index >= 2) {
+          rv$display_index <- rv$display_index - 1
         } else {
-          rv$pdf_index <- 1
+          rv$display_index <- 1
         }
       },
       ignoreInit = TRUE
     )
 
-    # Observe remove button and delete selected page, updating pdf_index and table selection as needed
+    # Observe remove button and delete selected page, updating indices as needed
     observeEvent(
       input$remove_pdf,
       {
         req(rv$files_df)
         if (nrow(rv$files_df) > 0) {
-          selected_row <- rv$pdf_index
+          display_tag <- if (
+            !is.null(rv$display_index) &&
+              nrow(rv$files_df) >= rv$display_index
+          ) {
+            rv$files_df$tag[rv$display_index]
+          } else {
+            NULL
+          }
+          selected_tag <- if (
+            !is.null(rv$selected_index) &&
+              nrow(rv$files_df) >= rv$selected_index
+          ) {
+            rv$files_df$tag[rv$selected_index]
+          } else {
+            NULL
+          }
+          display_index_before <- rv$display_index
+          selected_index_before <- rv$selected_index
+
+          selected_row <- if (!is.null(rv$selected_index)) {
+            rv$selected_index
+          } else {
+            rv$display_index
+          }
+
+          if (is.null(selected_row) || selected_row < 1) {
+            showNotification(
+              "Select a document page to remove.",
+              type = "warning",
+              duration = 4
+            )
+            return()
+          }
 
           fname <- rv$files_df$NewFilename[selected_row]
+          img_path <- rv$files_df$Path[selected_row]
 
           # Remove from files_df and OCR text
           rv$files_df <- rv$files_df[-selected_row, ]
           rv$ocr_text <- rv$ocr_text[-selected_row]
+          if (!is.null(img_path)) {
+            cache <- image_cache()
+            cache[[img_path]] <- NULL
+            image_cache(cache)
+          }
 
           # Update well_data structure by removing the filename
           for (well_id in names(rv$borehole_data)) {
@@ -2628,24 +2827,64 @@ simplerIndex <- function(id, language) {
           }
 
           if (nrow(rv$files_df) == 0) {
-            rv$pdf_index <- 1
-          } else if (rv$pdf_index > nrow(rv$files_df)) {
-            rv$pdf_index <- nrow(rv$files_df)
-            # Ensure table selection follows
-            DT::dataTableProxy(ns("pdf_table"), session = session) |>
-              DT::selectRows(rv$pdf_index)
+            rv$display_index <- 1
+            rv$selected_index <- NULL
+          } else {
+            display_index <- if (!is.null(display_tag)) {
+              match(display_tag, rv$files_df$tag)
+            } else {
+              NA_integer_
+            }
+            if (is.na(display_index)) {
+              display_index <- min(display_index_before, nrow(rv$files_df))
+            }
+            rv$display_index <- max(1, display_index)
+
+            selected_index <- if (!is.null(selected_tag)) {
+              match(selected_tag, rv$files_df$tag)
+            } else {
+              NA_integer_
+            }
+            if (is.na(selected_index)) {
+              if (!is.null(selected_index_before)) {
+                selected_index <- min(selected_index_before, nrow(rv$files_df))
+              } else {
+                selected_index <- NULL
+              }
+            }
+            rv$selected_index <- selected_index
           }
           sort_files_df()
+          bump_table_version()
         }
       },
       ignoreInit = TRUE
     )
 
-    # Observe changes to files_df and set up observers for each select input, which are created dynamically on table render
     observeEvent(
-      rv$files_df,
+      list(rv$files_df, rv$selected_index),
       {
-        if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
+        req(rv$files_df)
+        if (nrow(rv$files_df) == 0) {
+          return()
+        }
+        if (
+          !is.null(rv$selected_index) &&
+            !identical(input$pdf_table_rows_selected, rv$selected_index)
+        ) {
+          DT::dataTableProxy("pdf_table", session = session) |>
+            DT::selectRows(rv$selected_index)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    # Observe table version changes and set up observers for each select input
+    observeEvent(
+      rv$table_version,
+      {
+        files_df <- isolate(rv$files_df)
+        if (is.null(files_df) || nrow(files_df) == 0) {
           # No files, destroy all observers and exit
           lapply(
             rv$assign_observers,
@@ -2667,9 +2906,9 @@ simplerIndex <- function(id, language) {
             }
           }
         )
-        rv$assign_observers <- vector("list", length = nrow(rv$files_df))
+        rv$assign_observers <- vector("list", length = nrow(files_df))
         # Set up new observers for each row
-        for (i in seq_len(nrow(rv$files_df))) {
+        for (i in seq_len(nrow(files_df))) {
           rv$assign_observers[[i]] <- local({
             row_index <- i
             observeEvent(
@@ -2728,25 +2967,27 @@ simplerIndex <- function(id, language) {
 
     # Render the data table of files
     output$pdf_table <- DT::renderDT({
-      req(rv$files_df)
-      validate(need(nrow(rv$files_df) > 0, "No files uploaded yet"))
+      rv$table_version
+      files_df <- isolate(rv$files_df)
+      req(files_df)
+      validate(need(nrow(files_df) > 0, "No files uploaded yet"))
 
-      borehole_choices <- names(rv$borehole_data) # Fetch current borehole IDs
+      current_borehole_choices <- borehole_choices()
+      labelled_choices <- if (length(current_borehole_choices) > 0) {
+        stats::setNames(
+          current_borehole_choices,
+          paste("Borehole", current_borehole_choices)
+        )
+      } else {
+        NULL
+      }
       # Generate selectInput for each row to assign pages to boreholes
       select_inputs <- vapply(
-        seq_len(nrow(rv$files_df)),
+        seq_len(nrow(files_df)),
         function(i) {
-          selected_value <- rv$files_df$borehole_id[i]
+          selected_value <- files_df$borehole_id[i]
           if (length(selected_value) == 0 || is.na(selected_value)) {
             selected_value <- ""
-          }
-          labelled_choices <- if (length(borehole_choices) > 0) {
-            stats::setNames(
-              borehole_choices,
-              paste("Borehole", borehole_choices)
-            )
-          } else {
-            NULL
           }
           as.character(selectizeInput(
             ns(paste0("bh_select_", i)),
@@ -2760,14 +3001,15 @@ simplerIndex <- function(id, language) {
       )
 
       dat <- data.frame(
-        tag = rv$files_df$tag,
+        row_id = seq_len(nrow(files_df)),
+        tag = files_df$tag,
         borehole = select_inputs,
         stringsAsFactors = FALSE
       )
 
       DT::datatable(
         dat,
-        selection = list(mode = "single", selected = rv$pdf_index),
+        selection = list(mode = "single"),
         escape = FALSE,
         options = list(
           pageLength = 10,
@@ -2778,6 +3020,10 @@ simplerIndex <- function(id, language) {
           ordering = FALSE,
           scrollY = "300px",
           scrollCollapse = TRUE,
+          deferRender = TRUE,
+          columnDefs = list(
+            list(targets = 0, visible = FALSE, searchable = FALSE)
+          ),
           preDrawCallback = DT::JS(
             'function() { Shiny.unbindAll(this.api().table().node()); }'
           ),
@@ -2785,7 +3031,17 @@ simplerIndex <- function(id, language) {
             'function() { Shiny.bindAll(this.api().table().node()); } '
           )
         )
-      )
+      ) |>
+        DT::formatStyle(
+          "row_id",
+          target = "row",
+          backgroundColor = DT::styleEqual(
+            rv$display_index,
+            "#fff3cd"
+          ),
+          color = DT::styleEqual(rv$display_index, "#5c3d00"),
+          fontWeight = DT::styleEqual(rv$display_index, "bold")
+        )
     })
 
     # Modified observer for OCR display mode: process OCR for all images when mode is highlight/text
@@ -2811,20 +3067,17 @@ simplerIndex <- function(id, language) {
     rendered_plot <- reactiveVal(NULL)
     output$plot <- renderPlot(
       expr = {
-        req(rv$files_df)
-        req(rv$pdf_index)
-        req(nrow(rv$files_df) >= rv$pdf_index)
+        page <- rv$display_page
+        req(page)
         zoom <- input$zoom_level
         # Load and prepare the image
-        img_path <- rv$files_df$Path[rv$pdf_index]
+        img_path <- page$Path[1]
         req(file.exists(img_path))
 
-        img <- magick::image_read(img_path) |>
-          magick::image_enhance()
-        info <- magick::image_info(img)
-        img_width <- info$width
-        img_height <- info$height
-        img_raster <- as.raster(img)
+        cached_img <- get_cached_image(img_path)
+        img_width <- cached_img$width
+        img_height <- cached_img$height
+        img_raster <- cached_img$raster
 
         # Set up the plot area
         par(mar = c(0, 0, 0, 0), xaxs = "i", yaxs = "i")
@@ -2846,9 +3099,9 @@ simplerIndex <- function(id, language) {
         # Draw OCR overlay if in OCR mode and OCR data exists
         if (
           input$ocr_display_mode != "none" &&
-            !is.null(rv$ocr_text[[rv$pdf_index]])
+            !is.null(rv$ocr_text[[rv$display_index]])
         ) {
-          ocr_df <- rv$ocr_text[[rv$pdf_index]]
+          ocr_df <- rv$ocr_text[[rv$display_index]]
 
           # Filter by confidence threshold
           if (nrow(ocr_df) > 0) {
@@ -2966,24 +3219,24 @@ simplerIndex <- function(id, language) {
         }
       },
       width = function() {
-        req(rv$files_df)
-        req(rv$pdf_index)
-        img_path <- rv$files_df$Path[rv$pdf_index]
+        page <- rv$display_page
+        req(page)
+        img_path <- page$Path[1]
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
-        info <- magick::image_info(magick::image_read(img_path))
-        info$width * input$zoom_level / 2.2
+        cached_img <- get_cached_image(img_path)
+        cached_img$width * input$zoom_level / 2.2
       },
       height = function() {
-        req(rv$files_df)
-        req(rv$pdf_index)
-        img_path <- rv$files_df$Path[rv$pdf_index]
+        page <- rv$display_page
+        req(page)
+        img_path <- page$Path[1]
         if (is.null(img_path) || is.na(img_path) || !file.exists(img_path)) {
           return(400)
         }
-        info <- magick::image_info(magick::image_read(img_path))
-        info$height * input$zoom_level / 2.2
+        cached_img <- get_cached_image(img_path)
+        cached_img$height * input$zoom_level / 2.2
       },
       res = 96
     ) # Increased resolution for better text rendering
@@ -2992,10 +3245,10 @@ simplerIndex <- function(id, language) {
     observeEvent(input$pdf_brush, {
       req(input$pdf_brush)
       req(rv$files_df)
-      req(rv$pdf_index)
+      req(rv$display_index)
 
       # Get file path as unique identifier
-      file_path <- rv$files_df$Path[rv$pdf_index]
+      file_path <- rv$files_df$Path[rv$display_index]
 
       # If delete mode is enabled, find and delete clicked rectangle
       if (delete_enabled()) {
@@ -3093,7 +3346,7 @@ simplerIndex <- function(id, language) {
       # If brush mode is enabled, extract OCR text
       if (brush_enabled()) {
         # Get current OCR data
-        ocr_df <- rv$ocr_text[[rv$pdf_index]]
+        ocr_df <- rv$ocr_text[[rv$display_index]]
         if (is.null(ocr_df) || nrow(ocr_df) == 0) {
           rv$selected_text <- NULL
           return()
@@ -3122,7 +3375,7 @@ simplerIndex <- function(id, language) {
         brush <- input$pdf_brush
 
         # Get image dimensions for coordinate conversion
-        img_path <- rv$files_df$Path[rv$pdf_index]
+        img_path <- rv$files_df$Path[rv$display_index]
         img <- magick::image_read(img_path)
         info <- magick::image_info(img)
         img_width <- info$width
@@ -3184,10 +3437,10 @@ simplerIndex <- function(id, language) {
     # Observer for undo redaction button
     observeEvent(input$undo_redaction, {
       req(rv$files_df)
-      req(rv$pdf_index)
+      req(rv$display_index)
 
       # Get file path as unique identifier
-      file_path <- rv$files_df$Path[rv$pdf_index]
+      file_path <- rv$files_df$Path[rv$display_index]
 
       # Check if there are redactions to undo
       if (
@@ -3227,10 +3480,10 @@ simplerIndex <- function(id, language) {
 
     observeEvent(input$clear_rectangles, {
       req(rv$files_df)
-      req(rv$pdf_index)
+      req(rv$display_index)
 
       # Get file path as unique identifier
-      file_path <- rv$files_df$Path[rv$pdf_index]
+      file_path <- rv$files_df$Path[rv$display_index]
 
       # Clear rectangles for this file path only
       rv$rectangles[[file_path]] <- NULL
@@ -3932,7 +4185,7 @@ simplerIndex <- function(id, language) {
     # Upload handlers
     observeEvent(input$upload_selected, {
       req(rv$files_df)
-      req(rv$pdf_index)
+      req(rv$display_index)
 
       if (nrow(rv$files_df) == 0) {
         showNotification(
@@ -4246,7 +4499,7 @@ simplerIndex <- function(id, language) {
     # Add observer for OCR extracted text display
     output$ocr_text_display <- renderText({
       req(rv$files_df)
-      req(rv$pdf_index)
+      req(rv$display_index)
 
       if (length(rv$ocr_text) == 0) {
         return()
@@ -4259,7 +4512,7 @@ simplerIndex <- function(id, language) {
       if (is.null(input$ocr_display_mode) || input$ocr_display_mode == "none") {
         return("")
       }
-      ocr_df <- rv$ocr_text[[rv$pdf_index]]
+      ocr_df <- rv$ocr_text[[rv$display_index]]
       if (is.null(ocr_df) || nrow(ocr_df) == 0) {
         return("")
       }
@@ -4292,20 +4545,22 @@ simplerIndex <- function(id, language) {
     output$save_image <- downloadHandler(
       filename = function() {
         req(rv$files_df)
-        req(rv$pdf_index)
+        req(rv$display_index)
 
         # Get base filename without extension
-        base_name <- tools::file_path_sans_ext(rv$files_df$Name[rv$pdf_index])
-        page_num <- rv$files_df$Page[rv$pdf_index]
+        base_name <- tools::file_path_sans_ext(
+          rv$files_df$Name[rv$display_index]
+        )
+        page_num <- rv$files_df$Page[rv$display_index]
 
         paste0(base_name, "_page_", page_num, "_redacted.png")
       },
       content = function(file) {
         req(rv$files_df)
-        req(rv$pdf_index)
+        req(rv$display_index)
 
         # Get the original image path
-        img_path <- rv$files_df$Path[rv$pdf_index]
+        img_path <- rv$files_df$Path[rv$display_index]
 
         if (!file.exists(img_path)) {
           showNotification("Image file not found", type = "error", duration = 5)

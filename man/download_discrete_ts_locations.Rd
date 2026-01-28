@@ -4,12 +4,12 @@
 \alias{download_discrete_ts_locations}
 \title{Download discrete timeseries station locations}
 \usage{
-download_discrete_ts_locations(con, param_name_long, epsg = 4326)
+download_discrete_ts_locations(con, param_name, epsg = 4326)
 }
 \arguments{
 \item{con}{DBI database connection object}
 
-\item{param_name_long}{Character string of the parameter name to check}
+\item{param_name}{Character string of the parameter name to check}
 
 \item{epsg}{Integer EPSG code for coordinate transformation (default 4326)}
 }

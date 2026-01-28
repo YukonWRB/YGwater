@@ -485,7 +485,7 @@ get_most_recent_date <- function(ts) {
 
 #' Standardize parameter name
 #' @param param_name Character string of parameter name
-#' @param con [optional] AquaCache connection
+#' @param con (Optional) AquaCache connection
 #' @return parameter name
 #' @noRd
 standardize_param_name <- function(param_name, con = NULL) {
