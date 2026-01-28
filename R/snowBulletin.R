@@ -17,8 +17,6 @@
 #' @param basins The name of the sub_basin you wish to generate. One or many of "Upper Yukon", "Teslin", "Central Yukon", "Pelly", "Stewart", "White", "Lower Yukon", "Porcupine", "Peel", "Liard", "Alsek". North Slope will be added when AquaCache is updated with the new snow database. Default is NULL, where all basins are shown in bulletin.
 #' @param synchronize Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.
 #' @param language The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french" or "francais". Default is "english".
-#' @param precip_period The period to use for precipitation stats. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
-#' @param cddf_period The period to use for the cumulative degree day plot historic range. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".
 #' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #'
 #' @return A snow bulletin in Microsoft Word format.
@@ -29,49 +27,18 @@
 snowBulletin <- function(
   year,
   month,
-  save_path = 'choose',
+  save_path = NULL,
   scale = 1,
   basins = NULL,
   synchronize = FALSE,
   language = "english",
-  precip_period = "last 40 years",
-  cddf_period = "last 40 years",
   con = NULL
 ) {
-  year = 2025
-  month = 3
-  save_path = "C:/Users/gtdelapl/Desktop"
-  scale = 1
-  basins = NULL
-  synchronize = FALSE
-  language = "english"
-  precip_period = "last 40 years"
-  cddf_period = "last 40 years"
-
   #Check parameters
   #Language
   if (!(language %in% c("french", "english", "francais", "fran"))) {
     stop(
       "Parameter 'language' must be one of the options: 'english' or 'french'."
-    )
-  }
-
-  # precip_period
-  if (
-    !(precip_period %in%
-      c("last 40 years", "all years", "1981-2010", "1991-2020"))
-  ) {
-    stop(
-      "Parameter 'precip_period' must be one of the options: 'last 40 years', 'all years', '1981-2010', '1991-2020'."
-    )
-  }
-  # cddf_period
-  if (
-    !(cddf_period %in%
-      c("last 40 years", "all years", "1981-2010", "1991-2020"))
-  ) {
-    stop(
-      "Parameter 'cddf_period' must be one of the options: 'last 40 years', 'all years', '1981-2010', '1991-2020'."
     )
   }
 
@@ -272,8 +239,6 @@ snowBulletin <- function(
       } else {
         "  \n  \n  \nBulletin des relev\u00E9s  \nnivom\u00E9triques et des  \npr\u00E9visions hydrologiques  \ndu Yukon"
       },
-      precip_period = precip_period,
-      cddf_period = cddf_period,
       con = con
     )
   )
