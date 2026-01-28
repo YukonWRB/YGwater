@@ -19,54 +19,15 @@ snow_id <- DBI::dbGetQuery(
 
 bulletin_month <- 3
 bulletin_year <- 2024
+epsg <- "EPSG:3005"
 
 
-dat <- load_bulletin_timeseries(
-    con = con,
-    load_swe = TRUE,
-    load_temp = TRUE,
-    load_precip = TRUE,
-    october_start = TRUE
+snowBulletin(
+    year = 2024,
+    month = 3,
+    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
+    con = con
 )
-
-swe_pillows <- get_display_data(
-    dataset = dat$swe$pillows,
-    year = bulletin_year,
-    month = bulletin_month,
-    statistic = "relative_to_med"
-)
-
-swe_basins <- get_display_data(
-    dataset = dat$swe$basins,
-    year = bulletin_year,
-    month = bulletin_month,
-    statistic = "relative_to_med"
-)
-
-precip <- get_display_data(
-    dataset = dat$precipitation,
-    year = bulletin_year,
-    month = bulletin_month,
-    statistic = "relative_to_med"
-)
-
-fdd <- get_display_data(
-    dataset = dat$fdd,
-    year = bulletin_year,
-    month = bulletin_month,
-    statistic = "relative_to_med"
-)
-
-
-swe <- get_normalized_bulletin_values(
-    bulletin_month = 3,
-    bulletin_year = 2025,
-    ts = dat$swe$basins$timeseries$data,
-    parameter = "swe",
-    norms = dat$swe$basins$norms
-)
-
-
 plot(dat$fdd$timeseries$data[, 'datetime'], dat$fdd$timeseries$data[, '489'])
 
 
@@ -85,7 +46,6 @@ get_state_as_shp(
 swe$relative_to_norm
 
 timeseries <- dat$swe$basins$timeseries$data
-
 
 timeseries_key_to_name <- function(timeseries, metadata) {
     station_ids <- names(timeseries)
@@ -126,13 +86,6 @@ swe_stats <- swe_stats[, c("name", setdiff(names(swe_stats), "name"))]
 df$description <- description
 
 # on.exit(DBI::dbDisconnect(con), add = TRUE)
-
-# snowBulletin(
-#     year = 2024,
-#     month = 3,
-#     save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe\\exports",
-#     con = con
-# )
 
 query <- "SELECT locations.name AS location_name, locations.location AS location_id, datetime, value_corrected AS value FROM measurements_continuous_corrected INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id INNER JOIN locations ON timeseries.location = locations.location\n                                           WHERE measurements_continuous_corrected.timeseries_id IN ('663', '665', '666', '668', '664', '671', '667')"
 
@@ -206,3 +159,10 @@ parameter_name <- "swe"
 #   - Identifies the indices in the time series (`ts`) that fall within this period.
 #   - For each station, applies the aggregation function to the relevant data and stores the result in `historical_sums`.
 # - Finally, the code calculates the median value (norm) for each station across all historical years and stores it in `station_norms`.
+
+con <- YGwater::AquaConnect(
+    host = "199.247.132.26",
+    port = "5432",
+    user = "snow_reader",
+    password = "snow"
+)
