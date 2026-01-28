@@ -1253,18 +1253,22 @@ simplerIndex <- function(id, language) {
       updateSelectizeInput(
         session,
         "location_source",
-        selected = "GPS, uncorrected"
+        selected = character(0)
       )
       updateSelectizeInput(session, "utm_zone", selected = "8N")
-      updateSelectizeInput(session, "purpose_of_borehole", selected = NULL)
+      updateSelectizeInput(
+        session,
+        "purpose_of_borehole",
+        selected = character(0)
+      )
       updateRadioButtons(
         session,
         "purpose_borehole_inferred",
         selected = TRUE
       )
-      updateSelectizeInput(session, "purpose_of_well", selected = NULL)
+      updateSelectizeInput(session, "purpose_of_well", selected = character(0))
       updateRadioButtons(session, "purpose_well_inferred", selected = TRUE)
-      updateSelectizeInput(session, "drilled_by", selected = NULL)
+      updateSelectizeInput(session, "drilled_by", selected = character(0))
       updateSelectizeInput(
         session,
         "share_with_borehole",
@@ -1277,8 +1281,14 @@ simplerIndex <- function(id, language) {
       )
       updateRadioButtons(session, "coordinate_system", selected = "utm")
       updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
+      updateRadioButtons(session, "permafrost_top_unit", selected = "ft")
+      updateRadioButtons(session, "permafrost_bot_unit", selected = "ft")
       updateRadioButtons(session, "casing_od_unit", selected = "inch")
       updateRadioButtons(session, "drill_depth_unit", selected = "ft")
+      updateRadioButtons(session, "top_of_screen_unit", selected = "ft")
+      updateRadioButtons(session, "bottom_of_screen_unit", selected = "ft")
+      updateRadioButtons(session, "well_head_stick_up_unit", selected = "ft")
+      updateRadioButtons(session, "static_water_level_unit", selected = "ft")
       updateRadioButtons(
         session,
         "estimated_yield_unit",
@@ -1312,9 +1322,20 @@ simplerIndex <- function(id, language) {
       }
 
       # Clear checkboxes and date
+      updateCheckboxInput(
+        session,
+        "associate_loc_with_borehole",
+        value = FALSE
+      )
       updateCheckboxInput(session, "permafrost_present", value = FALSE)
       updateCheckboxInput(session, "is_well", value = FALSE)
       updateDateInput(session, "date_drilled", value = NULL)
+      updateNumericInput(session, "location_search_radius", value = 500)
+      updateSelectizeInput(
+        session,
+        "associated_location",
+        selected = character(0)
+      )
 
       loading_metadata(FALSE)
     }
