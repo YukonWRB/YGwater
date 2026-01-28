@@ -46,6 +46,7 @@
 
 plotMultiTimeseries <- function(
   type = 'traces',
+  timeseries_ids = NULL,
   locations = NULL,
   sub_locations = NULL,
   parameters = NULL,
@@ -78,8 +79,7 @@ plotMultiTimeseries <- function(
   resolution = NULL,
   tzone = "auto",
   data = FALSE,
-  con = NULL,
-  timeseries_ids = NULL
+  con = NULL
 ) {
   # type <- 'traces'
   # locations <- c("138", "140")
@@ -341,7 +341,9 @@ plotMultiTimeseries <- function(
         LIMIT 1;"
             res <- DBI::dbGetQuery(con, DBI::sqlInterpolate(con, query, at))
             if (nrow(res) == 1) {
-              aggregation_types$aggregation_type_id[i] <- res$aggregation_type_id
+              aggregation_types$aggregation_type_id[
+                i
+              ] <- res$aggregation_type_id
             } else {
               warning(
                 "`aggregation_types[",

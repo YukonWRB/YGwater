@@ -9,8 +9,10 @@ load_bulletin_timeseries(
   load_swe = TRUE,
   load_precip = FALSE,
   load_temp = FALSE,
+  load_streamflow = FALSE,
   start_year_historical = 1991,
   end_year_historical = 2020,
+  october_start = FALSE,
   epsg = 4326
 )
 }
@@ -22,6 +24,14 @@ load_bulletin_timeseries(
 \item{load_precip}{Logical indicating whether to load precipitation data (default FALSE)}
 
 \item{load_temp}{Logical indicating whether to load temperature data (default FALSE)}
+
+\item{load_streamflow}{Logical indicating whether to load streamflow data (default FALSE)}
+
+\item{start_year_historical}{Integer start year for historical norms (default 1991)}
+
+\item{end_year_historical}{Integer end year for historical norms (default 2020)}
+
+\item{october_start}{Logical indicating if water year starts in October (default FALSE)}
 
 \item{epsg}{Numeric EPSG code for coordinate reference system (default 4326)}
 }

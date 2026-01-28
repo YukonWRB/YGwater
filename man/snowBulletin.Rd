@@ -7,13 +7,11 @@
 snowBulletin(
   year,
   month,
-  save_path = "choose",
+  save_path = NULL,
   scale = 1,
   basins = NULL,
   synchronize = FALSE,
   language = "english",
-  precip_period = "last 40 years",
-  cddf_period = "last 40 years",
   con = NULL
 )
 }
@@ -31,10 +29,6 @@ snowBulletin(
 \item{synchronize}{Should the timeseries be synchronized with source data? If TRUE, all timeseries used in the snow bulletin will be synchronized. If FALSE (default), none will be synchronized. This requires installation of the AquaCache package (installed or updated each time this function is run with synchronize = TRUE) as well as write privileges to the database. See Details for more info.}
 
 \item{language}{The language of the snow bulletin. Currently only changes language of plots. Options are "english" and "french" or "francais". Default is "english".}
-
-\item{precip_period}{The period to use for precipitation stats. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".}
-
-\item{cddf_period}{The period to use for the cumulative degree day plot historic range. Options are "last 40 years", "all years" (all years of record), "1981-2010" (old climate normal period), "1991-2020" (current climate normal period). Default is "last 40 years".}
 
 \item{con}{A connection to the AquaCache database. If left NULL connection will be attempted with function \code{\link[=AquaConnect]{AquaConnect()}} using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!}
 }

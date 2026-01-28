@@ -4,7 +4,7 @@
 \alias{get_state_as_shp}
 \title{Extract SWE data at specific points for a given year and month}
 \usage{
-get_state_as_shp(data, year, month)
+get_state_as_shp(data, year, month, language)
 }
 \arguments{
 \item{data}{List containing timeseries and metadata from download functions}
