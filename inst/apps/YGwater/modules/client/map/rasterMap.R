@@ -90,12 +90,12 @@ mapRaster <- function(id, language) {
 
     swe_pillow_stations <- download_continuous_ts_locations(
       con = session$userData$AquaCache,
-      param_name_long = "snow water equivalent"
+      param_name = "snow water equivalent"
     )
 
     swe_survey_stations <- download_discrete_ts_locations(
       con = session$userData$AquaCache,
-      param_name_long = "snow water equivalent"
+      param_name = "snow water equivalent"
     )
 
     era5_query <- "
