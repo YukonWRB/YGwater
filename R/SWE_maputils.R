@@ -3509,57 +3509,97 @@ get_display_data <- function(
         "%)"
     )
 
-    # Add a 'description' column to stats_df based on perc_hist_med and language
+    # Add a 'snowbull_rmd_' tag to preposition column based on perc_hist_med
     dataset_state$preposition <- character(nrow(dataset_state))
     for (i in seq_len(nrow(dataset_state))) {
         val <- dataset_state$relative_to_med[i]
         if (is.na(val)) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_no_data",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_no_data"
         } else if (val < 66) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_well_below",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_well_below"
         } else if (val >= 66 && val < 90) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_below",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_below"
         } else if (val >= 90 && val < 98) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_close",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_close"
         } else if (val >= 98 && val < 103) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_normal",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_normal"
         } else if (val >= 103 && val < 110) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_close",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_close"
         } else if (val >= 110 && val < 135) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_above",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_above"
         } else if (val >= 135) {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_well_above",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_well_above"
         } else {
-            dataset_state$preposition[i] <- tr(
-                "snowbull_rmd_no_data",
-                language
-            )
+            dataset_state$preposition[i] <- "snowbull_rmd_no_data"
         }
     }
+
+    # Assign text_colour based on preposition tag
+    # TODO: should I remove officer dependency here?
+    dataset_state$text_colour <- vapply(
+        dataset_state$preposition,
+        function(tag) {
+            # Assign color based on tag
+            if (tag %in% c("snowbull_rmd_above", "snowbull_rmd_well_above")) {
+                officer::fp_text_lite(
+                    color = "#0097A9",
+                    bold = TRUE,
+                    font.size = 11
+                )
+            } else if (
+                tag %in% c("snowbull_rmd_below", "snowbull_rmd_well_below")
+            ) {
+                officer::fp_text_lite(
+                    color = "#834333",
+                    bold = TRUE,
+                    font.size = 11
+                )
+            } else if (
+                tag %in% c("snowbull_rmd_normal", "snowbull_rmd_close")
+            ) {
+                officer::fp_text_lite(
+                    color = "#7A9A01",
+                    bold = TRUE,
+                    font.size = 11
+                )
+            } else {
+                officer::fp_text_lite(
+                    color = "black",
+                    bold = TRUE,
+                    font.size = 11
+                )
+            }
+        },
+        officer::fp_text_lite(color = "black", bold = TRUE, font.size = 11)
+    )
+
+    # Translate the tags to the appropriate language
+    dataset_state$preposition <- vapply(
+        dataset_state$preposition,
+        function(tag) tr(tag, language),
+        character(1)
+    )
+
+    aggr_tag <- if (dataset$param_name %in% c("precipitation, total")) {
+        "snowbull_rmd_normal"
+    } else {
+        "snowbull_rmd_average"
+    }
+
+    # get the 'relative_to_med' text description by merging the preposition, aggr_tag, and text_colour
+    dataset_state$description <- vapply(
+        seq_len(nrow(dataset_state)),
+        function(i) {
+            officer::ftext(
+                paste0(
+                    dataset_state$preposition[i],
+                    tr(aggr_tag, language)
+                ),
+                dataset_state$text_colour[[i]]
+            )
+        },
+        FUN.VALUE = officer::ftext("dummy", officer::fp_text_lite())
+    )
 
     return(dataset_state)
 }
