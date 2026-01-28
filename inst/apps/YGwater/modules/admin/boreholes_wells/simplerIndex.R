@@ -1240,6 +1240,85 @@ simplerIndex <- function(id, language) {
       rv$table_version <- rv$table_version + 1
     }
 
+    clear_borehole_form <- function() {
+      loading_metadata(TRUE)
+
+      updateTextInput(session, "name", value = "")
+      update_location_choices(
+        nearby_locations(),
+        selected_id = NULL
+      )
+      updateTextInput(session, "notes_borehole", value = "")
+      updateTextInput(session, "notes_well", value = "")
+      updateSelectizeInput(
+        session,
+        "location_source",
+        selected = "GPS, uncorrected"
+      )
+      updateSelectizeInput(session, "utm_zone", selected = "8N")
+      updateSelectizeInput(session, "purpose_of_borehole", selected = NULL)
+      updateRadioButtons(
+        session,
+        "purpose_borehole_inferred",
+        selected = TRUE
+      )
+      updateSelectizeInput(session, "purpose_of_well", selected = NULL)
+      updateRadioButtons(session, "purpose_well_inferred", selected = TRUE)
+      updateSelectizeInput(session, "drilled_by", selected = NULL)
+      updateSelectizeInput(
+        session,
+        "share_with_borehole",
+        selected = "public_reader"
+      )
+      updateSelectizeInput(
+        session,
+        "share_with_well",
+        selected = "public_reader"
+      )
+      updateRadioButtons(session, "coordinate_system", selected = "utm")
+      updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
+      updateRadioButtons(session, "casing_od_unit", selected = "inch")
+      updateRadioButtons(session, "drill_depth_unit", selected = "ft")
+      updateRadioButtons(
+        session,
+        "estimated_yield_unit",
+        selected = "G/min"
+      )
+      updateRadioButtons(
+        session,
+        "surveyed_ground_elev_unit",
+        selected = "ft"
+      )
+
+      # Clear all numeric inputs
+      for (field in c(
+        "easting",
+        "northing",
+        "latitude",
+        "longitude",
+        "depth_to_bedrock",
+        "permafrost_top",
+        "permafrost_bot",
+        "casing_od",
+        "drill_depth",
+        "surveyed_ground_elev",
+        "top_of_screen",
+        "bottom_of_screen",
+        "well_head_stick_up",
+        "static_water_level",
+        "estimated_yield"
+      )) {
+        updateNumericInput(session, field, value = NULL)
+      }
+
+      # Clear checkboxes and date
+      updateCheckboxInput(session, "permafrost_present", value = FALSE)
+      updateCheckboxInput(session, "is_well", value = FALSE)
+      updateDateInput(session, "date_drilled", value = NULL)
+
+      loading_metadata(FALSE)
+    }
+
     remove_borehole_pages <- function(borehole_id) {
       if (is.null(rv$files_df) || nrow(rv$files_df) == 0) {
         return()
@@ -4265,82 +4344,7 @@ simplerIndex <- function(id, language) {
           loading_metadata(FALSE)
         } else {
           # If no metadata exists, clear all fields including notes
-          loading_metadata(TRUE)
-
-          updateTextInput(session, "name", value = "")
-          update_location_choices(
-            nearby_locations(),
-            selected_id = NULL
-          )
-          updateTextInput(session, "notes_borehole", value = "")
-          updateTextInput(session, "notes_well", value = "")
-          updateSelectizeInput(
-            session,
-            "location_source",
-            selected = "GPS, uncorrected"
-          )
-          updateSelectizeInput(session, "utm_zone", selected = "8N")
-          updateSelectizeInput(session, "purpose_of_borehole", selected = NULL)
-          updateRadioButtons(
-            session,
-            "purpose_borehole_inferred",
-            selected = TRUE
-          )
-          updateSelectizeInput(session, "purpose_of_well", selected = NULL)
-          updateRadioButtons(session, "purpose_well_inferred", selected = TRUE)
-          updateSelectizeInput(session, "drilled_by", selected = NULL)
-          updateSelectizeInput(
-            session,
-            "share_with_borehole",
-            selected = "public_reader"
-          )
-          updateSelectizeInput(
-            session,
-            "share_with_well",
-            selected = "public_reader"
-          )
-          updateRadioButtons(session, "coordinate_system", selected = "utm")
-          updateRadioButtons(session, "depth_to_bedrock_unit", selected = "ft")
-          updateRadioButtons(session, "casing_od_unit", selected = "inch")
-          updateRadioButtons(session, "drill_depth_unit", selected = "ft")
-          updateRadioButtons(
-            session,
-            "estimated_yield_unit",
-            selected = "G/min"
-          )
-          updateRadioButtons(
-            session,
-            "surveyed_ground_elev_unit",
-            selected = "ft"
-          )
-
-          # Clear all numeric inputs
-          for (field in c(
-            "easting",
-            "northing",
-            "latitude",
-            "longitude",
-            "depth_to_bedrock",
-            "permafrost_top",
-            "permafrost_bot",
-            "casing_od",
-            "drill_depth",
-            "surveyed_ground_elev",
-            "top_of_screen",
-            "bottom_of_screen",
-            "well_head_stick_up",
-            "static_water_level",
-            "estimated_yield"
-          )) {
-            updateNumericInput(session, field, value = NULL)
-          }
-
-          # Clear checkboxes and date
-          updateCheckboxInput(session, "permafrost_present", value = FALSE)
-          updateCheckboxInput(session, "is_well", value = FALSE)
-          updateDateInput(session, "date_drilled", value = NULL)
-
-          loading_metadata(FALSE)
+          clear_borehole_form()
         }
       },
       ignoreNULL = FALSE
@@ -4459,6 +4463,9 @@ simplerIndex <- function(id, language) {
             # Remove uploaded borehole from local data to prevent re-upload
             rv$borehole_data[[current_borehole_id]] <- NULL
             update_borehole_details_selector()
+            if (length(rv$borehole_data) == 0) {
+              clear_borehole_form()
+            }
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
@@ -4640,6 +4647,9 @@ simplerIndex <- function(id, language) {
       }
       # Update selector choices
       update_borehole_details_selector()
+      if (length(rv$borehole_data) == 0) {
+        clear_borehole_form()
+      }
     })
 
     # Add observer for OCR extracted text display
