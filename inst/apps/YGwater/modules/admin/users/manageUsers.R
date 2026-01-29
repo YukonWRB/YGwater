@@ -282,14 +282,8 @@ WHERE schema_name NOT LIKE 'pg_%'
                 } else {
                   sql <- sprintf(
                     "GRANT %s ON TABLE %s TO %s",
-                    DBI::dbQuoteIdentifier(
-                      session$userData$AquaCache,
-                      permission
-                    ),
-                    DBI::dbQuoteIdentifier(
-                      session$userData$AquaCache,
-                      table
-                    ),
+                    permission,
+                    table,
                     DBI::dbQuoteIdentifier(
                       session$userData$AquaCache,
                       input$group_name
