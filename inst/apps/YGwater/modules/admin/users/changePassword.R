@@ -26,9 +26,48 @@ changePassword <- function(id, language) {
       tagList(
         passwordInput(ns("current_pwd"), trl("current_pw")),
         passwordInput(ns("new_pwd"), trl("new_pw")),
+        helpText(
+          "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+        ),
+        actionButton(ns("generate_pwd"), "Generate password"),
         passwordInput(ns("confirm_pwd"), trl("confirm_pw")),
         actionButton(ns("submit"), trl("pw_change_btn"), class = "btn-primary")
       )
+    })
+
+    password_requirements <- "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+    validate_password <- function(password) {
+      nchar(password) >= 8 &&
+        grepl("[A-Z]", password) &&
+        grepl("[a-z]", password) &&
+        grepl("[0-9]", password) &&
+        !grepl("\\s", password)
+    }
+    generate_password <- function(length = 12) {
+      length <- max(length, 8)
+      upper <- sample(LETTERS, 1)
+      lower <- sample(letters, 1)
+      digit <- sample(0:9, 1)
+      all_chars <- c(LETTERS, letters, 0:9)
+      remaining <- sample(all_chars, length - 3, replace = TRUE)
+      paste0(sample(c(upper, lower, digit, remaining), length), collapse = "")
+    }
+
+    observeEvent(input$generate_pwd, {
+      generated_password <- generate_password()
+      updateTextInput(session, "new_pwd", value = generated_password)
+      updateTextInput(session, "confirm_pwd", value = generated_password)
+      showModal(modalDialog(
+        title = "Generated password",
+        tagList(
+          "A new password has been generated and filled in.",
+          tags$br(),
+          tags$strong("Password:"),
+          tags$code(generated_password)
+        ),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
     })
 
     observeEvent(input$submit, ignoreInit = TRUE, {
@@ -44,6 +83,16 @@ changePassword <- function(id, language) {
         showModal(modalDialog(
           title = trl("pw_change_title"),
           trl("pw_change_fail_match"),
+          easyClose = TRUE,
+          footer = actionButton(ns("close"), trl("close"))
+        ))
+        return(invisible(NULL))
+      }
+
+      if (!validate_password(input$new_pwd)) {
+        showModal(modalDialog(
+          title = trl("pw_change_title"),
+          password_requirements,
           easyClose = TRUE,
           footer = actionButton(ns("close"), trl("close"))
         ))
