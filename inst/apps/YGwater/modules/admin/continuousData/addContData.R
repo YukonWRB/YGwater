@@ -379,15 +379,14 @@ addContData <- function(id, language) {
         showNotification('Empty data table!', type = 'error')
         return(FALSE)
       }
-
       # Check for duplicated rows and drop them; warn the user
-      duplicated <- duplicated(data$df)
-      if (nrow(duplicated)) {
-        data$df <- data$df[!duplicated, ]
+      duplicated_rows <- duplicated(data$df)
+      if (any(duplicated_rows)) {
+        data$df <- data$df[!duplicated_rows, ]
         showNotification(
           paste0(
             'There were ',
-            nrow(duplicated),
+            sum(duplicated_rows),
             ' duplicated (completely identical) rows. Only the first occurence of each unique row was retained'
           ),
           type = 'message',
@@ -395,7 +394,7 @@ addContData <- function(id, language) {
         )
       }
       duplicated_datetimes <- data$df$datetime[duplicated(data$df$datetime)]
-      if (length(duplicated_datetimes) < 0) {
+      if (length(duplicated_datetimes) > 0) {
         showNotification(
           paste0(
             'There is more than one datetime for ',
