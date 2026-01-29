@@ -25,6 +25,10 @@ manageUsersUI <- function(id) {
         h4("Create user"),
         textInput(ns("user_name"), "Username"),
         passwordInput(ns("user_password"), "Password"),
+        helpText(
+          "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+        ),
+        actionButton(ns("generate_password"), "Generate password"),
         actionButton(ns("create_user"), "Create user"),
       ),
       conditionalPanel(
@@ -45,6 +49,23 @@ manageUsersUI <- function(id) {
 manageUsers <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+    password_requirements <- "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+    validate_password <- function(password) {
+      nchar(password) >= 8 &&
+        grepl("[A-Z]", password) &&
+        grepl("[a-z]", password) &&
+        grepl("[0-9]", password) &&
+        !grepl("\\s", password)
+    }
+    generate_password <- function(length = 12) {
+      length <- max(length, 8)
+      upper <- sample(LETTERS, 1)
+      lower <- sample(letters, 1)
+      digit <- sample(0:9, 1)
+      all_chars <- c(LETTERS, letters, 0:9)
+      remaining <- sample(all_chars, length - 3, replace = TRUE)
+      paste0(sample(c(upper, lower, digit, remaining), length), collapse = "")
+    }
 
     output$banner <- renderUI({
       req(language$language)
@@ -54,6 +75,22 @@ manageUsers <- function(id, language) {
         con = session$userData$AquaCache,
         module_id = "manageUsers"
       )
+    })
+
+    observeEvent(input$generate_password, {
+      generated_password <- generate_password()
+      updateTextInput(session, "user_password", value = generated_password)
+      showModal(modalDialog(
+        title = "Generated password",
+        tagList(
+          "A new password has been generated and filled in.",
+          tags$br(),
+          tags$strong("Password:"),
+          tags$code(generated_password)
+        ),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
     })
 
     # Fetch the schema names; this is used to grant usage to groups on relevant schemas
@@ -344,6 +381,10 @@ WHERE schema_name NOT LIKE 'pg_%'
 
     observeEvent(input$create_user, {
       req(input$user_name, input$user_password)
+      if (!validate_password(input$user_password)) {
+        output$status <- renderText(password_requirements)
+        return(NULL)
+      }
       tryCatch(
         {
           sql <- sprintf(
