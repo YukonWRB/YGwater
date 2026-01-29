@@ -388,7 +388,7 @@ addContData <- function(id, language) {
         )
         DBI::dbExecute(
           session$userData$AquaCache,
-          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
           params = list(
             df$name,
             ifelse(is.na(df$name_fr), NA, df$name_fr),
@@ -466,7 +466,7 @@ addContData <- function(id, language) {
         )
         DBI::dbExecute(
           session$userData$AquaCache,
-          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
           params = list(
             df$name,
             ifelse(is.na(df$name_fr), NA, df$name_fr),
@@ -559,6 +559,14 @@ addContData <- function(id, language) {
         return(NULL)
       }
 
+      if (ncol(data$upload_raw) < 2) {
+        showNotification(
+          'Uploaded file must have at least two columns: datetime and value',
+          type = 'error'
+        )
+        return(NULL)
+      }
+
       # If the file does not have columns 'datetime' and 'value', show a modal dialog to allow the user to map columns
       if (!all(c('datetime', 'value') %in% names(data$upload_raw))) {
         showModal(modalDialog(
@@ -600,8 +608,7 @@ addContData <- function(id, language) {
         )
         data$df <- prepare_table_data(df_mapped)
       },
-      ignoreInit = TRUE,
-      once = TRUE
+      ignoreInit = TRUE
     )
 
     observeEvent(input$add_row, {
@@ -675,13 +682,13 @@ addContData <- function(id, language) {
       }
 
       # Check for duplicated rows and drop them; warn the user
-      duplicated <- duplicated(data$df)
-      if (nrow(duplicated)) {
-        data$df <- data$df[!duplicated, ]
+      duplicated_rows <- duplicated(data$df)
+      if (any(duplicated_rows)) {
+        data$df <- data$df[!duplicated_rows, ]
         showNotification(
           paste0(
             'There were ',
-            nrow(duplicated),
+            sum(duplicated_rows),
             ' duplicated (completely identical) rows. Only the first occurence of each unique row was retained'
           ),
           type = 'message',
@@ -689,7 +696,7 @@ addContData <- function(id, language) {
         )
       }
       duplicated_datetimes <- data$df$datetime[duplicated(data$df$datetime)]
-      if (length(duplicated_datetimes) < 0) {
+      if (length(duplicated_datetimes) > 0) {
         showNotification(
           paste0(
             'There is more than one datetime for ',
@@ -738,7 +745,7 @@ addContData <- function(id, language) {
           upload_data$value <- data$parsed_value
           upload_data$owner <- as.integer(input$owner)
           upload_data$contributor <- as.integer(input$contributor)
-          data$no_update <- data.table::fifelse(
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE
@@ -803,7 +810,7 @@ addContData <- function(id, language) {
           upload_data$value <- data$parsed_value
           upload_data$owner <- as.integer(input$owner)
           upload_data$contributor <- as.integer(input$contributor)
-          data$no_update <- data.table::fifelse(
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE
@@ -869,7 +876,7 @@ addContData <- function(id, language) {
           upload_data$value <- data$parsed_value
           upload_data$owner <- as.integer(input$owner)
           upload_data$contributor <- as.integer(input$contributor)
-          data$no_update <- data.table::fifelse(
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE
