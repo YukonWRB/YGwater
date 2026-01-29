@@ -2172,7 +2172,7 @@ addLocation <- function(id, inputs, language) {
             existing_networks <- DBI::dbGetQuery(
               session$userData$AquaCache,
               sprintf(
-                "SELECT network_id FROM locations_networks WHERE location_id = %d",
+                "SELECT network_id FROM public.locations_networks WHERE location_id = %d",
                 selected_loc()
               )
             )$network_id
@@ -2182,7 +2182,7 @@ addLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
-                  "DELETE FROM locations_networks WHERE location_id = %d",
+                  "DELETE FROM public.locations_networks WHERE location_id = %d",
                   selected_loc()
                 )
               )
@@ -2191,7 +2191,7 @@ addLocation <- function(id, inputs, language) {
                   net <- desired_networks[i]
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    "INSERT INTO locations_networks (network_id, location_id) VALUES ($1, $2)",
+                    "INSERT INTO public.locations_networks (network_id, location_id) VALUES ($1, $2)",
                     params = list(
                       net,
                       selected_loc()
@@ -2206,7 +2206,7 @@ addLocation <- function(id, inputs, language) {
             existing_projects <- DBI::dbGetQuery(
               session$userData$AquaCache,
               sprintf(
-                "SELECT project_id FROM locations_projects WHERE location_id = %d",
+                "SELECT project_id FROM public.locations_projects WHERE location_id = %d",
                 selected_loc()
               )
             )$project_id
@@ -2216,7 +2216,7 @@ addLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
-                  "DELETE FROM locations_projects WHERE location_id = %d",
+                  "DELETE FROM public.locations_projects WHERE location_id = %d",
                   selected_loc()
                 )
               )
@@ -2225,7 +2225,7 @@ addLocation <- function(id, inputs, language) {
                   proj <- desired_projects[i]
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    "INSERT INTO locations_projects (project_id, location_id) VALUES ($1, $2)",
+                    "INSERT INTO public.locations_projects (project_id, location_id) VALUES ($1, $2)",
                     params = list(
                       proj,
                       selected_loc()
@@ -2247,7 +2247,7 @@ addLocation <- function(id, inputs, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
-                    "UPDATE locations SET jurisdictional_relevance = %s WHERE location_id = %d",
+                    "UPDATE public.locations SET jurisdictional_relevance = %s WHERE location_id = %d",
                     input$loc_jurisdictional_relevance,
                     selected_loc()
                   )
@@ -2267,7 +2267,7 @@ addLocation <- function(id, inputs, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
-                    "UPDATE locations SET anthropogenic_influence = %s WHERE location_id = %d",
+                    "UPDATE public.locations SET anthropogenic_influence = %s WHERE location_id = %d",
                     input$loc_anthropogenic_influence,
                     selected_loc()
                   )
@@ -2296,7 +2296,7 @@ addLocation <- function(id, inputs, language) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
                     sprintf(
-                      "UPDATE locations SET install_purpose = '%s' WHERE location_id = %d",
+                      "UPDATE public.locations SET install_purpose = '%s' WHERE location_id = %d",
                       input$loc_install_purpose,
                       selected_loc()
                     )
@@ -2307,7 +2307,7 @@ addLocation <- function(id, inputs, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
-                    "UPDATE locations SET install_purpose = '%s' WHERE location_id = %d",
+                    "UPDATE public.locations SET install_purpose = '%s' WHERE location_id = %d",
                     input$loc_install_purpose,
                     selected_loc()
                   )
@@ -2336,7 +2336,7 @@ addLocation <- function(id, inputs, language) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
                     sprintf(
-                      "UPDATE locations SET current_purpose = '%s' WHERE location_id = %d",
+                      "UPDATE public.locations SET current_purpose = '%s' WHERE location_id = %d",
                       input$loc_current_purpose,
                       selected_loc()
                     )
@@ -2347,7 +2347,7 @@ addLocation <- function(id, inputs, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
-                    "UPDATE locations SET current_purpose = '%s' WHERE location_id = %d",
+                    "UPDATE public.locations SET current_purpose = '%s' WHERE location_id = %d",
                     input$loc_current_purpose,
                     selected_loc()
                   )
@@ -2376,7 +2376,7 @@ addLocation <- function(id, inputs, language) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
                     sprintf(
-                      "UPDATE locations SET note = '%s' WHERE location_id = %d",
+                      "UPDATE public.locations SET note = '%s' WHERE location_id = %d",
                       input$loc_note,
                       selected_loc()
                     )
@@ -2386,7 +2386,7 @@ addLocation <- function(id, inputs, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
-                    "UPDATE locations SET note = '%s' WHERE location_id = %d",
+                    "UPDATE public.locations SET note = '%s' WHERE location_id = %d",
                     input$loc_note,
                     selected_loc()
                   )
