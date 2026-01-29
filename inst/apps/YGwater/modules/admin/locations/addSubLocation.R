@@ -69,6 +69,18 @@ addSubLocation <- function(id, inputs, language) {
           DT::DTOutput(ns("table"))
         ),
 
+        selectizeInput(
+          ns("location"),
+          "Associated location",
+          choices = stats::setNames(
+            moduleData$exist_locs$location_id,
+            moduleData$exist_locs$name
+          ),
+          multiple = TRUE,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+
         splitLayout(
           cellWidths = c("50%", "50%"),
           textInput(
@@ -86,18 +98,6 @@ addSubLocation <- function(id, inputs, language) {
             "French sub-location name (must not exist already)",
             width = "100%"
           )
-        ),
-
-        selectizeInput(
-          ns("location"),
-          "Associated location",
-          choices = stats::setNames(
-            moduleData$exist_locs$location_id,
-            moduleData$exist_locs$name
-          ),
-          multiple = TRUE,
-          options = list(maxItems = 1),
-          width = "100%"
         ),
 
         splitLayout(
