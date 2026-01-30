@@ -183,13 +183,19 @@ addTimeseries <- function(id, language) {
               choices = c(-12:14),
               selected = -7 # Default to MST (UTC-7)
             )
-          )
+          ) |>
+            tooltip(
+              "The timezone used for calculating daily statistics. This should usually be the local timezone of the location.  Used to set the UTC times to capture a day. Note that this does not affect the timestamps of the raw data and is applied year-round (no daylight savings time adjustment)."
+            )
         ),
         checkboxInput(
           ns("z_specify"),
           "Specify an elevation or depth?",
           value = FALSE
-        ),
+        ) |>
+          tooltip(
+            "If the height/depth at which this timeseries is measured is important to the data interpretation (e.g., wind tower anemometer height), specify it here. Otherwise leave blank."
+          ),
         numericInput(
           ns("z"),
           "Elevation or depth, m (signed appropriately)",
@@ -245,13 +251,19 @@ addTimeseries <- function(id, language) {
               placeholder = 'Select aggregation type'
             ),
             width = "100%"
-          ),
+          ) |>
+            tooltip(
+              "The aggregation type defines how the raw data is collected. For example, 'Instantaneous' means the data is collected at specific time points, while 'Mean' indicates that the data represents an average over the period between measurements. Choosing the correct aggregation type is crucial for accurate data analysis and interpretation."
+            ),
           textInput(
             ns("record_rate"),
             "Rough record rate (5 minutes, 1 hour, 1 day, 1 week, etc.)",
             value = "",
             width = "100%"
-          )
+          ) |>
+            tooltip(
+              "This should be reasonably accurate for the **recent** data collection period. Specifying a record rate greater than '1 day' will result in the timeseries having no calculated historical ranges."
+            )
         ),
         selectizeInput(
           ns("sensor_priority"),
@@ -278,7 +290,10 @@ addTimeseries <- function(id, language) {
               create = TRUE
             ),
             width = "100%"
-          ),
+          ) |>
+            tooltip(
+              "This is used to set the owner for uploaded data if it's not specified at upload time."
+            ),
           selectizeInput(
             ns("data_sharing_agreement"),
             "Data sharing agreement",
@@ -303,7 +318,10 @@ addTimeseries <- function(id, language) {
           selected = "public_reader",
           multiple = TRUE,
           width = "100%"
-        ),
+        ) |>
+          tooltip(
+            "Select the user groups that should have access to this timeseries data. 'public_reader' allows anyone with access to the system to view the data. You can select multiple groups IF public_reader is not one of them."
+          ),
         splitLayout(
           cellWidths = c("50%", "50%"),
           verticalLayout(
