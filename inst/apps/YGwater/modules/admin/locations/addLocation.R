@@ -1467,17 +1467,19 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE locations SET location = {input$loc_code} WHERE location_id = {selected_loc()};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE locations SET location = $1 WHERE location_id = $2;",
+                params = list(input$loc_code, selected_loc())
               )
               # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE vectors SET feature_name = {input$loc_code} WHERE layer_name = 'Locations' AND feature_name = {moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), 'location']};",
-                  .con = session$userData$AquaCache
+                "UPDATE vectors SET feature_name = $1 WHERE layer_name = 'Locations' AND feature_name = $2;",
+                params = list(
+                  input$loc_code,
+                  moduleData$exist_locs[
+                    which(moduleData$exist_locs$location_id == selected_loc()),
+                    'location'
+                  ]
                 )
               )
             }
@@ -1492,18 +1494,14 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE locations SET name = {input$loc_name} WHERE location_id = {selected_loc()};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE locations SET name = $1 WHERE location_id = $2;",
+                params = list(input$loc_name, selected_loc())
               )
               # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE vectors SET description = {input$loc_name} WHERE layer_name = 'Locations' AND feature_name = {input$loc_code};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE vectors SET description = $1 WHERE layer_name = 'Locations' AND feature_name = $2;",
+                params = list(input$loc_name, input$loc_code)
               )
             }
 
@@ -1517,10 +1515,8 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE locations SET name_fr = {input$loc_name_fr} WHERE location_id = {selected_loc()};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE locations SET name_fr = $1 WHERE location_id = $2;",
+                params = list(input$loc_name_fr, selected_loc())
               )
             }
 
@@ -1534,10 +1530,8 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE locations SET location_type = {input$loc_type} WHERE location_id = {selected_loc()};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE locations SET location_type = $1 WHERE location_id = $2;",
+                params = list(input$loc_type, selected_loc())
               )
             }
 
@@ -1552,10 +1546,8 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE locations SET latitude = {input$lat} WHERE location_id = {selected_loc()};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE locations SET latitude = $1 WHERE location_id = $2;",
+                params = list(input$lat, selected_loc())
               )
               updated_coords <- TRUE
             }
@@ -1568,10 +1560,8 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE locations SET longitude = {input$lon} WHERE location_id = {selected_loc()};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE locations SET longitude = $1 WHERE location_id = $2;",
+                params = list(input$lon, selected_loc())
               )
               updated_coords <- TRUE
             }
@@ -1579,10 +1569,8 @@ addLocation <- function(id, inputs, language) {
               # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', match it on 'feature_name' = input$loc_code. the 'geom' field (geometry data type) will be updated with the new coordinates
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE vectors SET geom = ST_SetSRID(ST_MakePoint({input$lon}, {input$lat}), 4269) WHERE layer_name = 'Locations' AND feature_name = {input$loc_code};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE vectors SET geom = ST_SetSRID(ST_MakePoint($1, $2), 4269) WHERE layer_name = 'Locations' AND feature_name = $3;",
+                params = list(input$lon, input$lat, input$loc_code)
               )
             }
 
@@ -1601,10 +1589,8 @@ addLocation <- function(id, inputs, language) {
               ))
               DBI::dbExecute(
                 session$userData$AquaCache,
-                glue::glue_sql(
-                  "UPDATE locations SET share_with = {share_with_sql} WHERE location_id = {selected_loc()};",
-                  .con = session$userData$AquaCache
-                )
+                "UPDATE locations SET share_with = $1 WHERE location_id = $2;",
+                params = list(share_with_sql, selected_loc())
               )
             }
 

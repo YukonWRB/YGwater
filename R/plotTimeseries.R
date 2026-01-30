@@ -257,20 +257,16 @@ plotTimeseries <- function(
         } else {
           aggregation_type <- DBI::dbGetQuery(
             con,
-            glue::glue_sql(
-              "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = {aggregation_type};",
-              .con = con
-            )
+            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = $1;",
+            params = list(aggregation_type)
           )[1, 1]
         }
       } else {
         if (inherits(aggregation_type, "numeric")) {
           aggregation_type <- DBI::dbGetQuery(
             con,
-            glue::glue_sql(
-              "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};",
-              .con = con
-            )
+            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = $1;",
+            params = list(aggregation_type)
           )[1, 1]
           if (is.na(aggregation_type)) {
             warning(
@@ -287,10 +283,8 @@ plotTimeseries <- function(
     location_txt <- as.character(location)
     location_id <- DBI::dbGetQuery(
       con,
-      glue::glue_sql(
-        "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",
-        .con = con
-      )
+      "SELECT location_id FROM locations WHERE location = $1 OR name = $1 OR name_fr = $1 OR location_id::text = $1 LIMIT 1;",
+      params = list(location_txt)
     )[1, 1]
     if (is.na(location_id)) {
       stop("The location you entered does not exist in the database.")
@@ -300,10 +294,8 @@ plotTimeseries <- function(
     parameter_txt <- tolower(as.character(parameter))
     parameter_tbl <- DBI::dbGetQuery(
       con,
-      glue::glue_sql(
-        "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",
-        .con = con
-      )
+      "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = $1 OR LOWER(param_name_fr) = $1 OR parameter_id::text = $1 LIMIT 1;",
+      params = list(parameter_txt)
     )
     parameter_code <- parameter_tbl$parameter_id[1]
     if (is.na(parameter_code)) {
@@ -393,10 +385,8 @@ plotTimeseries <- function(
       sub_loc_txt <- as.character(sub_location)
       sub_location_id <- DBI::dbGetQuery(
         con,
-        glue::glue_sql(
-          "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;",
-          .con = con
-        )
+        "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = $1 OR sub_location_name_fr = $1 OR sub_location_id::text = $1 LIMIT 1;",
+        params = list(sub_loc_txt)
       )[1, 1]
       if (is.na(sub_location_id)) {
         stop("The sub-location you entered does not exist in the database.")
@@ -407,30 +397,19 @@ plotTimeseries <- function(
           #both record_rate and aggregation_type_id are NULL
           exist_check <- DBI::dbGetQuery(
             con,
-            paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-              location_id,
-              " AND ts.sub_location_id = ",
-              sub_location_id,
-              " AND ts.parameter_id = ",
-              parameter_code,
-              ";"
-            )
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id = $2 AND ts.parameter_id = $3;",
+            params = list(location_id, sub_location_id, parameter_code)
           )
         } else {
           #aggregation_type_id is not NULL but record_rate is
           exist_check <- DBI::dbGetQuery(
             con,
-            paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id =$2 AND ts.parameter_id = $3 AND ts.aggregation_type_id = $4;",
+            params = list(
               location_id,
-              " AND ts.sub_location_id = ",
               sub_location_id,
-              " AND ts.parameter_id = ",
               parameter_code,
-              " AND ts.aggregation_type_id = ",
-              aggregation_type_id,
-              ";"
+              aggregation_type_id
             )
           )
         }
