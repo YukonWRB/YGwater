@@ -46,6 +46,14 @@ addLocation <- function(id, inputs, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    # Location code auto-generation logic
+    source(system.file(
+      "apps/YGwater/modules/admin/locations/loc_code_auto_generate.R",
+      package = "YGwater"
+    ))
+
+    auto_generate_server(input, session, ns)
+
     output$banner <- renderUI({
       req(language$language)
       application_notifications_ui(
@@ -60,11 +68,6 @@ addLocation <- function(id, inputs, language) {
     moduleInputs <- reactiveValues(
       location = if (!is.null(inputs$location)) inputs$location else NULL
     )
-
-    shinyjs::hide("hydat_fill") # Hide the button right away, it's shown if applicable
-
-    # Get some data from aquacache
-    moduleData <- reactiveValues()
 
     ensure_character <- function(x) {
       if (is.null(x)) {
@@ -89,27 +92,19 @@ addLocation <- function(id, inputs, language) {
     pending_network_new <- reactiveVal(NULL)
     pending_project_selection <- reactiveVal(character(0))
     pending_project_new <- reactiveVal(NULL)
-    ownership_refresh <- reactiveVal(0)
+
+    # Get some data from aquacache
+    moduleData <- reactiveValues()
 
     getModuleData <- function() {
-      moduleData$exist_locs = DBI::dbGetQuery(
+      moduleData$exist_locs <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, lmo.owner AS owner, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
+        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
         FROM locations l
         LEFT JOIN location_types lt ON l.location_type = lt.type_id
-        LEFT JOIN LATERAL (
-          SELECT lmoo.owner
-          FROM locations_metadata_owners_operators lmoo
-          WHERE lmoo.location_id = l.location_id
-            AND lmoo.start_datetime <= NOW()
-            AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
-            AND sub_location_id IS NULL
-          ORDER BY lmoo.start_datetime DESC
-          LIMIT 1
-        ) lmo ON TRUE
         LEFT JOIN locations_networks ln ON l.location_id = ln.location_id
         LEFT JOIN networks n ON ln.network_id = n.network_id
-        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.data_sharing_agreement_id, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, lmo.owner"
+        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
       )
       moduleData$exist_locs$network <- factor(
         ifelse(
@@ -118,75 +113,42 @@ addLocation <- function(id, inputs, language) {
           moduleData$exist_locs$network
         )
       )
-      moduleData$loc_types = DBI::dbGetQuery(
+      moduleData$loc_types <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT * FROM location_types"
       )
-      moduleData$organizations = DBI::dbGetQuery(
+      moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT organization_id, name FROM organizations"
       )
       # limit documents to those that are data sharing agreements, which requires a join on table document_types
-      moduleData$agreements = DBI::dbGetQuery(
+      moduleData$agreements <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT document_id, name, description FROM documents WHERE type = (SELECT document_type_id FROM document_types WHERE document_type_en = 'data sharing agreement')"
       )
-      moduleData$datums = DBI::dbGetQuery(
+      moduleData$datums <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT datum_id, datum_name_en FROM datum_list"
       )
-      moduleData$datum_conversions = DBI::dbGetQuery(
+      moduleData$datum_conversions <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT * FROM datum_conversions WHERE current IS TRUE"
       )
-      moduleData$networks = DBI::dbGetQuery(
+      moduleData$networks <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT network_id, name FROM networks"
       )
-      moduleData$projects = DBI::dbGetQuery(
+      moduleData$projects <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT project_id, name FROM projects"
       )
-      moduleData$users = DBI::dbGetQuery(
+      moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT * FROM public.get_shareable_principals_for('public.locations');"
       ) # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
     }
 
     getModuleData() # Initial data load
-
-    current_owner_for_location <- function(location_id) {
-      if (!isTruthy(location_id)) {
-        return(NA_integer_)
-      }
-      owner_row <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        glue::glue_sql(
-          "SELECT lmoo.owner
-           FROM locations_metadata_owners_operators lmoo
-           WHERE lmoo.location_id = {location_id}
-             AND lmoo.start_datetime <= NOW()
-             AND (lmoo.end_datetime IS NULL OR lmoo.end_datetime > NOW())
-             AND sub_location_id IS NULL
-           ORDER BY lmoo.start_datetime DESC
-           LIMIT 1;",
-          .con = session$userData$AquaCache
-        )
-      )
-      if (nrow(owner_row) == 0) {
-        NA_integer_
-      } else {
-        owner_row$owner[1]
-      }
-    }
-
-    update_current_owner <- function(location_id) {
-      updateSelectizeInput(
-        session,
-        "loc_owner",
-        selected = current_owner_for_location(location_id)
-      )
-    }
 
     output$ui <- renderUI({
       req(
@@ -224,12 +186,21 @@ addLocation <- function(id, inputs, language) {
           ns = ns,
           htmlOutput(ns("hydat_note"))
         ),
-        textInput(
-          ns("loc_code"),
-          "Location code (must not exist already)",
-          width = "100%"
+        splitLayout(
+          cellWidths = c("60%", "40%"),
+          textInput(
+            ns("loc_code"),
+            "Location code (must not exist already)",
+            width = "100%"
+          ),
+          auto_generate_ui(ns = ns),
         ),
-        actionButton(ns("hydat_fill"), "Auto-fill from HYDAT"),
+        # Don't show the HYDAT button unless we detect HYDAT is available
+        actionButton(
+          ns("hydat_fill"),
+          "Auto-fill fields from HYDAT",
+          style = "display: none;"
+        ),
         splitLayout(
           cellWidths = c("50%", "50%"),
           textInput(
@@ -302,53 +273,21 @@ addLocation <- function(id, inputs, language) {
           multiple = TRUE,
           options = list(create = TRUE),
           width = "100%"
-        ),
+        ) |>
+          tooltip(
+            "Select the user groups that should have access to this timeseries data. 'public_reader' allows anyone with access to the system to view the data. You can select multiple groups IF public_reader is not one of them."
+          ),
 
         splitLayout(
           cellWidths = c("0%", "50%", "50%"),
           tags$head(tags$style(HTML(
             ".shiny-split-layout > div {overflow: visible;}"
           ))),
-          selectizeInput(
-            ns("loc_owner"),
-            "Owner (type your own if not in list)",
-            choices = stats::setNames(
-              moduleData$organizations$organization_id,
-              moduleData$organizations$name
-            ),
-            multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-            options = list(maxItems = 1, create = TRUE),
-            width = "100%"
-          ),
           textInput(
             ns("loc_contact"),
-            "Contact details if different than owner default (optional)",
+            "Contact details (optional)",
             width = "100%"
           )
-        ),
-        conditionalPanel(
-          condition = "input.mode == 'modify'",
-          ns = ns,
-          actionButton(
-            ns("manage_ownership"),
-            "Manage ownership history",
-            icon = icon("clock-rotate-left"),
-            width = "100%"
-          )
-        ),
-
-        selectizeInput(
-          ns("data_sharing_agreement"),
-          "Data sharing agreement",
-          choices = stats::setNames(
-            moduleData$agreements$document_id,
-            moduleData$agreements$name
-          ),
-          options = list(
-            placeholder = "Optional - add the document first if needed"
-          ),
-          width = "100%",
-          multiple = FALSE
         ),
 
         splitLayout(
@@ -468,17 +407,6 @@ addLocation <- function(id, inputs, language) {
 
     ## Observers to modify existing entry ##########################################
     selected_loc <- reactiveVal(NULL)
-    ownership_edit_id <- reactiveVal(NULL)
-
-    shinyjs::disable("manage_ownership")
-
-    observe({
-      if (input$mode == "modify" && !is.null(selected_loc())) {
-        shinyjs::enable("manage_ownership")
-      } else {
-        shinyjs::disable("manage_ownership")
-      }
-    })
 
     output$loc_table <- DT::renderDT({
       tbl <- moduleData$exist_locs
@@ -543,13 +471,7 @@ addLocation <- function(id, inputs, language) {
             selected = array_to_text(details$share_with)
           )
 
-          update_current_owner(loc_id)
           updateTextInput(session, "loc_contact", value = details$contact)
-          updateSelectizeInput(
-            session,
-            "data_sharing_agreement",
-            selected = details$data_sharing_agreement_id
-          )
           updateSelectizeInput(
             session,
             "datum_id_from",
@@ -606,248 +528,6 @@ addLocation <- function(id, inputs, language) {
       } else {
         selected_loc(NULL)
       }
-    })
-
-    ownership_records <- reactive({
-      ownership_refresh()
-      req(selected_loc())
-      DBI::dbGetQuery(
-        session$userData$AquaCache,
-        glue::glue_sql(
-          "SELECT lmoo.id,
-                  lmoo.owner,
-                  owner_org.name AS owner_name,
-                  lmoo.operator,
-                  operator_org.name AS operator_name,
-                  lmoo.start_datetime,
-                  lmoo.end_datetime,
-                  lmoo.note
-           FROM locations_metadata_owners_operators lmoo
-           LEFT JOIN organizations owner_org ON owner_org.organization_id = lmoo.owner
-           LEFT JOIN organizations operator_org ON operator_org.organization_id = lmoo.operator
-           WHERE lmoo.location_id = {selected_loc()}
-           AND sub_location_id IS NULL
-           ORDER BY lmoo.start_datetime;",
-          .con = session$userData$AquaCache
-        )
-      )
-    })
-
-    output$ownership_table <- DT::renderDT({
-      tbl <- ownership_records()
-      DT::datatable(
-        tbl,
-        selection = "single",
-        options = list(
-          columnDefs = list(
-            list(targets = c(0, 1, 3), visible = FALSE)
-          ),
-          pageLength = 8,
-          scrollX = TRUE
-        ),
-        rownames = FALSE
-      )
-    })
-
-    show_ownership_history_modal <- function() {
-      showModal(modalDialog(
-        title = "Ownership history",
-        DT::DTOutput(ns("ownership_table")),
-        footer = tagList(
-          actionButton(ns("add_ownership"), "Add period"),
-          actionButton(ns("edit_ownership"), "Edit selected"),
-          modalButton("Close")
-        ),
-        size = "l",
-        easyClose = TRUE
-      ))
-    }
-
-    observeEvent(input$manage_ownership, {
-      req(selected_loc())
-      show_ownership_history_modal()
-    })
-
-    observeEvent(input$add_ownership, {
-      ownership_edit_id(NULL)
-      showModal(modalDialog(
-        title = "Add ownership period",
-        selectizeInput(
-          ns("ownership_owner"),
-          "Owner",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          ),
-          multiple = TRUE,
-          options = list(maxItems = 1),
-          width = "100%"
-        ),
-        selectizeInput(
-          ns("ownership_operator"),
-          "Operator",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          ),
-          multiple = TRUE,
-          options = list(maxItems = 1),
-          width = "100%"
-        ),
-        dateInput(
-          ns("ownership_start"),
-          "Start date",
-          value = Sys.Date()
-        ),
-        dateInput(
-          ns("ownership_end"),
-          "End date (leave blank if ongoing)",
-          value = NA
-        ),
-        textInput(
-          ns("ownership_note"),
-          "Note (optional)"
-        ),
-        footer = tagList(
-          actionButton(ns("save_ownership"), "Save"),
-          modalButton("Cancel")
-        ),
-        easyClose = TRUE
-      ))
-    })
-
-    observeEvent(input$edit_ownership, {
-      req(selected_loc())
-      selected_row <- input$ownership_table_rows_selected
-      if (length(selected_row) == 0) {
-        showModal(modalDialog(
-          "Select an ownership period to edit.",
-          easyClose = TRUE
-        ))
-        return()
-      }
-      record <- ownership_records()[selected_row, ]
-      ownership_edit_id(record$id)
-      showModal(modalDialog(
-        title = "Edit ownership period",
-        selectizeInput(
-          ns("ownership_owner"),
-          "Owner",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          ),
-          selected = record$owner,
-          options = list(maxItems = 1),
-          width = "100%"
-        ),
-        selectizeInput(
-          ns("ownership_operator"),
-          "Operator",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          ),
-          selected = record$operator,
-          options = list(maxItems = 1),
-          width = "100%"
-        ),
-        dateInput(
-          ns("ownership_start"),
-          "Start date",
-          value = as.Date(record$start_datetime)
-        ),
-        dateInput(
-          ns("ownership_end"),
-          "End date (leave blank if ongoing)",
-          value = as.Date(record$end_datetime)
-        ),
-        textInput(
-          ns("ownership_note"),
-          "Note (optional)",
-          value = record$note
-        ),
-        footer = tagList(
-          actionButton(ns("save_ownership"), "Save"),
-          modalButton("Cancel")
-        ),
-        easyClose = TRUE
-      ))
-    })
-
-    observeEvent(input$save_ownership, {
-      req(selected_loc())
-      if (!isTruthy(input$ownership_owner)) {
-        showModal(modalDialog(
-          "Owner is required.",
-          easyClose = TRUE
-        ))
-        return()
-      }
-
-      owner_id <- as.integer(input$ownership_owner)
-      operator_id <- if (isTruthy(input$ownership_operator)) {
-        as.integer(input$ownership_operator)
-      } else {
-        owner_id
-      }
-      start_dt <- as.POSIXct(input$ownership_start, tz = "UTC")
-      end_dt <- if (isTruthy(input$ownership_end)) {
-        as.POSIXct(input$ownership_end, tz = "UTC")
-      } else {
-        NA
-      }
-
-      if (!is.na(end_dt) && end_dt <= start_dt) {
-        showModal(modalDialog(
-          "End date must be after the start date.",
-          easyClose = TRUE
-        ))
-        return()
-      }
-
-      note_sql <- if (isTruthy(input$ownership_note)) {
-        input$ownership_note
-      } else {
-        DBI::SQL("NULL")
-      }
-      end_dt_sql <- if (is.na(end_dt)) {
-        DBI::SQL("NULL")
-      } else {
-        end_dt
-      }
-
-      if (is.null(ownership_edit_id())) {
-        DBI::dbExecute(
-          session$userData$AquaCache,
-          glue::glue_sql(
-            "INSERT INTO locations_metadata_owners_operators
-              (location_id, owner, operator, start_datetime, end_datetime, note)
-             VALUES
-              ({selected_loc()}, {owner_id}, {operator_id}, {start_dt}, {end_dt_sql}, {note_sql});",
-            .con = session$userData$AquaCache
-          )
-        )
-      } else {
-        DBI::dbExecute(
-          session$userData$AquaCache,
-          glue::glue_sql(
-            "UPDATE locations_metadata_owners_operators
-             SET owner = {owner_id},
-                 operator = {operator_id},
-                 start_datetime = {start_dt},
-                 end_datetime = {end_dt_sql},
-                 note = {note_sql}
-             WHERE id = {ownership_edit_id()};",
-            .con = session$userData$AquaCache
-          )
-        )
-      }
-
-      ownership_refresh(ownership_refresh() + 1)
-      update_current_owner(selected_loc())
-      ownership_edit_id(NULL)
-      show_ownership_history_modal()
     })
 
     observeEvent(input$mode, {
@@ -910,13 +590,7 @@ addLocation <- function(id, inputs, language) {
         "share_with",
         selected = "public_reader"
       )
-      updateSelectizeInput(session, "loc_owner", selected = character(0))
       updateTextInput(session, "loc_contact", value = "")
-      updateSelectizeInput(
-        session,
-        "data_sharing_agreement",
-        selected = character(0)
-      )
       updateSelectizeInput(session, "datum_id_from", selected = 10)
       updateSelectizeInput(session, "datum_id_to", selected = character(0))
       updateNumericInput(session, "elev", value = NA)
@@ -946,7 +620,6 @@ addLocation <- function(id, inputs, language) {
     ## Hydat fill ###############################################################
     # Detect if the user's location code is present in hydat. If so, show a button to enable them to auto-populate fields with hydat info
     hydat <- reactiveValues(exists = FALSE, stns = NULL)
-    shinyjs::hide("hydat_fill")
 
     safe <- function(expr) tryCatch(expr, error = function(e) NULL)
 
@@ -1080,7 +753,7 @@ addLocation <- function(id, inputs, language) {
     if (hydat$exists) {
       output$hydat_note <- renderUI({
         HTML(
-          "<b>Entering a WSC code will allow you to auto-populate fields with HYDAT information.</b><br>"
+          "<b>NOTE: Entering a WSC code will allow you to auto-populate fields with HYDAT information if the location exists.</b><br>"
         )
       })
     }
@@ -1220,14 +893,6 @@ addLocation <- function(id, inputs, language) {
         updateNumericInput(session, "lat", value = stn$LATITUDE)
         updateNumericInput(session, "lon", value = stn$LONGITUDE)
 
-        updateSelectizeInput(
-          session,
-          "loc_owner",
-          selected = moduleData$organizations[
-            moduleData$organizations$name == "Water Survey of Canada",
-            "organization_id"
-          ]
-        )
         updateTextInput(
           session,
           "loc_note",
@@ -1453,7 +1118,7 @@ addLocation <- function(id, inputs, language) {
     })
 
     ## Allow users to add a few things to the DB besides locations ###################################
-    ## If user types in their own network/project/owner/share_with, bring up a modal to add it to the database. This requires updating moduleData and the selectizeInput choices
+    ## If user types in their own network/project/share_with, bring up a modal to add it to the database. This requires updating moduleData and the selectizeInput choices
 
     ### Observe the network selectizeInput for new networks #######################
     observeEvent(
@@ -1694,104 +1359,6 @@ addLocation <- function(id, inputs, language) {
         removeModal()
         showModal(modalDialog(
           "New project added.",
-          easyClose = TRUE
-        ))
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    ### Observe the owner selectizeInput for new owners ############
-    observeEvent(
-      input$loc_owner,
-      {
-        if (
-          input$loc_owner %in%
-            moduleData$organizations$organization_id ||
-            nchar(input$loc_owner) == 0
-        ) {
-          return()
-        }
-        showModal(modalDialog(
-          textInput(ns("owner_name"), "Owner name", value = input$loc_owner),
-          textInput(ns("owner_name_fr"), "Owner name French (optional)"),
-          textInput(ns("contact_name"), "Contact name (optional)"),
-          textInput(ns("contact_phone"), "Contact phone (optional)"),
-          textInput(ns("contact_email"), "Contact email (optional)"),
-          textInput(ns("contact_note"), "Contact note (optional, for context)"),
-          actionButton(ns("add_owner"), "Add owner")
-        ))
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-    observeEvent(
-      input$add_owner,
-      {
-        # Check that mandatory fields are filled in
-        if (!isTruthy(input$owner_name)) {
-          shinyjs::js$backgroundCol(ns("owner_name"), "#fdd")
-          return()
-        }
-        # Add the owner to the database
-        df <- data.frame(
-          name = input$owner_name,
-          name_fr = if (isTruthy(input$owner_name_fr)) {
-            input$owner_name_fr
-          } else {
-            NA
-          },
-          contact_name = if (isTruthy(input$contact_name)) {
-            input$contact_name
-          } else {
-            NA
-          },
-          phone = if (isTruthy(input$contact_phone)) {
-            input$contact_phone
-          } else {
-            NA
-          },
-          email = if (isTruthy(input$contact_email)) {
-            input$contact_email
-          } else {
-            NA
-          },
-          note = if (isTruthy(input$contact_note)) input$contact_note else NA
-        )
-        DBI::dbExecute(
-          session$userData$AquaCache,
-          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
-          params = list(
-            df$name,
-            ifelse(is.na(df$name_fr), NA, df$name_fr),
-            ifelse(is.na(df$contact_name), NA, df$contact_name),
-            ifelse(is.na(df$phone), NA, df$phone),
-            ifelse(is.na(df$email), NA, df$email),
-            ifelse(is.na(df$note), NA, df$note)
-          )
-        )
-
-        # Update the moduleData reactiveValues
-        moduleData$organizations <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT organization_id, name FROM organizations"
-        )
-        # Update the selectizeInput to the new value
-        updateSelectizeInput(
-          session,
-          "loc_owner",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          ),
-          selected = moduleData$organizations[
-            moduleData$organizations$name == df$name,
-            "organization_id"
-          ]
-        )
-        removeModal()
-        showModal(modalDialog(
-          "New owner added.",
           easyClose = TRUE
         ))
       },
@@ -2041,16 +1608,6 @@ addLocation <- function(id, inputs, language) {
               )
             }
 
-            # Changes to owner
-
-            # TODO: this needs to touch the location_metadata_owner table, not the locations table
-            # if (isTruthy(input$loc_owner)) {
-            #   if (input$loc_owner != moduleData$exist_locs[which(moduleData$exist_locs$location_id == selected_loc()), "owner"]) {
-            #     DBI::dbExecute(session$userData$AquaCache,
-            #                    sprintf("UPDATE locations SET owner = %d WHERE location_id = %d", as.numeric(input$loc_owner), selected_loc()))
-            #   }
-            # }
-
             # Changes to contact
             if (isTruthy(input$loc_contact)) {
               if (
@@ -2085,26 +1642,6 @@ addLocation <- function(id, inputs, language) {
                   sprintf(
                     "UPDATE locations SET contact = '%s' WHERE location_id = %d",
                     input$loc_contact,
-                    selected_loc()
-                  )
-                )
-              }
-            }
-
-            # Changes to data sharing agreement
-            if (isTruthy(input$data_sharing_agreement)) {
-              if (
-                input$data_sharing_agreement !=
-                  moduleData$exist_locs[
-                    which(moduleData$exist_locs$location_id == selected_loc()),
-                    "data_sharing_agreement_id"
-                  ]
-              ) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE locations SET data_sharing_agreement_id = %d WHERE location_id = %d",
-                    as.numeric(input$data_sharing_agreement),
                     selected_loc()
                   )
                 )
@@ -2487,18 +2024,6 @@ addLocation <- function(id, inputs, language) {
         latitude = input$lat,
         longitude = input$lon,
         share_with = input$share_with,
-        owner = if (isTruthy(input$loc_owner)) {
-          as.numeric(input$loc_owner)
-        } else {
-          NA
-        },
-        data_sharing_agreement_id = if (
-          isTruthy(input$data_sharing_agreement)
-        ) {
-          as.numeric(input$data_sharing_agreement)
-        } else {
-          NA
-        },
         location_type = as.numeric(input$loc_type),
         note = if (isTruthy(input$loc_note)) input$loc_note else NA,
         contact = if (isTruthy(input$loc_contact)) input$loc_contact else NA,
@@ -2569,13 +2094,7 @@ addLocation <- function(id, inputs, language) {
             "share_with",
             selected = "public_reader"
           )
-          updateSelectizeInput(session, "loc_owner", selected = character(0))
           updateTextInput(session, "loc_contact", value = character(0))
-          updateSelectizeInput(
-            session,
-            "data_sharing_agreement",
-            selected = character(0)
-          )
           updateSelectizeInput(session, "datum_id_from", selected = 10)
           updateSelectizeInput(session, "datum_id_to", selected = 10)
           updateNumericInput(session, "elev", value = 0)
