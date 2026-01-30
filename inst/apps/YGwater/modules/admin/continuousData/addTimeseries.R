@@ -60,7 +60,7 @@ addTimeseries <- function(id, language) {
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.location_id = lz.location_id"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note, ts.data_sharing_agreement_id FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.location_id = lz.location_id"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -262,20 +262,39 @@ addTimeseries <- function(id, language) {
           options = list(maxItems = 1, placeholder = 'Select sensor priority'),
           width = "100%"
         ),
-        selectizeInput(
-          ns("default_owner"),
-          "Default owner (type your own if not in list)",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          selectizeInput(
+            ns("default_owner"),
+            "Default owner (type your own if not in list)",
+            choices = stats::setNames(
+              moduleData$organizations$organization_id,
+              moduleData$organizations$name
+            ),
+            multiple = TRUE,
+            options = list(
+              maxItems = 1,
+              placeholder = 'Select default owner',
+              create = TRUE
+            ),
+            width = "100%"
           ),
-          multiple = TRUE,
-          options = list(
-            maxItems = 1,
-            placeholder = 'Select default owner',
-            create = TRUE
-          ),
-          width = "100%"
+          selectizeInput(
+            ns("data_sharing_agreement"),
+            "Data sharing agreement",
+            choices = stats::setNames(
+              moduleData$agreements$document_id,
+              moduleData$agreements$name
+            ),
+            options = list(
+              placeholder = "Optional - add the document first if needed"
+            ),
+            width = "100%",
+            multiple = FALSE
+          ) |>
+            tooltip(
+              "Linking a data sharing agreement will help us track compliance with data sharing agreements."
+            )
         ),
         selectizeInput(
           ns("share_with"),
@@ -444,6 +463,11 @@ addTimeseries <- function(id, language) {
             moduleData$organizations$organization_id,
             moduleData$organizations$name
           )
+        )
+        updateSelectizeInput(
+          session,
+          "data_sharing_agreement",
+          selected = character(0)
         )
         updateSelectizeInput(
           session,
@@ -640,6 +664,11 @@ addTimeseries <- function(id, language) {
             session,
             "default_owner",
             selected = details$default_owner
+          )
+          updateSelectizeInput(
+            session,
+            "data_sharing_agreement",
+            selected = details$data_sharing_agreement_id
           )
           updateSelectizeInput(
             session,
@@ -1112,6 +1141,11 @@ addTimeseries <- function(id, language) {
         updateTextInput(session, "record_rate", value = "")
         updateSelectizeInput(session, "sensor_priority", selected = 1)
         updateSelectizeInput(session, "default_owner", selected = character(0))
+        updateSelectizeInput(
+          session,
+          "data_sharing_agreement",
+          selected = character(0)
+        )
         updateSelectizeInput(session, "share_with", selected = "public_reader")
         updateSelectizeInput(session, "source_fx", selected = character(0))
         updateTextInput(session, "source_fx_args", value = "")
@@ -1398,6 +1432,7 @@ addTimeseries <- function(id, language) {
               )
             }
 
+            # Changes to default_owner
             if (!is.na(selected_timeseries$default_owner)) {
               if (input$default_owner != selected_timeseries$default_owner) {
                 DBI::dbExecute(
@@ -1418,6 +1453,26 @@ addTimeseries <- function(id, language) {
                   selected_timeseries$timeseries_id
                 )
               )
+            }
+
+            # Changes to data sharing agreement
+            if (isTruthy(input$data_sharing_agreement)) {
+              if (
+                input$data_sharing_agreement !=
+                  moduleData$exist_locs[
+                    which(moduleData$exist_locs$location_id == selected_loc()),
+                    "data_sharing_agreement_id"
+                  ]
+              ) {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  sprintf(
+                    "UPDATE timeseries SET data_sharing_agreement_id = %d WHERE timeseries_id = %d",
+                    as.numeric(input$data_sharing_agreement),
+                    selected_timeseries$timeseries_id
+                  )
+                )
+              }
             }
 
             # Changes to share_with
