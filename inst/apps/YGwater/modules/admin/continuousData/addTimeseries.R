@@ -64,7 +64,7 @@ addTimeseries <- function(id, language) {
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id ORDER BY l.name ASC"
+        "SELECT l.location_id, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id ORDER BY l.name ASC"
       )
       moduleData$sub_locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -104,6 +104,15 @@ addTimeseries <- function(id, language) {
         INNER JOIN aggregation_types at ON ts.aggregation_type_id = at.aggregation_type_id
         INNER JOIN organizations o ON ts.default_owner = o.organization_id
         "
+      )
+      # Join on files.document_types.document_type_en = 'data sharing agreement' to get only data sharing agreements
+      moduleData$agreements <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM files.documents as f LEFT JOIN files.document_types as dt ON f.type = dt.document_type_id WHERE dt.document_type_en = 'data sharing agreement';"
+      )
+      moduleData$owners_agreements <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM public.organization_data_sharing_agreements;"
       )
     }
 
@@ -302,7 +311,12 @@ addTimeseries <- function(id, language) {
               moduleData$agreements$name
             ),
             options = list(
-              placeholder = "Optional - add the document first if needed"
+              placeholder = "Optional - add the document first if needed",
+              render = I(list(
+                option = htmlwidgets::JS(
+                  "function(item, escape) { return item.label; }"
+                )
+              ))
             ),
             width = "100%",
             multiple = FALSE
@@ -683,11 +697,43 @@ addTimeseries <- function(id, language) {
             "default_owner",
             selected = details$default_owner
           )
+
+          # Based on the default owner, find the associated agreements if any
+          owner_agreements <- moduleData$owners_agreements[
+            moduleData$owners_agreements$organization_id ==
+              details$default_owner,
+            "document_id"
+          ]
+          owner_agreements <- unique(owner_agreements)
+          owner_agreements <- owner_agreements[!is.na(owner_agreements)]
+
+          agreements_df <- moduleData$agreements
+          agreements_df$name <- as.character(agreements_df$name)
+
+          is_owner <- agreements_df$document_id %in% owner_agreements
+          agreements_df <- agreements_df[order(!is_owner, agreements_df$name), ]
+
+          # Create labels with (recommended) for owner agreements
+          labels <- ifelse(
+            is_owner[match(
+              agreements_df$document_id,
+              moduleData$agreements$document_id
+            )],
+            paste0(
+              "<b>",
+              htmltools::htmlEscape(agreements_df$name),
+              " (associated with default owner)</b>"
+            ),
+            htmltools::htmlEscape(agreements_df$name)
+          )
+
           updateSelectizeInput(
             session,
             "data_sharing_agreement",
+            choices = stats::setNames(agreements_df$document_id, labels),
             selected = details$data_sharing_agreement_id
           )
+
           updateSelectizeInput(
             session,
             "share_with",
@@ -723,17 +769,16 @@ addTimeseries <- function(id, language) {
       }
     })
 
-    ### Observe the owner selectizeInput for new owners ############
+    ### Observe the owner selectizeInput for new owners. If owner exists, find associated agreements and update selectizeInput ############
     observeEvent(
       input$default_owner,
       {
         if (
-          input$default_owner %in%
-            moduleData$organizations$organization_id ||
             nchar(input$default_owner) == 0
         ) {
           return()
-        }
+        } else if  (!input$default_owner %in%
+          moduleData$organizations$organization_id) {
         showModal(modalDialog(
           textInput(
             ns("owner_name"),
@@ -747,6 +792,41 @@ addTimeseries <- function(id, language) {
           textInput(ns("contact_note"), "Contact note (optional, for context)"),
           actionButton(ns("add_owner"), "Add owner")
         ))
+      } else {
+        # Find associated agreements for this owner
+        owner_id <- as.numeric(input$default_owner)
+        owner_agreements <- moduleData$owners_agreements[
+          moduleData$owners_agreements$organization_id == owner_id,
+          "document_id"
+        ]
+        owner_agreements <- unique(owner_agreements)
+        owner_agreements <- owner_agreements[!is.na(owner_agreements)]
+
+        agreements_df <- moduleData$agreements
+        agreements_df$name <- as.character(agreements_df$name)
+
+        is_owner <- agreements_df$document_id %in% owner_agreements
+        agreements_df <- agreements_df[order(!is_owner, agreements_df$name), ]
+
+        # Create labels with (recommended) for owner agreements
+        labels <- ifelse(
+          is_owner[match(
+            agreements_df$document_id,
+            moduleData$agreements$document_id
+          )],
+          paste0(
+            "<b>",
+            htmltools::htmlEscape(agreements_df$name),
+            " (associated with default owner)</b>"
+          ),
+          htmltools::htmlEscape(agreements_df$name)
+        )
+
+        updateSelectizeInput(
+          session,
+          "data_sharing_agreement",
+          choices = stats::setNames(agreements_df$document_id, labels)
+        )
       },
       ignoreInit = TRUE,
       ignoreNULL = TRUE
@@ -873,12 +953,6 @@ addTimeseries <- function(id, language) {
                 sub_loc <- NA
               }
 
-              # Get the location code from table locations
-              loc_code <- data$locations[
-                data$locations$location_id == loc,
-                "location"
-              ]
-
               if (!is.null(source_fx_args)) {
                 if (nzchar(source_fx_args)) {
                   args <- format_source_args(source_fx_args)
@@ -937,9 +1011,8 @@ addTimeseries <- function(id, language) {
               # Make a new entry to the timeseries table
               new_timeseries_id <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO continuous.timeseries (location, location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
+                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
                 params = list(
-                  loc_code,
                   as.numeric(loc),
                   ifelse(is.na(sub_loc), NA, sub_loc),
                   as.numeric(tz),

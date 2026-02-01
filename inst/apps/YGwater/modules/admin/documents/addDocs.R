@@ -115,6 +115,10 @@ addDocs <- function(id, language) {
         session$userData$AquaCache,
         "SELECT * FROM public.get_shareable_principals_for('files.documents');"
       )
+      moduleData$organizations <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT organization_id, name FROM organizations ORDER BY name ASC"
+      )
     }
 
     getModuleData()

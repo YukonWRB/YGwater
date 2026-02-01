@@ -117,18 +117,18 @@ auto_generate_server <- function(input, session, ns) {
         easyClose = TRUE,
         footer = modalButton("Close")
       ))
-      return(NULL)
+      code <- "NA"
     }
 
     code <- paste0(code, "-", type_suffix)
 
-    # Find the database's greatest existing code with that prefix in column 'location'
+    # Find the database's greatest existing code with that prefix in column 'location_code' of table 'locations'
     existing_code <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "
-      SELECT MAX(location) AS max_code
+      SELECT MAX(location_code) AS max_code
       FROM public.locations
-      WHERE location LIKE $1
+      WHERE location_code LIKE $1
       ",
       params = list(paste0(code, "%"))
     )[1, 1]
