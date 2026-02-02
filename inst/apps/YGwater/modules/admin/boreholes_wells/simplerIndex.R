@@ -34,18 +34,6 @@ simplerIndexUI <- function(id) {
           margin-bottom: 5px !important;
         }
         
-        /* Move Bootstrap modals to the left */
-        .modal.fade .modal-dialog {
-          transform: translate(-50%, -50%) !important;
-          margin-left: 25% !important;
-        }
-        
-        .modal-dialog {
-          margin-left: 50px !important;
-          margin-right: auto !important;
-          max-width: 500px !important;
-        }
-        
         /* Move tooltips to the left when possible */
         .tooltip {
           max-width: 300px !important;

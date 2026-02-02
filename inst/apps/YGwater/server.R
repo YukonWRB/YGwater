@@ -931,6 +931,8 @@ app_server <- function(input, output, session) {
     if (!isTRUE(session$userData$user_logged_in)) {
       return()
     }
+    removeModal() # Remove any existing modals
+
     session$userData$user_logged_in <- FALSE # Set login status to FALSE
     session$userData$can_create_role <- FALSE
     session$userData$table_privs <- data.frame() # Reset table privileges
@@ -938,24 +940,19 @@ app_server <- function(input, output, session) {
     session$userData$last_activity(NULL)
 
     if (show_idle_modal) {
-      current_language <- if (!is.null(languageSelection$language)) {
-        languageSelection$language
-      } else {
-        "English"
-      }
       showModal(modalDialog(
-        title = tr("logout_inactive_title", current_language),
-        tr("logout_inactive_msg", current_language),
+        title = tr("logout_inactive_title", languageSelection$language),
+        tr("logout_inactive_msg", languageSelection$language),
         easyClose = TRUE,
-        footer = modalButton(tr("close", current_language))
+        footer = modalButton(tr("close", languageSelection$language))
       ))
     }
 
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
-    # Remove the 'admin' button upon logout
-    removeUI(selector = "button:contains('Switch to ')")
+    # Hide the 'admin' button on logout
+    shinyjs::hide("admin")
 
     # Drop old connection
     DBI::dbDisconnect(session$userData$AquaCache)
@@ -982,7 +979,7 @@ app_server <- function(input, output, session) {
     # Send the user back to the 'home' tab if they were elsewhere
     updateTabsetPanel(session, "navbar", selected = "home")
 
-    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode and on the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
+    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode which will return them to the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
     admin_vis_flag("viz")
     shinyjs::click("admin")
   }
@@ -1022,13 +1019,13 @@ app_server <- function(input, output, session) {
       showModal(modalDialog(
         # html below allows the user to press 'Enter' to submit the login form
         tags$script(HTML(
-          '
-$(document).keyup(function(event) {
-  if ($("#password").is(":focus") && (event.keyCode == 13)) {
-                         $("#confirmLogin").click();
-    }
-  });
-  '
+          "
+          $(document).off('keyup.login').on('keyup.login', function(event) {
+            if ($('#password').is(':focus') && (event.keyCode == 13)) {
+              $('#confirmLogin').click();
+            }
+          });
+          "
         )),
         title = tr("login", languageSelection$language),
         renderUI(HTML(
