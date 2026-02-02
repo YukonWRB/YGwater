@@ -89,6 +89,20 @@ addContDataUI <- function(id) {
           tags$br(),
           DT::DTOutput(ns("data_table")),
           selectizeInput(
+            ns("owner"),
+            "Owner organization",
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1, placeholder = "Select owner")
+          ),
+          selectizeInput(
+            ns("contributor"),
+            "Contributor organization",
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1, placeholder = "Select contributor")
+          ),
+          selectizeInput(
             ns("UTC_offset"),
             "UTC offset of data",
             choices = seq(-12, 12, by = 1),
@@ -144,6 +158,13 @@ addContData <- function(id, language) {
 
     outputs <- reactiveValues() # Used to pass the user on to adding a timeseries directly
 
+    moduleData <- reactiveValues(
+      organizations = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
+      )
+    )
+
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT has_table_privilege(current_user, 'continuous.measurements_continuous', 'INSERT') AS can_insert"
@@ -167,13 +188,19 @@ addContData <- function(id, language) {
       )
     })
 
+    # Reload module data when asked
     observeEvent(input$reload_module, {
       ts_meta(dbGetQueryDT(
         session$userData$AquaCache,
         "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en"
       ))
+      moduleData$organizations <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
+      )
     })
 
+    # Change to add timeseries tab when button clicked
     observeEvent(input$addNewTS, {
       outputs$change_tab <- "addTimeseries"
     })
@@ -221,6 +248,264 @@ addContData <- function(id, language) {
       }
     })
 
+    # Update owner and contributor selectize inputs when organizations data is loaded
+    observe({
+      req(moduleData$organizations)
+      updateSelectizeInput(
+        session,
+        "owner",
+        choices = stats::setNames(
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        ),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session,
+        "contributor",
+        choices = stats::setNames(
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        ),
+        server = TRUE
+      )
+    })
+
+    # When timeseries is selected, update owner and contributor to default owner from timeseries table
+    observeEvent(timeseries(), {
+      req(timeseries())
+      default_owner <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        sprintf(
+          "SELECT default_owner FROM timeseries WHERE timeseries_id = %s",
+          as.integer(timeseries())
+        )
+      )
+      if (nrow(default_owner) > 0) {
+        updateSelectizeInput(
+          session,
+          "owner",
+          selected = default_owner$default_owner[[1]]
+        )
+        updateSelectizeInput(
+          session,
+          "contributor",
+          selected = default_owner$default_owner[[1]]
+        )
+      }
+    })
+
+    ### Observe the owner selectizeInput for new owners ############
+    addOrgModal <- function(name) {
+      # Called when adding owner or contributor
+      showModal(modalDialog(
+        textInput(
+          ns("org_name"),
+          "Organization name",
+          value = input[[name]]
+        ),
+        textInput(ns("org_name_fr"), "Organization name French (optional)"),
+        textInput(ns("org_contact_name"), "Contact name (optional)"),
+        textInput(ns("org_contact_phone"), "Contact phone (optional)"),
+        textInput(ns("org_contact_email"), "Contact email (optional)"),
+        textInput(
+          ns("org_contact_note"),
+          "Contact note (optional, for context)"
+        ),
+        actionButton(ns(paste0("add_", name)), "Add organization")
+      ))
+    }
+    observeEvent(
+      input$owner,
+      {
+        # Check for new organization (not in the list already)
+        if (
+          input$owner %in%
+            moduleData$organizations$organization_id ||
+            nchar(input$owner) == 0
+        ) {
+          return()
+        }
+        # If new, show modal dialog to add organization details
+        addOrgModal(name = "owner")
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$contributor,
+      {
+        # Check for new organization (not in the list already)
+        if (
+          input$contributor %in%
+            moduleData$organizations$organization_id ||
+            nchar(input$contributor) == 0
+        ) {
+          return()
+        }
+        # If new, show modal dialog to add organization details
+        addOrgModal(name = "contributor")
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$add_owner,
+      {
+        # Check that mandatory fields are filled in
+        if (!isTruthy(input$org_name)) {
+          shinyjs::js$backgroundCol(ns("org_name"), "#fdd")
+          return()
+        }
+        # Add the owner to the database
+        df <- data.frame(
+          name = input$org_name,
+          name_fr = if (isTruthy(input$org_name_fr)) {
+            input$org_name_fr
+          } else {
+            NA
+          },
+          contact_name = if (isTruthy(input$org_contact_name)) {
+            input$org_contact_name
+          } else {
+            NA
+          },
+          phone = if (isTruthy(input$org_contact_phone)) {
+            input$org_contact_phone
+          } else {
+            NA
+          },
+          email = if (isTruthy(input$org_contact_email)) {
+            input$org_contact_email
+          } else {
+            NA
+          },
+          note = if (isTruthy(input$org_contact_note)) {
+            input$org_contact_note
+          } else {
+            NA
+          }
+        )
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            ifelse(is.na(df$contact_name), NA, df$contact_name),
+            ifelse(is.na(df$phone), NA, df$phone),
+            ifelse(is.na(df$email), NA, df$email),
+            ifelse(is.na(df$note), NA, df$note)
+          )
+        )
+
+        # Update the moduleData reactiveValues
+        moduleData$organizations <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT organization_id, name FROM organizations"
+        )
+        # Update the selectizeInput to the new value
+        updateSelectizeInput(
+          session,
+          "owner",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = moduleData$organizations[
+            moduleData$organizations$name == df$name,
+            "organization_id"
+          ]
+        )
+        removeModal()
+        showModal(modalDialog(
+          "New organization added.",
+          easyClose = TRUE
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$add_contributor,
+      {
+        # Check that mandatory fields are filled in
+        if (!isTruthy(input$org_name)) {
+          shinyjs::js$backgroundCol(ns("org_name"), "#fdd")
+          return()
+        }
+        # Add the owner to the database
+        df <- data.frame(
+          name = input$org_name,
+          name_fr = if (isTruthy(input$org_name_fr)) {
+            input$org_name_fr
+          } else {
+            NA
+          },
+          contact_name = if (isTruthy(input$org_contact_name)) {
+            input$org_contact_name
+          } else {
+            NA
+          },
+          phone = if (isTruthy(input$org_contact_phone)) {
+            input$org_contact_phone
+          } else {
+            NA
+          },
+          email = if (isTruthy(input$org_contact_email)) {
+            input$org_contact_email
+          } else {
+            NA
+          },
+          note = if (isTruthy(input$org_contact_note)) {
+            input$org_contact_note
+          } else {
+            NA
+          }
+        )
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            ifelse(is.na(df$contact_name), NA, df$contact_name),
+            ifelse(is.na(df$phone), NA, df$phone),
+            ifelse(is.na(df$email), NA, df$email),
+            ifelse(is.na(df$note), NA, df$note)
+          )
+        )
+
+        # Update the moduleData reactiveValues
+        moduleData$organizations <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT organization_id, name FROM organizations"
+        )
+        # Update the selectizeInput to the new value
+        updateSelectizeInput(
+          session,
+          "contributor",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = moduleData$organizations[
+            moduleData$organizations$name == df$name,
+            "organization_id"
+          ]
+        )
+        removeModal()
+        showModal(modalDialog(
+          "New organization added.",
+          easyClose = TRUE
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    # Reactive values to hold uploaded data and parsed data
     data <- reactiveValues(
       df = data.frame(datetime = character(), value = numeric()),
       upload_raw = NULL,
@@ -274,6 +559,14 @@ addContData <- function(id, language) {
         return(NULL)
       }
 
+      if (ncol(data$upload_raw) < 2) {
+        showNotification(
+          'Uploaded file must have at least two columns: datetime and value',
+          type = 'error'
+        )
+        return(NULL)
+      }
+
       # If the file does not have columns 'datetime' and 'value', show a modal dialog to allow the user to map columns
       if (!all(c('datetime', 'value') %in% names(data$upload_raw))) {
         showModal(modalDialog(
@@ -315,8 +608,7 @@ addContData <- function(id, language) {
         )
         data$df <- prepare_table_data(df_mapped)
       },
-      ignoreInit = TRUE,
-      once = TRUE
+      ignoreInit = TRUE
     )
 
     observeEvent(input$add_row, {
@@ -370,6 +662,7 @@ addContData <- function(id, language) {
       print(data$df)
     })
 
+    # function to check data validity before upload
     check_fx <- function() {
       if (is.null(timeseries())) {
         showNotification('Please select a timeseries first.', type = 'error')
@@ -380,14 +673,22 @@ addContData <- function(id, language) {
         return(FALSE)
       }
 
+      if (is.null(input$owner) || is.null(input$contributor)) {
+        showNotification(
+          'Please select owner and contributor organizations.',
+          type = 'error'
+        )
+        return(FALSE)
+      }
+
       # Check for duplicated rows and drop them; warn the user
-      duplicated <- duplicated(data$df)
-      if (nrow(duplicated)) {
-        data$df <- data$df[!duplicated, ]
+      duplicated_rows <- duplicated(data$df)
+      if (any(duplicated_rows)) {
+        data$df <- data$df[!duplicated_rows, ]
         showNotification(
           paste0(
             'There were ',
-            nrow(duplicated),
+            sum(duplicated_rows),
             ' duplicated (completely identical) rows. Only the first occurence of each unique row was retained'
           ),
           type = 'message',
@@ -395,7 +696,7 @@ addContData <- function(id, language) {
         )
       }
       duplicated_datetimes <- data$df$datetime[duplicated(data$df$datetime)]
-      if (length(duplicated_datetimes) < 0) {
+      if (length(duplicated_datetimes) > 0) {
         showNotification(
           paste0(
             'There is more than one datetime for ',
@@ -442,7 +743,9 @@ addContData <- function(id, language) {
           upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC 0
           upload_data$value <- data$parsed_value
-          data$no_update <- data.table::fifelse(
+          upload_data$owner <- as.integer(input$owner)
+          upload_data$contributor <- as.integer(input$contributor)
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE
@@ -505,7 +808,9 @@ addContData <- function(id, language) {
           upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
           upload_data$value <- data$parsed_value
-          data$no_update <- data.table::fifelse(
+          upload_data$owner <- as.integer(input$owner)
+          upload_data$contributor <- as.integer(input$contributor)
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE
@@ -569,7 +874,9 @@ addContData <- function(id, language) {
           upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
           upload_data$value <- data$parsed_value
-          data$no_update <- data.table::fifelse(
+          upload_data$owner <- as.integer(input$owner)
+          upload_data$contributor <- as.integer(input$contributor)
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE

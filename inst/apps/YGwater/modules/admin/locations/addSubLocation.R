@@ -69,6 +69,18 @@ addSubLocation <- function(id, inputs, language) {
           DT::DTOutput(ns("table"))
         ),
 
+        selectizeInput(
+          ns("location"),
+          "Associated location",
+          choices = stats::setNames(
+            moduleData$exist_locs$location_id,
+            moduleData$exist_locs$name
+          ),
+          multiple = TRUE,
+          options = list(maxItems = 1),
+          width = "100%"
+        ),
+
         splitLayout(
           cellWidths = c("50%", "50%"),
           textInput(
@@ -86,18 +98,6 @@ addSubLocation <- function(id, inputs, language) {
             "French sub-location name (must not exist already)",
             width = "100%"
           )
-        ),
-
-        selectizeInput(
-          ns("location"),
-          "Associated location",
-          choices = stats::setNames(
-            moduleData$exist_locs$location_id,
-            moduleData$exist_locs$name
-          ),
-          multiple = TRUE,
-          options = list(maxItems = 1),
-          width = "100%"
         ),
 
         splitLayout(
@@ -131,6 +131,7 @@ addSubLocation <- function(id, inputs, language) {
         ),
         uiOutput(ns("lat_warning")),
         uiOutput(ns("lon_warning")),
+        uiOutput(ns("proximity_warning")),
 
         selectizeInput(
           ns("share_with"),
@@ -143,6 +144,7 @@ addSubLocation <- function(id, inputs, language) {
         ),
 
         textInput(ns("subloc_note"), "Sub-location note", width = "100%"),
+        uiOutput(ns("distance_ack")),
         actionButton(ns("add_subloc"), "Add sub-location", width = "100%")
       )
     })
@@ -335,6 +337,21 @@ addSubLocation <- function(id, inputs, language) {
       }
     })
 
+    distance_meters <- function(lat1, lon1, lat2, lon2) {
+      earth_radius <- 6371000
+      to_rad <- pi / 180
+      lat1 <- lat1 * to_rad
+      lon1 <- lon1 * to_rad
+      lat2 <- lat2 * to_rad
+      lon2 <- lon2 * to_rad
+      delta_lat <- lat2 - lat1
+      delta_lon <- lon2 - lon1
+      a <- sin(delta_lat / 2)^2 +
+        cos(lat1) * cos(lat2) * sin(delta_lon / 2)^2
+      c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+      earth_radius * c
+    }
+
     ## Map picker ##############################################################
     map_center <- reactiveVal(list(lat = 64.0, lon = -135.0, zoom = 4))
     map_selection <- reactiveVal(NULL)
@@ -353,6 +370,59 @@ addSubLocation <- function(id, inputs, language) {
         return(NULL)
       }
       list(lat = loc$latitude, lon = loc$longitude, name = loc$name)
+    })
+
+    sub_location_distance <- reactive({
+      req(isTruthy(input$lat))
+      req(isTruthy(input$lon))
+      primary <- primary_location()
+      if (is.null(primary)) {
+        return(NULL)
+      }
+      distance_meters(input$lat, input$lon, primary$lat, primary$lon)
+    })
+
+    output$proximity_warning <- renderUI({
+      distance <- sub_location_distance()
+      if (is.null(distance) || distance <= 10) {
+        return(NULL)
+      }
+      div(
+        style = "margin-top: -6px; margin-bottom: 10px;",
+        tags$strong(
+          sprintf(
+            "Warning: Sub-location is %.1f meters from the parent location. It should be within 10 meters.",
+            distance
+          )
+        )
+      )
+    })
+
+    output$distance_ack <- renderUI({
+      distance <- sub_location_distance()
+      if (is.null(distance) || distance <= 10 || distance >= 100) {
+        return(NULL)
+      }
+      checkboxInput(
+        ns("distance_ack"),
+        "I acknowledge that the sub-location is > 10 meters from it's parent location",
+        value = FALSE,
+        width = "100%"
+      )
+    })
+
+    observe({
+      distance <- sub_location_distance()
+      requires_ack <- !is.null(distance) && distance > 10 && distance < 100
+      too_far <- !is.null(distance) && distance >= 100
+
+      if (too_far) {
+        shinyjs::disable("add_subloc")
+      } else if (requires_ack && !isTRUE(input$distance_ack)) {
+        shinyjs::disable("add_subloc")
+      } else {
+        shinyjs::enable("add_subloc")
+      }
     })
 
     output$location_map <- leaflet::renderLeaflet({

@@ -230,6 +230,7 @@ get_static_style_elements <- function() {
 #' @param statistic Character string indicating the type of statistic to style.
 #'   Options are "relative_to_med", "data", "percentile", or "anomalies".
 #'   Defaults to "relative_to_med".
+#' @param param_name Character string for parameter name (e.g., "snow water equivalent", "precipitation, total").
 #' @param language Character string for language. Defaults to "English".
 #'
 #' @return A list containing bins, colors, and labels for the specified statistic:
@@ -253,7 +254,7 @@ get_static_style_elements <- function() {
 
 get_dynamic_style_elements <- function(
     statistic = NULL,
-    param_name = NULL,
+    param_name = "snow water equivalent",
     language = "English"
 ) {
     # VALUE_COL_CHOICES = c("relative_to_med", "absolute", "percentile")
@@ -3654,7 +3655,7 @@ make_leaflet_map <- function(
     poly_data = NULL,
     point_data_secondary = NULL,
     snowbull_shapefiles = NULL,
-    param_name = NULL,
+    param_name,
     statistic = "relative_to_med",
     language = "English",
     month = NULL,
