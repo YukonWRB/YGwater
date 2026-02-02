@@ -281,11 +281,7 @@ plotTimeseries <- function(
     aggregation_type_id <- aggregation_type
 
     location_txt <- as.character(location)
-    location_id <- DBI::dbGetQuery(
-      con,
-      "SELECT location_id FROM locations WHERE location = $1 OR name = $1 OR name_fr = $1 OR location_id::text = $1 LIMIT 1;",
-      params = list(location_txt)
-    )[1, 1]
+    location_id <- lookup_location_id(con, location_txt)
     if (is.na(location_id)) {
       stop("The location you entered does not exist in the database.")
     }

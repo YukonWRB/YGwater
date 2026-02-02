@@ -119,6 +119,10 @@ addDocs <- function(id, language) {
         session$userData$AquaCache,
         "SELECT organization_id, name FROM organizations ORDER BY name ASC"
       )
+      moduleData$organization_agreements <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT organization_id, document_id FROM public.organization_data_sharing_agreements;"
+      )
     }
 
     getModuleData()
@@ -128,7 +132,8 @@ addDocs <- function(id, language) {
         moduleData$doc_types,
         moduleData$docs,
         moduleData$geoms,
-        moduleData$users
+        moduleData$users,
+        moduleData$organizations
       )
 
       geom_labels <- paste(
@@ -208,6 +213,22 @@ addDocs <- function(id, language) {
           choices = geom_choices,
           multiple = TRUE,
           width = "100%"
+        ),
+
+        # Show on condition of data sharing agreement type
+        conditionalPanel(
+          condition = "input.doc_type && input.doc_type.indexOf('data sharing agreement') >= 0",
+          ns = ns,
+          selectizeInput(
+            ns("doc_organizations"),
+            label = "Associate organization(s) with data sharing agreement",
+            choices = stats::setNames(
+              moduleData$organizations$organization_id,
+              moduleData$organizations$name
+            ),
+            multiple = TRUE,
+            width = "100%"
+          )
         ),
         actionButton(ns("clear_form"), label = "Clear form"),
         conditionalPanel(
@@ -325,6 +346,15 @@ addDocs <- function(id, language) {
         "doc_geoms",
         selected = as.character(doc_geom_ids)
       )
+
+      doc_org_ids <- moduleData$organization_agreements$organization_id[
+        moduleData$organization_agreements$document_id == doc_id
+      ]
+      updateSelectizeInput(
+        session,
+        "doc_organizations",
+        selected = as.character(doc_org_ids)
+      )
     })
 
     observeEvent(input$clear_form, {
@@ -341,6 +371,11 @@ addDocs <- function(id, language) {
         selected = "public_reader"
       )
       updateSelectizeInput(session, "doc_geoms", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "doc_organizations",
+        selected = character(0)
+      )
       selected_document_id(NULL)
     })
 
@@ -353,6 +388,8 @@ addDocs <- function(id, language) {
       authors <- split_comma_text(input$doc_authors)
       share_with <- split_comma_text(input$doc_share_with)
       geoms <- parse_integer_input(input$doc_geoms)
+      doc_organizations <- parse_integer_input(input$doc_organizations)
+      is_data_sharing_agreement <- "data sharing agreement" %in% input$doc_type
       if (!length(share_with)) {
         share_with <- "public_reader"
       }
@@ -388,6 +425,41 @@ addDocs <- function(id, language) {
             geoms = if (length(geoms)) geoms else NULL,
             con = session$userData$AquaCache
           )
+          if (is_data_sharing_agreement && length(doc_organizations)) {
+            dsa_type_id <- moduleData$doc_types$document_type_id[
+              match(
+                "data sharing agreement",
+                moduleData$doc_types$document_type_en
+              )
+            ]
+            if (is.na(dsa_type_id)) {
+              stop("Data sharing agreement document type not found.")
+            }
+            new_doc <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              "SELECT document_id FROM files.documents
+              WHERE name = $1 AND type = $2
+              ORDER BY document_id DESC
+              LIMIT 1;",
+              params = list(input$doc_name, dsa_type_id)
+            )
+            if (!nrow(new_doc)) {
+              stop("Failed to locate the newly added document.")
+            }
+            org_links <- data.frame(
+              organization_id = doc_organizations,
+              document_id = new_doc$document_id[1]
+            )
+            DBI::dbAppendTable(
+              session$userData$AquaCache,
+              DBI::Id(
+                schema = "public",
+                table = "organization_data_sharing_agreements"
+              ),
+              org_links
+            )
+          }
+
           DBI::dbExecute(session$userData$AquaCache, "COMMIT")
           showNotification("Document added successfully.", type = "message")
           getModuleData()
@@ -404,6 +476,11 @@ addDocs <- function(id, language) {
             selected = "public_reader"
           )
           updateSelectizeInput(session, "doc_geoms", selected = character(0))
+          updateSelectizeInput(
+            session,
+            "doc_organizations",
+            selected = character(0)
+          )
         },
         error = function(err) {
           DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
@@ -430,10 +507,21 @@ addDocs <- function(id, language) {
         )
         return()
       }
+      is_data_sharing_agreement <- "data sharing agreement" %in% input$doc_type
+      has_org_links <- nrow(moduleData$organization_agreements) > 0 &&
+        doc_id %in% moduleData$organization_agreements$document_id
+      if (has_org_links && !is_data_sharing_agreement) {
+        showNotification(
+          "This document is linked to an organization as a data sharing agreement. Remove the association before changing the document type.",
+          type = "error"
+        )
+        return()
+      }
       tags <- split_comma_text(input$doc_tags)
       authors <- split_comma_text(input$doc_authors)
       share_with <- split_comma_text(input$doc_share_with)
       geoms <- parse_integer_input(input$doc_geoms)
+      doc_organizations <- parse_integer_input(input$doc_organizations)
 
       if (!length(share_with)) {
         share_with <- "public_reader"
@@ -507,6 +595,30 @@ addDocs <- function(id, language) {
               DBI::Id(schema = "files", table = "documents_spatial"),
               doc_spatial
             )
+          }
+
+          # Handle organization data sharing agreements
+          if (is_data_sharing_agreement) {
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "DELETE FROM public.organization_data_sharing_agreements
+              WHERE document_id = $1;",
+              params = list(doc_id)
+            )
+            if (length(doc_organizations)) {
+              org_links <- data.frame(
+                organization_id = doc_organizations,
+                document_id = doc_id
+              )
+              DBI::dbAppendTable(
+                session$userData$AquaCache,
+                DBI::Id(
+                  schema = "public",
+                  table = "organization_data_sharing_agreements"
+                ),
+                org_links
+              )
+            }
           }
 
           showNotification("Document updated successfully.", type = "message")

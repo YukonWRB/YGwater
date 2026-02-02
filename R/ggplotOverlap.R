@@ -398,16 +398,9 @@ ggplotOverlap <- function(
       )
     )
 
-    location_id <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT location_id FROM locations WHERE location = '",
-        location,
-        "';"
-      )
-    )[1, 1]
+    location_id <- lookup_location_id(con, location)
 
-    instantaneous <- dbGetQueryDT(
+    instantaneous <- DBI::dbGetQuery(
       con,
       "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';"
     )[1, 1]
@@ -1800,21 +1793,34 @@ ggplotOverlap <- function(
   # Wrap things up and return() -----------------------
   if (title) {
     if (is.null(custom_title)) {
+      location_id <- lookup_location_id(con, location)
       if (lang == "fr") {
-        stn_name <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT name_fr FROM locations where location = '",
-            location,
-            "'"
-          )
-        )[1, 1]
+        stn_name <- if (is.na(location_id)) {
+          location
+        } else {
+          dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT name_fr FROM locations where location_id = '",
+              location_id,
+              "'"
+            )
+          )[1, 1]
+        }
       }
       if (lang == "en" || is.na(stn_name)) {
-        stn_name <- dbGetQueryDT(
-          con,
-          paste0("SELECT name FROM locations where location = '", location, "'")
-        )[1, 1]
+        stn_name <- if (is.na(location_id)) {
+          location
+        } else {
+          dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT name FROM locations where location_id = '",
+              location_id,
+              "'"
+            )
+          )[1, 1]
+        }
       }
       stn_name <- titleCase(stn_name, lang)
 
@@ -1840,7 +1846,7 @@ ggplotOverlap <- function(
     }
   }
 
-  #Save it if requested
+  # Save it if requested
   if (!is.null(save_path)) {
     ggplot2::ggsave(
       filename = paste0(

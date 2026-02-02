@@ -683,8 +683,10 @@ plotDiscrete <- function(
     if (!is.null(locations)) {
       if (inherits(locations, "character")) {
         query <- paste0(
-          "SELECT location_id, location, name, name_fr FROM locations WHERE ",
-          "LOWER(location) IN (LOWER('",
+          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE LOWER(location_code) IN (LOWER('",
+          paste0(locations, collapse = "'), LOWER('"),
+          "')) ",
+          "OR LOWER(alias) IN (LOWER('",
           paste0(locations, collapse = "'), LOWER('"),
           "')) ",
           "OR LOWER(name) IN (LOWER('",
@@ -696,7 +698,7 @@ plotDiscrete <- function(
         )
       } else {
         query <- paste0(
-          "SELECT location_id, location, name, name_fr FROM locations WHERE location_id IN (",
+          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE location_id IN (",
           paste0(locations, collapse = ", "),
           ");"
         )
@@ -715,6 +717,7 @@ plotDiscrete <- function(
         combined_locIds <- unique(c(
           locIds$location_id,
           locIds$location,
+          locIds$alias,
           locIds$name,
           locIds$name_fr
         ))
@@ -730,7 +733,7 @@ plotDiscrete <- function(
 
         if (inherits(locations, "character")) {
           warning(
-            "The following locations were not found in the aquacache despite searching the 'location', 'name', and 'name_fr' columns of table 'locations': ",
+            "The following locations were not found in the aquacache despite searching the 'location_code', 'alias', 'name', and 'name_fr' columns of table 'locations': ",
             paste0(missing, collapse = ", "),
             ". Moving on without that location (and sub-location if applicable)."
           )
