@@ -951,8 +951,9 @@ app_server <- function(input, output, session) {
     # change the 'Logout' button back to 'Login'
     shinyjs::hide("logoutBtn")
     shinyjs::show("loginBtn")
-    # Hide the 'admin' button on logout
-    shinyjs::hide("admin")
+
+    # Remove the 'admin' button upon logout
+    removeUI(selector = "button:contains('Switch to ')")
 
     # Drop old connection
     DBI::dbDisconnect(session$userData$AquaCache)
