@@ -51,13 +51,13 @@ dat <- load_bulletin_timeseries(
   load_streamflow = TRUE,
   october_start = TRUE
 )
-
 pillows_table <- get_display_data(
   dataset = dat$swe$pillows,
   year = year_param,
   month = month_param,
   statistic = "relative_to_med"
 )
+
 
 basins_table <- get_display_data(
   dataset = dat$swe$basins,
@@ -1037,9 +1037,9 @@ tryCatch(
 ```
 
 `r basin_swe <- basins_table[basins_table$name == "Upper_Yukon", ]`
-`r pillow_ta <- pillows_table[pillows_table$basin == "09AA-M1", ]`
-`r pillow_lc <- pillows_table[pillows_table$basin == "09AA-M2", ]`
-`r pillow_wc <- pillows_table[pillows_table$basin == "29AB-M3", ]`
+`r pillow_ta <- pillows_table[pillows_table$location == "09AA-M1", ]`
+`r pillow_lc <- pillows_table[pillows_table$location == "09AA-M2", ]`
+`r pillow_wc <- pillows_table[pillows_table$location == "29AB-M3", ]`
 
 # `r titles$UPPER_YUKON`
 `r if (language$abbrev == "en") "The Upper Yukon River Basin snowpack is " else "L’accumulation de neige dans le bassin supérieur du fleuve Yukon est "`
@@ -1250,7 +1250,7 @@ if ("Teslin" %in% params$basins) {
   include <- FALSE
 }
 ```
-`r basin_swe <- basins_table[basins_table$location_id == "Teslin_Big_Salmon", ]`
+`r basin_swe <- basins_table[basins_table$name == "Teslin_Big_Salmon", ]`
 
 `r if (language$abbrev == "en") "The Teslin River Basin snowpack is " else "L’accumulation de neige dans le bassin de la rivière Teslin est "`
 `r officer::ftext(paste0(basin_swe$preposition, tr('snowbull_rmd_average', language$language), textColour(basin_swe$relative_to_med)))`.
@@ -1283,7 +1283,7 @@ tryCatch(
 )
 ```
 
-`r precip <- precip_table[precip_table$location_id == 8985, ]`
+`r precip <- precip_table[precip_table$location == 8985, ]`
 `r fdd <- fdd_table[fdd_table$location == 8985, ]`
 
 `r if (language$abbrev == "en") "Teslin precipitation has been" else "Les précipitations à Teslin ont été"`
@@ -1477,7 +1477,7 @@ if ("Pelly" %in% params$basins) {
 ```
 
 `r basin_swe <- basins_table[basins_table$name == "Pelly", ]`
-`r pillows <- pillows_table[pillows_table$location_id == "09BA-M7", ]`
+`r pillows <- pillows_table[pillows_table$location == "09BA-M7", ]`
 
 `r if (language$abbrev == "en") "The Pelly River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Pelly est"`
 `r officer::ftext(paste0(basin_swe$preposition, tr("snowbull_rmd_average", language$language), textColour(basin_swe$relative_to_med)))`.
@@ -1528,7 +1528,7 @@ tryCatch(
   }
 )
 ```
-`r basin_swe <- basins_table[basins_table$basin == "Pelly", ]`
+`r basin_swe <- basins_table[basins_table$name == "Pelly", ]`
 `r fdd <- fdd_table[fdd_table$location == 8964, ]`
 
 `r if (language$abbrev == "en") "There are no precipitation data available at Faro but the snowpack data indicates that it has been" else "Il n’y a pas de données de précipitations pour Faro, mais les données sur l’accumulation de neige indiquent que les conditions sont"`
@@ -1550,7 +1550,7 @@ tryCatch(
   }
 )
 ```
-`r flow <- flow_table[flow_table$location_id == "09BC001", ]`
+`r flow <- flow_table[flow_table$location == "09BC001", ]`
 
 `r if (language$abbrev == "en") "The estimated Pelly River discharge at Pelly Crossing is currently" else "Le débit estimé de la rivière Pelly à Pelly Crossing est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))`
@@ -1598,7 +1598,7 @@ if ("Stewart" %in% params$basins) {
   include <- FALSE
 }
 ```
-`r basin_swe <- basins_table[basins_table$basin == "Stewart", ]`
+`r basin_swe <- basins_table[basins_table$name == "Stewart", ]`
 `r pillows <- pillows_table[pillows_table$location == "09DB-M1", ]`
 
 `r if (language$abbrev == "en") "The Stewart River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Stewart est"`
@@ -1732,7 +1732,7 @@ if ("White" %in% params$basins) {
   include <- FALSE
 }
 ```
-`r basin_swe <- basins_table[basins_table$basin == "White", ]`
+`r basin_swe <- basins_table[basins_table$name == "White", ]`
 
 `r if (language$abbrev == "en") "The White River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière White est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`. 
@@ -1814,8 +1814,8 @@ if ("Lower Yukon" %in% params$basins) {
 ```
 
 
-`r basin_swe <- basins_table[basins_table$basin == "Lower_Yukon", ]`
-`r pillows <- pillows_table[pillows_table$location_id == "09EA-M1", ]`
+`r basin_swe <- basins_table[basins_table$name == "Lower_Yukon", ]`
+`r pillows <- pillows_table[pillows_table$location == "09EA-M1", ]`
 `r if (language$abbrev == "en") "The Lower Yukon River Basin snowpack is" else "L’accumulation de neige dans le bassin inférieur du fleuve Yukon est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`. 
 `r if (language$abbrev == "en") {
@@ -1896,8 +1896,8 @@ tryCatch(
 )
 ```
 
-`r flow_white <- flow_table[flow_table$location_id == "09CD001", ]`
-`r flow_klondike <- flow_table[flow_table$location_id == "09EA003", ]`
+`r flow_white <- flow_table[flow_table$location == "09CD001", ]`
+`r flow_klondike <- flow_table[flow_table$location == "09EA003", ]`
 
 `r if (language$abbrev == "en") "The estimated Yukon River discharge above White River is currently" else "Le débit estimé du fleuve Yukon en amont de la rivière White est"`
 `r officer::ftext(flow_white$description, textColour(flow_white$relative_to_med))` 
@@ -1975,7 +1975,7 @@ if ("Porcupine" %in% params$basins) {
 }
 ```
 
-`r basin_swe <- basins_table[basins_table$basin == "Porcupine", ]`
+`r basin_swe <- basins_table[basins_table$name == "Porcupine", ]`
 
 `r if (language$abbrev == "en") "The Porcupine River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Porcupine est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$description))`.
@@ -2091,7 +2091,7 @@ if ("Peel" %in% params$basins) {
 }
 ```
 
-`r basin_swe <- basins_table[basins_table$basin == "Peel", ]`
+`r basin_swe <- basins_table[basins_table$name == "Peel", ]`
 
 `r if (language$abbrev == "en") "The Peel River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Peel est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
@@ -2176,7 +2176,7 @@ if ("Liard" %in% params$basins) {
 
 
 `r pillow <- pillows_table[pillows_table$location == "10AD-M2", ]`
-`r basin_swe <- basins_table[basins_table$basin == "Liard", ]`
+`r basin_swe <- basins_table[basins_table$name == "Liard", ]`
 
 `r if (language$abbrev == "en") "The Liard River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Liard est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
@@ -2263,7 +2263,7 @@ tryCatch(
   }
 )
 ```
-`r flow <- flow_table[flow_table$location_id == "10AA001", ]`
+`r flow <- flow_table[flow_table$location == "10AA001", ]`
 
 `r if (language$abbrev == "en") "The estimated Liard River discharge at Upper Liard is currently" else "Le débit estimé de la rivière Liard à Upper Liard est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))`
