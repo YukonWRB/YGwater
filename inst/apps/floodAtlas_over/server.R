@@ -123,20 +123,22 @@ app_server <- function(input, output, session) {
         tsid <- DBI::dbGetQuery(
           session$userData$con,
           paste0(
-            "SELECT timeseries_id FROM timeseries WHERE location = '",
-            params$loc_code,
-            "' AND parameter_id = ",
-            params$param_code,
-            ";"
+            "SELECT t.timeseries_id FROM timeseries t ",
+            "INNER JOIN locations l ON t.location_id = l.location_id ",
+            "WHERE (l.location_code = $1 OR l.alias = $2 OR l.name = $3 OR l.name_fr = $4) AND t.parameter_id = $5;",
+            params = list(
+              params$loc_code,
+              params$loc_code,
+              params$loc_code,
+              params$loc_code,
+              params$param_code
+            )
           )
         )[1, 1]
         yrs <- DBI::dbGetQuery(
           session$userData$con,
-          paste0(
-            "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-            tsid,
-            " ORDER BY year DESC;"
-          )
+          "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 ORDER BY year DESC;",
+          params = list(tsid)
         )
         updateSelectizeInput(
           session,

@@ -99,12 +99,12 @@ addLocation <- function(id, inputs, language) {
     getModuleData <- function() {
       moduleData$exist_locs <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
+        "SELECT l.location_id, l.location_code, l.name, l.name_fr, l.alias, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
         FROM locations l
         LEFT JOIN location_types lt ON l.location_type = lt.type_id
         LEFT JOIN locations_networks ln ON l.location_id = ln.location_id
         LEFT JOIN networks n ON ln.network_id = n.network_id
-        GROUP BY l.location_id, l.location, l.name, l.name_fr, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
+        GROUP BY l.location_id, l.location_code, l.name, l.name_fr, l.alias, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
       )
       moduleData$exist_locs$network <- factor(
         ifelse(
@@ -186,6 +186,11 @@ addLocation <- function(id, inputs, language) {
           ns = ns,
           htmlOutput(ns("hydat_note"))
         ),
+        # Tell the user that they should auto-generate unless they have a good reason not to, and the code they want uses national hydro network codes already
+        tags$div(
+          "Use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it uses national hydro network codes (i.e. a Water Survey of Canada location).",
+          style = "margin-bottom: 10px; font-style: italic; color: #555;"
+        ),
         splitLayout(
           cellWidths = c("60%", "40%"),
           textInput(
@@ -202,7 +207,7 @@ addLocation <- function(id, inputs, language) {
           style = "display: none;"
         ),
         splitLayout(
-          cellWidths = c("50%", "50%"),
+          cellWidths = c("33%", "33%", "33%"),
           textInput(
             ns("loc_name"),
             "Location name (must not exist already)",
@@ -216,6 +221,11 @@ addLocation <- function(id, inputs, language) {
           textInput(
             ns("loc_name_fr"),
             "French location name (must not exist already)",
+            width = "100%"
+          ),
+          textInput(
+            ns("alias"),
+            "Alias (optional)",
             width = "100%"
           )
         ),
@@ -458,6 +468,7 @@ addLocation <- function(id, inputs, language) {
           updateTextInput(session, "loc_code", value = details$location)
           updateTextInput(session, "loc_name", value = details$name)
           updateTextInput(session, "loc_name_fr", value = details$name_fr)
+          updateTextInput(session, "alias", value = details$alias)
           updateSelectizeInput(
             session,
             "loc_type",
@@ -533,27 +544,9 @@ addLocation <- function(id, inputs, language) {
     observeEvent(input$mode, {
       if (input$mode == "modify") {
         updateActionButton(session, "add_loc", label = "Update location")
-        updateTextInput(session, "loc_code", label = "Location code")
-        updateTextInput(session, "loc_name", label = "Location name")
-        updateTextInput(session, "loc_name_fr", label = "French location name")
       } else {
         # Adding a new station
         updateActionButton(session, "add_loc", label = "Add location")
-        updateTextInput(
-          session,
-          "loc_code",
-          label = "Location code (must not exist already)"
-        )
-        updateTextInput(
-          session,
-          "loc_name",
-          label = "Location name (must not exist already)"
-        )
-        updateTextInput(
-          session,
-          "loc_name_fr",
-          label = "French location name (must not exist already)"
-        )
 
         # If was on 'modify' prior, show a modal to the user asking if they want to clear fields
         if (!is.null(selected_loc())) {
@@ -582,6 +575,7 @@ addLocation <- function(id, inputs, language) {
       updateTextInput(session, "loc_code", value = "")
       updateTextInput(session, "loc_name", value = "")
       updateTextInput(session, "loc_name_fr", value = "")
+      updateTextInput(session, "alias", value = "")
       updateNumericInput(session, "lat", value = NA)
       updateNumericInput(session, "lon", value = NA)
       updateSelectizeInput(session, "loc_type", selected = character(0))
@@ -826,6 +820,8 @@ addLocation <- function(id, inputs, language) {
       },
       ignoreInit = TRUE
     )
+
+    # Alias does not get the same treatment because it can be non-unique
 
     observeEvent(
       input$hydat_fill,
@@ -1520,6 +1516,21 @@ addLocation <- function(id, inputs, language) {
               )
             }
 
+            # Changes to the alias
+            if (
+              input$loc_alias !=
+                moduleData$exist_locs[
+                  which(moduleData$exist_locs$location_id == selected_loc()),
+                  "alias"
+                ]
+            ) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "UPDATE locations SET alias = $1 WHERE location_id = $2;",
+                params = list(input$loc_alias, selected_loc())
+              )
+            }
+
             # Changes to the location type
             if (
               input$loc_type !=
@@ -1991,6 +2002,7 @@ addLocation <- function(id, inputs, language) {
           return()
         }
       }
+      # alias is optional and non-unique, no need to check
       if (!isTruthy(input$loc_type)) {
         showModal(modalDialog(
           "Location type is mandatory",
@@ -2004,9 +2016,10 @@ addLocation <- function(id, inputs, language) {
       project_ids <- parse_ids(input$project)
       # Make a data.frame to pass to addACLocation
       df <- data.frame(
-        location = input$loc_code,
+        location_code = input$loc_code,
         name = input$loc_name,
         name_fr = input$loc_name_fr,
+        alias = if (isTruthy(input$loc_alias)) input$loc_alias else NA,
         latitude = input$lat,
         longitude = input$lon,
         share_with = input$share_with,
@@ -2071,6 +2084,7 @@ addLocation <- function(id, inputs, language) {
           updateTextInput(session, "loc_code", value = character(0))
           updateTextInput(session, "loc_name", value = character(0))
           updateTextInput(session, "loc_name_fr", value = character(0))
+          updateTextInput(session, "loc_alias", value = character(0))
           updateSelectizeInput(session, "loc_type", selected = character(0))
           updateNumericInput(session, "lat", value = NA)
           updateNumericInput(session, "lon", value = NA)

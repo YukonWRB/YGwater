@@ -2052,7 +2052,7 @@ simplerIndex <- function(id, language) {
       ) {
         extra_location <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT location_id, location, name, latitude, longitude FROM public.locations WHERE location_id = $1",
+          "SELECT location_id, location_code AS location, name, latitude, longitude FROM public.locations WHERE location_id = $1",
           params = list(selected_id)
         )
         if (nrow(extra_location) > 0) {

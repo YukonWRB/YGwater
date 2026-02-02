@@ -399,6 +399,9 @@ ggplotOverlap <- function(
     )
 
     location_id <- lookup_location_id(con, location)
+    if (is.na(location_id)) {
+      stop("The location you entered does not exist in the database.")
+    }
 
     instantaneous <- DBI::dbGetQuery(
       con,

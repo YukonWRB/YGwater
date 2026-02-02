@@ -5,7 +5,7 @@
 #'
 #' Statistics for each station are averaged over all years/seasons available, except for all-time data points. Years or seasons with more than 5 percent missing data (this is the default) are excluded from the statistics. Additionally, only stations with a minimum of 15 years/seasons of data (this is the default) are retained.
 #'
-#' @param stations The stations for which to calculate flow. Given as a vector of the station code matching the database's location table, 'location' column. Ex: c('08AA008', '09BC001'). Leave NULL if using the `data` argument instead.
+#' @param stations The stations for which to calculate flow. Given as a vector of station codes matching the database's location table `location_code` (or `alias`/`name`/`name_fr`). Ex: c('08AA008', '09BC001'). Leave NULL if using the `data` argument instead.
 #' @param data If the stations are not in the hydromet database, provide the data as a single table with the columns: name, location, date, value. Name is the name of the station, location is the location code or id, date is the date of measurement in yyyy-mm-dd, and value is the flow measurement in m3/s.
 #' @param perc The percent of data (days) required to include a year or season in the statistics. Default is 95.
 #' @param record_length The length of record (# of years/seasons) at a station required to be included in the statistics. Default is 15.
@@ -48,13 +48,25 @@ calculateFlowStats <- function(
     flow_all <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT locations.name, timeseries.location, measurements_calculated_daily_corrected.date, measurements_calculated_daily_corrected.value ",
-        "FROM measurements_calculated_daily_corrected ",
-        "INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id ",
-        "INNER JOIN locations ON timeseries.location = locations.location ",
-        "WHERE timeseries.location IN ('",
+        "SELECT 
+            locations.name, 
+            locations.location_code AS location, 
+            measurements_calculated_daily_corrected.date, 
+            measurements_calculated_daily_corrected.value 
+        FROM measurements_calculated_daily_corrected 
+        INNER JOIN 
+          timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id 
+        INNER JOIN 
+          locations ON timeseries.location_id = locations.location_id 
+        WHERE (locations.location_code IN ('",
         paste0(stations, collapse = "', '"),
-        "') AND parameter_id = ",
+        "') OR locations.alias IN ('",
+        paste0(stations, collapse = "', '"),
+        "') OR locations.name IN ('",
+        paste0(stations, collapse = "', '"),
+        "') OR locations.name_fr IN ('",
+        paste0(stations, collapse = "', '"),
+        "')) AND parameter_id = ",
         flow_paramId,
         ";"
       )

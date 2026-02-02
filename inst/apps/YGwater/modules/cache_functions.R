@@ -36,7 +36,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       )
       timeseries <- dbGetQueryDT(
         con,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.location AS loc_code, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, loc.location_code AS loc_code, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id LEFT JOIN locations loc ON ts.location_id = loc.location_id;"
       )
 
       rates <- data.frame(
@@ -327,7 +327,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT location, name, name_fr, latitude, longitude, location_id FROM locations"
+          "SELECT location_code AS location, name, name_fr, latitude, longitude, location_id FROM locations"
         ),
         timeseries = dbGetQueryDT(
           con,
@@ -368,7 +368,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT l.location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
+          "SELECT l.location_code AS location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
         ),
         timeseries = dbGetQueryDT(
           con,
