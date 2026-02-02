@@ -58,17 +58,6 @@ simplerIndexUI <- function(id) {
           max-width: 350px !important;
         }
         
-        /* Adjust sweetAlert or other alert libraries if used */
-        .swal2-container {
-          padding-left: 50px !important;
-          padding-right: auto !important;
-        }
-        
-        .swal2-popup {
-          margin-left: 0 !important;
-          margin-right: auto !important;
-        }
-        
         /* Prevent horizontal scrolling on main page */
         html, body {
           overflow-x: hidden !important;
@@ -193,647 +182,476 @@ simplerIndexUI <- function(id) {
         ns("pdf-container")
       )))
     ),
-    uiOutput(ns("banner")),
     div(
-      style = "display: flex; align-items: center; gap: 10px;",
+      class = "simpler-index",
+      uiOutput(ns("banner")),
       div(
-        id = ns("logo-container"),
-        # Try to load the logo image with error handling
-        tags$img(
-          src = "imgs/simplerIndex.png",
-          style = "height: 40px; width: 60px; object-fit: contain; border-radius: 6px; background: #fff;",
-          srcset = "logo@2x.png 2x, logo@3x.png 3x",
-          onerror = sprintf(
-            "this.onerror=null; this.style.display='none'; document.getElementById('%s').style.display='flex';",
-            ns("text-logo")
-          )
-        ),
-        # Fallback text logo that appears if image fails to load
+        style = "display: flex; align-items: center; gap: 10px;",
         div(
-          id = ns("text-logo"),
-          style = "width: 60px; height: 40px; background: linear-gradient(135deg, #007bff, #0056b3); border-radius: 6px; display: none; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;",
-          "YWRR"
-        )
-      ),
-      "Simpler Index",
-      hr()
-    ),
-
-    div(
-      class = "sidebar-layout",
-      div(
-        class = "sidebar-panel",
-        id = ns("sidebar"),
-        div(class = "resize-handle", id = ns("resize-handle")),
-        fileInput(
-          ns("pdf_file"),
-          "Upload PDF(s)",
-          accept = ".pdf",
-          multiple = TRUE
-        ),
-        numericInput(
-          ns("num_boreholes"),
-          "Number of boreholes",
-          value = 1,
-          min = 1
-        ),
-        # Navigation buttons
-        fluidRow(
-          column(
-            12,
-            actionButton(
-              ns("prev_pdf"),
-              icon("arrow-left"),
-              class = "nav-btn",
-              title = "Previous"
-            ),
-            actionButton(
-              ns("next_pdf"),
-              icon("arrow-right"),
-              class = "nav-btn",
-              title = "Next"
-            ),
-            actionButton(
-              ns("show_selected_pdf"),
-              icon("file-lines"),
-              class = "nav-btn",
-              title = "Show selected page"
-            ),
-            actionButton(
-              ns("remove_pdf"),
-              icon("trash"),
-              title = "Remove Selected",
-              class = "nav-btn"
+          id = ns("logo-container"),
+          # Try to load the logo image with error handling
+          tags$img(
+            src = "imgs/simplerIndex.png",
+            style = "height: 40px; width: 60px; object-fit: contain; border-radius: 6px; background: #fff;",
+            srcset = "logo@2x.png 2x, logo@3x.png 3x",
+            onerror = sprintf(
+              "this.onerror=null; this.style.display='none'; document.getElementById('%s').style.display='flex';",
+              ns("text-logo")
             )
-          )
-        ),
-        br(),
-        tags$small(
-          class = "text-muted",
-          "Select a row and click the ",
-          tags$strong("page button"),
-          " above to show it in the center pane or the ",
-          tags$strong("trash can"),
-          " to delete it."
-        ),
-        br(),
-        DT::DTOutput(ns("pdf_table"))
-      ),
-      div(
-        class = "main-panel",
-        # First row: select, redact, clear, save, zoom
-        div(
-          class = "control-row",
+          ),
+          # Fallback text logo that appears if image fails to load
           div(
-            class = "control-group",
-            actionButton(
-              ns("brush_select"),
-              "Select",
-              icon("mouse-pointer"),
-              class = "btn-toggle"
-            ) |>
-              tooltip(
-                "Enable the selection tool for OCR and content redaction."
-              ),
-            actionButton(
-              ns("redaction_mode"),
-              "Redaction Mode",
-              icon("rectangle-xmark"),
-              class = "btn-toggle"
-            ) |>
-              tooltip(
-                "Toggle redaction mode. When enabled, every selection will be automatically redacted."
-              ),
-            actionButton(
-              ns("delete_redaction"),
-              "Delete",
-              icon("minus-circle"),
-              class = "btn-toggle",
-              title = "Remove Selected Redactions"
-            ) |>
-              tooltip(
-                "Toggle delete mode. When enabled, drag to select and remove redactions."
-              ),
-            actionButton(
-              ns("undo_redaction"),
-              "Undo",
-              icon("undo"),
-              class = "btn btn-outline-warning",
-              title = "Undo last redaction"
-            ) |>
-              tooltip(
-                "Remove the most recently added redaction."
-              ),
-            actionButton(
-              ns("clear_rectangles"),
-              "Clear",
-              icon("eraser"),
-              class = "btn btn-outline-secondary",
-              title = "Clear Rectangles"
-            ),
-            downloadButton(
-              ns("save_image"),
-              "Export PDF",
-              class = "btn btn-outline-primary",
-              title = "Export PDF with redactions and OCR text"
-            ) |>
-              tooltip(
-                "Download a redacted copy for your records (does not send the PDF to the database)"
-              ),
-            # Zoom control - wrap in a container div
-            div(
-              class = "slider-container",
-              sliderInput(
-                ns("zoom_level"),
-                "Zoom",
-                min = 0.5,
-                max = 4.0,
-                value = 1.0,
-                step = 0.1,
-                width = "150px"
-              )
-            )
+            id = ns("text-logo"),
+            style = "width: 60px; height: 40px; background: linear-gradient(135deg, #007bff, #0056b3); border-radius: 6px; display: none; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;",
+            "YWRR"
           )
         ),
-
-        # Replace the Second row with simplified OCR controls
-        accordion(
-          id = ns("ocr-controls-accordion"),
-          open = FALSE,
-          accordion_panel(
-            title = "OCR Controls",
-            div(
-              class = "control-row",
-              style = "margin-top: 10px;",
-              div(
-                class = "control-group",
-                selectizeInput(
-                  ns("ocr_display_mode"),
-                  "OCR Display Mode",
-                  choices = list(
-                    "None" = "none",
-                    "Highlight Boxes" = "highlight",
-                    "Text Overlay" = "text"
-                  ),
-                  selected = "none"
-                ),
-                div(
-                  class = "slider-container",
-                  sliderInput(
-                    ns("confidence_threshold"),
-                    "Confidence %",
-                    min = 40,
-                    max = 100,
-                    value = 70,
-                    step = 10,
-                    width = "150px"
-                  )
-                ) |>
-                  tooltip(
-                    "Set the minimum confidence level for displaying OCR results. Higher values show only the most certain text."
-                  ),
-                selectizeInput(
-                  ns("psm_mode"),
-                  "PSM Mode",
-                  choices = list(
-                    "Auto" = "3",
-                    "Auto + OSD" = "1",
-                    "Sparse Text" = "11",
-                    "Sparse Text + OSD" = "12"
-                  ),
-                  selected = "1"
-                ) |>
-                  tooltip(
-                    "Page Segmentation Mode (PSM) controls how Tesseract splits the image into text blocks. 'Auto + OSD' is a good general choice for documents with mixed layouts."
-                  ),
-                selectizeInput(
-                  ns("pre_processing_method"),
-                  "Pre-processing",
-                  choices = list(
-                    "Default" = "default",
-                    "Enhance Dark" = "enhance_dark",
-                    "Enhance Light" = "enhance_light",
-                    "High Contrast" = "high_contrast",
-                    "Denoise" = "denoise",
-                    "Deskew" = "deskew"
-                  ),
-                  selected = "default"
-                ),
-
-                # OCR Text Display
-                div(
-                  style = "margin-left: 20px; width: 300px;",
-                  h6(
-                    "Extracted Text",
-                    style = "margin-bottom: 5px; color: #495057;"
-                  ),
-                  div(
-                    style = "max-height: 120px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; font-family: monospace; font-size: 11px; font-weight: bold; color: #007bff;",
-                    verbatimTextOutput(ns("ocr_text_display"))
-                  )
-                )
-              ),
-            )
-          )
-        ),
-
-        div(
-          id = ns("pdf-container"),
-          style = "width:100%; max-width:100%; height:calc(100vh - 200px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow-y: scroll; overflow-x: scroll; background:white; position:relative; display:block; padding:0;",
-
-          plotOutput(
-            ns("plot"),
-            brush = brushOpts(
-              id = ns("pdf_brush"),
-              resetOnNew = TRUE,
-              direction = "xy",
-              opacity = 0.3,
-              fill = "#007bff"
-            ),
-            height = "1000px"
-          )
-        )
+        "Simpler Index",
+        hr()
       ),
+
       div(
-        class = "right-panel",
-        id = ns("right-sidebar"),
-        div(class = "resize-handle-right", id = ns("resize-handle-right")),
-        # Scrollable content area
+        class = "sidebar-layout",
         div(
-          class = "scrollable-content",
-          style = "overflow-y: auto; padding: 15px; height: calc(100vh - 60px);",
-          # Borehole linking controls in scrollable area
+          class = "sidebar-panel",
+          id = ns("sidebar"),
+          div(class = "resize-handle", id = ns("resize-handle")),
+          fileInput(
+            ns("pdf_file"),
+            "Upload PDF(s)",
+            accept = ".pdf",
+            multiple = TRUE
+          ),
+          numericInput(
+            ns("num_boreholes"),
+            "Number of boreholes",
+            value = 1,
+            min = 1
+          ),
+          # Navigation buttons
           fluidRow(
             column(
               12,
-              selectizeInput(
-                ns("borehole_details_selector"),
-                "Select borehole to edit:",
-                choices = NULL,
-                selected = NULL,
-                options = list(
-                  placeholder = "Choose borehole",
-                  maxItems = 1
-                )
-              ) |>
-                tooltip(
-                  "Choose which borehole's details to view and edit."
-                )
+              actionButton(
+                ns("prev_pdf"),
+                icon("arrow-left"),
+                class = "nav-btn",
+                title = "Previous"
+              ),
+              actionButton(
+                ns("next_pdf"),
+                icon("arrow-right"),
+                class = "nav-btn",
+                title = "Next"
+              ),
+              actionButton(
+                ns("show_selected_pdf"),
+                icon("file-lines"),
+                class = "nav-btn",
+                title = "Show selected page"
+              ),
+              actionButton(
+                ns("remove_pdf"),
+                icon("trash"),
+                title = "Remove Selected",
+                class = "nav-btn"
+              )
             )
           ),
           br(),
-
-          # Well identification
-          textInput(
-            ns("name"),
-            "Borehole/well name *",
-            placeholder = "Enter name"
+          tags$small(
+            class = "text-muted",
+            "Select a row and click the ",
+            tags$strong("page button"),
+            " above to show it in the center pane or the ",
+            tags$strong("trash can"),
+            " to delete it."
           ),
-          textInput(
-            ns("notes_borehole"),
-            "Boreholes notes",
-            placeholder = "Enter borehole-specific notes"
-          ),
-          selectizeInput(
-            ns("share_with_borehole"),
-            "Share borehole with groups",
-            choices = "public_reader", # Rest populated in server
-            selected = "public_reader",
-            multiple = TRUE,
-            width = "100%"
-          ) |>
-            tooltip(
-              "Select user groups to share this borehole with. 'public_reader' = shared with everyone."
-            ),
-          # Add 'drilled by' selectize input
-          selectizeInput(
-            ns("drilled_by"),
-            "Driller *",
-            choices = NULL, # Populated in server
-            selected = NULL,
-            multiple = TRUE,
-            options = list(
-              create = TRUE,
-              placeholder = "Select driller",
-              maxItems = 1
-            )
-          ) |>
-            tooltip(
-              "Add a new driller by typing the name in."
-            ),
-
-          # Location information section - remove surveyed_location_top_casing field
-          radioButtons(
-            ns("coordinate_system"),
-            "Coordinate system *",
-            choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
-            selected = "utm",
-            inline = TRUE
-          ) |>
-            tooltip(
-              "UTM converted to Lat/Lon on upload."
-            ),
-          conditionalPanel(
-            condition = "input.coordinate_system == 'utm'",
-            ns = ns,
-            numericInput(ns("easting"), "Easting *", value = NULL, min = 0),
-            numericInput(ns("northing"), "Northing *", value = NULL, min = 0),
-            selectizeInput(
-              ns("utm_zone"),
-              "UTM Zone*",
-              choices = list(
-                "7N" = "7N",
-                "8N" = "8N",
-                "9N" = "9N",
-                "10N" = "10N",
-                "11N" = "11N",
-                "12N" = "12N",
-                "13N" = "13N"
-              ),
-              selected = "8N",
-              options = list(
-                placeholder = "Select UTM zone",
-                maxItems = 1
-              )
-            )
-          ),
-          conditionalPanel(
-            condition = "input.coordinate_system == 'latlon'",
-            ns = ns,
-            numericInput(
-              ns("latitude"),
-              "Latitude *",
-              value = NULL,
-              min = 40,
-              max = 85,
-              step = 0.000001
-            ),
-            numericInput(
-              ns("longitude"),
-              "Longitude *",
-              value = NULL,
-              min = -141,
-              max = -60,
-              step = 0.000001
-            )
-          ),
-          selectizeInput(
-            ns("location_source"),
-            "Location source *",
-            choices = c(
-              "GPS, uncorrected",
-              "GPS, corrected",
-              "Optical survey (benchmark)",
-              "Map",
-              "Satellite imagery",
-              "Unknown"
-            ),
-            selected = NULL,
-            multiple = TRUE,
-            options = list(
-              placeholder = "Select location source",
-              maxItems = 1
-            )
-          ),
-
-          checkboxInput(
-            ns("associate_loc_with_borehole"),
-            "Associate borehole with monitoring location",
-            value = FALSE
-          ),
-          conditionalPanel(
-            condition = "input.associate_loc_with_borehole == true",
-            ns = ns,
-            numericInput(
-              ns("location_search_radius"),
-              "Search radius for nearby locations (meters)",
-              value = 500,
-              min = 0
-            ),
-            actionButton(
-              ns("find_nearby_locations"),
-              "Find nearby locations",
-              width = "100%"
-            ),
-            uiOutput(ns("nearby_locations_count")),
-            selectizeInput(
-              ns("associated_location"),
-              "Associate with location (optional)",
-              choices = NULL,
-              selected = NULL,
-              options = list(
-                placeholder = "Choose a nearby location",
-                maxItems = 1
-              )
-            ),
-            actionButton(
-              ns("clear_location_association"),
-              "Clear location association",
-              class = "btn btn-outline-secondary",
-              width = "100%"
-            )
-          ),
-
-          selectizeInput(
-            ns("purpose_of_borehole"),
-            "Purpose of borehole",
-            choices = NULL, # Populated in server
-            selected = NULL,
-            multiple = TRUE,
-            options = list(
-              placeholder = "Select purpose",
-              maxItems = 1
-            )
-          ),
-          radioButtons(
-            ns("purpose_borehole_inferred"),
-            "Purpose inferred or explicit?",
-            choices = list("Inferred" = TRUE, "Explicit" = FALSE),
-            selected = TRUE,
-            inline = TRUE
-          ),
-
-          # Well construction details
-          # Drill Depth and unit
-          fluidRow(
-            column(
-              8,
-              numericInput(
-                ns("drill_depth"),
-                "Drill depth *",
-                value = NULL,
-                min = 0,
-                step = 0.1
-              )
-            ),
-            column(
-              4,
-              radioButtons(
-                ns("drill_depth_unit"),
-                "",
-                choices = list("m" = "m", "ft" = "ft"),
-                selected = "m",
-                inline = TRUE
-              )
-            )
-          ),
-          fluidRow(
-            column(
-              8,
-              numericInput(
-                ns("surveyed_ground_elev"),
-                "Surveyed ground elevation",
-                value = NULL,
-                step = 0.01
+          br(),
+          DT::DTOutput(ns("pdf_table"))
+        ),
+        div(
+          class = "main-panel",
+          # First row: select, redact, clear, save, zoom
+          div(
+            class = "control-row",
+            div(
+              class = "control-group",
+              actionButton(
+                ns("brush_select"),
+                "Select",
+                icon("mouse-pointer"),
+                class = "btn-toggle"
               ) |>
                 tooltip(
-                  "Elevation relative to sea level. Can be empty, but please make an effort and try to fill it in."
-                )
-            ),
-            column(
-              4,
-              radioButtons(
-                ns("surveyed_ground_elev_unit"),
-                "",
-                choices = list("m" = "m", "ft" = "ft"),
-                selected = "m",
-                inline = TRUE
-              )
-            )
-          ),
-          fluidRow(
-            column(
-              8,
-              numericInput(
-                ns("depth_to_bedrock"),
-                "Depth to bedrock",
-                value = NULL,
-                min = 0,
-                step = 0.1
+                  "Enable the selection tool for OCR and content redaction."
+                ),
+              actionButton(
+                ns("redaction_mode"),
+                "Redaction Mode",
+                icon("rectangle-xmark"),
+                class = "btn-toggle"
               ) |>
                 tooltip(
-                  "If bedrock was not reached or if unknown, leave empty."
-                )
-            ),
-            column(
-              4,
-              radioButtons(
-                ns("depth_to_bedrock_unit"),
-                "",
-                choices = list("m" = "m", "ft" = "ft"),
-                selected = "m",
-                inline = TRUE
-              )
-            )
-          ),
-
-          # Add permafrost checkbox and conditional inputs
-          checkboxInput(
-            ns("permafrost_present"),
-            "Permafrost present",
-            value = FALSE
-          ),
-
-          ## IS PERMAFROST present conditional panel ##################
-          conditionalPanel(
-            condition = "input.permafrost_present == true",
-            ns = ns,
-            fluidRow(
-              column(
-                8,
-                numericInput(
-                  ns("permafrost_top"),
-                  "Depth to top of permafrost",
-                  value = NULL,
-                  min = 0,
-                  step = 0.1
-                )
+                  "Toggle redaction mode. When enabled, every selection will be automatically redacted."
+                ),
+              actionButton(
+                ns("delete_redaction"),
+                "Delete",
+                icon("minus-circle"),
+                class = "btn-toggle",
+                title = "Remove Selected Redactions"
+              ) |>
+                tooltip(
+                  "Toggle delete mode. When enabled, drag to select and remove redactions."
+                ),
+              actionButton(
+                ns("undo_redaction"),
+                "Undo",
+                icon("undo"),
+                class = "btn btn-outline-warning",
+                title = "Undo last redaction"
+              ) |>
+                tooltip(
+                  "Remove the most recently added redaction."
+                ),
+              actionButton(
+                ns("clear_rectangles"),
+                "Clear",
+                icon("eraser"),
+                class = "btn btn-outline-secondary",
+                title = "Clear Rectangles"
               ),
-              column(
-                4,
-                radioButtons(
-                  ns("permafrost_top_unit"),
-                  "",
-                  choices = list("m" = "m", "ft" = "ft"),
-                  selected = "m",
-                  inline = TRUE
-                )
-              )
-            ),
-            fluidRow(
-              column(
-                8,
-                numericInput(
-                  ns("permafrost_bot"),
-                  "Depth to bottom of permafrost",
-                  value = NULL,
-                  min = 0,
-                  step = 0.1
-                )
-              ),
-              column(
-                4,
-                radioButtons(
-                  ns("permafrost_bot_unit"),
-                  "",
-                  choices = list("m" = "m", "ft" = "ft"),
-                  selected = "m",
-                  inline = TRUE
+              downloadButton(
+                ns("save_image"),
+                "Export PDF",
+                class = "btn btn-outline-primary",
+                title = "Export PDF with redactions and OCR text"
+              ) |>
+                tooltip(
+                  "Download a redacted copy for your records (does not send the PDF to the database)"
+                ),
+              # Zoom control - wrap in a container div
+              div(
+                class = "slider-container",
+                sliderInput(
+                  ns("zoom_level"),
+                  "Zoom",
+                  min = 0.5,
+                  max = 4.0,
+                  value = 1.0,
+                  step = 0.1,
+                  width = "150px"
                 )
               )
             )
           ),
 
-          dateInput(ns("date_drilled"), "Date drilled *", value = NULL),
+          # Replace the Second row with simplified OCR controls
+          accordion(
+            id = ns("ocr-controls-accordion"),
+            open = FALSE,
+            accordion_panel(
+              title = "OCR Controls",
+              div(
+                class = "control-row",
+                style = "margin-top: 10px;",
+                div(
+                  class = "control-group",
+                  selectizeInput(
+                    ns("ocr_display_mode"),
+                    "OCR Display Mode",
+                    choices = list(
+                      "None" = "none",
+                      "Highlight Boxes" = "highlight",
+                      "Text Overlay" = "text"
+                    ),
+                    selected = "none"
+                  ),
+                  div(
+                    class = "slider-container",
+                    sliderInput(
+                      ns("confidence_threshold"),
+                      "Confidence %",
+                      min = 40,
+                      max = 100,
+                      value = 70,
+                      step = 10,
+                      width = "150px"
+                    )
+                  ) |>
+                    tooltip(
+                      "Set the minimum confidence level for displaying OCR results. Higher values show only the most certain text."
+                    ),
+                  selectizeInput(
+                    ns("psm_mode"),
+                    "PSM Mode",
+                    choices = list(
+                      "Auto" = "3",
+                      "Auto + OSD" = "1",
+                      "Sparse Text" = "11",
+                      "Sparse Text + OSD" = "12"
+                    ),
+                    selected = "1"
+                  ) |>
+                    tooltip(
+                      "Page Segmentation Mode (PSM) controls how Tesseract splits the image into text blocks. 'Auto + OSD' is a good general choice for documents with mixed layouts."
+                    ),
+                  selectizeInput(
+                    ns("pre_processing_method"),
+                    "Pre-processing",
+                    choices = list(
+                      "Default" = "default",
+                      "Enhance Dark" = "enhance_dark",
+                      "Enhance Light" = "enhance_light",
+                      "High Contrast" = "high_contrast",
+                      "Denoise" = "denoise",
+                      "Deskew" = "deskew"
+                    ),
+                    selected = "default"
+                  ),
 
-          ## IS WELL conditional panel ##################
-          checkboxInput(ns("is_well"), "Well constructed", value = FALSE),
+                  # OCR Text Display
+                  div(
+                    style = "margin-left: 20px; width: 300px;",
+                    h6(
+                      "Extracted Text",
+                      style = "margin-bottom: 5px; color: #495057;"
+                    ),
+                    div(
+                      style = "max-height: 120px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; background: white; font-family: monospace; font-size: 11px; font-weight: bold; color: #007bff;",
+                      verbatimTextOutput(ns("ocr_text_display"))
+                    )
+                  )
+                ),
+              )
+            )
+          ),
 
-          # Show well construction fields only if 'is_well' is checked
-          conditionalPanel(
-            condition = "input.is_well == true",
-            ns = ns,
+          div(
+            id = ns("pdf-container"),
+            style = "width:100%; max-width:100%; height:calc(100vh - 200px); min-height:500px; border:1px solid #ccc; margin:10px auto; overflow-y: scroll; overflow-x: scroll; background:white; position:relative; display:block; padding:0;",
+
+            plotOutput(
+              ns("plot"),
+              brush = brushOpts(
+                id = ns("pdf_brush"),
+                resetOnNew = TRUE,
+                direction = "xy",
+                opacity = 0.3,
+                fill = "#007bff"
+              ),
+              height = "1000px"
+            )
+          )
+        ),
+        div(
+          class = "right-panel",
+          id = ns("right-sidebar"),
+          div(class = "resize-handle-right", id = ns("resize-handle-right")),
+          # Scrollable content area
+          div(
+            class = "scrollable-content",
+            style = "overflow-y: auto; padding: 15px; height: calc(100vh - 60px);",
+            # Borehole linking controls in scrollable area
+            fluidRow(
+              column(
+                12,
+                selectizeInput(
+                  ns("borehole_details_selector"),
+                  "Select borehole to edit:",
+                  choices = NULL,
+                  selected = NULL,
+                  options = list(
+                    placeholder = "Choose borehole",
+                    maxItems = 1
+                  )
+                ) |>
+                  tooltip(
+                    "Choose which borehole's details to view and edit."
+                  )
+              )
+            ),
+            br(),
+
+            # Well identification
+            textInput(
+              ns("name"),
+              "Borehole/well name *",
+              placeholder = "Enter name"
+            ),
+            textInput(
+              ns("notes_borehole"),
+              "Boreholes notes",
+              placeholder = "Enter borehole-specific notes"
+            ),
             selectizeInput(
-              ns("share_with_well"),
-              "Share well with groups",
+              ns("share_with_borehole"),
+              "Share borehole with groups",
               choices = "public_reader", # Rest populated in server
               selected = "public_reader",
               multiple = TRUE,
               width = "100%"
             ) |>
               tooltip(
-                "Select user groups to share this well with. 'public_reader' = shared with everyone. Can be different from borehole sharing."
+                "Select user groups to share this borehole with. 'public_reader' = shared with everyone."
               ),
-            # Casing Outside Diameter
-            fluidRow(
-              column(
-                8,
-                numericInput(
-                  ns("casing_od"),
-                  "Casing outside diameter",
-                  value = NULL,
-                  min = 0,
-                  step = 1
-                )
+            # Add 'drilled by' selectize input
+            selectizeInput(
+              ns("drilled_by"),
+              "Driller *",
+              choices = NULL, # Populated in server
+              selected = NULL,
+              multiple = TRUE,
+              options = list(
+                create = TRUE,
+                placeholder = "Select driller",
+                maxItems = 1
+              )
+            ) |>
+              tooltip(
+                "Add a new driller by typing the name in."
               ),
-              column(
-                4,
-                radioButtons(
-                  ns("casing_od_unit"),
-                  "",
-                  choices = list("cm" = "cm", "inch" = "inch"),
-                  selected = "inch",
-                  inline = TRUE
+
+            # Location information section - remove surveyed_location_top_casing field
+            radioButtons(
+              ns("coordinate_system"),
+              "Coordinate system *",
+              choices = list("UTM" = "utm", "Lat/Lon" = "latlon"),
+              selected = "utm",
+              inline = TRUE
+            ) |>
+              tooltip(
+                "UTM converted to Lat/Lon on upload."
+              ),
+            conditionalPanel(
+              condition = "input.coordinate_system == 'utm'",
+              ns = ns,
+              numericInput(ns("easting"), "Easting *", value = NULL, min = 0),
+              numericInput(ns("northing"), "Northing *", value = NULL, min = 0),
+              selectizeInput(
+                ns("utm_zone"),
+                "UTM Zone*",
+                choices = list(
+                  "7N" = "7N",
+                  "8N" = "8N",
+                  "9N" = "9N",
+                  "10N" = "10N",
+                  "11N" = "11N",
+                  "12N" = "12N",
+                  "13N" = "13N"
+                ),
+                selected = "8N",
+                options = list(
+                  placeholder = "Select UTM zone",
+                  maxItems = 1
                 )
               )
             ),
-            # Top of Screen
+            conditionalPanel(
+              condition = "input.coordinate_system == 'latlon'",
+              ns = ns,
+              numericInput(
+                ns("latitude"),
+                "Latitude *",
+                value = NULL,
+                min = 40,
+                max = 85,
+                step = 0.000001
+              ),
+              numericInput(
+                ns("longitude"),
+                "Longitude *",
+                value = NULL,
+                min = -141,
+                max = -60,
+                step = 0.000001
+              )
+            ),
+            selectizeInput(
+              ns("location_source"),
+              "Location source *",
+              choices = c(
+                "GPS, uncorrected",
+                "GPS, corrected",
+                "Optical survey (benchmark)",
+                "Map",
+                "Satellite imagery",
+                "Unknown"
+              ),
+              selected = NULL,
+              multiple = TRUE,
+              options = list(
+                placeholder = "Select location source",
+                maxItems = 1
+              )
+            ),
+
+            checkboxInput(
+              ns("associate_loc_with_borehole"),
+              "Associate borehole with monitoring location",
+              value = FALSE
+            ),
+            conditionalPanel(
+              condition = "input.associate_loc_with_borehole == true",
+              ns = ns,
+              numericInput(
+                ns("location_search_radius"),
+                "Search radius for nearby locations (meters)",
+                value = 500,
+                min = 0
+              ),
+              actionButton(
+                ns("find_nearby_locations"),
+                "Find nearby locations",
+                width = "100%"
+              ),
+              uiOutput(ns("nearby_locations_count")),
+              selectizeInput(
+                ns("associated_location"),
+                "Associate with location (optional)",
+                choices = NULL,
+                selected = NULL,
+                options = list(
+                  placeholder = "Choose a nearby location",
+                  maxItems = 1
+                )
+              ),
+              actionButton(
+                ns("clear_location_association"),
+                "Clear location association",
+                class = "btn btn-outline-secondary",
+                width = "100%"
+              )
+            ),
+
+            selectizeInput(
+              ns("purpose_of_borehole"),
+              "Purpose of borehole",
+              choices = NULL, # Populated in server
+              selected = NULL,
+              multiple = TRUE,
+              options = list(
+                placeholder = "Select purpose",
+                maxItems = 1
+              )
+            ),
+            radioButtons(
+              ns("purpose_borehole_inferred"),
+              "Purpose inferred or explicit?",
+              choices = list("Inferred" = TRUE, "Explicit" = FALSE),
+              selected = TRUE,
+              inline = TRUE
+            ),
+
+            # Well construction details
+            # Drill Depth and unit
             fluidRow(
               column(
                 8,
                 numericInput(
-                  ns("top_of_screen"),
-                  "Top of screen",
+                  ns("drill_depth"),
+                  "Drill depth *",
                   value = NULL,
                   min = 0,
                   step = 0.1
@@ -842,7 +660,7 @@ simplerIndexUI <- function(id) {
               column(
                 4,
                 radioButtons(
-                  ns("top_of_screen_unit"),
+                  ns("drill_depth_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
                   selected = "m",
@@ -850,69 +668,23 @@ simplerIndexUI <- function(id) {
                 )
               )
             ),
-            # Bottom of Screen
             fluidRow(
               column(
                 8,
                 numericInput(
-                  ns("bottom_of_screen"),
-                  "Bottom of screen",
-                  value = NULL,
-                  min = 0,
-                  step = 0.1
-                )
-              ),
-              column(
-                4,
-                radioButtons(
-                  ns("bottom_of_screen_unit"),
-                  "",
-                  choices = list("m" = "m", "ft" = "ft"),
-                  selected = "m",
-                  inline = TRUE
-                )
-              )
-            ),
-            # Well Head Stick Up
-            fluidRow(
-              column(
-                8,
-                numericInput(
-                  ns("well_head_stick_up"),
-                  "Well stick up",
-                  value = NULL,
-                  step = 0.01
-                )
-              ),
-              column(
-                4,
-                radioButtons(
-                  ns("well_head_stick_up_unit"),
-                  "",
-                  choices = list("m" = "m", "ft" = "ft"),
-                  selected = "m",
-                  inline = TRUE
-                )
-              )
-            ),
-            # Static Water Level
-            fluidRow(
-              column(
-                8,
-                numericInput(
-                  ns("static_water_level"),
-                  "Static water level BTOC",
+                  ns("surveyed_ground_elev"),
+                  "Surveyed ground elevation",
                   value = NULL,
                   step = 0.01
                 ) |>
                   tooltip(
-                    "Convert elevations BGS to BTOC!"
+                    "Elevation relative to sea level. Can be empty, but please make an effort and try to fill it in."
                   )
               ),
               column(
                 4,
                 radioButtons(
-                  ns("static_water_level_unit"),
+                  ns("surveyed_ground_elev_unit"),
                   "",
                   choices = list("m" = "m", "ft" = "ft"),
                   selected = "m",
@@ -920,121 +692,341 @@ simplerIndexUI <- function(id) {
                 )
               )
             ),
-            # Estimated Yield
             fluidRow(
               column(
                 8,
                 numericInput(
-                  ns("estimated_yield"),
-                  "Estimated yield",
+                  ns("depth_to_bedrock"),
+                  "Depth to bedrock",
                   value = NULL,
                   min = 0,
                   step = 0.1
-                )
+                ) |>
+                  tooltip(
+                    "If bedrock was not reached or if unknown, leave empty."
+                  )
               ),
               column(
                 4,
                 radioButtons(
-                  ns("estimated_yield_unit"),
+                  ns("depth_to_bedrock_unit"),
                   "",
-                  choices = list("L/s" = "L/s", "G/min" = "G/min"),
-                  selected = "G/min",
+                  choices = list("m" = "m", "ft" = "ft"),
+                  selected = "m",
                   inline = TRUE
                 )
               )
             ),
 
-            selectizeInput(
-              ns("purpose_of_well"),
-              "Purpose of well",
-              choices = NULL, # Populated in server
-              selected = NULL,
-              multiple = TRUE,
-              options = list(
-                placeholder = "Enter if different from borehole purpose",
-                maxItems = 1
-              )
+            # Add permafrost checkbox and conditional inputs
+            checkboxInput(
+              ns("permafrost_present"),
+              "Permafrost present",
+              value = FALSE
             ),
-            textInput(
-              ns("notes_well"),
-              "Well notes",
-              placeholder = "Screen type, filter pack, development, etc."
-            ),
-            radioButtons(
-              ns("purpose_well_inferred"),
-              "Purpose inferred or explicit?",
-              choices = list("Inferred" = TRUE, "Explicit" = FALSE),
-              selected = TRUE,
-              inline = TRUE
-            )
-          ), # End of is_well conditional panel
 
-          # Add upload buttons at the bottom of the scrollable content
-          div(
-            style = "margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6;",
-            fluidRow(
-              column(
-                6,
-                actionButton(
-                  ns("upload_selected"),
-                  "Upload selected",
-                  class = "btn btn-primary btn-block",
-                  icon = icon("upload")
+            ## IS PERMAFROST present conditional panel ##################
+            conditionalPanel(
+              condition = "input.permafrost_present == true",
+              ns = ns,
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("permafrost_top"),
+                    "Depth to top of permafrost",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("permafrost_top_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
                 )
               ),
-              column(
-                6,
-                actionButton(
-                  ns("upload_all"),
-                  "Upload all",
-                  class = "btn btn-success btn-block",
-                  icon = icon("cloud-upload-alt")
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("permafrost_bot"),
+                    "Depth to bottom of permafrost",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("permafrost_bot_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
+                )
+              )
+            ),
+
+            dateInput(ns("date_drilled"), "Date drilled *", value = NULL),
+
+            ## IS WELL conditional panel ##################
+            checkboxInput(ns("is_well"), "Well constructed", value = FALSE),
+
+            # Show well construction fields only if 'is_well' is checked
+            conditionalPanel(
+              condition = "input.is_well == true",
+              ns = ns,
+              selectizeInput(
+                ns("share_with_well"),
+                "Share well with groups",
+                choices = "public_reader", # Rest populated in server
+                selected = "public_reader",
+                multiple = TRUE,
+                width = "100%"
+              ) |>
+                tooltip(
+                  "Select user groups to share this well with. 'public_reader' = shared with everyone. Can be different from borehole sharing."
+                ),
+              # Casing Outside Diameter
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("casing_od"),
+                    "Casing outside diameter",
+                    value = NULL,
+                    min = 0,
+                    step = 1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("casing_od_unit"),
+                    "",
+                    choices = list("cm" = "cm", "inch" = "inch"),
+                    selected = "inch",
+                    inline = TRUE
+                  )
+                )
+              ),
+              # Top of Screen
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("top_of_screen"),
+                    "Top of screen",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("top_of_screen_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
+                )
+              ),
+              # Bottom of Screen
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("bottom_of_screen"),
+                    "Bottom of screen",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("bottom_of_screen_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
+                )
+              ),
+              # Well Head Stick Up
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("well_head_stick_up"),
+                    "Well stick up",
+                    value = NULL,
+                    step = 0.01
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("well_head_stick_up_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
+                )
+              ),
+              # Static Water Level
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("static_water_level"),
+                    "Static water level BTOC",
+                    value = NULL,
+                    step = 0.01
+                  ) |>
+                    tooltip(
+                      "Convert elevations BGS to BTOC!"
+                    )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("static_water_level_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
+                )
+              ),
+              # Estimated Yield
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("estimated_yield"),
+                    "Estimated yield",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("estimated_yield_unit"),
+                    "",
+                    choices = list("L/s" = "L/s", "G/min" = "G/min"),
+                    selected = "G/min",
+                    inline = TRUE
+                  )
+                )
+              ),
+
+              selectizeInput(
+                ns("purpose_of_well"),
+                "Purpose of well",
+                choices = NULL, # Populated in server
+                selected = NULL,
+                multiple = TRUE,
+                options = list(
+                  placeholder = "Enter if different from borehole purpose",
+                  maxItems = 1
+                )
+              ),
+              textInput(
+                ns("notes_well"),
+                "Well notes",
+                placeholder = "Screen type, filter pack, development, etc."
+              ),
+              radioButtons(
+                ns("purpose_well_inferred"),
+                "Purpose inferred or explicit?",
+                choices = list("Inferred" = TRUE, "Explicit" = FALSE),
+                selected = TRUE,
+                inline = TRUE
+              )
+            ), # End of is_well conditional panel
+
+            # Add upload buttons at the bottom of the scrollable content
+            div(
+              style = "margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6;",
+              fluidRow(
+                column(
+                  6,
+                  actionButton(
+                    ns("upload_selected"),
+                    "Upload selected",
+                    class = "btn btn-primary btn-block",
+                    icon = icon("upload")
+                  )
+                ),
+                column(
+                  6,
+                  actionButton(
+                    ns("upload_all"),
+                    "Upload all",
+                    class = "btn btn-success btn-block",
+                    icon = icon("cloud-upload-alt")
+                  )
                 )
               )
             )
           )
         )
-      )
-    ),
+      ),
 
-    # script to resize sidebars and reattach handlers after Shiny redraws UI
-    tags$script(HTML(sprintf(
-      "$(function(){ initSidebarResize({leftId:'%s', rightId:'%s', leftHandle:'%s', rightHandle:'%s', ids:[%s]}); });",
-      ns('sidebar'),
-      ns('right-sidebar'),
-      ns('resize-handle'),
-      ns('resize-handle-right'),
-      paste(
-        sprintf(
-          "'%s'",
-          ns(c(
-            'name',
-            'notes_borehole',
-            'share_with_borehole',
-            'easting',
-            'northing',
-            'latitude',
-            'longitude',
-            'location_source',
-            'depth_to_bedrock',
-            'permafrost_top',
-            'permafrost_bot',
-            'date_drilled',
-            'casing_od',
-            'drill_depth',
-            'surveyed_ground_elev',
-            'top_of_screen',
-            'bottom_of_screen',
-            'well_head_stick_up',
-            'static_water_level',
-            'estimated_yield',
-            'notes_well',
-            'share_with_well'
-          ))
-        ),
-        collapse = ','
-      )
-    )))
+      # script to resize sidebars and reattach handlers after Shiny redraws UI
+      tags$script(HTML(sprintf(
+        "$(function(){ initSidebarResize({leftId:'%s', rightId:'%s', leftHandle:'%s', rightHandle:'%s', ids:[%s]}); });",
+        ns('sidebar'),
+        ns('right-sidebar'),
+        ns('resize-handle'),
+        ns('resize-handle-right'),
+        paste(
+          sprintf(
+            "'%s'",
+            ns(c(
+              'name',
+              'notes_borehole',
+              'share_with_borehole',
+              'easting',
+              'northing',
+              'latitude',
+              'longitude',
+              'location_source',
+              'depth_to_bedrock',
+              'permafrost_top',
+              'permafrost_bot',
+              'date_drilled',
+              'casing_od',
+              'drill_depth',
+              'surveyed_ground_elev',
+              'top_of_screen',
+              'bottom_of_screen',
+              'well_head_stick_up',
+              'static_water_level',
+              'estimated_yield',
+              'notes_well',
+              'share_with_well'
+            ))
+          ),
+          collapse = ','
+        )
+      )))
+    )
   )
 } # End of UI function
 
