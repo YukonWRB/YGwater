@@ -18,7 +18,7 @@ snowInfo(
 )
 }
 \arguments{
-\item{locations}{The list of location codes requested from column 'location' of table 'locations', as a character vector of length n. Default "all" fetches all stations.}
+\item{locations}{The list of locations requested, as either a vector of location IDs (preferable) or entries from one of columns 'name', 'location_code', or 'alias' from table 'locations'. Default "all" fetches all stations in the Yukon Snow Survey Network.}
 
 \item{inactive}{Boolean specifying whether to include inactive stations. In this case, a station with no measurements for 5 or more years is considered inactive. Default is FALSE, i.e. no inactive stations.}
 
