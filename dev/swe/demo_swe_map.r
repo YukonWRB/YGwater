@@ -2,6 +2,37 @@ load_all()
 
 con <- YGwater::AquaConnect()
 
+dat <- load_bulletin_timeseries(
+    con = con,
+    load_swe = TRUE,
+    load_temp = TRUE,
+    load_precip = TRUE,
+    load_streamflow = TRUE,
+    start_year_historical = 1991,
+    end_year_historical = 2020,
+    october_start = TRUE,
+    epsg = "EPSG:3579"
+)
+
+make_snowbull_map(
+    year = 2024,
+    month = 3,
+    statistic = "anomalies",
+    language = "English",
+    format = "ggplot",
+    param_name = "temperature, air",
+    snowbull_timeseries = dat,
+    con = con,
+    filename = "map.png"
+)
+
+
+snowBulletin(
+    year = 2025,
+    month = 3,
+    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
+    con = con
+)
 
 # con <- YGwater::AquaConnect(
 #     name = "aquacache",
@@ -19,14 +50,23 @@ snow_id <- DBI::dbGetQuery(
 
 bulletin_month <- 3
 bulletin_year <- 2024
+bulletin_scale <- 1
+language <- list(language = "English", abbrev = "en")
+start_year_historical <- 1991
+end_year_historical <- 2020
+
+
+month <- bulletin_month
+month_param <- bulletin_month
+year_param <- bulletin_year
+year <- bulletin_year
+scale <- 1
+scale_param <- 1
+
+
 epsg <- "EPSG:3005"
 
-snowBulletin(
-    year = 2024,
-    month = 3,
-    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
-    con = con
-)
+
 plot(dat$fdd$timeseries$data[, 'datetime'], dat$fdd$timeseries$data[, '489'])
 
 

@@ -1147,6 +1147,13 @@ download_continuous_ts <- function(
     )
 
     ts_ids <- unique(md_continuous$timeseries_id)
+
+    # Get corresponding location_ids for each timeseries_id
+    loc_ids <- md_continuous$location[match(
+        ts_ids,
+        md_continuous$timeseries_id
+    )]
+
     # Temporary list to hold per-station data.frames for latest-date calculation
     ts_list_temp <- vector("list", length(ts_ids))
     names(ts_list_temp) <- as.character(ts_ids)
@@ -1197,13 +1204,16 @@ download_continuous_ts <- function(
         ts_data$datetime <- as.POSIXct(ts_data$datetime, tz = "UTC")
         ts_data <- ts_data[order(ts_data$datetime), , drop = FALSE]
 
+        #TODO: fix aggreation for other parameters
+
+        aggr_fun <- get_aggr_fun(param_name = param_name)
         # Resample to daily or monthly as requested
         if (resolution == "daily") {
             ts_data$day <- as.Date(ts_data$datetime)
             ts_daily <- stats::aggregate(
                 value ~ day,
                 data = ts_data,
-                FUN = mean,
+                FUN = aggr_fun,
                 na.rm = TRUE
             )
             names(ts_daily) <- c("datetime", "value")
@@ -1238,7 +1248,7 @@ download_continuous_ts <- function(
 
         # Merge into master dataframe (wide format)
         # rename value column to station id
-        station_col <- as.character(ts_id)
+        station_col <- as.character(loc_ids[i])
         ts_wide <- ts_out
         names(ts_wide)[names(ts_wide) == "value"] <- station_col
 
@@ -1317,7 +1327,7 @@ download_continuous_ts <- function(
     )
 
     # add a key column to match the timeseries columns (this key is different for each datatype)
-    metadata_sf$key <- metadata_sf$timeseries_id
+    metadata_sf$key <- metadata_sf$location
 
     # Get coordinates for stations
     surveys_coords <- sf::st_coordinates(metadata_sf)
@@ -1617,11 +1627,11 @@ load_snowcourse_factors <- function(
 get_aggr_fun <- function(param_name) {
     switch(
         param_name,
-        precipitation = function(x) sum(x, na.rm = TRUE),
-        swe = function(x) mean(x, na.rm = TRUE),
-        temperature = function(x) mean(x, na.rm = TRUE),
-        fdd = function(x) sum(x, na.rm = TRUE),
-        function(x) mean(x, na.rm = TRUE)
+        'precipitation, total' = sum,
+        'snow water equivalent' = mean,
+        'temperature, air' = mean,
+        'fdd' = sum,
+        mean
     )
 }
 
@@ -1742,7 +1752,7 @@ get_norms <- function(
                     sum(!is.na(vals)) >=
                         completeness_per_aggr_period * length(vals)
                 ) {
-                    aggr_value <- aggr_fun(vals)
+                    aggr_value <- aggr_fun(vals, na.rm = TRUE)
                 } else {
                     aggr_value <- NA
                 }
@@ -1819,8 +1829,11 @@ get_bulletin_value <- function(
     )
     idx <- get_indices(param_name, ts, period$start_date, period$end_date)
 
+    # Calculate aggregated value for each station over the period
     station_current <- stats::setNames(
-        sapply(station_names, function(station) aggr_fun(ts[idx, station])),
+        sapply(station_names, function(station) {
+            aggr_fun(ts[idx, station], na.rm = TRUE)
+        }),
         station_names
     )
 
@@ -2290,7 +2303,7 @@ get_state_as_shp <- function(
     # Ensure data_stats vectors are named and match keys
     stats_df <- data.frame(
         key = key,
-        data = as.numeric(data_stats$current[key]),
+        value = as.numeric(data_stats$current[key]),
         relative_to_med = as.numeric(data_stats$relative_to_norm[key]),
         historic_median = as.numeric(data_stats$norm[key]),
         percentile = as.numeric(data_stats$percentiles[key]),
@@ -3448,7 +3461,7 @@ get_display_data <- function(
         seq_len(nrow(dataset_state)),
         function(i) {
             generate_popup_content(
-                swe = as.numeric(dataset_state$data[i]),
+                swe = as.numeric(dataset_state$value[i]),
                 relative_to_med = as.numeric(dataset_state$relative_to_med[i]),
                 historic_median = as.numeric(dataset_state$historic_median[i]),
                 name = as.character(dataset_state$name[i]),
@@ -3474,13 +3487,13 @@ get_display_data <- function(
         )
     }
 
-    dataset_state$value_to_show <- dataset_state[[statistic]]
+    dataset_state$display_value <- dataset_state[[statistic]]
 
     # Ensure all swe_at_* columns are numeric for each data frame
     to_numeric_cols <- function(df, cols) {
         for (col in cols) {
             if (col %in% names(df)) {
-                df[[col]] <- as.numeric(df[[col]])
+                df[[col]] <- round(as.numeric(df[[col]]), 0)
             }
         }
         df
@@ -3516,7 +3529,7 @@ get_display_data <- function(
         } else if (val >= 90 && val < 98) {
             dataset_state$preposition[i] <- "snowbull_rmd_close"
         } else if (val >= 98 && val < 103) {
-            dataset_state$preposition[i] <- "snowbull_rmd_normal"
+            dataset_state$preposition[i] <- "snowbull_rmd_no_preposition"
         } else if (val >= 103 && val < 110) {
             dataset_state$preposition[i] <- "snowbull_rmd_close"
         } else if (val >= 110 && val < 135) {
@@ -3528,10 +3541,19 @@ get_display_data <- function(
         }
     }
 
+    # Define the snowbull translation function
+    trb <- function(key) {
+        tr(
+            key,
+            lang = language,
+            translations = data$snowbull_translations
+        )
+    }
+
     # Translate the tags to the appropriate language
     dataset_state$preposition <- vapply(
         dataset_state$preposition,
-        function(tag) tr(tag, language),
+        function(tag) trb(tag),
         character(1)
     )
 
@@ -3547,7 +3569,7 @@ get_display_data <- function(
         function(i) {
             paste(
                 dataset_state$preposition[i],
-                tr(aggr_tag, language),
+                trb(aggr_tag),
                 sep = " "
             )
         },
@@ -3702,7 +3724,7 @@ make_leaflet_map <- function(
             leaflet::addPolygons(
                 data = poly_data,
                 fillColor = ~ get_state_style_elements(
-                    value_to_show,
+                    display_value,
                     dynamic_style_elements
                 ),
                 color = static_style_elements$basins$color,
@@ -3756,7 +3778,7 @@ make_leaflet_map <- function(
                 radius = static_style_elements$surveys$radius,
                 color = static_style_elements$surveys$color,
                 fillColor = ~ get_state_style_elements(
-                    value_to_show,
+                    display_value,
                     dynamic_style_elements
                 ),
                 weight = static_style_elements$surveys$weight,
@@ -3812,7 +3834,7 @@ make_leaflet_map <- function(
                 radius = static_style_elements$pillows$radius,
                 color = static_style_elements$pillows$color,
                 fillColor = ~ get_state_style_elements(
-                    value_to_show,
+                    display_value,
                     dynamic_style_elements
                 ),
                 weight = static_style_elements$pillows$weight,
@@ -3959,7 +3981,6 @@ make_leaflet_map <- function(
             selfcontained = TRUE
         )
     }
-
     return(m)
 }
 
@@ -4136,23 +4157,9 @@ make_ggplot_map <- function(
             size = static_style_elements$basins$weight * 0.25
         )
 
-    if (!is.null(poly_data)) {
-        p <- p +
-            shadowtext::geom_shadowtext(
-                data = basin_labels_df,
-                x = basin_labels_df$x,
-                y = basin_labels_df$y,
-                label = basin_labels_df$annotation,
-                size = 2.25,
-                fontface = "bold",
-                color = static_style_elements$basins$label$color,
-                bg.color = "white",
-                bg.r = 0.2
-            )
-    }
-
     if (!is.null(point_data)) {
-        point_data <- point_data[!is.na(point_data$historic_median), ]
+        point_data <<- point_data
+        point_data <- point_data[!is.na(point_data$value), ]
         p <- p +
             ggplot2::geom_point(
                 data = point_data,
@@ -4165,6 +4172,21 @@ make_ggplot_map <- function(
                 size = static_style_elements$surveys$radius / 1.5,
                 shape = 21,
                 stroke = static_style_elements$surveys$weight * 0.5
+            )
+    }
+
+    if (!is.null(poly_data)) {
+        p <- p +
+            shadowtext::geom_shadowtext(
+                data = basin_labels_df,
+                x = basin_labels_df$x,
+                y = basin_labels_df$y,
+                label = basin_labels_df$annotation,
+                size = 2.25,
+                fontface = "bold",
+                color = static_style_elements$basins$label$color,
+                bg.color = "white",
+                bg.r = 0.2
             )
     }
 
@@ -4503,9 +4525,9 @@ make_snowbull_map <- function(
     if (is.null(snowbull_timeseries)) {
         snowbull_timeseries <- load_bulletin_timeseries(
             con,
-            load_swe = param_name == "swe",
-            load_precip = param_name == "precipitation",
-            load_temp = param_name == "temperature",
+            load_swe = param_name == "snow water equivalent",
+            load_precip = param_name == "precipitation, total",
+            load_temp = param_name == "temperature, air",
             epsg = epsg,
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical
@@ -4523,17 +4545,17 @@ make_snowbull_map <- function(
     # This step organizes the loaded timeseries data into a consistent structure for mapping.
     timeseries_data <- switch(
         param_name,
-        "swe" = list(
+        "snow water equivalent" = list(
             poly_data = snowbull_timeseries$swe$basins,
             point_data = snowbull_timeseries$swe$surveys,
             point_data_secondary = snowbull_timeseries$swe$pillows
         ),
-        "precipitation" = list(
+        "precipitation, total" = list(
             poly_data = NULL,
             point_data = snowbull_timeseries$precipitation,
             point_data_secondary = NULL
         ),
-        "temperature" = list(
+        "temperature, air" = list(
             poly_data = NULL,
             point_data = snowbull_timeseries$temperature,
             point_data_secondary = NULL
@@ -4560,7 +4582,7 @@ make_snowbull_map <- function(
                 language = language
             )
             map_data[[data_type]]$fill_colour <- get_state_style_elements(
-                map_data[[data_type]]$value_to_show,
+                map_data[[data_type]]$display_value,
                 style_elements = dynamic_style_elements
             )
         }
@@ -4591,17 +4613,17 @@ make_snowbull_map <- function(
     }
 
     # Attach processed map data to bulletin_data by parameter type
-    if (param_name == "swe") {
+    if (param_name == "snow water equivalent") {
         bulletin_data$swe_basins <- remove_mapping_fields(map_data$poly_data)
         bulletin_data$swe_surveys <- remove_mapping_fields(map_data$point_data)
         bulletin_data$swe_pillows <- remove_mapping_fields(
             map_data$point_data_secondary
         )
-    } else if (param_name == "precipitation") {
+    } else if (param_name == "precipitation, total") {
         bulletin_data$precip_stations <- remove_mapping_fields(
             map_data$point_data
         )
-    } else if (param_name == "temperature") {
+    } else if (param_name == "temperature, air") {
         bulletin_data$temp_stations <- remove_mapping_fields(
             map_data$point_data
         )

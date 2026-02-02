@@ -181,7 +181,7 @@ mapSnowbull <- function(id, language) {
     })
 
     # --- Reactive for processed data and map output ---
-    map_output <- reactive({
+    map_output <- shiny::reactive({
       req(input$year, input$month)
 
       # get the 'current' data for the specified date, and create the popup data
@@ -216,7 +216,7 @@ mapSnowbull <- function(id, language) {
           map_data[[
             data_type
           ]]$fill_colour <- YGwater:::get_state_style_elements(
-            map_data[[data_type]]$value_to_show,
+            map_data[[data_type]]$display_value,
             style_elements = dynamic_style_elements
           )
         }

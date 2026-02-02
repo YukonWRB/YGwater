@@ -1,0 +1,77 @@
+id,description,English,Français
+titleCase,Sets language to use in titleCase function,en,fr
+jan,,January,janvier
+feb,,February,février
+mar,,March,mars
+apr,,April,avril
+may,,May,mai
+jun,,June,juin
+jul,,July,juillet
+aug,,August,aout
+sep,,September,septembre
+oct,,October,octobre
+nov,,November,novembre
+dec,,December,décembre
+snowbull_rmd_icethickness_thinner,,thinner than normal ice thickness,plus mince que la normale
+snowbull_rmd_icethickness_close,,close to normal ice thickness,près de l'épaisseur normale
+snowbull_rmd_icethickness_normal,,normal ice thickness,normale
+snowbull_rmd_icethickness_thicker,,thicker than normal ice thickness,plus épaisse que la normale
+snowbull_rmd_swe_abbrev,,SWE,ÉEN
+snowbull_rmd_datefmt,,%b %e,%e %b
+snowbull_rmd_well_below,,well below,très inférieur à 
+snowbull_rmd_below,,below,inférieur à 
+snowbull_rmd_close,,close to,près de 
+snowbull_rmd_no_preposition,,,dans 
+snowbull_rmd_above,,above, supérieur à 
+snowbull_rmd_well_above,,well above,très supérieur à 
+snowbull_rmd_no_data,,NO DATA,DONNEES MANQUANTES
+snowbull_rmd_average,,average, la moyenne
+snowbull_rmd_normal,, normal, la normale
+snowbull_basin_upper_yukon,,Upper Yukon,sup. du Yukon
+snowbull_basin_teslin_big_salmon,,Teslin / Big Salmon, Teslin / Big Salmon
+snowbull_basin_central_yukon,,Central Yukon,central du Yukon
+snowbull_basin_stewart,,Stewart,Stewart
+snowbull_basin_white,,White,White
+snowbull_basin_lower_yukon,,Lower Yukon,inf. du Yukon
+snowbull_basin_porcupine,,Porcupine,Porcupine
+snowbull_basin_peel,,Peel,Peel
+snowbull_basin_liard,,Liard,Liard
+snowbull_basin_alsek,,Alsek,Alsek
+snowbull_snowcourse_tagish,,Tagish,Tagish
+snowbull_snowcourse_wolfcreek,, Wolf Creek Subalpine, ruisseau Wolf
+snowbull_snowcourse_pelly,,Pelly Basin, bassin Pelly
+
+snowbull_plot_pillow_title ,,%s: %s Snow Water Equivalent,%s : Équivalent en eau de la neige - %s
+snowbull_plot_cddf_title,,%s: Cumulative Degree-Days of Freezing in %s,%s : Degrés-jours de gel cumulés à %s
+snowbull_plot_precip_title,,%s: %s Monthly Precipitation,%s : Précipitations mensuelles à %s
+snowbull_plot_snowcourse_title,,%s: %s Snow Course Data,%s : Relevés nivométriques - %s
+snowbull_plot_level_title,,%s: %s Lake Water Surface Elevation,%s : Niveau d'eau du %s
+snowbull_plot_flow_title,,%s: %s Streamflow,%s : Débit %s
+
+snowbull_met_whitehorse,,Whitehorse,Whitehorse
+snowbull_met_log_cabin,,Log Cabin (B.C.),Log Cabin (C.-B.)
+snowbull_met_wolf_creek,,Wolf Creek,ruisseau Wolf
+snowbull_met_tagish,, Tagish,Tagish
+snowbull_met_teslin,,Teslin,Teslin
+snowbull_met_carmacks,,Carmacks,Carmacks
+snowbull_met_dawson,,Dawson,Dawson
+snowbull_met_old_crow,,Old Crow,Old Crow
+snowbull_met_watson_lake,,Watson Lake,Watson Lake
+snowbull_met_twin_creeks,,Twin Creeks, ruisseaux Twin
+snowbull_met_faro,,Faro,Faro
+snowbull_met_withers_lake,,Whithers Lake,lac Whithers
+snowbull_met_mayo,,Mayo,Mayo
+snowbull_met_hyland,,Hyland River,rivière Hyland
+snowbull_flow_nordenskiold_river,,Nordenskiold River Discharge below Rowlinson Creek, Débit de la rivière Nordenskiold en aval du ruisseau Rowlinson
+snowbull_level_marsh_lake,,Marsh Lake,lac Marsh
+snowbull_level_lake_laberge,,Lake Laberge,lac Laberge
+snowbull_level_teslin_lake,,Teslin Lake,lac Teslin
+snowbull_flow_pelly_crossing,,Pelly River Discharge at Pelly Crossing,Débit de la rivière Pelly à Pelly Crossing
+snowbull_flow_stewart_river_outlet,,Stewart River Discharge at Outlet,Débit à l'embouchure de la rivière Stewart
+snowbull_flow_white_river_alaska_highway,,White River Discharge at Alaska Highway,Débit de la rivière White à la route de l'Alaska
+snowbull_flow_yukon_river_above_white,,Yukon River Discharge above White River,Débit du fleuve Yukon en amont de la rivière White
+snowbull_flow_klondike_above_bonanza_creek,,Klondike River Discharge above Bonanza Creek,Débit de la rivière Klondike en amont du ruisseau Bonanza
+snowbull_flow_porcupine_river_international_boundary,,Porcupine River Discharge at Border,Débit de la rivière Porcupine à la frontière
+snowbull_flow_peel,,Peel River Discharge, Débit de la rivière Peel
+snowbull_flow_liard_upper_crossing,,Liard River Discharge at Upper Liard,Débit de la rivière Liard à Upper Liard
+snowbull_flow_alsek_above_bates,,Alsek River Discharge above Bates,Débit du fleuve Alsek en amont de Bates
