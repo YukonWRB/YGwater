@@ -521,18 +521,19 @@ addContData <- function(id, language) {
         return(as.POSIXct(x, tz = "UTC"))
       }
       x <- as.character(x)
-      as.POSIXct(
-        x,
-        tz = "UTC",
-        tryFormats = c(
-          "%Y-%m-%d %H:%M:%S",
-          "%Y-%m-%d %H:%M",
-          "%Y/%m/%d %H:%M:%S",
-          "%Y/%m/%d %H:%M",
-          "%Y-%m-%dT%H:%M:%S",
-          "%Y-%m-%dT%H:%M"
-        )
-      )
+      # Switch T character with space for ISO like formats
+      x <- x <- gsub("T", " ", x)
+      
+      lubridate::parse_date_time(x, orders = c(
+        "Ymd HMS",
+        "Ymd HM",  
+        "mdY HMS",   
+        "mdY HM",
+        "Ymd IMS p", 
+        "mdY IMS p",
+        "Ymd IM p", 
+        "mdY IM p"
+      ), exact = FALSE, train = TRUE, tz = "UTC")
     }
 
     prepare_table_data <- function(df) {
