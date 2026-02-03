@@ -3439,8 +3439,7 @@ get_display_data <- function(
     dataset_state <- get_state_as_shp(
         data = dataset,
         year = year,
-        month = month,
-        language = language
+        month = month
     )
 
     # create a label with format parameter_geom_continuity (e.g., swe_point_continuous)
