@@ -78,7 +78,7 @@ plotOverlap(
 
 \item{unusable}{Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.}
 
-\item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
+\item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all", "last", or "none".}
 
 \item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
