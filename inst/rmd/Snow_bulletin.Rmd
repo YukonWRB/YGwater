@@ -7,6 +7,8 @@ params:
   language: language
   title_var: title_var
   reference_docx: reference_docx
+  start_year_historical: start_year_historical
+  end_year_historical: end_year_historical
   con: con
       
 editor_options: 
@@ -14,6 +16,7 @@ editor_options:
     wrap: 72
     
 title: "`r params$title_var`"
+
 
 date: "`r if (params$language == 'english') paste0(month.name[params$month],' 1, ', params$year) else paste0('Le 1^er^ ', c('janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre')[params$month],' ', params$year)`"
 ---
@@ -39,9 +42,49 @@ language <- list(
   abbrev = tolower(substr(language, 1, 2))
 )
 
-year_param <- year
-month_param <- month
-scale_param <- scale
+# Redefine translations function with bulletin translations.
+trb <- function(key) {
+  tr(key, lang = language$language, translations = data$snowbull_translations)
+}
+
+bulletin_year <- params$year
+bulletin_month <- params$month
+bulletin_scale <- params$scale
+start_year_historical <- params$start_year_historical
+end_year_historical <- params$end_year_historical
+
+preprocess_timeseries_data <- function(timeseries, bulletin_month, bulletin_year, start_year_historical, end_year_historical, october_start = TRUE, units) {
+  # Convert datetime to POSIXct
+  timeseries$datetime <- as.POSIXct(timeseries$datetime)
+
+  if (!"datetime" %in% names(timeseries)) {
+    stop("timeseries must contain a 'datetime' column")
+  }
+
+  station_cols <- setdiff(names(timeseries), "datetime")
+  station_cols <- station_cols[station_cols != ""]
+
+  if (length(station_cols) != 1) {
+    stop("timeseries must contain exactly one station column")
+  }
+
+  historical_period_idx <-
+    (timeseries$datetime >= paste0(start_year_historical - 1, "-10-01")) &
+      (timeseries$datetime <= paste0(end_year_historical, "-0", bulletin_month, "-01"))
+
+  bulletin_period_idx <-
+    (timeseries$datetime >= paste0(bulletin_year - 1, "-10-01")) &
+      (timeseries$datetime < paste0(bulletin_year, "-0", bulletin_month, "-01"))
+
+  timeseries <- timeseries[historical_period_idx | bulletin_period_idx, ]
+
+  ts <- data.frame(datetime = timeseries$datetime)
+  ts$year <- format(timeseries$datetime, "%Y")
+  ts$month <- format(timeseries$datetime, "%m")
+  ts$value <- timeseries[[station_cols]]
+  ts$units <- units
+  return(ts)
+}
 
 dat <- load_bulletin_timeseries(
   con = con,
@@ -49,56 +92,57 @@ dat <- load_bulletin_timeseries(
   load_temp = TRUE,
   load_precip = TRUE,
   load_streamflow = TRUE,
-  october_start = TRUE
+  start_year_historical = start_year_historical,
+  end_year_historical = end_year_historical,
+  october_start = TRUE,
+  epsg = "EPSG:3579"
 )
 
 pillows_table <- get_display_data(
   dataset = dat$swe$pillows,
-  year = year_param,
-  month = month_param,
+  year = bulletin_year,
+  month = bulletin_month,
   statistic = "relative_to_med"
 )
 
 basins_table <- get_display_data(
   dataset = dat$swe$basins,
-  year = year_param,
-  month = month_param,
+  year = bulletin_year,
+  month = bulletin_month,
   statistic = "relative_to_med"
 )
 
 precip_table <- get_display_data(
   dataset = dat$precipitation,
-  year = year_param,
-  month = month_param,
+  year = bulletin_year,
+  month = bulletin_month,
   statistic = "relative_to_med"
 )
 
 fdd_table <- get_display_data(
   dataset = dat$fdd,
-  year = year_param,
-  month = month_param,
+  year = bulletin_year,
+  month = bulletin_month,
   statistic = "relative_to_med"
 )
 
 level_table <- get_display_data(
   dataset = dat$water_level,
-  year = year_param,
-  month = month_param,
+  year = bulletin_year,
+  month = bulletin_month,
   statistic = "relative_to_med"
 )
 
 flow_table <- get_display_data(
   dataset = dat$water_flow,
-  year = year_param,
-  month = month_param,
+  year = bulletin_year,
+  month = bulletin_month,
   statistic = "relative_to_med"
 )
 
-
-
 month_names <- c("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 for (i in 1:12) {
-  month_names[i] <- tr(month_names[i], lang = language$language)
+  month_names[i] <- trb(month_names[i])
 }
 
 # Define titles
@@ -188,26 +232,41 @@ textColour <- function(relative_to_med) {
 
 #### ------------------------- Conditional text --------------------------- ####
 iceThickness <- function(cddf) {
+  if (missing(cddf)) {
+    stop("cddf argument is missing")
+  }
+
+  if (length(cddf) == 0) {
+    return(NA)
+  }
   if (is.na(cddf)) {
     ice_thickness <- NA
   } else if (cddf < 90) {
-    ice_thickness <- tr("snowbull_rmd_icethickness_thinner", lang = language$language)
+    ice_thickness <- trb("snowbull_rmd_icethickness_thinner")
   } else if (cddf >= 90 && cddf < 98) {
-    ice_thickness <- tr("snowbull_rmd_icethickness_close", lang = language$language)
+    ice_thickness <- trb("snowbull_rmd_icethickness_close")
   } else if (cddf >= 98 && cddf <= 102) {
-    ice_thickness <- tr("snowbull_rmd_icethickness_normal", lang = language$language)
+    ice_thickness <- trb("snowbull_rmd_icethickness_normal")
   } else if (cddf >= 103 && cddf <= 109) {
-    ice_thickness <- tr("snowbull_rmd_icethickness_close", lang = language$language)
+    ice_thickness <- trb("snowbull_rmd_icethickness_close")
   } else if (cddf >= 110) {
-    ice_thickness <- tr("snowbull_rmd_icethickness_thicker", lang = language$language)
+    ice_thickness <- trb("snowbull_rmd_icethickness_thicker")
   }
   return(ice_thickness)
 }
 
 #### -------------------- A: snow scale/pillow plots ---------------------- ####
-snowbullpillow <- function(location, custom_title, year, month, language = "en", scale = scale_param) {
+snowbullpillow <- function(timeseries, loc_name, location_id, year = bulletin_year, month = bulletin_month, language = language, scale = bulletin_scale, subplot = "") {
+  custom_title <- sprintf(
+    trb("snowbull_plot_pillow_title"),
+    paste("A", subplot),
+    loc_name
+  )
+
+
   plot <- ggplotOverlap(
-    location = location,
+    location = location_id,
+    continuous_data = timeseries,
     parameter = "snow water equivalent",
     startDay = paste0(year, "-09-01"),
     endDay = paste0(year, "-07-01"),
@@ -228,7 +287,7 @@ snowbullpillow <- function(location, custom_title, year, month, language = "en",
   )
   plot <- plot + ggplot2::theme(legend.position = "none")
 
-  plot <- plot + ggplot2::labs(y = paste(tr("snowbull_rmd_swe_abbrev", lang = language$language), "(mm)"))
+  plot <- plot + ggplot2::labs(y = paste(trb("snowbull_rmd_swe_abbrev"), " (mm)"))
 
 
   return(plot)
@@ -239,17 +298,17 @@ snowbullpillow <- function(location, custom_title, year, month, language = "en",
 snowbullpillow2 <- function(location_pil,
                             location_surv,
                             custom_title,
-                            language = language$abbrev,
-                            year = year_param,
-                            scale = scale_param,
-                            month = month_param) {
+                            language = language,
+                            year = bulletin_year,
+                            scale = bulletin_scale,
+                            month = bulletin_month) {
   # Get this years snow pillow
   snow_p <- DBI::dbGetQuery(con, paste0(
     "SELECT date, value FROM measurements_calculated_daily_corrected ",
     "WHERE timeseries_id = ", location_pil,
-    " AND date >= '", year - 1, "-09-01' ", # year_param
+    " AND date >= '", year - 1, "-09-01' ", # bulletin_year
     "AND date <= '", year, "-0", month, "-01' "
-  )) # year_param
+  )) # bulletin_year
   snow_p$date <- as.POSIXct(snow_p$date)
   if (max(snow_p$date) > paste0(format(Sys.Date(), "%Y-%m"), "-01")) {
     snow_p[snow_p$date > paste0(format(Sys.Date(), "%Y-%m"), "-01"), ]$value <- NA
@@ -259,7 +318,7 @@ snowbullpillow2 <- function(location_pil,
   snow_s <- DBI::dbGetQuery(con, paste0("SELECT s.target_datetime, r.result AS value FROM results r
                                       JOIN samples s ON r.sample_id = s.sample_id
                                       WHERE s.location_id = ", location_surv, " AND r.parameter_id = 21"))
-  snow_s$fake_date <- as.Date(paste0(year, "-", format(snow_s$target_datetime, "%m-%d"))) # params$year
+  snow_s$fake_date <- as.Date(paste0(year, "-", format(snow_s$target_datetime, "%m-%d"))) # bulletin_year
   # Only keep those for March, April, May
   snow_s <- snow_s[format(snow_s$fake_date, "%m-%d") %in% c("03-01", "04-01", "05-01"), ]
   # Calculate stats
@@ -275,7 +334,7 @@ snowbullpillow2 <- function(location_pil,
   snow_s$fake_date <- as.POSIXct(snow_s$fake_date)
   plot_scale <- scale
 
-  labs <- tr("snowbull_rmd_datefmt", lang = language$language)
+  labs <- trb("snowbull_rmd_datefmt")
 
   # Define a custom date labeling function
   custom_date_labels <- function(x) {
@@ -309,7 +368,7 @@ snowbullpillow2 <- function(location_pil,
     ggplot2::scale_color_manual(name = "", labels = c("Maximum", "Median", "Minimum"), values = c("#0097A9", "#7A9A01", "#834333")) +
     ggplot2::theme(legend.position = "none") +
     ggplot2::theme(axis.title.y = ggplot2::element_text(size = 12 * plot_scale), axis.text.x = ggplot2::element_text(size = 11 * plot_scale), axis.text.y = ggplot2::element_text(size = 11 * plot_scale), plot.title = ggplot2::element_text(hjust = 0.05, size = 12 * plot_scale, face = "bold")) +
-    ggplot2::labs(x = NULL, y = paste(tr("snowbull_rmd_swe_abbrev", lang = language$language), "(mm)"), title = custom_title)
+    ggplot2::labs(x = NULL, y = paste(trb("snowbull_rmd_swe_abbrev"), "(mm)"), title = custom_title)
 
 
   return(plot)
@@ -317,15 +376,42 @@ snowbullpillow2 <- function(location_pil,
 
 
 #### ------------- B: Function to create basin SWE boxplots --------------- ####
-snowbullSWE <- function(loc, basin, year, month, swe_basins, custom_title, scale = scale_param, language) {
+snowbullSWE <- function(
+  timeseries,
+  loc_name,
+  year = bulletin_year,
+  month = bulletin_month,
+  scale = bulletin_scale,
+  language = language,
+  start_year_historical = start_year_historical,
+  end_year_historical = end_year_historical,
+  subplot = ""
+) {
   # Subset data
-  swe_basin <- swe_basins[swe_basins$location == basin, ]
-  swe_basin$datetime <- as.POSIXct(swe_basin$datetime)
+  # swe_basin <- swe_basins[swe_basins$location == basin, ]
+  # swe_basin$datetime <- as.POSIXct(swe_basin$datetime)
   # Remove data later than the requested year and month
-  swe_basin <- swe_basin[swe_basin$datetime < paste0(year, "-0", month, "-15"), ]
+  # swe_basin <- swe_basin[swe_basin$datetime < paste0(year, "-0", month, "-15"), ]
   # Plot
-  plot <- hydrometDiscrete(
-    location = loc,
+
+
+  custom_title <- sprintf(
+    trb("snowbull_plot_snowcourse_title"),
+    paste("B", subplot),
+    loc_name
+  )
+
+  ts <- preprocess_timeseries_data(
+    timeseries = timeseries,
+    bulletin_month = month,
+    bulletin_year = year,
+    start_year_historical = start_year_historical,
+    end_year_historical = end_year_historical,
+    october_start = TRUE,
+    units = "mm"
+  )
+
+  p <- hydrometDiscrete(
     parameter = "SWE",
     startDay = 1,
     tzone = "MST",
@@ -333,50 +419,73 @@ snowbullSWE <- function(loc, basin, year, month, swe_basins, custom_title, scale
     title = TRUE,
     custom_title = custom_title,
     plot_type = "linedbox",
-    save_path = NULL,
-    discrete_data = swe_basin,
+    save_path = "",
+    discrete_data = ts,
     con = con,
-    plot_scale = scale,
-    lang = language$abbrev
+    plot_scale = scale
   )
 
-  plot <- plot + ggplot2::theme(legend.position = "none")
-  plot <- plot + ggplot2::labs(y = tr("snowbull_rmd_swe_abbrev", lang = language$language), "(mm)")
+  p <- p + ggplot2::theme(legend.position = "none")
+  p <- p + ggplot2::labs(y = paste(trb("snowbull_rmd_swe_abbrev"), "(mm)", sep = " "))
 
-  return(plot)
+  return(p)
 }
 
 #### ------------- C: Function to create monthly precip plots ------------- ####
-snowBullPrecip <- function(tsid, year, scale = scale_param, custom_title, language, month = month_param) {
-  tab <- DBI::dbGetQuery(con, paste0(
-    "SELECT timeseries_id, datetime, value_corrected AS value, period, imputed FROM measurements_continuous_corrected WHERE timeseries_id = ", tsid,
-    " AND datetime >= '", year - 40, "-10-01'",
-    " AND datetime <= '", year, "-0", month_param, "-02'"
-  ))
+snowBullPrecip <- function(
+  timeseries,
+  loc_name,
+  language = language,
+  year = bulletin_year,
+  month = bulletin_month,
+  subplot = "",
+  start_year_historical = start_year_historical,
+  end_year_historical = end_year_historical
+) {
+  ts <- preprocess_timeseries_data(
+    timeseries = timeseries,
+    bulletin_month = month,
+    bulletin_year = year,
+    start_year_historical = start_year_historical,
+    end_year_historical = end_year_historical,
+    october_start = TRUE,
+    units = "mm",
+  )
 
-  attr(tab$datetime, "tzone") <- "MST"
-  tab$month <- format(tab$datetime, "%m")
-  tab$year <- format(tab$datetime, "%Y")
-  tab$units <- "mm"
+  # Create plot C
+  custom_title <- sprintf(
+    trb("snowbull_plot_precip_title"),
+    paste("C", subplot),
+    loc_name
+  )
 
-  if (language$abbrev == "fr") {
-    custom_title <- paste0("C : Précipitations mensuelles à ", custom_title)
-  } else {
-    custom_title <- paste0("C: ", custom_title, " Monthly Precipitation")
-  }
+  ts_monthly <- stats::aggregate(
+    value ~ year + month,
+    data = ts,
+    FUN = sum,
+    na.rm = FALSE
+  )
+
+
+  ts_monthly$datetime <- as.POSIXct(
+    paste0(ts_monthly$year, "-", ts_monthly$month, "-01"),
+    tz = "UTC"
+  )
+
+  ts_monthly$units <- "mm"
 
   plot <- hydrometDiscrete(
-    location = NULL, parameter = "Total precipitation",
+    parameter = "Total precipitation",
     tzone = "MST",
-    years = year - 1,
-    startDay = "2023-10-01",
-    endDay = "2024-05-01",
+    years = bulletin_year - 1,
+    startDay = "2024-10-01",
+    endDay = "2025-03-01",
     title = TRUE,
     custom_title = custom_title,
     plot_type = "linedbox",
-    plot_scale = scale,
+    plot_scale = bulletin_scale,
     save_path = NULL,
-    discrete_data = tab,
+    discrete_data = ts_monthly,
     con = con,
     lang = language$abbrev
   )
@@ -486,28 +595,42 @@ getCDDF <- function(temps, year) {
 }
 
 # Function to create CDDF plots
-snowbullCDDF <- function(timeseries_id,
-                         custom_title, language = "en",
-                         year = year_param,
-                         month = month_param,
-                         scale = scale_param) {
-  data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", timeseries_id, " AND datetime <= '", year, "-0", month, "-01' "))
+snowbullCDDF <- function(timeseries, loc_name, language, subplot = "") {
+  # data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", timeseries_id, " AND datetime <= '", year, "-0", month, "-01' "))
 
-  data <- getCDDF(data, year)
+  # data <- getCDDF(data, year)
 
-  # Make sure there's a data point for the first of the month
-  min_dt <- min(data$datetime)
-  if (min_dt > as.POSIXct(paste0(lubridate::year(min_dt), "-09-01 00:00"), tz = "UTC")) {
-    add <- data.frame(datetime = as.POSIXct(paste0(lubridate::year(min_dt), "-09-01 00:00"), tz = "UTC"), value = 0)
-    data <- rbind(data, add)
+  # # Make sure there's a data point for the first of the month
+  # min_dt <- min(data$datetime)
+  # if (min_dt > as.POSIXct(paste0(lubridate::year(min_dt), "-09-01 00:00"), tz = "UTC")) {
+  #   add <- data.frame(datetime = as.POSIXct(paste0(lubridate::year(min_dt), "-09-01 00:00"), tz = "UTC"), value = 0)
+  #   data <- rbind(data, add)
+  # }
+
+  # # Set title based on language
+  custom_title <- sprintf(
+    trb("snowbull_plot_cddf_title"),
+    paste("D", subplot),
+    loc_name
+  )
+
+  # ensure datetime column exists
+  if ("datetime" %notin% names(timeseries)) {
+    stop("timeseries must contain 'datetime'")
   }
 
-  # Set title based on language
-  if (language$abbrev == "fr") {
-    custom_title <- paste0("D : Degrés-jours de gel cumulés à ", custom_title)
-  } else {
-    custom_title <- paste0("D: Cumulative Degree-Days of Freezing in ", custom_title)
+  # ensure only one non-datetime column
+  if (length(setdiff(names(timeseries), "datetime")) != 1) {
+    stop("timeseries must contain exactly one station column besides 'datetime'")
   }
+  # enforce datetime as first column
+  timeseries <- timeseries[, c("datetime", setdiff(names(timeseries), "datetime"))]
+
+  # rename columns and remove NA
+  colnames(timeseries) <- c("datetime", "value")
+  timeseries <- timeseries[!is.na(timeseries$value), ]
+  timeseries$datetime <- as.POSIXct(timeseries$datetime)
+
 
   plot <- ggplotOverlap(
     parameter = "CDDF",
@@ -519,14 +642,14 @@ snowbullCDDF <- function(timeseries_id,
     custom_title = custom_title,
     returns = "none",
     allowed_missing = 10,
-    line_scale = scale,
-    axis_scale = scale,
-    legend_scale = scale,
+    line_scale = bulletin_scale,
+    axis_scale = bulletin_scale,
+    legend_scale = bulletin_scale,
     save_path = NULL,
     con = con,
-    continuous_data = data,
+    continuous_data = timeseries,
     snowbulletin = TRUE,
-    lang = language,
+    lang = language$abbrev,
     gridy = FALSE,
     gridx = FALSE,
     historic_range = "last"
@@ -543,13 +666,21 @@ snowbullCDDF <- function(timeseries_id,
 }
 
 #### --------- E: Function to create lake level snow bulletin plots ------- ####
-snowbullWater <- function(location, parameter, year, custom_title, scale, language = "en") {
-  flood <- data$flow_level_flood
+snowbullWater <- function(timeseries, parameter, year, location_id, loc_name, scale, subplot = "", language = "en") {
+  # flood <- data$flow_level_flood
+
+  custom_title <- sprintf(
+    trb("snowbull_plot_level_title"),
+    paste("E", subplot),
+    loc_name
+  )
+
   tryCatch(
     {
       plot <-
         ggplotOverlap(
-          location = location,
+          location_id = location_id,
+          continuous_data = timeseries,
           parameter = parameter,
           startDay = paste0(year, "-10-01"),
           endDay = paste0(as.character(as.numeric(year) + 1), "-09-30"),
@@ -562,42 +693,42 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
           axis_scale = scale * 0.9,
           legend_scale = scale * 0.9,
           snowbulletin = TRUE,
-          lang = language,
+          lang = language$abbrev,
           gridx = FALSE,
           gridy = FALSE,
           historic_range = "last"
         )
 
-      if (exists("flood") &
-        !is.null(flood) & parameter %in% c("water level", "flow")) {
-        if (parameter == "water level") {
-          plot <- plot +
-            ggplot2::geom_hline(
-              yintercept = dplyr::filter(flood, ID == location)$Flood_level_asl,
-              linetype = "dashed",
-              color = "red",
-              size = 1
-            )
-          if (language$abbrev == "fr") {
-            plot <- plot + ggplot2::labs(y = "Niveau d'eau (m)")
-          }
-        } else {
-          plot <- plot +
-            ggplot2::geom_hline(
-              yintercept = dplyr::filter(flood, ID == location)$Flood_flow,
-              linetype = "dashed",
-              color = "red",
-              size = 1
-            ) +
-            ggplot2::scale_y_log10()
+      # if (exists("flood") &
+      #   !is.null(flood) & parameter %in% c("water level", "flow")) {
+      #   if (parameter == "water level") {
+      #     plot <- plot +
+      #       ggplot2::geom_hline(
+      #         yintercept = dplyr::filter(flood, ID == location)$Flood_level_asl,
+      #         linetype = "dashed",
+      #         color = "red",
+      #         size = 1
+      #       )
+      #     if (language$abbrev == "fr") {
+      #       plot <- plot + ggplot2::labs(y = "Niveau d'eau (m)")
+      #     }
+      #   } else {
+      #     plot <- plot +
+      #       ggplot2::geom_hline(
+      #         yintercept = dplyr::filter(flood, ID == location)$Flood_flow,
+      #         linetype = "dashed",
+      #         color = "red",
+      #         size = 1
+      #       ) +
+      #       ggplot2::scale_y_log10()
 
-          if (language$abbrev == "fr") {
-            plot <- plot + ggplot2::labs(y = expression(paste("Débit (", m^3, "/s)")))
-          }
-        }
-      } else {
-        plot <- plot
-      }
+      #     if (language$abbrev == "fr") {
+      #       plot <- plot + ggplot2::labs(y = expression(paste("Débit (", m^3, "/s)")))
+      #     }
+      #   }
+      # } else {
+      #   plot <- plot
+      # }
 
       plot <- plot + ggplot2::theme(legend.position = "none")
 
@@ -613,7 +744,7 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
 ```{r SWEbasins, include=FALSE, eval=TRUE}
 # # Get SWE data for basins
 # swe_basins <- SWE_basin(
-#   year = year_param,
+#   year = bulletin_year,
 #   month = c(3, 4, 5),
 #   threshold = 6,
 #   csv = FALSE,
@@ -625,8 +756,8 @@ snowbullWater <- function(location, parameter, year, custom_title, scale, langua
 # swe_basins$datetime <- paste0(swe_basins$year, "-0", swe_basins$month, "-01")
 # Get stats for text
 # stats <- snowBulletinStats(
-#   year = year_param,
-#   month = month_param,
+#   year = bulletin_year,
+#   month = bulletin_month,
 #   excel_output = FALSE,
 #   con = con
 # )
@@ -806,8 +937,8 @@ paste0(
 "[Yukon.ca/snow-survey](https://yukon.ca/snow-survey)\n\n",
 "ISSN 1705-883X\n\n",
 "Reference to this report should be made in the following form:  \n",
-"Yukon Snow Survey Bulletin and Water Supply Forecast, ", month_names[params$month], " 1 ", params$year, "\n\n",
-"\u00A9 ", month_names[params$month], " ", params$year, "  \n",
+"Yukon Snow Survey Bulletin and Water Supply Forecast, ", month_names[bulletin_month], " 1 ", bulletin_year, "\n\n",
+"\u00A9 ", month_names[bulletin_month], " ", bulletin_year, "  \n",
 "Water Resources Branch  \n",
 "Department of Environment  \n",
 "Government of Yukon  \n",
@@ -823,8 +954,8 @@ paste0(
 "On peut consulter le présent bulletin et les bulletins précédents au [Yukon.ca/fr/releves-nivometriques](https://yukon.ca/fr/releves-nivometriques)\n\n",
 "ISSN 1705-883X\n\n",
 "Veuillez utiliser le titre suivant pour citer le présent document :  \n",
-"*Bulletin des relevés nivométriques et des prévisions hydrologiques du Yukon,  1^er^ ", month_names[params$month], " ", params$year, "*\n\n",
-"\u00A9 ", month_names[params$month], " ", params$year, "  \n",
+"*Bulletin des relevés nivométriques et des prévisions hydrologiques du Yukon,  1^er^ ", month_names[bulletin_month], " ", bulletin_year, "*\n\n",
+"\u00A9 ", month_names[bulletin_month], " ", bulletin_year, "  \n",
 "Direction des ressources en eau  \n",
 "Ministère de l’Environnement  \n",
 "Gouvernement du Yukon  \n",
@@ -971,15 +1102,17 @@ Le débit hivernal des cours d’eau et le niveau des lacs sont présentés pour
 # Plot SWE
 tryCatch(
   {
-    make_snowbull_map(
-      year = year_param,
-      month = month_param,
+    ret <- make_snowbull_map(
+      year = bulletin_year,
+      month = bulletin_month,
       statistic = "anomalies",
-      language = language,
+      language = language$language,
       format = "ggplot",
-      param_name = "temperature",
+      param_name = "temperature, air",
+      snowbull_timeseries = dat,
       con = con
     )
+    ret$map
   },
   error = function(e) {
     cat("Map generation error: ", e$message, "\n")
@@ -995,15 +1128,17 @@ tryCatch(
 # Plot SWE
 tryCatch(
   {
-    make_snowbull_map(
-      year = year_param,
-      month = month_param,
+    ret <- make_snowbull_map(
+      year = bulletin_year,
+      month = bulletin_month,
       statistic = "relative_to_med",
-      language = language,
+      language = language$language,
       format = "ggplot",
-      param_name = "precip",
-      con = con
+      param_name = "precipitation, total",
+      con = con,
+      snowbull_timeseries = dat
     )
+    ret$map
   },
   error = function(e) {
     cat("Map generation error: ", e$message, "\n")
@@ -1020,15 +1155,17 @@ tryCatch(
 # Plot SWE
 tryCatch(
   {
-    make_snowbull_map(
-      year = year_param,
-      month = month_param,
+    ret <- make_snowbull_map(
+      year = bulletin_year,
+      month = bulletin_month,
       statistic = "relative_to_med",
-      language = language,
+      language = language$language,
       format = "ggplot",
-      param_name = "swe",
+      param_name = "snow water equivalent",
+      snowbull_timeseries = dat,
       con = con
     )
+    ret$map
   },
   error = function(e) {
     cat("Map generation error: ", e$message, "\n")
@@ -1036,19 +1173,9 @@ tryCatch(
 )
 ```
 
-`r basin_swe <- basins_table[basins_table$name == "Upper_Yukon", ]`
-`r pillow_ta <- pillows_table[pillows_table$basin == "09AA-M1", ]`
-`r pillow_lc <- pillows_table[pillows_table$basin == "09AA-M2", ]`
-`r pillow_wc <- pillows_table[pillows_table$basin == "29AB-M3", ]`
 
-# `r titles$UPPER_YUKON`
-`r if (language$abbrev == "en") "The Upper Yukon River Basin snowpack is " else "L’accumulation de neige dans le bassin supérieur du fleuve Yukon est "`
-`r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
-`r if (language$abbrev == "en") {
-paste0("At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillow_ta$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A1) while at Wolf Creek Subalpine Meteorological Station, SWE is estimated to be **", pillow_wc$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A2). Established in 2023, Log Cabin Meteorological Station registered SWE at **", pillow_lc$relative_to_med, "%** of the historical median when compared with the manual snow survey record for that site (Figure", knitr::asis_output("\U00A0"), "A3). The Upper Yukon basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B)." )
-} else {
-paste0("À la station météorologique de Tagish, l’équivalent en eau de la neige (EEN) est estimé à **", pillow_ta$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A1), tandis qu’à la station subalpine du ruisseau Wolf, il est estimé à **", pillow_wc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A2). Installé en 2023, la station météorologique de Log Cabin a enregistré un EEN de **", pillow_lc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique si l’on compare avec les archives du relevé manuel de l’enneigement pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A3). L’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** au 1^er^ ", month_names[params$month], " (figure", knitr::asis_output("\U00A0"), "B)." )
-}`
+
+
 
 ```{r Upper Yukon, echo=FALSE}
 # Run or don't run following chunks
@@ -1057,7 +1184,30 @@ if ("Upper Yukon" %in% params$basins) {
 } else {
   include <- FALSE
 }
+
+basin_name <- "Upper_Yukon"
+
+met_name_ta <- "Tagish Meteorological" # Tagish
+met_name_lc <- "Log Cabin Meteorological" # Log Cabin
+met_name_wc <- "Wolf Creek Buckbrush Taiga Meteorological" # Wolf Creek
+
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+pillow_ta <- pillows_table[pillows_table$name == met_name_ta, ]
+pillow_lc <- pillows_table[pillows_table$name == met_name_lc, ]
+pillow_wc <- pillows_table[pillows_table$name == met_name_wc, ]
 ```
+
+# `r titles$UPPER_YUKON`
+
+`r if (language$abbrev == "en") "The Upper Yukon River Basin snowpack is " else "L’accumulation de neige dans le bassin supérieur du fleuve Yukon est "`
+`r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
+`r if (language$abbrev == "en") {
+paste0("At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillow_ta$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A1) while at Wolf Creek Subalpine Meteorological Station, SWE is estimated to be **", pillow_wc$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A2). Established in 2023, Log Cabin Meteorological Station registered SWE at **", pillow_lc$relative_to_med, "%** of the historical median when compared with the manual snow survey record for that site (Figure", knitr::asis_output("\U00A0"), "A3). The Upper Yukon basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B)." )
+} else {
+paste0("À la station météorologique de Tagish, l’équivalent en eau de la neige (EEN) est estimé à **", pillow_ta$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A1), tandis qu’à la station subalpine du ruisseau Wolf, il est estimé à **", pillow_wc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A2). Installé en 2023, la station météorologique de Log Cabin a enregistré un EEN de **", pillow_lc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique si l’on compare avec les archives du relevé manuel de l’enneigement pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A3). L’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** au 1^er^ ", month_names[bulletin_month], " (figure", knitr::asis_output("\U00A0"), "B)." )
+}`
+
+
 
 ```{r UpperYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # r UpperYukonRiver_Snow, echo=FALSE, eval=include, out.width='.49\\linewidth', fig.width=4, fig.height=3,fig.show='hold',fig.align='center'
@@ -1065,15 +1215,23 @@ graphics::par(mfrow = c(1, 2))
 
 ## A1 Tagish
 # Set station ID
-station_id <- "09AA-M1"
+
+
+# custom_title <- sprintf(trb("snowbull_plot_pillow_title", language=language$language), "A1", tr(snowbull_snowcourse_tagish, language=language$language))
+
 # Plot SWE
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullpillow(location = station_id, custom_title = "A1 : Équivalent en eau de la neige - Tagish", year = year_param, month = month_param, language = "fr")
-    } else {
-      snowbullpillow(location = station_id, custom_title = "A1: Tagish Snow Water Equivalent", year = year_param, month = month_param, language = "en")
-    }
+    snowbullpillow(
+      timeseries = dat$swe$timeseries$data[, c("datetime", as.character(pillow_ta$met_id))],
+      location_id = pillow_ta$location_id,
+      year = bulletin_year,
+      month = bulletin_month,
+      subplot = "1",
+      loc_name = trb("snowbull_met_tagish"),
+      language = language,
+      scale = bulletin_scale
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1082,16 +1240,19 @@ tryCatch(
 
 
 ## A2 Wolf Creek
-# Set station ID
-station_id <- "29AB-M3"
+
+
+# custom_title <- sprintf(trb("snowbull_plot_pillow_title", language=language$language), "A2", tr(swe_basin, language=language$language))
 # Plot SWE
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullpillow(location = station_id, custom_title = "A2 : Équivalent en eau de la neige - ruisseau Wolf", year = year_param, month = month_param, language = "fr")
-    } else {
-      snowbullpillow(location = station_id, custom_title = "A2: Wolf Creek Subalpine Snow Water Equivalent", year = year_param, month = month_param, language = "en")
-    }
+    snowbullpillow(
+      timeseries = dat$swe$timeseries$data[, c("datetime", as.character(pillow_wc$met_id))],
+      loc_name = trb("snowbull_met_wolf_creek"),
+      location_id = pillow_wc$location_id,
+      subplot = "2",
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1102,14 +1263,23 @@ tryCatch(
 ```{r UpperYukon_basin, echo=FALSE, eval=include, out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 
+custom_title <- sprintf(
+  trb("snowbull_plot_pillow_title"),
+  "A3",
+  trb("snowbull_met_log_cabin")
+)
+
 ## A3: Log Cabin
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullpillow2(location_pil = 649, location_surv = 46, custom_title = "A3 : Équivalent en eau de la neige - Log Cabin (C.-B.)", year = year_param, scale = scale_param)
-    } else {
-      snowbullpillow2(location_pil = 649, location_surv = 46, custom_title = "A3: Log Cabin (B.C) Snow Water Equivalent", year = year_param, scale = scale_param)
-    }
+    snowbullpillow2(
+      location_pil = 649,
+      location_surv = 46,
+      custom_title = custom_title,
+      year = bulletin_year,
+      scale = bulletin_scale,
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1120,40 +1290,51 @@ tryCatch(
 # Plotting
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Upper Yukon", basin = "Upper_Yukon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin sup. du Yukon", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Upper Yukon", basin = "Upper_Yukon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Upper Yukon Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc = basin_name,
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)],
+      year = bulletin_year,
+      month = bulletin_month,
+      language = language,
+      scale = bulletin_scale,
+      start_year_historical = start_year_historical,
+      end_year_historical = end_year_historical
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-`r precip <- precip_table[precip_table$location == 48168,]`
-`r fdd <- fdd_table[fdd_table$location == 48168, ]`
+
+
+```{r, echo=FALSE}
+loc_name <- "Whitehorse"
+met_name <- "Whitehorse ECCC Meteorological" # 48168
+precip <- precip_table[precip_table$name == met_name, ]
+fdd <- fdd_table[fdd_table$name == met_name, ]
+```
+
+
 
 `r if (language$abbrev == "en") "Whitehorse precipitation has been " else "Les précipitations à Whitehorse ont été "`
 `r officer::ftext(precip$description, textColour(precip$relative_to_med))`. 
 `r if (language$abbrev == "en") {
-paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
+paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else  {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
-}
+paste0("d’octobre à ", month_names[bulletin_month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[bulletin_month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+}`
 
 ```{r UpperYukon_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", warnings=FALSE, fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 # Plot C
+
 tryCatch(
   {
-    snowBullPrecip(663, year_param, scale_param, "Whitehorse", language = language)
+    snowBullPrecip(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_whitehorse")
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1163,24 +1344,37 @@ tryCatch(
 # Plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 484, custom_title = "Whitehorse", language = substr(language, 1, 2))
+    snowbullCDDF(
+      timeseries = dat$cddf$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_whitehorse"),
+      location_id = fdd$location_id
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-`r level <- level_table[level_table$location == "09AB004",]`
+
+```{r, echo=FALSE}
+hydro_id_ml <- "09AB004"
+hydro_id_ll <- "09AB010"
+
+hydro_name_ml <- "Marsh Lake Near Whitehorse"
+hydro_name_ll <- "Lake Laberge Near Whitehorse"
+
+level_ml <- level_table[level_table$name == hydro_name_ml, ]
+level_ll <- level_table[level_table$name == hydro_name_ll, ]
+```
 
 `r if (language$abbrev == "en") "The measured water surface elevation (relative to sea level) in Marsh Lake is currently" else "Le niveau d'eau (par rapport au niveau de la mer) du lac Marsh est"`
-`r officer::ftext(level$description, textColour(level$relative_to_med))`
+`r officer::ftext(level_ml$description, textColour(level_ml$relative_to_med))`
 `r if (language$abbrev == "en") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "E1). The current snow and groundwater conditions suggest that water levels will be  ------  average this summer. However, weather conditions over the spring and summer will determine the peak water level in Marsh Lake, which typically occurs in late summer in response to peak glacial runoff and large precipitation events. Lake Laberge level is currently ")
 } else {
 paste0("(figure", knitr::asis_output("\U00A0"), "E1). Les conditions d'enneigement actuelles et des eaux souterraines portent à croire que les niveaux d'eau seront ------ la moyenne cet été. Toutefois, les conditions météorologiques printanières et estivales détermineront le niveau d'eau maximal du lac Marsh, qui est habituellement atteint à la fin de l'été sous l'effet d'un ruissellement glaciaire maximal et  de fortes précipitations. Le niveau du lac Laberge est actuellement ")
 }`
-`r level <- level_table[level_table$location == "09AB004",]`
-`r officer::ftext(level$description, textColour(level$relative_to_med))`
+`r officer::ftext(level_ll$description, textColour(level_ll$relative_to_med))`
 `r if(language$abbrev == "en") {
 paste0(" (Figure", knitr::asis_output("\U00A0"), "E2). Lake Laberge follows a similar summer pattern to the upper Southern Lakes and is expected to experience  ------  average water levels this summer.")
 } else {
@@ -1190,22 +1384,18 @@ paste0(" (figure", knitr::asis_output("\U00A0"), "E2). L’été, le lac Laberge
 ```{r MarshLake, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E1
 # Set station ID
-station_id <- "09AB004"
-if (language$abbrev == "fr") {
-  custom_title <- "E1 : Niveau d'eau du lac Marsh"
-} else {
-  custom_title <- "E1: Marsh Lake Water Surface Elevation"
-}
+
+
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$level$timeseries$data[, c("datetime", as.character(hydro_id_ml))],
+      loc_name = trb("snowbull_level_marsh_lake"),
       parameter = "water level",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      subplot = "1",
+      location_id = level_ml$location_id
     )
   },
   error = function(e) {
@@ -1216,23 +1406,18 @@ tryCatch(
 
 ```{r LakeLaberge, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E2
-# Set station ID
-station_id <- "09AB010"
-if (language$abbrev == "fr") {
-  custom_title <- "E2 : Niveau d'eau du lac Laberge"
-} else {
-  custom_title <- "E2: Lake Laberge Water Surface Elevation"
-}
+
+
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_level$timeseries$data[, c("datetime", as.character(hydro_id_ll))],
       parameter = "water level",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_level_lake_laberge"),
+      subplot = "2",
+      location_id = level_ll$location_id
     )
   },
   error = function(e) {
@@ -1249,15 +1434,23 @@ if ("Teslin" %in% params$basins) {
 } else {
   include <- FALSE
 }
+
+basin_name <- "Teslin_Big_Salmon"
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+
+met_name <- "Carmacks Airport"
+met_id <- precip_table[precip_table$name == met_name, ]$key
+precip <- precip_table[precip_table$key == met_id, ]
+fdd <- fdd_table[fdd_table$key == met_id, ]
 ```
-`r basin_swe <- basins_table[basins_table$location_id == "Teslin_Big_Salmon", ]`
+
 
 `r if (language$abbrev == "en") "The Teslin River Basin snowpack is " else "L’accumulation de neige dans le bassin de la rivière Teslin est "`
-`r officer::ftext(paste0(basin_swe$preposition, tr('snowbull_rmd_average', language$language), textColour(basin_swe$relative_to_med)))`.
+`r officer::ftext(basin_swe$description , textColour(basin_swe$relative_to_med))`.
 `r if (language$abbrev == "en") {
-paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated at **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated at **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r TeslinBigSalmon_basin, echo=FALSE, eval=include, out.width="50%", fig.height=fig.height_half}
@@ -1265,51 +1458,56 @@ paste0("Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est est
 # Plotting
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Teslin / Big Salmon", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Teslin - Big Salmon", basin = "Teslin_Big_Salmon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Teslin / Big Salmon Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc = basin_swe$name,
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)],
+      year = bulletin_year,
+      month = bulletin_month,
+      language = language,
+      scale = bulletin_scale,
+      start_year_historical = start_year_historical,
+      end_year_historical = end_year_historical
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-
-`r precip <- precip_table[precip_table$location_id == 8985, ]`
-`r fdd <- fdd_table[fdd_table$location == 8985, ]`
 
 `r if (language$abbrev == "en") "Teslin precipitation has been" else "Les précipitations à Teslin ont été"`
 `r officer::ftext(precip$description, textColour(precip$relative_to_med))` 
 `r if (language$abbrev == "en") {
-paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), "on rivers and lakes of the region.")
+paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), "on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+paste0("d’octobre à ", month_names[bulletin_month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[bulletin_month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
 }`
 
 ```{r Teslin_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# Plot C
+
+
 tryCatch(
   {
-    snowBullPrecip(665, year_param, scale_param, "Teslin", language = language)
+    snowBullPrecip(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_teslin")
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 
+
 # Plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 532, custom_title = "Teslin", language = substr(language, 1, 2))
+    snowbullCDDF(
+      timeseries = dat$cddf$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_teslin"),
+      location_id = fdd$location_id
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1317,9 +1515,15 @@ tryCatch(
 )
 ```
 
-`r flow <- flow_table[flow_table$location == "09AE002", ]`
+```{r, echo=FALSE}
+loc_name <- "Teslin Lake"
+hydro_name <- "Teslin Lake At Teslin"
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+level <- level_table[level_table$name == hydro_name, ]
+```
+
 `r if (language$abbrev == "en") "The measured water surface elevation (relative to sea level) in Teslin Lake is currently" else "Le niveau d'eau (par rapport au niveau de la mer) du lac Teslin est"`
-`r officer::ftext(flow$description, textColour(flow$relative_to_med))` 
+`r officer::ftext(level$description, textColour(level$relative_to_med))` 
 `r if (language$abbrev == "en") {
 paste0("(Figure", knitr::asis_output("\U00A0"), "C). Teslin Lake typically peaks in late June and is predominantly snowmelt driven. The ------ snowpack and ------ water level suggest that summer water levels will be ------ . Peak water levels will depend on spring weather patterns.")
 } else {
@@ -1327,24 +1531,15 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). Principalement influencé p
 }`
 
 ```{r TeslinLake, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
-# E
-# Set station ID
-station_id <- "09AE002"
-if (language$abbrev == "fr") {
-  custom_title <- "E : Niveau d'eau du lac Teslin"
-} else {
-  custom_title <- "E: Teslin Lake Water Surface Elevation"
-}
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_level$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "water level",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = language$abbrev
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_level_teslin_lake"),
+      location_id = level$location_id
     )
   },
   error = function(e) {
@@ -1363,32 +1558,29 @@ if ("Central Yukon" %in% params$basins) {
 }
 ```
 
-`r basin_swe <- basins_table[basins_table$name == "Central_Yukon", ]`
-
+```{r, echo=FALSE}
+basin_name <- "Central_Yukon"
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+```
 `r if (language$abbrev == "en") "The Central Yukon River Basin snowpack is" else "L’accumulation de neige dans le bassin central du fleuve Yukon est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
 `r if (language$abbrev == "en") {
-paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$swe, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$swe, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r CentralYukon_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting
+
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Central Yukon", basin = "Central_Yukon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin central du Yukon", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Central Yukon", basin = "Central_Yukon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Central Yukon Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc_name = basin_name,
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)],
+      location_id = basin_swe$location_id
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1396,40 +1588,59 @@ tryCatch(
 )
 ```
 
-`r precip <- precip_table[precip_table$location == 27950, ]`
-`r fdd <- fdd_table[fdd_table$location == 27950, ]`
+```{r, echo=FALSE}
+loc_name <- "Carmacks"
+met_name <- "Carmacks Airport"
+hydro_name <- "Nordenskiold River Below Rowlinson Creek"
+
+met_id <- precip_table[precip_table$name == met_name, ]$key
+
+precip <- precip_table[precip_table$key == met_id, ]
+fdd <- fdd_table[fdd_table$key == met_id, ]
+
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+flow <- flow_table[flow_table$key == hydro_id, ]
+```
 
 `r if (language$abbrev == "en") "Carmacks precipitation has been" else "Les précipitations à Carmacks ont été"`
 `r officer::ftext(precip$description, textColour(precip$relative_to_med))`
 `r if (language$abbrev == "en") {
-paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
+paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else {
-paste0("d'octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+paste0("d'octobre à ", month_names[bulletin_month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[bulletin_month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
 }`
 
 ```{r Carmacks_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# Create plot C
+
+
+
 tryCatch(
   {
-    snowBullPrecip(666, year_param, scale_param, "Carmacks", language = language)
+    snowBullPrecip(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_carmacks")
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
+
 # Plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 540, custom_title = "Carmacks", language = substr(language, 1, 2))
+    snowbullCDDF(
+      timeseries = dat$cddf$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_carmacks"),
+      location_id = fdd$location_id
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-`r flow <- flow_table[flow_table$location == "09AH004", ]
-`
 `r if (language$abbrev == "en") "The estimated Nordenskiold River discharge is currently" else "Le débit estimé de la rivière Nordenskiold est "`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))` 
 `r if (language$abbrev == "en") {
@@ -1441,23 +1652,16 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). L’accumulation de neige -
 ```{r Nordenskiold, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "09AH004"
 
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit de la rivière Nordenskiold en aval du ruisseau Rowlinson"
-} else {
-  custom_title <- "E: Nordenskiold River Discharge below Rowlinson Creek"
-}
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_nordenskiold_river"),
+      location_id = flow$location_id
     )
   },
   error = function(e) {
@@ -1474,83 +1678,96 @@ if ("Pelly" %in% params$basins) {
 } else {
   include <- FALSE
 }
+
+basin_name <- "Pelly"
+met_name <- "Twin Creeks Meteorological"
+met_id <- pillows_table[pillows_table$name == met_name, ]$key
+
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+pillows <- pillows_table[pillows_table$name == met_name, ]
 ```
 
-`r basin_swe <- basins_table[basins_table$name == "Pelly", ]`
-`r pillows <- pillows_table[pillows_table$location_id == "09BA-M7", ]`
+
 
 `r if (language$abbrev == "en") "The Pelly River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Pelly est"`
-`r officer::ftext(paste0(basin_swe$preposition, tr("snowbull_rmd_average", language$language), textColour(basin_swe$relative_to_med)))`.
+`r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
 `r if (language$abbrev == "en") {
-paste0("At Twin Creeks Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillows$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A). The Pelly River basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("At Twin Creeks Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillows$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A). The Pelly River basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("À la station météorologique des ruisseaux Twin, l’EEN est estimé à **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("À la station météorologique des ruisseaux Twin, l’EEN est estimé à **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r Pelly_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 ## A Twin Creeks
 # Set station ID
-station_id <- "09BA-M7"
+
 # Plot SWE
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullpillow(location = station_id, custom_title = "A : Équivalent en eau de la neige - ruisseaux Twin", year = year_param, month = month_param, language = "fr")
-    } else {
-      snowbullpillow(location = station_id, custom_title = "A: Twin Creeks Snow Water Equivalent", year = year_param, month = month_param, language = "en")
-    }
+    snowbullpillow(
+      timeseries = dat$swe$pillows$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_twin_creeks"),
+      location_id = pillows$location_id
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 
-
-# B Pelly Basin
-# Plotting
+# Plot SWE
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Pelly", basin = "Pelly",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Pelly", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Pelly", basin = "Pelly",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Pelly Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc_name = trb("snowbull_basin_pelly"),
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)]
+    )
   },
   error = function(e) {
-    cat("Plotting error: ", e$message, "\n")
+    cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-`r basin_swe <- basins_table[basins_table$basin == "Pelly", ]`
-`r fdd <- fdd_table[fdd_table$location == 8964, ]`
+
+```{r, echo=FALSE}
+basin_name <- "Pelly"
+met_name <- "Faro ECCC Met"
+met_id <- fdd_table[fdd_table$name == met_name, ]$key
+
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+fdd <- fdd_table[fdd_table$name == met_name, ]
+```
 
 `r if (language$abbrev == "en") "There are no precipitation data available at Faro but the snowpack data indicates that it has been" else "Il n’y a pas de données de précipitations pour Faro, mais les données sur l’accumulation de neige indiquent que les conditions sont"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`. 
 `r if (language$abbrev == "en") {
-paste0("Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "C), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
+paste0("Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "C), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], " les degrés-jours de gel cumulés sont à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours**  (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+paste0("Au 1^er^ ", month_names[bulletin_month], " les degrés-jours de gel cumulés sont à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours**  (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
 }`
 
 ```{r Faro_CDDF, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # Create plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 500, custom_title = "Faro", language = substr(language, 1, 2))
+    snowbullCDDF(
+      timeseries = dat$cddf$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_faro"),
+      location_id = fdd$location_id
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-`r flow <- flow_table[flow_table$location_id == "09BC001", ]`
+
+```{r, echo=FALSE}
+hydro_name <- "Pelly River At Pelly Crossing"
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+flow <- flow_table[flow_table$key == hydro_id, ]
+```
 
 `r if (language$abbrev == "en") "The estimated Pelly River discharge at Pelly Crossing is currently" else "Le débit estimé de la rivière Pelly à Pelly Crossing est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))`
@@ -1563,24 +1780,17 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). L’accumulation de neige -
 ```{r PellyRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "09BC001"
-
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit de la rivière Pelly à Pelly Crossing"
-} else {
-  custom_title <- "E: Pelly River Discharge at Pelly Crossing"
-}
 
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_pelly_crossing"),
+      scale = bulletin_scale,
+      language = language
     )
   },
   error = function(e) {
@@ -1597,31 +1807,37 @@ if ("Stewart" %in% params$basins) {
 } else {
   include <- FALSE
 }
+
+basin_name <- "Stewart"
+met_name <- "Withers Lake Meteorological"
+
+met_id <- pillows_table[pillows_table$name == met_name, ]$key
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+pillows <- pillows_table[pillows_table$key == met_id, ]
 ```
-`r basin_swe <- basins_table[basins_table$basin == "Stewart", ]`
-`r pillows <- pillows_table[pillows_table$location == "09DB-M1", ]`
+
 
 `r if (language$abbrev == "en") "The Stewart River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Stewart est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
 `r if (language$abbrev == "en") {
-paste0("At Withers Lake Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillows$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A). The Stewart River basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$swe, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("At Withers Lake Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillows$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A). The Stewart River basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$swe, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("À la station météorologique du lac Withers, l’EEN est estimé à **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("À la station météorologique du lac Withers, l’EEN est estimé à **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$swe, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r StewartRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 ## A Withers Lake
 # Set station ID
-station_id <- "09DB-M1"
+
+
 # Plot SWE
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullpillow(location = station_id, custom_title = "A : Équivalent en eau de la neige - lac Withers", year = year_param, month = month_param, language = "fr")
-    } else {
-      snowbullpillow(location = station_id, custom_title = "A: Withers Lake Snow Water Equivalent", year = year_param, month = month_param, language = "en")
-    }
+    snowbullpillow(
+      timeseries = dat$swe$pillows$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_withers_lake")
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1630,44 +1846,49 @@ tryCatch(
 
 # B
 # Plotting
+
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Stewart", basin = "Stewart",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Stewart", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Stewart", basin = "Stewart",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Stewart Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc_name = basin_name,
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)],
+    )
   },
   error = function(e) {
-    cat("Plotting error: ", e$message, "\n")
+    cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
 
 
-`r precip <- precip_table[precip_table$location == 51426, ]`
-`r fdd <- fdd_table[fdd_table$location == 51426, ]`
+```{r, echo=FALSE}
+loc_name <- "Mayo"
+met_name <- "Mayo ECCC Met"
+met_id <- precip_table[precip_table$name == met_name, ]$key
+
+precip <- precip_table[precip_table$location == met_id, ]
+fdd <- fdd_table[fdd_table$location == met_id, ]
+```
 
 `r if (language$abbrev == "en") "Mayo precipitation has been" else "Les précipitations à Mayo ont été"`
 `r officer::ftext(precip$description, textColour(precip$relative_to_med))`
 `r if (language$abbrev == "en") {
-paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
+paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+paste0("d’octobre à ", month_names[bulletin_month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[bulletin_month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
 }`
 
 ```{r Mayo_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 # Create plot c
+
 tryCatch(
   {
-    snowBullPrecip(668, year_param, scale_param, "Mayo", language = language)
+    snowBullPrecip(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_mayo"),
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1676,7 +1897,10 @@ tryCatch(
 # Create plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 548, custom_title = "Mayo", language = substr(language, 1, 2))
+    snowbullCDDF(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_mayo")
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1684,7 +1908,15 @@ tryCatch(
 )
 ```
 
-`r flow <- flow_table[flow_table$location == "09DD003", ]`
+
+```{r, echo=FALSE}
+loc_name <- "Stewart River"
+hydro_name <- "Stewart River At The Mouth"
+
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+
+flow <- flow_table[flow_table$location == hydro_id, ]
+```
 
 `r if (language$abbrev == "en") "The estimated Stewart River discharge at the outlet is currently" else "Le débit estimé à l'embouchure de la rivière Stewart est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))`
@@ -1697,24 +1929,17 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). L’accumulation de neige -
 ```{r StewartRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "09DD003"
-
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit à l'embouchure de la rivière Stewart"
-} else {
-  custom_title <- "E: Stewart River Discharge at Outlet"
-}
 
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      loc_name = trb("snowbull_flow_stewart_river_outlet"),
+      year = bulletin_year - 1, ,
+      scale = bulletin_scale,
+      language = language
     )
   },
   error = function(e) {
@@ -1731,33 +1956,29 @@ if ("White" %in% params$basins) {
 } else {
   include <- FALSE
 }
+
+basin_name <- "White"
+basin_swe <- basins_table[basins_table$name == basin_name, ]
 ```
-`r basin_swe <- basins_table[basins_table$basin == "White", ]`
 
 `r if (language$abbrev == "en") "The White River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière White est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`. 
 `r if (language$abbrev == "en") {
-paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r White_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting
+
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "White", basin = "White",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin White", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "White", basin = "White",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: White Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc_name = trb("snowbull_basin_white"),
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)]
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1765,7 +1986,12 @@ tryCatch(
 )
 ```
 
-`r flow <- flow_table[flow_table$location == "09CB001", ]`
+```{r, echo=FALSE}
+hydro_name <- "White River At Km 1881.6 Alaska Highway"
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+flow <- flow_table[flow_table$key == hydro_id, ]
+```
+
 `r if (language$abbrev == "en") "The estimated White River discharge at the Alaska Highway is currently" else "Le débit estimé de la rivière White à la route de l’Alaska est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))` 
 `r if (language$abbrev == "en") {
@@ -1777,24 +2003,15 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). Dans ce bassin hydrographiq
 ```{r WhiteRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "09CB001"
-
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit de la rivière White à la route de l'Alaska"
-} else {
-  custom_title <- "E: White River Discharge at Alaska Highway"
-}
 
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      loc_name = trb("snowbull_flow_white_river_alaska_highway"),
+      year = bulletin_year - 1
     )
   },
   error = function(e) {
@@ -1813,82 +2030,98 @@ if ("Lower Yukon" %in% params$basins) {
 }
 ```
 
+```{r, echo=FALSE}
+basin_name <- "Lower_Yukon"
+met_name <- "King Solomon Dome Meteorological"
+met_id <- pillows_table[pillows_table$name == met_name, ]$key
 
-`r basin_swe <- basins_table[basins_table$basin == "Lower_Yukon", ]`
-`r pillows <- pillows_table[pillows_table$location_id == "09EA-M1", ]`
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+pillows <- pillows_table[pillows_table$key == met_id, ]
+```
+
 `r if (language$abbrev == "en") "The Lower Yukon River Basin snowpack is" else "L’accumulation de neige dans le bassin inférieur du fleuve Yukon est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`. 
 `r if (language$abbrev == "en") {
 paste0("Established in 2022, King Solomon Dome Meteorological Station registered Snow Water Equivalent (SWE) at **", pillows$relative_to_med, "%** of the historical median when compared with the manual snow survey record for that site (Figure", knitr::asis_output("\U00A0"), "A). The Lower Yukon basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%**
-of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Installée en 2022, la station météorologique du dôme King Solomon a enregistré un EEN de **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique par rapport aux relevés nivométriques manuels pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Installée en 2022, la station météorologique du dôme King Solomon a enregistré un EEN de **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique par rapport aux relevés nivométriques manuels pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r LowerYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 
 ## A King Solomon Dome
-tryCatch(
-  {
-    if (language$abbrev == "fr") {
-      snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A : Équivalent en eau de la neige - dôme King Solomon", year = year_param, scale = scale_param)
-    } else {
-      snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A: King Solomon Dome Snow Water Equivalent", year = year_param, scale = scale_param)
-    }
-  },
-  error = function(e) {
-    cat("Plot generation error: ", e$message, "\n")
-  }
-)
+# tryCatch(
+#   {
+#     if (language$abbrev == "fr") {
+#       snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A : Équivalent en eau de la neige - dôme King Solomon", year = bulletin_year, scale = bulletin_scale)
+#     } else {
+#       snowbullpillow2(location_pil = 85, location_surv = 136, custom_title = "A: King Solomon Dome Snow Water Equivalent", year = bulletin_year, scale = bulletin_scale)
+#     }
+#   },
+#   error = function(e) {
+#     cat("Plot generation error: ", e$message, "\n")
+#   }
+# )
 
 # B
 # Plotting
+
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Lower Yukon", basin = "Lower_Yukon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin inf. Yukon", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Lower Yukon", basin = "Lower_Yukon",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Lower Yukon Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)],
+      loc_name = trb("snowbull_basin_lower_yukon"),
+      year = bulletin_year,
+      month = bulletin_month,
+      language = language,
+      scale = bulletin_scale,
+      start_year_historical = start_year_historical,
+      end_year_historical = end_year_historical
+    )
   },
   error = function(e) {
-    cat("Plotting error: ", e$message, "\n")
+    cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-`r precip <- precip_table[precip_table$location == 10194, ]`
-`r fdd <- fdd_table[fdd_table$location == 10194, ]`
 
+```{r Dawson_weather, echo=FALSE}
+met_name <- "Dawson City ECCC Met"
+met_id <- precip_table[precip_table$name == met_name, ]$key
+
+precip <- precip_table[precip_table$key == met_id, ]
+fdd <- fdd_table[fdd_table$key == met_id, ]
+```
 `r if (language$abbrev == "en") "Precipitation at Dawson Airport has been " else "Les précipitations à l’aéroport de Dawson ont été"`
 `r officer::ftext(precip$description, textColour(precip$relative_to_med))`
 `r if (language$abbrev == "en") {
-paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "D). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
+paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "D). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+paste0("d’octobre à ", month_names[bulletin_month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[bulletin_month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
 }`
 
-```{r Dawson_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
+```{r Dawson_weather_plots, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 # Create plot C
+
 tryCatch(
   {
-    snowBullPrecip(664, year_param, scale_param, "Dawson", language = language)
+    snowBullPrecip(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_dawson")
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
+
 # Create plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 492, custom_title = "Dawson", language = substr(language, 1, 2))
+    snowbullCDDF(timeseries = dat$cddf$basins$timeseries$data[, c("datetime", as.character(met_id))], loc_name = trb("snowbull_met_dawson"))
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -1896,8 +2129,15 @@ tryCatch(
 )
 ```
 
-`r flow_white <- flow_table[flow_table$location_id == "09CD001", ]`
-`r flow_klondike <- flow_table[flow_table$location_id == "09EA003", ]`
+
+```{r, echo=FALSE}
+hydro_name_wh <- "Yukon River Above White River"
+hydro_name_kl <- "Klondike River Above Bonanza Creek"
+hydro_id_wh <- flow_table[flow_table$name == hydro_name_wh, ]$key
+hydro_id_kl <- flow_table[flow_table$name == hydro_name_kl, ]$key
+flow_white <- flow_table[flow_table$key == hydro_id_wh, ]
+flow_klondike <- flow_table[flow_table$key == hydro_id_kl, ]
+```
 
 `r if (language$abbrev == "en") "The estimated Yukon River discharge above White River is currently" else "Le débit estimé du fleuve Yukon en amont de la rivière White est"`
 `r officer::ftext(flow_white$description, textColour(flow_white$relative_to_med))` 
@@ -1911,25 +2151,15 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E2). L'accumulation de neige --
 
 ```{r YukonRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E1
-# Set station ID
-station_id <- "09CD001"
-
-if (language$abbrev == "fr") {
-  custom_title <- "E1 : Débit du fleuve Yukon en amont de la rivière White"
-} else {
-  custom_title <- "E1: Yukon River Discharge above White River"
-}
-
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id_wh))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_yukon_above_white_river"),
+      subplot = "1"
     )
   },
   error = function(e) {
@@ -1937,26 +2167,17 @@ tryCatch(
   }
 )
 
+
 # E2
-# Set station ID
-station_id <- "09EA003"
-
-if (language$abbrev == "fr") {
-  custom_title <- "E2 : Débit de la rivière Klondike en amont du ruisseau Bonanza"
-} else {
-  custom_title <- "E2: Klondike River Discharge above Bonanza Creek"
-}
-
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id_kl))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_klondike_above_bonanza_creek"),
+      subplot = "2"
     )
   },
   error = function(e) {
@@ -1975,32 +2196,32 @@ if ("Porcupine" %in% params$basins) {
 }
 ```
 
-`r basin_swe <- basins_table[basins_table$basin == "Porcupine", ]`
+`r basin_swe <- basins_table[basins_table$name == "Porcupine", ]`
 
 `r if (language$abbrev == "en") "The Porcupine River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Porcupine est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$description))`.
 `r if (language$abbrev == "en") {
-paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r Porcupine_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting
+
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Porcupine", basin = "Porcupine",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Porcupine", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Porcupine", basin = "Porcupine",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Porcupine Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc = "Porcupine",
+      timeseries = dat$swe$basins$timeseries$data,
+      year = bulletin_year,
+      month = bulletin_month,
+      language = language,
+      scale = bulletin_scale,
+      start_year_historical = start_year_historical,
+      end_year_historical = end_year_historical
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -2008,33 +2229,57 @@ tryCatch(
 )
 ```
 
-
-`r precip <- precip_table[precip_table$location == 26894, ]`
-`r fdd <- fdd_table[fdd_table$location == 26894, ]`
+```{r, echo=FALSE}
+met_id <- 26894 # Old Crow Airport
+precip <- precip_table[precip_table$location == met_id, ]
+fdd <- fdd_table[fdd_table$location == met_id, ]
+```
 
 `r if (language$abbrev == "en") "Precipitation at Old Crow Airport has been " else "Les précipitations à l’aéroport d’Old Crow ont été"`
 `r officer::ftext(precip$description, textColour(precip$relative_to_med))`
 `r if (language$abbrev == "en") {
-paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
+paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+paste0("d’octobre à ", month_names[bulletin_month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[bulletin_month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
 }`
 
 ```{r OldCrow_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# Create plot C
+
+
+custom_title <- sprintf(
+  trb("snowbull_plot_precip_title"),
+  "C",
+  trb("snowbull_met_old_crow")
+)
+
 tryCatch(
   {
-    snowBullPrecip(671, year_param, scale_param, "Old Crow", language = language)
+    snowBullPrecip(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_old_crow"),
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
+
+
+custom_title <- sprintf(
+  trb("snowbull_plot_cddf_title"),
+  "D",
+  trb("snowbull_met_old_crow")
+)
 # Create plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 556, custom_title = "Old Crow", language = substr(language, 1, 2))
+    snowbullCDDF(
+      timeseries = dat$cddf$basins$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_old_crow"),
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -2042,8 +2287,11 @@ tryCatch(
 )
 ```
 
-`r flow <- flow_table[flow_table$location == "09FD002", ]`
-
+```{r, echo=FALSE}
+hydro_name <- "Porcupine River Near International Boundary"
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+flow <- flow_table[flow_table$key == hydro_id, ]
+```
 `r if (language$abbrev == "en") "The estimated Porcupine River discharge is currently" else "Le débit estimé de la rivière Porcupine est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))` 
 `r if (language$abbrev == "en") {
@@ -2055,24 +2303,17 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). L’accumulation de neige -
 ```{r PorcupineRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "09FD002"
 
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit de la rivière Porcupine à la frontière"
-} else {
-  custom_title <- "E: Porcupine River Discharge at Border"
-}
 
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_porcupine_river_international_boundary"),
+      language = language
     )
   },
   error = function(e) {
@@ -2089,34 +2330,37 @@ if ("Peel" %in% params$basins) {
 } else {
   include <- FALSE
 }
+
+basin_name <- "Peel"
+basin_swe <- basins_table[basins_table$name == basin_name, ]
 ```
 
-`r basin_swe <- basins_table[basins_table$basin == "Peel", ]`
 
 `r if (language$abbrev == "en") "The Peel River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Peel est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
 `r if (language$abbrev == "en") {
-paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r Peel_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
 # Plotting
+
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Peel", basin = "Peel",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Peel", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Peel", basin = "Peel",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Peel Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc = "Peel",
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)],
+      loc_name = trb("snowbull_basin_peel"),
+      year = bulletin_year,
+      month = bulletin_month,
+      language = language,
+      scale = bulletin_scale,
+      start_year_historical = start_year_historical,
+      end_year_historical = end_year_historical
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -2124,9 +2368,11 @@ tryCatch(
 )
 ```
 
-
-`r flow <- flow_table[flow_table$location == "10MA001", ]`
-
+```{r, echo=FALSE}
+hydro_name <- "Peel River Above Canyon Creek"
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+flow <- flow_table[flow_table$key == hydro_id, ]
+```
 `r if (language$abbrev == "en") "The estimated Peel River discharge is" else "Le débit estimé de la rivière Peel est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))` 
 `r if (language$abbrev == "en") {
@@ -2138,24 +2384,16 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). L’accumulation de neige -
 ```{r PeelRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "10MA001"
-
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit de la rivière Peel"
-} else {
-  custom_title <- "E: Peel River Discharge"
-}
 
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_peel"),
+      language = language
     )
   },
   error = function(e) {
@@ -2172,18 +2410,21 @@ if ("Liard" %in% params$basins) {
 } else {
   include <- FALSE
 }
+
+basin_name <- "Liard"
+met_name <- "Hyland North Meteorological"
+met_id <- pillows_table[pillows_table$name == met_name, ]$key
+pillow <- pillows_table[pillows_table$location == met_id, ]
+basin_swe <- basins_table[basins_table$name == basin_name, ]
 ```
 
-
-`r pillow <- pillows_table[pillows_table$location == "10AD-M2", ]`
-`r basin_swe <- basins_table[basins_table$basin == "Liard", ]`
 
 `r if (language$abbrev == "en") "The Liard River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Liard est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
 `r if (language$abbrev == "en") {
-paste0("At Hyland Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillow$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A). The Liard River basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("At Hyland Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillow$relative_to_med, "%** of the historical median (Figure", knitr::asis_output("\U00A0"), "A). The Liard River basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("À la station météorologique Hyland, l’EEN est estimé à **", pillow$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("À la station météorologique Hyland, l’EEN est estimé à **", pillow$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r LiardRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2191,15 +2432,15 @@ par(mfrow = c(1, 2))
 
 ## A Hyland River
 # Set station ID
-station_id <- "10AD-M2"
+
 # Plot SWE
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullpillow(location = station_id, custom_title = "A : Équivalent en eau de la neige - rivière Hyland", year = year_param, month = month_param, language = "fr")
-    } else {
-      snowbullpillow(location = station_id, custom_title = "A: Hyland River Snow Water Equivalent", year = year_param, month = month_param, language = "en")
-    }
+    snowbullpillow(
+      timeseries = dat$swe$pillows$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = loc_name <- trb("snowbull_met_hyland"),
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -2208,20 +2449,19 @@ tryCatch(
 
 
 # B
-# Plotting
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Liard", basin = "Liard",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Liard", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Liard", basin = "Liard",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Liard Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc = "Liard",
+      timeseries = dat$swe$basins$timeseries$data[, c("datetime", basin_name)],
+      loc_name = trb("snowbull_basin_liard"),
+      year = bulletin_year,
+      month = bulletin_month,
+      language = language,
+      scale = bulletin_scale,
+      start_year_historical = start_year_historical,
+      end_year_historical = end_year_historical
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -2229,42 +2469,60 @@ tryCatch(
 )
 ```
 
-
-`r precip <- precip_table[precip_table$location == 32293, ]`
-`r fdd <- fdd_table[fdd_table$location == 32293, ]`
+```{r, echo=FALSE}
+met_name <- "Watson Lake ECCC Met"
+met_id <- precip_table[precip_table$name == met_name, ]$key
+precip <- precip_table[precip_table$key == met_id, ]
+fdd <- fdd_table[fdd_table$key == met_id, ]
+```
 
 `r if (language$abbrev == "en") "Precipitation at Watson Lake Airport has been " else "Les précipitations à l’aéroport de Watson Lake ont été"`
 `r officer::ftext(precip$description, textColour(precip$relative_to_med))`
 `r if (language$abbrev == "en") {
-paste0("from October through ", month_names[params$month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[params$month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
+paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of historical median on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of historical median, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else {
-paste0("d’octobre à ", month_names[params$month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[params$month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
+paste0("d’octobre à ", month_names[bulletin_month-1], " (figure", knitr::asis_output("\U00A0"), "C). Au 1^er^ ", month_names[bulletin_month], ", les précipitations hivernales cumulatives se chiffrent à **", precip$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, et les degrés-jours de gel cumulés à **", fdd$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", fdd$value, " \u00B0C-jours** (figure", knitr::asis_output("\U00A0"), "D), ce qui laisse penser que l'épaisseur de glace sur les lacs et les cours d'eau de la région est ", iceThickness(fdd$relative_to_med), ".")
 }`
 
 
 ```{r WatsonLake_weather, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
-# Create plot C
+
+
 tryCatch(
   {
-    snowBullPrecip(667, year_param, scale_param, "Watson Lake", language = language)
+    snowBullPrecip(
+      timeseries = dat$precip$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_watson_lake"),
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
+
+
+
 # Create plot D
 tryCatch(
   {
-    snowbullCDDF(timeseries_id = 508, custom_title = "Watson Lake", language = substr(language, 1, 2))
+    snowbullCDDF(
+      timeseries = dat$cddf$basins$timeseries$data[, c("datetime", as.character(met_id))],
+      loc_name = trb("snowbull_met_watson_lake"),
+      language = language
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
 ```
-`r flow <- flow_table[flow_table$location_id == "10AA001", ]`
-
+```{r, echo=FALSE}
+hydro_name <- "Liard River At Upper Crossing"
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$key
+flow <- flow_table[flow_table$key == hydro_id, ]
+```
 `r if (language$abbrev == "en") "The estimated Liard River discharge at Upper Liard is currently" else "Le débit estimé de la rivière Liard à Upper Liard est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))`
 `r if (language$abbrev == "en") {
@@ -2276,24 +2534,17 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). L’accumulation de neige -
 ```{r LiardRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "10AA001"
-
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit de la rivière Liard à Upper Liard"
-} else {
-  custom_title <- "E: Liard River Discharge at Upper Liard"
-}
 
 tryCatch(
   {
     # Plotting
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_liard_upper_crossing"),
+      scale = bulletin_scale,
+      language = language
     )
   },
   error = function(e) {
@@ -2310,16 +2561,17 @@ if ("Alsek" %in% params$basins) {
 } else {
   include <- FALSE
 }
-```
 
-`r basin_swe <- basins_table[basins_table$name == "Alsek", ]`
+basin_name <- "Alsek"
+basin_swe <- basins_table[basins_table$name == basin_name, ]
+```
 
 `r if (language$abbrev == "en") "The Alsek River Basin snowpack is" else "L’accumulation de neige dans le bassin du fleuve Alsek est"`
 `r officer::ftext(basin_swe$description, textColour(basin_swe$relative_to_med))`.
 `r if (language$abbrev == "en") {
-paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[params$month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
+paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of the historical median, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la médiane historique, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r Alsek_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2327,17 +2579,17 @@ paste0("Au 1^er^ ", month_names[params$month], ", l'EEN moyen du bassin est esti
 # Plotting
 tryCatch(
   {
-    if (language$abbrev == "fr") {
-      snowbullSWE(
-        loc = "Alsek", basin = "Alsek",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B : Relevés nivométriques - bassin Alsek", language = language
-      )
-    } else {
-      snowbullSWE(
-        loc = "Alsek", basin = "Alsek",
-        year = year_param, month = month_param, swe_basins = swe_basins, custom_title = "B: Alsek Basin Basin Snow Course Data", language = language
-      )
-    }
+    snowbullSWE(
+      loc = basin_name,
+      timeseries = dat$swe$basins$timeseries$data,
+      loc_name = trb("snowbull_basin_alsek"),
+      year = bulletin_year,
+      month = bulletin_month,
+      language = language,
+      scale = bulletin_scale,
+      start_year_historical = start_year_historical,
+      end_year_historical = end_year_historical
+    )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
@@ -2345,8 +2597,11 @@ tryCatch(
 )
 ```
 
-`r flow <- flow_table[flow_table$location == "08AB001", ]`
-
+```{r, echo=FALSE}
+hydro_name <- "Alsek River Above Bates River"
+hydro_id <- flow_table[flow_table$name == hydro_name, ]$location
+flow <- flow_table[flow_table$key == hydro_id, ]
+```
 `r if (language$abbrev == "en") "The estimated Alsek River discharge is currently" else "Le débit estimé du fleuve Alsek est"`
 `r officer::ftext(flow$description, textColour(flow$relative_to_med))`
 `r if (language$abbrev == "en") {
@@ -2358,24 +2613,18 @@ paste0("(figure", knitr::asis_output("\U00A0"), "E). Les débits élevés dans c
 ```{r AlsekRiver, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E
 # Set station ID
-station_id <- "08AB001"
 
-if (language$abbrev == "fr") {
-  custom_title <- "E : Débit du fleuve Alsek en amont de Bates"
-} else {
-  custom_title <- "E: Alsek River Discharge above Bates"
-}
 
 # Plotting
 tryCatch(
   {
     snowbullWater(
-      location = station_id,
+      timeseries = dat$water_flow$timeseries$data[, c("datetime", as.character(hydro_id))],
       parameter = "flow",
-      year = year_param - 1,
-      custom_title = custom_title,
-      scale = scale_param,
-      language = substr(language, 1, 2)
+      year = bulletin_year - 1,
+      loc_name = trb("snowbull_flow_alsek_above_bates"),
+      scale = bulletin_scale,
+      language = language
     )
   },
   error = function(e) {

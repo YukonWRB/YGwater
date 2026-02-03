@@ -22,7 +22,7 @@
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param unusable Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.
-#' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
+#' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all", "last", or "none".
 #' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param line_scale A scale factor to apply to the size (width) of the lines. Default is 1.
 #' @param axis_scale A scale factor to apply to the size of axis labels. Default is 1.
@@ -232,9 +232,9 @@ plotOverlap <- function(
     }
   }
 
-  if (!(historic_range %in% c("all", "last"))) {
+  if (!(historic_range %in% c("all", "last", "none"))) {
     warning(
-      "Parameter `historic_range` can only be 'all' or 'last'. Resetting it to the default 'last'."
+      "Parameter `historic_range` can only be 'all', 'last', or 'none'. Resetting it to the default 'last'."
     )
     historic_range <- "last"
   }
@@ -717,14 +717,14 @@ plotOverlap <- function(
       last_year + 1,
       lubridate::year(Sys.time())
     )
-  } else if (historic_range == "last") {
+  } else if (historic_range %in% c("last", "none")) {
     if (overlaps) {
       lubridate::year(daily_end) <- last_year + 1
     } else {
       lubridate::year(daily_end) <- last_year
     }
   }
-  daily_end <- daily_end + 60 * 60 * 24 #adds a day so that the ribbon is complete for the whole plotted line
+  daily_end <- daily_end + 60 * 60 * 24 # adds a day so that the ribbon is complete for the whole plotted line
   if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
     daily_end <- daily_end + 60 * 60 * 24
   }
@@ -864,94 +864,103 @@ plotOverlap <- function(
 
   # Add the ribbon values ######################
   # Make the ribbon sequence
-  ribbon_yr <- lubridate::year(min(
-    (max(daily$datetime) - 24 * 60 * 60),
-    (daily_end - 24 * 60 * 60)
-  )) #Daily was queried as one day longer than the day sequence earlier... this reverses that one day extra, but also finds out if the actual data extracted doesn't go that far back
-  if (overlaps) {
-    if (historic_range == "all") {
-      ribbon_seq <- seq.POSIXt(
-        as.POSIXct(paste0(ribbon_yr - 1, substr(startDay, 5, 16)), tz = tzone),
-        as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone),
-        by = "day"
-      )
+  if (historic_range != "none") {
+    ribbon_yr <- lubridate::year(min(
+      (max(daily$datetime) - 24 * 60 * 60),
+      (daily_end - 24 * 60 * 60)
+    )) # Daily was queried as one day longer than the day sequence earlier... this reverses that one day extra, but also finds out if the actual data extracted doesn't go that far back
+    if (overlaps) {
+      if (historic_range == "all") {
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(
+            paste0(ribbon_yr - 1, substr(startDay, 5, 16)),
+            tz = tzone
+          ),
+          as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
+      } else {
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone),
+          as.POSIXct(paste0(last_year + 1, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
+      }
     } else {
-      ribbon_seq <- seq.POSIXt(
-        as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone),
-        as.POSIXct(paste0(last_year + 1, substr(endDay, 5, 16)), tz = tzone),
-        by = "day"
-      )
+      if (historic_range == "all") {
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(paste0(ribbon_yr, substr(startDay, 5, 16)), tz = tzone),
+          as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
+      } else {
+        ribbon_seq <- seq.POSIXt(
+          as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone),
+          as.POSIXct(paste0(last_year, substr(endDay, 5, 16)), tz = tzone),
+          by = "day"
+        )
+      }
     }
-  } else {
-    if (historic_range == "all") {
-      ribbon_seq <- seq.POSIXt(
-        as.POSIXct(paste0(ribbon_yr, substr(startDay, 5, 16)), tz = tzone),
-        as.POSIXct(paste0(ribbon_yr, substr(endDay, 5, 16)), tz = tzone),
-        by = "day"
-      )
-    } else {
-      ribbon_seq <- seq.POSIXt(
-        as.POSIXct(paste0(last_year, substr(startDay, 5, 16)), tz = tzone),
-        as.POSIXct(paste0(last_year, substr(endDay, 5, 16)), tz = tzone),
-        by = "day"
-      )
-    }
-  }
 
-  ribbon <- data.frame()
-  ribbon_start_end <- if (overlaps) {
-    paste0(
-      lubridate::year(min(daily$datetime)),
-      "-",
-      lubridate::year(min(daily$datetime)) + 1
-    )
-  } else {
-    lubridate::year(min(daily$datetime))
-  }
-  for (i in 1:length(ribbon_seq)) {
-    target_date <- ribbon_seq[i] + 12 * 60 * 60
-    plot_date <- day_seq[i]
-    if (is.na(plot_date)) {
-      plot_date <- day_seq[i - 1] + 60 * 60 * 24 - 1
+    ribbon <- data.frame()
+    ribbon_start_end <- if (overlaps) {
+      paste0(
+        lubridate::year(min(daily$datetime)),
+        "-",
+        lubridate::year(min(daily$datetime)) + 1
+      )
+    } else {
+      lubridate::year(min(daily$datetime))
     }
-    if (
-      !(lubridate::month(target_date) == 2 & lubridate::day(target_date) == 29)
-    ) {
-      #Can't have the Feb 29 date because there is no Feb 29 ribbon
-      row <- daily[daily$datetime == target_date, ]
-      if (nrow(row) == 0) {
-        lubridate::year(target_date) <- lubridate::year(target_date) - 1
-        if (is.na(target_date)) {
-          next
-        }
+    for (i in 1:length(ribbon_seq)) {
+      target_date <- ribbon_seq[i] + 12 * 60 * 60
+      plot_date <- day_seq[i]
+      if (is.na(plot_date)) {
+        plot_date <- day_seq[i - 1] + 60 * 60 * 24 - 1
+      }
+      if (
+        !(lubridate::month(target_date) == 2 &
+          lubridate::day(target_date) == 29)
+      ) {
+        #Can't have the Feb 29 date because there is no Feb 29 ribbon
         row <- daily[daily$datetime == target_date, ]
-      }
-      lubridate::year(row$datetime) <- lubridate::year(plot_date)
-      if (i == length(ribbon_seq)) {
-        row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
-        ribbon_start_end <- if (overlaps) {
-          c(
-            ribbon_start_end,
-            paste0(
-              lubridate::year(target_date) - 2,
-              "-",
-              lubridate::year(target_date) - 1
+        if (nrow(row) == 0) {
+          lubridate::year(target_date) <- lubridate::year(target_date) - 1
+          if (is.na(target_date)) {
+            next
+          }
+          row <- daily[daily$datetime == target_date, ]
+        }
+        lubridate::year(row$datetime) <- lubridate::year(plot_date)
+        if (i == length(ribbon_seq)) {
+          row$datetime <- row$datetime - 1 #This keeps the last ribbon point within the same days as the day sequence requested. Without this, a last day requested of 365 causes a point to show up in the following year.
+          ribbon_start_end <- if (overlaps) {
+            c(
+              ribbon_start_end,
+              paste0(
+                lubridate::year(target_date) - 2,
+                "-",
+                lubridate::year(target_date) - 1
+              )
             )
-          )
-        } else {
-          c(ribbon_start_end, lubridate::year(target_date) - 1)
+          } else {
+            c(ribbon_start_end, lubridate::year(target_date) - 1)
+          }
+        }
+        if (nrow(row) > 0) {
+          ribbon <- rbind(ribbon, row)
         }
       }
-      if (nrow(row) > 0) {
-        ribbon <- rbind(ribbon, row)
-      }
     }
-  }
-  if (nrow(ribbon) > 0) {
-    if (min(ribbon$datetime) < min(realtime$datetime)) {
-      first_date <- min(realtime$datetime)
-      lubridate::hour(first_date) <- 0
-      ribbon[ribbon$datetime == min(ribbon$datetime), "datetime"] <- first_date
+    if (nrow(ribbon) > 0) {
+      if (min(ribbon$datetime) < min(realtime$datetime)) {
+        first_date <- min(realtime$datetime)
+        lubridate::hour(first_date) <- 0
+        ribbon[
+          ribbon$datetime == min(ribbon$datetime),
+          "datetime"
+        ] <- first_date
+      }
     }
   }
 
@@ -960,10 +969,12 @@ plotOverlap <- function(
   realtime$month <- lubridate::month(realtime$datetime)
   realtime$day <- lubridate::day(realtime$datetime)
   realtime <- realtime[!(realtime$month == 2 & realtime$day == 29), ] #Remove Feb 29
-  ribbon$year <- lubridate::year(ribbon$datetime)
-  ribbon$month <- lubridate::month(ribbon$datetime)
-  ribbon$day <- lubridate::month(ribbon$datetime)
-  ribbon <- ribbon[!(ribbon$month == 2 & ribbon$day == 29), ] #Remove Feb 29
+  if (historic_range != "none") {
+    ribbon$year <- lubridate::year(ribbon$datetime)
+    ribbon$month <- lubridate::month(ribbon$datetime)
+    ribbon$day <- lubridate::month(ribbon$datetime)
+    ribbon <- ribbon[!(ribbon$month == 2 & ribbon$day == 29), ] #Remove Feb 29
+  }
 
   if (overlaps) {
     # This section sorts out the overlap years, builds the plotting column
@@ -1016,10 +1027,12 @@ plotOverlap <- function(
 
   # apply datum correction where necessary
   if (datum) {
-    ribbon$min <- ribbon$min + datum_m
-    ribbon$max <- ribbon$max + datum_m
-    ribbon$q75 <- ribbon$q75 + datum_m
-    ribbon$q25 <- ribbon$q25 + datum_m
+    if (historic_range != "none") {
+      ribbon$min <- ribbon$min + datum_m
+      ribbon$max <- ribbon$max + datum_m
+      ribbon$q75 <- ribbon$q75 + datum_m
+      ribbon$q25 <- ribbon$q25 + datum_m
+    }
     realtime$value <- realtime$value + datum_m
   }
 
@@ -1113,53 +1126,57 @@ plotOverlap <- function(
 
   # Create basic plot with historic range
 
-  plot <- plotly::plot_ly() %>%
-    plotly::add_ribbons(
-      data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ],
-      x = ~datetime,
-      ymin = ~q25,
-      ymax = ~q75,
-      # name = if (lang == "en") "IQR" else "EIQ",
-      name = if (lang == "en") "Typical" else "Typique",
-      color = I("#5f9da6"),
-      line = list(width = 0.2),
-      hoverinfo = if (hover) "text" else "none",
-      text = if (hover) {
-        ~ paste0(
-          "q25: ",
-          round(.data$q25, 2),
-          ", q75: ",
-          round(.data$q75, 2),
-          " (",
-          as.Date(.data$datetime),
-          ")"
-        )
-      },
-      legendrank = 1
-    ) %>%
-    plotly::add_ribbons(
-      data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ],
-      x = ~datetime,
-      ymin = ~min,
-      ymax = ~max,
-      # name = "Min-Max",
-      name = if (lang == "en") "Historic" else "Historique",
-      color = I("#D4ECEF"),
-      line = list(width = 0.2),
-      hoverinfo = if (hover) "text" else "none",
-      text = if (hover) {
-        ~ paste0(
-          "Min: ",
-          round(.data$min, 2),
-          ", Max: ",
-          round(.data$max, 2),
-          " (",
-          as.Date(.data$datetime),
-          ")"
-        )
-      },
-      legendrank = 2
-    )
+  plot <- plotly::plot_ly()
+
+  if (historic_range != "none") {
+    plot <- plot %>%
+      plotly::add_ribbons(
+        data = ribbon[!is.na(ribbon$q25) & !is.na(ribbon$q75), ],
+        x = ~datetime,
+        ymin = ~q25,
+        ymax = ~q75,
+        # name = if (lang == "en") "IQR" else "EIQ",
+        name = if (lang == "en") "Typical" else "Typique",
+        color = I("#5f9da6"),
+        line = list(width = 0.2),
+        hoverinfo = if (hover) "text" else "none",
+        text = if (hover) {
+          ~ paste0(
+            "q25: ",
+            round(.data$q25, 2),
+            ", q75: ",
+            round(.data$q75, 2),
+            " (",
+            as.Date(.data$datetime),
+            ")"
+          )
+        },
+        legendrank = 1
+      ) %>%
+      plotly::add_ribbons(
+        data = ribbon[!is.na(ribbon$min) & !is.na(ribbon$max), ],
+        x = ~datetime,
+        ymin = ~min,
+        ymax = ~max,
+        # name = "Min-Max",
+        name = if (lang == "en") "Historic" else "Historique",
+        color = I("#D4ECEF"),
+        line = list(width = 0.2),
+        hoverinfo = if (hover) "text" else "none",
+        text = if (hover) {
+          ~ paste0(
+            "Min: ",
+            round(.data$min, 2),
+            ", Max: ",
+            round(.data$max, 2),
+            " (",
+            as.Date(.data$datetime),
+            ")"
+          )
+        },
+        legendrank = 2
+      )
+  }
 
   # Add traces
   plot_yrs <- sort(unique(realtime$plot_year), decreasing = FALSE)
@@ -1284,7 +1301,10 @@ plotOverlap <- function(
 
   # Return the plot and data if requested ##########################
   if (data) {
-    datalist <- list(trace_data = realtime, range_data = ribbon)
+    datalist <- list(
+      trace_data = realtime,
+      range_data = if (historic_range != "none") ribbon else NULL
+    )
     return(list(plot = plot, data = datalist))
   } else {
     return(plot)

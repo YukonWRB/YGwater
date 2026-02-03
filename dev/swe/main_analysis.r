@@ -378,6 +378,7 @@ basin_shp_list <- lapply(basin_names, function(nm) {
 })
 filenames <- file.path("dev/swe/exports", paste0(tolower(basin_names), ".png"))
 
+
 result_list <- run_swe_analysis(
     crs = 4326,
     historical_start_year = 1991,
@@ -389,6 +390,36 @@ result_list <- run_swe_analysis(
     con = con
 )
 
+
+hybas_shapefile <- sf::st_read(
+    "H:/esniede/data/HydroSheds/hybas_ar_lev01-12_v1c/hybas_ar_lev07_v1c.shp"
+)
+
+# hydrorivers_shapefile <- sf::st_read(
+#     "H:/esniede/data/HydroSheds/HydroRIVERS_v10_ar_shp/HydroRIVERS_v10_ar.shp"
+# )
+
+hybas_id <- 8070212940 #mayo
+# hybas_id <- 8070274780 #whitehorse
+
+basin_shp <- hybas_shapefile[hybas_shapefile$HYBAS_ID == hybas_id, ]
+
+# Fix invalid geometries before intersection
+basin_shp <- sf::st_make_valid(basin_shp)
+
+basin_shp_list <- list(basin_shp)
+filenames <- c("dev/swe/exports/mayo_basin.png")
+
+result_list <- run_swe_analysis(
+    crs = 4326,
+    historical_start_year = 1991,
+    historical_end_year = 2020,
+    query_date = as.Date(query_date),
+    basin_shp_list = basin_shp_list,
+    filenames = filenames,
+    upsample_factor = 16,
+    con = con
+)
 # # Function to get the most recent September 1st given a date
 # get_date_datum <- function(date_input, month = 9) {
 #     if (month < 1 | month > 12) {

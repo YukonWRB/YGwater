@@ -1,0 +1,127 @@
+Upper_Yukon:
+  display_name: "Upper Yukon River Basin (Southern Lakes/Whitehorse)"
+  tr_code: "snowbull_basin_upper_yukon"
+  met:
+    - name: "Twin Creeks North Meteorological"
+  flow:
+    - id: "09AB004"
+      name: "Marsh Lake water surface elevation"
+      parameter: "water level"
+    - id: "09AB010"
+      name: "Lake Laberge water surface elevation"
+      parameter: "water level"
+
+Teslin_Big_Salmon:
+  display_name: "Teslin River Basin"
+  tr_code: "snowbull_basin_teslin_big_salmon"
+  met:
+    - id: "8985"
+      name: "Teslin meteorological station"
+  flow:
+    - id: "09AE002"
+      name: "Teslin Lake water surface elevation"
+      parameter: "water level"
+
+Central_Yukon:
+  display_name: "Central Yukon River Basin (Carmacks)"
+  tr_code: "snowbull_basin_central_yukon"
+  met:
+    - id: "27950"
+      name: "Carmacks meteorological station"
+  flow:
+    - id: "09AH004"
+      name: "Nordenskiold River below Rowlinson Creek"
+      parameter: "flow"
+
+Pelly:
+  display_name: "Pelly River Basin"
+  tr_code: "snowbull_basin_pelly"
+  met:
+    - id: "09BA-M7"
+      name: "Twin Creeks snow pillow"
+    - id: "09BC001"
+      name: "Faro CDDF site"
+  flow:
+    - id: "09BC001"
+      name: "Pelly River at Pelly Crossing"
+      parameter: "flow"
+
+Stewart:
+  display_name: "Stewart River Basin"
+  tr_code: "snowbull_basin_stewart"
+  met:
+    - id: "09DB-M1"
+      name: "Withers Lake snow pillow"
+    - id: "51426"
+      name: "Mayo meteorological station"
+  flow:
+    - id: "09DD003"
+      name: "Stewart River outlet gauge"
+      parameter: "flow"
+
+White:
+  display_name: "White River Basin"
+  tr_code: "snowbull_basin_white"
+  met: []
+  flow:
+    - id: "09CB001"
+      name: "White River at Alaska Highway"
+      parameter: "flow"
+
+Lower_Yukon:
+  display_name: "Lower Yukon River Basin (Dawson region)"
+  tr_code: "snowbull_basin_lower_yukon"
+  met:
+    - id: "09EA-M1"
+      name: "King Solomon Dome snow pillow"
+    - id: "10194"
+      name: "Dawson Airport meteorological station"
+  flow:
+    - id: "09CD001"
+      name: "Yukon River above White River"
+      parameter: "flow"
+    - id: "09EA003"
+      name: "Klondike River above Bonanza Creek"
+      parameter: "flow"
+
+Porcupine:
+  display_name: "Porcupine River Basin"
+  tr_code: "snowbull_basin_porcupine"
+  met:
+    - id: "26894"
+      name: "Old Crow Airport meteorological station"
+  flow:
+    - id: "09FD002"
+      name: "Porcupine River at border"
+      parameter: "flow"
+
+Peel:
+  display_name: "Peel River Basin"
+  tr_code: "snowbull_basin_peel"
+  met: []
+  flow:
+    - id: "10MA001"
+      name: "Peel River gauge"
+      parameter: "flow"
+
+Liard:
+  display_name: "Liard River Basin"
+  tr_code: "snowbull_basin_liard"
+  met:
+    - id: "10AD-M2"
+      name: "Hyland snow pillow"
+    - id: "32293"
+      name: "Watson Lake Airport meteorological station"
+  flow:
+    - id: "10AA001"
+      name: "Liard River at Upper Liard"
+      parameter: "flow"
+
+Alsek:
+  display_name: "Alsek River Basin"
+  tr_code: "snowbull_basin_alsek"
+  met: []
+  flow:
+    - id: "08AB001"
+      name: "Alsek River above Bates"
+      parameter: "flow"

@@ -31,65 +31,110 @@ translations_df <- data.table::fread(
   encoding = "UTF-8"
 )
 
-# Check for ids which are the same
-dup_ids <- translations_df$id[duplicated(translations_df$id)]
-if (length(dup_ids) > 0) {
-  stop(
-    "Duplicate translation IDs found in translations.csv: ",
-    paste(dup_ids, collapse = ", ")
-  )
-}
-
-# Check for completely duplicated rows
-dups_rows_all <- duplicated(translations_df$id)
-if (any(dups_rows_all)) {
-  stop(
-    "Duplicate rows found in translations.csv. Duplicate rows: ",
-    paste(which(dups_rows_all), collapse = ", ")
-  )
-}
-
-# Check for identical rows, not including the ids
-dup_rows_no_id <- duplicated(translations_df[, -1])
-if (any(dup_rows_no_id)) {
-  warning(
-    "Identical translation rows found in translations.csv (excluding IDs). Rows: ",
-    paste(which(dup_rows_no_id), collapse = ", ")
-  )
-}
-
-
-# Build a list from the data.frame
-translations <- lapply(
-  setdiff(names(translations_df[, -2]), "id"),
-  function(lang) {
-    # Removes the second, "description" column, builds lists for each language
-    stats::setNames(translations_df[[lang]], translations_df$id)
-  }
+# Creating translations from csv
+snowbull_translations_df <- data.table::fread(
+  system.file(
+    "data-raw/snowbull_translations.csv",
+    package = "YGwater"
+  ),
+  encoding = "UTF-8"
 )
-names(translations) <- setdiff(names(translations_df)[-2], "id")
 
 
-# Now call each element of all list elements to see if any fails:
-for (lang in names(translations)) {
-  for (id in names(translations[[lang]])) {
-    tryCatch(
-      {
-        print(translations[[lang]][[id]])
-      },
-      error = function(e) {
-        stop(
-          "Error in translation for language '",
-          lang,
-          "', id '",
-          id,
-          "': ",
-          e$message
-        )
-      }
+#' Preprocess a translations data frame.
+#'
+#' Applies standard cleaning and transformation steps to a translations data frame
+#' to ensure consistent structure and ready-to-use values.
+#'
+#' @param translations_df A data frame containing translation entries to be standardized.
+#'
+#' @return A data frame with cleaned and preprocessed translation records.
+#'
+#' @examples
+#' cleaned_translations <- preprocess_translations(raw_translations)
+#' @noRd
+#' @keywords internal
+preprocess_translations <- function(
+  translations_df,
+  check_for_duplicate_translations = TRUE
+) {
+  dup_ids <- translations_df$id[duplicated(translations_df$id)]
+  if (length(dup_ids) > 0) {
+    stop(
+      paste0(
+        "Duplicate translation IDs found in translations.csv: ",
+        paste(dup_ids, collapse = ", ")
+      )
     )
   }
+
+  dup_rows_all <- duplicated(translations_df$id)
+  if (any(dup_rows_all)) {
+    stop(
+      paste0(
+        "Duplicate rows found in translations.csv. Duplicate rows: ",
+        paste(which(dup_rows_all), collapse = ", ")
+      )
+    )
+  }
+
+  if (check_for_duplicate_translations) {
+    dup_rows_no_id <- duplicated(translations_df[, -1])
+    if (any(dup_rows_no_id)) {
+      warning(
+        paste0(
+          "Identical translation rows found in translations.csv ",
+          "(excluding IDs). Rows: ",
+          paste(which(dup_rows_no_id), collapse = ", ")
+        )
+      )
+    }
+  }
+
+  lang_cols <- setdiff(names(translations_df[, -2]), "id")
+  translations <- lapply(
+    lang_cols,
+    function(lang) {
+      stats::setNames(translations_df[[lang]], translations_df$id)
+    }
+  )
+  names(translations) <- lang_cols
+
+  for (lang in names(translations)) {
+    for (id in names(translations[[lang]])) {
+      tryCatch(
+        {
+          print(translations[[lang]][[id]])
+        },
+        error = function(e) {
+          stop(
+            paste0(
+              "Error in translation for language '",
+              lang,
+              "', id '",
+              id,
+              "': ",
+              e$message
+            )
+          )
+        }
+      )
+    }
+  }
+
+  translations
 }
+
+translations <- preprocess_translations(
+  translations_df = translations_df
+)
+
+# here we skip check for dupes, since we might have a many-to-one mapping
+snowbull_translations <- preprocess_translations(
+  translations_df = snowbull_translations_df,
+  check_for_duplicate_translations = FALSE
+)
+
 
 data <- list(
   level_returns_max = level_returns_max,
@@ -100,7 +145,8 @@ data <- list(
   snowcourse_factors = snowcourse_factors,
   eq_std_calc_CCME_Mn = eq_std_calc_CCME_Mn,
   eq_std_calc_CCME_NH4 = eq_std_calc_CCME_NH4,
-  translations = translations
+  translations = translations,
+  snowbull_translations = snowbull_translations
 )
 
 usethis::use_data(data, internal = TRUE, overwrite = TRUE)
