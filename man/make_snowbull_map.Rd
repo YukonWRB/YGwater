@@ -43,13 +43,17 @@ make_snowbull_map(
 
 \item{statistic}{Character, "absolute", "relative", or "percentile" (default: "relative")}
 
+\item{start_year_historical}{Integer, start year for historical norms (default: 1991)}
+
+\item{end_year_historical}{Integer, end year for historical norms (default: 2020)
+
+(default: "English")}
+
 \item{language}{Character string indicating the language for labels and legends. Default is "English".}
 
 \item{con}{Optional database connection, if not provided a default connection will be used}
 
-\item{format}{Character string indicating the output format: "ggplot", "leaflet", or "shiny"
-
-(default: "English")}
+\item{format}{Character string indicating the output format: "ggplot", "leaflet", or "shiny",}
 }
 \value{
 A ggplot2 object with SWE basins and stations
