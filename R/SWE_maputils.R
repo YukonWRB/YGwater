@@ -2276,8 +2276,7 @@ split_communities <- function(communities) {
 get_state_as_shp <- function(
     data,
     year,
-    month,
-    language
+    month
 ) {
     # Assert that data contains timeseries and metadata
     stopifnot(is.list(data))
@@ -3623,8 +3622,8 @@ get_display_data <- function(
 #' and language settings. The map extent is automatically set to cover the
 #' Yukon Territory with appropriate zoom levels.
 #'
-#'
-#' @export
+#' @noRd
+#' @keywords internal
 #'
 #' @examples
 #' \dontrun{
@@ -3647,8 +3646,6 @@ get_display_data <- function(
 #'   filename = "march_2025_swe.html"
 #' )
 #' }
-#'
-#' @noRd
 
 make_leaflet_map <- function(
     point_data = NULL,
@@ -4424,7 +4421,9 @@ make_ggplot_map <- function(
 #' @param statistic Character, "absolute", "relative", or "percentile" (default: "relative")
 #' @param language Character string indicating the language for labels and legends. Default is "English".
 #' @param con Optional database connection, if not provided a default connection will be used
-#' @param format Character string indicating the output format: "ggplot", "leaflet", or "shiny"
+#' @param format Character string indicating the output format: "ggplot", "leaflet", or "shiny",
+#' @param start_year_historical Integer, start year for historical norms (default: 1991)
+#' @param end_year_historical Integer, end year for historical norms (default: 2020)
 #'
 #' (default: "English")
 #' @return A ggplot2 object with SWE basins and stations
