@@ -195,6 +195,7 @@ SWE_station <- function(
         "')"
       )
     )
+    Meas$location_name_fr <- Meas$name
 
     # Calculate density
     Meas$density <- round((Meas$swe / Meas$depth) * 10, 2)
@@ -228,6 +229,7 @@ SWE_station <- function(
       "sample_date",
       "elevation",
       "estimate_flag",
+      "location_name_fr",
       "parameter",
       "value"
     )
