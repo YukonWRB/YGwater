@@ -499,23 +499,33 @@ snowInfo_mem <- memoise::memoise(
 
 # Function to check for latest snow sample/result timestamp for cache invalidation
 get_snow_stamp <- function(con) {
-  sql <- "
-    SELECT GREATEST(
-      (SELECT MAX(COALESCE(s.modified, s.created))
-         FROM discrete.samples s
-        WHERE s.import_source = 'downloadSnowCourse'),
+  rows <- DBI::dbGetQuery(
+    con,
+    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourse'"
+  )[1, 1]
 
-      (SELECT MAX(COALESCE(r.modified, r.created))
-         FROM discrete.results r
-         JOIN discrete.samples s ON s.sample_id = r.sample_id
-        WHERE s.import_source = 'downloadSnowCourse'
-          AND r.parameter_id IN (21, 1220))
-    ) AS stamp
-  "
+  stamp <- DBI::dbGetQuery(
+    con,
+    "
+  SELECT GREATEST(
+    (SELECT MAX(COALESCE(s.modified, s.created))
+       FROM discrete.samples s
+      WHERE s.import_source = 'downloadSnowCourse'),
 
-  stamp <- DBI::dbGetQuery(con, sql)$stamp[[1]]
+    (SELECT MAX(COALESCE(r.modified, r.created))
+       FROM discrete.results r
+       JOIN discrete.samples s ON s.sample_id = r.sample_id
+      WHERE s.import_source = 'downloadSnowCourse'
+        AND r.parameter_id IN (21, 1220))
+  ) AS stamp
+"
+  )[1, 1]
 
-  if (is.na(stamp)) "none" else as.character(stamp) # stabilize type for hashing
+  if (is.na(stamp) | is.na(rows)) {
+    "none"
+  } else {
+    as.character(paste0(stamp, " ", rows))
+  } # stabilize type for hashing
 }
 
 #' Return basic snow survey data
