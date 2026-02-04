@@ -82,10 +82,10 @@ plotTimeseries <- function(
   data = FALSE,
   con = NULL
 ) {
-  # timeseries_id = NULL
-  # location <- "30AA003"
+  # timeseries_id = 1222
+  # location <- NULL
   # sub_location <- NULL
-  # parameter = 1165
+  # parameter = NULL
   # start_date <- "2022-08-12"
   # end_date <- "2025-08-13"
   # record_rate = NULL
@@ -1081,6 +1081,9 @@ plotTimeseries <- function(
       by = "run",
       keep.by = FALSE
     )
+    if (length(range_runs) == 0) {
+      historic_range <- FALSE
+    }
   }
 
   # Make the plot ###################################
@@ -1102,6 +1105,7 @@ plotTimeseries <- function(
 
   plot <- plotly::plot_ly()
   if (historic_range) {
+    # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
     # plot <- plot %>%
     #   plotly::add_ribbons(
     #     data = range_data,
