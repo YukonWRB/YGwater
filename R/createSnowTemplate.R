@@ -102,7 +102,7 @@ createSnowTemplate <- function(
     maintenance <- DBI::dbGetQuery(
       snowCon,
       paste0(
-        "SELECT maintenance.maintenance, locations.location_code AS location, locations.name FROM maintenance INNER JOIN locations ON maintenance.location = locations.location_code WHERE maintenance.completed = FALSE AND locations.name IN ('",
+        "SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance INNER JOIN locations ON maintenance.location = locations.location WHERE maintenance.completed = FALSE AND locations.name IN ('",
         paste(courses, collapse = "', '"),
         "') AND maintenance.completed = FALSE"
       )

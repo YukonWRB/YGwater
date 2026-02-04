@@ -110,7 +110,7 @@ SWE_station <- function(
   }
   loc_basin <- DBI::dbGetQuery(
     snowCon,
-    "SELECT location_code AS location_id, sub_basin, active FROM locations"
+    "SELECT location AS location_id, sub_basin, active FROM locations"
   )
 
   # Create list of stations
