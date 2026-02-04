@@ -264,6 +264,34 @@ addLocation <- function(id, inputs, language) {
           uiOutput(ns("lon_warning"))
         ),
 
+        # Add UI for well association
+        checkboxInput(
+          ns("associate_well"),
+          "Associate with nearby well",
+          value = FALSE
+        ),
+        conditionalPanel(
+          condition = "input.associate_well == true",
+          ns = ns,
+          splitLayout(
+            cellWidths = c("40%", "40%", "20%"),
+            numericInput(
+              ns("well_radius_m"),
+              "Well search radius (meters)",
+              value = 500,
+              min = 0,
+              width = "100%"
+            ),
+            uiOutput(ns("nearby_well_count")),
+            actionButton(
+              ns("choose_well"),
+              "Select a nearby well",
+              width = "100%"
+            )
+          ),
+          uiOutput(ns("selected_well_note"))
+        ),
+
         selectizeInput(
           ns("loc_type"),
           "Location type",
@@ -839,7 +867,10 @@ addLocation <- function(id, inputs, language) {
         }
         if (nrow(datum) == 0) {
           showModal(modalDialog(
-            "No datum conversion found for this station in HYDAT."
+            "No datum conversion found for this station in HYDAT.",
+            footer = tagList(
+              actionButton(ns("close"), "Close")
+            )
           ))
           updateSelectizeInput(session, "datum_id_from", selected = 10)
           updateSelectizeInput(session, "datum_id_to", selected = 10)
@@ -1052,7 +1083,7 @@ addLocation <- function(id, inputs, language) {
         leaflet::leafletOutput(ns("location_map"), height = "400px"),
         uiOutput(ns("map_zoom_note")),
         footer = tagList(
-          modalButton("Cancel"),
+          actionButton(ns("close"), "Cancel"),
           actionButton(ns("save_location_map"), "Use selected location")
         ),
         size = "l",
@@ -1113,6 +1144,171 @@ addLocation <- function(id, inputs, language) {
       }
     })
 
+    # Well selection ##############################################################
+    selected_well_id <- reactiveVal(NULL)
+    selected_well_label <- reactiveVal(NULL)
+
+    format_well_label <- function(row) {
+      name <- if (is.na(row$well_name) || !nzchar(row$well_name)) {
+        "Unnamed well"
+      } else {
+        row$well_name
+      }
+      location_label <- if (
+        is.na(row$location_code) || !nzchar(row$location_code)
+      ) {
+        "unlinked"
+      } else {
+        paste("linked to", row$location_code)
+      }
+      paste0(
+        "ID ",
+        row$well_id,
+        " - ",
+        name,
+        " (",
+        round(row$distance_m),
+        " m, ",
+        location_label,
+        ")"
+      )
+    }
+
+    nearby_wells <- reactive({
+      req(isTruthy(input$lat), isTruthy(input$lon))
+      radius <- suppressWarnings(as.numeric(input$well_radius_m))
+      if (is.na(radius) || radius <= 0) {
+        return(data.frame())
+      }
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT b.borehole_id AS well_id,
+                  b.borehole_name AS well_name,
+                  b.location_id,
+                  l.location_code,
+                  l.name AS location_name,
+                  ST_Distance(
+                    ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography,
+                    ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+                  ) AS distance_m
+           FROM boreholes.boreholes b
+           INNER JOIN boreholes.wells w
+             ON w.borehole_id = b.borehole_id
+           LEFT JOIN public.locations l
+             ON b.location_id = l.location_id
+           WHERE ST_DWithin(
+             ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography,
+             ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+             $5
+           )
+           ORDER BY distance_m;",
+        params = list(
+          input$lon,
+          input$lat,
+          input$lon,
+          input$lat,
+          radius
+        )
+      )
+    })
+
+    output$nearby_well_count <- renderUI({
+      if (!isTruthy(input$lat) || !isTruthy(input$lon)) {
+        return(div("Enter coordinates to check nearby wells."))
+      }
+      radius <- suppressWarnings(as.numeric(input$well_radius_m))
+      if (is.na(radius) || radius <= 0) {
+        return(div("Set a radius to check nearby wells."))
+      }
+      count <- nrow(nearby_wells())
+      div(sprintf("Wells within radius: %d", count))
+    })
+
+    output$selected_well_note <- renderUI({
+      label <- selected_well_label()
+      if (is.null(label)) {
+        return(div("Selected well: none"))
+      }
+      div(paste("Selected well:", label))
+    })
+
+    observeEvent(
+      nearby_wells(),
+      {
+        current <- selected_well_id()
+        if (!is.null(current) && !current %in% nearby_wells()$well_id) {
+          selected_well_id(NULL)
+          selected_well_label(NULL)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(input$choose_well, {
+      wells <- nearby_wells()
+      if (nrow(wells) == 0) {
+        showModal(modalDialog(
+          "No wells found within the selected radius.",
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
+        ))
+        return()
+      }
+      labels <- vapply(
+        seq_len(nrow(wells)),
+        function(i) format_well_label(wells[i, ]),
+        character(1)
+      )
+      choices <- stats::setNames(wells$well_id, labels)
+      showModal(modalDialog(
+        title = "Associate nearby well",
+        selectizeInput(
+          ns("nearby_well_select"),
+          "Well",
+          choices = choices,
+          selected = selected_well_id(),
+          options = list(maxItems = 1)
+        ),
+        footer = tagList(
+          actionButton(ns("confirm_well_selection"), "Associate well"),
+          actionButton(ns("clear_well_selection"), "Clear selection"),
+          actionButton(ns("close"), "Cancel")
+        ),
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$confirm_well_selection, {
+      selected <- input$nearby_well_select
+      if (!isTruthy(selected)) {
+        selected_well_id(NULL)
+        selected_well_label(NULL)
+      } else {
+        selected <- as.numeric(selected)
+        wells <- nearby_wells()
+        match_row <- wells[
+          wells$well_id == selected,
+          ,
+          drop = FALSE
+        ]
+        if (nrow(match_row) > 0) {
+          selected_well_id(selected)
+          selected_well_label(format_well_label(match_row[1, ]))
+        } else {
+          selected_well_id(selected)
+          selected_well_label(paste("ID", selected))
+        }
+      }
+      removeModal()
+    })
+
+    observeEvent(input$clear_well_selection, {
+      selected_well_id(NULL)
+      selected_well_label(NULL)
+      removeModal()
+    })
     ## Allow users to add a few things to the DB besides locations ###################################
     ## If user types in their own network/project/share_with, bring up a modal to add it to the database. This requires updating moduleData and the selectizeInput choices
 
@@ -1157,7 +1353,10 @@ addLocation <- function(id, inputs, language) {
             stats::setNames(net_types$id, net_types$name),
             multiple = FALSE
           ),
-          actionButton(ns("add_network"), "Add network")
+          footer = tagList(
+            actionButton(ns("close"), "Cancel"),
+            actionButton(ns("add_network"), "Add network")
+          )
         ))
       },
       ignoreInit = TRUE,
@@ -1194,7 +1393,7 @@ addLocation <- function(id, inputs, language) {
         )
         DBI::dbExecute(
           session$userData$AquaCache,
-          "INSERT INTO networks (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
+          "INSERT INTO public.networks (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
           params = list(
             df$name,
             ifelse(is.na(df$name_fr), NA, df$name_fr),
@@ -1232,7 +1431,10 @@ addLocation <- function(id, inputs, language) {
         removeModal()
         showModal(modalDialog(
           "New network added.",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
       },
       ignoreInit = TRUE,
@@ -1281,7 +1483,10 @@ addLocation <- function(id, inputs, language) {
             stats::setNames(proj_types$id, proj_types$name),
             multiple = FALSE
           ),
-          actionButton(ns("add_project"), "Add project")
+          footer = tagList(
+            actionButton(ns("close"), "Cancel"),
+            actionButton(ns("add_project"), "Add project")
+          )
         ))
       },
       ignoreInit = TRUE,
@@ -1317,7 +1522,7 @@ addLocation <- function(id, inputs, language) {
         )
         DBI::dbExecute(
           session$userData$AquaCache,
-          "INSERT INTO projects (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
+          "INSERT INTO public.projects (name, name_fr, description, description_fr, type) VALUES ($1, $2, $3, $4, $5)",
           params = list(
             df$name,
             ifelse(is.na(df$name_fr), NA, df$name_fr),
@@ -1355,7 +1560,10 @@ addLocation <- function(id, inputs, language) {
         removeModal()
         showModal(modalDialog(
           "New project added.",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
       },
       ignoreInit = TRUE,
@@ -1371,7 +1579,10 @@ addLocation <- function(id, inputs, language) {
         ) {
           showModal(modalDialog(
             "If public_reader is selected it must be the only group selected.",
-            easyClose = TRUE
+            easyClose = TRUE,
+            footer = tagList(
+              actionButton(ns("close"), "Close")
+            )
           ))
           updateSelectizeInput(
             session,
@@ -1388,7 +1599,10 @@ addLocation <- function(id, inputs, language) {
           return()
         }
         showModal(modalDialog(
-          "Ask a database admin to create a new user or user group"
+          "Ask a database admin to create a new user or user group",
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
       },
       ignoreInit = TRUE,
@@ -1407,7 +1621,10 @@ addLocation <- function(id, inputs, language) {
       if (!isTruthy(input$lat) || !isTruthy(input$lon)) {
         showModal(modalDialog(
           "Latitude and longitude are mandatory",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       }
@@ -1415,14 +1632,20 @@ addLocation <- function(id, inputs, language) {
       if (input$lat < -90 || input$lat > 90) {
         showModal(modalDialog(
           "Latitude must be between -90 and 90 degrees",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       }
       if (input$lon < -180 || input$lon > 180) {
         showModal(modalDialog(
           "Longitude must be between -180 and 180 degrees",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       }
@@ -1431,7 +1654,10 @@ addLocation <- function(id, inputs, language) {
       if (!isTruthy(input$datum_id_from) || !isTruthy(input$datum_id_to)) {
         showModal(modalDialog(
           "Datum ID from and to are mandatory (use assumed datum for both if there is no conversion to apply)",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       }
@@ -1440,7 +1666,10 @@ addLocation <- function(id, inputs, language) {
       if (input$datum_id_from == input$datum_id_to && input$elev != 0) {
         showModal(modalDialog(
           "Elevation conversion must be 0 if the datums are the same",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       }
@@ -1769,6 +1998,14 @@ addLocation <- function(id, inputs, language) {
               }
             }
 
+            if (isTruthy(selected_well_id())) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "UPDATE boreholes.boreholes SET location_id = $1 WHERE borehole_id = $2",
+                params = list(new_loc_id, selected_well_id())
+              )
+            }
+
             # Changes to jurisdictional relevance
             if (isTruthy(input$loc_jurisdictional_relevance)) {
               if (
@@ -1941,8 +2178,10 @@ addLocation <- function(id, inputs, language) {
             # If there was an error, rollback the transaction
             DBI::dbRollback(session$userData$AquaCache)
             showModal(modalDialog(
-              "Error updating location: ",
-              e$message
+              paste0("Error updating location: ", e$message),
+              footer = tagList(
+                actionButton(ns("close"), "Close")
+              )
             ))
           }
         )
@@ -1954,7 +2193,10 @@ addLocation <- function(id, inputs, language) {
       if (!isTruthy(input$loc_code)) {
         showModal(modalDialog(
           "Location code is mandatory",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       } else {
@@ -1967,7 +2209,10 @@ addLocation <- function(id, inputs, language) {
         ) {
           showModal(modalDialog(
             "Location code already exists",
-            easyClose = TRUE
+            easyClose = TRUE,
+            footer = tagList(
+              actionButton(ns("close"), "Close")
+            )
           ))
           return()
         }
@@ -1975,14 +2220,20 @@ addLocation <- function(id, inputs, language) {
       if (!isTruthy(input$loc_name)) {
         showModal(modalDialog(
           "Location name is mandatory",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       } else {
         if (input$loc_name %in% moduleData$exist_locs$name) {
           showModal(modalDialog(
             "Location name already exists",
-            easyClose = TRUE
+            easyClose = TRUE,
+            footer = tagList(
+              actionButton(ns("close"), "Close")
+            )
           ))
           return()
         }
@@ -1990,14 +2241,20 @@ addLocation <- function(id, inputs, language) {
       if (!isTruthy(input$loc_name_fr)) {
         showModal(modalDialog(
           "Location name (French) is mandatory",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       } else {
         if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
           showModal(modalDialog(
             "Location name (French) already exists",
-            easyClose = TRUE
+            easyClose = TRUE,
+            footer = tagList(
+              actionButton(ns("close"), "Close")
+            )
           ))
           return()
         }
@@ -2006,7 +2263,10 @@ addLocation <- function(id, inputs, language) {
       if (!isTruthy(input$loc_type)) {
         showModal(modalDialog(
           "Location type is mandatory",
-          easyClose = TRUE
+          easyClose = TRUE,
+          footer = tagList(
+            actionButton(ns("close"), "Close")
+          )
         ))
         return()
       }
@@ -2074,7 +2334,10 @@ addLocation <- function(id, inputs, language) {
           # Show a modal to the user that the location was added
           showModal(modalDialog(
             "Location added successfully",
-            easyClose = TRUE
+            easyClose = TRUE,
+            footer = tagList(
+              actionButton(ns("close"), "Close")
+            )
           ))
 
           # Update the moduleData reactiveValues
@@ -2105,12 +2368,16 @@ addLocation <- function(id, inputs, language) {
           pending_network_new(NULL)
           pending_project_selection(character(0))
           pending_project_new(NULL)
+          selected_well_id(NULL)
+          selected_well_label(NULL)
         },
         error = function(e) {
           # Rollback already happens within AquaCache::addACLocation
           showModal(modalDialog(
-            "Error adding location: ",
-            e$message
+            paste0("Error adding location: ", e$message),
+            footer = tagList(
+              actionButton(ns("close"), "Close")
+            )
           ))
         }
       )
