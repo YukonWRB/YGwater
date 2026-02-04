@@ -129,20 +129,31 @@ docTableView <- function(id, language) {
 
     selected_document_id <- reactiveVal(NULL)
 
-    observeEvent(input$documents_table_rows_selected, {
-      tbl <- table_data()
-      if (
-        !is.null(input$documents_table_rows_selected) &&
-          length(input$documents_table_rows_selected) == 1 &&
-          nrow(tbl) >= input$documents_table_rows_selected
-      ) {
-        selected_document_id(tbl$document_id[
-          input$documents_table_rows_selected
-        ])
-      } else {
-        selected_document_id(NULL)
-      }
-    })
+    observeEvent(
+      input$documents_table_rows_selected,
+      {
+        tbl <- table_data()
+        print(input$documents_table_rows_selected)
+        if (
+          !is.null(input$documents_table_rows_selected) &&
+            length(input$documents_table_rows_selected) == 1 &&
+            nrow(tbl) >= input$documents_table_rows_selected
+        ) {
+          selected_document_id(tbl$document_id[
+            input$documents_table_rows_selected
+          ])
+        } else {
+          selected_document_id(NULL)
+        }
+
+        if (is.null(input$documents_table_rows_selected)) {
+          shinyjs::hide("download_document")
+        } else {
+          shinyjs::show("download_document")
+        }
+      },
+      ignoreNULL = FALSE
+    ) # FALSE to catch deselection
 
     output$page <- renderUI({
       tags <- tagList(
@@ -182,6 +193,8 @@ docTableView <- function(id, language) {
       sort_target <- which(names(tbl) == "sort_date") - 1
       name_target <- which(names(tbl) == "name") - 1
 
+      # Make the full ID for callbacks
+      tbl_id <- session$ns("documents_table")
       DT::datatable(
         tbl,
         rownames = FALSE,
