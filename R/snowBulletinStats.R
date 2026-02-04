@@ -105,7 +105,7 @@ snowBulletinStats <- function(
       paste0(
         "SELECT 
           locations.name AS location_name, 
-          locations.location AS location_id, 
+          locations.location_code AS location_id, 
           datetime, 
           value_corrected AS value
         FROM measurements_continuous_corrected 
@@ -456,7 +456,7 @@ snowBulletinStats <- function(
       con,
       paste0(
         "SELECT locations.name AS location_name, 
-            locations.location AS location_id,
+            locations.location_code AS location_id,
             datetime, value_corrected AS value
             FROM measurements_continuous_corrected 
             INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
