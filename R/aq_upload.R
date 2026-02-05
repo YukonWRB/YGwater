@@ -6,7 +6,7 @@
 #'@details
 #' The parameter `data` should consist of a data.frame with two named columns: Value and Time (case sensitive). Units for the column `Value` are set according the units already in use for the timeseries on the Aquarius server, so it should only contain numbers compatible with this. The `Time` column should be formatted as.POSIXct in timezone UTC, keeping in mind that Aquarius will apply the station UTC offset. Failure to ensure the correct timezone of input data will result in offset points.
 #'
-#' Deleting or overwriting: this function can be used to simply delete data without appending anything. Simply specify a data.frame with both columns ('Time' and 'Value')and NA values, set overwrite = TRUE, and specify a start and end time (inclusive)
+#' Deleting or overwriting: this function can be used to simply delete data without appending anything. Simply specify a data.frame with both columns ('Time' and 'Value')and NA values, set overwrite = TRUE, and specify a start and end time (inclusive).
 #'
 #' To store login credentials in your .renviron profile, call [usethis::edit_r_environ()] and enter your username and password as value pairs, as AQUSER="your username" and AQPASS="your password". The server should be entered at server="your_server_url".
 #'
@@ -40,7 +40,7 @@ aq_upload <- function(
     }
   }
 
-  #Check that data has correct column names
+  # Check that data has correct column names
   if (!(all(c("Value", "Time") %in% names(data)))) {
     stop(
       "Your data.frame must contain columns labelled Value and Time. Case sensitive."
@@ -56,11 +56,11 @@ aq_upload <- function(
   data$Value[data$Value == "NA"] <- NA
   data$Value[data$Value == "<NA>"] <- NA
 
-  data <- stats::na.omit(data) #Very important! Any NA data actually gets appended to AQ as a point and is then a PITA to overwrite.
+  data <- stats::na.omit(data) # Very important! Any NA data actually gets appended to AQ as a point and is then a PITA to overwrite.
 
-  #Start with server connection
+  # Start with server connection
   source(system.file("scripts", "timeseries_client.R", package = "YGwater"))
-  #Make the Aquarius configuration and connect
+  # Make the Aquarius configuration and connect
   config = list(
     server = server,
     username = login[1],
@@ -73,13 +73,13 @@ aq_upload <- function(
   timeseries$connect(config$server, config$username, config$password)
   on.exit(timeseries$disconnect())
 
-  #Then append Points.
-  #Notes about how AQ handles timestamps: it doesn't. The server will take the data fed to it as if it was UTC, without considering the tz attribute, and applies the station offset to that value. Therefore times must be converted to UTC prior to being uploaded, even if the TZ attribute does not matter. Time data can be fed in as.POSIXct or as dateTtime.
+  # Then append Points.
+  # Notes about how AQ handles timestamps: it doesn't. The server will take the data fed to it as if it was UTC, without considering the tz attribute, and applies the station offset to that value. Therefore times must be converted to UTC prior to being uploaded, even if the TZ attribute does not matter. Time data can be fed in as.POSIXct or as dateTtime.
 
   result <- timeseries$waitForCompletedAppendRequest(
     timeseries$appendPoints(config$timeSeriesName, data, start, end),
     120
-  ) #This makes it wait up to 120 seconds to show the append result - long enough for even giant datasets.
+  ) # This makes it wait up to 120 seconds to show the append result - long enough for even giant datasets.
   points_in_file <- nrow(data)
 
   output <- list(
@@ -96,6 +96,5 @@ aq_upload <- function(
       "{.strong Your request was not completed or had an irregular status:} {result$AppendStatus}.\n{result$NumberOfPointsAppended} points were appended out of the {points_in_file} that were in the provided dataset.\nThe target timeseries was {.strong {ts_name}} at location {.strong {loc_id}}."
     )
   }
-
   return(output)
 }
