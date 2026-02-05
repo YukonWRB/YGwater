@@ -679,7 +679,7 @@ snowBulletinStats <- function(
       "WITH latest_measurements AS (
         SELECT 
           l.name AS location_name,
-          l.location AS location_id,
+          l.location_id,
           m.date,
           p.param_name AS variable,
           m.value,
@@ -691,7 +691,7 @@ snowBulletinStats <- function(
           ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
         FROM measurements_calculated_daily_corrected m
           INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
-          INNER JOIN locations l ON t.location = l.location
+          INNER JOIN locations l ON t.location_id = l.location_id
           INNER JOIN parameters p ON t.parameter_id = p.parameter_id
         WHERE m.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
           AND m.date BETWEEN ('",
@@ -833,7 +833,7 @@ snowBulletinStats <- function(
       "WITH latest_measurements AS (
         SELECT 
           l.name AS location_name,
-          l.location AS location_id,
+          l.location_code AS location_id,
           m.date,
           p.param_name AS variable,
           m.value,
@@ -845,7 +845,7 @@ snowBulletinStats <- function(
           ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
         FROM measurements_calculated_daily_corrected m
           INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
-          INNER JOIN locations l ON t.location = l.location
+          INNER JOIN locations l ON t.location_id = l.location_id
           INNER JOIN parameters p ON t.parameter_id = p.parameter_id
         WHERE m.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
           AND m.date BETWEEN ('",

@@ -113,8 +113,7 @@ YGwater <- function(
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
-  # Connection via AquaCache package will also check for updates to apply to the database schema
-  con <- AquaCache::AquaConnect(
+  con <- AquaConnect(
     name = dbName,
     host = dbHost,
     port = dbPort,
@@ -128,40 +127,52 @@ YGwater <- function(
     !DBI::dbExistsTable(con, "page_content", schema = "application") ||
       !DBI::dbExistsTable(con, "notifications", schema = "application")
   ) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
-      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' or 'notifications' tables. You'll need to bring the AquaCache database up to revision 31 at minimum.",
-      appDir,
-      "."
+      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' or 'notifications' tables. You'll need to bring the AquaCache database up to revision 31 at minimum."
     )
   }
 
   # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_calculated', 'samples', 'results'
   if (!DBI::dbExistsTable(con, "timeseries")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'timeseries'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "locations")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'locations'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "parameters")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'parameters'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "measurements_continuous_corrected")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the view table 'measurements_continuous_corrected'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "samples")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'samples'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "results")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'results'. This table is required for the app to function."
     )
@@ -174,6 +185,8 @@ YGwater <- function(
     "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
   )[1, 1])
   if (ver < 32) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The aquacache database version is too old. Please update to at least version 32. Current version is ",
       ver,

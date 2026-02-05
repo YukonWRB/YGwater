@@ -60,7 +60,7 @@ addTimeseries <- function(id, language) {
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note, ts.data_sharing_agreement_id FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note, ts.default_data_sharing_agreement_id FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,

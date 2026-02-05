@@ -121,7 +121,7 @@ addDocs <- function(id, language) {
       )
       moduleData$organization_agreements <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT organization_id, document_id FROM public.organization_data_sharing_agreements;"
+        "SELECT organization_id, data_sharing_agreement_id AS document_id FROM public.organization_data_sharing_agreements;"
       )
     }
 
@@ -178,6 +178,21 @@ addDocs <- function(id, language) {
           options = list(maxItems = 1, create = FALSE),
           width = "100%"
         ),
+        # Show on condition of data sharing agreement type
+        conditionalPanel(
+          condition = "input.doc_type && input.doc_type.indexOf('data sharing agreement') >= 0",
+          ns = ns,
+          selectizeInput(
+            ns("doc_organizations"),
+            label = "Associate organization(s) with data sharing agreement",
+            choices = stats::setNames(
+              moduleData$organizations$organization_id,
+              moduleData$organizations$name
+            ),
+            multiple = TRUE,
+            width = "100%"
+          )
+        ),
         textAreaInput(
           ns("doc_description"),
           label = "Description",
@@ -215,21 +230,6 @@ addDocs <- function(id, language) {
           width = "100%"
         ),
 
-        # Show on condition of data sharing agreement type
-        conditionalPanel(
-          condition = "input.doc_type && input.doc_type.indexOf('data sharing agreement') >= 0",
-          ns = ns,
-          selectizeInput(
-            ns("doc_organizations"),
-            label = "Associate organization(s) with data sharing agreement",
-            choices = stats::setNames(
-              moduleData$organizations$organization_id,
-              moduleData$organizations$name
-            ),
-            multiple = TRUE,
-            width = "100%"
-          )
-        ),
         actionButton(ns("clear_form"), label = "Clear form"),
         conditionalPanel(
           condition = "input.mode == 'add'",
@@ -448,7 +448,7 @@ addDocs <- function(id, language) {
             }
             org_links <- data.frame(
               organization_id = doc_organizations,
-              document_id = new_doc$document_id[1]
+              data_sharing_agreement_id = new_doc$document_id[1]
             )
             DBI::dbAppendTable(
               session$userData$AquaCache,
@@ -602,13 +602,13 @@ addDocs <- function(id, language) {
             DBI::dbExecute(
               session$userData$AquaCache,
               "DELETE FROM public.organization_data_sharing_agreements
-              WHERE document_id = $1;",
+              WHERE data_sharing_agreement_id = $1;",
               params = list(doc_id)
             )
             if (length(doc_organizations)) {
               org_links <- data.frame(
                 organization_id = doc_organizations,
-                document_id = doc_id
+                data_sharing_agreement_id = doc_id
               )
               DBI::dbAppendTable(
                 session$userData$AquaCache,

@@ -342,15 +342,15 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
           ts.start_datetime, 
           ts.end_datetime, 
           lz.z_meters AS z
-          FROM timeseries AS ts 
-          LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id 
-          LEFT JOIN media_types AS m ON ts.media_id = m.media_id
+          FROM continuous.timeseries AS ts 
+          LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id 
+          LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
           LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
 "
         ),
         parameters = dbGetQueryDT(
           con,
-          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
+          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM public.parameters AS p RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
         )
       )
     },
@@ -446,7 +446,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
 }
 
 
-# locations map module #########
+# water well registry module #########
 wwr_module_data <- function(con, env = .GlobalEnv) {
   get_cached(
     key = "wwr_module_data",

@@ -475,13 +475,16 @@ plotDiscrete <- function(
     # Now add the result_condition and result_condition_value columns
     # Sometimes the "." is a "," in the result, so we need to replace it
     data$result <- gsub(",", ".", data$result)
-    #result_condition should get < DL, > DL, or NA depending on if '<' or '>' show up in columns 'result'
-    data$result_condition <- data.table::fifelse(
-      grepl("<", data$result),
-      "< DL",
-      data.table::fifelse(grepl(">", data$result), "> DL", NA)
+    # result_condition should get < DL, > DL, or NA depending on if '<' or '>' show up in columns 'result'
+    suppressWarnings(
+      # Warning suppression to avoid warnings about NAs introduced by coercion
+      data$result_condition <- data.table::fifelse(
+        grepl("<", data$result),
+        "< DL",
+        data.table::fifelse(grepl(">", data$result), "> DL", NA)
+      )
     )
-    #result_condition_value should get the numeric portion of the string in 'result' only if '<' or '>' show up in columns 'result'
+    # result_condition_value should get the numeric portion of the string in 'result' only if '<' or '>' show up in columns 'result'
     data$result_condition_value <- data.table::fifelse(
       grepl("<", data$result),
       as.numeric(gsub("<", "", data$result)),
