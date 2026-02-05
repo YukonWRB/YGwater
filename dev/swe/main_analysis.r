@@ -4,6 +4,8 @@ library(DBI)
 library(plotly)
 library(leaflet)
 library(sf)
+
+
 config <- list(
     dbName = "aquacache",
     dbHost = Sys.getenv("aquacacheHostProd"),
@@ -19,7 +21,6 @@ con <- AquaConnect(
     user = config$dbUser,
     pass = config$dbPass
 )
-
 
 run_swe_analysis <- function(
     crs = 4326,
@@ -395,20 +396,74 @@ hybas_shapefile <- sf::st_read(
     "H:/esniede/data/HydroSheds/hybas_ar_lev01-12_v1c/hybas_ar_lev07_v1c.shp"
 )
 
-# hydrorivers_shapefile <- sf::st_read(
-#     "H:/esniede/data/HydroSheds/HydroRIVERS_v10_ar_shp/HydroRIVERS_v10_ar.shp"
-# )
+wsc_shapefile <- sf::st_read(
+    "H:/esniede/data/WSC/MDA_ADP_10/MDA_ADP_10_DrainageBasin_BassinDeDrainage.geojson"
+)
+
+# wsc_station <- "09DC004"
+wsc_station <- "10AA001"
+
+hydrorivers_shapefile <- sf::st_read(
+    "H:/esniede/data/HydroSheds/HydroRIVERS_v10_ar_shp/HydroRIVERS_v10_ar.shp"
+)
 
 hybas_id <- 8070212940 #mayo
 # hybas_id <- 8070274780 #whitehorse
 
-basin_shp <- hybas_shapefile[hybas_shapefile$HYBAS_ID == hybas_id, ]
+hybas_shp <- hybas_shapefile[hybas_shapefile$HYBAS_ID == hybas_id, ]
+
+basin_shp <- wsc_shapefile[
+    wsc_shapefile$StationNum == wsc_station,
+]
+
+if (!isTRUE(sf::st_crs(hybas_shp) == sf::st_crs(basin_shp))) {
+    hybas_shp <- sf::st_transform(
+        hybas_shp,
+        sf::st_crs(basin_shp)
+    )
+}
+
+# plot(
+#     sf::st_geometry(hybas_shp),
+#     col = NA,
+#     border = "grey50",
+#     lwd = 2
+# )
+# plot(
+#     sf::st_geometry(basin_shp),
+#     col = NA,
+#     border = "darkblue",
+#     lwd = 2,
+#     add = TRUE
+# )
+
+# plot(
+#     communities$geometry,
+#     pch = 16,
+#     bg = "orange",
+#     cex = 2.5,
+#     add = TRUE
+# )
+# text(
+#     sf::st_coordinates(communities),
+#     labels = communities$feature_name,
+#     pos = 1,
+#     cex = 1.2
+# )
+
+# legend(
+#     "topright",
+#     legend = c("HYBAS basin", "WSC basin"),
+#     col = c("grey50", "darkblue"),
+#     lwd = 2,
+#     bg = "white"
+# )
 
 # Fix invalid geometries before intersection
 basin_shp <- sf::st_make_valid(basin_shp)
 
 basin_shp_list <- list(basin_shp)
-filenames <- c("dev/swe/exports/mayo_basin.png")
+filenames <- c("dev/swe/exports/upper_basin.png")
 
 result_list <- run_swe_analysis(
     crs = 4326,

@@ -2,6 +2,7 @@ load_all()
 
 con <- YGwater::AquaConnect()
 
+
 dat <- load_bulletin_timeseries(
     con = con,
     load_swe = TRUE,
@@ -11,16 +12,16 @@ dat <- load_bulletin_timeseries(
     start_year_historical = 1991,
     end_year_historical = 2020,
     october_start = TRUE,
-    epsg = "EPSG:3579"
+    epsg = 3579
 )
 
 make_snowbull_map(
-    year = 2024,
+    year = 2025,
     month = 3,
-    statistic = "anomalies",
+    statistic = "relative_to_med",
     language = "English",
     format = "ggplot",
-    param_name = "temperature, air",
+    param_name = "snow water equivalent",
     snowbull_timeseries = dat,
     con = con,
     filename = "map.png"
@@ -49,7 +50,7 @@ snow_id <- DBI::dbGetQuery(
 
 
 bulletin_month <- 3
-bulletin_year <- 2024
+bulletin_year <- 2025
 bulletin_scale <- 1
 language <- list(language = "English", abbrev = "en")
 start_year_historical <- 1991

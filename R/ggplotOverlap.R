@@ -854,11 +854,11 @@ ggplotOverlap <- function(
     summary_dat <- dat %>%
       dplyr::group_by(.data$day) %>%
       dplyr::summarise(
-        min = round(min(.data$value), 0),
-        max = round(max(.data$value), 0),
-        md = round(stats::median(.data$value), 0),
-        q75 = round(stats::quantile(.data$value, 0.75), 0),
-        q25 = round(stats::quantile(.data$value, 0.25), 0)
+        min = round(min(.data$value), 3),
+        max = round(max(.data$value), 3),
+        md = round(stats::median(.data$value), 3),
+        q75 = round(stats::quantile(.data$value, 0.75), 3),
+        q25 = round(stats::quantile(.data$value, 0.25), 3)
       )
 
     # Add date
@@ -996,8 +996,10 @@ ggplotOverlap <- function(
     realtime <- realtime[order(realtime$fake_datetime), ]
     # Remove all values before the first of the month
     try({
+      cutoff <- lubridate::floor_date(Sys.Date(), "month")
+
       realtime[
-        realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"),
+        !is.na(realtime$datetime) & realtime$datetime > cutoff,
         "value"
       ] <- NA
     })

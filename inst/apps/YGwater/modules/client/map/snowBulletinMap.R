@@ -162,7 +162,7 @@ mapSnowbull <- function(id, language) {
             ns("statistic"),
             label = NULL,
             choices = stats::setNames(
-              c("relative_to_med", "data", "percentile"),
+              c("relative_to_med", "value", "percentile"),
               c(
                 tr("snowbull_relative_median", language$language),
                 tr("snowbull_swe", language$language),
