@@ -631,6 +631,7 @@ addLocation <- function(id, inputs, language) {
       updateTextInput(session, "loc_install_purpose", value = "")
       updateTextInput(session, "loc_current_purpose", value = "")
       updateTextInput(session, "loc_note", value = "")
+      updateCheckboxInput(session, "associate_well", value = FALSE)
       removeModal()
       selected_loc(NULL)
     })
@@ -1998,11 +1999,13 @@ addLocation <- function(id, inputs, language) {
               }
             }
 
-            if (isTruthy(selected_well_id())) {
+            if (
+              isTruthy(input$associate_well) && isTruthy(selected_well_id())
+            ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE boreholes.boreholes SET location_id = $1 WHERE borehole_id = $2",
-                params = list(new_loc_id, selected_well_id())
+                params = list(seleced_loc(), selected_well_id())
               )
             }
 
@@ -2331,6 +2334,21 @@ addLocation <- function(id, inputs, language) {
           # addACLocation is all done within a transaction, including additions to accessory tables
           AquaCache::addACLocation(con = session$userData$AquaCache, df = df)
 
+          if (isTruthy(input$associate_well) && isTruthy(selected_well_id())) {
+            new_loc_id <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              "SELECT location_id FROM public.locations WHERE location = $1",
+              params = list(input$loc_code)
+            )$location_id
+            if (length(new_loc_id)) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "UPDATE boreholes.boreholes SET location_id = $1 WHERE borehole_id = $2",
+                params = list(new_loc_id[1], selected_well_id())
+              )
+            }
+          }
+
           # Show a modal to the user that the location was added
           showModal(modalDialog(
             "Location added successfully",
@@ -2364,6 +2382,19 @@ addLocation <- function(id, inputs, language) {
           updateSelectizeInput(session, "network", selected = character(0))
           updateSelectizeInput(session, "project", selected = character(0))
           updateTextInput(session, "loc_note", value = character(0))
+          updateCheckboxInput(
+            session,
+            "loc_jurisdictional_relevance",
+            value = FALSE
+          )
+          updateCheckboxInput(
+            session,
+            "loc_anthropogenic_influence",
+            value = FALSE
+          )
+          updateTextInput(session, "loc_install_purpose", value = "")
+          updateTextInput(session, "loc_current_purpose", value = "")
+          updateCheckboxInput(session, "associate_well", value = FALSE)
           pending_network_selection(character(0))
           pending_network_new(NULL)
           pending_project_selection(character(0))
