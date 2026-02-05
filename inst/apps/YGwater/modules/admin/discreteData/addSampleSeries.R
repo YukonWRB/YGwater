@@ -699,7 +699,7 @@ addSampleSeries <- function(id, language) {
         ]
       } else {
         moduleData$sample_series[
-          moduleData$sample_series$location_id == as.numeric(input$location) &&
+          moduleData$sample_series$location_id == as.numeric(input$location) &
             moduleData$sample_series$sub_location_id == sub_loc,
         ]
       }
@@ -707,7 +707,7 @@ addSampleSeries <- function(id, language) {
         showNotification(
           "There is alraedy a sample series for this location and sub_location combo. Please modify the existing sample series.",
           type = "error",
-          duration = 8,
+          duration = 8
         )
         return()
       }
@@ -719,7 +719,7 @@ addSampleSeries <- function(id, language) {
           showNotification(
             "Source function arguments should use ':' to separate keys and values, not '='.",
             type = "error",
-            duration = 8,
+            duration = 8
           )
           return()
         }
@@ -742,7 +742,7 @@ addSampleSeries <- function(id, language) {
       } else {
         showNotification(
           "Source functions and arguments are necessary when adding a sample series.",
-          type = error,
+          type = "error",
           duration = 8
         )
       }

@@ -181,7 +181,7 @@ mapSnowbull <- function(id, language) {
     })
 
     # --- Reactive for processed data and map output ---
-    map_output <- shiny::reactive({
+    map_output <- reactive({
       req(input$year, input$month)
 
       # get the 'current' data for the specified date, and create the popup data
@@ -222,7 +222,7 @@ mapSnowbull <- function(id, language) {
         }
       }
 
-      make_leaflet_map(
+      YGwater:::make_leaflet_map(
         point_data = map_data$point_data,
         poly_data = map_data$poly_data,
         point_data_secondary = map_data$point_data_secondary,

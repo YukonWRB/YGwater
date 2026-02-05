@@ -326,10 +326,11 @@ contPlotOld <- function(id, language, windowDims, inputs) {
               ns("historic_range_overlap"),
               label = tr("plot_hist_range_select", language$language),
               choices = stats::setNames(
-                c("all", "last"),
+                c("all", "last", "none"),
                 c(
                   tr("all_yrs_record", language$language),
-                  tr("last_yr_only", language$language)
+                  tr("last_yr_only", language$language),
+                  tr("none_fm", language$language)
                 )
               ),
               selected = "all"

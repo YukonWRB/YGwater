@@ -103,13 +103,15 @@ snowBulletinStats <- function(
     tab <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT locations.name AS location_name, 
-                                           locations.location AS location_id, 
-                                           datetime, value_corrected AS value
-                                           FROM measurements_continuous_corrected 
-                                           INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
-                                           INNER JOIN locations ON timeseries.location = locations.location
-                                           WHERE measurements_continuous_corrected.timeseries_id IN ('",
+        "SELECT 
+          locations.name AS location_name, 
+          locations.location AS location_id, 
+          datetime, 
+          value_corrected AS value
+        FROM measurements_continuous_corrected 
+        INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
+        INNER JOIN locations ON timeseries.location_id = locations.location_id
+        WHERE measurements_continuous_corrected.timeseries_id IN ('",
         paste0(tsid, collapse = "', '"),
         "')"
       )
@@ -458,7 +460,7 @@ snowBulletinStats <- function(
             datetime, value_corrected AS value
             FROM measurements_continuous_corrected 
             INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
-            INNER JOIN locations ON timeseries.location = locations.location
+            INNER JOIN locations ON timeseries.location_id = locations.location_id
             WHERE measurements_continuous_corrected.timeseries_id IN ('",
         paste0(tsid, collapse = "', '"),
         "')"
