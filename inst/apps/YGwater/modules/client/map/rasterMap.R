@@ -1,13 +1,13 @@
 mapRasterUI <- function(id) {
-  ns <- NS(id)
+  ns <- shiny::NS(id)
   bslib::page_fluid(
-    uiOutput(ns("banner")),
-    uiOutput(ns("sidebar_page")) # <-- add ns() here
+    shiny::uiOutput(ns("banner")),
+    shiny::uiOutput(ns("sidebar_page")) # <-- add ns() here
   )
 }
 
 mapRaster <- function(id, language) {
-  moduleServer(id, function(input, output, session) {
+  shiny::moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
     getRasterRefID <- function(ref_table, datetime) {
@@ -98,19 +98,32 @@ mapRaster <- function(id, language) {
       param_name = "snow water equivalent"
     )
 
-    era5_query <- "
+    raster_reference_query <- "
     SELECT 
         r.reference_id,
+        rsi.model,
         rr.valid_from as datetime
     FROM spatial.raster_series_index rsi
     JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
     JOIN spatial.rasters r ON r.reference_id = rr.reference_id
-    WHERE rsi.model = 'ERA5_land'
+    WHERE parameter = 'snow water equivalent' AND rsi.model = 'ERA5_land'
     ORDER BY rr.valid_from, r.reference_id"
-    era5_raster_data <- DBI::dbGetQuery(session$userData$AquaCache, era5_query)
-    era5_raster_data$datetime <- as.POSIXct(era5_raster_data$datetime)
 
-    output$banner <- renderUI({
+    raster_reference_list <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      raster_reference_query
+    )
+    raster_reference_list$datetime <- as.POSIXct(raster_reference_list$datetime)
+    models <- unique(raster_reference_list$model)
+
+    # NOTE (ES): Currently, this module only supports 'ERA5_land' model.
+    # Future enhancements can include additional models if available.
+    # this would require (1), creation of a reactive subset of raster_reference_list, which would update Date selection
+    # a potential issue is if available dates aren't continuous, there's no way of 'blocking them' in date select.
+    # would need to add a modal warning if selected date has no data for selected model.
+    # next, reference_raster_mask would also need to be updated for every model change
+
+    output$banner <- shiny::renderUI({
       application_notifications_ui(
         ns = ns,
         lang = language$language,
@@ -119,18 +132,24 @@ mapRaster <- function(id, language) {
       )
     })
 
-    output$sidebar_page <- renderUI({
+    output$sidebar_page <- shiny::renderUI({
       bslib::page_sidebar(
         sidebar = bslib::sidebar(
-          dateInput(
+          shiny::selectInput(
+            ns("raster_type"),
+            tr("maps_raster", language$language),
+            choices = models,
+            selected = models[1]
+          ),
+          shiny::dateInput(
             ns("date"), # already namespaced
             "Date",
-            value = max(era5_raster_data$datetime),
-            min = min(era5_raster_data$datetime),
-            max = max(era5_raster_data$datetime),
+            value = max(raster_reference_list$datetime),
+            min = min(raster_reference_list$datetime),
+            max = max(raster_reference_list$datetime),
             language = language$abbrev
           ),
-          selectInput(
+          shiny::selectInput(
             ns("shapefile"), # already namespaced
             tr("gen_snowBul_basins", language$language),
             choices = c(
@@ -138,16 +157,16 @@ mapRaster <- function(id, language) {
             ),
             selected = "swe_basins"
           ),
-          tags$details(
-            tags$summary(tr("snowbull_details", language$language)),
-            uiOutput(ns("map_details"))
+          shiny::tags$details(
+            shiny::tags$summary(tr("snowbull_details", language$language)),
+            shiny::uiOutput(ns("map_details"))
           )
         ),
         leaflet::leafletOutput(ns("swe_map"), height = 800) # already namespaced
       )
     })
 
-    basins_shp <- reactive({
+    basins_shp <- shiny::reactive({
       if (input$shapefile == "swe_basins") {
         # input IDs are already namespaced in modules
         shp <- sf::st_read(
@@ -166,12 +185,12 @@ mapRaster <- function(id, language) {
 
     # Permanent snow mask
     permenent_snow_date <- as.Date("2025-09-01")
-    ref_id_perm <- getRasterRefID(era5_raster_data, permenent_snow_date)
+    ref_id_perm <- getRasterRefID(raster_reference_list, permenent_snow_date)
     r_db_perm <- getRasterSWE(session$userData$AquaCache, ref_id_perm)
     swe_mask <- !is.na(r_db_perm) & (r_db_perm <= 10)
 
-    swe_map_data <- reactive({
-      req(input$date)
+    swe_map_data <- shiny::reactive({
+      shiny::req(input$date)
 
       swe_pillows <- getPillowSWE(
         con = session$userData$AquaCache,
@@ -186,7 +205,7 @@ mapRaster <- function(id, language) {
       )
 
       # Query raster for selected date
-      ref_id <- getRasterRefID(era5_raster_data, input$date)
+      ref_id <- getRasterRefID(raster_reference_list, input$date)
       r_db <- getRasterSWE(session$userData$AquaCache, ref_id)
       r_db <- terra::mask(r_db, swe_mask, maskvalue = FALSE)
       # Basins
@@ -239,7 +258,7 @@ mapRaster <- function(id, language) {
 
     output$swe_map <- leaflet::renderLeaflet({
       map_data <- swe_map_data()
-      req(map_data)
+      shiny::req(map_data)
       r_db <- map_data$r_db
       basins_shp <- map_data$basins
       contours_sf <- map_data$contours_sf
@@ -414,8 +433,8 @@ mapRaster <- function(id, language) {
     })
 
     # --- Render selected date text with details ---
-    output$map_details <- renderUI({
-      HTML(paste0(
+    output$map_details <- shiny::renderUI({
+      shiny::HTML(paste0(
         "<b>",
         tr("app_version", language$language),
         "</b> ",

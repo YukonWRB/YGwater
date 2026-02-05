@@ -81,7 +81,7 @@ get_static_style_elements <- function() {
             color = "white",
             weight = 3,
             opacity = 1,
-            fillOpacity = 0.7,
+            fillOpacity = 1,
             label = list(
                 color = "#222",
                 fontSize = "14px",
@@ -293,13 +293,13 @@ get_dynamic_style_elements <- function(
 
     anomalies_bins <- c(-Inf, -5, -2, -0.4, 0.5, 2, 5, Inf)
     anomalies_colors <- c(
-        "#6772F7", # Blue (extremely high)
-        "#85B4F8", # Light blue (very high)
-        "#8CEFE1", # Cyan (high)
-        "#6CFC88", # Green (well above normal)
-        "#C1FB80", # Light green (above normal)
+        "#EBB966", # Orange (near normal)
         "#EEE383", # Yellow (normal)
-        "#EBB966" # Orange (near normal)
+        "#C1FB80", # Light green (above normal)
+        "#6CFC88", # Green (well above normal)
+        "#8CEFE1", # Cyan (high)
+        "#85B4F8", # Light blue (very high)
+        "#6772F7" # Blue (extremely high)
     )
 
     absolute_bins <- c(0, 50, 100, 150, 200, 250, 300, 400, 500, Inf)
@@ -332,49 +332,49 @@ get_dynamic_style_elements <- function(
 
     # Custom legend labels for each value type
     relative_labels <- c(
-        tr("snowbull_no_snow", language), #"No snow present where<br>historical median is zero",
-        tr("snowbull_some_snow", language), #"Snow present where<br>historical median is zero",
-        "< 50%",
-        "50 - 69%",
-        "70 - 89%",
-        "90 - 109%",
-        "110 - 129%",
-        "130 - 149%",
-        ">= 150%"
+        tr("snowbull_no_snow", language), # "No snow present where historical median is zero"
+        tr("snowbull_some_snow", language), # "Snow present where historical median is zero"
+        "x ≤ 50%",
+        "50% < x ≤ 70%",
+        "70% < x ≤ 90%",
+        "90% < x ≤ 110%",
+        "110% < x ≤ 130%",
+        "130% < x ≤ 150%",
+        "x > 150%"
     )
 
     anomalies_labels <- c(
-        "> -5.0",
-        "-5.0 to -2.0",
-        "-2.0 to -0.4",
-        "-0.4 to +0.5",
-        "+0.5 to +2.0",
-        "+2.0 to +5.0",
-        ">= +5.0"
+        "x ≤ -5.0",
+        "-5.0 < x ≤ -2.0",
+        "-2.0 < x ≤ -0.4",
+        "-0.4 < x ≤ +0.5",
+        "+0.5 < x ≤ +2.0",
+        "+2.0 < x ≤ +5.0",
+        "x > +5.0"
     )
 
     absolute_labels <- c(
-        "0-50 mm",
-        "50-100 mm",
-        "100-150 mm",
-        "150-200 mm",
-        "200-250 mm",
-        "250-300 mm",
-        "300-400 mm",
-        "400-500 mm",
-        ">500 mm"
+        "x ≤ 50",
+        "50 < x ≤ 100",
+        "100 < x ≤ 150 ",
+        "150 < x ≤ 200",
+        "200 < x ≤ 250",
+        "250 < x ≤ 300",
+        "300 < x ≤ 400",
+        "400 < x ≤ 500",
+        "x > 500"
     )
     percentile_labels <- c(
-        paste("0-10", tr("snowbull_percentile_suffix", language)),
-        paste("10-20", tr("snowbull_percentile_suffix", language)),
-        paste("20-30", tr("snowbull_percentile_suffix", language)),
-        paste("30-40", tr("snowbull_percentile_suffix", language)),
-        paste("40-50", tr("snowbull_percentile_suffix", language)),
-        paste("50-60", tr("snowbull_percentile_suffix", language)),
-        paste("60-70", tr("snowbull_percentile_suffix", language)),
-        paste("70-80", tr("snowbull_percentile_suffix", language)),
-        paste("80-90", tr("snowbull_percentile_suffix", language)),
-        paste("90-100", tr("snowbull_percentile_suffix", language))
+        "x ≤ 10",
+        "10 < x ≤ 20",
+        "20 < x ≤ 30",
+        "30 < x ≤ 40",
+        "40 < x ≤ 50",
+        "50 < x ≤ 60",
+        "60 < x ≤ 70",
+        "70 < x ≤ 80",
+        "80 < x ≤ 90",
+        "90 < x ≤ 100"
     )
 
     style_choices = list(
@@ -483,6 +483,32 @@ get_most_recent_date <- function(ts) {
     latest_time <- max(ts$datetime[valid_idx], na.rm = TRUE)
     return(latest_time)
 }
+
+
+#' Standardize parameter name
+#' @param epsg Integer or character EPSG code
+#' @return Standardized integer EPSG code
+#' @noRd
+standardize_epsg <- function(epsg) {
+    if (is.null(epsg)) {
+        stop("epsg must be provided and non-null")
+    }
+    # If epsg is character and matches a number, extract the number
+    if (is.character(epsg) && length(epsg) == 1) {
+        # Extract number from string (e.g., "EPSG:4326" or "4326")
+        m <- regmatches(epsg, regexpr("[0-9]{3,5}", epsg))
+        if (length(m) == 1 && nzchar(m)) {
+            epsg <- as.integer(m)
+        } else {
+            stop("Could not extract EPSG code from string")
+        }
+    }
+    if (!is.numeric(epsg) || length(epsg) != 1 || is.na(epsg)) {
+        stop("epsg must be a single integer or string containing an EPSG code")
+    }
+    return(epsg)
+}
+
 
 #' Standardize parameter name
 #' @param param_name Character string of parameter name
@@ -1130,7 +1156,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
 
 download_continuous_ts <- function(
     con,
-    param_name = NULL,
+    param_name,
     start_date = sprintf("%d-01-01", 1950),
     end_date = sprintf("%d-01-01", 2100),
     resolution = "daily",
@@ -1150,7 +1176,7 @@ download_continuous_ts <- function(
     ts_ids <- unique(md_continuous$timeseries_id)
 
     # Get corresponding location_ids for each timeseries_id
-    loc_ids <- md_continuous$location[match(
+    loc_ids <- md_continuous$location_id[match(
         ts_ids,
         md_continuous$timeseries_id
     )]
@@ -1328,7 +1354,7 @@ download_continuous_ts <- function(
     )
 
     # add a key column to match the timeseries columns (this key is different for each datatype)
-    metadata_sf$key <- metadata_sf$location
+    metadata_sf$key <- metadata_sf$location_id
 
     # Get coordinates for stations
     surveys_coords <- sf::st_coordinates(metadata_sf)
@@ -1631,7 +1657,7 @@ get_aggr_fun <- function(param_name) {
         'precipitation, total' = sum,
         'snow water equivalent' = mean,
         'temperature, air' = mean,
-        'fdd' = sum,
+        'fdd' = mean,
         mean
     )
 }
@@ -1683,9 +1709,7 @@ get_indices <- function(param_name, ts, start_date, end_date) {
         `temperature, air` = which(
             ts$datetime >= start_date & ts$datetime < end_date
         ),
-        fdd = which(
-            ts$datetime >= start_date & ts$datetime < end_date
-        ),
+        `fdd` = which(ts$datetime == end_date),
         `water level` = which(ts$datetime == end_date),
         `water flow` = which(ts$datetime == end_date),
         which(ts$datetime >= start_date & ts$datetime < end_date)
@@ -2580,6 +2604,79 @@ get_km_to_crs_correction <- function(epsg) {
 }
 
 
+#### --------------- D: Functions to create CDDF plots -------------------- ####
+# Function for calculating CDDF
+getCDDF <- function(temps, year) {
+    # Function for calculating cddf of dataframe (with all dates of interest)
+    calcCDDF <- function(temps) {
+        cddf <- 0
+        temps$cddf <- NA
+        temps$value[is.na(temps$value)] <- 0
+        temps$cddf <- Reduce(
+            function(prev, temp) pmax(0, prev - temp),
+            temps$value,
+            init = 0,
+            accumulate = TRUE
+        )[-1]
+        return(temps[, c("datetime", "cddf")])
+    }
+
+    # # Keep only sept-june data
+    # temps <- temps[
+    #     format(temps$datetime, "%m") %in%
+    #         c("09", "10", "11", "12", "01", "02", "03", "04", "05", "06", "07"),
+    # ]
+
+    # Find first and last year
+    first_yr <- format(min(temps$datetime), "%Y")
+    last_yr <- format(max(temps$datetime), "%Y")
+
+    # if (last_yr <= year) {
+    #   last_yr <- year
+    # }
+
+    stations <- setdiff(names(temps), "datetime")
+    cddf_station <- list()
+
+    cddf_timeseries <- data.frame(datetime = temps$datetime)
+    # Run over every year
+    for (station in stations) {
+        cddf <- data.frame()
+
+        for (y in first_yr:last_yr) {
+            # Subset data
+            tab <- temps[
+                temps$datetime >= paste0(y, "-09-01") &
+                    temps$datetime < paste0(y + 1, "-08-31"),
+                c("datetime", station)
+            ]
+            names(tab) <- c("datetime", "value")
+
+            # Only calculate if missing less than 10 days, but only for years that are not in the 'years' list
+            if (length(tab$datetime) != 0) {
+                if (
+                    sum(!is.na(tab$value)) >= 276 |
+                        format(min(tab$datetime), "%Y") %in% c(year - 1)
+                ) {
+                    cddf_y <- calcCDDF(tab)
+                    names(cddf_y) <- c("datetime", station)
+                    cddf <- rbind(cddf, cddf_y)
+                }
+            }
+        }
+        cddf_timeseries <- merge(
+            cddf_timeseries,
+            cddf,
+            by = "datetime",
+            all.x = TRUE,
+            sort = FALSE
+        )
+    }
+
+    return(cddf_timeseries)
+}
+
+
 #' Load all base data for the SWE mapping application
 #'
 #' @param con DBI database connection object
@@ -2943,26 +3040,23 @@ load_bulletin_timeseries <- function(
         station_list <- names(temp_data$timeseries$data)[
             names(temp_data$timeseries$data) != "datetime"
         ]
-        temp_freezing <- temp_data$timeseries$data
-        # Set all values above 0 to 0 for each station
-        temp_freezing[station_list] <- lapply(
-            temp_freezing[station_list],
-            function(x) {
-                ifelse(is.na(x), NA, ifelse(x > 0, 0, abs(x)))
-            }
+
+        cddf <- getCDDF(
+            temps = temp_data$timeseries$data,
+            year = as.integer(format(Sys.Date(), "%Y"))
         )
 
         # FDD will always have october start - since 1-month FDD doesn't seem super useful
         norms <- get_norms(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
-            ts = temp_freezing,
+            ts = cddf,
             october_start = TRUE,
             param_name = "fdd"
         )
 
         snowbull_timeseries$fdd <- list(
-            timeseries = list(data = temp_freezing),
+            timeseries = list(data = cddf),
             param_name = "fdd",
             continuity = "derived",
             geom = "point",
@@ -2978,6 +3072,59 @@ load_bulletin_timeseries <- function(
             start_date = "1990-01-01",
             epsg = epsg
         )
+
+        paste(water_level$metadata$location_id)
+        datums <- DBI::dbGetQuery(
+            con,
+            sprintf(
+                "SELECT location_id, conversion_m FROM public.datum_conversions WHERE current = TRUE AND location_id IN (%s)",
+                paste(water_level$metadata$location_id, collapse = ",")
+            )
+        )
+
+        # Apply datum corrections to water_level$timeseries$data by matching columns to location_id
+        if (!is.null(datums) && nrow(datums) > 0) {
+            # datums: location_id, conversion_m
+            ts_cols <- setdiff(names(water_level$timeseries$data), "datetime")
+            for (col in ts_cols) {
+                loc_id <- as.integer(col)
+                datum_row <- datums[datums$location_id == loc_id, ]
+                if (nrow(datum_row) == 1 && !is.na(datum_row$conversion_m)) {
+                    water_level$timeseries$data[[
+                        col
+                    ]] <- water_level$timeseries$data[[col]] +
+                        datum_row$conversion_m
+                } else {
+                    #if datum is not found, issue a warning and set to NA
+                    warning(
+                        sprintf(
+                            "No datum conversion found for location_id %d. Skipping datum correction for this station.",
+                            loc_id
+                        )
+                    )
+                    water_level$timeseries$data[[col]] <- NA
+                }
+            }
+        }
+
+        threshold_levels <- data$flow_level_flood
+        threshold_levels <- threshold_levels[
+            !is.na(threshold_levels$Flood_level_asl),
+        ]
+        # Rename Flood_level_asl to threshold for consistency
+        names(threshold_levels)[
+            names(threshold_levels) == "Flood_level_asl"
+        ] <- "threshold"
+
+        water_level$metadata <-
+            merge(
+                water_level$metadata,
+                threshold_levels[c("ID", "threshold")],
+                by.x = "location",
+                by.y = "ID",
+                all.x = TRUE,
+                sort = FALSE
+            )
 
         norms <- get_norms(
             start_year_historical = start_year_historical,
@@ -2996,6 +3143,25 @@ load_bulletin_timeseries <- function(
             start_date = "1990-01-01",
             epsg = epsg
         )
+
+        threshold_flows <- data$flow_level_flood
+        threshold_flows <- threshold_flows[
+            !is.na(threshold_flows$Flood_flow),
+        ]
+        # Rename Flood_flow to threshold for consistency
+        names(threshold_flows)[
+            names(threshold_flows) == "Flood_flow"
+        ] <- "threshold"
+
+        water_flow$metadata <-
+            merge(
+                water_flow$metadata,
+                threshold_flows[c("ID", "threshold")],
+                by.x = "location",
+                by.y = "ID",
+                all.x = TRUE,
+                sort = FALSE
+            )
 
         norms <- get_norms(
             start_year_historical = start_year_historical,
@@ -3398,7 +3564,7 @@ generate_popup_content <- function(
 
 # Filter out stations with no recent data (more than 1 year old)
 filter_stations_by_latest_date <- function(df, input_date, cutoff_days) {
-    df[
+    ok <- df[
         is.na(df$latest_date) |
             as.numeric(difftime(
                 input_date,
@@ -4100,18 +4266,6 @@ make_ggplot_map <- function(
             plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 12)
         )
 
-    # Add Yukon boundary background (underneath everything except basins)
-    if (!is.null(snowbull_shapefiles$yukon)) {
-        p <- p +
-            ggplot2::geom_sf(
-                data = snowbull_shapefiles$yukon,
-                fill = "#F5F5DC", # Beige terrain-like color
-                color = "black",
-                size = 1.5,
-                alpha = 0.5 # 50% transparent background
-            )
-    }
-
     # Add basin labels using adjusted coordinates
     if (!is.null(poly_data)) {
         basin_labels_df <- data.frame(
@@ -4125,13 +4279,15 @@ make_ggplot_map <- function(
             basin_labels_df$annotation
         )
 
+        p <- ggplot2::ggplot()
         p <- p +
             ggplot2::geom_sf(
                 data = poly_data,
                 fill = poly_data$fill_colour,
                 size = static_style_elements$basins$weight * 0.25,
-                alpha = static_style_elements$basins$fillOpacity
+                alpha = 1
             )
+        p
     }
 
     # Add roads (below stations)
@@ -4149,18 +4305,36 @@ make_ggplot_map <- function(
         ggplot2::geom_sf(
             data = snowbull_shapefiles$basins,
             color = "white",
-            size = static_style_elements$basins$weight * 0.6
+            size = static_style_elements$basins$weight * 0.6,
+            fill = NA
         )
     p <- p +
         ggplot2::geom_sf(
             data = snowbull_shapefiles$basins,
             color = "black",
-            size = static_style_elements$basins$weight * 0.25
+            size = static_style_elements$basins$weight * 0.25,
+            fill = NA
         )
 
+    # Add Yukon boundary background (underneath everything except basins)
+    if (!is.null(snowbull_shapefiles$yukon)) {
+        p <- p +
+            ggplot2::geom_sf(
+                data = snowbull_shapefiles$yukon,
+                fill = NA, # No fill for background
+                color = "black",
+                size = 1.5,
+                alpha = 0.5 # 50% transparent background
+            )
+    }
+
     if (!is.null(point_data)) {
-        point_data <<- point_data
-        point_data <- point_data[!is.na(point_data$value), ]
+        # point_data <<- point_data
+        # point_data <- point_data[!is.na(point_data$value), ]
+
+        point_data <- point_data[
+            order(point_data$value, decreasing = FALSE, na.last = FALSE),
+        ]
         p <- p +
             ggplot2::geom_point(
                 data = point_data,
@@ -4228,7 +4402,7 @@ make_ggplot_map <- function(
                 data = communities_df,
                 ggplot2::aes(x = .data$x, y = .data$y),
                 fill = "black",
-                size = static_style_elements$communities$iconWidth / 8,
+                size = static_style_elements$communities$iconWidth / 6,
                 shape = 18
             ) +
             shadowtext::geom_shadowtext(
@@ -4238,7 +4412,7 @@ make_ggplot_map <- function(
                     y = .data$y_adjust,
                     label = .data$annotation
                 ),
-                size = 2,
+                size = 3,
                 fontface = "bold.italic",
                 color = static_style_elements$communities$labelColor,
                 bg.color = "white",
@@ -4509,7 +4683,7 @@ make_snowbull_map <- function(
     dynamic_style_elements <- get_dynamic_style_elements(
         statistic = statistic,
         param_name = param_name,
-        language = language
+        language = "English"
     )
 
     # static_style_elements <- get_static_style_elements()
@@ -4580,7 +4754,7 @@ make_snowbull_map <- function(
                 year = year,
                 month = month,
                 statistic = statistic,
-                language = language
+                language = "English"
             )
             map_data[[data_type]]$fill_colour <- get_state_style_elements(
                 map_data[[data_type]]$display_value,
