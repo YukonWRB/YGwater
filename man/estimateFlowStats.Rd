@@ -14,7 +14,7 @@ estimateFlowStats(
 )
 }
 \arguments{
-\item{gauged_stations}{The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001). These must be locations in the databases' location table, column 'location'. In addition there must be correspondingly named polygons in the 'vectors' table under the 'Drainage basins' layer.}
+\item{gauged_stations}{The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001). These must be locations in the database's location table, matching \code{location_code} (or \code{alias}/\code{name}/\code{name_fr}). In addition there must be correspondingly named polygons in the 'vectors' table under the 'Drainage basins' layer.}
 
 \item{ungauged_area}{The area of the stations of interest. Given in square km and as a vector.}
 

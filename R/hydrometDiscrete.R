@@ -152,14 +152,10 @@ hydrometDiscrete <- function(
   if (is.null(discrete_data)) {
     # Check for existence of timeseries ---------------------------------------
     #then for presence of data within the time range requested.
-    location_id <- DBI::dbGetQuery(
-      con,
-      paste0(
-        "SELECT location_id FROM locations WHERE location = '",
-        location,
-        "';"
-      )
-    )[1, 1]
+    location_id <- lookup_location_id(con, location)
+    if (is.na(location_id)) {
+      stop("The location you entered does not exist in the database.")
+    }
     parameter_code <- DBI::dbGetQuery(
       con,
       paste0(
@@ -687,8 +683,9 @@ hydrometDiscrete <- function(
       if (is.null(discrete_data)) {
         stn_name <- DBI::dbGetQuery(
           con,
-          paste0("SELECT name FROM locations where location = '", location, "'")
-        )
+          "SELECT name FROM locations where location_id = $1;",
+          params = list(location_id)
+        )[1, 1]
         titl <- paste0("Location ", location, ": ", titleCase(stn_name))
       } else {
         if (!is.null(location)) {

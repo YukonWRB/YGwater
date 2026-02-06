@@ -3,7 +3,7 @@
 #' @description
 #' This function is intended to facilitate the reporting of snow survey data by compiling basic statistics (years of record, missing years, mean, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of SWE, depth, and density for all requested stations. At its most basic (parameters to FALSE or NULL where applicable), the result is a list of two data.frames to the R environment with location metadata and field measurements.
 #'
-#' @param locations The list of location codes requested from column 'location' of table 'locations', as a character vector of length n. Default "all" fetches all stations.
+#' @param locations The list of locations requested, as either a vector of location IDs (preferable) or entries from one of columns 'name', 'location_code', or 'alias' from table 'locations'. Default "all" fetches all stations in the Yukon Snow Survey Network.
 #' @param inactive Boolean specifying whether to include inactive stations. In this case, a station with no measurements for 5 or more years is considered inactive. Default is FALSE, i.e. no inactive stations.
 #' @param save_path The path where the .csv(s) and plots should be saved. Set to NULL for data only as an R object. Plots are not created if there is no save path.
 #' @param stats set TRUE if you want basic statistics (mean, min, max) and calculated trends.
@@ -87,7 +87,7 @@ snowInfo <- function(
     locations <- DBI::dbGetQuery(
       con,
       "
-    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
+    SELECT DISTINCT l.location_code AS location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
@@ -104,15 +104,21 @@ snowInfo <- function(
       con,
       paste0(
         "
-    SELECT DISTINCT l.location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
+    SELECT DISTINCT l.location_code AS location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Yukon Snow Survey Network' AND l.location IN ('",
+    WHERE n.name = 'Yukon Snow Survey Network' AND l.location_id IN ('",
         paste(locations, collapse = "', '"),
-        "')
+        "') OR l.alias IN ('",
+        paste(locations, collapse = "', '"),
+        "') OR l.name IN ('",
+        paste(locations, collapse = "', '"),
+        "') OR l.name_fr IN ('",
+        paste(locations, collapse = "', '"),
+        "'))
     ORDER BY l.name;
   "
       )

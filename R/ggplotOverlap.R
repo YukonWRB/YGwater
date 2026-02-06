@@ -20,7 +20,7 @@
 #'
 #' If specifying the option "table", the function will attempt to find returns for the location within the package internal data. The returns contained there are from consultant work involving a detailed analysis of which data to keep/discard, as well as a human determination of the most appropriate distribution and curve fitting methods. The caveat here is that these tables are not necessarily up to date, that most locations have no calculated return periods, and that return periods only exist for water levels.
 #'
-#' @param location The location for which you want a plot.
+#' @param location The location for which you want a plot. You can pass in the location_id, location_code, English or French location name.
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
 #' @param units The units to display on the y-axis. Default is "" and the function will attempt to find the appropriate units from the database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
@@ -347,7 +347,7 @@ ggplotOverlap <- function(
 
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
-    #Confirm parameter and location exist in the database and that there is only one entry
+    # Confirm parameter and location exist in the database and that there is only one entry
     if (inherits(parameter, "character")) {
       escaped_parameter <- gsub("'", "''", parameter)
       parameter_tbl <- dbGetQueryDT(
@@ -400,16 +400,12 @@ ggplotOverlap <- function(
       )
     )
 
-    location_id <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT location_id FROM locations WHERE location = '",
-        location,
-        "';"
-      )
-    )[1, 1]
+    location_id <- lookup_location_id(con, location)
+    if (is.na(location_id)) {
+      stop("The location you entered does not exist in the database.")
+    }
 
-    instantaneous <- dbGetQueryDT(
+    instantaneous <- DBI::dbGetQuery(
       con,
       "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';"
     )[1, 1]
@@ -1899,21 +1895,34 @@ ggplotOverlap <- function(
   # Wrap things up and return() -----------------------
   if (title) {
     if (is.null(custom_title)) {
+      location_id <- lookup_location_id(con, location)
       if (lang == "fr") {
-        stn_name <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT name_fr FROM locations where location = '",
-            location,
-            "'"
-          )
-        )[1, 1]
+        stn_name <- if (is.na(location_id)) {
+          location
+        } else {
+          dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT name_fr FROM locations where location_id = '",
+              location_id,
+              "'"
+            )
+          )[1, 1]
+        }
       }
       if (lang == "en" || is.na(stn_name)) {
-        stn_name <- dbGetQueryDT(
-          con,
-          paste0("SELECT name FROM locations where location = '", location, "'")
-        )[1, 1]
+        stn_name <- if (is.na(location_id)) {
+          location
+        } else {
+          dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT name FROM locations where location_id = '",
+              location_id,
+              "'"
+            )
+          )[1, 1]
+        }
       }
       stn_name <- titleCase(stn_name, lang)
 
@@ -1939,7 +1948,7 @@ ggplotOverlap <- function(
     }
   }
 
-  #Save it if requested
+  # Save it if requested
   if (!is.null(save_path)) {
     ggplot2::ggsave(
       filename = paste0(

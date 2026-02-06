@@ -529,13 +529,7 @@ plotMultiTimeseries <- function(
     if (is.null(timeseries_ids)) {
       # Confirm parameter and location, sub location exist in the database and that there is only one entry
       location_txt <- as.character(location)
-      location_id <- DBI::dbGetQuery(
-        con,
-        glue::glue_sql(
-          "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",
-          .con = con
-        )
-      )[1, 1]
+      location_id <- lookup_location_id(con, location_txt)
       if (is.na(location_id)) {
         warning(
           "The location you entered, ",

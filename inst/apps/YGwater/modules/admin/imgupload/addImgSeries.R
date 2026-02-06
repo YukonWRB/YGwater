@@ -45,7 +45,7 @@ addImgSeries <- function(id, language) {
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, location, name, latitude, longitude FROM locations"
+        "SELECT location_id, location_code AS location, name, latitude, longitude FROM locations"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,

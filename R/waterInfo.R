@@ -7,7 +7,7 @@
 #' Sites that routinely see 0 values for flow or level in mid-winter may report a negative annual percent change *even if* the sens's slope is positive. This is due to the intercept of a linear model calculated using minimum flows and years being below 0 at the first year of record. Unfortunately there is no fix, but the Sen's value is still valid.
 #'
 #' @param con A connection to the database. Default uses function [AquaConnect()] with default settings.
-#' @param locations The list of locations requested, as either a vector of location IDs/codes from table 'locations'. Default "all" fetches all stations.
+#' @param locations The list of locations requested, as either a vector of location IDs (preferable) or entries from one of columns 'name', 'location_code', or 'alias' from table 'locations'. Default "all" fetches all stations.
 #' @param level_flow Default 'both' will get and calculate level and flow information wherever possible. 'one' will pick flow where it exists, otherwise level. Exception to this is if there is no flow on the end_date requested AND most recent flow is > 1 month older than level ; in this case flow is assumed to be discontinued and level is used.
 #' @param end_date The most recent day to include in calculations. Defaults to today.
 #' @param months_min The month range in which to look for minimums. Does *not* currently support a month range overlapping two years.
@@ -194,36 +194,32 @@ waterInfo <- function(
   }
   for (i in names(extremes)) {
     tbl <- extremes[[i]]
+    location_input <- sub("_.*", "", i)
+    location_id <- lookup_location_id(con, location_input)
+    if (is.na(location_id)) {
+      stop("The location you entered does not exist in the database.")
+    }
     name <- DBI::dbGetQuery(
       con,
-      paste0(
-        "SELECT name FROM locations where location = '",
-        sub("_.*", "", i),
-        "'"
-      )
+      "SELECT name FROM locations where location_id = $1;",
+      params = list(location_id)
     )[1, 1]
     #metadata
     metadata <- rbind(
       metadata,
       data.frame(
-        "location" = sub("_.*", "", i),
+        "location" = location_input,
         "name" = name,
         "parameter" = sub(".*_", "", i),
         "latitude" = DBI::dbGetQuery(
           con,
-          paste0(
-            "SELECT latitude FROM locations where location = '",
-            sub("_.*", "", i),
-            "'"
-          )
+          "SELECT latitude FROM locations where location_id = $1;",
+          params = list(location_id)
         )[1, 1],
         "longitude" = DBI::dbGetQuery(
           con,
-          paste0(
-            "SELECT longitude FROM locations where location = '",
-            sub("_.*", "", i),
-            "'"
-          )
+          "SELECT longitude FROM locations where location_id = $1;",
+          params = list(location_id)
         )[1, 1],
         "active" = max(data[[i]]$date) > as.Date(end_date) - 365,
         "note" = paste0("Last data available on ", max(data[[i]]$date), ".")

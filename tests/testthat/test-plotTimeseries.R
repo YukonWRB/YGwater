@@ -237,10 +237,14 @@ test_that("plotTimeseries works when given only a timeseries_id", {
     con,
     "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
   )[1, 1]
+  loc_id <- DBI::dbGetQuery(
+    con,
+    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
+  )[1, 1]
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location = '09EA004';",
-    params = list(wl)
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2;",
+    params = list(wl, loc_id)
   )[1, 1]
   plot <- plotTimeseries(
     timeseries_id = tsid,
@@ -280,10 +284,14 @@ test_that("plotTimeseries plots raw and corrected data", {
     con,
     "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
   )[1, 1]
+  loc_id <- DBI::dbGetQuery(
+    con,
+    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
+  )[1, 1]
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location = '09EA004';",
-    params = list(wl)
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2;",
+    params = list(wl, loc_id)
   )[1, 1]
   plot <- plotTimeseries(
     timeseries_id = tsid,

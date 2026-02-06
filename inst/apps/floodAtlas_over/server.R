@@ -100,6 +100,7 @@ app_server <- function(input, output, session) {
     session,
     {
       query <- parseQueryString(session$clientData$url_search)
+      req(query$loc_code, query$param_code, query$lang)
 
       # Set input values based on URL parameters if they exist
       # yrs
@@ -122,21 +123,19 @@ app_server <- function(input, output, session) {
         # Find the years of record for the location
         tsid <- DBI::dbGetQuery(
           session$userData$con,
-          paste0(
-            "SELECT timeseries_id FROM timeseries WHERE location = '",
+          "SELECT t.timeseries_id FROM timeseries t INNER JOIN locations l ON t.location_id = l.location_id WHERE (l.location_code = $1 OR l.alias = $2 OR l.name = $3 OR l.name_fr = $4) AND t.parameter_id = $5;",
+          params = list(
             params$loc_code,
-            "' AND parameter_id = ",
-            params$param_code,
-            ";"
+            params$loc_code,
+            params$loc_code,
+            params$loc_code,
+            params$param_code
           )
         )[1, 1]
         yrs <- DBI::dbGetQuery(
           session$userData$con,
-          paste0(
-            "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-            tsid,
-            " ORDER BY year DESC;"
-          )
+          "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 ORDER BY year DESC;",
+          params = list(tsid)
         )
         updateSelectizeInput(
           session,
@@ -167,6 +166,7 @@ app_server <- function(input, output, session) {
 
   # input$go is triggering a reactiveValues change, which triggers the plot to be re-rendered. This is done to allow for triggering the reactive upon loading from a URL as well as when clicking the go button.
   observeEvent(input$go, {
+    req(params$loc_code, params$param_code, params$yrs, params$lang)
     if (params$render) {
       params$render <- FALSE
     } else {
@@ -176,6 +176,7 @@ app_server <- function(input, output, session) {
 
   # Show a modal with explanatory info when the user clicks the info button
   observeEvent(input$info, {
+    req(params$lang)
     if (params$lang == "en") {
       showModal(modalDialog(
         HTML(
@@ -235,13 +236,8 @@ app_server <- function(input, output, session) {
 
         loc_name <- DBI::dbGetQuery(
           con,
-          paste0(
-            "SELECT ",
-            if (lang == "en") "name" else "name_fr",
-            " FROM locations WHERE location = '",
-            loc,
-            "';"
-          )
+          "SELECT $1 FROM locations WHERE location_code = $2;",
+          params = list(if (lang == "en") "name" else "name_fr", loc)
         )[1, 1]
         if (nchar(loc_name) > 30) {
           loc_name <- paste0(substr(loc_name, 1, 25), "...")

@@ -1004,7 +1004,7 @@ download_continuous_ts_locations <- function(
         "SELECT
             t.timeseries_id,
             t.location_id,
-            l.location_code,
+            l.location_code AS location,
             l.name,
             l.latitude,
             l.longitude,
@@ -1092,7 +1092,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
         l.location_id,
         l.latitude,
         l.longitude,
-        l.location_code,
+        l.location_code AS location,
         l.name,
         dc.conversion_m
         FROM discrete.samples s

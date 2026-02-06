@@ -3,21 +3,6 @@ mapParamsUI <- function(id) {
 
   tagList(
     tags$style(
-      HTML(
-        "/* Make the ...preparing download... notification stand out more */
-        .shiny-notification {
-          font-size: 24px;
-          font-weight: bold;
-          background-color: #f9f9f9;  /* Light grey background */
-          color: #333;  /* Dark grey text */
-          padding: 15px;  /* Larger padding for more space */
-          border-left: 5px solid #007BFF;  /* Blue left border */
-          border-right: 5px solid #007BFF;  /* Blue right border */
-          border-top: 5px solid #007BFF;  /* Blue top border */
-          border-bottom: 5px solid #007BFF;  /* Blue bottom border */
-          border-radius: 10px;  /* Rounded corners */
-        }"
-      ),
       HTML(sprintf(
         "
      /* Add colors to the accordion. Using ns() makes it specific to each accordion */
@@ -45,12 +30,12 @@ mapParams <- function(id, language) {
     ns <- session$ns
 
     if (session$userData$user_logged_in) {
-      cached <- map_params_module_data(
+      cached <<- map_params_module_data(
         con = session$userData$AquaCache,
         env = session$userData$app_cache
       )
     } else {
-      cached <- map_params_module_data(con = session$userData$AquaCache)
+      cached <<- map_params_module_data(con = session$userData$AquaCache)
     }
 
     moduleData <- reactiveValues(
@@ -450,13 +435,10 @@ mapParams <- function(id, language) {
       }
 
       # Deal with parameter 1
-      tsids1 <- dbGetQueryDT(
-        session$userData$AquaCache,
-        sprintf(
-          "SELECT timeseries_id FROM timeseries WHERE parameter_id = %s;",
-          map_params$param1
-        )
-      )$timeseries_id
+      tsids1 <- moduleData$timeseries[
+        moduleData$timeseries$parameter_id == map_params$param1,
+        "timeseries_id"
+      ][[1]]
       if (length(tsids1) == 0) {
         return()
       }
@@ -492,6 +474,14 @@ mapParams <- function(id, language) {
                     row_num = 1;"
           )
         )
+
+        # IF there are no closest measurements, stop and show a notification
+        if (nrow(closest_measurements1) == 0) {
+          leaflet::leafletProxy("map", session) %>%
+            leaflet::clearMarkers() %>%
+            leaflet::clearControls()
+          return()
+        }
 
         # For timeseries where there was a measurement above, get historical range data and add
         range1 <- dbGetQueryDT(
@@ -588,16 +578,11 @@ mapParams <- function(id, language) {
 
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
-        tsids2 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT timeseries_id FROM timeseries WHERE parameter_id = ",
-            map_params$param2,
-            " AND location_id NOT IN (",
-            paste(locs_tsids1$location_id, collapse = ", "),
-            ");"
-          )
-        )$timeseries_id
+        tsids2 <- moduleData$timeseries[
+          moduleData$timeseries$parameter_id == map_params$param2 &
+            !moduleData$timeseries$location_id %in% locs_tsids1$location_id,
+          "timeseries_id"
+        ][[1]]
         if (length(tsids2) == 0) {
           return()
         }

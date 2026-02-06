@@ -131,14 +131,14 @@ SWE_station <- function(
     Meas <- DBI::dbGetQuery(
       aquaCon,
       paste0(
-        "SELECT l.name, l.name_fr, l.location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
+        "SELECT l.name, l.name_fr, l.location_code AS location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
            FROM results as res
            INNER JOIN samples as samp ON res.sample_id = samp.sample_id
            INNER JOIN locations as l ON samp.location_id = l.location_id
            INNER JOIN parameters as p ON res.parameter_id = p.parameter_id
            INNER JOIN datum_conversions as dc ON l.location_id = dc.location_id
            INNER JOIN result_value_types as rvt ON res.result_value_type = rvt.result_value_type_id
-           WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location IN ('",
+           WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location_code IN ('",
         paste0(stations, collapse = "', '"),
         "')"
       )

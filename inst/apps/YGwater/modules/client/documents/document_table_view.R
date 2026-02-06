@@ -133,7 +133,6 @@ docTableView <- function(id, language) {
       input$documents_table_rows_selected,
       {
         tbl <- table_data()
-        print(input$documents_table_rows_selected)
         if (
           !is.null(input$documents_table_rows_selected) &&
             length(input$documents_table_rows_selected) == 1 &&
