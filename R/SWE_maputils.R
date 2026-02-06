@@ -280,6 +280,7 @@ get_dynamic_style_elements <- function(
     # Bins represent percentage of normal SWE (relative_to_med values)
     relative_bins <- c(-2, -1, 0, 50, 70, 90, 110, 130, 150, Inf)
     relative_colors <- c(
+        "gray", # Gray (NA/NaN values)
         "#27A62C", # Green (much below normal)
         "#B200DD", # Purple (below normal)
         "#EBB966", # Orange (near normal)
@@ -293,17 +294,19 @@ get_dynamic_style_elements <- function(
 
     anomalies_bins <- c(-Inf, -5, -2, -0.4, 0.5, 2, 5, Inf)
     anomalies_colors <- c(
-        "#EBB966", # Orange (near normal)
-        "#EEE383", # Yellow (normal)
-        "#C1FB80", # Light green (above normal)
-        "#6CFC88", # Green (well above normal)
-        "#8CEFE1", # Cyan (high)
-        "#85B4F8", # Light blue (very high)
-        "#6772F7" # Blue (extremely high)
+        "gray", # Gray (NA/NaN values)
+        "#6772F7", # Blue (extremely low)
+        "#85B4F8", # Light blue (very low)
+        "#8CEFE1", # Cyan (low)
+        "#6CFC88", # Green (well below normal)
+        "#C1FB80", # Light green (below normal)
+        "#EEE383", # Yellow (above normal)
+        "#EBB966" # Orange (well above normal)
     )
 
     absolute_bins <- c(0, 50, 100, 150, 200, 250, 300, 400, 500, Inf)
     absolute_colors <- c(
+        "gray", # Gray (NA/NaN values)
         "#e6f5ff", # Very light sky blue
         "#b3e2ff", # Light blue
         "#80c7e6", # Cyan/teal
@@ -318,6 +321,7 @@ get_dynamic_style_elements <- function(
     # Percentile bins and colors (Spectral palette, 0-100)
     percentile_bins <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
     percentile_colors <- c(
+        "gray", # Gray (NA/NaN values)
         "#9e0142", # Very low (0-10)
         "#d53e4f", # Low (10-20)
         "#f46d43", # Below normal (20-30)
@@ -332,6 +336,7 @@ get_dynamic_style_elements <- function(
 
     # Custom legend labels for each value type
     relative_labels <- c(
+        tr("snowbull_no_data", language), # "No data"
         tr("snowbull_no_snow", language), # "No snow present where historical median is zero"
         tr("snowbull_some_snow", language), # "Snow present where historical median is zero"
         "x ≤ 50%",
@@ -344,6 +349,7 @@ get_dynamic_style_elements <- function(
     )
 
     anomalies_labels <- c(
+        tr("snowbull_no_data", language), # "No data"
         "x ≤ -5.0",
         "-5.0 < x ≤ -2.0",
         "-2.0 < x ≤ -0.4",
@@ -354,6 +360,7 @@ get_dynamic_style_elements <- function(
     )
 
     absolute_labels <- c(
+        tr("snowbull_no_data", language), # "No data"
         "x ≤ 50",
         "50 < x ≤ 100",
         "100 < x ≤ 150 ",
@@ -365,6 +372,7 @@ get_dynamic_style_elements <- function(
         "x > 500"
     )
     percentile_labels <- c(
+        tr("snowbull_no_data", language), # "No data"
         "x ≤ 10",
         "10 < x ≤ 20",
         "20 < x ≤ 30",
@@ -403,9 +411,9 @@ get_dynamic_style_elements <- function(
     # for precip, remove the 'no snow' and 'snow present' edge cases
     if (param_name == "precipitation, total") {
         style_choices$relative_to_med <- list(
-            bins = relative_bins[-c(1, 2)], # remove no snow / some snow bins
-            colors = relative_colors[-c(1, 2)], # remove no snow / some snow colors
-            labels = relative_labels[-c(1, 2)] # remove no snow / some snow labels
+            bins = relative_bins[-c(2, 3)], # remove no snow / some snow bins
+            colors = relative_colors[-c(2, 3)], # remove no snow / some snow colors
+            labels = relative_labels[-c(2, 3)] # remove no snow / some snow labels
         )
     }
 
@@ -529,7 +537,8 @@ standardize_param_name <- function(param_name, con = NULL) {
         "temperature, air",
         "water level",
         "water flow",
-        "fdd"
+        "fdd",
+        "snow depth"
     )
 
     # check that param_name is in available choices
@@ -995,7 +1004,7 @@ download_continuous_ts_locations <- function(
         "SELECT
             t.timeseries_id,
             t.location_id,
-            l.location,
+            l.location_code,
             l.name,
             l.latitude,
             l.longitude,
@@ -1083,7 +1092,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
         l.location_id,
         l.latitude,
         l.longitude,
-        l.location,
+        l.location_code,
         l.name,
         dc.conversion_m
         FROM discrete.samples s
@@ -2745,6 +2754,7 @@ load_bulletin_timeseries <- function(
     # Each timeseries entry has data, historic_median, relative_to_med, percentile
     snowbull_timeseries <- list(
         swe = list(),
+        sd = list(),
         precipitation = list(),
         temperature = list(),
         streamflow = list()
@@ -2816,10 +2826,72 @@ load_bulletin_timeseries <- function(
         # store discrete survey data
         snowbull_timeseries$swe$surveys <- discrete_data
         snowbull_timeseries$swe$surveys$norms <- norms
+
+        discrete_data <- download_discrete_ts(
+            con = con,
+            epsg = epsg,
+            param_name = "snow depth"
+        )
+
+        # we can leave param_name as swe here since they're calculated in the same way
+        norms <- get_norms(
+            start_year_historical = start_year_historical,
+            end_year_historical = end_year_historical,
+            ts = discrete_data$timeseries$data,
+            param_name = "snow water equivalent"
+        )
+
+        # store discrete survey data
+        snowbull_timeseries$sd$surveys <- discrete_data
+        snowbull_timeseries$sd$surveys$norms <- norms
+
+        # Spatial join: assign basin names to each survey station
+
+        # Ensure both are in the same CRS
+        surveys_sf <- snowbull_timeseries$swe$surveys$metadata
+
+        # Perform spatial join: add basin name to each survey station
+        # Ensure both objects have valid geometries and matching CRS
+        if (sf::st_crs(surveys_sf) != sf::st_crs(basins_shp)) {
+            surveys_sf <- sf::st_transform(
+                surveys_sf,
+                sf::st_crs(basins_shp)
+            )
+        }
+        # Perform spatial join using st_within as a function
+        basin_names <- sf::st_join(
+            surveys_sf,
+            basins_shp[, c("name")],
+            left = TRUE,
+            join = function(x, y) sf::st_within(x, y)
+        )$name.y
+        snowbull_timeseries$swe$surveys$metadata$basin <- basin_names
+
+        # manually add the two alaska surveys - ideally an 'Alaska' polygon shoud be included in SWE_basins..
+        snowbull_timeseries$swe$surveys$metadata[
+            snowbull_timeseries$swe$surveys$metadata$location %in%
+                c("08AK-SC01", "08AK-SC02"),
+            "basin"
+        ] <- "Alaska"
+
         # Load or infer weight matrix from snowcourse factors CSV using discrete metadata
         weights_df <- load_snowcourse_factors(
             metadata_discrete = discrete_data$metadata
         )
+
+        # Add location_id column to weights_df based on metadata lookup
+
+        weights_df <- merge(
+            weights_df,
+            discrete_data$metadata[, c("location", "location_id")],
+            by = "location",
+            all.x = TRUE,
+            sort = FALSE
+        )
+
+        # Remove 'location' column and rename 'location_id' to 'location'
+        weights_df$location <- NULL
+        names(weights_df)[names(weights_df) == "location_id"] <- "location"
 
         # Prepare dates and station list from discrete wide timeseries
         basin_dates <- snowbull_timeseries$swe$surveys$timeseries$data$datetime
@@ -2838,13 +2910,13 @@ load_bulletin_timeseries <- function(
 
             # get the weight matrix for available stations on that date
             weight_matrix <- weights_df[,
-                c("location_id", basin_names),
+                c("location", basin_names),
                 drop = FALSE
             ]
 
             swe_samples <- as.numeric(discrete_data$timeseries$data[
                 i,
-                as.character(weight_matrix$location_id),
+                as.character(weight_matrix$location),
                 drop = TRUE
             ])
 
@@ -3648,7 +3720,7 @@ get_display_data <- function(
         dataset_state <- filter_stations_by_latest_date(
             dataset_state,
             input_date,
-            366
+            50
         )
     }
 
@@ -3686,23 +3758,23 @@ get_display_data <- function(
     for (i in seq_len(nrow(dataset_state))) {
         val <- dataset_state$relative_to_med[i]
         if (is.na(val)) {
-            dataset_state$preposition[i] <- "snowbull_rmd_no_data"
+            dataset_state$preposition[i] <- "rmd_no_data"
         } else if (val < 66) {
-            dataset_state$preposition[i] <- "snowbull_rmd_well_below"
+            dataset_state$preposition[i] <- "rmd_well_below"
         } else if (val >= 66 && val < 90) {
-            dataset_state$preposition[i] <- "snowbull_rmd_below"
+            dataset_state$preposition[i] <- "rmd_below"
         } else if (val >= 90 && val < 98) {
-            dataset_state$preposition[i] <- "snowbull_rmd_close"
+            dataset_state$preposition[i] <- "rmd_close"
         } else if (val >= 98 && val < 103) {
-            dataset_state$preposition[i] <- "snowbull_rmd_no_preposition"
+            dataset_state$preposition[i] <- "rmd_no_preposition"
         } else if (val >= 103 && val < 110) {
-            dataset_state$preposition[i] <- "snowbull_rmd_close"
+            dataset_state$preposition[i] <- "rmd_close"
         } else if (val >= 110 && val < 135) {
-            dataset_state$preposition[i] <- "snowbull_rmd_above"
+            dataset_state$preposition[i] <- "rmd_above"
         } else if (val >= 135) {
-            dataset_state$preposition[i] <- "snowbull_rmd_well_above"
+            dataset_state$preposition[i] <- "rmd_well_above"
         } else {
-            dataset_state$preposition[i] <- "snowbull_rmd_no_data"
+            dataset_state$preposition[i] <- "rmd_no_data"
         }
     }
 
@@ -3723,9 +3795,9 @@ get_display_data <- function(
     )
 
     aggr_tag <- if (dataset$param_name %in% c("precipitation, total")) {
-        "snowbull_rmd_normal"
+        "rmd_normal"
     } else {
-        "snowbull_rmd_average"
+        "rmd_average"
     }
 
     # get the 'relative_to_med' text description by merging the preposition, aggr_tag, and text_colour
@@ -4227,13 +4299,16 @@ make_ggplot_map <- function(
     statistic = NULL,
     snowbull_shapefiles,
     param_name = NULL,
+    units = "",
     language = "English",
     month = NULL,
     year = NULL,
     filename = NULL,
     dpi = 300,
     height = 14,
-    width = 8
+    width = 8,
+    start_year_historical = NULL,
+    end_year_historical = NULL
 ) {
     requireNamespace("ggplot2")
     requireNamespace("shadowtext")
@@ -4275,7 +4350,6 @@ make_ggplot_map <- function(
             basin_labels_df$annotation
         )
 
-        p <- ggplot2::ggplot()
         p <- p +
             ggplot2::geom_sf(
                 data = poly_data,
@@ -4283,7 +4357,6 @@ make_ggplot_map <- function(
                 size = static_style_elements$basins$weight * 0.25,
                 alpha = 1
             )
-        p
     }
 
     # Add roads (below stations)
@@ -4452,19 +4525,51 @@ make_ggplot_map <- function(
     )
     # Compose title and subtitle for ggplot (no HTML tags, no <br>, no <b>)
     title <- tr("maps_snowbull", language)
+    switch(
+        param_name,
+        "snow water equivalent" = "mm",
+        "precipitation, total" = "mm",
+        "temperature, air" = "\u00B0C",
+    )
+
+    # if start_year_historical and end_year_historical are not null, add period of record to subtitle
+    if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
+        period_of_record <- paste0(
+            "\n",
+            tr("snowbull_normal", language),
+            " (",
+            start_year_historical,
+            "-",
+            end_year_historical,
+            ")"
+        )
+    } else {
+        period_of_record <- ""
+    }
+
+    # make the title based on parameter, statistic, and date
     subtitle <- paste0(
+        switch(
+            param_name,
+            "snow water equivalent" = tr("snowbull_swe", language),
+            "precipitation, total" = tr("snowbull_precipitation", language),
+            "temperature, air" = tr("snowbull_temperature", language),
+            ""
+        ),
+        "\n",
         switch(
             statistic,
             "relative_to_med" = tr("snowbull_relative_median", language),
-            "data" = tr("snowbull_swe", language),
+            "value" = sprintf(tr("snowbull_values", language), units),
             "percentile" = tr("snowbull_percentile", language),
-            "anomalies" = tr("snowbull_anomalies", language),
+            "anomalies" = sprintf(tr("snowbull_anomalies", language), units),
             ""
         ),
-        " - ",
+        "\n",
         tr(month_name_short, language),
-        " ",
-        year
+        " 1, ",
+        year,
+        period_of_record
     )
 
     # Add a dummy legend showing fill colour bins
@@ -4473,17 +4578,18 @@ make_ggplot_map <- function(
         label = dynamic_style_elements$labels,
         stringsAsFactors = FALSE
     )
-    # Ensure label is a factor with levels in the correct order
+    # Reverse the order of legend labels and colors
     legend_df$label <- factor(
         legend_df$label,
-        levels = dynamic_style_elements$labels
+        levels = rev(dynamic_style_elements$labels)
     )
+    legend_df$color <- rev(dynamic_style_elements$colors)
 
     p <- p +
-        ggplot2::labs(
-            title = title,
-            subtitle = subtitle
-        ) +
+        # ggplot2::labs(
+        #     title = title,
+        #     subtitle = subtitle
+        # ) +
         ggplot2::guides(
             fill = ggplot2::guide_legend(
                 title = subtitle,
@@ -4736,6 +4842,17 @@ make_snowbull_map <- function(
         stop("Unsupported param_name: ", param_name)
     )
 
+    # ugly units hardcoding
+    units <- switch(
+        param_name,
+        "snow water equivalent" = "mm",
+        "precipitation, total" = "mm",
+        "temperature, air" = "\u00B0C",
+        "fdd" = "\u00B0C days",
+
+        ""
+    )
+
     # Prepare map_data structure to hold processed data for each layer type
     map_data <- list(
         poly_data = NULL,
@@ -4832,7 +4949,10 @@ make_snowbull_map <- function(
                 filename = filename,
                 height = height,
                 width = width,
-                dpi = dpi
+                dpi = dpi,
+                start_year_historical = start_year_historical,
+                end_year_historical = end_year_historical,
+                units = units
             )
 
             return(list(

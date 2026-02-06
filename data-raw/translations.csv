@@ -111,7 +111,7 @@ tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,M
 tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
 tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Lieu de la prise de la mesure ou de l’échantillon
 tooltip_utc7,table tool tips,UTC-7,UTC-7
-tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données".
+tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données."
 tooltip_params_map_date_within,,"Maximum number of days from the target date to include a measurement. Use a lower threshold for parameters that change quickly (e.g., temperature).","Nombre maximum de jours à partir de la date ciblée pour inclure une mesure. Utilisez un seuil plus bas pour les paramètres qui changent rapidement (par exemple, la température)."
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
@@ -439,10 +439,12 @@ pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actue
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median (%),Pourcentage de la médiane historique (%)
 snowbull_historical_median,,Historical median,Médiane historique
-snowbull_anomalies,,Anomalies,Anomalies
-snowbull_swe,,Snow water equivalent (mm),Équivalent en eau de neige (mm)
+snowbull_anomalies,,Anomalies (%s),Anomalies (%s)
+snowbull_values,,Values (%s),Valeurs (%s)
+snowbull_swe,,Snow water equivalent,Équivalent en eau de neige
+snowbull_temperature,,Temperature,Température
+snowbull_precipitation,,Precipitation,Précipitation
 snowbull_percentile,,Percentile (%),Percentile (%)
-snowbull_values,,Values,Valeurs
 snowbull_details,,Map details,Détails de la carte
 app_version,,Current application version:,Version actuelle de l'application :
 snowbull_gen_on,,Map generated on,Carte générée le
@@ -453,10 +455,13 @@ snowbull_date,,Snow Bulletin Date,Date du bulletin de neige
 snowbull_historical_period,,Historical period for statistics,Période historique pour les statistiques
 snowbull_no_snow,,No snow (no record),Pas de neige (aucun enregistrement historique)
 snowbull_some_snow,,"Snow present (no record)","Neige présente (aucun enregistrement historique)"
+snowbull_no_data,,No data,Aucune donnée
 snowbull_percentile_suffix,,th,ème
 snowbull_snow_survey,,Snow survey,Relevé nivométrique
 snowbull_snow_pillow,,Snow pillow,Coussin à neige
-snowbull_swe_basin,,Basin average SWE,EEN moyen du bassin
+snowbull_swe_basin,,Basin average SWE,EEN moyen du 
+snowbull_normal,,Normal,Normal
+snowbull_average,,Average,Moyenne
 snowbull_communities,,Communities,Communautés
 snowbull_roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles

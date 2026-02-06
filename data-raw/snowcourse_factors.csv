@@ -9,7 +9,7 @@ Ford Lake,10AA-SC04,0.3,0,0,0,0,0,0,0,0,0.6,0
 Hoole River,09BA-SC03,0.3,0.7,0,0,0,0,0,0,0,0.6,0
 Rose Creek,09BC-SC01,0,1.95,0,0,0,0,1.5,0,0,0,0
 Pelly Farm,09CD-SC03,0,1.22,0.45,0,0,0,1.5,0,0,0,0
-Twin Creeks A,09BA-SC02B,0,1.22,0,0,0,0,0,0,0,0,0
+Twin Creeks A,09BA-SC02,0,1.22,0,0,0,0,0,0,0,0,0
 Burns Lake,09BA-SC04,1.2,1.32,0,0,0,0,0,0,0,0,0
 Fuller Lake,09BB-SC03,0,1.22,0.45,0,0,0,0,0,0,0,0
 Plata Airstrip,09DA-SC01,0,0.45,2.1,0,0,0,0,0,0,0,0
@@ -18,8 +18,7 @@ Calumet,09DD-SC01,0,0,1.4,0.4,0,0,0,0,0,0,0
 Withers Lake,09DB-SC01,0,0,1.4,0,0,0,0,0,0,0,0
 Rackla Lake,09DB-SC02,0,0,0.7,0.8,0,0,0,0,0,0,0
 Bonnet Plume Lake,10MB-SC01,0,0,0.45,0.8,0,0,0,0,0,0,0
-Mayo Airport A,09DC-SC01A,0,0,0.45,0,0,0,0,0,0,0,0
-Mayo Airport B,09DC-SC01B,0,0,0.45,0,0,0,0,0,0,0,0
+Mayo Airport A,09DC-SC01,0,0,0.45,0,0,0,0,0,0,0,0
 Riff's Ridge,09FA-SC01,0,0,0,2,2,0,0,0,0,0,0
 Ogilvie River,10MA-SC02,0,0,0,2,0.5,0,0,0,0,0,0
 Blackstone River,10MA-SC01,0,0,0,2,0,0,0,0.5,0,0,0
