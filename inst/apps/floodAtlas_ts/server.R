@@ -150,12 +150,10 @@ app_server <- function(input, output, session) {
 
         loc_name <- DBI::dbGetQuery(
           con,
-          paste0(
-            "SELECT ",
+          "SELECT $1 FROM locations WHERE location_code = $2;",
+          params = list(
             if (lang == "en") "name" else "name_fr",
-            " FROM locations WHERE location = '",
-            loc,
-            "';"
+            loc
           )
         )[1, 1]
         if (nchar(loc_name) > 30) {
