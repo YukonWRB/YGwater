@@ -145,7 +145,7 @@ visit <- function(id, language) {
     getModuleData <- function() {
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id"
+        "SELECT l.location_id, l.location_code AS location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id"
       )
       moduleData$sub_locations <- DBI::dbGetQuery(
         session$userData$AquaCache,

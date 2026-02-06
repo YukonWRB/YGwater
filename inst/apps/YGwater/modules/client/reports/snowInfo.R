@@ -34,7 +34,7 @@ snowInfoMod <- function(id, language) {
     moduleData <- reactiveValues(
       locs = dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT DISTINCT l.location_id, l.location, l.name, l.name_fr
+        "SELECT DISTINCT l.location_id, l.location_code AS location, l.name, l.name_fr
          FROM locations AS l
          JOIN locations_networks AS ln ON l.location_id = ln.location_id
          JOIN networks AS n ON ln.network_id = n.network_id

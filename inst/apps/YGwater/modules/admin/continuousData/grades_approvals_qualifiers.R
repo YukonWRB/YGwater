@@ -533,7 +533,7 @@ grades_approvals_qualifiers <- function(id, language) {
       {
         selected_record(NULL)
         next_edge("start")
-        proxy <- DT::dataTableProxy(nS("active_assignments"), session = session)
+        proxy <- DT::dataTableProxy(ns("active_assignments"), session = session)
         DT::selectRows(proxy, NULL)
       },
       ignoreNULL = FALSE

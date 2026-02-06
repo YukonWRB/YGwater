@@ -325,13 +325,7 @@ plotOverlap <- function(
 
     # Get the location and parameter metadata ###########
     location_txt <- as.character(location)
-    location_id <- DBI::dbGetQuery(
-      con,
-      glue::glue_sql(
-        "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",
-        .con = con
-      )
-    )[1, 1]
+    location_id <- lookup_location_id(con, location_txt)
     if (is.na(location_id)) {
       stop("The location you entered does not exist in the database.")
     }

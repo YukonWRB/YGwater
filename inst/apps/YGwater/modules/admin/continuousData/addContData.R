@@ -523,17 +523,23 @@ addContData <- function(id, language) {
       x <- as.character(x)
       # Switch T character with space for ISO like formats
       x <- x <- gsub("T", " ", x)
-      
-      lubridate::parse_date_time(x, orders = c(
-        "Ymd HMS",
-        "Ymd HM",  
-        "mdY HMS",   
-        "mdY HM",
-        "Ymd IMS p", 
-        "mdY IMS p",
-        "Ymd IM p", 
-        "mdY IM p"
-      ), exact = FALSE, train = TRUE, tz = "UTC")
+
+      lubridate::parse_date_time(
+        x,
+        orders = c(
+          "Ymd HMS",
+          "Ymd HM",
+          "mdY HMS",
+          "mdY HM",
+          "Ymd IMS p",
+          "mdY IMS p",
+          "Ymd IM p",
+          "mdY IM p"
+        ),
+        exact = FALSE,
+        train = TRUE,
+        tz = "UTC"
+      )
     }
 
     prepare_table_data <- function(df) {
@@ -660,7 +666,6 @@ addContData <- function(id, language) {
         proxy = data_table_proxy,
         rownames = TRUE
       )
-      print(data$df)
     })
 
     # function to check data validity before upload

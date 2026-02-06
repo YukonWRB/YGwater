@@ -233,8 +233,6 @@ imputeMissing <- function(id, language) {
 
     observeEvent(input$plot_ts_pre, {
       req(selected_ts())
-      print(selected_ts())
-      print(input$dt_range_pre)
       ts_plot_pre_task$invoke(
         tsid = selected_ts(),
         range = input$dt_range_pre,

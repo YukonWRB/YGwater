@@ -60,11 +60,11 @@ addTimeseries <- function(id, language) {
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.location_id = lz.location_id"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note, ts.default_data_sharing_agreement_id FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id ORDER BY l.name ASC"
+        "SELECT l.location_id, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id ORDER BY l.name ASC"
       )
       moduleData$sub_locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -105,6 +105,15 @@ addTimeseries <- function(id, language) {
         INNER JOIN organizations o ON ts.default_owner = o.organization_id
         "
       )
+      # Join on files.document_types.document_type_en = 'data sharing agreement' to get only data sharing agreements
+      moduleData$agreements <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM files.documents as f LEFT JOIN files.document_types as dt ON f.type = dt.document_type_id WHERE dt.document_type_en = 'data sharing agreement';"
+      )
+      moduleData$owners_agreements <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM public.organization_data_sharing_agreements;"
+      )
     }
 
     getModuleData() # Initial data load
@@ -144,7 +153,7 @@ addTimeseries <- function(id, language) {
           tags$div(
             class = "alert alert-info",
             "Tip: if you add a new timeseries with a source_fx and appropriate arguments, data will automatically be fetched from the source when you click 'Add timeseries'. If you leave the source_fx blank, you can enter data manually or use other methods. Note that WSC timeseries will get daily mean measurements as well as realtime measurements as far back as exist."
-          ),
+          )
         ),
         fluidRow(
           column(
@@ -183,13 +192,19 @@ addTimeseries <- function(id, language) {
               choices = c(-12:14),
               selected = -7 # Default to MST (UTC-7)
             )
-          )
+          ) |>
+            tooltip(
+              "The timezone used for calculating daily statistics. This should usually be the local timezone of the location.  Used to set the UTC times to capture a day. Note that this does not affect the timestamps of the raw data and is applied year-round (no daylight savings time adjustment)."
+            )
         ),
         checkboxInput(
           ns("z_specify"),
           "Specify an elevation or depth?",
           value = FALSE
-        ),
+        ) |>
+          tooltip(
+            "If the height/depth at which this timeseries is measured is important to the data interpretation (e.g., wind tower anemometer height), specify it here. Otherwise leave blank."
+          ),
         numericInput(
           ns("z"),
           "Elevation or depth, m (signed appropriately)",
@@ -245,13 +260,19 @@ addTimeseries <- function(id, language) {
               placeholder = 'Select aggregation type'
             ),
             width = "100%"
-          ),
+          ) |>
+            tooltip(
+              "The aggregation type defines how the raw data is collected. For example, 'Instantaneous' means the data is collected at specific time points, while 'Mean' indicates that the data represents an average over the period between measurements. Choosing the correct aggregation type is crucial for accurate data analysis and interpretation."
+            ),
           textInput(
             ns("record_rate"),
             "Rough record rate (5 minutes, 1 hour, 1 day, 1 week, etc.)",
             value = "",
             width = "100%"
-          )
+          ) |>
+            tooltip(
+              "This should be reasonably accurate for the **recent** data collection period. Specifying a record rate greater than '1 day' will result in the timeseries having no calculated historical ranges."
+            )
         ),
         selectizeInput(
           ns("sensor_priority"),
@@ -262,20 +283,47 @@ addTimeseries <- function(id, language) {
           options = list(maxItems = 1, placeholder = 'Select sensor priority'),
           width = "100%"
         ),
-        selectizeInput(
-          ns("default_owner"),
-          "Default owner (type your own if not in list)",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          ),
-          multiple = TRUE,
-          options = list(
-            maxItems = 1,
-            placeholder = 'Select default owner',
-            create = TRUE
-          ),
-          width = "100%"
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          selectizeInput(
+            ns("default_owner"),
+            "Default owner (type your own if not in list)",
+            choices = stats::setNames(
+              moduleData$organizations$organization_id,
+              moduleData$organizations$name
+            ),
+            multiple = TRUE,
+            options = list(
+              maxItems = 1,
+              placeholder = 'Select default owner',
+              create = TRUE
+            ),
+            width = "100%"
+          ) |>
+            tooltip(
+              "This is used to set the owner for uploaded data if it's not specified at upload time."
+            ),
+          selectizeInput(
+            ns("data_sharing_agreement"),
+            "Data sharing agreement",
+            choices = stats::setNames(
+              moduleData$agreements$document_id,
+              moduleData$agreements$name
+            ),
+            options = list(
+              placeholder = "Optional - add the document first if needed",
+              render = I(list(
+                option = htmlwidgets::JS(
+                  "function(item, escape) { return item.label; }"
+                )
+              ))
+            ),
+            width = "100%",
+            multiple = FALSE
+          ) |>
+            tooltip(
+              "Linking a data sharing agreement will help us track compliance with data sharing agreements."
+            )
         ),
         selectizeInput(
           ns("share_with"),
@@ -284,7 +332,10 @@ addTimeseries <- function(id, language) {
           selected = "public_reader",
           multiple = TRUE,
           width = "100%"
-        ),
+        ) |>
+          tooltip(
+            "Select the user groups that should have access to this timeseries data. 'public_reader' allows anyone with access to the system to view the data. You can select multiple groups IF public_reader is not one of them."
+          ),
         splitLayout(
           cellWidths = c("50%", "50%"),
           verticalLayout(
@@ -306,7 +357,7 @@ addTimeseries <- function(id, language) {
             ),
             actionButton(
               ns("source_fx_doc"),
-              "Open function documentation",
+              "Open function documentation"
             )
           ),
           verticalLayout(
@@ -444,6 +495,11 @@ addTimeseries <- function(id, language) {
             moduleData$organizations$organization_id,
             moduleData$organizations$name
           )
+        )
+        updateSelectizeInput(
+          session,
+          "data_sharing_agreement",
+          selected = character(0)
         )
         updateSelectizeInput(
           session,
@@ -641,6 +697,43 @@ addTimeseries <- function(id, language) {
             "default_owner",
             selected = details$default_owner
           )
+
+          # Based on the default owner, find the associated agreements if any
+          owner_agreements <- moduleData$owners_agreements[
+            moduleData$owners_agreements$organization_id ==
+              details$default_owner,
+            "document_id"
+          ]
+          owner_agreements <- unique(owner_agreements)
+          owner_agreements <- owner_agreements[!is.na(owner_agreements)]
+
+          agreements_df <- moduleData$agreements
+          agreements_df$name <- as.character(agreements_df$name)
+
+          is_owner <- agreements_df$document_id %in% owner_agreements
+          agreements_df <- agreements_df[order(!is_owner, agreements_df$name), ]
+
+          # Create labels with (recommended) for owner agreements
+          labels <- ifelse(
+            is_owner[match(
+              agreements_df$document_id,
+              moduleData$agreements$document_id
+            )],
+            paste0(
+              "<b>",
+              htmltools::htmlEscape(agreements_df$name),
+              " (associated with default owner)</b>"
+            ),
+            htmltools::htmlEscape(agreements_df$name)
+          )
+
+          updateSelectizeInput(
+            session,
+            "data_sharing_agreement",
+            choices = stats::setNames(agreements_df$document_id, labels),
+            selected = details$data_sharing_agreement_id
+          )
+
           updateSelectizeInput(
             session,
             "share_with",
@@ -676,30 +769,69 @@ addTimeseries <- function(id, language) {
       }
     })
 
-    ### Observe the owner selectizeInput for new owners ############
+    ### Observe the owner selectizeInput for new owners. If owner exists, find associated agreements and update selectizeInput ############
     observeEvent(
       input$default_owner,
       {
-        if (
-          input$default_owner %in%
-            moduleData$organizations$organization_id ||
-            nchar(input$default_owner) == 0
-        ) {
+        if (nchar(input$default_owner) == 0) {
           return()
+        } else if (
+          !input$default_owner %in% moduleData$organizations$organization_id
+        ) {
+          showModal(
+            modalDialog(
+              textInput(
+                ns("owner_name"),
+                "Owner name",
+                value = input$default_owner
+              ),
+              textInput(ns("owner_name_fr"), "Owner name French (optional)"),
+              textInput(ns("contact_name"), "Contact name (optional)"),
+              textInput(ns("contact_phone"), "Contact phone (optional)"),
+              textInput(ns("contact_email"), "Contact email (optional)"),
+              textInput(
+                ns("contact_note"),
+                "Contact note (optional, for context)"
+              ),
+              actionButton(ns("add_owner"), "Add owner")
+            )
+          )
+        } else {
+          # Find associated agreements for this owner
+          owner_id <- as.numeric(input$default_owner)
+          owner_agreements <- moduleData$owners_agreements[
+            moduleData$owners_agreements$organization_id == owner_id,
+            "document_id"
+          ]
+          owner_agreements <- unique(owner_agreements)
+          owner_agreements <- owner_agreements[!is.na(owner_agreements)]
+
+          agreements_df <- moduleData$agreements
+          agreements_df$name <- as.character(agreements_df$name)
+
+          is_owner <- agreements_df$document_id %in% owner_agreements
+          agreements_df <- agreements_df[order(!is_owner, agreements_df$name), ]
+
+          # Create labels with (recommended) for owner agreements
+          labels <- ifelse(
+            is_owner[match(
+              agreements_df$document_id,
+              moduleData$agreements$document_id
+            )],
+            paste0(
+              "<b>",
+              htmltools::htmlEscape(agreements_df$name),
+              " (associated with default owner)</b>"
+            ),
+            htmltools::htmlEscape(agreements_df$name)
+          )
+
+          updateSelectizeInput(
+            session,
+            "data_sharing_agreement",
+            choices = stats::setNames(agreements_df$document_id, labels)
+          )
         }
-        showModal(modalDialog(
-          textInput(
-            ns("owner_name"),
-            "Owner name",
-            value = input$default_owner
-          ),
-          textInput(ns("owner_name_fr"), "Owner name French (optional)"),
-          textInput(ns("contact_name"), "Contact name (optional)"),
-          textInput(ns("contact_phone"), "Contact phone (optional)"),
-          textInput(ns("contact_email"), "Contact email (optional)"),
-          textInput(ns("contact_note"), "Contact note (optional, for context)"),
-          actionButton(ns("add_owner"), "Add owner")
-        ))
       },
       ignoreInit = TRUE,
       ignoreNULL = TRUE
@@ -826,12 +958,6 @@ addTimeseries <- function(id, language) {
                 sub_loc <- NA
               }
 
-              # Get the location code from table locations
-              loc_code <- data$locations[
-                data$locations$location_id == loc,
-                "location"
-              ]
-
               if (!is.null(source_fx_args)) {
                 if (nzchar(source_fx_args)) {
                   args <- format_source_args(source_fx_args)
@@ -890,9 +1016,8 @@ addTimeseries <- function(id, language) {
               # Make a new entry to the timeseries table
               new_timeseries_id <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO continuous.timeseries (location, location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
+                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
                 params = list(
-                  loc_code,
                   as.numeric(loc),
                   ifelse(is.na(sub_loc), NA, sub_loc),
                   as.numeric(tz),
@@ -1006,7 +1131,7 @@ addTimeseries <- function(id, language) {
         need(input$aggregation_type, "Please select an aggregation type."),
         need(input$default_owner, "Please select a default owner."),
         need(input$sensor_priority, "Please select a sensor priority."),
-        need(input$record_rate, "Please specify a record rate."),
+        need(input$record_rate, "Please specify a record rate.")
       )
 
       if (input$mode != "add") {
@@ -1014,7 +1139,7 @@ addTimeseries <- function(id, language) {
         showNotification(
           "Please select 'Add new' mode to add a timeseries.",
           type = "error",
-          duration = 8,
+          duration = 8
         )
         return()
       }
@@ -1084,14 +1209,14 @@ addTimeseries <- function(id, language) {
         showNotification(
           "Timeseries added successfully with no data fetched. REMEMBER TO ADD DATA NOW.",
           type = "warning",
-          duration = 10,
+          duration = 10
         )
       } else if (addNewTimeseries$result() == "success") {
         # If the result is "success", show a success notification
         showNotification(
           "Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.",
           type = "message",
-          duration = 8,
+          duration = 8
         )
 
         getModuleData()
@@ -1112,6 +1237,11 @@ addTimeseries <- function(id, language) {
         updateTextInput(session, "record_rate", value = "")
         updateSelectizeInput(session, "sensor_priority", selected = 1)
         updateSelectizeInput(session, "default_owner", selected = character(0))
+        updateSelectizeInput(
+          session,
+          "data_sharing_agreement",
+          selected = character(0)
+        )
         updateSelectizeInput(session, "share_with", selected = "public_reader")
         updateSelectizeInput(session, "source_fx", selected = character(0))
         updateTextInput(session, "source_fx_args", value = "")
@@ -1128,7 +1258,7 @@ addTimeseries <- function(id, language) {
           showNotification(
             "Please select 'Modify existing' mode to modify a timeseries.",
             type = "error",
-            duration = 8,
+            duration = 8
           )
           return()
         }
@@ -1138,7 +1268,7 @@ addTimeseries <- function(id, language) {
           showNotification(
             "Please select a single timeseries to modify.",
             type = "error",
-            duration = 8,
+            duration = 8
           )
           return()
         }
@@ -1156,7 +1286,7 @@ addTimeseries <- function(id, language) {
           showNotification(
             "Selected timeseries does not exist in the database.",
             type = "error",
-            duration = 8,
+            duration = 8
           )
           return()
         }
@@ -1183,7 +1313,7 @@ addTimeseries <- function(id, language) {
                   "UPDATE timeseries SET sub_location_id = NULL WHERE timeseries_id = $1;",
                   params = list(selected_timeseries$timeseries_id)
                 )
-              } else if (!nzchar(sub_location)) {
+              } else if (!nzchar(input$sub_location)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET sub_location_id = NULL WHERE timeseries_id = $1;",
@@ -1204,7 +1334,7 @@ addTimeseries <- function(id, language) {
               }
             } else {
               # If there is no pre-existing sub_location_id:
-              if (!is.null(input$sub_location_id)) {
+              if (!is.null(input$sub_location)) {
                 # could be NULL if not touched
                 if (!is.na(input$sub_location) && !nzchar(input$sub_location)) {
                   DBI::dbExecute(
@@ -1398,6 +1528,7 @@ addTimeseries <- function(id, language) {
               )
             }
 
+            # Changes to default_owner
             if (!is.na(selected_timeseries$default_owner)) {
               if (input$default_owner != selected_timeseries$default_owner) {
                 DBI::dbExecute(
@@ -1418,6 +1549,26 @@ addTimeseries <- function(id, language) {
                   selected_timeseries$timeseries_id
                 )
               )
+            }
+
+            # Changes to data sharing agreement
+            if (isTruthy(input$data_sharing_agreement)) {
+              if (
+                input$data_sharing_agreement !=
+                  moduleData$exist_locs[
+                    which(moduleData$exist_locs$location_id == selected_loc()),
+                    "data_sharing_agreement_id"
+                  ]
+              ) {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  sprintf(
+                    "UPDATE timeseries SET data_sharing_agreement_id = %d WHERE timeseries_id = %d",
+                    as.numeric(input$data_sharing_agreement),
+                    selected_timeseries$timeseries_id
+                  )
+                )
+              }
             }
 
             # Changes to share_with
@@ -1544,12 +1695,12 @@ addTimeseries <- function(id, language) {
               showNotification(
                 "Recalculating statistics from the beginning of the timeseries due to timezone change. Please be patient.",
                 type = "message",
-                duration = 8,
+                duration = 8
               )
               earliest <- DBI::dbGetQuery(
                 session$userData$AquaCache,
                 "SELECT MIN(datetime) FROM continuous.measurements_continuous WHERE timeseries_id = $1",
-                params = selected_timeseries$timeseries_id
+                params = list(selected_timeseries$timeseries_id)
               )[1, 1]
               AquaCache::calculate_stats(
                 timeseries_id = selected_timeseries$timeseries_id,
@@ -1570,7 +1721,7 @@ addTimeseries <- function(id, language) {
             showNotification(
               paste("Error updating timeseries:", e$message),
               type = "error",
-              duration = 10,
+              duration = 10
             )
           }
         )

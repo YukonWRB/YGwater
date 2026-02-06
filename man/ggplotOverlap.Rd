@@ -38,7 +38,7 @@ ggplotOverlap(
 )
 }
 \arguments{
-\item{location}{The location for which you want a plot.}
+\item{location}{The location for which you want a plot. You can pass in the location_id, location_code, English or French location name.}
 
 \item{parameter}{The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.}
 

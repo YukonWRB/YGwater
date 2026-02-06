@@ -130,6 +130,35 @@ iso_period <- function(x) {
   result
 }
 
+#' Lookup a location_id from user input
+#'
+#' Prefers location_id when the input is numeric or coercible to numeric.
+#' Otherwise searches name, name_fr, location_code, and alias.
+#'
+#' @param con A DBI connection.
+#' @param location A location identifier (numeric or character).
+#' @return A single location_id, or NA if not found.
+#' @noRd
+lookup_location_id <- function(con, location) {
+  location_txt <- as.character(location)
+  location_num <- suppressWarnings(as.integer(location_txt))
+  if (!is.na(location_num) && nzchar(location_txt)) {
+    result <- DBI::dbGetQuery(
+      con,
+      "SELECT location_id FROM locations WHERE location_id = $1 LIMIT 1;",
+      params = list(location_num)
+    )
+    return(result[1, 1])
+  }
+
+  result <- DBI::dbGetQuery(
+    con,
+    "SELECT location_id FROM locations WHERE location_code = $1 OR alias = $1 OR name = $1 OR name_fr = $1 LIMIT 1;",
+    params = list(location_txt)
+  )
+  result[1, 1]
+}
+
 
 # Internal helper functions for default file paths
 
