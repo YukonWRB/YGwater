@@ -1228,7 +1228,7 @@ table.on("click", "tr", function() {
           return()
         }
         DBI::dbExecute(
-          con,
+          session$userData$AquaCache,
           "INSERT INTO instrument_model (model, description) VALUES ($1, $2)",
           params = list(
             input$new_model,
@@ -3488,10 +3488,13 @@ table.on("click", "tr", function() {
     observeEvent(
       input$submit_sensor_change,
       {
+        comment_text <- trimws(if (is.null(input$add_comment)) "" else input$add_comment)
+        sensor_serial_text <- trimws(if (is.null(input$add_sensor_serial)) "" else input$add_sensor_serial)
         if (
-          nchar(input$sensor_change_name) <= 1 |
-            nchar(input$add_comment) < 5 |
-            nchar(input$add_sensor_serial) < 2
+          is.null(input$sensor_change_name) ||
+            input$sensor_change_name == "" ||
+            nchar(comment_text) < 5 ||
+            nchar(sensor_serial_text) < 2
         ) {
           alert(
             "Please fill in all fields!",
