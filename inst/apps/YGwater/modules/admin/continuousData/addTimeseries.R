@@ -305,7 +305,7 @@ addTimeseries <- function(id, language) {
             ),
           selectizeInput(
             ns("data_sharing_agreement"),
-            "Data sharing agreement",
+            "Default data sharing agreement",
             choices = stats::setNames(
               moduleData$agreements$document_id,
               moduleData$agreements$name
@@ -322,7 +322,7 @@ addTimeseries <- function(id, language) {
             multiple = FALSE
           ) |>
             tooltip(
-              "Linking a data sharing agreement will help us track compliance with data sharing agreements."
+              "Linking a default data sharing agreement will help us track compliance with data sharing agreements. Note that a different data sharing agreement can always be assigned when needed."
             )
         ),
         selectizeInput(
