@@ -15,7 +15,7 @@
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
-#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
+#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
@@ -57,7 +57,7 @@ plotTimeseries <- function(
   end_date = Sys.Date(),
   invert = NULL,
   slider = TRUE,
-  datum = TRUE,
+  datum = FALSE,
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
@@ -1070,11 +1070,23 @@ plotTimeseries <- function(
     }
   }
 
+  # ES: if a datum is applied, add ASL to y-axis label
+  if (datum) {
+    datum_label <- if (lang == "en") {
+      paste0(" A.S.L.")
+    } else {
+      paste0(" A.M.S.L.")
+    }
+  } else {
+    datum_label <- ""
+  }
+
   y_title <- paste0(
     parameter_name,
     if (!is.na(exist_check$z)) paste0(" ", exist_check$z, " meters") else "",
     " (",
     units,
+    datum_label,
     ")"
   )
 
