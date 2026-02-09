@@ -3491,7 +3491,15 @@ table.on("click", "tr", function() {
         comment_text <- trimws(if (is.null(input$add_comment)) "" else input$add_comment)
         sensor_serial_text <- trimws(if (is.null(input$add_sensor_serial)) "" else input$add_sensor_serial)
         if (
-          is.null(input$sensor_change_name) ||
+          is.null(input$sensor_change_name)) {
+          alert(
+            "Please fill in all fields!",
+            "You need a few more characters if you've already written something. Come on, make us a useful note!",
+            type = "error",
+            timer = 3000
+          )
+          return()
+          } else if (
             input$sensor_change_name == "" ||
             nchar(comment_text) < 5 ||
             nchar(sensor_serial_text) < 2
@@ -3502,6 +3510,7 @@ table.on("click", "tr", function() {
             type = "error",
             timer = 3000
           )
+          return()
         } else {
           #add the data to the array_maintenance_changes table
           # Check if the datetime exists in the instrument table, which means we're editing an entry from this same session
