@@ -181,15 +181,15 @@ addLocation <- function(id, inputs, language) {
             )
           )
         ),
+        # Tell the user that they should auto-generate unless they have a good reason not to, and the code they want uses national hydro network codes already
+        tags$div(
+          "Important: use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it uses national hydro network codes (i.e. a Water Survey of Canada location).",
+          style = "margin-bottom: 10px; font-style: bold; color: #555;"
+        ),
         conditionalPanel(
           condition = "input.mode == 'add'",
           ns = ns,
           htmlOutput(ns("hydat_note"))
-        ),
-        # Tell the user that they should auto-generate unless they have a good reason not to, and the code they want uses national hydro network codes already
-        tags$div(
-          "Use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it uses national hydro network codes (i.e. a Water Survey of Canada location).",
-          style = "margin-bottom: 10px; font-style: italic; color: #555;"
         ),
         splitLayout(
           cellWidths = c("60%", "40%"),
@@ -228,6 +228,17 @@ addLocation <- function(id, inputs, language) {
             "Alias (optional)",
             width = "100%"
           )
+        ),
+        selectizeInput(
+          ns("loc_type"),
+          "Location type",
+          choices = stats::setNames(
+            moduleData$loc_types$type_id,
+            moduleData$loc_types$type
+          ),
+          multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+          options = list(maxItems = 1),
+          width = "100%"
         ),
         splitLayout(
           cellWidths = c("40%", "40%", "20%"),
@@ -292,17 +303,6 @@ addLocation <- function(id, inputs, language) {
           uiOutput(ns("selected_well_note"))
         ),
 
-        selectizeInput(
-          ns("loc_type"),
-          "Location type",
-          choices = stats::setNames(
-            moduleData$loc_types$type_id,
-            moduleData$loc_types$type
-          ),
-          multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-          options = list(maxItems = 1),
-          width = "100%"
-        ),
         selectizeInput(
           ns("share_with"),
           "Share with groups (1 or more, type your own if not in list)",
@@ -758,7 +758,7 @@ addLocation <- function(id, inputs, language) {
             hydat$stns <- character(0)
             hydat$exists <- TRUE
             showNotification(
-              "HYDAT download failed; HYDAT functions will not be available.",
+              "HYDAT (Water Survey of Canada database) download failed; related functions will not be available.",
               type = "error"
             )
           }
@@ -767,7 +767,7 @@ addLocation <- function(id, inputs, language) {
         hydat$stns <- character(0)
         hydat$exists <- FALSE
         showNotification(
-          "HYDAT download failed; HYDAT functions will not be available.",
+          "HYDAT (Water Survey of Canada database) download failed; related functions will not be available.",
           type = "error"
         )
       }
@@ -776,7 +776,7 @@ addLocation <- function(id, inputs, language) {
     if (hydat$exists) {
       output$hydat_note <- renderUI({
         HTML(
-          "<b>NOTE: Entering a WSC code will allow you to auto-populate fields with HYDAT information if the location exists.</b><br>"
+          "<b>Entering a Water Survey of Canada code will allow you to auto-populate fields with their information if the location code exists.</b><br>"
         )
       })
     }
