@@ -10,7 +10,7 @@ auto_generate_ui <- function(ns) {
   )
 }
 
-auto_generate_server <- function(input, session, ns) {
+auto_generate_server <- function(input, session, ns, moduleData) {
   observeEvent(input$auto_generate, {
     # Check if latitude/longitude are provided
     if (
@@ -144,7 +144,9 @@ auto_generate_server <- function(input, session, ns) {
         existing_code
       ))
       suffix_num <- suffix_num + 1
-      code <- paste0(code, "-", sprintf("%05d", suffix_num))
+      if (suffix_num <= 99999) {
+        code <- paste0(code, "-", sprintf("%05d", suffix_num))
+      } # else it'll just increase in number
     }
 
     updateTextInput(
