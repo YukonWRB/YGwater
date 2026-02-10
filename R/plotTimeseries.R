@@ -1073,9 +1073,7 @@ plotTimeseries <- function(
   # ES: if a datum is applied, add ASL to y-axis label
   if (datum) {
     datum_label <- if (lang == "en") {
-      paste0(" A.S.L.")
-    } else {
-      paste0(" A.M.S.L.")
+      " ASL"
     }
   } else {
     datum_label <- ""

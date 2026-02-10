@@ -1408,24 +1408,24 @@ ggplotOverlap <- function(
         ggplot2::geom_line(
           ggplot2::aes(y = ath, colour = "Maximum (historical)"),
           size = 1,
-          linetype = 2
+          linetype = 1
         ) +
         ggplot2::geom_line(
           ggplot2::aes(y = atl, colour = "Minimum (historical)"),
           size = 1,
-          linetype = 2
+          linetype = 1
         )
     }
 
     plot <- plot +
-      ggplot2::geom_line(
-        ggplot2::aes(y = max, colour = "Maximum"),
-        size = 1
-      ) +
-      ggplot2::geom_line(
-        ggplot2::aes(y = min, colour = "Minimum"),
-        size = 1
-      ) +
+      # ggplot2::geom_line(
+      #   ggplot2::aes(y = max, colour = "Maximum"),
+      #   size = 1
+      # ) +
+      # ggplot2::geom_line(
+      #   ggplot2::aes(y = min, colour = "Minimum"),
+      #   size = 1
+      # ) +
       ggplot2::geom_line(
         ggplot2::aes(colour = current_year_label),
         linewidth = line_size,
