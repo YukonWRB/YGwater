@@ -305,7 +305,7 @@ addTimeseries <- function(id, language) {
             ),
           selectizeInput(
             ns("data_sharing_agreement"),
-            "Data sharing agreement",
+            "Default data sharing agreement",
             choices = stats::setNames(
               moduleData$agreements$document_id,
               moduleData$agreements$name
@@ -322,7 +322,7 @@ addTimeseries <- function(id, language) {
             multiple = FALSE
           ) |>
             tooltip(
-              "Linking a data sharing agreement will help us track compliance with data sharing agreements."
+              "Linking a default data sharing agreement will help us track compliance with data sharing agreements. Note that a different data sharing agreement can always be assigned when needed."
             )
         ),
         selectizeInput(
@@ -1016,7 +1016,7 @@ addTimeseries <- function(id, language) {
               # Make a new entry to the timeseries table
               new_timeseries_id <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
+                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING timeseries_id;",
                 params = list(
                   as.numeric(loc),
                   ifelse(is.na(sub_loc), NA, sub_loc),

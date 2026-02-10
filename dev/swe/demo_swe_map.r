@@ -15,9 +15,9 @@ con <- YGwater::AquaConnect()
 dat <- load_bulletin_timeseries(
     con = con,
     load_swe = TRUE,
-    load_temp = TRUE,
-    load_precip = TRUE,
-    load_streamflow = TRUE,
+    load_temp = FALSE,
+    load_precip = FALSE,
+    load_streamflow = FALSE,
     start_year_historical = 1991,
     end_year_historical = 2020,
     october_start = TRUE,
@@ -37,7 +37,6 @@ make_snowbull_map(
     start_year_historical = 1991,
     end_year_historical = 2020
 )
-
 
 snowBulletin(
     year = 2025,
@@ -288,3 +287,37 @@ ret <- make_snowbull_map(
     language = "English",
     filename = "dev\\swe\\exports\\swe_bulletin_apr2025.png"
 )
+
+
+library(sf)
+library(ggplot2)
+
+# Download Yukon boundary from a GeoJSON URL (no rnaturalearth)
+yukon_url <- "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/yukon.geojson"
+yukon_boundary <- sf::st_read(yukon_url, quiet = TRUE)
+
+# Download Canada boundary from a GeoJSON URL
+canada_url <- "https://raw.githubusercontent.com/johan/world.geo.json/master/countries/CAN.geo.json"
+canada <- sf::st_read(canada_url, quiet = TRUE)
+
+# Plot Yukon boundary with terrain basemap
+library(ggspatial)
+library(ggmap)
+
+# Get terrain basemap from Stamen Maps
+
+ggmap::register_stadiamaps("774f7648-cc81-4dc5-a1f6-1d18e74e2f10")
+
+terrain_map <- get_stadiamap(
+    bbox = c(left = -142, bottom = 59, right = -123, top = 69),
+    zoom = 6,
+    maptype = "stamen_terrain_background",
+    color = 'bw',
+    force = TRUE
+)
+
+
+ggmap(terrain_map)
++geom_sf(data = yukon_boundary, fill = NA, color = "red", inherit.aes = FALSE) +
+    theme_minimal() +
+    labs(title = "Yukon Boundary Map with Terrain Basemap")

@@ -278,7 +278,7 @@ get_dynamic_style_elements <- function(
 
     # Color scheme and visualization parameters
     # Bins represent percentage of normal SWE (relative_to_med values)
-    relative_bins <- c(-2, -1, 0, 50, 70, 90, 110, 130, 150, Inf)
+    relative_bins <- c(-Inf, -2, -1, 0, 50, 70, 90, 110, 130, 150, Inf)
     relative_colors <- c(
         "gray", # Gray (NA/NaN values)
         "#27A62C", # Green (much below normal)
@@ -292,7 +292,7 @@ get_dynamic_style_elements <- function(
         "#6772F7" # Blue (extremely high)
     )
 
-    anomalies_bins <- c(-Inf, -5, -2, -0.4, 0.5, 2, 5, Inf)
+    anomalies_bins <- c(-Inf, -100, -5, -2, -0.4, 0.5, 2, 5, Inf)
     anomalies_colors <- c(
         "gray", # Gray (NA/NaN values)
         "#6772F7", # Blue (extremely low)
@@ -304,7 +304,7 @@ get_dynamic_style_elements <- function(
         "#EBB966" # Orange (well above normal)
     )
 
-    absolute_bins <- c(0, 50, 100, 150, 200, 250, 300, 400, 500, Inf)
+    absolute_bins <- c(-Inf, 0, 50, 100, 150, 200, 250, 300, 400, 500, Inf)
     absolute_colors <- c(
         "gray", # Gray (NA/NaN values)
         "#e6f5ff", # Very light sky blue
@@ -319,7 +319,7 @@ get_dynamic_style_elements <- function(
     )
 
     # Percentile bins and colors (Spectral palette, 0-100)
-    percentile_bins <- c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+    percentile_bins <- c(-Inf, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, Inf)
     percentile_colors <- c(
         "gray", # Gray (NA/NaN values)
         "#9e0142", # Very low (0-10)
@@ -333,56 +333,55 @@ get_dynamic_style_elements <- function(
         "#3288bd", # High (80-90)
         "#5e4fa2" # Very high (90-100)
     )
-
     # Custom legend labels for each value type
     relative_labels <- c(
         tr("snowbull_no_data", language), # "No data"
         tr("snowbull_no_snow", language), # "No snow present where historical median is zero"
         tr("snowbull_some_snow", language), # "Snow present where historical median is zero"
-        "x ≤ 50%",
-        "50% < x ≤ 70%",
-        "70% < x ≤ 90%",
-        "90% < x ≤ 110%",
-        "110% < x ≤ 130%",
-        "130% < x ≤ 150%",
-        "x > 150%"
+        "< 50%",
+        "50–70%",
+        "70–90%",
+        "90–110%",
+        "110–130%",
+        "130–150%",
+        "≥ 150%"
     )
 
     anomalies_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "x ≤ -5.0",
-        "-5.0 < x ≤ -2.0",
-        "-2.0 < x ≤ -0.4",
-        "-0.4 < x ≤ +0.5",
-        "+0.5 < x ≤ +2.0",
-        "+2.0 < x ≤ +5.0",
-        "x > +5.0"
+        "< -5.0",
+        "-5.0 – -2.0",
+        "-2.0 – -0.4",
+        "-0.4 – +0.5",
+        "+0.5 – +2.0",
+        "+2.0 – +5.0",
+        "≥ +5.0"
     )
 
     absolute_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "x ≤ 50",
-        "50 < x ≤ 100",
-        "100 < x ≤ 150 ",
-        "150 < x ≤ 200",
-        "200 < x ≤ 250",
-        "250 < x ≤ 300",
-        "300 < x ≤ 400",
-        "400 < x ≤ 500",
-        "x > 500"
+        "< 50",
+        "50–100",
+        "100–150",
+        "150–200",
+        "200–250",
+        "250–300",
+        "300–400",
+        "400–500",
+        "≥ 500"
     )
     percentile_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "x ≤ 10",
-        "10 < x ≤ 20",
-        "20 < x ≤ 30",
-        "30 < x ≤ 40",
-        "40 < x ≤ 50",
-        "50 < x ≤ 60",
-        "60 < x ≤ 70",
-        "70 < x ≤ 80",
-        "80 < x ≤ 90",
-        "90 < x ≤ 100"
+        "0-10",
+        "10-20",
+        "20-30",
+        "30-40",
+        "40-50",
+        "50-60",
+        "60-70",
+        "70-80",
+        "80-90",
+        "90-100"
     )
 
     style_choices = list(
@@ -1144,7 +1143,7 @@ download_continuous_ts_locations <- function(
         "SELECT
             t.timeseries_id,
             t.location_id,
-            l.location_code AS location,
+            l.location_code as location,
             l.name,
             l.latitude,
             l.longitude,
@@ -1232,7 +1231,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
         l.location_id,
         l.latitude,
         l.longitude,
-        l.location_code AS location,
+        l.location_code as location,
         l.name,
         dc.conversion_m
         FROM discrete.samples s
@@ -2963,27 +2962,27 @@ load_bulletin_timeseries <- function(
             param_name = "snow water equivalent"
         )
 
-        # store discrete survey data
+        # # store discrete survey data
         snowbull_timeseries$swe$surveys <- discrete_data
         snowbull_timeseries$swe$surveys$norms <- norms
 
-        discrete_data <- download_discrete_ts(
-            con = con,
-            epsg = epsg,
-            param_name = "snow depth"
-        )
+        # discrete_data <- download_discrete_ts(
+        #     con = con,
+        #     epsg = epsg,
+        #     param_name = "snow depth"
+        # )
 
         # we can leave param_name as swe here since they're calculated in the same way
-        norms <- get_norms(
-            start_year_historical = start_year_historical,
-            end_year_historical = end_year_historical,
-            ts = discrete_data$timeseries$data,
-            param_name = "snow water equivalent"
-        )
+        # norms <- get_norms(
+        #     start_year_historical = start_year_historical,
+        #     end_year_historical = end_year_historical,
+        #     ts = discrete_data$timeseries$data,
+        #     param_name = "snow water equivalent"
+        # )
 
         # store discrete survey data
-        snowbull_timeseries$sd$surveys <- discrete_data
-        snowbull_timeseries$sd$surveys$norms <- norms
+        # snowbull_timeseries$sd$surveys <- discrete_data
+        # snowbull_timeseries$sd$surveys$norms <- norms
 
         # Spatial join: assign basin names to each survey station
 
@@ -3019,20 +3018,6 @@ load_bulletin_timeseries <- function(
             metadata_discrete = discrete_data$metadata
         )
 
-        # Add location_id column to weights_df based on metadata lookup
-
-        weights_df <- merge(
-            weights_df,
-            discrete_data$metadata[, c("location", "location_id")],
-            by = "location",
-            all.x = TRUE,
-            sort = FALSE
-        )
-
-        # Remove 'location' column and rename 'location_id' to 'location'
-        weights_df$location <- NULL
-        names(weights_df)[names(weights_df) == "location_id"] <- "location"
-
         # Prepare dates and station list from discrete wide timeseries
         basin_dates <- snowbull_timeseries$swe$surveys$timeseries$data$datetime
 
@@ -3045,18 +3030,18 @@ load_bulletin_timeseries <- function(
         )
 
         # for each survey date
-        for (i in seq_along(basin_dates)) {
+        for (i in 1:length(basin_dates)) {
             basin_swe_mat[i, ] <- NA_real_
 
             # get the weight matrix for available stations on that date
             weight_matrix <- weights_df[,
-                c("location", basin_names),
+                c("location_id", basin_names),
                 drop = FALSE
             ]
 
             swe_samples <- as.numeric(discrete_data$timeseries$data[
                 i,
-                as.character(weight_matrix$location),
+                as.character(weight_matrix$location_id),
                 drop = TRUE
             ])
 
