@@ -508,10 +508,80 @@ addContData <- function(id, language) {
     # Reactive values to hold uploaded data and parsed data
     data <- reactiveValues(
       df = data.frame(datetime = character(), value = numeric()),
-      upload_raw = NULL,
       parsed_datetime = NULL,
       parsed_value = NULL
     )
+    
+    upload_raw <- reactive({
+      req(input$file)
+      req(input$raw_start_row)
+      # Set starting row to 1 if input is null, so we don't have to catch empty inputs in validate
+      starting_row <- ifelse(length(input$raw_start_row) < 1, 1, input$raw_start_row)
+      
+      ext <- tools::file_ext(input$file$name)
+      if (ext == 'xlsx') {
+        return(openxlsx::read.xlsx(input$file$datapath, sheet = 1, startRow = starting_row))
+      } else if (ext == "csv") {
+        # .csv files more complex due to ungraceful handling of non-equal 
+        #  number of columns and column names by read.table
+
+        # Read data without header, skip to first row below specified header row
+        out <- read.csv(input$file$datapath, 
+                        header = FALSE, skip = starting_row)
+        
+        # Read in header row and convert to vector
+        out_names <- read.csv(input$file$datapath, 
+                              header = FALSE, nrows = 1, skip = starting_row -1) |> 
+          unlist() |> 
+          unname()
+        # Apply header rows to data
+        names(out) <- out_names
+        
+        return(out)
+      }
+      
+    })
+
+    # Error checking, all possible conditions of start row and upload_raw 
+    #  in which the confirm mapping button should be disabled
+    observe({
+      if(is.null(input$raw_start_row)){
+        shinyjs::disable('confirm_mapping')
+      } else if(is.na(input$raw_start_row)){
+        shinyjs::disable('confirm_mapping')
+      } else if(input$raw_start_row < 1){
+        shinyjs::disable('confirm_mapping')
+      } else if(ncol(upload_raw()) < 2){
+        shinyjs::disable('confirm_mapping')
+      } else {
+        shinyjs::enable('confirm_mapping')
+      }
+    })
+
+    output$map_col_inputs <- renderUI({
+      validate(
+        need(
+          input$raw_start_row > 0, 'Invalid header row'
+        ),
+        need(
+          ncol(upload_raw()) >= 2, 'Uploaded file must have at least two columns (one containing date time, and one containing measurement value)'
+        )
+      )
+      tagList(
+        selectizeInput(
+          ns('upload_datetime_col'),
+          'Select the column for datetime:',
+          choices = names(upload_raw()),
+          selected = names(upload_raw())[1]
+        ),
+        selectizeInput(
+          ns('upload_value_col'),
+          'Select the column for value:',
+          choices = names(upload_raw()),
+          selected = names(upload_raw())[2]
+        )
+      )
+    })
 
     parse_datetime <- function(x) {
       if (inherits(x, "POSIXct")) {
@@ -548,60 +618,27 @@ addContData <- function(id, language) {
       df$value <- suppressWarnings(as.numeric(df$value))
       df
     }
+    
+    # Store modal to be shown upon user uploading .csv or .xlsx
+    map_col_modal <- modalDialog(
+      title = 'Map Columns',
+      'The uploaded file does not contain the required columns "datetime" and "value". Please map the columns below:',
+      numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |> 
+        tooltip("The row number which contains your data's column names"),
+      # UI which holds selectizeInputs for datetime and value column
+      uiOutput(ns('map_col_inputs')),
 
+      easyClose = FALSE,
+      footer = tagList(
+        modalButton('Cancel'),
+        actionButton(ns('confirm_mapping'), 'Confirm Mapping')
+      )
+    )
+
+    # Show modal when user adds file
     observeEvent(input$file, {
       req(input$file)
-      ext <- tools::file_ext(input$file$name)
-      if (ext == 'xlsx') {
-        data$upload_raw <- openxlsx::read.xlsx(input$file$datapath, sheet = 1)
-      } else if (ext == "csv") {
-        data$upload_raw <- utils::read.csv(
-          input$file$datapath
-        )
-      } else {
-        showNotification(
-          'Invalid file; please upload a .csv or .xlsx file',
-          type = 'error'
-        )
-        return(NULL)
-      }
-
-      if (ncol(data$upload_raw) < 2) {
-        showNotification(
-          'Uploaded file must have at least two columns: datetime and value',
-          type = 'error'
-        )
-        return(NULL)
-      }
-
-      # If the file does not have columns 'datetime' and 'value', show a modal dialog to allow the user to map columns
-      if (!all(c('datetime', 'value') %in% names(data$upload_raw))) {
-        showModal(modalDialog(
-          title = 'Map Columns',
-          'The uploaded file does not contain the required columns "datetime" and "value". Please map the columns below:',
-          selectizeInput(
-            ns('upload_datetime_col'),
-            'Select the column for datetime:',
-            choices = names(data$upload_raw),
-            selected = names(data$upload_raw)[1]
-          ),
-          selectizeInput(
-            ns('upload_value_col'),
-            'Select the column for value:',
-            choices = names(data$upload_raw),
-            selected = names(data$upload_raw)[2]
-          ),
-          easyClose = FALSE,
-          footer = tagList(
-            modalButton('Cancel'),
-            actionButton(ns('confirm_mapping'), 'Confirm Mapping')
-          )
-        ))
-        # data$df is is this case assigned by observing input$confirm_mapping below
-      } else {
-        # If the required columns are present, just use them
-        data$df <- prepare_table_data(data$upload_raw)
-      }
+      showModal(map_col_modal)
     })
 
     observeEvent(
@@ -610,8 +647,8 @@ addContData <- function(id, language) {
         removeModal() # Close the modal dialog
         req(input$upload_datetime_col, input$upload_value_col)
         df_mapped <- data.frame(
-          datetime = data$upload_raw[[input$upload_datetime_col]],
-          value = data$upload_raw[[input$upload_value_col]]
+          datetime = upload_raw()[[input$upload_datetime_col]],
+          value = upload_raw()[[input$upload_value_col]]
         )
         data$df <- prepare_table_data(df_mapped)
       },
