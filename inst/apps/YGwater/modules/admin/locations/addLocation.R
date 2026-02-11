@@ -448,7 +448,7 @@ addLocation <- function(id, inputs, language) {
 
     output$loc_table <- DT::renderDT({
       tbl <- moduleData$exist_locs
-      tbl$location <- as.factor(tbl$location)
+      tbl$location_code <- as.factor(tbl$location_code)
       tbl$name <- as.factor(tbl$name)
       tbl$name_fr <- as.factor(tbl$name_fr)
       tbl$location_type <- as.factor(tbl$location_type)
