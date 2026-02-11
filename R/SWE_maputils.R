@@ -5054,6 +5054,7 @@ make_snowbull_map <- function(
                 point_data_secondary = map_data$point_data_secondary,
                 snowbull_shapefiles = snowbull_shapefiles,
                 language = language,
+                param_name = param_name,
                 statistic = statistic,
                 month = month, # month and year for title only; data is already good to go
                 year = year,

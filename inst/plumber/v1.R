@@ -512,13 +512,13 @@ snowbull_leaflet_mem <- memoise::memoise(
   omit_args = c("con")
 )
 
-get_snowbull_stamp <- function(con) {
+get_snowbull_stamp <- function(con, year = NULL, month = NULL) {
   param_id <- DBI::dbGetQuery(
     con,
     "SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent'"
   )[1, 1]
 
-  if (is.na(param_id)) {
+  if (is.na(param_id) | is.null(year) | is.null(month)) {
     return("none")
   }
 
@@ -526,12 +526,13 @@ get_snowbull_stamp <- function(con) {
     con,
     sprintf(
       "
-      SELECT MAX(m.date) AS stamp
+      SELECT MAX(COALESCE(m.created, m.modified)::date) AS stamp
       FROM continuous.measurements_calculated_daily_corrected m
       JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
-      WHERE t.parameter_id = %s
+      WHERE t.parameter_id = %s AND DATE(m.date) <= CAST('%s' AS date) AND DATE(m.date) >= CAST('1990-10-01' AS date)
       ",
-      as.integer(param_id)
+      as.integer(param_id),
+      as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
     )
   )[1, 1]
 
@@ -539,13 +540,14 @@ get_snowbull_stamp <- function(con) {
     con,
     sprintf(
       "
-      SELECT MAX(COALESCE(s.target_datetime, s.datetime)) AS stamp
+      SELECT MAX(COALESCE(s.created, s.modified)::date) AS stamp
       FROM discrete.samples s
       JOIN discrete.results r ON s.sample_id = r.sample_id
       WHERE r.parameter_id = %s
-        AND r.result IS NOT NULL
+        AND r.result IS NOT NULL AND DATE(s.target_datetime) < DATE('%s') AND DATE(s.target_datetime) >= DATE('1990-10-01')
       ",
-      as.integer(param_id)
+      as.integer(param_id),
+      as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
     )
   )[1, 1]
 
@@ -564,7 +566,14 @@ get_snowbull_stamp <- function(con) {
 #* @param language Language for labels (default "English").
 #* @get /snow-bulletin/leaflet
 #* @serializer contentType list(type = "text/html")
-function(req, res, year = NA, month = NA, statistic = "relative_to_med", language = "English") {
+function(
+  req,
+  res,
+  year = NA,
+  month = NA,
+  statistic = "relative_to_med",
+  language = "English"
+) {
   con <- try(
     YGwater::AquaConnect(
       username = req$user,
@@ -608,7 +617,7 @@ function(req, res, year = NA, month = NA, statistic = "relative_to_med", languag
     month <- NULL
   }
 
-  latest_stamp <- get_snowbull_stamp(con)
+  latest_stamp <- get_snowbull_stamp(con, year, month)
   map_payload <- snowbull_leaflet_mem(
     stamp = latest_stamp,
     year = year,
