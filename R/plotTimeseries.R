@@ -33,7 +33,7 @@
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
-#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
@@ -177,7 +177,7 @@ plotTimeseries <- function(
 
   if (!is.null(resolution)) {
     resolution <- tolower(resolution)
-    if (!(resolution %in% c("max", "hour", "day"))) {
+    if (!(resolution %in% c("max", "day"))) {
       stop(
         "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
@@ -636,14 +636,8 @@ plotTimeseries <- function(
 
   range <- seq.POSIXt(start_date, end_date, by = "day")
   if (is.null(resolution)) {
-    if (length(range) > 3000) {
-      if (!raw) {
-        resolution <- "day"
-      } else {
-        resolution <- "hour"
-      }
-    } else if (length(range) > 1000) {
-      resolution <- "hour"
+    if (length(range) > 1000) {
+      resolution <- "day"
     } else {
       resolution <- "max"
     }
@@ -782,16 +776,6 @@ plotTimeseries <- function(
       params = list(tsid, start_date, end_date)
     )
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
-  } else if (resolution == "hour") {
-    trace_data <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT datetime, value_corrected AS value, imputed",
-        if (raw) ", value_raw",
-        " FROM measurements_hourly_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC;"
-      ),
-      params = list(tsid, start_date, end_date)
-    )
   } else if (resolution == "max") {
     trace_data <- dbGetQueryDT(
       con,
@@ -802,25 +786,6 @@ plotTimeseries <- function(
       ),
       params = list(tsid, start_date, end_date)
     )
-
-    if (nrow(trace_data) > 0) {
-      if (min(trace_data$datetime) > start_date) {
-        infill <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT datetime, value_corrected AS value, imputed",
-            if (raw) ", value_raw",
-            " FROM measurements_hourly_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC;"
-          ),
-          params = list(
-            tsid,
-            start_date,
-            min(trace_data$datetime) - 1
-          )
-        )
-        trace_data <- rbind(infill, trace_data)
-      }
-    }
   }
   attr(trace_data$datetime, "tzone") <- tzone
 
@@ -953,7 +918,7 @@ plotTimeseries <- function(
       trace_data <- rbind(trace_data, extra)
     }
   } else {
-    # this means that no trace data could be had because there are no measurements in the continuous or the hourly views table
+    # this means that no trace data could be had because there are no measurements in the continuous view table
     trace_data <- dbGetQueryDT(
       con,
       "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
@@ -1070,11 +1035,9 @@ plotTimeseries <- function(
     }
   }
 
-  # ES: if a datum is applied, add ASL to y-axis label
+  # if a datum is applied, add ASL to y-axis label
   if (datum) {
-    datum_label <- if (lang == "en") {
-      " ASL"
-    }
+    datum_label <- " ASL"
   } else {
     datum_label <- ""
   }

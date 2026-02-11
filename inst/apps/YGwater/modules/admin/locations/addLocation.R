@@ -52,7 +52,7 @@ addLocation <- function(id, inputs, language) {
       package = "YGwater"
     ))
 
-    auto_generate_server(input, session, ns)
+    auto_generate_server(input, session, ns, moduleData)
 
     output$banner <- renderUI({
       req(language$language)
@@ -186,11 +186,6 @@ addLocation <- function(id, inputs, language) {
           "Important: use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it uses national hydro network codes (i.e. a Water Survey of Canada location).",
           style = "margin-bottom: 10px; font-style: bold; color: #555;"
         ),
-        conditionalPanel(
-          condition = "input.mode == 'add'",
-          ns = ns,
-          htmlOutput(ns("hydat_note"))
-        ),
         splitLayout(
           cellWidths = c("60%", "40%"),
           textInput(
@@ -199,6 +194,11 @@ addLocation <- function(id, inputs, language) {
             width = "100%"
           ),
           auto_generate_ui(ns = ns),
+        ),
+        conditionalPanel(
+          condition = "input.mode == 'add'",
+          ns = ns,
+          htmlOutput(ns("hydat_note"))
         ),
         # Don't show the HYDAT button unless we detect HYDAT is available
         actionButton(
@@ -448,7 +448,7 @@ addLocation <- function(id, inputs, language) {
 
     output$loc_table <- DT::renderDT({
       tbl <- moduleData$exist_locs
-      tbl$location <- as.factor(tbl$location)
+      tbl$location_code <- as.factor(tbl$location_code)
       tbl$name <- as.factor(tbl$name)
       tbl$name_fr <- as.factor(tbl$name_fr)
       tbl$location_type <- as.factor(tbl$location_type)

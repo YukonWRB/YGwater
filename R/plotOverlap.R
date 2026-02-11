@@ -775,14 +775,6 @@ plotOverlap <- function(
             .con = con
           )
         ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
-      } else if (resolution == "hour") {
-        new_realtime <- dbGetQueryDT(
-          con,
-          glue::glue_sql(
-            "SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime",
-            .con = con
-          )
-        ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       } else if (resolution == "day") {
         new_realtime <- data.table::data.table()
       }
