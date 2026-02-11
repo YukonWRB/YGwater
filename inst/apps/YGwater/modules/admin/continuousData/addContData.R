@@ -621,8 +621,9 @@ addContData <- function(id, language) {
     
     # Store modal to be shown upon user uploading .csv or .xlsx
     map_col_modal <- modalDialog(
-      title = 'Map Columns',
-      'The uploaded file does not contain the required columns "datetime" and "value". Please map the columns below:',
+      title = 'Identify columns',
+      'Please identify which columns represent date-time and value:',
+      hr(),
       numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |> 
         tooltip("The row number which contains your data's column names"),
       # UI which holds selectizeInputs for datetime and value column
@@ -631,7 +632,7 @@ addContData <- function(id, language) {
       easyClose = FALSE,
       footer = tagList(
         modalButton('Cancel'),
-        actionButton(ns('confirm_mapping'), 'Confirm Mapping')
+        actionButton(ns('confirm_mapping'), 'Confirm')
       )
     )
 
