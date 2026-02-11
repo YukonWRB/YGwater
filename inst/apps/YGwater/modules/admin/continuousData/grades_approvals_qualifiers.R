@@ -312,12 +312,11 @@ grades_approvals_qualifiers <- function(id, language) {
       {
         selection <- input$ts_table_rows_selected
         if (length(selection)) {
-          tsid <- ts_meta()[selection, "timeseries_id"]
+          tsid <- ts_meta()$timeseries_id[selection]
           selected_ts(tsid)
           assignment_refresh(assignment_refresh() + 1)
           selected_record(NULL)
           next_edge("start")
-
           range_info <- safe_query(
             DBI::dbGetQuery(
               session$userData$AquaCache,
