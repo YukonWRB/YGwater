@@ -712,7 +712,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         rownames = FALSE,
         selection = list(mode = "single"),
         options = list(
-          pageLength = 5,
+          pageLength = 10,
           lengthMenu = c(5, 10, 20),
           columnDefs = list(
             list(visible = FALSE, targets = 0),
