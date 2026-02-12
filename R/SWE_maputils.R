@@ -542,6 +542,13 @@ get_latest_bulletin_month_year <- function(
         get_latest_timeseries_datetime,
         FUN.VALUE = as.POSIXct(NA)
     )
+    if (inherits(latest_dates, "numeric")) {
+        latest_dates <- as.POSIXct(
+            latest_dates,
+            origin = "1970-01-01",
+            tz = "UTC"
+        )
+    }
 
     latest_date <- max(latest_dates, na.rm = TRUE)
     if (is.infinite(latest_date) || is.na(latest_date)) {
@@ -557,9 +564,17 @@ get_latest_bulletin_month_year <- function(
 render_leaflet_widget_html <- function(widget) {
     requireNamespace("pandoc")
 
-    loc <- pandoc::pandoc_locate()
+    tryCatch(
+        {
+            loc <- pandoc::pandoc_locate()
+        },
+        error = function(e) {
+            loc <<- pandoc::pandoc_bin()
+        }
+    )
     if (is.null(loc)) {
-        stop("Pandoc installation not found. Please install pandoc.")
+        message("Installing pandoc...")
+        pandoc::pandoc_install(force = TRUE)
     }
 
     tmp_file <- tempfile(fileext = ".html")
@@ -4811,7 +4826,7 @@ make_ggplot_map <- function(
 }
 
 
-#' Create a static ggplot2 map for SWE basins and stations
+#' Create a map for SWE basins and stations
 #'
 #' @param year Integer year (e.g., 2025)
 #' @param month Integer month (e.g., 3 for March)
@@ -4822,8 +4837,8 @@ make_ggplot_map <- function(
 #' @param filename Optional character string for PNG output file path
 #' @param dpi Numeric resolution in dots per inch (default: 300)
 #' @param param_name Character, parameter to plot (default: "swe")
-#' @param statistic Character, "absolute", "relative", or "percentile" (default: "relative")
-#' @param language Character string indicating the language for labels and legends. Default is "English".
+#' @param statistic Character, "absolute", "relative_to_med" (relative to median) or "percentile" (default: "relative_to_med")
+#' @param language Character string indicating the language for labels and legends. 'French' or 'English'; default is "English".
 #' @param con Optional database connection, if not provided a default connection will be used
 #' @param format Character string indicating the output format: "ggplot", "leaflet", or "shiny",
 #' @param start_year_historical Integer, start year for historical norms (default: 1991)
