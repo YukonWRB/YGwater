@@ -491,6 +491,146 @@ get_most_recent_date <- function(ts) {
     return(latest_time)
 }
 
+get_latest_timeseries_datetime <- function(ts) {
+    if (is.null(ts) || !is.data.frame(ts) || !"datetime" %in% names(ts)) {
+        return(as.POSIXct(NA))
+    }
+
+    data_cols <- setdiff(names(ts), "datetime")
+    if (length(data_cols) == 0 || nrow(ts) == 0) {
+        return(as.POSIXct(NA))
+    }
+
+    has_data <- rowSums(!is.na(ts[, data_cols, drop = FALSE])) > 0
+    if (!any(has_data)) {
+        return(as.POSIXct(NA))
+    }
+
+    latest_date <- max(
+        as.POSIXct(ts$datetime[has_data], tz = "UTC"),
+        na.rm = TRUE
+    )
+
+    latest_date
+}
+
+get_latest_bulletin_month_year <- function(
+    snowbull_timeseries,
+    param_name = "snow water equivalent"
+) {
+    if (is.null(snowbull_timeseries)) {
+        return(list(year = NA_integer_, month = NA_integer_))
+    }
+
+    timeseries_list <- switch(
+        param_name,
+        "snow water equivalent" = list(
+            snowbull_timeseries$swe$pillows$timeseries$data,
+            snowbull_timeseries$swe$surveys$timeseries$data
+        ),
+        "precipitation, total" = list(
+            snowbull_timeseries$precipitation$timeseries$data
+        ),
+        "temperature, air" = list(
+            snowbull_timeseries$temperature$timeseries$data
+        ),
+        stop("Unsupported param_name: ", param_name)
+    )
+
+    latest_dates <- vapply(
+        timeseries_list,
+        get_latest_timeseries_datetime,
+        FUN.VALUE = as.POSIXct(NA)
+    )
+
+    latest_date <- max(latest_dates, na.rm = TRUE)
+    if (is.infinite(latest_date) || is.na(latest_date)) {
+        return(list(year = NA_integer_, month = NA_integer_))
+    }
+
+    list(
+        year = as.integer(format(latest_date, "%Y")),
+        month = as.integer(format(latest_date, "%m"))
+    )
+}
+
+render_leaflet_widget_html <- function(widget) {
+    requireNamespace("pandoc")
+
+    loc <- pandoc::pandoc_locate()
+    if (is.null(loc)) {
+        stop("Pandoc installation not found. Please install pandoc.")
+    }
+
+    tmp_file <- tempfile(fileext = ".html")
+    on.exit(unlink(tmp_file), add = TRUE)
+
+    htmlwidgets::saveWidget(
+        widget,
+        file = tmp_file,
+        selfcontained = TRUE
+    )
+
+    paste(readLines(tmp_file, warn = FALSE), collapse = "\n")
+}
+
+create_snowbull_leaflet_html <- function(
+    year = NULL,
+    month = NULL,
+    param_name = "snow water equivalent",
+    statistic = "relative_to_med",
+    language = "English",
+    con = NULL,
+    snowbull_shapefiles = NULL,
+    snowbull_timeseries = NULL
+) {
+    if (is.null(con)) {
+        con <- AquaConnect(silent = TRUE)
+        on.exit(DBI::dbDisconnect(con), add = TRUE)
+    }
+
+    if (is.null(snowbull_timeseries)) {
+        snowbull_timeseries <- load_bulletin_timeseries(
+            con,
+            load_swe = param_name == "snow water equivalent",
+            load_precip = param_name == "precipitation, total",
+            load_temp = param_name == "temperature, air",
+            epsg = 4326
+        )
+    }
+
+    if (is.null(year) || is.null(month)) {
+        latest <- get_latest_bulletin_month_year(
+            snowbull_timeseries = snowbull_timeseries,
+            param_name = param_name
+        )
+        year <- latest$year
+        month <- latest$month
+    }
+
+    if (is.na(year) || is.na(month)) {
+        stop("Unable to determine latest bulletin date.")
+    }
+
+    leaflet_map <- make_snowbull_map(
+        year = year,
+        month = month,
+        snowbull_shapefiles = snowbull_shapefiles,
+        snowbull_timeseries = snowbull_timeseries,
+        param_name = param_name,
+        statistic = statistic,
+        language = language,
+        con = con,
+        format = "leaflet"
+    )
+
+    list(
+        html = render_leaflet_widget_html(leaflet_map),
+        year = year,
+        month = month
+    )
+}
+
 
 #' Standardize parameter name
 #' @param epsg Integer or character EPSG code
@@ -4914,6 +5054,7 @@ make_snowbull_map <- function(
                 point_data_secondary = map_data$point_data_secondary,
                 snowbull_shapefiles = snowbull_shapefiles,
                 language = language,
+                param_name = param_name,
                 statistic = statistic,
                 month = month, # month and year for title only; data is already good to go
                 year = year,

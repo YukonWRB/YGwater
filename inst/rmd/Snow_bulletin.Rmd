@@ -1253,28 +1253,20 @@ tryCatch(
 ```{r UpperYukon_basin, echo=FALSE, eval=include, out.width="50%", fig.height=fig.height_half}
 par(mfrow = c(1, 2))
 
-custom_title <- sprintf(
-  trb("plot_pillow_title"),
-  "A3",
-  trb(paste0("met_", fmt_tr_key(met_name_lc)))
-)
 
-## A3: Log Cabin
 tryCatch(
   {
-    snowbullpillow2(
-      location_pil = 649,
-      location_surv = 46,
-      custom_title = custom_title,
-      year = bulletin_year,
-      scale = bulletin_scale,
-      language = language
+    snowbullpillow(
+      timeseries = dat$swe$pillows$timeseries$data[, c("datetime", as.character(pillow_lc))],
+      loc_name = trb(paste0("met_", fmt_tr_key(met_name_lc))),
+      subplot = "2"
     )
   },
   error = function(e) {
     cat("Plot generation error: ", e$message, "\n")
   }
 )
+
 
 # B
 # Plotting
@@ -2553,6 +2545,15 @@ tryCatch(
 tryCatch(
   {
     tabl <- stats$station_stats
+
+    tabl <- surveys_table
+    names(tabl)[names(tabl) == "conversion_m"] <- "elevation"
+    names(tabl)[names(tabl) == "snow_water_equivalent"] <- "swe"
+    names(tabl)[names(tabl) == "snow_depth"] <- "depth"
+    names(tabl)[names(tabl) == "last_year_snow_water_equivalent"] <- "swe_prevyear"
+    names(tabl)[names(tabl) == "survey_date"] <- "sample_date"
+    names(tabl)[names(tabl) == "swe_historical_median"] <- "swe_med"
+
 
     # Round values
     tabl$elevation <- round(as.numeric(tabl$elevation), 0)
