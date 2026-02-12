@@ -17,7 +17,7 @@ plotTimeseries(
   end_date = Sys.Date(),
   invert = NULL,
   slider = TRUE,
-  datum = TRUE,
+  datum = FALSE,
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
@@ -68,7 +68,7 @@ plotTimeseries(
 
 \item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.}
 
-\item{datum}{Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.}
+\item{datum}{Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is FALSE.}
 
 \item{title}{Should a title be included?}
 
@@ -104,7 +104,7 @@ plotTimeseries(
 
 \item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.}
 
-\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
+\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "day".}
 
 \item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).}
 
