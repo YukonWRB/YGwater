@@ -4345,9 +4345,17 @@ make_leaflet_map <- function(
         cat(sprintf("Saving map to file: %s\n", filename))
         requireNamespace("pandoc")
 
-        loc <- pandoc::pandoc_locate()
+        tryCatch(
+            {
+                loc <- pandoc::pandoc_locate()
+            },
+            error = function(e) {
+                loc <<- pandoc::pandoc_bin()
+            }
+        )
         if (is.null(loc)) {
-            stop("Pandoc installation not found. Please install pandoc.")
+            message("Installing pandoc...")
+            pandoc::pandoc_install(force = TRUE)
         }
 
         htmlwidgets::saveWidget(
