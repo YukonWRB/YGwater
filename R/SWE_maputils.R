@@ -338,50 +338,50 @@ get_dynamic_style_elements <- function(
         tr("snowbull_no_data", language), # "No data"
         tr("snowbull_no_snow", language), # "No snow present where historical median is zero"
         tr("snowbull_some_snow", language), # "Snow present where historical median is zero"
-        "< 50%",
-        "50–70%",
-        "70–90%",
-        "90–110%",
-        "110–130%",
-        "130–150%",
-        "≥ 150%"
+        "\u003C 50%",
+        "50\u201370%",
+        "70\u201390%",
+        "90\u2013110%",
+        "110\u2013130%",
+        "130\u2013150%",
+        "\u2264 150%"
     )
 
     anomalies_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "< -5.0",
-        "-5.0 – -2.0",
-        "-2.0 – -0.4",
-        "-0.4 – +0.5",
-        "+0.5 – +2.0",
-        "+2.0 – +5.0",
-        "≥ +5.0"
+        "\u003C -5.0",
+        "-5.0 \u2013 -2.0",
+        "-2.0 \u2013 -0.4",
+        "-0.4 \u2013 +0.5",
+        "+0.5 \u2013 +2.0",
+        "+2.0 \u2013 +5.0",
+        "\u2264 +5.0"
     )
 
     absolute_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "< 50",
-        "50–100",
-        "100–150",
-        "150–200",
-        "200–250",
-        "250–300",
-        "300–400",
-        "400–500",
-        "≥ 500"
+        "\u003C 50",
+        "50\u2013100",
+        "100\u2013150",
+        "150\u2013200",
+        "200\u2013250",
+        "250\u2013300",
+        "300\u2013400",
+        "400\u2013500",
+        "\u2264 500"
     )
     percentile_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "0-10",
-        "10-20",
-        "20-30",
-        "30-40",
-        "40-50",
-        "50-60",
-        "60-70",
-        "70-80",
-        "80-90",
-        "90-100"
+        "0\u201310",
+        "10\u201320",
+        "20\u201330",
+        "30\u201340",
+        "40\u201350",
+        "50\u201360",
+        "60\u201370",
+        "70\u201380",
+        "80\u201390",
+        "90\u2013100"
     )
 
     style_choices = list(
@@ -747,7 +747,7 @@ standardize_param_name <- function(param_name, con = NULL) {
 #     temperature$date_day <- lubridate::day(temperature$datetime)
 #     temperature <- temperature[order(temperature$datetime), ]
 
-#     # FDD: sum of degrees below 0°C per water year (Oct 1 - Jun 30)
+#     # FDD: sum of degrees below 0 celcius per water year (Oct 1 - Jun 30)
 #     temperature$date_water_year <- ifelse(
 #         lubridate::month(temperature$datetime) >= water_year_start_month,
 #         temperature$date_year + 1,
