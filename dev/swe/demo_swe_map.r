@@ -1,6 +1,12 @@
 load_all()
 
-con <- YGwater::AquaConnect()
+con <- YGwater::AquaConnect(
+    name = "aquacache",
+    host = Sys.getenv("aquacacheHostProd"),
+    port = Sys.getenv("aquacachePortProd"),
+    user = Sys.getenv("aquacacheUserProd"),
+    password = Sys.getenv("aquacachePassProd"),
+)
 
 
 # ggplotOverlap(
@@ -21,7 +27,7 @@ dat <- load_bulletin_timeseries(
     start_year_historical = 1991,
     end_year_historical = 2020,
     october_start = TRUE,
-    epsg = 3579
+    epsg = 4326
 )
 
 make_snowbull_map(
@@ -29,11 +35,11 @@ make_snowbull_map(
     month = 3,
     statistic = "relative_to_med",
     language = "English",
-    format = "ggplot",
+    format = "leaflet",
     param_name = "snow water equivalent",
     snowbull_timeseries = dat,
     con = con,
-    filename = "map.png",
+    filename = "map.html",
     start_year_historical = 1991,
     end_year_historical = 2020
 )
@@ -46,7 +52,13 @@ snowBulletin(
 )
 
 
-ok <- dat$swe$surveys$metadata
+surveys_table <- dat$swe$surveys$metadata[c(
+    "name",
+    "location",
+    "location_id",
+    "basin",
+    "conversion_m"
+)]
 
 target <- c(
     "Upper_Yukon",
@@ -64,23 +76,25 @@ target <- c(
 )
 
 # Order by basin (factor with levels = target), then by location
-ok <- ok[order(factor(ok$basin, levels = target), ok$location), ]
+surveys_table <- surveys_table[
+    order(factor(surveys_table$basin, levels = target), surveys_table$location),
+]
 
 stations <- c(
     "09AA-SC01",
     "09AA-SC02",
     "09AA-SC03",
     "09AA-SC04",
-    "09AB-SC01B",
-    "09AB-SC02B",
+    "09AB-SC01",
+    "09AB-SC02",
     "09AD-SC01",
     "09AD-SC02",
     "09AE-SC01",
     "09AH-SC01",
     "09AH-SC03",
     "09AH-SC04",
-    "09BA-SC02A",
-    "09BA-SC02B",
+    "09BA-SC02",
+    "09BA-SC02",
     "09BA-SC03",
     "09BA-SC04",
     "09BA-SC05",
@@ -91,8 +105,8 @@ stations <- c(
     "09DA-SC01",
     "09DB-SC01",
     "09DB-SC02",
-    "09DC-SC01A",
-    "09DC-SC01B",
+    "09DC-SC01",
+    "09DC-SC01",
     "09DC-SC02",
     "09DD-SC01",
     "09CA-SC01",
@@ -117,7 +131,7 @@ stations <- c(
     "10AA-SC03",
     "10AA-SC04",
     "10AB-SC01",
-    "10AD-SC01B",
+    "10AD-SC01",
     "08AA-SC01",
     "08AA-SC02",
     "08AA-SC03",
@@ -127,11 +141,6 @@ stations <- c(
     "08AK-SC02"
 )
 
-ok <- ok[ok$location %in% stations, ]
-
-
-ok[, c("name", "location", "conversion_m")]
-
 
 # con <- YGwater::AquaConnect(
 #     name = "aquacache",
@@ -140,9 +149,6 @@ ok[, c("name", "location", "conversion_m")]
 #     user = Sys.getenv("aquacacheUserDev"),
 #     password = Sys.getenv("aquacachePassDev"),
 # )
-
-loc_id <- ts_ids[i]
-
 
 # Query snow survey dates and snow depths for the stats table
 location_ids_list <- paste0(
@@ -157,8 +163,10 @@ target_date <- paste(
     "01",
     sep = "-"
 )
-query <- "
-    SELECT s.location_id, s.datetime, r.result 
+
+# Query for snow depth
+query_snow_depth <- "
+    SELECT s.location_id, s.datetime as survey_date, r.result as snow_depth
     FROM discrete.samples s
     JOIN discrete.results r ON s.sample_id = r.sample_id
     WHERE s.location_id = ANY($1)
@@ -169,28 +177,181 @@ query <- "
       AND r.result IS NOT NULL
 "
 
-results_df <- DBI::dbGetQuery(
+results_snow_depth <- DBI::dbGetQuery(
     con,
-    query,
+    query_snow_depth,
     params = list(location_ids_list, target_date, "snow depth")
 )
 
-# Combine results if needed
-res <- do.call(rbind, results_list)
+surveys_table <- merge(
+    surveys_table,
+    results_snow_depth[, c("location_id", "survey_date", "snow_depth")],
+    by.x = "location_id",
+    by.y = "location_id",
+    all.x = TRUE
+)
 
-# Add results to surveys_table as 'survey_datetime'
-surveys_table$survey_datetime <- res$datetime
+# Query for snow water equivalent
+query_swe <- "
+    SELECT s.location_id, r.result as snow_water_equivalent
+    FROM discrete.samples s
+    JOIN discrete.results r ON s.sample_id = r.sample_id
+    WHERE s.location_id = ANY($1)
+      AND DATE(s.target_datetime) = DATE($2)
+      AND r.parameter_id = (
+          SELECT parameter_id FROM public.parameters WHERE param_name = $3
+      )
+      AND r.result IS NOT NULL
+"
 
-
-# Combine results if needed
-res <- do.call(rbind, results_list)
-
-
-snow_id <- DBI::dbGetQuery(
+results_swe <- DBI::dbGetQuery(
     con,
-    "SELECT media_id FROM media_types WHERE media_type = 'snow'"
-)[1, 1]
+    query_swe,
+    params = list(location_ids_list, target_date, "snow water equivalent")
+)
 
+surveys_table <- merge(
+    surveys_table,
+    results_swe[, c("location_id", "snow_water_equivalent")],
+    by.x = "location_id",
+    by.y = "location_id",
+    all.x = TRUE
+)
+
+
+# Query for snow water equivalent
+query_swe <- "
+    SELECT s.location_id, r.result as last_year_snow_water_equivalent
+    FROM discrete.samples s
+    JOIN discrete.results r ON s.sample_id = r.sample_id
+    WHERE s.location_id = ANY($1)
+    AND DATE(s.target_datetime) = DATE($2) - INTERVAL '1 year'
+      AND r.parameter_id = (
+          SELECT parameter_id FROM public.parameters WHERE param_name = $3
+      )
+      AND r.result IS NOT NULL
+"
+
+results_swe <- DBI::dbGetQuery(
+    con,
+    query_swe,
+    params = list(location_ids_list, target_date, "snow water equivalent")
+)
+
+surveys_table <- merge(
+    surveys_table,
+    results_swe[, c("location_id", "last_year_snow_water_equivalent")],
+    by.x = "location_id",
+    by.y = "location_id",
+    all.x = TRUE
+)
+
+
+# Query to get the min and max survey dates per station for the target month and day across all years,
+# and return the difference in years (max_date - min_date)
+query <- "
+    SELECT
+        s.location_id,
+        MIN(s.target_datetime) AS min_date,
+        MAX(s.target_datetime) AS max_date,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY r.result) AS swe_historical_median,
+        MIN(r.result) AS swe_historical_min,
+        MAX(r.result) AS swe_historical_max
+    FROM discrete.samples s
+    JOIN discrete.results r ON s.sample_id = r.sample_id
+    WHERE s.location_id = ANY($1)
+      AND EXTRACT(MONTH FROM s.target_datetime) = $2
+      AND EXTRACT(DAY FROM s.target_datetime) = $3
+      AND r.parameter_id = (
+          SELECT parameter_id FROM public.parameters WHERE param_name = $4
+      )
+      AND r.result IS NOT NULL
+      AND EXTRACT(YEAR FROM s.target_datetime) < EXTRACT(YEAR FROM DATE($5))
+    GROUP BY s.location_id
+"
+
+median_results_df <- DBI::dbGetQuery(
+    con,
+    query,
+    params = list(
+        location_ids_list,
+        bulletin_month,
+        1,
+        "snow water equivalent",
+        target_date
+    )
+)
+
+
+surveys_table <- merge(
+    surveys_table,
+    median_results_df[, c(
+        "location_id",
+        "swe_historical_median",
+        "years_of_record"
+    )],
+    by.x = "location_id",
+    by.y = "location_id",
+    all.x = TRUE
+)
+
+query <- "
+    SELECT
+        s.location_id,
+        MIN(s.target_datetime) AS min_date,
+        MAX(s.target_datetime) AS max_date,
+        COUNT(DISTINCT EXTRACT(YEAR FROM s.target_datetime)) AS num_years
+    FROM discrete.samples s
+    JOIN discrete.results r ON s.sample_id = r.sample_id
+    WHERE s.location_id = ANY($1)
+      AND EXTRACT(MONTH FROM s.target_datetime) = $2
+      AND EXTRACT(DAY FROM s.target_datetime) = $3
+      AND r.parameter_id = (
+          SELECT parameter_id FROM public.parameters WHERE param_name = $4
+      )
+      AND r.result IS NOT NULL
+      AND EXTRACT(YEAR FROM s.target_datetime) <= EXTRACT(YEAR FROM DATE($5))
+    GROUP BY s.location_id
+"
+
+
+daterange_results_df <- DBI::dbGetQuery(
+    con,
+    query,
+    params = list(
+        location_ids_list,
+        bulletin_month,
+        1,
+        "snow water equivalent",
+        target_date
+    )
+)
+
+surveys_table <- merge(
+    surveys_table,
+    daterange_results_df[, c(
+        "location_id",
+        "num_years"
+    )],
+    by.x = "location_id",
+    by.y = "location_id",
+    all.x = TRUE
+)
+
+
+surveys_table[["relative_to_med"]] <- 100 *
+    surveys_table[["snow_water_equivalent"]] /
+    surveys_table[["swe_historical_median"]]
+
+
+surveys_table <- surveys_table[surveys_table$location %in% stations, ]
+
+
+surveys_table$location_id <- NULL
+
+
+surveys_table[, c("name", "location", "survey_date", "snow_depth", )]
+survey_date <- format(as.Date(surveys_table[["survey_date"]]), "%m-%d")
 
 bulletin_month <- 3
 bulletin_year <- 2025
@@ -206,7 +367,7 @@ year_param <- bulletin_year
 year <- bulletin_year
 scale <- 1
 scale_param <- 1
-
+param_name <- "snow water equivalent"
 
 epsg <- "EPSG:3005"
 

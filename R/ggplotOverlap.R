@@ -1406,12 +1406,12 @@ ggplotOverlap <- function(
     if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
       plot <- plot +
         ggplot2::geom_line(
-          ggplot2::aes(y = ath, colour = "Maximum (historical)"),
+          ggplot2::aes(y = .data$ath, colour = "Maximum (historical)"),
           size = 1,
           linetype = 1
         ) +
         ggplot2::geom_line(
-          ggplot2::aes(y = atl, colour = "Minimum (historical)"),
+          ggplot2::aes(y = .data$atl, colour = "Minimum (historical)"),
           size = 1,
           linetype = 1
         )

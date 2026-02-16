@@ -338,50 +338,50 @@ get_dynamic_style_elements <- function(
         tr("snowbull_no_data", language), # "No data"
         tr("snowbull_no_snow", language), # "No snow present where historical median is zero"
         tr("snowbull_some_snow", language), # "Snow present where historical median is zero"
-        "< 50%",
-        "50–70%",
-        "70–90%",
-        "90–110%",
-        "110–130%",
-        "130–150%",
-        "≥ 150%"
+        "\u003C 50%",
+        "50\u201370%",
+        "70\u201390%",
+        "90\u2013110%",
+        "110\u2013130%",
+        "130\u2013150%",
+        "\u2264 150%"
     )
 
     anomalies_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "< -5.0",
-        "-5.0 – -2.0",
-        "-2.0 – -0.4",
-        "-0.4 – +0.5",
-        "+0.5 – +2.0",
-        "+2.0 – +5.0",
-        "≥ +5.0"
+        "\u003C -5.0",
+        "-5.0 \u2013 -2.0",
+        "-2.0 \u2013 -0.4",
+        "-0.4 \u2013 +0.5",
+        "+0.5 \u2013 +2.0",
+        "+2.0 \u2013 +5.0",
+        "\u2264 +5.0"
     )
 
     absolute_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "< 50",
-        "50–100",
-        "100–150",
-        "150–200",
-        "200–250",
-        "250–300",
-        "300–400",
-        "400–500",
-        "≥ 500"
+        "\u003C 50",
+        "50\u2013100",
+        "100\u2013150",
+        "150\u2013200",
+        "200\u2013250",
+        "250\u2013300",
+        "300\u2013400",
+        "400\u2013500",
+        "\u2264 500"
     )
     percentile_labels <- c(
         tr("snowbull_no_data", language), # "No data"
-        "0-10",
-        "10-20",
-        "20-30",
-        "30-40",
-        "40-50",
-        "50-60",
-        "60-70",
-        "70-80",
-        "80-90",
-        "90-100"
+        "0\u201310",
+        "10\u201320",
+        "20\u201330",
+        "30\u201340",
+        "40\u201350",
+        "50\u201360",
+        "60\u201370",
+        "70\u201380",
+        "80\u201390",
+        "90\u2013100"
     )
 
     style_choices = list(
@@ -489,6 +489,161 @@ get_most_recent_date <- function(ts) {
     }
     latest_time <- max(ts$datetime[valid_idx], na.rm = TRUE)
     return(latest_time)
+}
+
+get_latest_timeseries_datetime <- function(ts) {
+    if (is.null(ts) || !is.data.frame(ts) || !"datetime" %in% names(ts)) {
+        return(as.POSIXct(NA))
+    }
+
+    data_cols <- setdiff(names(ts), "datetime")
+    if (length(data_cols) == 0 || nrow(ts) == 0) {
+        return(as.POSIXct(NA))
+    }
+
+    has_data <- rowSums(!is.na(ts[, data_cols, drop = FALSE])) > 0
+    if (!any(has_data)) {
+        return(as.POSIXct(NA))
+    }
+
+    latest_date <- max(
+        as.POSIXct(ts$datetime[has_data], tz = "UTC"),
+        na.rm = TRUE
+    )
+
+    latest_date
+}
+
+get_latest_bulletin_month_year <- function(
+    snowbull_timeseries,
+    param_name = "snow water equivalent"
+) {
+    if (is.null(snowbull_timeseries)) {
+        return(list(year = NA_integer_, month = NA_integer_))
+    }
+
+    timeseries_list <- switch(
+        param_name,
+        "snow water equivalent" = list(
+            snowbull_timeseries$swe$pillows$timeseries$data,
+            snowbull_timeseries$swe$surveys$timeseries$data
+        ),
+        "precipitation, total" = list(
+            snowbull_timeseries$precipitation$timeseries$data
+        ),
+        "temperature, air" = list(
+            snowbull_timeseries$temperature$timeseries$data
+        ),
+        stop("Unsupported param_name: ", param_name)
+    )
+
+    latest_dates <- vapply(
+        timeseries_list,
+        get_latest_timeseries_datetime,
+        FUN.VALUE = as.POSIXct(NA)
+    )
+    if (inherits(latest_dates, "numeric")) {
+        latest_dates <- as.POSIXct(
+            latest_dates,
+            origin = "1970-01-01",
+            tz = "UTC"
+        )
+    }
+
+    latest_date <- max(latest_dates, na.rm = TRUE)
+    if (is.infinite(latest_date) || is.na(latest_date)) {
+        return(list(year = NA_integer_, month = NA_integer_))
+    }
+
+    list(
+        year = as.integer(format(latest_date, "%Y")),
+        month = as.integer(format(latest_date, "%m"))
+    )
+}
+
+render_leaflet_widget_html <- function(widget) {
+    requireNamespace("pandoc")
+
+    tryCatch(
+        {
+            loc <- pandoc::pandoc_locate()
+        },
+        error = function(e) {
+            loc <<- pandoc::pandoc_bin()
+        }
+    )
+    if (is.null(loc)) {
+        message("Installing pandoc...")
+        pandoc::pandoc_install(force = TRUE)
+    }
+
+    tmp_file <- tempfile(fileext = ".html")
+    on.exit(unlink(tmp_file), add = TRUE)
+
+    htmlwidgets::saveWidget(
+        widget,
+        file = tmp_file,
+        selfcontained = TRUE
+    )
+
+    paste(readLines(tmp_file, warn = FALSE), collapse = "\n")
+}
+
+create_snowbull_leaflet_html <- function(
+    year = NULL,
+    month = NULL,
+    param_name = "snow water equivalent",
+    statistic = "relative_to_med",
+    language = "English",
+    con = NULL,
+    snowbull_shapefiles = NULL,
+    snowbull_timeseries = NULL
+) {
+    if (is.null(con)) {
+        con <- AquaConnect(silent = TRUE)
+        on.exit(DBI::dbDisconnect(con), add = TRUE)
+    }
+
+    if (is.null(snowbull_timeseries)) {
+        snowbull_timeseries <- load_bulletin_timeseries(
+            con,
+            load_swe = param_name == "snow water equivalent",
+            load_precip = param_name == "precipitation, total",
+            load_temp = param_name == "temperature, air",
+            epsg = 4326
+        )
+    }
+
+    if (is.null(year) || is.null(month)) {
+        latest <- get_latest_bulletin_month_year(
+            snowbull_timeseries = snowbull_timeseries,
+            param_name = param_name
+        )
+        year <- latest$year
+        month <- latest$month
+    }
+
+    if (is.na(year) || is.na(month)) {
+        stop("Unable to determine latest bulletin date.")
+    }
+
+    leaflet_map <- make_snowbull_map(
+        year = year,
+        month = month,
+        snowbull_shapefiles = snowbull_shapefiles,
+        snowbull_timeseries = snowbull_timeseries,
+        param_name = param_name,
+        statistic = statistic,
+        language = language,
+        con = con,
+        format = "leaflet"
+    )
+
+    list(
+        html = render_leaflet_widget_html(leaflet_map),
+        year = year,
+        month = month
+    )
 }
 
 
@@ -607,7 +762,7 @@ standardize_param_name <- function(param_name, con = NULL) {
 #     temperature$date_day <- lubridate::day(temperature$datetime)
 #     temperature <- temperature[order(temperature$datetime), ]
 
-#     # FDD: sum of degrees below 0°C per water year (Oct 1 - Jun 30)
+#     # FDD: sum of degrees below 0 celcius per water year (Oct 1 - Jun 30)
 #     temperature$date_water_year <- ifelse(
 #         lubridate::month(temperature$datetime) >= water_year_start_month,
 #         temperature$date_year + 1,
@@ -4190,9 +4345,17 @@ make_leaflet_map <- function(
         cat(sprintf("Saving map to file: %s\n", filename))
         requireNamespace("pandoc")
 
-        loc <- pandoc::pandoc_locate()
+        tryCatch(
+            {
+                loc <- pandoc::pandoc_locate()
+            },
+            error = function(e) {
+                loc <<- pandoc::pandoc_bin()
+            }
+        )
         if (is.null(loc)) {
-            stop("Pandoc installation not found. Please install pandoc.")
+            message("Installing pandoc...")
+            pandoc::pandoc_install(force = TRUE)
         }
 
         htmlwidgets::saveWidget(
@@ -4671,7 +4834,7 @@ make_ggplot_map <- function(
 }
 
 
-#' Create a static ggplot2 map for SWE basins and stations
+#' Create a map for SWE basins and stations
 #'
 #' @param year Integer year (e.g., 2025)
 #' @param month Integer month (e.g., 3 for March)
@@ -4682,8 +4845,8 @@ make_ggplot_map <- function(
 #' @param filename Optional character string for PNG output file path
 #' @param dpi Numeric resolution in dots per inch (default: 300)
 #' @param param_name Character, parameter to plot (default: "swe")
-#' @param statistic Character, "absolute", "relative", or "percentile" (default: "relative")
-#' @param language Character string indicating the language for labels and legends. Default is "English".
+#' @param statistic Character, "absolute", "relative_to_med" (relative to median) or "percentile" (default: "relative_to_med")
+#' @param language Character string indicating the language for labels and legends. 'French' or 'English'; default is "English".
 #' @param con Optional database connection, if not provided a default connection will be used
 #' @param format Character string indicating the output format: "ggplot", "leaflet", or "shiny",
 #' @param start_year_historical Integer, start year for historical norms (default: 1991)
@@ -4914,6 +5077,7 @@ make_snowbull_map <- function(
                 point_data_secondary = map_data$point_data_secondary,
                 snowbull_shapefiles = snowbull_shapefiles,
                 language = language,
+                param_name = param_name,
                 statistic = statistic,
                 month = month, # month and year for title only; data is already good to go
                 year = year,
