@@ -6,6 +6,7 @@ YGwater_globals <- function(
   dbPass,
   RLS_user,
   RLS_pass,
+  network_check,
   accessPath1,
   accessPath2,
   logout_timer_min,
@@ -31,13 +32,17 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
-  g_drive <- FALSE
+  if (!isFALSE(network_check)) {
+    network_check <- dir.exists(network_check)
+    # YG specific code here
+    g_drive <- FALSE
 
-  if (!public) {
-    # confirm G drive access for FOD reports
-    g_drive <- dir.exists(
-      "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
-    )
+    if (!public) {
+      # confirm G drive access for FOD reports
+      g_drive <- dir.exists(
+        "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
+      )
+    }
 
     # 'Admin' side modules #####
     # database admin modules
@@ -526,7 +531,7 @@ YGwater_globals <- function(
     ))
 
     # Report modules
-    if (g_drive) {
+    if (network_check) {
       source(system.file(
         "apps/YGwater/modules/client/reports/WQReport.R",
         package = "YGwater"
@@ -611,7 +616,7 @@ YGwater_globals <- function(
 
   ## Access database connections ###########
   # Look for .mdb files in the AccessPath directories
-  if (g_drive) {
+  if (network_check) {
     if (!is.null(accessPath1)) {
       if (dir.exists(accessPath1) & !public) {
         # List the *.mdb files in the directory
@@ -666,7 +671,8 @@ YGwater_globals <- function(
     dbUser = dbUser,
     dbPass = dbPass,
     public = public,
-    g_drive = g_drive,
+    g_drive = g_drive, # YG specific - whether the app has access to the G drive where FOD reports are stored, which allows the FOD report module to be visible and functional
+    network_check = network_check,
     mdb_files = mdb_files,
     logout_timer_min = logout_timer_min,
     admin = FALSE,
