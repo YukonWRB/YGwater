@@ -25,29 +25,55 @@ contPlotUI <- function(id) {
     /* Panel: plot_panel */
     #%s .accordion-item[data-value='%s'] {
       --bs-accordion-bg:        #F1F4E5;
-      --bs-accordion-btn-bg:    #7A9A01;
-      --bs-accordion-active-bg: #7A9A01;
+      --bs-accordion-btn-bg:    #bacc81ff;
+      --bs-accordion-active-bg: #bacc81ff;
+    }
+
+    /* Panel: metadata_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #FFFCF5;
+      --bs-accordion-btn-bg:    #FBE5B2;
+      --bs-accordion-active-bg: #FBE5B2;
     }
     ",
-      ns("accordion_panels"),
-      ns("accordion_panels"),
+      ns("accordion1"),
+      ns("accordion1"),
       ns("filters_panel"),
-      ns("accordion_panels"),
+      ns("accordion1"),
       ns("table_panel"),
-      ns("accordion_panels"),
-      ns("plot_panel")
+      ns("accordion1"),
+      ns("plot_options_panel"),
+      ns("accordion2"),
+      ns("metadata_panel")
     ))),
+
+    # Adjust table background so they don't blend into the accordion
     tags$style(HTML(sprintf(
       "
-      /* Force DT table background to white (scoped to this module/table) */
+      /* Force DT table backgrounds to white for these module tables */
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td,
+    
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td,
+    
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td,
+    
       #%s table.dataTable,
       #%s table.dataTable tbody,
       #%s table.dataTable tbody tr,
       #%s table.dataTable tbody td {
         background-color: #FFFFFF !important;
       }
-
-      /* keep filters at top white too */
+    
+      /* Only timeseries_table has the filter row in the header */
       #%s table.dataTable thead tr,
       #%s table.dataTable thead th,
       #%s table.dataTable thead td {
@@ -58,10 +84,23 @@ contPlotUI <- function(id) {
       ns("timeseries_table"),
       ns("timeseries_table"),
       ns("timeseries_table"),
+      ns("location_metadata_table"),
+      ns("location_metadata_table"),
+      ns("location_metadata_table"),
+      ns("location_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_ownership_table"),
+      ns("timeseries_ownership_table"),
+      ns("timeseries_ownership_table"),
+      ns("timeseries_ownership_table"),
       ns("timeseries_table"),
       ns("timeseries_table"),
       ns("timeseries_table")
     ))),
+
     uiOutput(ns("banner")),
     uiOutput(ns("main"))
   )
@@ -285,6 +324,15 @@ contPlot <- function(id, language, windowDims, inputs) {
         loc_code = as.factor(loc_code)
       )]
 
+      # Convert to periods
+      ts[,
+        record_rate := ifelse(
+          !is.na(record_rate),
+          as.character(lubridate::seconds_to_period(record_rate)),
+          NA_character_
+        )
+      ]
+
       ts <- ts[, .(
         timeseries_id,
         location,
@@ -294,6 +342,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         media,
         aggregation,
         z,
+        record_rate,
         networks,
         projects,
         start_date,
@@ -384,50 +433,51 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
       tags <- tagList(
         bslib::accordion(
-          id = ns("accordion_panels"),
+          id = ns("accordion1"),
           open = c(ns("table_panel"), ns("plot_options_panel")),
-          bslib::accordion_panel(
-            title = tr("filters", language$language),
-            value = ns("filters_panel"),
-            fluidRow(
-              column(
-                width = 4,
-                selectizeInput(
-                  ns("network_filter"),
-                  label = tr("networks", language$language),
-                  choices = network_choices,
-                  multiple = TRUE,
-                  options = list(
-                    placeholder = tr("select_network", language$language)
-                  )
-                )
-              ),
-              column(
-                width = 4,
-                selectizeInput(
-                  ns("project_filter"),
-                  label = tr("projects", language$language),
-                  choices = project_choices,
-                  multiple = TRUE,
-                  options = list(
-                    placeholder = tr("select_project", language$language)
-                  )
-                )
-              ),
-              column(
-                width = 4,
-                selectizeInput(
-                  ns("param_grp_filter"),
-                  label = tr("param_groups", language$language),
-                  choices = param_grp_choices,
-                  multiple = TRUE,
-                  options = list(
-                    placeholder = tr("select_param_group", language$language)
-                  )
-                )
-              )
-            )
-          ), # End filters_panel
+          # Filters are not visible now, may be necessary when there is more data to show.
+          # bslib::accordion_panel(
+          #   title = tr("filters", language$language),
+          #   value = ns("filters_panel"),
+          #   fluidRow(
+          #     column(
+          #       width = 4,
+          #       selectizeInput(
+          #         ns("network_filter"),
+          #         label = tr("networks", language$language),
+          #         choices = network_choices,
+          #         multiple = TRUE,
+          #         options = list(
+          #           placeholder = tr("select_network", language$language)
+          #         )
+          #       )
+          #     ),
+          #     column(
+          #       width = 4,
+          #       selectizeInput(
+          #         ns("project_filter"),
+          #         label = tr("projects", language$language),
+          #         choices = project_choices,
+          #         multiple = TRUE,
+          #         options = list(
+          #           placeholder = tr("select_project", language$language)
+          #         )
+          #       )
+          #     ),
+          #     column(
+          #       width = 4,
+          #       selectizeInput(
+          #         ns("param_grp_filter"),
+          #         label = tr("param_groups", language$language),
+          #         choices = param_grp_choices,
+          #         multiple = TRUE,
+          #         options = list(
+          #           placeholder = tr("select_param_group", language$language)
+          #         )
+          #       )
+          #     )
+          #   )
+          # ), # End filters_panel
           bslib::accordion_panel(
             title = tr("cont_table_heading", language$language),
             value = ns("table_panel"),
@@ -532,9 +582,38 @@ contPlot <- function(id, language, windowDims, inputs) {
               )
             )
           ) # End plot_options_panel
-        ), # End accordion
+        ), # End accordion 1
+        tags$div(style = "height: 10px;"),
         plotly::plotlyOutput(ns("plot"), height = "600px", inline = TRUE),
-        uiOutput(ns("full_screen_ui"))
+        uiOutput(ns("full_screen_ui")),
+
+        # Space so the table and plot aren't in each other's faces
+        tags$div(style = "height: 15px;"),
+
+        # Start accordion 2
+        bslib::accordion(
+          id = ns("accordion2"),
+          bslib::accordion_panel(
+            title = tr("metadata", language$language),
+            value = ns("metadata_panel"),
+            uiOutput(ns("metadata_message")),
+            fluidRow(
+              column(
+                width = 6,
+                tags$h5(tr("location_metadata_heading", language$language)),
+                DT::dataTableOutput(ns("location_metadata_table"))
+              ),
+              column(
+                width = 6,
+                tags$h5(tr("timeseries_metadata_heading", language$language)),
+                DT::dataTableOutput(ns("timeseries_metadata_table"))
+              )
+            ),
+            tags$div(style = "height: 10px;"),
+            tags$h5(tr("ownership_history_heading", language$language)),
+            DT::dataTableOutput(ns("timeseries_ownership_table"))
+          )
+        ) # End accordion2 accordion
       ) # End tagList
       return(tags)
     }) # End renderUI
@@ -596,6 +675,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         media = tr("media", language$language),
         aggregation = tr("aggregation", language$language),
         z = tr("z", language$language),
+        record_rate = tr("record_rate", language$language),
         networks = tr("network", language$language),
         projects = tr("project", language$language),
         start_date = tr("start_date", language$language),
@@ -632,7 +712,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         rownames = FALSE,
         selection = list(mode = "single"),
         options = list(
-          pageLength = 5,
+          pageLength = 10,
           lengthMenu = c(5, 10, 20),
           columnDefs = list(
             list(visible = FALSE, targets = 0),
@@ -671,17 +751,69 @@ contPlot <- function(id, language, windowDims, inputs) {
           ),
           order = order_columns,
           stateSave = FALSE
-        ),
+        ), # End options
         colnames = c("timeseries_id", col_names),
         filter = "top",
-        # Code below can add simple hover tooltips, but a) needs to be customized for each column, b) needs to be namespaced, and c) needs apdapting to work not just on hover for touch screen devices
-        # callback = htmlwidgets::JS(
-        #   "var tips = ['tooltip1', 'tooltip2', 'tooltip3', 'tooltip4', 'tooltip5'],
-        # firstRow = $('#contPlot-timeseries_table thead tr th');
-        # for (var i = 0; i < tips.length; i++) {
-        #   $(firstRow[i]).attr('title', tips[i]);
-        # }"
-        # )
+        callback = htmlwidgets::JS(
+          sprintf(
+            "
+          var tips = {
+            4: '%s',
+            6: '%s'
+          };
+        
+          var applyTips = function() {
+            var $thead = $(table.table().header());
+            var $rows  = $thead.find('tr');
+        
+            var $labelRow = $rows.filter(function() {
+              return $(this).find('th').filter(function() {
+                return $.trim($(this).text()).length > 0;
+              }).length > 0;
+            }).first();
+        
+            $labelRow.find('th').each(function(i) {
+              if (!(i in tips)) return;
+        
+              var $th   = $(this);
+              var $icon = $th.find('.dt-info-icon');
+        
+              if ($icon.length === 0) {
+                $icon = $('<i class=\"fa fa-info-circle dt-info-icon\" style=\"font-size:100%%; margin-left:5px; cursor:help;\"></i>')
+                  .appendTo($th);
+        
+                // Make it focusable (Tab) and clickable (mobile)
+                $icon.attr({ tabindex: 0, role: 'button', 'aria-label': 'Info' });
+              }
+        
+              // Bootstrap 5 tooltip attributes (title is read by BS)
+              $icon.attr({
+                title: tips[i],
+                'data-bs-toggle': 'tooltip',
+                'data-bs-trigger': 'hover focus click',
+                'data-bs-placement': 'top'
+              });
+        
+              // Initialize (or update) Bootstrap tooltip instance
+              var el = $icon.get(0);
+              if (window.bootstrap && bootstrap.Tooltip) {
+                var inst = bootstrap.Tooltip.getInstance(el);
+                if (inst) {
+                  inst.setContent({ '.tooltip-inner': tips[i] });
+                } else {
+                  new bootstrap.Tooltip(el, { trigger: 'hover focus click', delay: { show: 0, hide: 0 } });
+                }
+              }
+            });
+          };
+        
+          applyTips();
+          table.on('draw.dt', applyTips);
+          ",
+            tr("cont_table_tooltip1", language$language),
+            tr("cont_table_tooltip2", language$language)
+          )
+        )
       )
       dt
     })
@@ -779,6 +911,249 @@ contPlot <- function(id, language, windowDims, inputs) {
         plot_resolution = input$plot_resolution,
         plot_timezone = input$plot_timezone
       )
+    })
+
+    format_metadata_value <- function(value) {
+      if (is.null(value) || length(value) == 0) {
+        return(NA_character_)
+      }
+      if (is.list(value)) {
+        value <- unlist(value, use.names = FALSE)
+      }
+      if (length(value) > 1) {
+        return(paste(stats::na.omit(value), collapse = ", "))
+      }
+      value <- as.character(value)
+      if (!is.na(value) && grepl("^\\{.*\\}$", value)) {
+        value <- gsub("^\\{|\\}$", "", value)
+        value <- gsub(",", ", ", value)
+      }
+      if (identical(value, "")) {
+        return(NA_character_)
+      }
+      value
+    }
+
+    metadata_base_table <- function(attributes, values) {
+      metadata <- data.frame(
+        attribute = attributes,
+        value = values,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+      metadata <- metadata[!is.na(metadata$value) & metadata$value != "", ]
+      metadata
+    }
+
+    selected_location_id <- reactive({
+      ts_id <- selected_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NULL)
+      }
+      location_id <- moduleData$timeseries[
+        timeseries_id == ts_id,
+        location_id
+      ]
+      if (length(location_id) == 0) {
+        return(NULL)
+      }
+      location_id[[1]]
+    })
+
+    selected_sub_location <- reactive({
+      ts_id <- selected_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NA_character_)
+      }
+      selected_sub_location_id <- moduleData$timeseries[
+        timeseries_id == ts_id,
+        sub_location_id
+      ]
+      if (length(selected_sub_location_id) == 0) {
+        return(NA_character_)
+      }
+      selected_sub_location_id <- selected_sub_location_id[[1]]
+      if (
+        is.null(selected_sub_location_id) || is.na(selected_sub_location_id)
+      ) {
+        return(NA_character_)
+      }
+      sub_loc_col <- tr("sub_location_col", language$language)
+      sub_loc <- moduleData$sub_locs[
+        sub_location_id == selected_sub_location_id,
+        ..sub_loc_col
+      ][[sub_loc_col]]
+      if (length(sub_loc) == 0) {
+        return(NA_character_)
+      }
+      sub_loc[[1]]
+    })
+
+    location_metadata <- reactive({
+      req(selected_location_id())
+      loc_tbl <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste0(
+          "SELECT * FROM ",
+          if (language$abbrev == "fr") {
+            "location_metadata_fr"
+          } else {
+            "location_metadata_en"
+          },
+          " WHERE location_id = ",
+          selected_location_id(),
+          ";"
+        )
+      )
+      if (nrow(loc_tbl) == 0) {
+        return(NULL)
+      }
+      location_name <- if (language$abbrev == "fr") {
+        loc_tbl$nom
+      } else {
+        loc_tbl$name
+      }
+      location_code <- if (language$abbrev == "fr") {
+        loc_tbl$code_de_site
+      } else {
+        loc_tbl$location_code
+      }
+      projects <- if (language$abbrev == "fr") {
+        loc_tbl$projets
+      } else {
+        loc_tbl$projects
+      }
+      networks <- if (language$abbrev == "fr") {
+        loc_tbl$`réseaux`
+      } else {
+        loc_tbl$networks
+      }
+      elevation <- if (language$abbrev == "fr") {
+        loc_tbl$altitude
+      } else {
+        loc_tbl$elevation
+      }
+      metadata_base_table(
+        attributes = c(
+          tr("loc", language$language),
+          tr("location_code_label", language$language),
+          tr("sub_loc", language$language),
+          tr("latitude", language$language),
+          tr("longitude", language$language),
+          tr("elevation_m", language$language),
+          tr("datum", language$language),
+          tr("projects", language$language),
+          tr("networks", language$language)
+        ),
+        values = c(
+          format_metadata_value(location_name),
+          format_metadata_value(location_code),
+          format_metadata_value(selected_sub_location()),
+          format_metadata_value(loc_tbl$latitude),
+          format_metadata_value(loc_tbl$longitude),
+          format_metadata_value(elevation),
+          format_metadata_value(loc_tbl$datum),
+          format_metadata_value(projects),
+          format_metadata_value(networks)
+        )
+      )
+    })
+
+    timeseries_metadata <- reactive({
+      ts_id <- selected_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NULL)
+      }
+      ts_tbl <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste0(
+          "SELECT * FROM ",
+          if (language$abbrev == "fr") {
+            "continuous.timeseries_metadata_fr"
+          } else {
+            "continuous.timeseries_metadata_en"
+          },
+          " WHERE timeseries_id = ",
+          ts_id,
+          ";"
+        )
+      )
+      if (nrow(ts_tbl) == 0) {
+        return(NULL)
+      }
+      if (language$abbrev == "fr") {
+        parameter <- ts_tbl$`nom_paramètre`
+        media <- ts_tbl$`type_de_média`
+        aggregation <- ts_tbl$`type_agrégation`
+        record_rate <- ts_tbl$`fréquence_enregistrement`
+        depth_height <- ts_tbl$`profondeur_hauteur_m`
+        start_dt <- ts_tbl$`début`
+        end_dt <- ts_tbl$fin
+      } else {
+        parameter <- ts_tbl$parameter_name
+        media <- ts_tbl$media_type
+        aggregation <- ts_tbl$aggregation_type
+        record_rate <- ts_tbl$recording_rate
+        depth_height <- ts_tbl$depth_height_m
+        start_dt <- ts_tbl$start_datetime
+        end_dt <- ts_tbl$end_datetime
+      }
+      record_rate_seconds <- suppressWarnings(as.numeric(record_rate))
+      record_rate_display <- if (!is.na(record_rate_seconds)) {
+        as.character(lubridate::seconds_to_period(record_rate_seconds))
+      } else {
+        format_metadata_value(record_rate)
+      }
+      metadata_base_table(
+        attributes = c(
+          tr("parameter", language$language),
+          tr("media", language$language),
+          tr("aggregation", language$language),
+          tr("nominal_rate", language$language),
+          tr("depth_height_m", language$language),
+          tr("start_date", language$language),
+          tr("end_date", language$language),
+          tr("note", language$language)
+        ),
+        values = c(
+          format_metadata_value(parameter),
+          format_metadata_value(media),
+          format_metadata_value(aggregation),
+          format_metadata_value(record_rate_display),
+          format_metadata_value(depth_height),
+          format_metadata_value(start_dt),
+          format_metadata_value(end_dt),
+          format_metadata_value(ts_tbl$note)
+        )
+      )
+    })
+
+    timeseries_ownership <- reactive({
+      ts_id <- selected_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NULL)
+      }
+      ownership_tbl <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste0(
+          "SELECT o.start_dt, o.end_dt, ",
+          if (language$abbrev == "fr") {
+            "COALESCE(org.name_fr, org.name) AS owner"
+          } else {
+            "org.name AS owner"
+          },
+          " FROM continuous.owners o ",
+          "JOIN public.organizations org ",
+          "ON o.organization_id = org.organization_id ",
+          "WHERE o.timeseries_id = ",
+          ts_id,
+          " ORDER BY o.start_dt;"
+        )
+      )
+      if (nrow(ownership_tbl) == 0) {
+        return(NULL)
+      }
+      ownership_tbl
     })
 
     # ExtendedTask that does the heavy plotting work
@@ -896,6 +1271,136 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
       plot_created(TRUE)
     }) # End renderPlotly
+
+    output$metadata_message <- renderUI({
+      if (is.null(selected_timeseries_id())) {
+        return(
+          tags$em(tr("metadata_select_prompt", language$language))
+        )
+      }
+      NULL
+    })
+
+    output$location_metadata_table <- DT::renderDataTable({
+      metadata <- location_metadata()
+      req(metadata)
+      DT::datatable(
+        metadata,
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          dom = "t",
+          paging = FALSE,
+          ordering = FALSE,
+          searching = FALSE,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {
+             $(this.api().table().header()).css({
+              'font-size': '90%'
+             });
+             $(this.api().table().body()).css({
+              'font-size': '80%'
+             });
+            }"
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          )
+        ),
+        colnames = c(
+          tr("attribute", language$language),
+          tr("value", language$language)
+        )
+      )
+    })
+
+    output$timeseries_metadata_table <- DT::renderDataTable({
+      metadata <- timeseries_metadata()
+      req(metadata)
+      DT::datatable(
+        metadata,
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          dom = "t",
+          paging = FALSE,
+          ordering = FALSE,
+          searching = FALSE,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {
+             $(this.api().table().header()).css({
+              'font-size': '90%'
+             });
+             $(this.api().table().body()).css({
+              'font-size': '80%'
+             });
+            }"
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          )
+        ),
+        colnames = c(
+          tr("attribute", language$language),
+          tr("value", language$language)
+        )
+      )
+    })
+
+    output$timeseries_ownership_table <- DT::renderDataTable({
+      ownership <- timeseries_ownership()
+      req(ownership)
+      DT::datatable(
+        ownership,
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          dom = "t",
+          paging = FALSE,
+          ordering = FALSE,
+          searching = FALSE,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {
+             $(this.api().table().header()).css({
+              'font-size': '90%'
+             });
+             $(this.api().table().body()).css({
+              'font-size': '80%'
+             });
+            }"
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          )
+        ),
+        colnames = c(
+          tr("start_date", language$language),
+          tr("end_date", language$language),
+          tr("owner", language$language)
+        )
+      )
+    })
 
     # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
     # The js function takes care of debouncing the window resize event and also reacts to a change in orientation or full screen event

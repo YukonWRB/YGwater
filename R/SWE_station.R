@@ -14,7 +14,7 @@
 #' @param snowCon A connection to the snow database. If NULL, a new connection will be created with [snowConnect()] and automatically closed. If aquaCon is not NULL but snowCon is NULL, connection to the snow DB will be attempted at the same host and port as the aquacache connection.
 #' @param summarise TRUE or FALSE. If TRUE, the output table is summarized by sub-basin. If FALSE, the output table is not summarised.
 #' @param historical_start_year The first year to include in the historical statistics. If NULL, all years prior to 'year' are included.
-#' @param historical_end_year The last year to include in the historical statistics. If NULL
+#' @param historical_end_year The last year to include in the historical statistics. If NULL, the year prior to the current year is used.
 #' @param save_path The path to save the csv file. If "choose", a dialog box will open to select the path. If NULL, the csv file will not be saved.
 #'
 #' @return A table and a csv file (if csv = TRUE) with the current snow depth and swe, the swe of the previous year, historical median swe, the swe relative to the median (swe / swe_median), and the number of years with data at that station.
@@ -51,8 +51,8 @@ SWE_station <- function(
   # save_path = "choose"
 
   # parameter checks
-  if (!month %in% c(3, 4, 5)) {
-    stop("Parameter 'month' must be either 3, 4 or 5")
+  if (!month %in% c(2, 3, 4, 5)) {
+    stop("Parameter 'month' must be either 2, 3, 4 or 5")
   }
   source <- tolower(source)
   if (!source %in% c("aquacache", "snow")) {
@@ -131,14 +131,14 @@ SWE_station <- function(
     Meas <- DBI::dbGetQuery(
       aquaCon,
       paste0(
-        "SELECT l.name, l.name_fr, l.location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
+        "SELECT l.name, l.name_fr, l.location_code AS location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
            FROM results as res
            INNER JOIN samples as samp ON res.sample_id = samp.sample_id
            INNER JOIN locations as l ON samp.location_id = l.location_id
            INNER JOIN parameters as p ON res.parameter_id = p.parameter_id
            INNER JOIN datum_conversions as dc ON l.location_id = dc.location_id
            INNER JOIN result_value_types as rvt ON res.result_value_type = rvt.result_value_type_id
-           WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location IN ('",
+           WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location_code IN ('",
         paste0(stations, collapse = "', '"),
         "')"
       )
@@ -195,6 +195,7 @@ SWE_station <- function(
         "')"
       )
     )
+    Meas$location_name_fr <- Meas$name
 
     # Calculate density
     Meas$density <- round((Meas$swe / Meas$depth) * 10, 2)
@@ -228,6 +229,7 @@ SWE_station <- function(
       "sample_date",
       "elevation",
       "estimate_flag",
+      "location_name_fr",
       "parameter",
       "value"
     )
@@ -294,6 +296,7 @@ SWE_station <- function(
           dplyr::group_by(.data$target_date, .data$parameter) %>%
           dplyr::summarise(
             location_name = unique(.data$location_name),
+            location_name_fr = unique(.data$location_name_fr),
             location_id = unique(.data$location_id),
             target_date = unique(.data$target_date),
             sample_date = mean(.data$sample_date),

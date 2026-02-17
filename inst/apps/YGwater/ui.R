@@ -35,6 +35,7 @@ app_ui <- function(request) {
       )), # Include Matomo analytics tracking code
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
       tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
+      tags$script(src = "js/idle_timer.js"), # JS to report user activity for inactivity logout
       # JS below is for updating the title of the page from the server, when the user changes language
       tags$script(HTML(
         "
@@ -69,20 +70,33 @@ app_ui <- function(request) {
         type = "text/css",
         href = "css/buttons.css"
       ), # styling for hover effects on buttons with YG colors
-
+      # Allow datatable filters to overflow the table, helpful when table is filtered to only a few rows.
+      tags$style(
+        HTML(
+          "
+            /* Allow filter dropdowns to overflow the DT scroll containers */
+            div.dataTables_scroll,
+            div.dataTables_scrollHead,
+            div.dataTables_scrollHeadInner,
+            div.dataTables_scrollBody {
+              overflow: visible !important;
+            }
+          "
+        )
+      ),
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
-      tags$style(HTML(
-        "
+      tags$style(
+        HTML(
+          "
         a.dropdown-toggle > .shiny-html-output {
         display: inline;
         }
       "
-      )),
+        )
+      ),
       tags$style(
         HTML(
-          "
-    .alert { white-space: normal !important; }
-  "
+          ".alert { white-space: normal !important; }"
         )
       )
     ),

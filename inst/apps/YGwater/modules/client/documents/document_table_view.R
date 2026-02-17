@@ -129,20 +129,30 @@ docTableView <- function(id, language) {
 
     selected_document_id <- reactiveVal(NULL)
 
-    observeEvent(input$documents_table_rows_selected, {
-      tbl <- table_data()
-      if (
-        !is.null(input$documents_table_rows_selected) &&
-          length(input$documents_table_rows_selected) == 1 &&
-          nrow(tbl) >= input$documents_table_rows_selected
-      ) {
-        selected_document_id(tbl$document_id[
-          input$documents_table_rows_selected
-        ])
-      } else {
-        selected_document_id(NULL)
-      }
-    })
+    observeEvent(
+      input$documents_table_rows_selected,
+      {
+        tbl <- table_data()
+        if (
+          !is.null(input$documents_table_rows_selected) &&
+            length(input$documents_table_rows_selected) == 1 &&
+            nrow(tbl) >= input$documents_table_rows_selected
+        ) {
+          selected_document_id(tbl$document_id[
+            input$documents_table_rows_selected
+          ])
+        } else {
+          selected_document_id(NULL)
+        }
+
+        if (is.null(input$documents_table_rows_selected)) {
+          shinyjs::hide("download_document")
+        } else {
+          shinyjs::show("download_document")
+        }
+      },
+      ignoreNULL = FALSE
+    ) # FALSE to catch deselection
 
     output$page <- renderUI({
       tags <- tagList(
@@ -165,11 +175,11 @@ docTableView <- function(id, language) {
         document_id = "document_id",
         name = tr("name", language$language),
         type = tr("type", language$language),
-        authors = tr("document_authors", language$language),
+        authors = tr("authors", language$language),
         publish_date = tr("document_published", language$language),
-        description = tr("document_description", language$language),
-        format = tr("document_format", language$language),
-        owner = tr("document_owner", language$language),
+        description = tr("description", language$language),
+        format = tr("format", language$language),
+        owner = tr("owner", language$language),
         tags = tr("tags", language$language),
         sort_date = "sort_date"
       )
@@ -182,6 +192,8 @@ docTableView <- function(id, language) {
       sort_target <- which(names(tbl) == "sort_date") - 1
       name_target <- which(names(tbl) == "name") - 1
 
+      # Make the full ID for callbacks
+      tbl_id <- session$ns("documents_table")
       DT::datatable(
         tbl,
         rownames = FALSE,
@@ -268,17 +280,17 @@ docTableView <- function(id, language) {
         tags$p(doc$name),
         tags$strong(tr("type", language$language)),
         tags$p(doc$type),
-        tags$strong(tr("document_authors", language$language)),
+        tags$strong(tr("authors", language$language)),
         tags$p(ifelse(is.na(doc$authors), "", doc$authors)),
         tags$strong(tr("document_published", language$language)),
         tags$p(ifelse(is.na(doc$publish_date), "", doc$publish_date)),
-        tags$strong(tr("document_description", language$language)),
+        tags$strong(tr("description", language$language)),
         tags$p(doc$description),
-        tags$strong(tr("document_format", language$language)),
+        tags$strong(tr("format", language$language)),
         tags$p(doc$format),
-        tags$strong(tr("document_owner", language$language)),
+        tags$strong(tr("owner", language$language)),
         tags$p(ifelse(is.na(doc$owner), "", doc$owner)),
-        tags$strong(tr("document_contributor", language$language)),
+        tags$strong(tr("contributor", language$language)),
         tags$p(ifelse(is.na(doc$contributor), "", doc$contributor)),
         tags$strong(tr("tags", language$language)),
         tags$p(ifelse(is.na(doc$tags), "", doc$tags)),

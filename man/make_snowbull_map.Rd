@@ -2,7 +2,7 @@
 % Please edit documentation in R/SWE_maputils.R
 \name{make_snowbull_map}
 \alias{make_snowbull_map}
-\title{Create a static ggplot2 map for SWE basins and stations}
+\title{Create a map for SWE basins and stations}
 \usage{
 make_snowbull_map(
   year,
@@ -13,8 +13,10 @@ make_snowbull_map(
   width = 12,
   height = 8,
   dpi = 300,
-  parameter_name = "swe",
+  param_name = NULL,
   statistic = "relative_to_med",
+  start_year_historical = 1991,
+  end_year_historical = 2020,
   language = "English",
   con = NULL,
   format = "ggplot"
@@ -37,17 +39,21 @@ make_snowbull_map(
 
 \item{dpi}{Numeric resolution in dots per inch (default: 300)}
 
-\item{parameter_name}{Character, parameter to plot (default: "swe")}
+\item{param_name}{Character, parameter to plot (default: "swe")}
 
-\item{statistic}{Character, "absolute", "relative", or "percentile" (default: "relative")}
+\item{statistic}{Character, "absolute", "relative_to_med" (relative to median) or "percentile" (default: "relative_to_med")}
 
-\item{language}{Character string indicating the language for labels and legends. Default is "English".}
+\item{start_year_historical}{Integer, start year for historical norms (default: 1991)}
+
+\item{end_year_historical}{Integer, end year for historical norms (default: 2020)
+
+(default: "English")}
+
+\item{language}{Character string indicating the language for labels and legends. 'French' or 'English'; default is "English".}
 
 \item{con}{Optional database connection, if not provided a default connection will be used}
 
-\item{format}{Character string indicating the output format: "ggplot", "leaflet", or "shiny"
-
-(default: "English")}
+\item{format}{Character string indicating the output format: "ggplot", "leaflet", or "shiny",}
 }
 \value{
 A ggplot2 object with SWE basins and stations

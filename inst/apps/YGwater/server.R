@@ -908,10 +908,115 @@ app_server <- function(input, output, session) {
   session$userData$table_privs <- data.frame() # track table privileges
   session$userData$admin_privs <- list() # store privilege flags for UI filtering
 
+  # Track the user's last activity
+  session$userData$last_activity <- reactiveVal(Sys.time())
+  # 1 minute for testing
+  inactivity_timeout_secs <- config$logout_timer_min * 60
+  # Run a check every 30 seconds
+  inactivity_check <- reactiveTimer(30000, session)
+
+  observeEvent(
+    input$user_last_activity,
+    {
+      session$userData$last_activity(as.POSIXct(
+        input$user_last_activity / 1000,
+        origin = "1970-01-01",
+        tz = "UTC"
+      ))
+    },
+    ignoreInit = TRUE
+  )
+
+  clear_modals <- function() {
+    removeModal()
+    shinyjs::runjs(
+      "$('.modal-backdrop').remove();$('body').removeClass('modal-open');$('body').css('padding-right','');"
+    )
+  }
+
+  perform_logout <- function(show_idle_modal = FALSE) {
+    if (!isTRUE(session$userData$user_logged_in)) {
+      return()
+    }
+
+    session$userData$user_logged_in <- FALSE # Set login status to FALSE
+    session$userData$can_create_role <- FALSE
+    session$userData$table_privs <- data.frame() # Reset table privileges
+    session$userData$admin_privs <- list() # Reset privilege flags
+    session$userData$last_activity(NULL)
+
+    if (show_idle_modal) {
+      clear_modals() # Remove any existing modals
+      showModal(modalDialog(
+        title = tr("logout_inactive_title", languageSelection$language),
+        tr("logout_inactive_msg", languageSelection$language),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", languageSelection$language))
+      ))
+    }
+
+    # change the 'Logout' button back to 'Login'
+    shinyjs::hide("logoutBtn")
+    shinyjs::show("loginBtn")
+
+    # Remove the 'admin' button upon logout
+    removeUI(selector = "button:contains('Switch to ')")
+
+    # Drop old connection
+    DBI::dbDisconnect(session$userData$AquaCache)
+    # Re-create the connection with the base 'config' parameters, no edit privileges
+    session$userData$AquaCache <- AquaConnect(
+      name = config$dbName,
+      host = config$dbHost,
+      port = config$dbPort,
+      username = config$dbUser,
+      password = config$dbPass,
+      silent = TRUE
+    )
+
+    # Reset the session userData with the default credentials
+    session$userData$config$dbUser <- config$dbUser
+    session$userData$config$dbPass <- config$dbPass
+
+    showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
+
+    # Clear the app_cache environment
+    session$userData$app_cache <- new.env(parent = emptyenv())
+    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+    reset_ui_loaded()
+    # Send the user back to the 'home' tab if they were elsewhere
+    updateTabsetPanel(session, "navbar", selected = "home")
+
+    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode which will return them to the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
+    admin_vis_flag("viz")
+    shinyjs::click("admin")
+  }
+
+  observe({
+    inactivity_check()
+    if (!isTRUE(session$userData$user_logged_in)) {
+      return()
+    }
+    last_activity <- session$userData$last_activity()
+    if (is.null(last_activity)) {
+      return()
+    }
+    idle_seconds <- as.numeric(difftime(
+      Sys.time(),
+      last_activity,
+      units = "secs"
+    ))
+    if (!is.na(idle_seconds) && idle_seconds > inactivity_timeout_secs) {
+      perform_logout(show_idle_modal = TRUE)
+    }
+  })
+
   ## Log in #########
   # Login UI elements are not created if YGwater() is launched in public mode, in which case this code would not run
   observeEvent(input$loginBtn, {
     req(languageSelection$language) # Ensure language is set before proceeding (might not be yet if the app is still loading)
+    clear_modals() # Remove any existing modals
+    # Check if the user has exceeded the maximum number of login attempts
     if (log_attempts() > 5) {
       showModal(modalDialog(
         title = tr("login_fail", languageSelection$language),
@@ -924,13 +1029,13 @@ app_server <- function(input, output, session) {
       showModal(modalDialog(
         # html below allows the user to press 'Enter' to submit the login form
         tags$script(HTML(
-          '
-$(document).keyup(function(event) {
-  if ($("#password").is(":focus") && (event.keyCode == 13)) {
-                         $("#confirmLogin").click();
-    }
-  });
-  '
+          "
+          $(document).off('keyup.login').on('keyup.login', function(event) {
+            if ($('#password').is(':focus') && (event.keyCode == 13)) {
+              $('#confirmLogin').click();
+            }
+          });
+          "
         )),
         title = tr("login", languageSelection$language),
         renderUI(HTML(
@@ -954,6 +1059,7 @@ $(document).keyup(function(event) {
   # Log in attempt if the button is clicked
   observeEvent(input$confirmLogin, {
     if (nchar(input$username) == 0 || nchar(input$password) == 0) {
+      clear_modals()
       showModal(modalDialog(
         title = tr("login_fail", languageSelection$language),
         tr("login_fail_missing", languageSelection$language),
@@ -978,17 +1084,7 @@ $(document).keyup(function(event) {
         # Test the connection
         if (nrow(test) > 0) {
           # Means the connection was successful
-          removeModal()
-          showModal(modalDialog(
-            title = tr("login_success", languageSelection$language),
-            paste0(
-              tr("login_success_msg", languageSelection$language),
-              " ",
-              input$username
-            ),
-            easyClose = TRUE,
-            footer = modalButton(tr("close", languageSelection$language))
-          ))
+
           # Drop the old connection
           DBI::dbDisconnect(session$userData$AquaCache)
           session$userData$AquaCache <- session$userData$AquaCache_new
@@ -1495,10 +1591,22 @@ $(document).keyup(function(event) {
           # Select the last tab the user was on in viz mode. This will reload the module since the tab was previously set to 'home'.
           updateTabsetPanel(session, "navbar", selected = last_viz_tab())
 
+          clear_modals()
+          showModal(modalDialog(
+            title = tr("login_success", languageSelection$language),
+            paste0(
+              tr("login_success_msg", languageSelection$language),
+              " ",
+              input$username
+            ),
+            easyClose = TRUE,
+            footer = modalButton(tr("close", languageSelection$language))
+          ))
+
           return()
         } else {
           # Connection failed (without throwing an explicit error) or could not see any records
-          removeModal()
+          clear_modals()
           showModal(modalDialog(
             title = tr("login_fail", languageSelection$language),
             tr("login_fail_msg", languageSelection$language),
@@ -1514,7 +1622,7 @@ $(document).keyup(function(event) {
       },
       error = function(e) {
         # Connection failed with error
-        removeModal()
+        clear_modals()
         showModal(modalDialog(
           title = tr("login_fail", languageSelection$language),
           tr("login_fail_msg", languageSelection$language),
@@ -1532,45 +1640,7 @@ $(document).keyup(function(event) {
 
   ## Log out #####################################################
   observeEvent(input$logoutBtn, {
-    session$userData$user_logged_in <- FALSE # Set login status to FALSE
-    session$userData$can_create_role <- FALSE
-    session$userData$table_privs <- data.frame() # Reset table privileges
-    session$userData$admin_privs <- list() # Reset privilege flags
-
-    # change the 'Logout' button back to 'Login'
-    shinyjs::hide("logoutBtn")
-    shinyjs::show("loginBtn")
-    # Remove the 'admin' button upon logout
-    removeUI(selector = "button:contains('Switch to ')")
-
-    # Drop old connection
-    DBI::dbDisconnect(session$userData$AquaCache)
-    # Re-create the connection with the base 'config' parameters, no edit privileges
-    session$userData$AquaCache <- AquaConnect(
-      name = config$dbName,
-      host = config$dbHost,
-      port = config$dbPort,
-      username = config$dbUser,
-      password = config$dbPass,
-      silent = TRUE
-    )
-
-    # Reset the session userData with the default credentials
-    session$userData$config$dbUser <- config$dbUser
-    session$userData$config$dbPass <- config$dbPass
-
-    showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
-
-    # Clear the app_cache environment
-    session$userData$app_cache <- new.env(parent = emptyenv())
-    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
-    reset_ui_loaded()
-    # Send the user back to the 'home' tab if they were elsewhere
-    updateTabsetPanel(session, "navbar", selected = "home")
-
-    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode and on the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
-    admin_vis_flag("viz")
-    shinyjs::click("admin")
+    perform_logout(show_idle_modal = FALSE)
   })
 
   # Load modules based on input$navbar ################################
@@ -2048,7 +2118,10 @@ $(document).keyup(function(event) {
           "continuousCorrections"
         ))
         ui_loaded$continuousCorrections <- TRUE
-        continuousCorrections("continuousCorrections", language = languageSelection)
+        continuousCorrections(
+          "continuousCorrections",
+          language = languageSelection
+        )
       }
     }
     if (input$navbar == "imputeMissing") {

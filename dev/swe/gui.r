@@ -486,7 +486,10 @@ server <- function(input, output, session) {
         session,
         "timeseries_id",
         choices = if (nrow(md_continuous_df) > 0) {
-            setNames(md_continuous_df$timeseries_id, md_continuous_df$name)
+            stats::setNames(
+                md_continuous_df$timeseries_id,
+                md_continuous_df$name
+            )
         } else {
             NULL
         }
@@ -496,7 +499,7 @@ server <- function(input, output, session) {
         session,
         "discrete_id",
         choices = if (nrow(md_discrete_df) > 0) {
-            setNames(md_discrete_df$location_id, md_discrete_df$name)
+            stats::setNames(md_discrete_df$location_id, md_discrete_df$name)
         } else {
             NULL
         }

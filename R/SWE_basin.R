@@ -52,7 +52,7 @@ SWE_basin <- function(
     samples <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT s.sample_id, l.location, s.target_datetime 
+        "SELECT s.sample_id, l.location_code AS location, s.target_datetime 
                                FROM samples s 
                                INNER JOIN locations l ON l.location_id = s.location_id 
                                WHERE media_id = ",
@@ -172,13 +172,20 @@ SWE_basin <- function(
             c(
               l,
               fact[fact$location_id == l, ]$val *
-                tab[tab$location_id == l, ]$SWE /
+                mean(tab[tab$location_id == l, ]$SWE) / # Using mean here because stations like Buckbrush might have multiple measurements around the target date that get in here.
                 10,
               fact[fact$location_id == l, ]$val
             )
         }
         # Calculate sum for basin with total percentage not missing
-        sweb[nrow(sweb) + 1, ] = swe
+        tryCatch(
+          {
+            sweb[nrow(sweb) + 1, ] <- swe
+          },
+          warning = function(w) {
+            message("Warning on ym = ", ym, " basin = ", b, ", l = ", l)
+          }
+        )
       }
       # calculate total percent of available numbers
       perc <- sum(as.numeric(sweb$perc), na.rm = TRUE)

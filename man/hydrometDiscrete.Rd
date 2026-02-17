@@ -49,7 +49,7 @@ hydrometDiscrete(
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
-\item{discrete_data}{A data.frame with the data to be plotted. Must contain the following columns: year, month, value and units.}
+\item{discrete_data}{A data.frame with the data to be plotted. Must contain the following columns: datetime, year, month, value and units.}
 
 \item{lang}{The desired language for the plot.}
 }

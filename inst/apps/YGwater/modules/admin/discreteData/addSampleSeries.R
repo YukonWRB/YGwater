@@ -4,6 +4,9 @@ addSampleSeriesUI <- function(id) {
   ns <- NS(id)
 
   tagList(
+    tags$head(tags$style(HTML(
+      ".shiny-split-layout > div {overflow: visible;}"
+    ))),
     page_fluid(
       uiOutput(ns("banner")),
       uiOutput(ns("ui"))
@@ -63,63 +66,6 @@ addSampleSeries <- function(id, language) {
       out
     }
 
-    parse_source_args <- function(arg_string) {
-      if (is.null(arg_string) || !nzchar(arg_string)) {
-        return(list(json = NA_character_, error = NULL))
-      }
-      parts <- strsplit(arg_string, ",")[[1]]
-      args <- list()
-      for (part in parts) {
-        part <- trimws(part)
-        colon <- regexpr(":", part, fixed = TRUE)
-        if (colon == -1) {
-          return(list(
-            json = NULL,
-            error = sprintf("Argument '%s' is missing a ':' separator.", part)
-          ))
-        }
-        key <- trimws(substr(part, 1, colon - 1))
-        value <- trimws(substr(part, colon + 1, nchar(part)))
-        if (!nzchar(key) || !nzchar(value)) {
-          return(list(
-            json = NULL,
-            error = sprintf(
-              "Argument '%s' must include both key and value.",
-              part
-            )
-          ))
-        }
-        args[[key]] <- value
-      }
-      list(json = jsonlite::toJSON(args, auto_unbox = TRUE), error = NULL)
-    }
-
-    format_source_args <- function(value) {
-      if (
-        is.null(value) ||
-          length(value) == 0 ||
-          all(is.na(value)) ||
-          !nzchar(value)
-      ) {
-        return("")
-      }
-      parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
-      if (is.null(parsed)) {
-        return(value)
-      }
-      if (length(parsed) == 0) {
-        return("")
-      }
-      if (is.list(parsed) && !is.data.frame(parsed)) {
-        parsed <- unlist(parsed)
-      }
-      if (is.null(names(parsed))) {
-        return(paste(parsed, collapse = ", "))
-      }
-      entries <- paste(names(parsed), parsed, sep = ": ")
-      paste(entries, collapse = ", ")
-    }
-
     getModuleData <- function() {
       moduleData$sample_series <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -165,7 +111,15 @@ addSampleSeries <- function(id, language) {
         conditionalPanel(
           condition = "input.mode == 'modify'",
           ns = ns,
-          DT::DTOutput(ns("ss_table"))
+          accordion(
+            id = ns("accordion1"),
+            open = "sampleseries_table_panel",
+            accordion_panel(
+              id = ns("sampleseries_table_panel"),
+              title = "Select a sample series to modify",
+              DT::DTOutput(ns("ss_table"))
+            )
+          )
         ),
         conditionalPanel(
           condition = "input.mode == 'add'",
@@ -180,7 +134,7 @@ addSampleSeries <- function(id, language) {
             width = 6,
             selectizeInput(
               ns("location"),
-              "Location",
+              "Location (add new under the 'locations' menu)",
               choices = stats::setNames(
                 moduleData$locations$location_id,
                 moduleData$locations$name
@@ -347,6 +301,11 @@ addSampleSeries <- function(id, language) {
         df$synch_to <- format_datetime_input(df$synch_to)
         df$last_new_data <- format_datetime_input(df$last_new_data)
         df$last_synchronize <- format_datetime_input(df$last_synchronize)
+        df$location <- as.factor(df$location)
+        df$sub_location <- as.factor(df$sub_location)
+        df$source_fx <- as.factor(df$source_fx)
+        df$default_owner <- as.factor(df$default_owner)
+        df$default_contributor <- as.factor(df$default_contributor)
       }
       DT::datatable(
         df,
@@ -361,18 +320,20 @@ addSampleSeries <- function(id, language) {
             "$(this.api().table().header()).css({",
             "  'background-color': '#079',",
             "  'color': '#fff',",
-            "  'font-size': '100%',",
+            "  'font-size': '90%',",
             "});",
             "$(this.api().table().body()).css({",
-            "  'font-size': '90%',",
+            "  'font-size': '80%',",
             "});",
             "}"
           )
-        )
+        ),
+        filter = 'top',
+        rownames = FALSE
       )
     })
 
-    table_proxy <- DT::dataTableProxy("ss_table")
+    table_proxy <- DT::dataTableProxy(ns("ss_table"))
 
     observeEvent(input$reload_module, {
       getModuleData()
@@ -629,7 +590,7 @@ addSampleSeries <- function(id, language) {
         updateTextInput(
           session,
           "source_fx_args",
-          value = format_source_args(details$source_fx_args)
+          value = parse_source_args(details$source_fx_args)
         )
         updateTextAreaInput(
           session,
@@ -648,22 +609,21 @@ addSampleSeries <- function(id, language) {
         ))
         return()
       }
-      examples <- moduleData$sample_series[
+      ex_args <- moduleData$sample_series[
         moduleData$sample_series$source_fx == input$source_fx,
         "source_fx_args"
       ]
-      examples <- examples[!is.na(examples)][1:5]
-      if (!length(examples)) {
-        showModal(modalDialog(
-          "No example arguments found in existing sample series. Refer to the AquaCache package documentation for details on the required arguments.",
-          easyClose = TRUE
-        ))
-        return()
-      }
-      examples <- unique(vapply(examples, format_source_args, character(1)))
+      ex_args <- ex_args[!is.na(ex_args)][1:10]
+      ex_args <- ex_args[nzchar(ex_args)]
+      # strip the [], {}, and "" from the json strings
+      ex_args <- gsub("\\[|\\]|\\{|\\}|\"", "", ex_args)
       showModal(modalDialog(
         title = paste("Example arguments for", input$source_fx),
-        paste(examples, collapse = "\n\n"),
+        if (length(ex_args) > 0) {
+          tags$pre(paste(unique(ex_args), collapse = "\n"))
+        } else {
+          "No example arguments found in existing timeseries. Please refer to the AquaCache package documentation for details on the required arguments."
+        },
         easyClose = TRUE
       ))
     })
@@ -685,6 +645,7 @@ addSampleSeries <- function(id, language) {
         ))
         return()
       }
+      # output path under the served directory, set up in globals
       out <- file.path(.rd_dir, paste0(input$source_fx, ".html"))
       tools::Rd2HTML(
         package[[file]],
@@ -692,7 +653,18 @@ addSampleSeries <- function(id, language) {
         no_links = TRUE,
         package = "AquaCache"
       )
-      url <- paste0("/rdocs/", basename(out))
+      # URL that the client can reach
+      rdoc_url <- function(session, filename) {
+        path <- session$clientData$url_pathname
+        if (is.null(path) || !nzchar(path)) {
+          path <- "/"
+        }
+        if (!grepl("/$", path)) {
+          path <- paste0(path, "/")
+        }
+        paste0(path, "rdocs/", filename)
+      }
+      url <- rdoc_url(session, basename(out)) # not namespaced
       shinyjs::runjs(sprintf("window.open('%s','_blank');", url))
     })
 
@@ -709,6 +681,72 @@ addSampleSeries <- function(id, language) {
         need(input$source_fx, "Please select a source function."),
         need(input$default_owner, "Please select a default owner.")
       )
+
+      sub_loc <- if (is.null(input$sub_location)) {
+        NA
+      } else if (
+        length(input$sub_location) == 0 || !nzchar(input$sub_location[1])
+      ) {
+        NA
+      } else {
+        as.numeric(input$sub_location[1])
+      }
+
+      # Ensure that there is not an existing sample series for this location + sub_location combo
+      exist <- if (is.na(sub_loc)) {
+        moduleData$sample_series[
+          moduleData$sample_series$location_id == as.numeric(input$location),
+        ]
+      } else {
+        moduleData$sample_series[
+          moduleData$sample_series$location_id == as.numeric(input$location) &
+            moduleData$sample_series$sub_location_id == sub_loc,
+        ]
+      }
+      if (nrow(exist) > 0) {
+        showNotification(
+          "There is alraedy a sample series for this location and sub_location combo. Please modify the existing sample series.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      # if input$source_fx_args is not blank, validate that it is in the correct format.
+      # Should have no =, no "" or '', and have : separating key and value
+      if (nzchar(input$source_fx_args)) {
+        if (grepl("=", input$source_fx_args)) {
+          showNotification(
+            "Source function arguments should use ':' to separate keys and values, not '='.",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        if (grepl("\"|'", input$source_fx_args)) {
+          showNotification(
+            "Source function arguments should not contain quotes (\") or (').",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        if (!all(grepl(":", unlist(strsplit(input$source_fx_args, ",\\s*"))))) {
+          showNotification(
+            "Source function arguments should use ':' to separate keys and values.",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+      } else {
+        showNotification(
+          "Source functions and arguments are necessary when adding a sample series.",
+          type = "error",
+          duration = 8
+        )
+      }
+
       synch_from_input <- input$synch_from
       if (is.null(synch_from_input)) {
         synch_from_input <- ""
@@ -727,42 +765,44 @@ addSampleSeries <- function(id, language) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }
-      args <- parse_source_args(input$source_fx_args)
-      if (!is.null(args$error)) {
-        showNotification(args$error, type = "error")
-        return()
-      }
-      DBI::dbBegin(session$userData$AquaCache)
-      sub_loc <- if (
-        length(input$sub_location) == 0 || !nzchar(input$sub_location[1])
+      args <- format_source_args(input$source_fx_args)
+
+      contributor <- if (is.null(input$default_contributor)) {
+        NA
+      } else if (
+        length(input$default_contributor) == 0 ||
+          !nzchar(input$default_contributor[1])
       ) {
         NA
       } else {
-        as.numeric(input$sub_location[1])
+        as.numeric(input$default_contributor[1])
       }
-      sql <- DBI::sqlInterpolate(
-        session$userData$AquaCache,
-        "INSERT INTO discrete.sample_series (location_id, sub_location_id, synch_from, synch_to, default_owner, default_contributor, active, source_fx, source_fx_args, note) VALUES (?loc, ?sub_loc, ?synch_from, ?synch_to, ?default_owner, ?default_contributor, ?active, ?source_fx, CAST(?source_fx_args AS jsonb), ?note) RETURNING sample_series_id;",
-        loc = as.numeric(input$location),
-        sub_loc = sub_loc,
-        synch_from = synch_from,
-        synch_to = synch_to,
-        default_owner = as.numeric(input$default_owner),
-        default_contributor = if (
-          length(input$default_contributor) == 0 ||
-            !nzchar(input$default_contributor[1])
-        ) {
-          NA
-        } else {
-          as.numeric(input$default_contributor[1])
-        },
-        active = isTRUE(input$active),
-        source_fx = input$source_fx,
-        source_fx_args = args$json,
-        note = if (isTruthy(input$note)) input$note else NA
-      )
+
+      DBI::dbBegin(session$userData$AquaCache)
       res <- tryCatch(
-        DBI::dbGetQuery(session$userData$AquaCache, sql),
+        {
+          new <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "INSERT INTO discrete.sample_series (location_id, sub_location_id, synch_from, synch_to, default_owner, default_contributor, active, source_fx, source_fx_args, note) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING sample_series_id;",
+            params = list(
+              input$location,
+              sub_loc,
+              synch_from,
+              synch_to,
+              input$default_owner,
+              contributor,
+              isTRUE(input$active),
+              input$source_fx,
+              args,
+              input$note
+            )
+          )
+          # Try to get new discrete data
+          AquaCache::getNewDiscrete(
+            con = session$userData$AquaCache,
+            sample_series_id = new
+          )
+        },
         error = function(e) {
           DBI::dbRollback(session$userData$AquaCache)
           showNotification(
@@ -828,44 +868,55 @@ addSampleSeries <- function(id, language) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }
-      args <- parse_source_args(input$source_fx_args)
-      if (!is.null(args$error)) {
-        showNotification(args$error, type = "error")
-        return()
-      }
-      DBI::dbBegin(session$userData$AquaCache)
-      sub_loc <- if (
+      args <- format_source_args(input$source_fx_args)
+
+      sub_loc <- if (is.null(input$sub_location)) {
+        NA
+      } else if (
         length(input$sub_location) == 0 || !nzchar(input$sub_location[1])
       ) {
         NA
       } else {
         as.numeric(input$sub_location[1])
       }
-      sql <- DBI::sqlInterpolate(
-        session$userData$AquaCache,
-        "UPDATE discrete.sample_series SET location_id = ?loc, sub_location_id = ?sub_loc, synch_from = ?synch_from, synch_to = ?synch_to, default_owner = ?default_owner, default_contributor = ?default_contributor, active = ?active, source_fx = ?source_fx, source_fx_args = CAST(?source_fx_args AS jsonb), note = ?note WHERE sample_series_id = ?id;",
-        loc = as.numeric(input$location),
-        sub_loc = sub_loc,
-        synch_from = synch_from,
-        synch_to = synch_to,
-        default_owner = as.numeric(input$default_owner),
-        default_contributor = if (
-          length(input$default_contributor) == 0 ||
-            !nzchar(input$default_contributor[1])
-        ) {
-          NA
-        } else {
-          as.numeric(input$default_contributor[1])
-        },
-        active = isTRUE(input$active),
-        source_fx = input$source_fx,
-        source_fx_args = args$json,
-        note = if (isTruthy(input$note)) input$note else NA,
-        id = as.numeric(selected_series())
-      )
+
+      contributor <- if (is.null(input$default_contributor)) {
+        NA
+      } else if (
+        length(input$default_contributor) == 0 ||
+          !nzchar(input$default_contributor[1])
+      ) {
+        NA
+      } else {
+        as.numeric(input$default_contributor[1])
+      }
+
+      DBI::dbBegin(session$userData$AquaCache)
       res <- tryCatch(
         {
-          DBI::dbExecute(session$userData$AquaCache, sql)
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "UPDATE discrete.sample_series SET location_id = $1, sub_location_id = $2, synch_from = $3, synch_to = $4, default_owner = $5, default_contributor = $6, active = $7, source_fx = $8, source_fx_args = $9, note = $10 WHERE sample_series_id = $11;",
+            params = list(
+              input$location,
+              sub_loc,
+              synch_from,
+              synch_to,
+              input$default_owner,
+              contributor,
+              isTRUE(input$active),
+              input$source_fx,
+              args,
+              input$note,
+              selected_series()
+            )
+          )
+
+          # Re-synch the sample series
+          AquaCache::synchronize_discrete(
+            con = session$userData$AquaCache,
+            sample_series_id = selected_series()
+          )
           TRUE
         },
         error = function(e) {

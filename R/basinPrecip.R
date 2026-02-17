@@ -108,6 +108,8 @@ basinPrecip <- function(
     }
   }
 
+  location_id <- NA_integer_
+  # Coerce location to either decimal degrees or a location in the database
   if (
     grepl("^[0-9]{2}[\\.]{1}[0-9]*[ ]{1}[-]{1}[0-9]*[\\.]{1}[0-9]*", location)
   ) {
@@ -129,22 +131,27 @@ basinPrecip <- function(
         )
       }
     )
-  } else if (
-    nrow(DBI::dbGetQuery(
-      con,
-      paste0(
-        "SELECT location_id FROM locations WHERE location = '",
-        location,
-        "';"
-      )
-    )) ==
-      1
-  ) {
+  } else {
+    location_id <- lookup_location_id(con, location)
+  }
+
+  if (type == "longlat") {
+    # already handled
+  } else if (!is.na(location_id)) {
     type <- "DB"
-    requested_point <- location
+    location_metadata <- DBI::dbGetQuery(
+      con,
+      "SELECT location_code FROM locations WHERE location_id = $1 LIMIT 1;",
+      params = list(location_id)
+    )
+    requested_point <- if (nrow(location_metadata) > 0) {
+      location_metadata$location_code[1]
+    } else {
+      location
+    }
     location <- getVector(
       layer_name = "Locations",
-      feature_name = location,
+      feature_name = requested_point,
       silent = TRUE,
       con = con
     )

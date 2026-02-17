@@ -22,12 +22,12 @@ images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
 images_map,imagesNavMapTitle,Map selection,À partir de la carte
 documents,translation,Documents,Documents
 document_download,documentsModuleDownload,Download document,Télécharger le document
-document_authors,documentsModuleColAuthors,Authors,Auteurs
+authors,documentsModuleColAuthors,Authors,Auteurs
 document_published,documentsModuleColPublished,Published,Date de publication
-document_description,documentsModuleColDescription,Description,Description
-document_format,documentsModuleColFormat,Format,Format
-document_owner,documentsModuleColOwner,Owner,Propriétaire
-document_contributor,documentsModuleColContributor,Contributor,Contributeur
+description,documentsModuleColDescription,Description,Description
+format,documentsModuleColFormat,Format,Format
+owner,,Owner,Propriétaire
+contributor,documentsModuleColContributor,Contributor,Contributeur
 document_select_prompt,documentsModuleSelectPrompt,Select a document to view details.,Sélectionnez un document pour voir ses détails.
 tags,,Tags,Étiquettes
 document_no_preview,documentsModuleNoPreview,Preview not available for this file type.,Aucun aperçu disponible pour ce type de fichier.
@@ -59,6 +59,8 @@ login_fail_attempts,modal text,Too many login attempts. Please try again later.,
 login_confirm,modal actionButton text,Log in,Se connecter
 login,button text,Login,Connexion
 logout,button text,Logout,Déconnexion
+logout_inactive_title,modal title,Logged out due to inactivity,Déconnexion pour cause d'inactivité
+logout_inactive_msg,modal text,You have been logged out due to inactivity. Please log in again to continue.,Vous avez été déconnecté en raison d'une période d'inactivité. Veuillez vous reconnecter pour continuer.
 error,,Error,Erreur
 errorModalTitle,pop-up error message title,Our apologies!,Désolé!
 errorModalMsg,pop-up error message body,The feature you selected could not be loaded.,La fonctionnalité que vous avez sélectionnée n'a pas pu être chargée.
@@ -109,7 +111,7 @@ tooltip_discrete,tool tips,Measurements or samples taken at variable intervals,M
 tooltip_continuous,tool tips,Measurements recorded at regular intervals automatically,Mesures enregistrées automatiquement à intervalles réguliers
 tooltip_sample_media,tool tips,Media in which sample or measurement was collected,Lieu de la prise de la mesure ou de l’échantillon
 tooltip_utc7,table tool tips,UTC-7,UTC-7
-tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données".
+tooltip_params_map_min_yrs,,"Minimum number of years on record to show the point. Especially useful when showing historic range to avoid points with very little data.","Nombre minimum d'années de données pour afficher le point. Utile surtout lors de l'affichage de la plage historique pour éviter les points avec très peu de données."
 tooltip_params_map_date_within,,"Maximum number of days from the target date to include a measurement. Use a lower threshold for parameters that change quickly (e.g., temperature).","Nombre maximum de jours à partir de la date ciblée pour inclure une mesure. Utilisez un seuil plus bas pour les paramètres qui changent rapidement (par exemple, la température)."
 filters,,Filters,Filtres
 reset_filters,,Reset filters,Réinitialiser les filtres
@@ -154,6 +156,8 @@ plot_resolution_daily,,Daily,Journalière
 plot_timezone_offset,,Plot time zone (UTC offset),Fuseau horaire du graphique (décalage UTC)
 plot_timezone_offset_placeholder,,Select UTC offset,Choisir le décalage UTC
 plot_type_ts,,Timeseries,Série temporelle
+none_fm,,None,Aucune
+none_m,,None,Aucun
 plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec
 plot_hist_range_select_tooltip,,Choose whether the historic range should include all available years of record or only up to the last year shown on the plot.,Choisissez si la plage historique doit inclure toutes les années de données disponibles ou seulement jusqu’à la dernière année affichée sur le graphique.
@@ -168,10 +172,25 @@ plot_last_30,,Last 30 days,30 derniers jours
 plot_all_record,,Entire record,Période entière
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
 cont_table_heading,,Available timeseries,Séries chronologiques disponibles
-cont_table_plot_heading,,Plot,Graphique
+cont_table_tooltip1,Tooltip for the table header,"Instantaneous: conditions at the moment of recording. Mean, max, etc. summarize conditions over the interval between points. (min + max)/2 is the historical meteorological mean, based on daily extremes.","Instantané : conditions au moment de l’enregistrement. Moyenne, maximum, etc. : résumé des conditions sur l’intervalle entre les points. (min + max)/2 : moyenne météorologique historique, basée sur les extrêmes quotidiens."
+cont_table_tooltip2,Tooltip for the table header,"Approximate recording rate for recent data. Some time series also include older data recorded at coarser intervals.","Fréquence d’enregistrement approximative pour les données récentes ; certaines séries contiennent aussi des données plus anciennes à des intervalles plus grossiers."
+cont_table_plot_heading,,Plot options,Options du graphique
+metadata,,Metadata,Métadonnées
+location_metadata_heading,,Location metadata,Métadonnées du site
+timeseries_metadata_heading,,Timeseries metadata,Métadonnées de la série chronologique
+ownership_history_heading,,Ownership history,Historique de propriété
+metadata_select_prompt,,Select a timeseries to view metadata.,Sélectionnez une série chronologique pour voir les métadonnées.
+attribute,,Attribute,Attribut
+location_code_label,,Location code,Code du site
+latitude,,Latitude,Latitude
+longitude,,Longitude,Longitude
+elevation_m,,Elevation (m),Altitude (m)
+datum,,Datum,Référentiel
+depth_height_m,,Depth/height (m),Profondeur/hauteur (m)
+note,,Note,Note
 media,,Media,Matrice
 aggregation,,Aggregation,Agrégation
-cont_table_col_record_rate,,Record rate,Fréquence d'enregistrement
+record_rate,,Record rate,Fréquence d'enregistrement
 start_date,,Start date,Date de début
 end_date,,End date,Date de fin
 facet_on,,Split plots by,Diviser les graphiques par
@@ -419,10 +438,13 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median (%),Pourcentage de la médiane historique (%)
-snowbull_historical_median,,Historical median (mm),Médiane historique (mm)
-snowbull_swe,,Snow water equivalent (mm),Équivalent en eau de neige (mm)
+snowbull_historical_median,,Historical median,Médiane historique
+snowbull_anomalies,,Anomalies (%s),Anomalies (%s)
+snowbull_values,,Values (%s),Valeurs (%s)
+snowbull_swe,,Snow water equivalent,Équivalent en eau de neige
+snowbull_temperature,,Temperature,Température
+snowbull_precipitation,,Precipitation,Précipitation
 snowbull_percentile,,Percentile (%),Percentile (%)
-snowbull_values,,Values,Valeurs
 snowbull_details,,Map details,Détails de la carte
 app_version,,Current application version:,Version actuelle de l'application :
 snowbull_gen_on,,Map generated on,Carte générée le
@@ -433,17 +455,20 @@ snowbull_date,,Snow Bulletin Date,Date du bulletin de neige
 snowbull_historical_period,,Historical period for statistics,Période historique pour les statistiques
 snowbull_no_snow,,No snow (no record),Pas de neige (aucun enregistrement historique)
 snowbull_some_snow,,"Snow present (no record)","Neige présente (aucun enregistrement historique)"
+snowbull_no_data,,No data,Aucune donnée
 snowbull_percentile_suffix,,th,ème
 snowbull_snow_survey,,Snow survey,Relevé nivométrique
 snowbull_snow_pillow,,Snow pillow,Coussin à neige
-snowbull_swe_basin,,Basin average SWE,EEN moyen du bassin
+snowbull_swe_basin,,Basin average SWE,EEN moyen du 
+snowbull_normal,,Normal,Normal
+snowbull_average,,Average,Moyenne
 snowbull_communities,,Communities,Communautés
 snowbull_roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles
 snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
-snowbull_elevation,,Elevation,Altitude
-snowbull_coordinates,,Coordinates,Coordonnées
-snowbull_isocontours,,Isocontours,Isocontours
+elevation,,Elevation,Altitude
+coordinates,,Coordinates,Coordonnées
+isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche EEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.

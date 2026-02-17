@@ -5,7 +5,7 @@
 #'
 #' Statistics for each station are averaged over all years/seasons available, except for all-time data points. Years or seasons with more than 5 percent missing data (this is the default) are excluded from the statistics. Additionally, only stations with a minimum of 15 years/seasons of data (this is the default) are retained. Next, statistics are expressed as m3/s/km2 and plotted to visualize outliers (plots). Each statistic is averaged for all stations and applied to the ungauged rivers/streams/creeks using their catchment area.
 #'
-#' @param gauged_stations The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001). These must be locations in the databases' location table, column 'location'. In addition there must be correspondingly named polygons in the 'vectors' table under the 'Drainage basins' layer.
+#' @param gauged_stations The stations used for estimating flow. Given as a vector of the station code. Ex: c(08AA008, 09BC001). These must be locations in the database's location table, matching `location_code` (or `alias`/`name`/`name_fr`). In addition there must be correspondingly named polygons in the 'vectors' table under the 'Drainage basins' layer.
 #' @param ungauged_area The area of the stations of interest. Given in square km and as a vector.
 #' @param ungauged_name The name of the stations of interest, given as a character vector. The name is only used to differentiate between ungauged location stats in the output table. Note: ungauged_name must be the same length as ungauged_area.
 #' @param perc The percent of data (days) required to include a year or season in the statistics. Default is 95.
@@ -47,13 +47,23 @@ estimateFlowStats <- function(
   flow_all <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT locations.name, timeseries.location, measurements_calculated_daily_corrected.date, measurements_calculated_daily_corrected.value, locations.geom_id ",
-      "FROM measurements_calculated_daily_corrected ",
-      "INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id ",
-      "INNER JOIN locations ON timeseries.location = locations.location ",
-      "WHERE timeseries.location IN ('",
+      "SELECT 
+        locations.name, 
+        locations.location_code AS location, 
+        measurements_calculated_daily_corrected.date, 
+        measurements_calculated_daily_corrected.value, 
+        locations.geom_id 
+      FROM measurements_calculated_daily_corrected 
+      INNER JOIN timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id 
+      INNER JOIN locations ON timeseries.location_id = locations.location_id WHERE (locations.location_code IN ('",
       paste0(gauged_stations, collapse = "', '"),
-      "') AND timeseries.parameter_id = ",
+      "') OR locations.alias IN ('",
+      paste0(gauged_stations, collapse = "', '"),
+      "') OR locations.name IN ('",
+      paste0(gauged_stations, collapse = "', '"),
+      "') OR locations.name_fr IN ('",
+      paste0(gauged_stations, collapse = "', '"),
+      "')) AND timeseries.parameter_id = ",
       flow_paramId,
       ";"
     )

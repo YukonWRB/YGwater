@@ -153,9 +153,10 @@ app_server <- function(input, output, session) {
           paste0(
             "SELECT ",
             if (lang == "en") "name" else "name_fr",
-            " FROM locations WHERE location = '",
-            loc,
-            "';"
+            " FROM locations WHERE location_code = $1;"
+          ),
+          params = list(
+            loc
           )
         )[1, 1]
         if (nchar(loc_name) > 30) {

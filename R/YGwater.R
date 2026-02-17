@@ -10,8 +10,10 @@
 #' @param dbPort Port number of the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbUser Username for the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
+#' @param network_check Optional: a path to a network location to check if the app is run internally or externally. If the app can see the path, some additional functionality is enabled, such as log in by admin roles. Default is FALSE, which means no check is performed and the app assumes it's running internally with access to all features.
 #' @param accessPath1 to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
 #' @param accessPath2 Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.
+#' @param logout_timer_min Auto logout timer, in minutes.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
 #' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.
 #'
@@ -28,6 +30,8 @@ YGwater <- function(
   dbPass = Sys.getenv("aquacachePass"),
   accessPath1 = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
   accessPath2 = "//carver/infosys/EQWin",
+  network_check = FALSE,
+  logout_timer_min = 10,
   server = FALSE,
   public = TRUE
 ) {
@@ -90,6 +94,13 @@ YGwater <- function(
     )
   }
 
+  # Make sure 'network_check' is either FALSE or character
+  if (!is.logical(network_check) && !is.character(network_check)) {
+    stop(
+      "The 'network_check' argument must be either FALSE or a character string representing a path to check."
+    )
+  }
+
   appDir <- system.file("apps/YGwater", package = "YGwater")
 
   if (appDir == "") {
@@ -106,7 +117,9 @@ YGwater <- function(
     dbPass = dbPass,
     accessPath1 = accessPath1,
     accessPath2 = accessPath2,
-    public = public
+    network_check = network_check,
+    public = public,
+    logout_timer_min = logout_timer_min
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
@@ -120,41 +133,56 @@ YGwater <- function(
   )
 
   # Check that the DB has the 'application' schema
-  if (!DBI::dbExistsTable(con, "page_content", schema = "application")) {
+  if (
+    !DBI::dbExistsTable(con, "page_content", schema = "application") ||
+      !DBI::dbExistsTable(con, "notifications", schema = "application")
+  ) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
-      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' table. Refer to the script 'application_tables.R' in this application's folder to create this table. You'll find this script at ",
-      appDir,
-      "."
+      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' or 'notifications' tables. You'll need to bring the AquaCache database up to revision 31 at minimum."
     )
   }
 
   # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_calculated', 'samples', 'results'
   if (!DBI::dbExistsTable(con, "timeseries")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'timeseries'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "locations")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'locations'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "parameters")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'parameters'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "measurements_continuous_corrected")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the view table 'measurements_continuous_corrected'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "samples")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'samples'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "results")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'results'. This table is required for the app to function."
     )
@@ -166,11 +194,13 @@ YGwater <- function(
     con,
     "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
   )[1, 1])
-  if (ver < 27) {
+  if (ver < 32) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
-      "The aquacache database version is too old. Please update to at least version 27. Current version is ",
+      "The aquacache database version is too old. Please update to at least version 32. Current version is ",
       ver,
-      ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache documentation for more details."
+      ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache::AquaConnect documentation for more details."
     )
   }
 

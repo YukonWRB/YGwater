@@ -36,7 +36,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       )
       timeseries <- dbGetQueryDT(
         con,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.location AS loc_code, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id;"
+        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, loc.location_code AS loc_code, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id LEFT JOIN locations loc ON ts.location_id = loc.location_id;"
       )
 
       rates <- data.frame(
@@ -327,7 +327,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT location, name, name_fr, latitude, longitude, location_id FROM locations"
+          "SELECT location_code AS location, name, name_fr, latitude, longitude, location_id FROM locations"
         ),
         timeseries = dbGetQueryDT(
           con,
@@ -342,15 +342,15 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
           ts.start_datetime, 
           ts.end_datetime, 
           lz.z_meters AS z
-          FROM timeseries AS ts 
-          LEFT JOIN parameters AS p ON ts.parameter_id = p.parameter_id 
-          LEFT JOIN media_types AS m ON ts.media_id = m.media_id
+          FROM continuous.timeseries AS ts 
+          LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id 
+          LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
           LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
 "
         ),
         parameters = dbGetQueryDT(
           con,
-          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM parameters AS p RIGHT JOIN timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
+          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM public.parameters AS p RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
         )
       )
     },
@@ -368,7 +368,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT l.location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
+          "SELECT l.location_code AS location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
         ),
         timeseries = dbGetQueryDT(
           con,
@@ -446,13 +446,13 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
 }
 
 
-# locations map module #########
+# water well registry module #########
 wwr_module_data <- function(con, env = .GlobalEnv) {
   get_cached(
     key = "wwr_module_data",
     env = env,
     fetch_fun = function() {
-      list(
+      res <- list(
         # Only get borehole purposes that are used in the wells table
         purposes = dbGetQueryDT(
           con,
@@ -469,6 +469,8 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
           "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.depth_to_bedrock_m, b.borehole_id FROM boreholes AS b JOIN wells AS w ON b.borehole_id = w.borehole_id"
         )
       )
+      res$wells[, completion_year := lubridate::year(completion_date)]
+      return(res)
     },
     ttl = 60 * 60 * 24
   ) # Cache for 24 hours

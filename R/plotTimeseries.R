@@ -15,7 +15,7 @@
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
-#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
+#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
@@ -33,7 +33,7 @@
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
-#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
@@ -57,7 +57,7 @@ plotTimeseries <- function(
   end_date = Sys.Date(),
   invert = NULL,
   slider = TRUE,
-  datum = TRUE,
+  datum = FALSE,
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
@@ -82,10 +82,10 @@ plotTimeseries <- function(
   data = FALSE,
   con = NULL
 ) {
-  # timeseries_id = NULL
-  # location <- "30AA003"
+  # timeseries_id = 1222
+  # location <- NULL
   # sub_location <- NULL
-  # parameter = 1165
+  # parameter = NULL
   # start_date <- "2022-08-12"
   # end_date <- "2025-08-13"
   # record_rate = NULL
@@ -177,7 +177,7 @@ plotTimeseries <- function(
 
   if (!is.null(resolution)) {
     resolution <- tolower(resolution)
-    if (!(resolution %in% c("max", "hour", "day"))) {
+    if (!(resolution %in% c("max", "day"))) {
       stop(
         "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
@@ -257,20 +257,16 @@ plotTimeseries <- function(
         } else {
           aggregation_type <- DBI::dbGetQuery(
             con,
-            glue::glue_sql(
-              "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = {aggregation_type};",
-              .con = con
-            )
+            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = $1;",
+            params = list(aggregation_type)
           )[1, 1]
         }
       } else {
         if (inherits(aggregation_type, "numeric")) {
           aggregation_type <- DBI::dbGetQuery(
             con,
-            glue::glue_sql(
-              "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};",
-              .con = con
-            )
+            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = $1;",
+            params = list(aggregation_type)
           )[1, 1]
           if (is.na(aggregation_type)) {
             warning(
@@ -285,13 +281,7 @@ plotTimeseries <- function(
     aggregation_type_id <- aggregation_type
 
     location_txt <- as.character(location)
-    location_id <- DBI::dbGetQuery(
-      con,
-      glue::glue_sql(
-        "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",
-        .con = con
-      )
-    )[1, 1]
+    location_id <- lookup_location_id(con, location_txt)
     if (is.na(location_id)) {
       stop("The location you entered does not exist in the database.")
     }
@@ -300,10 +290,8 @@ plotTimeseries <- function(
     parameter_txt <- tolower(as.character(parameter))
     parameter_tbl <- DBI::dbGetQuery(
       con,
-      glue::glue_sql(
-        "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",
-        .con = con
-      )
+      "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = $1 OR LOWER(param_name_fr) = $1 OR parameter_id::text = $1 LIMIT 1;",
+      params = list(parameter_txt)
     )
     parameter_code <- parameter_tbl$parameter_id[1]
     if (is.na(parameter_code)) {
@@ -393,10 +381,8 @@ plotTimeseries <- function(
       sub_loc_txt <- as.character(sub_location)
       sub_location_id <- DBI::dbGetQuery(
         con,
-        glue::glue_sql(
-          "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;",
-          .con = con
-        )
+        "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = $1 OR sub_location_name_fr = $1 OR sub_location_id::text = $1 LIMIT 1;",
+        params = list(sub_loc_txt)
       )[1, 1]
       if (is.na(sub_location_id)) {
         stop("The sub-location you entered does not exist in the database.")
@@ -407,30 +393,19 @@ plotTimeseries <- function(
           #both record_rate and aggregation_type_id are NULL
           exist_check <- DBI::dbGetQuery(
             con,
-            paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-              location_id,
-              " AND ts.sub_location_id = ",
-              sub_location_id,
-              " AND ts.parameter_id = ",
-              parameter_code,
-              ";"
-            )
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id = $2 AND ts.parameter_id = $3;",
+            params = list(location_id, sub_location_id, parameter_code)
           )
         } else {
           #aggregation_type_id is not NULL but record_rate is
           exist_check <- DBI::dbGetQuery(
             con,
-            paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id =$2 AND ts.parameter_id = $3 AND ts.aggregation_type_id = $4;",
+            params = list(
               location_id,
-              " AND ts.sub_location_id = ",
               sub_location_id,
-              " AND ts.parameter_id = ",
               parameter_code,
-              " AND ts.aggregation_type_id = ",
-              aggregation_type_id,
-              ";"
+              aggregation_type_id
             )
           )
         }
@@ -661,14 +636,8 @@ plotTimeseries <- function(
 
   range <- seq.POSIXt(start_date, end_date, by = "day")
   if (is.null(resolution)) {
-    if (length(range) > 3000) {
-      if (!raw) {
-        resolution <- "day"
-      } else {
-        resolution <- "hour"
-      }
-    } else if (length(range) > 1000) {
-      resolution <- "hour"
+    if (length(range) > 1000) {
+      resolution <- "day"
     } else {
       resolution <- "max"
     }
@@ -807,16 +776,6 @@ plotTimeseries <- function(
       params = list(tsid, start_date, end_date)
     )
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
-  } else if (resolution == "hour") {
-    trace_data <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT datetime, value_corrected AS value, imputed",
-        if (raw) ", value_raw",
-        " FROM measurements_hourly_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC;"
-      ),
-      params = list(tsid, start_date, end_date)
-    )
   } else if (resolution == "max") {
     trace_data <- dbGetQueryDT(
       con,
@@ -827,25 +786,6 @@ plotTimeseries <- function(
       ),
       params = list(tsid, start_date, end_date)
     )
-
-    if (nrow(trace_data) > 0) {
-      if (min(trace_data$datetime) > start_date) {
-        infill <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT datetime, value_corrected AS value, imputed",
-            if (raw) ", value_raw",
-            " FROM measurements_hourly_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC;"
-          ),
-          params = list(
-            tsid,
-            start_date,
-            min(trace_data$datetime) - 1
-          )
-        )
-        trace_data <- rbind(infill, trace_data)
-      }
-    }
   }
   attr(trace_data$datetime, "tzone") <- tzone
 
@@ -978,7 +918,7 @@ plotTimeseries <- function(
       trace_data <- rbind(trace_data, extra)
     }
   } else {
-    # this means that no trace data could be had because there are no measurements in the continuous or the hourly views table
+    # this means that no trace data could be had because there are no measurements in the continuous view table
     trace_data <- dbGetQueryDT(
       con,
       "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
@@ -1081,6 +1021,9 @@ plotTimeseries <- function(
       by = "run",
       keep.by = FALSE
     )
+    if (length(range_runs) == 0) {
+      historic_range <- FALSE
+    }
   }
 
   # Make the plot ###################################
@@ -1092,16 +1035,25 @@ plotTimeseries <- function(
     }
   }
 
+  # if a datum is applied, add ASL to y-axis label
+  if (datum) {
+    datum_label <- " ASL"
+  } else {
+    datum_label <- ""
+  }
+
   y_title <- paste0(
     parameter_name,
     if (!is.na(exist_check$z)) paste0(" ", exist_check$z, " meters") else "",
     " (",
     units,
+    datum_label,
     ")"
   )
 
   plot <- plotly::plot_ly()
   if (historic_range) {
+    # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
     # plot <- plot %>%
     #   plotly::add_ribbons(
     #     data = range_data,

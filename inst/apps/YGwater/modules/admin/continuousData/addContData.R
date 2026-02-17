@@ -83,9 +83,25 @@ addContDataUI <- function(id) {
           ),
           # space so the buttons don't overlap the table
           # Text to tell the user they can edit values by clicking on the desired cell
-          tags$div("Hint: click a cell to edit it. Use the row numbers to select rows for deletion."),
+          tags$div(
+            "Hint: click a cell to edit it. Use the row numbers to select rows for deletion."
+          ),
           tags$br(),
           DT::DTOutput(ns("data_table")),
+          selectizeInput(
+            ns("owner"),
+            "Owner organization",
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1, placeholder = "Select owner")
+          ),
+          selectizeInput(
+            ns("contributor"),
+            "Contributor organization",
+            choices = NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1, placeholder = "Select contributor")
+          ),
           selectizeInput(
             ns("UTC_offset"),
             "UTC offset of data",
@@ -142,6 +158,13 @@ addContData <- function(id, language) {
 
     outputs <- reactiveValues() # Used to pass the user on to adding a timeseries directly
 
+    moduleData <- reactiveValues(
+      organizations = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
+      )
+    )
+
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT has_table_privilege(current_user, 'continuous.measurements_continuous', 'INSERT') AS can_insert"
@@ -165,13 +188,19 @@ addContData <- function(id, language) {
       )
     })
 
+    # Reload module data when asked
     observeEvent(input$reload_module, {
       ts_meta(dbGetQueryDT(
         session$userData$AquaCache,
         "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en"
       ))
+      moduleData$organizations <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
+      )
     })
 
+    # Change to add timeseries tab when button clicked
     observeEvent(input$addNewTS, {
       outputs$change_tab <- "addTimeseries"
     })
@@ -219,12 +248,340 @@ addContData <- function(id, language) {
       }
     })
 
+    # Update owner and contributor selectize inputs when organizations data is loaded
+    observe({
+      req(moduleData$organizations)
+      updateSelectizeInput(
+        session,
+        "owner",
+        choices = stats::setNames(
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        ),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session,
+        "contributor",
+        choices = stats::setNames(
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        ),
+        server = TRUE
+      )
+    })
+
+    # When timeseries is selected, update owner and contributor to default owner from timeseries table
+    observeEvent(timeseries(), {
+      req(timeseries())
+      default_owner <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        sprintf(
+          "SELECT default_owner FROM timeseries WHERE timeseries_id = %s",
+          as.integer(timeseries())
+        )
+      )
+      if (nrow(default_owner) > 0) {
+        updateSelectizeInput(
+          session,
+          "owner",
+          selected = default_owner$default_owner[[1]]
+        )
+        updateSelectizeInput(
+          session,
+          "contributor",
+          selected = default_owner$default_owner[[1]]
+        )
+      }
+    })
+
+    ### Observe the owner selectizeInput for new owners ############
+    addOrgModal <- function(name) {
+      # Called when adding owner or contributor
+      showModal(modalDialog(
+        textInput(
+          ns("org_name"),
+          "Organization name",
+          value = input[[name]]
+        ),
+        textInput(ns("org_name_fr"), "Organization name French (optional)"),
+        textInput(ns("org_contact_name"), "Contact name (optional)"),
+        textInput(ns("org_contact_phone"), "Contact phone (optional)"),
+        textInput(ns("org_contact_email"), "Contact email (optional)"),
+        textInput(
+          ns("org_contact_note"),
+          "Contact note (optional, for context)"
+        ),
+        actionButton(ns(paste0("add_", name)), "Add organization")
+      ))
+    }
+    observeEvent(
+      input$owner,
+      {
+        # Check for new organization (not in the list already)
+        if (
+          input$owner %in%
+            moduleData$organizations$organization_id ||
+            nchar(input$owner) == 0
+        ) {
+          return()
+        }
+        # If new, show modal dialog to add organization details
+        addOrgModal(name = "owner")
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$contributor,
+      {
+        # Check for new organization (not in the list already)
+        if (
+          input$contributor %in%
+            moduleData$organizations$organization_id ||
+            nchar(input$contributor) == 0
+        ) {
+          return()
+        }
+        # If new, show modal dialog to add organization details
+        addOrgModal(name = "contributor")
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$add_owner,
+      {
+        # Check that mandatory fields are filled in
+        if (!isTruthy(input$org_name)) {
+          shinyjs::js$backgroundCol(ns("org_name"), "#fdd")
+          return()
+        }
+        # Add the owner to the database
+        df <- data.frame(
+          name = input$org_name,
+          name_fr = if (isTruthy(input$org_name_fr)) {
+            input$org_name_fr
+          } else {
+            NA
+          },
+          contact_name = if (isTruthy(input$org_contact_name)) {
+            input$org_contact_name
+          } else {
+            NA
+          },
+          phone = if (isTruthy(input$org_contact_phone)) {
+            input$org_contact_phone
+          } else {
+            NA
+          },
+          email = if (isTruthy(input$org_contact_email)) {
+            input$org_contact_email
+          } else {
+            NA
+          },
+          note = if (isTruthy(input$org_contact_note)) {
+            input$org_contact_note
+          } else {
+            NA
+          }
+        )
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            ifelse(is.na(df$contact_name), NA, df$contact_name),
+            ifelse(is.na(df$phone), NA, df$phone),
+            ifelse(is.na(df$email), NA, df$email),
+            ifelse(is.na(df$note), NA, df$note)
+          )
+        )
+
+        # Update the moduleData reactiveValues
+        moduleData$organizations <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT organization_id, name FROM organizations"
+        )
+        # Update the selectizeInput to the new value
+        updateSelectizeInput(
+          session,
+          "owner",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = moduleData$organizations[
+            moduleData$organizations$name == df$name,
+            "organization_id"
+          ]
+        )
+        removeModal()
+        showModal(modalDialog(
+          "New organization added.",
+          easyClose = TRUE
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$add_contributor,
+      {
+        # Check that mandatory fields are filled in
+        if (!isTruthy(input$org_name)) {
+          shinyjs::js$backgroundCol(ns("org_name"), "#fdd")
+          return()
+        }
+        # Add the owner to the database
+        df <- data.frame(
+          name = input$org_name,
+          name_fr = if (isTruthy(input$org_name_fr)) {
+            input$org_name_fr
+          } else {
+            NA
+          },
+          contact_name = if (isTruthy(input$org_contact_name)) {
+            input$org_contact_name
+          } else {
+            NA
+          },
+          phone = if (isTruthy(input$org_contact_phone)) {
+            input$org_contact_phone
+          } else {
+            NA
+          },
+          email = if (isTruthy(input$org_contact_email)) {
+            input$org_contact_email
+          } else {
+            NA
+          },
+          note = if (isTruthy(input$org_contact_note)) {
+            input$org_contact_note
+          } else {
+            NA
+          }
+        )
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(
+            df$name,
+            ifelse(is.na(df$name_fr), NA, df$name_fr),
+            ifelse(is.na(df$contact_name), NA, df$contact_name),
+            ifelse(is.na(df$phone), NA, df$phone),
+            ifelse(is.na(df$email), NA, df$email),
+            ifelse(is.na(df$note), NA, df$note)
+          )
+        )
+
+        # Update the moduleData reactiveValues
+        moduleData$organizations <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT organization_id, name FROM organizations"
+        )
+        # Update the selectizeInput to the new value
+        updateSelectizeInput(
+          session,
+          "contributor",
+          choices = stats::setNames(
+            moduleData$organizations$organization_id,
+            moduleData$organizations$name
+          ),
+          selected = moduleData$organizations[
+            moduleData$organizations$name == df$name,
+            "organization_id"
+          ]
+        )
+        removeModal()
+        showModal(modalDialog(
+          "New organization added.",
+          easyClose = TRUE
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    # Reactive values to hold uploaded data and parsed data
     data <- reactiveValues(
       df = data.frame(datetime = character(), value = numeric()),
-      upload_raw = NULL,
       parsed_datetime = NULL,
       parsed_value = NULL
     )
+    
+    upload_raw <- reactive({
+      req(input$file)
+      req(input$raw_start_row)
+      # Set starting row to 1 if input is null, so we don't have to catch empty inputs in validate
+      starting_row <- ifelse(length(input$raw_start_row) < 1, 1, input$raw_start_row)
+      
+      ext <- tools::file_ext(input$file$name)
+      if (ext == 'xlsx') {
+        return(openxlsx::read.xlsx(input$file$datapath, sheet = 1, startRow = starting_row))
+      } else if (ext == "csv") {
+        # .csv files more complex due to ungraceful handling of non-equal 
+        #  number of columns and column names by read.table
+
+        # Read data without header, skip to first row below specified header row
+        out <- read.csv(input$file$datapath, 
+                        header = FALSE, skip = starting_row)
+        
+        # Read in header row and convert to vector
+        out_names <- read.csv(input$file$datapath, 
+                              header = FALSE, nrows = 1, skip = starting_row -1) |> 
+          unlist() |> 
+          unname()
+        # Apply header rows to data
+        names(out) <- out_names
+        
+        return(out)
+      }
+      
+    })
+
+    # Error checking, all possible conditions of start row and upload_raw 
+    #  in which the confirm mapping button should be disabled
+    observe({
+      if(is.null(input$raw_start_row)){
+        shinyjs::disable('confirm_mapping')
+      } else if(is.na(input$raw_start_row)){
+        shinyjs::disable('confirm_mapping')
+      } else if(input$raw_start_row < 1){
+        shinyjs::disable('confirm_mapping')
+      } else if(ncol(upload_raw()) < 2){
+        shinyjs::disable('confirm_mapping')
+      } else {
+        shinyjs::enable('confirm_mapping')
+      }
+    })
+
+    output$map_col_inputs <- renderUI({
+      validate(
+        need(
+          input$raw_start_row > 0, 'Invalid header row'
+        ),
+        need(
+          ncol(upload_raw()) >= 2, 'Uploaded file must have at least two columns (one containing date time, and one containing measurement value)'
+        )
+      )
+      tagList(
+        selectizeInput(
+          ns('upload_datetime_col'),
+          'Select the column for datetime:',
+          choices = names(upload_raw()),
+          selected = names(upload_raw())[1]
+        ),
+        selectizeInput(
+          ns('upload_value_col'),
+          'Select the column for value:',
+          choices = names(upload_raw()),
+          selected = names(upload_raw())[2]
+        )
+      )
+    })
 
     parse_datetime <- function(x) {
       if (inherits(x, "POSIXct")) {
@@ -234,17 +591,24 @@ addContData <- function(id, language) {
         return(as.POSIXct(x, tz = "UTC"))
       }
       x <- as.character(x)
-      as.POSIXct(
+      # Switch T character with space for ISO like formats
+      x <- x <- gsub("T", " ", x)
+
+      lubridate::parse_date_time(
         x,
-        tz = "UTC",
-        tryFormats = c(
-          "%Y-%m-%d %H:%M:%S",
-          "%Y-%m-%d %H:%M",
-          "%Y/%m/%d %H:%M:%S",
-          "%Y/%m/%d %H:%M",
-          "%Y-%m-%dT%H:%M:%S",
-          "%Y-%m-%dT%H:%M"
-        )
+        orders = c(
+          "Ymd HMS",
+          "Ymd HM",
+          "mdY HMS",
+          "mdY HM",
+          "Ymd IMS p",
+          "mdY IMS p",
+          "Ymd IM p",
+          "mdY IM p"
+        ),
+        exact = FALSE,
+        train = TRUE,
+        tz = "UTC"
       )
     }
 
@@ -254,52 +618,28 @@ addContData <- function(id, language) {
       df$value <- suppressWarnings(as.numeric(df$value))
       df
     }
+    
+    # Store modal to be shown upon user uploading .csv or .xlsx
+    map_col_modal <- modalDialog(
+      title = 'Identify columns',
+      'Please identify which columns represent date-time and value:',
+      hr(),
+      numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |> 
+        tooltip("The row number which contains your data's column names"),
+      # UI which holds selectizeInputs for datetime and value column
+      uiOutput(ns('map_col_inputs')),
 
+      easyClose = FALSE,
+      footer = tagList(
+        modalButton('Cancel'),
+        actionButton(ns('confirm_mapping'), 'Confirm')
+      )
+    )
+
+    # Show modal when user adds file
     observeEvent(input$file, {
       req(input$file)
-      ext <- tools::file_ext(input$file$name)
-      if (ext == 'xlsx') {
-        data$upload_raw <- openxlsx::read.xlsx(input$file$datapath, sheet = 1)
-      } else if (ext == "csv") {
-        data$upload_raw <- utils::read.csv(
-          input$file$datapath
-        )
-      } else {
-        showNotification(
-          'Invalid file; please upload a .csv or .xlsx file',
-          type = 'error'
-        )
-        return(NULL)
-      }
-
-      # If the file does not have columns 'datetime' and 'value', show a modal dialog to allow the user to map columns
-      if (!all(c('datetime', 'value') %in% names(data$upload_raw))) {
-        showModal(modalDialog(
-          title = 'Map Columns',
-          'The uploaded file does not contain the required columns "datetime" and "value". Please map the columns below:',
-          selectizeInput(
-            ns('upload_datetime_col'),
-            'Select the column for datetime:',
-            choices = names(data$upload_raw),
-            selected = names(data$upload_raw)[1]
-          ),
-          selectizeInput(
-            ns('upload_value_col'),
-            'Select the column for value:',
-            choices = names(data$upload_raw),
-            selected = names(data$upload_raw)[2]
-          ),
-          easyClose = FALSE,
-          footer = tagList(
-            modalButton('Cancel'),
-            actionButton(ns('confirm_mapping'), 'Confirm Mapping')
-          )
-        ))
-        # data$df is is this case assigned by observing input$confirm_mapping below
-      } else {
-        # If the required columns are present, just use them
-        data$df <- prepare_table_data(data$upload_raw)
-      }
+      showModal(map_col_modal)
     })
 
     observeEvent(
@@ -308,13 +648,12 @@ addContData <- function(id, language) {
         removeModal() # Close the modal dialog
         req(input$upload_datetime_col, input$upload_value_col)
         df_mapped <- data.frame(
-          datetime = data$upload_raw[[input$upload_datetime_col]],
-          value = data$upload_raw[[input$upload_value_col]]
+          datetime = upload_raw()[[input$upload_datetime_col]],
+          value = upload_raw()[[input$upload_value_col]]
         )
         data$df <- prepare_table_data(df_mapped)
       },
-      ignoreInit = TRUE,
-      once = TRUE
+      ignoreInit = TRUE
     )
 
     observeEvent(input$add_row, {
@@ -339,7 +678,11 @@ addContData <- function(id, language) {
         DT::datatable(
           data$df,
           editable = TRUE,
-          selection = list(mode = "multiple", target = "row", selector = "td:first-child"),
+          selection = list(
+            mode = "multiple",
+            target = "row",
+            selector = "td:first-child"
+          ),
           options = list(scrollX = TRUE),
           callback = htmlwidgets::JS(
             "table.on('click.dt', 'tbody td', function() {",
@@ -363,6 +706,7 @@ addContData <- function(id, language) {
       )
     })
 
+    # function to check data validity before upload
     check_fx <- function() {
       if (is.null(timeseries())) {
         showNotification('Please select a timeseries first.', type = 'error')
@@ -372,11 +716,48 @@ addContData <- function(id, language) {
         showNotification('Empty data table!', type = 'error')
         return(FALSE)
       }
+
+      if (is.null(input$owner) || is.null(input$contributor)) {
+        showNotification(
+          'Please select owner and contributor organizations.',
+          type = 'error'
+        )
+        return(FALSE)
+      }
+
+      # Check for duplicated rows and drop them; warn the user
+      duplicated_rows <- duplicated(data$df)
+      if (any(duplicated_rows)) {
+        data$df <- data$df[!duplicated_rows, ]
+        showNotification(
+          paste0(
+            'There were ',
+            sum(duplicated_rows),
+            ' duplicated (completely identical) rows. Only the first occurence of each unique row was retained'
+          ),
+          type = 'message',
+          duration = 8
+        )
+      }
+      duplicated_datetimes <- data$df$datetime[duplicated(data$df$datetime)]
+      if (length(duplicated_datetimes) > 0) {
+        showNotification(
+          paste0(
+            'There is more than one datetime for ',
+            paste(unique(duplicated_datetimes), collapse = ", ")
+          ),
+          type = 'error',
+          duration = 10
+        )
+        return(FALSE)
+      }
+
       parsed_value <- suppressWarnings(as.numeric(data$df$value))
       if (any(is.na(parsed_value))) {
         showNotification(
           'Value column must be numeric with no missing values.',
-          type = 'error'
+          type = 'error',
+          duration = 8
         )
         return(FALSE)
       }
@@ -385,7 +766,8 @@ addContData <- function(id, language) {
       if (any(is.na(parsed_datetime))) {
         showNotification(
           'Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.',
-          type = 'error'
+          type = 'error',
+          duration = 10
         )
         return(FALSE)
       }
@@ -405,7 +787,9 @@ addContData <- function(id, language) {
           upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC 0
           upload_data$value <- data$parsed_value
-          data$no_update <- data.table::fifelse(
+          upload_data$owner <- as.integer(input$owner)
+          upload_data$contributor <- as.integer(input$contributor)
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE
@@ -468,7 +852,9 @@ addContData <- function(id, language) {
           upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
           upload_data$value <- data$parsed_value
-          data$no_update <- data.table::fifelse(
+          upload_data$owner <- as.integer(input$owner)
+          upload_data$contributor <- as.integer(input$contributor)
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE
@@ -532,7 +918,9 @@ addContData <- function(id, language) {
           upload_data$datetime <- data$parsed_datetime -
             (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
           upload_data$value <- data$parsed_value
-          data$no_update <- data.table::fifelse(
+          upload_data$owner <- as.integer(input$owner)
+          upload_data$contributor <- as.integer(input$contributor)
+          upload_data$no_update <- data.table::fifelse(
             input$no_update == "yes",
             TRUE,
             FALSE

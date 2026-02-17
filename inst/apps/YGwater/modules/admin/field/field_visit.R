@@ -103,7 +103,7 @@ visit <- function(id, language) {
         air_temp = as.numeric(input$air_temp),
         wind = input$weather_wind,
         note = note,
-        share_with = format_share_with(input$share_with)
+        share_with = share_with_to_array(input$share_with)
       )
     }
 
@@ -145,7 +145,7 @@ visit <- function(id, language) {
     getModuleData <- function() {
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id"
+        "SELECT l.location_id, l.location_code AS location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id"
       )
       moduleData$sub_locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -686,7 +686,7 @@ visit <- function(id, language) {
             "visit_notes",
             value = visit_data$note
           )
-          share_groups <- parse_share_with(visit_data$share_with)
+          share_groups <- array_to_text(visit_data$share_with)
           if (!length(share_groups)) {
             share_groups <- "public_reader"
           }

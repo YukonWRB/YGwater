@@ -20,7 +20,7 @@
 #'
 #' If specifying the option "table", the function will attempt to find returns for the location within the package internal data. The returns contained there are from consultant work involving a detailed analysis of which data to keep/discard, as well as a human determination of the most appropriate distribution and curve fitting methods. The caveat here is that these tables are not necessarily up to date, that most locations have no calculated return periods, and that return periods only exist for water levels.
 #'
-#' @param location The location for which you want a plot.
+#' @param location The location for which you want a plot. You can pass in the location_id, location_code, English or French location name.
 #' @param parameter The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.
 #' @param units The units to display on the y-axis. Default is "" and the function will attempt to find the appropriate units from the database.
 #' @param record_rate The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.
@@ -34,6 +34,8 @@
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
+#' @param start_year_historical The first year to consider when calculating historic ranges. Default is NULL and will use the first year of data available.
+#' @param end_year_historical The last year to consider when calculating historic ranges. Default is NULL and will use the last year of data available or the last year specified in `years` if `historic_range` is set to "last".
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
@@ -99,6 +101,8 @@ ggplotOverlap <- function(
   custom_title = NULL,
   filter = NULL,
   historic_range = NULL,
+  start_year_historical = NULL,
+  end_year_historical = NULL,
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
@@ -120,8 +124,6 @@ ggplotOverlap <- function(
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
-
-  lang <- shortenLanguage(lang)
 
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
   old_warn <- getOption("warn")
@@ -345,7 +347,7 @@ ggplotOverlap <- function(
 
   #### ------------------------- Data is not provided ---------------------- ####
   if (is.null(continuous_data)) {
-    #Confirm parameter and location exist in the database and that there is only one entry
+    # Confirm parameter and location exist in the database and that there is only one entry
     if (inherits(parameter, "character")) {
       escaped_parameter <- gsub("'", "''", parameter)
       parameter_tbl <- dbGetQueryDT(
@@ -398,16 +400,12 @@ ggplotOverlap <- function(
       )
     )
 
-    location_id <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT location_id FROM locations WHERE location = '",
-        location,
-        "';"
-      )
-    )[1, 1]
+    location_id <- lookup_location_id(con, location)
+    if (is.na(location_id)) {
+      stop("The location you entered does not exist in the database.")
+    }
 
-    instantaneous <- dbGetQueryDT(
+    instantaneous <- DBI::dbGetQuery(
       con,
       "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';"
     )[1, 1]
@@ -550,8 +548,11 @@ ggplotOverlap <- function(
       max = NA,
       min = NA,
       q75 = NA,
-      q25 = NA
+      q25 = NA,
+      ath = NA,
+      atl = NA
     )
+
     complete[match(daily$date, all_dates), ] <- daily
     daily <- complete
 
@@ -746,6 +747,8 @@ ggplotOverlap <- function(
       realtime$min <- NA
       realtime$q75 <- NA
       realtime$q25 <- NA
+      realtime$ath <- NA
+      realtime$atl <- NA
     }
 
     realtime$year <- lubridate::year(realtime$datetime) #year, month columns used for removing Feb 29 later
@@ -823,13 +826,45 @@ ggplotOverlap <- function(
 
     # apply datum correction where necessary
     if (datum$conversion_m > 0) {
-      daily[, c("value", "max", "min", "q75", "q25")] <- apply(
-        daily[, c("value", "max", "min", "q75", "q25")],
+      daily[, c(
+        "value",
+        "max",
+        "min",
+        "q75",
+        "q25",
+        "ath",
+        "atl"
+      )] <- apply(
+        daily[, c(
+          "value",
+          "max",
+          "min",
+          "q75",
+          "q25",
+          "ath",
+          "atl"
+        )],
         2,
         function(x) x + datum$conversion_m
       )
-      realtime[, c("value", "max", "min", "q75", "q25")] <- apply(
-        realtime[, c("value", "max", "min", "q75", "q25")],
+      realtime[, c(
+        "value",
+        "max",
+        "min",
+        "q75",
+        "q25",
+        "ath",
+        "atl"
+      )] <- apply(
+        realtime[, c(
+          "value",
+          "max",
+          "min",
+          "q75",
+          "q25",
+          "ath",
+          "atl"
+        )],
         2,
         function(x) x + datum$conversion_m
       )
@@ -848,24 +883,49 @@ ggplotOverlap <- function(
 
     dat <- continuous_data
 
-    # ES: get unique years used to calculate historic stats (just used for annotation on  plot)
+    # ES: get unique years used to calculate historic stats (just used for annotation on plot)
     historic_years <- sort(unique(lubridate::year(dat$datetime)))
 
     # Remove Feb 29
     dat$monthday <- format(dat$datetime, "%m-%d")
     dat <- dat[dat$monthday != "02-29", ]
     dat <- dat[, c("datetime", "value")]
-    # Calculate min, max, median
+    dat$year <- lubridate::year(dat$datetime)
     dat$day <- format(dat$datetime, "%m-%d")
-    summary_dat <- dat %>%
+
+    # Calculate min/max based on start/end_year_historical, all-time based on entire record
+    if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
+      dat_hist <- dat[
+        dat$year >= start_year_historical & dat$year <= end_year_historical,
+      ]
+      summary_dat <- dat_hist %>%
+        dplyr::group_by(.data$day) %>%
+        dplyr::summarise(
+          min = round(min(.data$value), 3),
+          max = round(max(.data$value), 3),
+          md = round(stats::median(.data$value), 3),
+          q75 = round(stats::quantile(.data$value, 0.75), 3),
+          q25 = round(stats::quantile(.data$value, 0.25), 3)
+        )
+    } else {
+      summary_dat <- dat %>%
+        dplyr::group_by(.data$day) %>%
+        dplyr::summarise(
+          min = round(min(.data$value), 3),
+          max = round(max(.data$value), 3),
+          md = round(stats::median(.data$value), 3),
+          q75 = round(stats::quantile(.data$value, 0.75), 3),
+          q25 = round(stats::quantile(.data$value, 0.25), 3)
+        )
+    }
+    # All-time min/max
+    alltime_dat <- dat %>%
       dplyr::group_by(.data$day) %>%
       dplyr::summarise(
-        min = round(min(.data$value), 0),
-        max = round(max(.data$value), 0),
-        md = round(stats::median(.data$value), 0),
-        q75 = round(stats::quantile(.data$value, 0.75), 0),
-        q25 = round(stats::quantile(.data$value, 0.25), 0)
+        ath = round(max(.data$value), 3),
+        atl = round(min(.data$value), 3)
       )
+    summary_dat <- dplyr::left_join(summary_dat, alltime_dat, by = "day")
 
     # Add date
     summary_dat$datetime <- NA
@@ -979,6 +1039,8 @@ ggplotOverlap <- function(
       "md",
       "q75",
       "q25",
+      "ath",
+      "atl",
       "datetime",
       "datetime.y",
       "value"
@@ -1002,8 +1064,10 @@ ggplotOverlap <- function(
     realtime <- realtime[order(realtime$fake_datetime), ]
     # Remove all values before the first of the month
     try({
+      cutoff <- lubridate::floor_date(Sys.Date(), "month")
+
       realtime[
-        realtime$datetime > paste0(format(Sys.Date(), "%Y-%m"), "-01"),
+        !is.na(realtime$datetime) & realtime$datetime > cutoff,
         "value"
       ] <- NA
     })
@@ -1012,6 +1076,8 @@ ggplotOverlap <- function(
     realtime$q75 <- zoo::rollmean(realtime$q75, 5, fill = NA, align = "left")
     realtime$min <- zoo::rollmean(realtime$min, 5, fill = NA, align = "left")
     realtime$max <- zoo::rollmean(realtime$max, 5, fill = NA, align = "left")
+    realtime$atl <- zoo::rollmean(realtime$atl, 5, fill = NA, align = "left")
+    realtime$ath <- zoo::rollmean(realtime$ath, 5, fill = NA, align = "left")
   }
 
   if (!is.null(filter)) {
@@ -1084,6 +1150,8 @@ ggplotOverlap <- function(
     realtime[realtime$max < 0 & !is.na(realtime$max), "max"] <- 0
     realtime[realtime$q25 < 0 & !is.na(realtime$q25), "q25"] <- 0
     realtime[realtime$min < 0 & !is.na(realtime$min), "min"] <- 0
+    realtime[realtime$atl < 0 & !is.na(realtime$atl), "atl"] <- 0
+    realtime[realtime$ath < 0 & !is.na(realtime$ath), "ath"] <- 0
   }
 
   #### ----------------------------- Make the plot -------------------------- ####
@@ -1092,6 +1160,13 @@ ggplotOverlap <- function(
   maxHist <- max(realtime$max, na.rm = TRUE)
   minLines <- min(realtime$value, na.rm = TRUE)
   maxLines <- max(realtime$value, na.rm = TRUE)
+
+  # ES: get historical data for min/max if start/end_year_historical provided
+  # this will always be less than minHist/maxHist calculated from realtime above, so can simply overwrite
+  if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
+    minHist <- min(realtime$atl, na.rm = TRUE)
+    maxHist <- max(realtime$ath, na.rm = TRUE)
+  }
 
   min <- if (minHist < minLines) minHist else minLines
   max <- if (maxHist > maxLines) maxHist else maxLines
@@ -1304,6 +1379,8 @@ ggplotOverlap <- function(
     "Minimum" = "#834333"
   )
   color_mapping[current_year_label] <- "black"
+  color_mapping["Maximum (historical)"] <- "#0097A9"
+  color_mapping["Minimum (historical)"] <- "#834333"
 
   if (!snowbulletin) {
     # Create legend entry variables
@@ -1326,20 +1403,36 @@ ggplotOverlap <- function(
         breaks = rev(unique(realtime$plot_year))
       )
   } else {
+    if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
+      plot <- plot +
+        ggplot2::geom_line(
+          ggplot2::aes(y = .data$ath, colour = "Maximum (historical)"),
+          size = 1,
+          linetype = 1
+        ) +
+        ggplot2::geom_line(
+          ggplot2::aes(y = .data$atl, colour = "Minimum (historical)"),
+          size = 1,
+          linetype = 1
+        )
+    }
+
     plot <- plot +
-      ggplot2::geom_line(
-        ggplot2::aes(y = max, colour = "Maximum"),
-        size = 1
-      ) +
-      ggplot2::geom_line(
-        ggplot2::aes(y = min, colour = "Minimum"),
-        size = 1
-      ) +
+      # ggplot2::geom_line(
+      #   ggplot2::aes(y = max, colour = "Maximum"),
+      #   size = 1
+      # ) +
+      # ggplot2::geom_line(
+      #   ggplot2::aes(y = min, colour = "Minimum"),
+      #   size = 1
+      # ) +
       ggplot2::geom_line(
         ggplot2::aes(colour = current_year_label),
         linewidth = line_size,
         na.rm = T
-      ) +
+      )
+
+    plot <- plot +
       ggplot2::scale_colour_manual(
         name = if (lang == "en") "Legend" else "L\u00E9egende",
         # Create the color mapping as a variable
@@ -1349,7 +1442,9 @@ ggplotOverlap <- function(
         breaks = c(
           "Maximum",
           "Minimum",
-          current_year_label
+          current_year_label,
+          "Maximum (historical)",
+          "Minimum (historical)"
         )
       )
   }
@@ -1800,21 +1895,34 @@ ggplotOverlap <- function(
   # Wrap things up and return() -----------------------
   if (title) {
     if (is.null(custom_title)) {
+      location_id <- lookup_location_id(con, location)
       if (lang == "fr") {
-        stn_name <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT name_fr FROM locations where location = '",
-            location,
-            "'"
-          )
-        )[1, 1]
+        stn_name <- if (is.na(location_id)) {
+          location
+        } else {
+          dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT name_fr FROM locations where location_id = '",
+              location_id,
+              "'"
+            )
+          )[1, 1]
+        }
       }
       if (lang == "en" || is.na(stn_name)) {
-        stn_name <- dbGetQueryDT(
-          con,
-          paste0("SELECT name FROM locations where location = '", location, "'")
-        )[1, 1]
+        stn_name <- if (is.na(location_id)) {
+          location
+        } else {
+          dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT name FROM locations where location_id = '",
+              location_id,
+              "'"
+            )
+          )[1, 1]
+        }
       }
       stn_name <- titleCase(stn_name, lang)
 
@@ -1840,7 +1948,7 @@ ggplotOverlap <- function(
     }
   }
 
-  #Save it if requested
+  # Save it if requested
   if (!is.null(save_path)) {
     ggplot2::ggsave(
       filename = paste0(

@@ -6,23 +6,23 @@
 \usage{
 download_continuous_ts(
   con,
+  param_name,
   start_date = sprintf("\%d-01-01", 1950),
   end_date = sprintf("\%d-01-01", 2100),
   resolution = "daily",
-  parameter_name = "swe",
   epsg = 4326
 )
 }
 \arguments{
 \item{con}{DBI database connection object}
 
+\item{param_name}{Character string of the parameter name to retrieve}
+
 \item{start_date}{Character date string (YYYY-MM-DD) for filtering data}
 
 \item{end_date}{Character date string (YYYY-MM-DD) for filtering data}
 
 \item{resolution}{Character, either "daily" or "monthly" for data aggregation}
-
-\item{parameter_name}{Character string of the parameter name to retrieve}
 
 \item{epsg}{Integer EPSG code for coordinate transformation (default 4326)}
 }

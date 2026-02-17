@@ -477,7 +477,7 @@ addDiscData <- function(id, language) {
       if (input$file_format == "long") {
         req(input$long_param_col, input$long_value_col)
         pnames <- unique(df[[input$long_param_col]])
-        param_list <- setNames(
+        param_list <- stats::setNames(
           lapply(pnames, function(p) {
             key <- gsub("[^A-Za-z0-9]", "_", as.character(p))
             list(
@@ -497,7 +497,7 @@ addDiscData <- function(id, language) {
         )
       } else {
         cols <- setdiff(names(df), input$map_datetime)
-        param_list <- setNames(
+        param_list <- stats::setNames(
           lapply(cols, function(col) {
             list(
               id = input[[paste0("param_", col)]],

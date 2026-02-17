@@ -6,9 +6,10 @@
 \usage{
 plotMultiTimeseries(
   type = "traces",
-  locations,
+  timeseries_ids = NULL,
+  locations = NULL,
   sub_locations = NULL,
-  parameters,
+  parameters = NULL,
   record_rates = NULL,
   aggregation_types = NULL,
   z = NULL,
@@ -43,6 +44,8 @@ plotMultiTimeseries(
 }
 \arguments{
 \item{type}{Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.}
+
+\item{timeseries_ids}{Vector of timeseries IDs to plot, if known (else leave NULL). When provided, location/parameter inputs are ignored.}
 
 \item{locations}{The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.}
 

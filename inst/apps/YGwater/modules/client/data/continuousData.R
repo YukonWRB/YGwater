@@ -2182,7 +2182,7 @@ contData <- function(id, language, inputs) {
     # End of creating and rendering table section
 
     # Create the proxy for datatable manipulations
-    proxy <- DT::dataTableProxy("tbl")
+    proxy <- DT::dataTableProxy(ns("tbl"))
 
     # Show/hide the view button based on if a row is selected #
     observe({
@@ -2395,10 +2395,9 @@ contData <- function(id, language, inputs) {
           ns("modal_frequency"),
           label = tr("frequency", language$language),
           choices = stats::setNames(
-            c("daily", "hourly", "max"),
+            c("daily", "max"),
             c(
               tr("daily", language$language),
-              tr("hourly", language$language),
               tr("max", language$language)
             )
           ),
@@ -2510,46 +2509,6 @@ contData <- function(id, language, inputs) {
             # ")
             #   subset <- dbGetQueryDT(session$userData$AquaCache, query)
             #   subset[, c(3:12) := lapply(.SD, round, 2), .SDcols = c(3:12)]
-          } else if (input$modal_frequency == "hourly") {
-            rows <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT COUNT(*) FROM measurements_hourly_corrected WHERE timeseries_id IN (",
-                paste(selected_tsids, collapse = ", "),
-                ") AND datetime > '",
-                input$modal_date_range[1],
-                "' AND datetime < '",
-                input$modal_date_range[2],
-                "';"
-              )
-            )[[1]]
-
-            #   query <- paste0("WITH extremes AS (
-            #   SELECT
-            #   timeseries_id,
-            #   MIN(datetime) AS first_datetime,
-            #   MAX(datetime) AS last_datetime
-            #   FROM measurements_hourly_corrected
-            #   WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
-            #   AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "'
-            #   GROUP BY timeseries_id
-            # )
-            # SELECT
-            # m.timeseries_id,
-            # m.datetime AS datetime_UTC,
-            # m.value_raw,
-            # m.value_corrected,
-            # m.imputed
-            # FROM measurements_hourly_corrected AS m
-            # JOIN extremes AS e
-            # ON m.timeseries_id = e.timeseries_id
-            # AND (m.datetime = e.first_datetime OR m.datetime = e.last_datetime)
-            # ORDER BY m.timeseries_id,
-            # m.datetime;
-            # ")
-            #   subset <- dbGetQueryDT(session$userData$AquaCache, query)
-            #   subset[, c(3,4) := lapply(.SD, round, 2), .SDcols = c(3,4)]
-            #   subset[, datetime := substr(as.character(datetime), 1, 16)] # Truncate datetime to the first 16 characters (YYYY-MM-DD HH:MM)
           } else {
             rows <- DBI::dbGetQuery(
               session$userData$AquaCache,
@@ -2864,20 +2823,7 @@ contData <- function(id, language, inputs) {
           )
         )
 
-        if (input$modal_frequency == "hourly") {
-          data$hourly_means <- dbGetQueryDT(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT * FROM measurements_hourly_corrected WHERE timeseries_id IN (",
-              paste(selected_tsids, collapse = ", "),
-              ") AND datetime >= '",
-              input$modal_date_range[1],
-              "' AND datetime <= '",
-              input$modal_date_range[2],
-              "';"
-            )
-          )
-        } else if (input$modal_frequency == "max") {
+        if (input$modal_frequency == "max") {
           data$max_resolution <- dbGetQueryDT(
             session$userData$AquaCache,
             paste0(

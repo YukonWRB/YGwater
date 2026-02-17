@@ -14,6 +14,7 @@ function(req, res) {
     "^/parameters$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
+    "^/snow-bulletin/leaflet$",
     "^/__docs__/", # Swagger UI shell & assets
     "^/openapi.json$", # <-- needed for the UI to load without auth
     "^/openapi.yaml$", # <-- sometimes used
@@ -486,6 +487,155 @@ function(req, res, sample_ids, parameters = NA) {
 }
 
 
+# Functions and endpoints for snow bulletin map ########################
+# Memoised version of snow bulletin leaflet HTML to improve performance.
+snowbull_leaflet_mem <- memoise::memoise(
+  function(
+    stamp,
+    year = NULL,
+    month = NULL,
+    statistic = "relative_to_med",
+    language = "English",
+    param_name = "snow water equivalent",
+    con = NULL
+  ) {
+    YGwater:::create_snowbull_leaflet_html(
+      year = year,
+      month = month,
+      param_name = param_name,
+      statistic = statistic,
+      language = language,
+      con = con
+    )
+  },
+  cache = cachem::cache_mem(),
+  omit_args = c("con")
+)
+
+get_snowbull_stamp <- function(con, year = NULL, month = NULL) {
+  param_id <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent'"
+  )[1, 1]
+
+  if (is.na(param_id) | is.null(year) | is.null(month)) {
+    return("none")
+  }
+
+  continuous_stamp <- DBI::dbGetQuery(
+    con,
+    sprintf(
+      "
+      SELECT MAX(COALESCE(m.created, m.modified)::date) AS stamp
+      FROM continuous.measurements_calculated_daily_corrected m
+      JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+      WHERE t.parameter_id = %s AND DATE(m.date) <= CAST('%s' AS date) AND DATE(m.date) >= CAST('1990-10-01' AS date)
+      ",
+      as.integer(param_id),
+      as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
+    )
+  )[1, 1]
+
+  discrete_stamp <- DBI::dbGetQuery(
+    con,
+    sprintf(
+      "
+      SELECT MAX(COALESCE(s.created, s.modified)::date) AS stamp
+      FROM discrete.samples s
+      JOIN discrete.results r ON s.sample_id = r.sample_id
+      WHERE r.parameter_id = %s
+        AND r.result IS NOT NULL AND DATE(s.target_datetime) < DATE('%s') AND DATE(s.target_datetime) >= DATE('1990-10-01')
+      ",
+      as.integer(param_id),
+      as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
+    )
+  )[1, 1]
+
+  stamp_parts <- c(
+    if (!is.na(continuous_stamp)) as.character(continuous_stamp) else "none",
+    if (!is.na(discrete_stamp)) as.character(discrete_stamp) else "none"
+  )
+
+  paste(stamp_parts, collapse = "|")
+}
+
+#' Return SWE snow bulletin leaflet map HTML
+#* @param year Bulletin year (optional; defaults to latest available).
+#* @param month Bulletin month (optional; defaults to latest available).
+#* @param statistic Statistic to display. One of "data", "relative_to_med", "percentile", "anomalies" (default "relative_to_med").
+#* @param language Language for labels: 'French' or 'English' (default "English").
+#* @get /snow-bulletin/leaflet
+#* @serializer contentType list(type = "text/html")
+function(
+  req,
+  res,
+  year = NA,
+  month = NA,
+  statistic = "relative_to_med",
+  language = "English"
+) {
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return("<p>Database connection failed, check your credentials.</p>")
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (xor(is.na(year), is.na(month))) {
+    res$status <- 400
+    return(
+      "<p>Both 'year' and 'month' must be provided together or not at all.</p>"
+    )
+  }
+
+  if (!is.na(year)) {
+    year <- as.integer(year)
+    if (is.na(year)) {
+      res$status <- 400
+      return("<p>Invalid 'year' parameter.</p>")
+    }
+  } else {
+    year <- NULL
+  }
+
+  if (!is.na(month)) {
+    month <- as.integer(month)
+    if (is.na(month) || month < 1 || month > 12) {
+      res$status <- 400
+      return("<p>Invalid 'month' parameter. Use 1-12.</p>")
+    }
+  } else {
+    month <- NULL
+  }
+
+  latest_stamp <- get_snowbull_stamp(con, year, month)
+  map_payload <- snowbull_leaflet_mem(
+    stamp = latest_stamp,
+    year = year,
+    month = month,
+    statistic = statistic,
+    language = language,
+    param_name = "snow water equivalent",
+    con = con
+  )
+
+  res$headers[["X-Map-Year"]] <- as.character(map_payload$year)
+  res$headers[["X-Map-Month"]] <- as.character(map_payload$month)
+
+  map_payload$html
+}
+
 # Functions and endpoints for snow survey data ########################
 # Memoised version of snowInfo to improve performance. Re-used for multiple endpoints.
 snowInfo_mem <- memoise::memoise(
@@ -499,23 +649,33 @@ snowInfo_mem <- memoise::memoise(
 
 # Function to check for latest snow sample/result timestamp for cache invalidation
 get_snow_stamp <- function(con) {
-  sql <- "
-    SELECT GREATEST(
-      (SELECT MAX(COALESCE(s.modified, s.created))
-         FROM discrete.samples s
-        WHERE s.import_source = 'downloadSnowCourse'),
+  rows <- DBI::dbGetQuery(
+    con,
+    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourse'"
+  )[1, 1]
 
-      (SELECT MAX(COALESCE(r.modified, r.created))
-         FROM discrete.results r
-         JOIN discrete.samples s ON s.sample_id = r.sample_id
-        WHERE s.import_source = 'downloadSnowCourse'
-          AND r.parameter_id IN (21, 1220))
-    ) AS stamp
-  "
+  stamp <- DBI::dbGetQuery(
+    con,
+    "
+  SELECT GREATEST(
+    (SELECT MAX(COALESCE(s.modified, s.created))
+       FROM discrete.samples s
+      WHERE s.import_source = 'downloadSnowCourse'),
 
-  stamp <- DBI::dbGetQuery(con, sql)$stamp[[1]]
+    (SELECT MAX(COALESCE(r.modified, r.created))
+       FROM discrete.results r
+       JOIN discrete.samples s ON s.sample_id = r.sample_id
+      WHERE s.import_source = 'downloadSnowCourse'
+        AND r.parameter_id IN (21, 1220))
+  ) AS stamp
+"
+  )[1, 1]
 
-  if (is.na(stamp)) "none" else as.character(stamp) # stabilize type for hashing
+  if (is.na(stamp) | is.na(rows)) {
+    "none"
+  } else {
+    as.character(paste0(stamp, " ", rows))
+  } # stabilize type for hashing
 }
 
 #' Return basic snow survey data

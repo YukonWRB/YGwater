@@ -123,15 +123,17 @@ test_that("tests for API V1", {
     out,
     c(
       "location_id",
-      "location_code",
       "name",
+      "alias",
+      "location_code",
       "latitude",
       "longitude",
       "elevation",
       "datum",
       "note",
       "projects",
-      "networks"
+      "networks",
+      "fn_names"
     )
   )
 

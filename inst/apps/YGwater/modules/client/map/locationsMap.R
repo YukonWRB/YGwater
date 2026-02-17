@@ -168,11 +168,11 @@ mapLocs <- function(id, language) {
           bg = config$sidebar_bg, # Set in globals file'
           open = list(mobile = "always-above"),
           tagList(
-            # checkboxInput(
-            #   ns("cluster_points"),
-            #   label = tr("cluster_points_label", language$language),
-            #   value = FALSE
-            # ),
+            checkboxInput(
+              ns("cluster_points"),
+              label = tr("cluster_points_label", language$language),
+              value = TRUE
+            ),
             selectizeInput(
               ns("data_type"),
               label = tooltip(
@@ -993,16 +993,15 @@ mapLocs <- function(id, language) {
             lat = ~latitude,
             popup = ~popup_html,
             icon = icons,
-            # clusterOptions = if (isTRUE(input$cluster_points)) {
-            #   leaflet::markerClusterOptions()
-            # } else {
-            #   NULL
-            # }
-            clusterOptions = leaflet::markerClusterOptions(
-              iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
-              maxClusterRadius = 80, # cluster radius in pixels
-              spiderfyOnMaxZoom = TRUE
-            )
+            clusterOptions = if (isTRUE(input$cluster_points)) {
+              leaflet::markerClusterOptions(
+                iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
+                maxClusterRadius = 80, # cluster radius in pixels
+                spiderfyOnMaxZoom = TRUE
+              )
+            } else {
+              NULL
+            }
           ) %>%
           leaflet::addControl(
             build_symbol_legend(

@@ -75,23 +75,35 @@ tabularReport <- function(
       level_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1165 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 AND (l.location_code IN ('",
           paste(level_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(level_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(level_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(level_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     } else if (level_locations[1] == "all") {
       level_locations <- DBI::dbGetQuery(
         con,
-        "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1165 ORDER BY location;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 ORDER BY l.location_code;"
       )
     } else {
       level_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1165 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 AND (l.location_code IN ('",
           paste(level_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(level_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(level_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(level_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     }
@@ -119,23 +131,35 @@ tabularReport <- function(
       flow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1150 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 AND (l.location_code IN ('",
           paste(flow_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(flow_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(flow_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(flow_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     } else if (flow_locations[1] == "all") {
       flow_locations <- DBI::dbGetQuery(
         con,
-        "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1150 ORDER BY location;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 ORDER BY l.location_code;"
       )
     } else {
       flow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1150 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 AND (l.location_code IN ('",
           paste(flow_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(flow_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(flow_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(flow_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     }
@@ -154,23 +178,35 @@ tabularReport <- function(
       snow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 21 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 AND (l.location_code IN ('",
           paste(snow_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(snow_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(snow_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(snow_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     } else if (snow_locations[1] == "all") {
       snow_locations <- DBI::dbGetQuery(
         con,
-        "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 21 ORDER BY location;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 ORDER BY l.location_code;"
       )
     } else {
       snow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 21 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 AND (l.location_code IN ('",
           paste(snow_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(snow_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(snow_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(snow_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     }
@@ -188,23 +224,35 @@ tabularReport <- function(
       bridge_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1160 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 AND (l.location_code IN ('",
           paste(bridge_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(bridge_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(bridge_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(bridge_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     } else if (bridge_locations[1] == "all") {
       bridge_locations <- DBI::dbGetQuery(
         con,
-        "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1160 ORDER BY location;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 ORDER BY l.location_code;"
       )
     } else {
       bridge_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id = 1160 AND t.location IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 AND (l.location_code IN ('",
           paste(bridge_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(bridge_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(bridge_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(bridge_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )
     }
@@ -242,16 +290,22 @@ tabularReport <- function(
       precip_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id IN (1165, 1150) AND t.location IN ('",
+          "SELECT l.location_code AS location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id IN (1165, 1150) AND (l.location_code IN ('",
           paste(precip_locations, collapse = "', '"),
-          "') ORDER BY location;"
+          "') OR l.alias IN ('",
+          paste(precip_locations, collapse = "', '"),
+          "') OR l.name IN ('",
+          paste(precip_locations, collapse = "', '"),
+          "') OR l.name_fr IN ('",
+          paste(precip_locations, collapse = "', '"),
+          "')) ORDER BY l.location_code;"
         )
       )[, 1]
       precip_locations <- unique(precip_locations)
     } else if (precip_locations[1] == "all") {
       precip_locations <- DBI::dbGetQuery(
         con,
-        "SELECT t.location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id WHERE p.parameter_id IN (1165, 1150) ORDER BY location;"
+        "SELECT l.location_code AS location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id IN (1165, 1150) ORDER BY l.location_code;"
       )[, 1]
       precip_locations <- unique(precip_locations)
     }
@@ -391,7 +445,7 @@ tabularReport <- function(
     for (i in precip_locations) {
       name <- stringr::str_to_title(unique(DBI::dbGetQuery(
         con,
-        paste0("SELECT name FROM locations WHERE location = '", i, "'")
+        paste0("SELECT name FROM locations WHERE location_code = '", i, "'")
       )))
       yesterday_comment_precip <- if (yesterday_comments) {
         yesterday$yesterday_locs$precipitation[
@@ -583,7 +637,7 @@ tabularReport <- function(
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location = '",
+            "SELECT name FROM locations WHERE location_code = '",
             level_locations[i, "location"],
             "'"
           )
@@ -645,7 +699,7 @@ tabularReport <- function(
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location = '",
+            "SELECT name FROM locations WHERE location_code = '",
             flow_locations[i, "location"],
             "'"
           )
@@ -707,7 +761,7 @@ tabularReport <- function(
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location = '",
+            "SELECT name FROM locations WHERE location_code = '",
             snow_locations[i, "location"],
             "'"
           )
@@ -769,7 +823,7 @@ tabularReport <- function(
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location = '",
+            "SELECT name FROM locations WHERE location_code = '",
             bridge_locations[i, "location"],
             "'"
           )

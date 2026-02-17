@@ -40,6 +40,7 @@ createSnowTemplate <- function(
     }
   }
 
+  # Check target_date format
   if (inherits(target_date, "Date")) {
     target_date <- as.character(target_date)
   } else if (!inherits(target_date, "character")) {
@@ -54,8 +55,8 @@ createSnowTemplate <- function(
   if (circuits[1] == "all") {
     circuits <- DBI::dbGetQuery(snowCon, "SELECT * FROM circuits")
   } else {
-    # Make sure that the requested circuit exist in the database
-    circuits <- DBI::dbGetQuery(
+    # Make sure that the requested circuit exists in the database
+    avail_circuits <- DBI::dbGetQuery(
       snowCon,
       paste0(
         "SELECT * FROM circuits WHERE circuit_name IN ('",
@@ -63,7 +64,7 @@ createSnowTemplate <- function(
         "')"
       )
     )
-    if (nrow(circuits) != length(circuits)) {
+    if (nrow(avail_circuits) != length(circuits)) {
       valid_circuits <- DBI::dbGetQuery(
         snowCon,
         "SELECT circuit_name FROM circuits"
@@ -72,6 +73,8 @@ createSnowTemplate <- function(
         "One or more circuits not found in snow database. Please enter a valid circuit name. Valid names are ",
         paste(valid_circuits$circuit_name, collapse = ", ")
       )
+    } else {
+      circuits <- avail_circuits
     }
   }
 
@@ -190,7 +193,8 @@ createSnowTemplate <- function(
       month = as.numeric(substr(target_date, start = 7, stop = 7)),
       return_missing = TRUE,
       source = "snow",
-      snowCon = snowCon
+      snowCon = snowCon,
+      active = TRUE
     )
     # Subset to locations of interest and columns of interest
     summary <- summary[
