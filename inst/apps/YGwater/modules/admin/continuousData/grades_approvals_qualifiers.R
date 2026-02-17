@@ -312,12 +312,11 @@ grades_approvals_qualifiers <- function(id, language) {
       {
         selection <- input$ts_table_rows_selected
         if (length(selection)) {
-          tsid <- ts_meta()[selection, "timeseries_id"]
+          tsid <- ts_meta()$timeseries_id[selection]
           selected_ts(tsid)
           assignment_refresh(assignment_refresh() + 1)
           selected_record(NULL)
           next_edge("start")
-
           range_info <- safe_query(
             DBI::dbGetQuery(
               session$userData$AquaCache,
@@ -331,7 +330,7 @@ grades_approvals_qualifiers <- function(id, language) {
           } else {
             Sys.time()
           }
-          default_start <- default_end - 7 * 24 * 3600
+          default_start <- default_end - 60 * 24 * 3600
           if (nrow(range_info) && !is.na(range_info$min_dt[1])) {
             min_dt <- as.POSIXct(range_info$min_dt[1], tz = "UTC")
             if (!is.na(min_dt) && default_start < min_dt) {
@@ -770,6 +769,7 @@ grades_approvals_qualifiers <- function(id, language) {
           )
           return()
         }
+        # TODO: modify query to include RETURNS to throw error MAYBE?
         query <- sprintf(
           "INSERT INTO %s (timeseries_id, %s, start_dt, end_dt) VALUES ($1, $2, $3, $4)",
           table_name,
@@ -883,14 +883,17 @@ grades_approvals_qualifiers <- function(id, language) {
     })
 
     observeEvent(
-      plotly::event_data("plotly_selected", source = ns("ts_plot")),
+      plotly::event_data("plotly_brushed", source = ns("ts_plot")),
       {
         req(selected_ts())
+
         selection <- plotly::event_data(
-          "plotly_selected",
+          "plotly_brushed",
           source = ns("ts_plot")
         )
-        if (is.null(selection) || !nrow(selection)) {
+        
+        
+        if (is.null(selection) || !length(selection)) {
           return()
         }
         times <- vapply(selection$x, to_posix_from_event, as.POSIXct(NA))
@@ -899,11 +902,8 @@ grades_approvals_qualifiers <- function(id, language) {
           return()
         }
         times <- sort(times)
-        updateTextInput(session, "start_dt", value = format_datetime(times[1]))
-        updateTextInput(
-          session,
-          "end_dt",
-          value = format_datetime(times[length(times)])
+        updateTextInput(session, "start_dt", value = unname(format_datetime(times[1])))
+        updateTextInput(session, "end_dt", value = unname(format_datetime(times[length(times)]))
         )
         next_edge("start")
       },
@@ -964,7 +964,7 @@ grades_approvals_qualifiers <- function(id, language) {
         name = "Raw",
         source = plot_source,
         line = list(color = "#6C757D")
-      )
+      ) 
       if ("value_corrected" %in% names(df)) {
         p <- plotly::add_lines(
           p,
