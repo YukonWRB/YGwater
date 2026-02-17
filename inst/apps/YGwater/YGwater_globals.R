@@ -32,11 +32,10 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
+  g_drive <- FALSE
   if (!isFALSE(network_check)) {
     network_check <- dir.exists(network_check)
     # YG specific code here
-    g_drive <- FALSE
-
     if (!public) {
       # confirm G drive access for FOD reports
       g_drive <- dir.exists(
