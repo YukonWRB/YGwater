@@ -437,14 +437,14 @@ pw_change_success,modal text,Password updated successfully.,Mot de passe mis à 
 pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
-snowbull_relative_median,,Percent of median (%),Pourcentage de la médiane historique (%)
+snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
 snowbull_historical_median,,Historical median,Médiane historique
-snowbull_anomalies,,Anomalies (%s),Anomalies (%s)
-snowbull_values,,Values (%s),Valeurs (%s)
+snowbull_anomalies,,Anomalies,Anomalies
+snowbull_values,,Values,Valeurs
 snowbull_swe,,Snow water equivalent,Équivalent en eau de neige
 snowbull_temperature,,Temperature,Température
 snowbull_precipitation,,Precipitation,Précipitation
-snowbull_percentile,,Percentile (%),Percentile (%)
+snowbull_percentile,,Percentile,Percentile
 snowbull_details,,Map details,Détails de la carte
 app_version,,Current application version:,Version actuelle de l'application :
 snowbull_gen_on,,Map generated on,Carte générée le
@@ -453,8 +453,8 @@ snowbull_map_credits,,Basemap:</b> Esri World Imagery,Crédits de la carte de ba
 snowbull_data_credits,,Data source:</b> AquaCache database,Source des données :</b> Base de données AquaCache
 snowbull_date,,Snow Bulletin Date,Date du bulletin de neige
 snowbull_historical_period,,Historical period for statistics,Période historique pour les statistiques
-snowbull_no_snow,,No snow (no record),Pas de neige (aucun enregistrement historique)
-snowbull_some_snow,,"Snow present (no record)","Neige présente (aucun enregistrement historique)"
+snowbull_no_snow,,No snow (median is zero),Pas de neige (médiane historique égale à zéro)
+snowbull_some_snow,,"Snow present (median is zero)","Neige présente (médiane historique égale à zéro)"
 snowbull_no_data,,No data,Aucune donnée
 snowbull_percentile_suffix,,th,ème
 snowbull_snow_survey,,Snow survey,Relevé nivométrique
@@ -462,6 +462,7 @@ snowbull_snow_pillow,,Snow pillow,Coussin à neige
 snowbull_swe_basin,,Basin average SWE,EEN moyen du 
 snowbull_normal,,Normal,Normal
 snowbull_average,,Average,Moyenne
+snowbull_reference_period,,Reference period, Période de référence
 snowbull_communities,,Communities,Communautés
 snowbull_roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles
@@ -472,3 +473,4 @@ coordinates,,Coordinates,Coordonnées
 isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche EEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
+snowbull_to,, to,à

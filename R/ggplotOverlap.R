@@ -34,8 +34,8 @@
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
 #' @param historic_range Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".
-#' @param start_year_historical The first year to consider when calculating historic ranges. Default is NULL and will use the first year of data available.
-#' @param end_year_historical The last year to consider when calculating historic ranges. Default is NULL and will use the last year of data available or the last year specified in `years` if `historic_range` is set to "last".
+#' @param ref_period_start_datetime The first year to consider when calculating ribbons for a reference period. Default is NULL and will use the first year of data available.
+#' @param ref_period_end_datetime The last year to consider when calculating ribbons for a reference period. Default is NULL and will use the last year of data available or the last year specified in `years` if `historic_range` is set to "last".
 #' @param returns Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".
 #' @param return_type Use minimum ("min") or maximum ("max") values for returns?
 #' @param return_months Numeric vector of months during which to look for minimum or maximum values. Only works with calculated returns. Does not have to be within `startDay` and `endDay`, but will only consider data up to the last year specified in `years`. For months overlapping the new year like November-April, should look like c(11:12,1:4). IMPORTANT: the first month in the range should be the first element of the vector: c(1:4, 11:12) would not be acceptable. Think of it as defining a season. Passed to 'months' argument of [fasstr::calc_annual_extremes()] and also used to set the 'water_year_start' parameter of this function.
@@ -101,8 +101,8 @@ ggplotOverlap <- function(
   custom_title = NULL,
   filter = NULL,
   historic_range = NULL,
-  start_year_historical = NULL,
-  end_year_historical = NULL,
+  ref_period_start_datetime = NULL,
+  ref_period_end_datetime = NULL,
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
@@ -893,12 +893,16 @@ ggplotOverlap <- function(
     dat$year <- lubridate::year(dat$datetime)
     dat$day <- format(dat$datetime, "%m-%d")
 
-    # Calculate min/max based on start/end_year_historical, all-time based on entire record
-    if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
+    # Calculate min/max based on start/ref_period_end_datetime, all-time based on entire record
+    if (
+      !is.null(ref_period_start_datetime) && !is.null(ref_period_end_datetime)
+    ) {
       dat_hist <- dat[
-        dat$year >= start_year_historical & dat$year <= end_year_historical,
+        dat$datetime >= ref_period_start_datetime &
+          dat$datetime <= ref_period_end_datetime,
       ]
-      summary_dat <- dat_hist %>%
+      dat_hist <<- dat_hist
+      summary_dat <<- dat_hist %>%
         dplyr::group_by(.data$day) %>%
         dplyr::summarise(
           min = round(min(.data$value), 3),
@@ -1161,9 +1165,11 @@ ggplotOverlap <- function(
   minLines <- min(realtime$value, na.rm = TRUE)
   maxLines <- max(realtime$value, na.rm = TRUE)
 
-  # ES: get historical data for min/max if start/end_year_historical provided
+  # ES: get historical data for min/max if start/ref_period_end_datetime provided
   # this will always be less than minHist/maxHist calculated from realtime above, so can simply overwrite
-  if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
+  if (
+    !is.null(ref_period_start_datetime) && !is.null(ref_period_end_datetime)
+  ) {
     minHist <- min(realtime$atl, na.rm = TRUE)
     maxHist <- max(realtime$ath, na.rm = TRUE)
   }
@@ -1403,15 +1409,31 @@ ggplotOverlap <- function(
         breaks = rev(unique(realtime$plot_year))
       )
   } else {
-    if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
+    # if a specific historical range is provided, the envelope will show min/max within the period, solid lines show ATL and ATH
+    if (
+      !is.null(ref_period_start_datetime) && !is.null(ref_period_end_datetime)
+    ) {
       plot <- plot +
         ggplot2::geom_line(
-          ggplot2::aes(y = ath, colour = "Maximum (historical)"),
+          ggplot2::aes(y = .data$ath, colour = "Maximum (historical)"),
           size = 1,
           linetype = 1
         ) +
         ggplot2::geom_line(
-          ggplot2::aes(y = atl, colour = "Minimum (historical)"),
+          ggplot2::aes(y = .data$atl, colour = "Minimum (historical)"),
+          size = 1,
+          linetype = 1
+        )
+      # if historical range is not prrovided, plot the min/max lines normally, to enclose the shaded ribbon
+    } else {
+      plot <- plot +
+        ggplot2::geom_line(
+          ggplot2::aes(y = .data$max, colour = "Maximum"),
+          size = 1,
+          linetype = 1
+        ) +
+        ggplot2::geom_line(
+          ggplot2::aes(y = .data$min, colour = "Minimum"),
           size = 1,
           linetype = 1
         )

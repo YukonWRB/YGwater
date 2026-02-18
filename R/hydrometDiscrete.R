@@ -23,6 +23,8 @@
 #' @param save_path Default is NULL and the graph will be visible in RStudio and can be assigned to an object. Option "choose" brings up the File Explorer for you to choose where to save the file, or you can also specify a save path directly.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param discrete_data A data.frame with the data to be plotted. Must contain the following columns: datetime, year, month, value and units.
+#' @param ref_period_start_datetime The first year to consider when calculating ribbons for a reference period. Default is NULL and will use the first year of data available.
+#' @param ref_period_end_datetime The last year to consider when calculating ribbons for a reference period. Default is NULL and will use the last year of data available or the last
 #' @param lang The desired language for the plot.
 #'
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified
@@ -43,6 +45,8 @@ hydrometDiscrete <- function(
   save_path = NULL,
   con = NULL,
   discrete_data = NULL,
+  ref_period_start_datetime = NULL,
+  ref_period_end_datetime = NULL,
   lang = "en"
 ) {
   # TODO Should give a decent error message if the user requests something that doesn't exist. Station not existing, timeseries not existing, years not available (and where they are), etc.
@@ -370,24 +374,105 @@ hydrometDiscrete <- function(
 
   #### ------------------ Calculate stats for "lined box" ------------------- ####
   if (plot_type == 'linedbox') {
-    # Calculate stats, removing current year first
-    stats_discrete <- all_discrete[all_discrete$year < max(years), ]
-    stats_discrete <- stats_discrete %>%
-      dplyr::group_by(.data$month) %>%
-      dplyr::summarise(value = min(.data$value, na.rm = TRUE), type = "min") %>%
-      dplyr::bind_rows(
-        stats_discrete %>%
-          dplyr::group_by(.data$month) %>%
-          dplyr::summarise(value = max(.data$value, na.rm = TRUE), type = "max")
-      ) %>%
-      dplyr::bind_rows(
-        stats_discrete %>%
-          dplyr::group_by(.data$month) %>%
-          dplyr::summarise(
-            value = stats::median(.data$value, na.rm = TRUE),
-            type = "median"
-          )
-      )
+    # Calculate stats for linedbox plot
+    # If reference years are provided, use them for min/max/median; otherwise use all data
+    if (
+      !is.null(ref_period_start_datetime) && !is.null(ref_period_end_datetime)
+    ) {
+      # Ensure ref_period_start_datetime and ref_period_end_datetime are Date objects
+      ref_period_start_datetime <- as.Date(ref_period_start_datetime)
+      ref_period_end_datetime <- as.Date(ref_period_end_datetime)
+      # Filter all_discrete for datetimes within the reference period
+      stats_ref <- all_discrete[
+        all_discrete$datetime >= ref_period_start_datetime &
+          all_discrete$datetime <= ref_period_end_datetime,
+      ]
+      stats_discrete <- stats_ref %>%
+        dplyr::group_by(.data$month) %>%
+        dplyr::summarise(
+          value = min(.data$value, na.rm = TRUE),
+          type = "min"
+        ) %>%
+        dplyr::bind_rows(
+          stats_ref %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = max(.data$value, na.rm = TRUE),
+              type = "max"
+            )
+        ) %>%
+        dplyr::bind_rows(
+          stats_ref %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = stats::median(.data$value, na.rm = TRUE),
+              type = "median"
+            )
+        ) %>%
+        dplyr::bind_rows(
+          stats_ref %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = stats::quantile(.data$value, probs = 0.25, na.rm = TRUE),
+              type = "p25"
+            )
+        ) %>%
+        dplyr::bind_rows(
+          stats_ref %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = stats::quantile(.data$value, probs = 0.75, na.rm = TRUE),
+              type = "p75"
+            )
+        )
+      # Calculate all-time high/low using all data
+      ath <- all_discrete %>%
+        dplyr::group_by(.data$month) %>%
+        dplyr::summarise(value = max(.data$value, na.rm = TRUE), type = "ath")
+      atl <- all_discrete %>%
+        dplyr::group_by(.data$month) %>%
+        dplyr::summarise(value = min(.data$value, na.rm = TRUE), type = "atl")
+      stats_discrete <- dplyr::bind_rows(stats_discrete, ath, atl)
+    } else {
+      stats_discrete <- all_discrete %>%
+        dplyr::group_by(.data$month) %>%
+        dplyr::summarise(
+          value = min(.data$value, na.rm = TRUE),
+          type = "min"
+        ) %>%
+        dplyr::bind_rows(
+          all_discrete %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = max(.data$value, na.rm = TRUE),
+              type = "max"
+            )
+        ) %>%
+        dplyr::bind_rows(
+          all_discrete %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = stats::median(.data$value, na.rm = TRUE),
+              type = "median"
+            )
+        ) %>%
+        dplyr::bind_rows(
+          all_discrete %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = stats::quantile(.data$value, probs = 0.25, na.rm = TRUE),
+              type = "p25"
+            )
+        ) %>%
+        dplyr::bind_rows(
+          all_discrete %>%
+            dplyr::group_by(.data$month) %>%
+            dplyr::summarise(
+              value = stats::quantile(.data$value, probs = 0.75, na.rm = TRUE),
+              type = "p75"
+            )
+        )
+    }
 
     if (overlaps) {
       stats_discrete$fake_date <- NA
@@ -574,8 +659,24 @@ hydrometDiscrete <- function(
     for (m in unique(stats_discrete$month)) {
       plot <- plot +
         ggplot2::geom_rect(
-          data = stats_discrete[stats_discrete$month == m, ],
-          fill = 'grey87',
+          data = stats_discrete[
+            (stats_discrete$month == m) &
+              (stats_discrete$type %in% c("min", "max", "median")),
+          ],
+          fill = 'grey90',
+          ggplot2::aes(
+            xmin = .data$fake_date - 12,
+            xmax = .data$fake_date + 12,
+            ymin = min(.data$value),
+            ymax = max(.data$value)
+          )
+        ) +
+        ggplot2::geom_rect(
+          data = stats_discrete[
+            (stats_discrete$month == m) &
+              (stats_discrete$type %in% c("p25", "p75", "median")),
+          ],
+          fill = 'grey80',
           ggplot2::aes(
             xmin = .data$fake_date - 12,
             xmax = .data$fake_date + 12,
@@ -584,23 +685,50 @@ hydrometDiscrete <- function(
           )
         )
     }
-    plot <- plot +
-      ggplot2::geom_segment(
-        data = stats_discrete,
-        linewidth = plot_scale * 1.5,
-        ggplot2::aes(
-          color = .data$type,
-          yend = .data$value,
-          x = .data$fake_date - 12,
-          xend = .data$fake_date + 12
-        )
-      ) +
-      ggplot2::scale_color_manual(
-        name = "",
-        labels = c("Maximum", "Median", "Minimum"),
-        values = c("#0097A9", "#7A9A01", "#834333")
-      ) +
-      ggnewscale::new_scale_color()
+
+    if (
+      !is.null(ref_period_start_datetime) && !is.null(ref_period_end_datetime)
+    ) {
+      # Only plot ATH, ATL, and Median
+      stats_to_plot <- stats_discrete[
+        stats_discrete$type %in% c("ath", "atl"),
+      ]
+      plot <- plot +
+        ggplot2::geom_segment(
+          data = stats_to_plot,
+          linewidth = plot_scale * 1.5,
+          ggplot2::aes(
+            color = .data$type,
+            yend = .data$value,
+            x = .data$fake_date - 12,
+            xend = .data$fake_date + 12
+          )
+        ) +
+        ggplot2::scale_color_manual(
+          name = "",
+          labels = c("All-time High", "All-time Low"),
+          values = c("#0097A9", "#834333")
+        ) +
+        ggnewscale::new_scale_color()
+    } else {
+      plot <- plot +
+        ggplot2::geom_segment(
+          data = stats_discrete,
+          linewidth = plot_scale * 1.5,
+          ggplot2::aes(
+            color = .data$type,
+            yend = .data$value,
+            x = .data$fake_date - 12,
+            xend = .data$fake_date + 12
+          )
+        ) +
+        ggplot2::scale_color_manual(
+          name = "",
+          labels = c("Maximum", "Median", "Minimum"),
+          values = c("#0097A9", "#7A9A01", "#834333")
+        ) +
+        ggnewscale::new_scale_color()
+    }
   } else if (plot_type == "violin") {
     plot <- plot +
       ggplot2::geom_violin(

@@ -20,7 +20,6 @@
 #' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #' @param start_year_historical The start year for the historical period used in the snow bulletin.
 #' @param end_year_historical The end year for the historical period used in the snow bulletin.
-#'
 #' @return A snow bulletin in Microsoft Word format.
 #'
 #' @export
