@@ -562,8 +562,8 @@ get_snowbull_stamp <- function(con, year = NULL, month = NULL) {
 #' Return SWE snow bulletin leaflet map HTML
 #* @param year Bulletin year (optional; defaults to latest available).
 #* @param month Bulletin month (optional; defaults to latest available).
-#* @param statistic Statistic to display (default "relative_to_med").
-#* @param language Language for labels (default "English").
+#* @param statistic Statistic to display. One of "data", "relative_to_med", "percentile", "anomalies" (default "relative_to_med").
+#* @param language Language for labels: 'French' or 'English' (default "English").
 #* @get /snow-bulletin/leaflet
 #* @serializer contentType list(type = "text/html")
 function(
@@ -594,7 +594,9 @@ function(
 
   if (xor(is.na(year), is.na(month))) {
     res$status <- 400
-    return("<p>Both 'year' and 'month' must be provided together.</p>")
+    return(
+      "<p>Both 'year' and 'month' must be provided together or not at all.</p>"
+    )
   }
 
   if (!is.na(year)) {

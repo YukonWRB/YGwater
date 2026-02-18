@@ -6,7 +6,7 @@
 \usage{
 download_continuous_ts(
   con,
-  param_name = NULL,
+  param_name,
   start_date = sprintf("\%d-01-01", 1950),
   end_date = sprintf("\%d-01-01", 2100),
   resolution = "daily",

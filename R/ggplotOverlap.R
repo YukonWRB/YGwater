@@ -1416,6 +1416,7 @@ ggplotOverlap <- function(
       plot <- plot +
         ggplot2::geom_line(
           ggplot2::aes(y = .data$ath, colour = "Maximum (historical)"),
+          ggplot2::aes(y = .data$ath, colour = "Maximum (historical)"),
           size = 1,
           linetype = 1
         ) +

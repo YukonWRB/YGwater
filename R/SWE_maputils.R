@@ -345,6 +345,7 @@ get_dynamic_style_elements <- function(
 
     # Custom legend labels for each value type
     relative_labels <- c(
+<<<<<<< HEAD
         no_data, # "No data"
         no_snow, # "No snow present where historical median is zero"
         some_snow, # "Snow present where historical median is zero"
@@ -392,6 +393,55 @@ get_dynamic_style_elements <- function(
         paste("70", to, "80"),
         paste("80", to, "90"),
         paste("90", to, "100")
+=======
+        tr("snowbull_no_data", language), # "No data"
+        tr("snowbull_no_snow", language), # "No snow present where historical median is zero"
+        tr("snowbull_some_snow", language), # "Snow present where historical median is zero"
+        "\u003C 50%",
+        "50\u201370%",
+        "70\u201390%",
+        "90\u2013110%",
+        "110\u2013130%",
+        "130\u2013150%",
+        "\u2264 150%"
+    )
+
+    anomalies_labels <- c(
+        tr("snowbull_no_data", language), # "No data"
+        "\u003C -5.0",
+        "-5.0 \u2013 -2.0",
+        "-2.0 \u2013 -0.4",
+        "-0.4 \u2013 +0.5",
+        "+0.5 \u2013 +2.0",
+        "+2.0 \u2013 +5.0",
+        "\u2264 +5.0"
+    )
+
+    absolute_labels <- c(
+        tr("snowbull_no_data", language), # "No data"
+        "\u003C 50",
+        "50\u2013100",
+        "100\u2013150",
+        "150\u2013200",
+        "200\u2013250",
+        "250\u2013300",
+        "300\u2013400",
+        "400\u2013500",
+        "\u2264 500"
+    )
+    percentile_labels <- c(
+        tr("snowbull_no_data", language), # "No data"
+        "0\u201310",
+        "10\u201320",
+        "20\u201330",
+        "30\u201340",
+        "40\u201350",
+        "50\u201360",
+        "60\u201370",
+        "70\u201380",
+        "80\u201390",
+        "90\u2013100"
+>>>>>>> 5825e24bbf747db17974b463e31d809782397408
     )
 
     style_choices = list(
@@ -552,6 +602,13 @@ get_latest_bulletin_month_year <- function(
         get_latest_timeseries_datetime,
         FUN.VALUE = as.POSIXct(NA)
     )
+    if (inherits(latest_dates, "numeric")) {
+        latest_dates <- as.POSIXct(
+            latest_dates,
+            origin = "1970-01-01",
+            tz = "UTC"
+        )
+    }
 
     latest_date <- max(latest_dates, na.rm = TRUE)
     if (is.infinite(latest_date) || is.na(latest_date)) {
@@ -567,9 +624,17 @@ get_latest_bulletin_month_year <- function(
 render_leaflet_widget_html <- function(widget) {
     requireNamespace("pandoc")
 
-    loc <- pandoc::pandoc_locate()
+    tryCatch(
+        {
+            loc <- pandoc::pandoc_locate()
+        },
+        error = function(e) {
+            loc <<- pandoc::pandoc_bin()
+        }
+    )
     if (is.null(loc)) {
-        stop("Pandoc installation not found. Please install pandoc.")
+        message("Installing pandoc...")
+        pandoc::pandoc_install(force = TRUE)
     }
 
     tmp_file <- tempfile(fileext = ".html")
@@ -757,7 +822,7 @@ standardize_param_name <- function(param_name, con = NULL) {
 #     temperature$date_day <- lubridate::day(temperature$datetime)
 #     temperature <- temperature[order(temperature$datetime), ]
 
-#     # FDD: sum of degrees below 0°C per water year (Oct 1 - Jun 30)
+#     # FDD: sum of degrees below 0 celcius per water year (Oct 1 - Jun 30)
 #     temperature$date_water_year <- ifelse(
 #         lubridate::month(temperature$datetime) >= water_year_start_month,
 #         temperature$date_year + 1,
@@ -4950,9 +5015,17 @@ make_leaflet_map <- function(
         cat(sprintf("Saving map to file: %s\n", filename))
         requireNamespace("pandoc")
 
-        loc <- pandoc::pandoc_locate()
+        tryCatch(
+            {
+                loc <- pandoc::pandoc_locate()
+            },
+            error = function(e) {
+                loc <<- pandoc::pandoc_bin()
+            }
+        )
         if (is.null(loc)) {
-            stop("Pandoc installation not found. Please install pandoc.")
+            message("Installing pandoc...")
+            pandoc::pandoc_install(force = TRUE)
         }
 
         htmlwidgets::saveWidget(
@@ -5518,7 +5591,7 @@ make_ggplot_map <- function(
 }
 
 
-#' Create a static ggplot2 map for SWE basins and stations
+#' Create a map for SWE basins and stations
 #'
 #' @param year Integer year (e.g., 2025)
 #' @param month Integer month (e.g., 3 for March)
@@ -5529,8 +5602,8 @@ make_ggplot_map <- function(
 #' @param filename Optional character string for PNG output file path
 #' @param dpi Numeric resolution in dots per inch (default: 300)
 #' @param param_name Character, parameter to plot (default: "swe")
-#' @param statistic Character, "absolute", "relative", or "percentile" (default: "relative")
-#' @param language Character string indicating the language for labels and legends. Default is "English".
+#' @param statistic Character, "absolute", "relative_to_med" (relative to median) or "percentile" (default: "relative_to_med")
+#' @param language Character string indicating the language for labels and legends. 'French' or 'English'; default is "English".
 #' @param con Optional database connection, if not provided a default connection will be used
 #' @param format Character string indicating the output format: "ggplot", "leaflet", or "shiny",
 #' @param start_year_historical Integer, start year for historical norms (default: 1991)
