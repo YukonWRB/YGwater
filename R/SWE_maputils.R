@@ -345,7 +345,6 @@ get_dynamic_style_elements <- function(
 
     # Custom legend labels for each value type
     relative_labels <- c(
-<<<<<<< HEAD
         no_data, # "No data"
         no_snow, # "No snow present where historical median is zero"
         some_snow, # "Snow present where historical median is zero"
@@ -393,55 +392,6 @@ get_dynamic_style_elements <- function(
         paste("70", to, "80"),
         paste("80", to, "90"),
         paste("90", to, "100")
-=======
-        tr("snowbull_no_data", language), # "No data"
-        tr("snowbull_no_snow", language), # "No snow present where historical median is zero"
-        tr("snowbull_some_snow", language), # "Snow present where historical median is zero"
-        "\u003C 50%",
-        "50\u201370%",
-        "70\u201390%",
-        "90\u2013110%",
-        "110\u2013130%",
-        "130\u2013150%",
-        "\u2264 150%"
-    )
-
-    anomalies_labels <- c(
-        tr("snowbull_no_data", language), # "No data"
-        "\u003C -5.0",
-        "-5.0 \u2013 -2.0",
-        "-2.0 \u2013 -0.4",
-        "-0.4 \u2013 +0.5",
-        "+0.5 \u2013 +2.0",
-        "+2.0 \u2013 +5.0",
-        "\u2264 +5.0"
-    )
-
-    absolute_labels <- c(
-        tr("snowbull_no_data", language), # "No data"
-        "\u003C 50",
-        "50\u2013100",
-        "100\u2013150",
-        "150\u2013200",
-        "200\u2013250",
-        "250\u2013300",
-        "300\u2013400",
-        "400\u2013500",
-        "\u2264 500"
-    )
-    percentile_labels <- c(
-        tr("snowbull_no_data", language), # "No data"
-        "0\u201310",
-        "10\u201320",
-        "20\u201330",
-        "30\u201340",
-        "40\u201350",
-        "50\u201360",
-        "60\u201370",
-        "70\u201380",
-        "80\u201390",
-        "90\u2013100"
->>>>>>> 5825e24bbf747db17974b463e31d809782397408
     )
 
     style_choices = list(
