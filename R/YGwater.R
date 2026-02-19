@@ -45,6 +45,10 @@ YGwater <- function(
     reason = "required to enable asynchronous operations in YGwater apps"
   )
   rlang::check_installed(
+    "promises",
+    reason = "required to enable asynchronous operations in YGwater apps"
+  )
+  rlang::check_installed(
     "bslib",
     reason = "required to enable bootstrap 5 themes and elements in YGwater apps"
   )

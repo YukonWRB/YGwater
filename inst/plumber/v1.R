@@ -158,9 +158,9 @@ function(req, res, lang = "en") {
 
 
 #' Return measurements for a timeseries
-#* @param id Timeseries ID (required).
-#* @param start Start date/time (required, ISO 8601 i.e. 2025-01-01 00:00).
-#* @param end End date/time (optional; defaults to now, ISO 8601).
+#* @param id Timeseries IDs to target, separated by commas (required).
+#* @param start Start date/time, inclusive (required, ISO 8601 i.e. 2025-01-01 00:00).
+#* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @get /timeseries/measurements
 #* @serializer csv
@@ -233,17 +233,37 @@ function(req, res, id, start, end = NA, limit = 100000) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
+  # Break id apart by comma and convert to integer vector
+  id <- unlist(strsplit(id, ","))
+  id <- as.integer(id)
+  if (length(id) == 1) {
+    out <- DBI::dbGetQuery(
+      con,
+      "SELECT * FROM continuous.measurements_continuous_corrected 
   WHERE timeseries_id = $1 
   AND datetime >= $2 
   AND datetime <= $3 
   ORDER BY datetime DESC
-  LIMIT $4"
-  out <- DBI::dbGetQuery(
-    con,
-    sql,
-    params = list(as.integer(id), start, end, lim)
-  )
+  LIMIT $4",
+      params = list(as.integer(id), start, end, lim)
+    )
+  } else {
+    # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
+    sql <- sprintf(
+      "SELECT * FROM continuous.measurements_continuous_corrected 
+    WHERE timeseries_id IN (%s) 
+    AND datetime >= $1 
+    AND datetime <= $2 
+    ORDER BY datetime DESC
+    LIMIT $3",
+      paste(id, collapse = ",")
+    )
+    out <- DBI::dbGetQuery(
+      con,
+      sql,
+      params = list(start, end, lim)
+    )
+  }
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"

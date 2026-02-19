@@ -64,6 +64,11 @@ test_that("tests for API V1", {
       "location_id",
       "location_name",
       "depth_height_m",
+      "latitude",
+      "longitude",
+      "location_elevation",
+      "projects",
+      "networks",
       "media_type",
       "parameter_name",
       "units",
@@ -90,6 +95,11 @@ test_that("tests for API V1", {
       tz = "UTC"
     )
   }
+
+  # Pick another timeseries same or greater end datetime to test the /timeseries/{timeseries_id} endpoint later on
+  test_timeseries_id_2 <- out$timeseries_id[
+    out$end_datetime >= test_timeseries_end
+  ][1]
 
   # Tests for /locations endpoint
   expect_s3_class(
@@ -139,6 +149,7 @@ test_that("tests for API V1", {
 
   ## Tests for /timeseries/{timeseries_id} endpoint
   skip_on_ci()
+  # Single timeseries
   expect_s3_class(
     # ---------------- Make API call --------------------
     get_ts_id <- callthat::call_that_api_get(
@@ -149,6 +160,21 @@ test_that("tests for API V1", {
         end = test_timeseries_end,
         limit = 100,
         id = test_timeseries_id
+      )
+    ),
+    "response"
+  )
+  # Two timeseries
+  expect_s3_class(
+    # ---------------- Make API call --------------------
+    get_ts_id <- callthat::call_that_api_get(
+      api_session,
+      endpoint = "timeseries/measurements",
+      query = list(
+        start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
+        end = test_timeseries_end,
+        limit = 100,
+        id = paste(test_timeseries_id, test_timeseries_id_2, sep = ",")
       )
     ),
     "response"
@@ -179,7 +205,9 @@ test_that("tests for API V1", {
       "value_raw",
       "value_corrected",
       "period",
-      "imputed"
+      "imputed",
+      "created",
+      "modified"
     )
   )
 })
