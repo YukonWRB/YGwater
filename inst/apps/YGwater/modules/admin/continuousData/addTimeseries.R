@@ -34,6 +34,9 @@ addTimeseriesUI <- function(id) {
         ns("accordion2")
       ))
     ),
+    tags$head(tags$style(HTML(
+      ".shiny-split-layout > div {overflow: visible;}"
+    ))),
     page_fluid(
       uiOutput(ns("banner")),
       uiOutput(ns("ui"))
@@ -216,9 +219,6 @@ addTimeseries <- function(id, language) {
 
         splitLayout(
           cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
           selectizeInput(
             ns("parameter"),
             "Parameter",
@@ -244,9 +244,6 @@ addTimeseries <- function(id, language) {
         ),
         splitLayout(
           cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
           selectizeInput(
             ns("aggregation_type"),
             "Aggregation type",

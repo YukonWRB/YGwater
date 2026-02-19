@@ -42,7 +42,16 @@ YGwater_globals <- function(
         "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
       )
     }
+    if (g_drive) {
+      # FOD module (only visible internally)
+      source(system.file(
+        "apps/YGwater/modules/client/FOD/FOD_main.R",
+        package = "YGwater"
+      ))
+    }
+  }
 
+  if (!public) {
     # 'Admin' side modules #####
     # database admin modules
     source(system.file(
@@ -175,21 +184,10 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
 
-    if (g_drive) {
-      # FOD module (only visible internally)
-      source(system.file(
-        "apps/YGwater/modules/client/FOD/FOD_main.R",
-        package = "YGwater"
-      ))
-    }
-
     # Set up a temporary directory for storing R documentation files during app runtime
     .rd_dir <<- file.path(tempdir(), "rdocs")
     dir.create(.rd_dir, showWarnings = FALSE, recursive = TRUE)
     shiny::addResourcePath("rdocs", .rd_dir)
-
-    # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
-    options(shiny.maxRequestSize = 1024 * 1024^2)
 
     # define some functions for later use
     array_to_text <<- function(value) {
@@ -219,50 +217,53 @@ YGwater_globals <- function(
       groups <- gsub('"', '\\"', groups, fixed = TRUE)
       paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
     }
+
+    # Take the JSON string coming from the DB and make it into a readable text string
+    parse_source_args <<- function(value) {
+      if (
+        is.null(value) ||
+          length(value) == 0 ||
+          all(is.na(value)) ||
+          !nzchar(value)
+      ) {
+        return("")
+      }
+      parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
+      if (is.null(parsed)) {
+        return(value)
+      }
+      if (length(parsed) == 0) {
+        return("")
+      }
+      if (is.list(parsed) && !is.data.frame(parsed)) {
+        parsed <- unlist(parsed)
+      }
+      if (is.null(names(parsed))) {
+        return(paste(parsed, collapse = ", "))
+      }
+      entries <- paste(names(parsed), parsed, sep = ": ")
+      paste(entries, collapse = ", ")
+    }
+
+    # Format source function arguments to JSON for input to database
+    format_source_args <<- function(args) {
+      # split into "argument1: value1" etc.
+      args <- strsplit(args, ",\\s*")[[1]]
+
+      # split only on first colon
+      keys <- sub(":.*", "", args)
+      vals <- sub("^[^:]+:\\s*", "", args)
+
+      # build named list
+      args <- stats::setNames(as.list(vals), keys)
+
+      # convert to JSON
+      args <- jsonlite::toJSON(args, auto_unbox = TRUE)
+    }
+
+    # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
+    options(shiny.maxRequestSize = 1024 * 1024^2)
   } # End of if public = FALSE
-
-  # Take the JSON string coming from the DB and make it into a readable text string
-  parse_source_args <<- function(value) {
-    if (
-      is.null(value) ||
-        length(value) == 0 ||
-        all(is.na(value)) ||
-        !nzchar(value)
-    ) {
-      return("")
-    }
-    parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
-    if (is.null(parsed)) {
-      return(value)
-    }
-    if (length(parsed) == 0) {
-      return("")
-    }
-    if (is.list(parsed) && !is.data.frame(parsed)) {
-      parsed <- unlist(parsed)
-    }
-    if (is.null(names(parsed))) {
-      return(paste(parsed, collapse = ", "))
-    }
-    entries <- paste(names(parsed), parsed, sep = ": ")
-    paste(entries, collapse = ", ")
-  }
-
-  # Format source function arguments to JSON for input to database
-  format_source_args <<- function(args) {
-    # split into "argument1: value1" etc.
-    args <- strsplit(args, ",\\s*")[[1]]
-
-    # split only on first colon
-    keys <- sub(":.*", "", args)
-    vals <- sub("^[^:]+:\\s*", "", args)
-
-    # build named list
-    args <- stats::setNames(as.list(vals), keys)
-
-    # convert to JSON
-    args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-  }
 
   application_notifications_ui <<- function(
     ns,
