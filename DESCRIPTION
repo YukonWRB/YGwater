@@ -77,7 +77,7 @@ Suggests:
     officedown,
     pandoc,
     pdftools,
-    plumber,
+    plumber2,
     purrr,
     ragg,
     readr,

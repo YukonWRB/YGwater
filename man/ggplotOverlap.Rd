@@ -19,8 +19,8 @@ ggplotOverlap(
   custom_title = NULL,
   filter = NULL,
   historic_range = NULL,
-  start_year_historical = NULL,
-  end_year_historical = NULL,
+  ref_period_start_datetime = NULL,
+  ref_period_end_datetime = NULL,
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
@@ -68,9 +68,9 @@ ggplotOverlap(
 
 \item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
 
-\item{start_year_historical}{The first year to consider when calculating historic ranges. Default is NULL and will use the first year of data available.}
+\item{ref_period_start_datetime}{The first year to consider when calculating ribbons for a reference period. Default is NULL and will use the first year of data available.}
 
-\item{end_year_historical}{The last year to consider when calculating historic ranges. Default is NULL and will use the last year of data available or the last year specified in \code{years} if \code{historic_range} is set to "last".}
+\item{ref_period_end_datetime}{The last year to consider when calculating ribbons for a reference period. Default is NULL and will use the last year of data available or the last year specified in \code{years} if \code{historic_range} is set to "last".}
 
 \item{returns}{Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".}
 

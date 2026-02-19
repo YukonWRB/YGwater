@@ -1,8 +1,8 @@
 # !IMPORTANT! Some helper functions are located at the bottom of this file.
 
 #' @apiTitle AquaCache API version 1
-#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory. Many endpoints can make use of authentication via HTTP Basic Auth. See the documentation for details. In addition, memoisation is used in multiple endpoints to cache results for improved performance.
-#' @apiVersion 1.0.0
+#' @apiDescription API for programmatic access to the aquacache database.
+#' @apiVersion 1.0.1
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
