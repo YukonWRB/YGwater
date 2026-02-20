@@ -31,8 +31,8 @@ function(req, res) {
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    req$user <- Sys.getenv("APIaquacacheAnonUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
-    req$password <- Sys.getenv("APIaquacacheAnonPass", "aquacache")
+    req$user <- Sys.getenv("APIaquacacheUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
+    req$password <- Sys.getenv("APIaquacachePass", "aquacache")
     return(plumber::forward())
   }
 
@@ -240,27 +240,26 @@ function(req, res, id, start, end = NA, limit = 100000) {
     out <- DBI::dbGetQuery(
       con,
       "SELECT * FROM continuous.measurements_continuous_corrected 
-  WHERE timeseries_id = $1 
-  AND datetime >= $2 
-  AND datetime <= $3 
-  ORDER BY datetime DESC
-  LIMIT $4",
+      WHERE timeseries_id = $1 
+      AND datetime >= $2 
+      AND datetime <= $3 
+      ORDER BY datetime DESC
+      LIMIT $4",
       params = list(as.integer(id), start, end, lim)
     )
   } else {
     # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
-    sql <- sprintf(
-      "SELECT * FROM continuous.measurements_continuous_corrected 
-    WHERE timeseries_id IN (%s) 
-    AND datetime >= $1 
-    AND datetime <= $2 
-    ORDER BY datetime DESC
-    LIMIT $3",
-      paste(id, collapse = ",")
-    )
     out <- DBI::dbGetQuery(
       con,
-      sql,
+      sprintf(
+        "SELECT * FROM continuous.measurements_continuous_corrected 
+          WHERE timeseries_id IN (%s) 
+          AND datetime >= $1 
+          AND datetime <= $2 
+          ORDER BY datetime DESC
+          LIMIT $3",
+        paste(id, collapse = ",")
+      ),
       params = list(start, end, lim)
     )
   }

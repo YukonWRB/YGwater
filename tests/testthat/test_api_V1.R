@@ -6,8 +6,8 @@
 
 test_that("tests for API V1", {
   # Set some environment variables for the API to use. These are normally set when the API is launched using api() but are set here in the local environment.
-  Sys.setenv(APIaquacacheAnonUser = Sys.getenv("aquacacheUser", "runner"))
-  Sys.setenv(APIaquacacheAnonPass = Sys.getenv("aquacachePass", "runner"))
+  Sys.setenv(APIaquacacheUser = Sys.getenv("aquacacheUser", "runner"))
+  Sys.setenv(APIaquacachePass = Sys.getenv("aquacachePass", "runner"))
   Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheName", "testdb"))
   Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheHost", "localhost"))
   Sys.setenv(APIaquacachePort = Sys.getenv("aquacachePort", "5432"))
@@ -47,14 +47,17 @@ test_that("tests for API V1", {
     200
   )
 
-  out <- readr::read_csv(
-    httr::content(
+  # get the content of the response as a data frame with base R if possible
+  out <- read.csv(
+    text = httr::content(
       get_ts,
       type = "text",
       encoding = "UTF-8"
-    ),
-    show_col_types = FALSE
+    )
   )
+
+  out$end_datetime <- as.POSIXct(out$end_datetime, tz = "UTC")
+  out$start_datetime <- as.POSIXct(out$start_datetime, tz = "UTC")
 
   ## Test to confirm the output of the API is correct
   expect_named(
@@ -116,13 +119,12 @@ test_that("tests for API V1", {
     get_locs$status_code,
     200
   )
-  out <- readr::read_csv(
-    httr::content(
+  out <- read.csv(
+    text = httr::content(
       get_locs,
       type = "text",
       encoding = "UTF-8"
-    ),
-    show_col_types = FALSE
+    )
   )
   # ---------- Run tests against response ---------------
   expect_gt(
@@ -184,13 +186,12 @@ test_that("tests for API V1", {
     get_ts_id$status_code,
     200
   )
-  out <- readr::read_csv(
-    httr::content(
+  out <- read.csv(
+    text = httr::content(
       get_ts_id,
       type = "text",
       encoding = "UTF-8"
-    ),
-    show_col_types = FALSE
+    )
   )
   # ---------- Run tests against response ---------------
   expect_gt(

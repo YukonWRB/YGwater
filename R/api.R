@@ -7,9 +7,11 @@
 #' @param host The host address to bind the server to. Default is the local host.
 #' @param port The port number to listen on. Default is 8000.
 #' @param server The server path for the API. Default is '/water-data/api'.
-#' @param dbName The name of the PostgreSQL database. Default is 'aquacache'.
-#' @param dbHost The host address of the PostgreSQL database. Default is 'localhost'.
-#' @param dbPort The port number of the PostgreSQL database. Default is 5432.
+#' @param dbName The name of the PostgreSQL database. Default is taken from the environment variable 'aquacacheName'.
+#' @param dbHost The host address of the PostgreSQL database. Default is taken from the environment variable 'aquacacheHost'.
+#' @param dbPort The port number of the PostgreSQL database. Default is taken from the environment variable 'aquacachePort'.
+#' @param dbUser The username for the PostgreSQL database. Default is taken from the environment variable 'aquacacheUser'.
+#' @param dbPass The password for the PostgreSQL database. Default is taken from the environment variable 'aquacachePass'.
 #' @param run Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.
 #' @return Runs the API server.
 #' @export
@@ -26,6 +28,8 @@ api <- function(
   dbName = Sys.getenv("aquacacheName"),
   dbHost = Sys.getenv("aquacacheHost"),
   dbPort = Sys.getenv("aquacachePort"),
+  dbUser = Sys.getenv("aquacacheUser"),
+  dbPass = Sys.getenv("aquacachePass"),
   run = TRUE
 ) {
   rlang::check_installed("plumber", reason = "required to run a plumber API")
@@ -64,6 +68,8 @@ api <- function(
   Sys.setenv(APIaquacacheName = dbName)
   Sys.setenv(APIaquacacheHost = dbHost)
   Sys.setenv(APIaquacachePort = dbPort)
+  Sys.setenv(APIaquacacheUser = dbUser)
+  Sys.setenv(APIaquacachePass = dbPass)
 
   spec <- pr$getApiSpec()
   spec$components$securitySchemes$BasicAuth <- list(
@@ -77,5 +83,6 @@ api <- function(
   if (!run) {
     return(pr)
   }
+
   pr$run(host = host, port = port)
 }
