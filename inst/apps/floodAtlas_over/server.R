@@ -6,16 +6,6 @@
 #' @noRd
 
 app_server <- function(input, output, session) {
-  # Initial setup #############################################################
-
-  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)  # This does not work with Shiny Server open source
-  session$userData$use_webgl <- FALSE
-
-  output$keep_alive <- renderText({
-    invalidateLater(5000, session)
-    Sys.time()
-  })
-
   # Connection to DB
   session$userData$con <- AquaConnect(
     name = config$dbName,
@@ -26,13 +16,82 @@ app_server <- function(input, output, session) {
     silent = TRUE
   )
 
-  session$onUnhandledError(function() {
+  # Logging to the database tracking table
+
+  get_client_ip <- function(session) {
+    req <- session$request
+
+    # Prefer X-Forwarded-For when behind proxies
+    xff <- req$HTTP_X_FORWARDED_FOR
+    if (!is.null(xff) && nzchar(xff)) {
+      # XFF is a comma-separated chain; the left-most is the original client
+      return(trimws(strsplit(xff, ",")[[1]][1]))
+    }
+
+    # Fallbacks
+    xri <- req$HTTP_X_REAL_IP
+    if (!is.null(xri) && nzchar(xri)) {
+      return(trimws(xri))
+    }
+
+    req$REMOTE_ADDR
+  }
+
+  tryCatch(
+    {
+      id <- DBI::dbGetQuery(
+        session$userData$con,
+        "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
+        params = list(
+          "floodAtlas_overlap",
+          config$dbUser,
+          get_client_ip(session)
+        )
+      )[1, 1]
+    },
+    error = function(e) {
+      id <<- NULL
+      warning("Failed to log app usage to database: ", e$message)
+    }
+  )
+
+  session$onUnhandledError(function(e) {
+    if (!is.null(id)) {
+      DBI::dbExecute(
+        session$userData$con,
+        "UPDATE application.shiny_app_usage SET error_message = $1, session_end = NOW() WHERE id = $2;",
+        params = list(
+          e$message,
+          id
+        )
+      )
+    }
     DBI::dbDisconnect(session$userData$con)
   })
 
   session$onSessionEnded(function() {
+    if (!is.null(id)) {
+      DBI::dbExecute(
+        session$userData$con,
+        "UPDATE application.shiny_app_usage SET session_end = NOW() WHERE id = $1;",
+        params = list(id)
+      )
+    }
     DBI::dbDisconnect(session$userData$con)
   })
+
+  # Initial setup #############################################################
+
+  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE)  # This does not work with Shiny Server open source
+  session$userData$use_webgl <- FALSE
+
+  output$keep_alive <- renderText({
+    invalidateLater(5000, session)
+    Sys.time()
+  })
+
+  # Allow re connection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
+  session$allowReconnect(TRUE)
 
   # Remove irrelevant bookmarks
   setBookmarkExclude(c(
