@@ -4468,6 +4468,15 @@ simplerIndex <- function(id, language) {
             if (length(rv$borehole_data) == 0) {
               clear_borehole_form()
             }
+
+            # Clear the cached borehole/well data so the application shows the new well
+            # For all public users
+            clear_cached(key = "wwr_module_data", env = .GlobalEnv)
+            # For the logged in user
+            clear_cached(
+              key = "wwr_module_data",
+              env = session$userData$app_cache
+            )
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
