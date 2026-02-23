@@ -60,6 +60,7 @@ grades_approvals_qualifiersUI <- function(id) {
                 class = "text-muted small mt-2",
                 textOutput(ns("click_feedback"))
               ),
+              hr(),
               actionButton(ns("last_year"), label = "Most Recent Year"),
               actionButton(ns("entire_ts"), label = "Full Timeseries")
             ),
