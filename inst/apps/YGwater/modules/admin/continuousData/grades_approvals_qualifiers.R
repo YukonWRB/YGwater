@@ -59,7 +59,10 @@ grades_approvals_qualifiersUI <- function(id) {
               div(
                 class = "text-muted small mt-2",
                 textOutput(ns("click_feedback"))
-              )
+              ),
+              hr(),
+              actionButton(ns("last_year"), label = "Most Recent Year"),
+              actionButton(ns("entire_ts"), label = "Full Timeseries")
             ),
             column(
               width = 8,
@@ -363,7 +366,125 @@ grades_approvals_qualifiers <- function(id, language) {
       },
       ignoreNULL = FALSE
     )
+    
+    # observe user clicked 'full time series' button
+    observeEvent(
+      input$entire_ts,
+      {
+        selection <- input$ts_table_rows_selected
+        if (length(selection)) { 
+          # Store time series id
+          tsid <- ts_meta()$timeseries_id[selection]
+          # Pull min/max date range of corrected timeseries
+          range_info <- safe_query(
+            DBI::dbGetQuery(
+              session$userData$AquaCache,
+              "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
+              params = list(tsid)
+            )
+          )
+          
+          # If range info is valid, set end date to maximum date
+          ts_end <- if (nrow(range_info) && !is.na(range_info$max_dt[1])) {
+            as.POSIXct(range_info$max_dt[1], tz = "UTC")
+          } else {
+            Sys.time()
+          }
+          # If range info is valid, set start date to minimum date
+          ts_start <- if (nrow(range_info) && !is.na(range_info$min_dt[1])) {
+            as.POSIXct(range_info$min_dt[1], tz = "UTC")
+          } else {
+            Sys.time() - 60 * 24 * 3600
+          }
 
+          # If either start or end are not finite, set range to first week
+          # TODO: Review this error condition, I'm not sure if this will ever fire -Eliot
+          if (
+            !is.finite(as.numeric(ts_start)) ||
+            !is.finite(as.numeric(ts_end))
+          ) {
+            ts_start <- Sys.time() - 7 * 24 * 3600
+            ts_end <- Sys.time()
+          }
+          # If start is greater than end, set start to final hour of ts
+          if (ts_start >= ts_end) {
+            ts_start <- ts_end - 1 * 3600
+          }
+          updateTextInput(
+            session,
+            "start_dt",
+            value = format_datetime(ts_start)
+          )
+          updateTextInput(
+            session,
+            "end_dt",
+            value = format_datetime(ts_end)
+          )
+        }
+      })
+
+    # observe user clicked 'most recent year of time series' button
+    observeEvent(
+      input$last_year,
+      {
+        selection <- input$ts_table_rows_selected
+        if (length(selection)) { 
+          # Store time series id
+          tsid <- ts_meta()$timeseries_id[selection]
+          # Pull min/max date range of corrected timeseries
+          range_info <- safe_query(
+            DBI::dbGetQuery(
+              session$userData$AquaCache,
+              "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
+              params = list(tsid)
+            )
+          )
+          
+          # If range info is valid, set end date to maximum date
+          ts_end <- if (nrow(range_info) && !is.na(range_info$max_dt[1])) {
+            as.POSIXct(range_info$max_dt[1], tz = "UTC")
+          } else {
+            Sys.time()
+          }
+          # Set start date to 1 year prior to last entry
+          year_start <- ts_end - 365 * 24 * 3600
+          
+          # Calculate start of time series (min_dt), if it's >= year_start, show a message
+          if (nrow(range_info) && !is.na(range_info$min_dt[1])) {
+            min_dt <- as.POSIXct(range_info$min_dt[1], tz = "UTC")
+            if (!is.na(min_dt) && year_start < min_dt) {
+              year_start <- min_dt
+              showNotification(sprintf("Earliest entry in time series displayed (%s)", min_dt))
+            }
+          }
+          
+          # If either start or end are not finite, set range to first week
+          # TODO: Review this error condition, I'm not sure if this will ever fire -Eliot
+          if (
+            !is.finite(as.numeric(year_start)) ||
+            !is.finite(as.numeric(ts_end))
+          ) {
+            year_start <- Sys.time() - 7 * 24 * 3600
+            ts_end <- Sys.time()
+          }
+          
+          # If start is greater than end, set start to final hour of ts
+          if (year_start >= ts_end) {
+            year_start <- ts_end - 1 * 3600
+          }
+          updateTextInput(
+            session,
+            "start_dt",
+            value = format_datetime(year_start)
+          )
+          updateTextInput(
+            session,
+            "end_dt",
+            value = format_datetime(ts_end)
+          )
+        }
+      })
+    
     range_error <- reactive({
       if (is.null(selected_ts())) {
         return(NULL)
@@ -1016,10 +1137,11 @@ grades_approvals_qualifiers <- function(id, language) {
       if (length(shapes)) {
         p <- plotly::layout(p, shapes = shapes)
       }
+
       p <- plotly::layout(
         p,
         title = NULL,
-        xaxis = list(title = "Datetime"),
+        xaxis = list(title = "Datetime", range = c(parse_datetime(input$start_dt), parse_datetime(input$end_dt))),
         yaxis = list(title = "Value"),
         dragmode = "select",
         legend = list(orientation = "h", yanchor = "bottom", y = 1.02)
