@@ -53,10 +53,14 @@ addContDataUI <- function(id) {
           DT::DTOutput(ns("ts_table"))
         )
       ),
+
       accordion(
         id = ns("accordion2"),
-        open = FALSE,
-        div(
+        open = "data_entry_panel",
+        accordion_panel(
+          id = ns("data_entry_panel"),
+          title = "Add data",
+          icon = icon("table"),
           radioButtons(
             ns("entry_mode"),
             "Input method",
@@ -85,74 +89,13 @@ addContDataUI <- function(id) {
             "Hint: double click a cell to edit its contents."
           ),
           tags$br(),
-        ),
-        # Add delete/grade/approval/qualifier functionality within accordions
-        accordion_panel(
-          id = ns("delete_panel"),
-          title = "Delete data",
-          icon = icon("trash"),
-          div(
-            actionButton(ns("delete_rows"), "Delete selected rows"),
-            tags$br(),
-            textInput(
-              ns("delete_cutoff_datetime"),
-              "Delete data before/after datetime (YYYY-MM-DD HH:MM:SS)",
-              placeholder = "2024-01-01 00:00:00"
-            ),
-            div(
-              actionButton(
-                ns("delete_before_datetime"),
-                "Delete rows before datetime"
-              ) |>
-                tooltip(
-                  "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
-                ),
-              actionButton(
-                ns("delete_after_datetime"),
-                "Delete rows after datetime"
-              ) |>
-                tooltip(
-                  "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
-                )
-            )
-          )
-        ), # end delete accordion panel
-        # Add grade/approval/qualifier functionality within an accordion
-        accordion_panel(
-          id = ns("grade_panel"),
-          title = "Add grades",
-          icon = icon("check"),
-          div(
-            actionButton(
-              ns("add_grade"),
-              "Add grade column with default value"
-            )
-          )
-        ), # end grade accordion panel
-        accordion_panel(
-          id = ns("qualifier_panel"),
-          title = "Add qualifiers",
-          icon = icon("flag"),
-          div(
-            actionButton(
-              ns("add_qc"),
-              "Add QC column with default value"
-            )
-          )
-        ), # End qualifiers accordion panel
-        accordion_panel(
-          id = ns("approval_panel"),
-          title = "Add approval status",
-          icon = icon("thumbs-up"),
-          div(
-            actionButton(
-              ns("add_approval"),
-              "Add approval column with default value"
-            )
-          )
-        ),
-        div(
-          tags$br(),
+          selectizeInput(
+            ns("UTC_offset"),
+            "UTC offset of data",
+            choices = seq(-12, 12, by = 1),
+            selected = 0,
+            multiple = FALSE
+          ),
           splitLayout(
             cellWidths = c("50%", "50%"),
             selectizeInput(
@@ -170,13 +113,6 @@ addContDataUI <- function(id) {
               options = list(maxItems = 1, placeholder = "Select contributor")
             )
           ),
-          selectizeInput(
-            ns("UTC_offset"),
-            "UTC offset of data",
-            choices = seq(-12, 12, by = 1),
-            selected = 0,
-            multiple = FALSE
-          ),
           radioButtons(
             ns("no_update"),
             "Prevent updates to these data by automatic processes?",
@@ -186,25 +122,103 @@ addContDataUI <- function(id) {
           ),
           tags$div(
             "Note: data visibility is controlled by the timeseries visibility parameters."
+          )
+        ),
+        # accordion to hold a plotly plot of the uploaded/added data for quick visual checks before upload
+        accordion_panel(
+          id = ns("preview_panel"),
+          title = "Preview data",
+          icon = icon("chart-line"),
+          plotly::plotlyOutput(ns("data_preview"))
+        ),
+
+        # Add delete/grade/approval/qualifier functionality within accordions
+        # Delete regions panel
+        accordion_panel(
+          id = ns("delete_panel"),
+          title = "Delete data",
+          icon = icon("trash"),
+          actionButton(ns("delete_rows"), "Delete selected rows"),
+          tags$br(),
+          textInput(
+            ns("delete_cutoff_datetime"),
+            "Delete data before/after datetime (YYYY-MM-DD HH:MM:SS)",
+            placeholder = "2024-01-01 00:00:00"
           ),
           div(
             actionButton(
-              ns("upload"),
-              "Upload to AquaCache (no overwrite)",
-              style = "font-size: 14px;"
-            ),
+              ns("delete_before_datetime"),
+              "Delete rows before datetime"
+            ) |>
+              tooltip(
+                "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
+              ),
             actionButton(
-              ns("upload_overwrite_all"),
-              "Upload to AquaCache (replace all points in new data range)",
-              style = "font-size: 14px;"
-            ),
+              ns("delete_after_datetime"),
+              "Delete rows after datetime"
+            ) |>
+              tooltip(
+                "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
+              )
+          )
+        ), # end delete accordion panel
+
+        # Add grades panel
+        accordion_panel(
+          id = ns("grade_panel"),
+          title = "Add grades",
+          icon = icon("check"),
+          div(
             actionButton(
-              ns("upload_overwrite_some"),
-              "Upload to AquaCache (overwrite conflicting points only)",
-              style = "font-size: 14px;"
+              ns("add_grade"),
+              "Add grade column with default value"
             )
           )
-        )
+        ), # end grade accordion panel
+
+        # Add qualifiers panel
+        accordion_panel(
+          id = ns("qualifier_panel"),
+          title = "Add qualifiers",
+          icon = icon("flag"),
+          div(
+            actionButton(
+              ns("add_qc"),
+              "Add QC column with default value"
+            )
+          )
+        ), # End qualifiers accordion panel
+
+        # Add approvals panel
+        accordion_panel(
+          id = ns("approval_panel"),
+          title = "Add approval status",
+          icon = icon("thumbs-up"),
+          div(
+            actionButton(
+              ns("add_approval"),
+              "Add approval column with default value"
+            )
+          )
+        ) # End approval panel
+      ), # end accordion for data manipulation options
+
+      br(),
+
+      actionButton(
+        ns("upload"),
+        "Upload to AquaCache (no overwrite)",
+        style = "font-size: 14px;"
+      ),
+      actionButton(
+        ns("upload_overwrite_all"),
+        "Upload to AquaCache (replace all points in new data range)",
+        style = "font-size: 14px;"
+      ),
+      actionButton(
+        ns("upload_overwrite_some"),
+        "Upload to AquaCache (overwrite conflicting points only)",
+        style = "font-size: 14px;"
       )
     )
   )
@@ -252,7 +266,7 @@ addContData <- function(id, language) {
     ts_meta <- reactiveVal({
       dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en"
+        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
       )
     })
 
@@ -260,7 +274,7 @@ addContData <- function(id, language) {
     observeEvent(input$reload_module, {
       ts_meta(dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en"
+        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
       ))
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
