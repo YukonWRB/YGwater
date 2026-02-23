@@ -1494,6 +1494,44 @@ simplerIndex <- function(id, language) {
       list(files = character(), metadata = metadata)
     }
 
+    convert_utm_to_ll <- function(easting, northing, zone) {
+      easting <- null_if_empty(easting)
+      northing <- null_if_empty(northing)
+      zone <- null_if_empty(zone)
+      if (is.null(easting) || is.null(northing) || is.null(zone)) {
+        return(list(latitude = NULL, longitude = NULL))
+      }
+      easting_num <- suppressWarnings(as.numeric(easting[1]))
+      northing_num <- suppressWarnings(as.numeric(northing[1]))
+      zone_val <- toupper(trimws(as.character(zone[1])))
+      if (
+        length(easting_num) == 0 ||
+          is.na(easting_num) ||
+          length(northing_num) == 0 ||
+          is.na(northing_num) ||
+          !grepl("^[0-9]{1,2}[C-HJ-NP-X]$", zone_val)
+      ) {
+        return(list(latitude = NULL, longitude = NULL))
+      }
+
+      # Only return the number part of the UTM zone (strip N/S)
+      zone_val <- sub("([0-9]{1,2})([C-HJ-NP-X])", "\\1", zone_val)
+      v <- data.frame(lon = easting_num, lat = northing_num) |>
+        terra::vect(
+          crs = paste0(
+            "+proj=utm +zone=",
+            zone_val,
+            " +datum=WGS84 +units=m +no_defs"
+          )
+        ) |>
+        terra::project("epsg:4326")
+      lonlat <- terra::geom(v)[, c("x", "y")]
+      return(list(
+        latitude = lonlat[names(lonlat) == "y"],
+        longitude = lonlat[names(lonlat) == "x"]
+      ))
+    }
+
     sanitize_metadata_for_insert <- function(metadata) {
       if (is.null(metadata) || !is.list(metadata)) {
         metadata <- empty_well_entry()$metadata
@@ -1616,44 +1654,6 @@ simplerIndex <- function(id, language) {
           return(NULL)
         }
         unit_val
-      }
-
-      convert_utm_to_ll <- function(easting, northing, zone) {
-        easting <- null_if_empty(easting)
-        northing <- null_if_empty(northing)
-        zone <- null_if_empty(zone)
-        if (is.null(easting) || is.null(northing) || is.null(zone)) {
-          return(list(latitude = NULL, longitude = NULL))
-        }
-        easting_num <- suppressWarnings(as.numeric(easting[1]))
-        northing_num <- suppressWarnings(as.numeric(northing[1]))
-        zone_val <- toupper(trimws(as.character(zone[1])))
-        if (
-          length(easting_num) == 0 ||
-            is.na(easting_num) ||
-            length(northing_num) == 0 ||
-            is.na(northing_num) ||
-            !grepl("^[0-9]{1,2}[C-HJ-NP-X]$", zone_val)
-        ) {
-          return(list(latitude = NULL, longitude = NULL))
-        }
-
-        # Only return the number part of the UTM zone (strip N/S)
-        zone_val <- sub("([0-9]{1,2})([C-HJ-NP-X])", "\\1", zone_val)
-        v <- data.frame(lon = easting_num, lat = northing_num) |>
-          terra::vect(
-            crs = paste0(
-              "+proj=utm +zone=",
-              zone_val,
-              " +datum=WGS84 +units=m +no_defs"
-            )
-          ) |>
-          terra::project("epsg:4326")
-        lonlat <- terra::geom(v)[, c("x", "y")]
-        return(list(
-          latitude = lonlat[names(lonlat) == "y"],
-          longitude = lonlat[names(lonlat) == "x"]
-        ))
       }
 
       convert_length_to_m <- function(value, unit) {
@@ -2090,7 +2090,7 @@ simplerIndex <- function(id, language) {
         session$userData$AquaCache,
         glue::glue_sql(
           "SELECT location_id,
-                  location,
+                  location_code AS location,
                   name,
                   latitude,
                   longitude,
