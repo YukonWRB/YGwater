@@ -129,6 +129,24 @@ addContDataUI <- function(id) {
           id = ns("preview_panel"),
           title = "Preview data",
           icon = icon("chart-line"),
+          checkboxInput(
+            ns("preview_historic_range"),
+            "Show historic range",
+            value = TRUE
+          ),
+          textInput(
+            ns("preview_start_datetime"),
+            "Preview start datetime (UTC; YYYY-MM-DD HH:MM:SS)",
+            placeholder = "Optional. Default uses earliest new data datetime"
+          ),
+          numericInput(
+            ns("preview_adjacent_n"),
+            "Number of adjacent points before/after new-data range",
+            value = 25,
+            min = 0,
+            max = 500,
+            step = 1
+          ),
           plotly::plotlyOutput(ns("data_preview"))
         ),
 
@@ -665,18 +683,46 @@ addContData <- function(id, language) {
           'Uploaded file must have at least two columns (one containing date time, and one containing measurement value)'
         )
       )
+
+      uploaded_names <- names(upload_raw())
+
+      pick_col <- function(candidates, default = "") {
+        out <- uploaded_names[tolower(uploaded_names) %in% tolower(candidates)]
+        if (length(out) > 0) out[[1]] else default
+      }
+
+      choices_optional <- c("" = "", uploaded_names)
+
       tagList(
         selectizeInput(
           ns('upload_datetime_col'),
           'Select the column for datetime:',
-          choices = names(upload_raw()),
-          selected = names(upload_raw())[1]
+          choices = uploaded_names,
+          selected = pick_col(c('datetime', 'date_time', 'date', 'time'), uploaded_names[[1]])
         ),
         selectizeInput(
           ns('upload_value_col'),
           'Select the column for value:',
-          choices = names(upload_raw()),
-          selected = names(upload_raw())[2]
+          choices = uploaded_names,
+          selected = pick_col(c('value', 'values', 'measurement', 'measured_value'), uploaded_names[[2]])
+        ),
+        selectizeInput(
+          ns('upload_grade_col'),
+          'Optional: select the column for grades:',
+          choices = choices_optional,
+          selected = pick_col(c('grade', 'grades'))
+        ),
+        selectizeInput(
+          ns('upload_approval_col'),
+          'Optional: select the column for approvals:',
+          choices = choices_optional,
+          selected = pick_col(c('approval', 'approvals'))
+        ),
+        selectizeInput(
+          ns('upload_qualifier_col'),
+          'Optional: select the column for qualifiers:',
+          choices = choices_optional,
+          selected = pick_col(c('qualifier', 'qualifiers'))
         )
       )
     })
@@ -720,7 +766,7 @@ addContData <- function(id, language) {
     # Store modal to be shown upon user uploading .csv or .xlsx
     map_col_modal <- modalDialog(
       title = 'Identify columns',
-      'Please identify which columns represent date-time and value:',
+      'Please identify which columns represent date-time and value (and optionally grade/approval/qualifier):',
       hr(),
       numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
         tooltip("The row number which contains your data's column names"),
@@ -749,7 +795,27 @@ addContData <- function(id, language) {
           datetime = upload_raw()[[input$upload_datetime_col]],
           value = upload_raw()[[input$upload_value_col]]
         )
+
+        if (isTruthy(input$upload_grade_col) && input$upload_grade_col %in% names(upload_raw())) {
+          df_mapped$grades <- upload_raw()[[input$upload_grade_col]]
+        }
+        if (isTruthy(input$upload_approval_col) && input$upload_approval_col %in% names(upload_raw())) {
+          df_mapped$approvals <- upload_raw()[[input$upload_approval_col]]
+        }
+        if (isTruthy(input$upload_qualifier_col) && input$upload_qualifier_col %in% names(upload_raw())) {
+          df_mapped$qualifiers <- upload_raw()[[input$upload_qualifier_col]]
+        }
+
         data$df <- prepare_table_data(df_mapped)
+        if ("grades" %in% names(df_mapped)) {
+          data$df$grades <- df_mapped$grades
+        }
+        if ("approvals" %in% names(df_mapped)) {
+          data$df$approvals <- df_mapped$approvals
+        }
+        if ("qualifiers" %in% names(df_mapped)) {
+          data$df$qualifiers <- df_mapped$qualifiers
+        }
       },
       ignoreInit = TRUE
     )
@@ -913,6 +979,199 @@ addContData <- function(id, language) {
       )
     })
 
+
+    add_column_default <- function(col_name, default_value = NA) {
+      if (!(col_name %in% names(data$df))) {
+        data$df[[col_name]] <- rep(default_value, nrow(data$df))
+      } else {
+        na_idx <- is.na(data$df[[col_name]])
+        if (any(na_idx)) {
+          data$df[[col_name]][na_idx] <- default_value
+        }
+      }
+    }
+
+    observeEvent(input$add_grade, {
+      add_column_default("grades", default_value = "A")
+    })
+
+    observeEvent(input$add_qc, {
+      add_column_default("qualifiers", default_value = "")
+    })
+
+    observeEvent(input$add_approval, {
+      add_column_default("approvals", default_value = TRUE)
+    })
+
+    preview_data <- reactive({
+      req(timeseries())
+      req(nrow(data$df) > 0)
+
+      parsed_dt <- parse_datetime(data$df$datetime)
+      parsed_val <- suppressWarnings(as.numeric(data$df$value))
+      valid_idx <- !(is.na(parsed_dt) | is.na(parsed_val))
+      req(any(valid_idx))
+
+      df_new <- data$df[valid_idx, , drop = FALSE]
+      df_new$datetime <- parsed_dt[valid_idx] - (as.numeric(input$UTC_offset) * 3600)
+      df_new$value <- parsed_val[valid_idx]
+      df_new$source <- "New upload"
+
+      if ("grades" %in% names(df_new)) {
+        df_new$grades <- as.character(df_new$grades)
+      }
+      if ("approvals" %in% names(df_new)) {
+        df_new$approvals <- as.character(df_new$approvals)
+      }
+      if ("qualifiers" %in% names(df_new)) {
+        df_new$qualifiers <- as.character(df_new$qualifiers)
+      }
+
+      range_start <- min(df_new$datetime, na.rm = TRUE)
+      range_end <- max(df_new$datetime, na.rm = TRUE)
+
+      custom_start <- parse_datetime(input$preview_start_datetime)
+      if (!is.na(custom_start)) {
+        custom_start <- custom_start - (as.numeric(input$UTC_offset) * 3600)
+        range_start <- min(range_start, custom_start)
+      }
+
+      adjacent_n <- ifelse(
+        is.null(input$preview_adjacent_n) || is.na(input$preview_adjacent_n),
+        25,
+        as.integer(input$preview_adjacent_n)
+      )
+      adjacent_n <- max(0, adjacent_n)
+
+      before_q <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime < $2 ORDER BY datetime DESC LIMIT $3",
+        params = list(timeseries(), range_start, adjacent_n)
+      )
+      after_q <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime > $2 ORDER BY datetime ASC LIMIT $3",
+        params = list(timeseries(), range_end, adjacent_n)
+      )
+
+      if (nrow(before_q) > 0) {
+        before_q <- before_q[order(before_q$datetime), , drop = FALSE]
+      }
+      if (nrow(after_q) > 0) {
+        after_q <- after_q[order(after_q$datetime), , drop = FALSE]
+      }
+
+      adjacent_df <- rbind(before_q, after_q)
+      if (nrow(adjacent_df) > 0) {
+        adjacent_df$source <- "Existing adjacent"
+      }
+
+      hist_out <- NULL
+      if (isTRUE(input$preview_historic_range)) {
+        hist_out <- tryCatch(
+          {
+            AquaCache::plotTimeseries(
+              timeseries_id = timeseries(),
+              start_date = range_start,
+              end_date = range_end,
+              historic_range = TRUE,
+              slider = FALSE,
+              webgl = FALSE,
+              data = TRUE,
+              tzone = "UTC",
+              con = session$userData$AquaCache
+            )
+          },
+          error = function(e) {
+            NULL
+          }
+        )
+      }
+
+      list(
+        new_data = df_new,
+        adjacent = adjacent_df,
+        historic = hist_out
+      )
+    })
+
+    output$data_preview <- plotly::renderPlotly({
+      req(timeseries())
+      pv <- preview_data()
+
+      p <- plotly::plot_ly()
+
+      if (!is.null(pv$historic) && !is.null(pv$historic$data$range_data)) {
+        range_df <- pv$historic$data$range_data
+        if (nrow(range_df) > 0) {
+          p <- p |>
+            plotly::add_ribbons(
+              data = range_df,
+              x = ~datetime,
+              ymin = ~min,
+              ymax = ~max,
+              name = "Historic range",
+              fillcolor = "rgba(2, 136, 209, 0.20)",
+              line = list(color = "rgba(2,136,209,0)"),
+              hovertemplate = paste0(
+                "Time: %{x}<br>",
+                "Historic min: %{y:.3f}<br>",
+                "Historic max: %{y:.3f}<extra></extra>"
+              )
+            )
+        }
+      }
+
+      if (nrow(pv$adjacent) > 0) {
+        p <- p |>
+          plotly::add_lines(
+            data = pv$adjacent,
+            x = ~datetime,
+            y = ~value,
+            name = "Existing adjacent",
+            line = list(color = "#6c757d", dash = "dot"),
+            hovertemplate = "Time: %{x}<br>Value: %{y}<extra></extra>"
+          )
+      }
+
+      hover_cols <- c("datetime", "value")
+      if ("grades" %in% names(pv$new_data)) hover_cols <- c(hover_cols, "grades")
+      if ("approvals" %in% names(pv$new_data)) hover_cols <- c(hover_cols, "approvals")
+      if ("qualifiers" %in% names(pv$new_data)) hover_cols <- c(hover_cols, "qualifiers")
+
+      p <- p |>
+        plotly::add_markers(
+          data = pv$new_data,
+          x = ~datetime,
+          y = ~value,
+          name = "New upload",
+          marker = list(color = "#d55e00", size = 8),
+          customdata = as.matrix(pv$new_data[, hover_cols, drop = FALSE]),
+          hovertemplate = paste0(
+            "Time: %{customdata[1]}<br>",
+            "Value: %{customdata[2]}",
+            if ("grades" %in% names(pv$new_data)) "<br>Grade: %{customdata[3]}" else "",
+            if ("approvals" %in% names(pv$new_data)) {
+              if ("grades" %in% names(pv$new_data)) "<br>Approval: %{customdata[4]}" else "<br>Approval: %{customdata[3]}"
+            } else "",
+            if ("qualifiers" %in% names(pv$new_data)) {
+              idx <- 3
+              if ("grades" %in% names(pv$new_data)) idx += 1
+              if ("approvals" %in% names(pv$new_data)) idx += 1
+              paste0("<br>Qualifier: %{customdata[", idx, "]}")
+            } else "",
+            "<extra></extra>"
+          )
+        ) |>
+        plotly::layout(
+          xaxis = list(title = "Datetime (UTC)"),
+          yaxis = list(title = "Value"),
+          legend = list(orientation = "h", y = -0.2)
+        )
+
+      p
+    })
+
     # function to check data validity before upload
     check_fx <- function() {
       if (is.null(timeseries())) {
@@ -1001,6 +1260,15 @@ addContData <- function(id, language) {
             TRUE,
             FALSE
           )
+          if ("grades" %in% names(upload_data)) {
+            upload_data$grade <- upload_data$grades
+          }
+          if ("approvals" %in% names(upload_data)) {
+            upload_data$approval <- upload_data$approvals
+          }
+          if ("qualifiers" %in% names(upload_data)) {
+            upload_data$qualifier <- upload_data$qualifiers
+          }
           AquaCache::addNewContinuous(
             tsid = timeseries(),
             df = upload_data,
@@ -1066,6 +1334,15 @@ addContData <- function(id, language) {
             TRUE,
             FALSE
           )
+          if ("grades" %in% names(upload_data)) {
+            upload_data$grade <- upload_data$grades
+          }
+          if ("approvals" %in% names(upload_data)) {
+            upload_data$approval <- upload_data$approvals
+          }
+          if ("qualifiers" %in% names(upload_data)) {
+            upload_data$qualifier <- upload_data$qualifiers
+          }
           AquaCache::addNewContinuous(
             tsid = timeseries(),
             df = upload_data,
@@ -1132,6 +1409,15 @@ addContData <- function(id, language) {
             TRUE,
             FALSE
           )
+          if ("grades" %in% names(upload_data)) {
+            upload_data$grade <- upload_data$grades
+          }
+          if ("approvals" %in% names(upload_data)) {
+            upload_data$approval <- upload_data$approvals
+          }
+          if ("qualifiers" %in% names(upload_data)) {
+            upload_data$qualifier <- upload_data$qualifiers
+          }
           AquaCache::addNewContinuous(
             tsid = timeseries(),
             df = upload_data,
