@@ -303,7 +303,8 @@ addLocation <- function(id, inputs, language) {
               width = "100%"
             )
           ),
-          uiOutput(ns("selected_well_note"))
+          uiOutput(ns("selected_well_note")),
+          br()
         ),
 
         selectizeInput(
@@ -2340,7 +2341,7 @@ addLocation <- function(id, inputs, language) {
           if (isTruthy(input$associate_well) && isTruthy(selected_well_id())) {
             new_loc_id <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              "SELECT location_id FROM public.locations WHERE location = $1",
+              "SELECT location_id FROM public.locations WHERE location_code = $1",
               params = list(input$loc_code)
             )$location_id
             if (length(new_loc_id)) {

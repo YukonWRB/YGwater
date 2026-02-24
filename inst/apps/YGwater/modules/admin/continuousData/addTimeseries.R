@@ -125,6 +125,20 @@ addTimeseries <- function(id, language) {
     moduleData$source_fx <- choices[grepl("^download", choices)]
 
     output$ui <- renderUI({
+
+      orgs <- isolate(moduleData$organizations)
+
+      req(
+        moduleData$locations,
+        moduleData$parameters,
+        moduleData$media,
+        moduleData$aggregation_types,
+        moduleData$organizations,
+        moduleData$users,
+        moduleData$timeseries,
+        orgs
+        moduleData$agreements
+      )
       tagList(
         actionButton(
           ns("reload_module"),
@@ -218,7 +232,7 @@ addTimeseries <- function(id, language) {
         ),
 
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
+          cellWidths = c("50%", "50%"),
           selectizeInput(
             ns("parameter"),
             "Parameter",
@@ -243,7 +257,7 @@ addTimeseries <- function(id, language) {
           )
         ),
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
+          cellWidths = c("50%", "50%"),
           selectizeInput(
             ns("aggregation_type"),
             "Aggregation type",
@@ -286,8 +300,8 @@ addTimeseries <- function(id, language) {
             ns("default_owner"),
             "Default owner (type your own if not in list)",
             choices = stats::setNames(
-              moduleData$organizations$organization_id,
-              moduleData$organizations$name
+              orgs$organization_id,
+              orgs$name
             ),
             multiple = TRUE,
             options = list(
@@ -324,7 +338,7 @@ addTimeseries <- function(id, language) {
         ),
         selectizeInput(
           ns("share_with"),
-          "Share with groups (1 or more, type your own if not in list)",
+          "Share with groups (1 or more, or 'public_reader' to share with everyone)",
           choices = moduleData$users$role_name,
           selected = "public_reader",
           multiple = TRUE,
@@ -401,7 +415,7 @@ addTimeseries <- function(id, language) {
           )
         )
       )
-    })
+    }) # End of output$ui
 
     # Render the timeseries table for modification
     output$ts_table <- DT::renderDT({
