@@ -29,10 +29,10 @@ app_ui <- function(request) {
     ),
 
     tags$head(
-      includeHTML(system.file(
-        "apps/YGwater/www/html/matomo.html",
-        package = "YGwater"
-      )), # Include Matomo analytics tracking code
+      # do not change to !analytics because analytics can be a character string with the file path
+      if (analytics != FALSE) {
+        includeHTML(config$analytics) # Include analytics html code
+      },
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
       tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
       tags$script(src = "js/idle_timer.js"), # JS to report user activity for inactivity logout

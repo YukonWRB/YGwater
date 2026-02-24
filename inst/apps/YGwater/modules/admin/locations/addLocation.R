@@ -151,14 +151,17 @@ addLocation <- function(id, inputs, language) {
     getModuleData() # Initial data load
 
     output$ui <- renderUI({
+      networks <- isolate(moduleData$networks)
+      projects <- isolate(moduleData$projects)
+
       req(
         moduleData$exist_locs,
         moduleData$loc_types,
         moduleData$organizations,
         moduleData$agreements,
         moduleData$datums,
-        moduleData$networks,
-        moduleData$projects,
+        networks,
+        projects,
         moduleData$users
       )
       tagList(
@@ -378,8 +381,8 @@ addLocation <- function(id, inputs, language) {
             ns("network"),
             "Network(s) (type your own if not in list)",
             choices = stats::setNames(
-              moduleData$networks$network_id,
-              moduleData$networks$name
+              networks$network_id,
+              networks$name
             ),
             multiple = TRUE,
             options = list(
@@ -392,8 +395,8 @@ addLocation <- function(id, inputs, language) {
             ns("project"),
             "Project(s) (type your own if not in list)",
             choices = stats::setNames(
-              moduleData$projects$project_id,
-              moduleData$projects$name
+              projects$project_id,
+              projects$name
             ),
             multiple = TRUE,
             options = list(
@@ -1228,9 +1231,9 @@ addLocation <- function(id, inputs, language) {
     output$selected_well_note <- renderUI({
       label <- selected_well_label()
       if (is.null(label)) {
-        return(div("Selected well: none"))
+        return(div(strong("Selected well: none")))
       }
-      div(paste("Selected well:", label))
+      div(strong(paste("Selected well:", label)))
     })
 
     observeEvent(

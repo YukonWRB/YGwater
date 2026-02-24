@@ -10,6 +10,7 @@ YGwater_globals <- function(
   accessPath1,
   accessPath2,
   logout_timer_min,
+  analytics,
   public
 ) {
   library(shiny)
@@ -675,8 +676,11 @@ YGwater_globals <- function(
     network_check = network_check,
     mdb_files = mdb_files,
     logout_timer_min = logout_timer_min,
+    analytics = analytics,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels
   )
+
+  return(config)
 }
