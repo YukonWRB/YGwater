@@ -39,7 +39,7 @@ app_server <- function(input, output, session) {
       return(trimws(xri))
     }
 
-    req$HTTP_ORIGIN
+    req$REMOTE_ADDR
   }
 
   tryCatch(
