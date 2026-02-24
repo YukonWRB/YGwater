@@ -3131,6 +3131,8 @@ load_bulletin_timeseries <- function(
                 c("location_id", basin_names),
                 drop = FALSE
             ]
+            # Drop those where location_id is NA
+            weight_matrix <- weight_matrix[!is.na(weight_matrix$location_id), ]
 
             swe_samples <- as.numeric(discrete_data$timeseries$data[
                 i,
