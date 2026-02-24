@@ -121,15 +121,14 @@ YGwater <- function(
         "The analytics file specified in the 'analytics' argument cannot be found."
       )
       analytics <- FALSE
-      return()
-    }
-    # Ensure that it's an HTML file
-    if (tools::file_ext(analytics) != "html") {
-      warning(
-        "The analytics file specified in the 'analytics' argument is not an HTML file. Analytics will be disabled."
-      )
-      analytics <- FALSE
-      return()
+    } else {
+      # Ensure that it's an HTML file
+      if (tools::file_ext(analytics) != "html") {
+        warning(
+          "The analytics file specified in the 'analytics' argument is not an HTML file. Analytics will be disabled."
+        )
+        analytics <- FALSE
+      }
     }
   }
 
