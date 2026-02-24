@@ -906,7 +906,7 @@ addContData <- function(id, language) {
 
           db_df <- db_types[[class_name]]
           db_choices <- stats::setNames(
-            as.character(db_df$id),
+            as.character(db_df$code),
             paste0(db_df$code, ": ", db_df$description)
           )
 
@@ -1011,19 +1011,19 @@ addContData <- function(id, language) {
               next
             }
 
-            mapped_ids <- vapply(
+            mapped_values <- vapply(
               seq_along(class_vals),
               function(i) {
-                as.integer(input[[paste0("map_", class_name, "_", i)]])
+                as.character(input[[paste0("map_", class_name, "_", i)]])
               },
-              integer(1)
+              character(1)
             )
-            names(mapped_ids) <- class_vals
+            names(mapped_values) <- class_vals
 
             current_vals <- trimws(as.character(out[[class_name]]))
             non_missing <- !is.na(current_vals) & nzchar(current_vals)
             out[[class_name]][non_missing] <- unname(
-              mapped_ids[current_vals[non_missing]]
+              mapped_values[current_vals[non_missing]]
             )
           }
           out
