@@ -662,15 +662,15 @@ addContData <- function(id, language) {
       list(
         grade = DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT grade_type_id AS id, grade_type_code AS code FROM public.grade_types ORDER BY grade_type_id"
+          "SELECT grade_type_id AS id, grade_type_code AS code, grade_type_description AS description FROM public.grade_types ORDER BY grade_type_id"
         ),
         approval = DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT approval_type_id AS id, approval_type_code AS code FROM public.approval_types ORDER BY approval_type_id"
+          "SELECT approval_type_id AS id, approval_type_code AS code, approval_type_description AS description FROM public.approval_types ORDER BY approval_type_id"
         ),
         qualifier = DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT qualifier_type_id AS id, qualifier_type_code AS code FROM public.qualifier_types ORDER BY qualifier_type_id"
+          "SELECT qualifier_type_id AS id, qualifier_type_code AS code, qualifier_type_description AS description FROM public.qualifier_types ORDER BY qualifier_type_id"
         )
       )
     })
@@ -678,7 +678,11 @@ addContData <- function(id, language) {
     map_modal_state <- reactiveValues(
       step = "columns",
       pending_df = NULL,
-      class_values = list(grade = character(), approval = character(), qualifier = character())
+      class_values = list(
+        grade = character(),
+        approval = character(),
+        qualifier = character()
+      )
     )
 
     build_df_from_column_mapping <- function() {
@@ -903,7 +907,7 @@ addContData <- function(id, language) {
           db_df <- db_types[[class_name]]
           db_choices <- stats::setNames(
             as.character(db_df$id),
-            paste0(db_df$code, " (", db_df$id, ")")
+            paste0(db_df$code, ": ", db_df$description)
           )
 
           mapping_ui[[length(mapping_ui) + 1]] <- tags$h5(
@@ -919,7 +923,11 @@ addContData <- function(id, language) {
               ns(paste0("map_", class_name, "_", i)),
               paste0("Uploaded '", class_vals[[i]], "' maps to:"),
               choices = db_choices,
-              selected = ""
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = "Select class to map to"
+              )
             )
           }
         }
