@@ -658,19 +658,122 @@ addContData <- function(id, language) {
       }
     })
 
+    class_type_choices <- reactive({
+      list(
+        grade = DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT grade_type_id AS id, grade_type_code AS code FROM public.grade_types ORDER BY grade_type_id"
+        ),
+        approval = DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT approval_type_id AS id, approval_type_code AS code FROM public.approval_types ORDER BY approval_type_id"
+        ),
+        qualifier = DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT qualifier_type_id AS id, qualifier_type_code AS code FROM public.qualifier_types ORDER BY qualifier_type_id"
+        )
+      )
+    })
+
+    map_modal_state <- reactiveValues(
+      step = "columns",
+      pending_df = NULL,
+      class_values = list(grade = character(), approval = character(), qualifier = character())
+    )
+
+    build_df_from_column_mapping <- function() {
+      req(input$upload_datetime_col, input$upload_value_col)
+
+      df_mapped <- data.frame(
+        datetime = upload_raw()[[input$upload_datetime_col]],
+        value = upload_raw()[[input$upload_value_col]]
+      )
+
+      if (
+        isTruthy(input$upload_grade_col) &&
+          input$upload_grade_col %in% names(upload_raw())
+      ) {
+        df_mapped$grade <- upload_raw()[[input$upload_grade_col]]
+      }
+      if (
+        isTruthy(input$upload_approval_col) &&
+          input$upload_approval_col %in% names(upload_raw())
+      ) {
+        df_mapped$approval <- upload_raw()[[input$upload_approval_col]]
+      }
+      if (
+        isTruthy(input$upload_qualifier_col) &&
+          input$upload_qualifier_col %in% names(upload_raw())
+      ) {
+        df_mapped$qualifier <- upload_raw()[[input$upload_qualifier_col]]
+      }
+
+      df_mapped
+    }
+
+    selected_class_cols <- reactive({
+      cols <- c()
+      if (isTruthy(input$upload_grade_col)) {
+        cols <- c(cols, "grade")
+      }
+      if (isTruthy(input$upload_approval_col)) {
+        cols <- c(cols, "approval")
+      }
+      if (isTruthy(input$upload_qualifier_col)) {
+        cols <- c(cols, "qualifier")
+      }
+      cols
+    })
+
     # Error checking, all possible conditions of start row and upload_raw
     #  in which the confirm mapping button should be disabled
     observe({
-      if (is.null(input$raw_start_row)) {
-        shinyjs::disable('confirm_mapping')
-      } else if (is.na(input$raw_start_row)) {
-        shinyjs::disable('confirm_mapping')
-      } else if (input$raw_start_row < 1) {
-        shinyjs::disable('confirm_mapping')
-      } else if (ncol(upload_raw()) < 2) {
-        shinyjs::disable('confirm_mapping')
+      if (map_modal_state$step != "columns") {
+        return()
+      }
+
+      target_id <- if (length(selected_class_cols()) > 0) {
+        "next_mapping"
       } else {
+        "confirm_mapping"
+      }
+
+      if (is.null(input$raw_start_row)) {
+        shinyjs::disable(target_id)
+      } else if (is.na(input$raw_start_row)) {
+        shinyjs::disable(target_id)
+      } else if (input$raw_start_row < 1) {
+        shinyjs::disable(target_id)
+      } else if (ncol(upload_raw()) < 2) {
+        shinyjs::disable(target_id)
+      } else {
+        shinyjs::enable(target_id)
+      }
+    })
+
+    observe({
+      if (map_modal_state$step != "class_mapping") {
+        return()
+      }
+
+      all_mapped <- TRUE
+      for (class_name in names(map_modal_state$class_values)) {
+        values <- map_modal_state$class_values[[class_name]]
+        if (length(values) == 0) {
+          next
+        }
+        for (i in seq_along(values)) {
+          if (!isTruthy(input[[paste0("map_", class_name, "_", i)]])) {
+            all_mapped <- FALSE
+            break
+          }
+        }
+      }
+
+      if (all_mapped) {
         shinyjs::enable('confirm_mapping')
+      } else {
+        shinyjs::disable('confirm_mapping')
       }
     })
 
@@ -775,56 +878,149 @@ addContData <- function(id, language) {
       df
     }
 
+    output$map_modal_body <- renderUI({
+      if (map_modal_state$step == "columns") {
+        tagList(
+          'Identify which columns represent date-time and value (and optionally grade/approval/qualifier):',
+          hr(),
+          numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
+            tooltip("The row number which contains your data's column names"),
+          uiOutput(ns('map_col_inputs'))
+        )
+      } else {
+        mapping_ui <- list(
+          tags$p('Map your uploaded classes to database classes.')
+        )
+
+        db_types <- class_type_choices()
+
+        for (class_name in names(map_modal_state$class_values)) {
+          class_vals <- map_modal_state$class_values[[class_name]]
+          if (length(class_vals) == 0) {
+            next
+          }
+
+          db_df <- db_types[[class_name]]
+          db_choices <- stats::setNames(
+            as.character(db_df$id),
+            paste0(db_df$code, " (", db_df$id, ")")
+          )
+
+          mapping_ui[[length(mapping_ui) + 1]] <- tags$h5(
+            paste0(
+              toupper(substring(class_name, 1, 1)),
+              substring(class_name, 2),
+              " mapping"
+            )
+          )
+
+          for (i in seq_along(class_vals)) {
+            mapping_ui[[length(mapping_ui) + 1]] <- selectizeInput(
+              ns(paste0("map_", class_name, "_", i)),
+              paste0("Uploaded '", class_vals[[i]], "' maps to:"),
+              choices = db_choices,
+              selected = ""
+            )
+          }
+        }
+
+        do.call(tagList, mapping_ui)
+      }
+    })
+
+    output$map_modal_footer <- renderUI({
+      if (map_modal_state$step == "columns") {
+        button_label <- if (length(selected_class_cols()) > 0) {
+          "Next"
+        } else {
+          "Confirm"
+        }
+        button_id <- if (length(selected_class_cols()) > 0) {
+          "next_mapping"
+        } else {
+          "confirm_mapping"
+        }
+
+        tagList(
+          modalButton('Cancel'),
+          actionButton(ns(button_id), button_label)
+        )
+      } else {
+        tagList(
+          modalButton('Cancel'),
+          actionButton(ns('confirm_mapping'), 'Confirm')
+        )
+      }
+    })
+
     # Store modal to be shown upon user uploading .csv or .xlsx
     map_col_modal <- modalDialog(
       title = 'Identify columns',
-      'Identify which columns represent date-time and value (and optionally grade/approval/qualifier):',
-      hr(),
-      numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
-        tooltip("The row number which contains your data's column names"),
-      # UI which holds selectizeInputs for datetime and value column
-      uiOutput(ns('map_col_inputs')),
-
+      uiOutput(ns('map_modal_body')),
       easyClose = FALSE,
-      footer = tagList(
-        modalButton('Cancel'),
-        actionButton(ns('confirm_mapping'), 'Confirm')
-      )
+      footer = uiOutput(ns('map_modal_footer'))
     )
 
     # Show modal when user adds file
     observeEvent(input$file, {
       req(input$file)
+      map_modal_state$step <- "columns"
+      map_modal_state$pending_df <- NULL
+      map_modal_state$class_values <- list(
+        grade = character(),
+        approval = character(),
+        qualifier = character()
+      )
       showModal(map_col_modal)
+    })
+
+    observeEvent(input$next_mapping, {
+      df_mapped <- build_df_from_column_mapping()
+      map_modal_state$pending_df <- df_mapped
+      sanitize_class_vals <- function(x) {
+        vals <- trimws(as.character(x))
+        sort(unique(vals[!is.na(vals) & nzchar(vals)]))
+      }
+      map_modal_state$class_values <- list(
+        grade = sanitize_class_vals(df_mapped$grade),
+        approval = sanitize_class_vals(df_mapped$approval),
+        qualifier = sanitize_class_vals(df_mapped$qualifier)
+      )
+      map_modal_state$step <- "class_mapping"
     })
 
     observeEvent(
       input$confirm_mapping,
       {
         removeModal() # Close the modal dialog
-        req(input$upload_datetime_col, input$upload_value_col)
-        df_mapped <- data.frame(
-          datetime = upload_raw()[[input$upload_datetime_col]],
-          value = upload_raw()[[input$upload_value_col]]
-        )
+        df_mapped <- if (map_modal_state$step == "class_mapping") {
+          req(map_modal_state$pending_df)
+          out <- map_modal_state$pending_df
 
-        if (
-          isTruthy(input$upload_grade_col) &&
-            input$upload_grade_col %in% names(upload_raw())
-        ) {
-          df_mapped$grade <- upload_raw()[[input$upload_grade_col]]
-        }
-        if (
-          isTruthy(input$upload_approval_col) &&
-            input$upload_approval_col %in% names(upload_raw())
-        ) {
-          df_mapped$approval <- upload_raw()[[input$upload_approval_col]]
-        }
-        if (
-          isTruthy(input$upload_qualifier_col) &&
-            input$upload_qualifier_col %in% names(upload_raw())
-        ) {
-          df_mapped$qualifier <- upload_raw()[[input$upload_qualifier_col]]
+          for (class_name in names(map_modal_state$class_values)) {
+            class_vals <- map_modal_state$class_values[[class_name]]
+            if (length(class_vals) == 0 || !(class_name %in% names(out))) {
+              next
+            }
+
+            mapped_ids <- vapply(
+              seq_along(class_vals),
+              function(i) {
+                as.integer(input[[paste0("map_", class_name, "_", i)]])
+              },
+              integer(1)
+            )
+            names(mapped_ids) <- class_vals
+
+            current_vals <- trimws(as.character(out[[class_name]]))
+            non_missing <- !is.na(current_vals) & nzchar(current_vals)
+            out[[class_name]][non_missing] <- unname(
+              mapped_ids[current_vals[non_missing]]
+            )
+          }
+          out
+        } else {
+          build_df_from_column_mapping()
         }
 
         data$df <- prepare_table_data(df_mapped)
