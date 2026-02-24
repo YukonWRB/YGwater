@@ -48,7 +48,7 @@ app_server <- function(input, output, session) {
         session$userData$AquaCache,
         "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
         params = list(
-          "YGwater/AquaCache",
+          if (config$public) "YGwater/public" else "YGwater/partner",
           config$dbUser,
           get_client_ip(session)
         )
@@ -1026,7 +1026,7 @@ app_server <- function(input, output, session) {
           session$userData$AquaCache,
           "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
           params = list(
-            "YGwater/AquaCache",
+            if (config$public) "YGwater/public" else "YGwater/partner",
             config$dbUser,
             get_client_ip(session)
           )
@@ -1701,7 +1701,7 @@ app_server <- function(input, output, session) {
                 session$userData$AquaCache,
                 "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
                 params = list(
-                  "YGwater/AquaCache",
+                  if (config$public) "YGwater/public" else "YGwater/partner",
                   input$username,
                   get_client_ip(session)
                 )
