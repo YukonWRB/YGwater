@@ -129,6 +129,26 @@ addContDataUI <- function(id) {
           id = ns("preview_panel"),
           title = "Preview data",
           icon = icon("chart-line"),
+          checkboxInput(
+            ns("preview_historic_range"),
+            "Show historic range",
+            value = TRUE
+          ),
+          textInput(
+            ns("preview_start_datetime"),
+            "Preview start datetime (YYYY-MM-DD HH:MM:SS, UTC offset specified above)",
+            placeholder = "Default uses earliest new data datetime"
+          ),
+          textInput(
+            ns("preview_end_datetime"),
+            "Preview end datetime (YYYY-MM-DD HH:MM:SS, UTC offset specified above)",
+            placeholder = "Default uses latest new data datetime"
+          ),
+          bslib::input_task_button(
+            ns("refresh_plot"),
+            "Refresh plot",
+            icon = icon("refresh")
+          ),
           plotly::plotlyOutput(ns("data_preview"))
         ),
 
@@ -163,7 +183,7 @@ addContDataUI <- function(id) {
           )
         ), # end delete accordion panel
 
-        # Add grades panel
+        # Add grade panel
         accordion_panel(
           id = ns("grade_panel"),
           title = "Add grades",
@@ -665,19 +685,57 @@ addContData <- function(id, language) {
           'Uploaded file must have at least two columns (one containing date time, and one containing measurement value)'
         )
       )
+
+      uploaded_names <- names(upload_raw())
+
+      pick_col <- function(candidates, default = "") {
+        out <- uploaded_names[tolower(uploaded_names) %in% tolower(candidates)]
+        if (length(out) > 0) out[[1]] else default
+      }
+
+      choices_optional <- uploaded_names
+
       tagList(
         selectizeInput(
           ns('upload_datetime_col'),
           'Select the column for datetime:',
-          choices = names(upload_raw()),
-          selected = names(upload_raw())[1]
+          choices = uploaded_names,
+          selected = pick_col(
+            c('datetime', 'date_time', 'date', 'time'),
+            uploaded_names[[1]]
+          )
         ),
         selectizeInput(
           ns('upload_value_col'),
-          'Select the column for value:',
-          choices = names(upload_raw()),
-          selected = names(upload_raw())[2]
-        )
+          'Select the column for values:',
+          choices = uploaded_names,
+          selected = pick_col(
+            c('value', 'values', 'measurement', 'measured_value'),
+            uploaded_names[[2]]
+          )
+        ),
+        if (length(uploaded_names) > 2) {
+          div(
+            selectizeInput(
+              ns('upload_grade_col'),
+              'Optional: select the column for grades:',
+              choices = choices_optional,
+              selected = pick_col(c('grade', 'grades'))
+            ),
+            selectizeInput(
+              ns('upload_approval_col'),
+              'Optional: select the column for approvals:',
+              choices = choices_optional,
+              selected = pick_col(c('approval', 'approvals'))
+            ),
+            selectizeInput(
+              ns('upload_qualifier_col'),
+              'Optional: select the column for qualifiers:',
+              choices = choices_optional,
+              selected = pick_col(c('qualifier', 'qualifiers'))
+            )
+          )
+        }
       )
     })
 
@@ -720,7 +778,7 @@ addContData <- function(id, language) {
     # Store modal to be shown upon user uploading .csv or .xlsx
     map_col_modal <- modalDialog(
       title = 'Identify columns',
-      'Please identify which columns represent date-time and value:',
+      'Identify which columns represent date-time and value (and optionally grade/approval/qualifier):',
       hr(),
       numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
         tooltip("The row number which contains your data's column names"),
@@ -749,7 +807,36 @@ addContData <- function(id, language) {
           datetime = upload_raw()[[input$upload_datetime_col]],
           value = upload_raw()[[input$upload_value_col]]
         )
+
+        if (
+          isTruthy(input$upload_grade_col) &&
+            input$upload_grade_col %in% names(upload_raw())
+        ) {
+          df_mapped$grade <- upload_raw()[[input$upload_grade_col]]
+        }
+        if (
+          isTruthy(input$upload_approval_col) &&
+            input$upload_approval_col %in% names(upload_raw())
+        ) {
+          df_mapped$approval <- upload_raw()[[input$upload_approval_col]]
+        }
+        if (
+          isTruthy(input$upload_qualifier_col) &&
+            input$upload_qualifier_col %in% names(upload_raw())
+        ) {
+          df_mapped$qualifier <- upload_raw()[[input$upload_qualifier_col]]
+        }
+
         data$df <- prepare_table_data(df_mapped)
+        if ("grade" %in% names(df_mapped)) {
+          data$df$grade <- df_mapped$grade
+        }
+        if ("approval" %in% names(df_mapped)) {
+          data$df$approval <- df_mapped$approval
+        }
+        if ("qualifier" %in% names(df_mapped)) {
+          data$df$qualifier <- df_mapped$qualifier
+        }
       },
       ignoreInit = TRUE
     )
@@ -911,6 +998,292 @@ addContData <- function(id, language) {
         proxy = data_table_proxy,
         rownames = FALSE
       )
+    })
+
+    preview_data <- reactive({
+      req(timeseries())
+      req(nrow(data$df) > 0)
+
+      parsed_dt <- parse_datetime(data$df$datetime)
+      parsed_val <- suppressWarnings(as.numeric(data$df$value))
+      valid_idx <- !(is.na(parsed_dt) | is.na(parsed_val))
+      req(any(valid_idx))
+
+      df_new <- data$df[valid_idx, , drop = FALSE]
+      df_new$datetime <- parsed_dt[valid_idx] -
+        (as.numeric(input$UTC_offset) * 3600)
+      df_new$value <- parsed_val[valid_idx]
+      df_new$source <- "New upload"
+
+      if ("grade" %in% names(df_new)) {
+        df_new$grade <- as.character(df_new$grade)
+      }
+      if ("approval" %in% names(df_new)) {
+        df_new$approval <- as.character(df_new$approval)
+      }
+      if ("qualifier" %in% names(df_new)) {
+        df_new$qualifier <- as.character(df_new$qualifier)
+      }
+
+      range_start <- min(df_new$datetime, na.rm = TRUE)
+      range_end <- max(df_new$datetime, na.rm = TRUE)
+
+      custom_start <- parse_datetime(input$preview_start_datetime)
+      if (!is.na(custom_start)) {
+        custom_start <- custom_start - (as.numeric(input$UTC_offset) * 3600)
+        range_start <- min(range_start, custom_start)
+      }
+
+      extra <- dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT datetime, value_corrected AS value FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3",
+        params = list(timeseries(), range_start, range_end)
+      )
+
+      if (nrow(extra) == 0) {
+        extra <- NULL
+      }
+
+      hist_out <- NULL
+      if (isTRUE(input$preview_historic_range)) {
+        # add a day to the end for the historic query to ensure we have enough ribbon
+        hist_out <- dbGetQueryDT(
+          session$userData$AquaCache,
+          "SELECT date AS datetime, min, max, q25, q75 FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date >= $2 AND date <= $3",
+          params = list(timeseries(), range_start, range_end + 86400)
+        )
+        tz <- dbGetQueryDT(
+          session$userData$AquaCache,
+          "SELECT timezone_daily_calc FROM timeseries WHERE timeseries_id = $1",
+          params = list(timeseries())
+        )$timezone_daily_calc[[1]]
+        hist_out$datetime <- as.POSIXct(hist_out$datetime, tz = "UTC") -
+          tz * 3600
+      }
+
+      parameter <- dbGetQueryDT(
+        session$userData$AquaCache,
+        "SELECT param_name, unit_default, plot_default_y_orientation FROM public.parameters JOIN continuous.timeseries ON parameters.parameter_id = timeseries.parameter_id WHERE timeseries.timeseries_id = $1",
+        params = list(timeseries())
+      )
+
+      list(
+        new_data = df_new,
+        db = extra,
+        historic = hist_out,
+        parameter = parameter
+      )
+    })
+
+    plot_data <- reactiveVal(NULL)
+    observeEvent(input$refresh_plot, {
+      req(timeseries())
+      pv <- preview_data()
+
+      # Start with the range ribbons. Like in plotTimeseries, create ranges within the historic range data so that discontinuous range data doesn't connect across gaps.
+      historic_range <- FALSE
+      if (!is.null(pv$historic)) {
+        pv$historic[,
+          has_stats := !is.na(q25) & !is.na(q75) & !is.na(min) & !is.na(max)
+        ]
+
+        # Create a run id that increments each time has_stats changes
+        pv$historic[, run := data.table::rleid(has_stats)]
+
+        # Keep only runs with data
+        range_runs <- split(
+          pv$historic[has_stats == TRUE],
+          by = "run",
+          keep.by = FALSE
+        )
+        if (length(range_runs) > 0) {
+          historic_range <- TRUE
+        }
+      }
+
+      plot <- plotly::plot_ly()
+
+      if (historic_range) {
+        for (rd in range_runs) {
+          plot <- plot |>
+            plotly::add_ribbons(
+              data = rd,
+              x = ~datetime,
+              ymin = ~q25,
+              ymax = ~q75,
+              name = "IQR",
+              color = I("#5f9da6"),
+              line = list(width = 0.2),
+              hoverinfo = "text",
+              text = ~ paste0(
+                "Q25: ",
+                round(q25, 2),
+                ", Q75: ",
+                round(q75, 2),
+                " (",
+                as.Date(datetime),
+                ")"
+              ),
+              showlegend = FALSE
+            ) |>
+            plotly::add_ribbons(
+              data = rd,
+              x = ~datetime,
+              ymin = ~min,
+              ymax = ~max,
+              name = "Historic",
+              color = I("#D4ECEF"),
+              line = list(width = 0.2),
+              hoverinfo = "text",
+              text = ~ paste0(
+                "Min: ",
+                round(min, 2),
+                ", Max: ",
+                round(max, 2),
+                " (",
+                as.Date(datetime),
+                ")"
+              ),
+              showlegend = FALSE
+            )
+        }
+
+        # Add *visible* dummy legend keys (one point is enough)
+        key_rd <- range_runs[[1]][1]
+
+        plot <- plot |>
+          plotly::add_ribbons(
+            data = key_rd,
+            x = ~datetime,
+            ymin = ~q25,
+            ymax = ~q75,
+            name = "IQR",
+            color = I("#5f9da6"),
+            line = list(width = 0.2),
+            hoverinfo = "none",
+            showlegend = TRUE
+          ) |>
+          plotly::add_ribbons(
+            data = key_rd,
+            x = ~datetime,
+            ymin = ~min,
+            ymax = ~max,
+            name = "Historic",
+            color = I("#D4ECEF"),
+            line = list(width = 0.2),
+            hoverinfo = "none",
+            showlegend = TRUE
+          )
+      }
+
+      # Now add in the existing data
+      if (!is.null(pv$db)) {
+        plot <- plot |>
+          plotly::add_trace(
+            data = pv$db,
+            x = ~datetime,
+            y = ~value,
+            type = "scatter",
+            mode = "lines",
+            line = list(width = 2.5),
+            name = "Existing corrected",
+            color = I("#fa9906ff"),
+            hoverinfo = "text",
+            text = ~ paste0(
+              pv$parameter$param_name,
+              ": ",
+              round(.data$value, 4),
+              " (",
+              .data$datetime,
+              ")"
+            )
+          )
+      }
+
+      # Finally, add the new data
+      plot <- plot |>
+        plotly::add_trace(
+          data = pv$new_data,
+          x = ~datetime,
+          y = ~value,
+          type = "scatter",
+          mode = "lines",
+          line = list(width = 2.5),
+          name = "New upload",
+          color = I("#00454e"),
+          hoverinfo = "text",
+          text = ~ paste0(
+            pv$parameter$param_name,
+            ": ",
+            round(.data$value, 4),
+            " (",
+            .data$datetime,
+            ")"
+          )
+        )
+
+      plot <- plot |>
+        plotly::layout(
+          title = NULL,
+          xaxis = list(
+            title = list(standoff = 0),
+            showgrid = FALSE,
+            showline = TRUE,
+            tickformat = "%b %-d '%y",
+            titlefont = list(size = 14),
+            tickfont = list(size = 12),
+            nticks = 10,
+            rangeslider = list(
+              visible = TRUE
+            ),
+            ticks = "outside",
+            ticklen = 5,
+            tickwidth = 1,
+            tickcolor = "black"
+          ),
+          # Main plot yaxis layout
+          yaxis = list(
+            title = list(
+              text = paste0(
+                pv$parameter$param_name,
+                " (",
+                pv$parameter$unit,
+                ")"
+              ),
+              standoff = 10
+            ),
+            showgrid = FALSE,
+            showline = TRUE,
+            zeroline = FALSE,
+            titlefont = list(size = 14),
+            tickfont = list(size = 12),
+            autorange = if (
+              pv$parameter$plot_default_y_orientation == "inverted"
+            ) {
+              "reversed"
+            } else {
+              TRUE
+            },
+            ticks = "outside",
+            ticklen = 5,
+            tickwidth = 1,
+            tickcolor = "black"
+          ),
+          margin = list(b = 0, t = 40, l = 50),
+          hovermode = "x unified",
+          legend = list(
+            font = list(size = 12),
+            orientation = "v"
+          ),
+          font = list(family = "Nunito Sans")
+        ) |>
+        plotly::config(locale = "en")
+
+      return(plot)
+    })
+
+    output$data_preview <- plotly::renderPlotly({
+      plot_data()
     })
 
     # function to check data validity before upload
