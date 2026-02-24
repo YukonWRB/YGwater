@@ -125,7 +125,6 @@ addTimeseries <- function(id, language) {
     moduleData$source_fx <- choices[grepl("^download", choices)]
 
     output$ui <- renderUI({
-
       orgs <- isolate(moduleData$organizations)
 
       req(
@@ -136,7 +135,7 @@ addTimeseries <- function(id, language) {
         moduleData$organizations,
         moduleData$users,
         moduleData$timeseries,
-        orgs
+        orgs,
         moduleData$agreements
       )
       tagList(
