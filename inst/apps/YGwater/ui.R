@@ -30,7 +30,7 @@ app_ui <- function(request) {
 
     tags$head(
       # do not change to !analytics because analytics can be a character string with the file path
-      if (analytics != FALSE) {
+      if (config$analytics != FALSE) {
         includeHTML(config$analytics) # Include analytics html code
       },
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
