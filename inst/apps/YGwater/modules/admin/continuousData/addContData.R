@@ -157,6 +157,7 @@ addContDataUI <- function(id) {
             "Refresh plot",
             icon = icon("refresh")
           ),
+          uiOutput(ns("plot_refresh_warning")),
           plotly::plotlyOutput(ns("data_preview"))
         ),
 
@@ -190,14 +191,32 @@ addContDataUI <- function(id) {
           )
         ), # end delete accordion panel
 
+        # Add approvals panel
+        accordion_panel(
+          id = ns("approval_panel"),
+          title = "Add/modify approval status",
+          icon = icon("thumbs-up"),
+          div(
+            actionButton(ns("add_approval_range"), "Add approval range"),
+            actionButton(ns("edit_approval_range"), "Edit selected"),
+            actionButton(ns("delete_approval_range"), "Delete selected")
+          ),
+          DT::DTOutput(ns("approval_ranges_table")),
+          uiOutput(ns("approval_ranges_warning"))
+        ), # End approval panel
+
         # Add grade panel
         accordion_panel(
           id = ns("grade_panel"),
           title = "Add/modify grades",
           icon = icon("check"),
           div(
-            "Placeholder for grades functionality"
-          )
+            actionButton(ns("add_grade_range"), "Add grade range"),
+            actionButton(ns("edit_grade_range"), "Edit selected"),
+            actionButton(ns("delete_grade_range"), "Delete selected")
+          ),
+          DT::DTOutput(ns("grade_ranges_table")),
+          uiOutput(ns("grade_ranges_warning"))
         ), # end grade accordion panel
 
         # Add qualifiers panel
@@ -206,19 +225,13 @@ addContDataUI <- function(id) {
           title = "Add/modify qualifiers",
           icon = icon("flag"),
           div(
-            "Placeholder for qualifiers functionality"
-          )
-        ), # End qualifiers accordion panel
-
-        # Add approvals panel
-        accordion_panel(
-          id = ns("approval_panel"),
-          title = "Add/modify approval status",
-          icon = icon("thumbs-up"),
-          div(
-            "Placeholder for approval functionality"
-          )
-        ) # End approval panel
+            actionButton(ns("add_qualifier_range"), "Add qualifier range"),
+            actionButton(ns("edit_qualifier_range"), "Edit selected"),
+            actionButton(ns("delete_qualifier_range"), "Delete selected")
+          ),
+          DT::DTOutput(ns("qualifier_ranges_table")),
+          uiOutput(ns("qualifier_ranges_warning"))
+        ) # End qualifiers accordion panel
       ), # end accordion for data manipulation options
 
       br(),
@@ -272,7 +285,8 @@ addContData <- function(id, language) {
       session$userData$AquaCache,
       "SELECT has_table_privilege(current_user, 'continuous.measurements_continuous', 'INSERT') AS can_insert"
     )
-    if (!check$can_insert) {
+    can_insert <- isTRUE(check$can_insert[[1]])
+    if (!can_insert) {
       showModal(modalDialog(
         title = 'Insufficient Privileges',
         'You do not have write privileges to add measurements.',
@@ -690,15 +704,15 @@ addContData <- function(id, language) {
       list(
         grade = DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT grade_type_id AS id, grade_type_code AS code, grade_type_description AS description FROM public.grade_types ORDER BY grade_type_id"
+          "SELECT grade_type_id AS id, grade_type_code AS code, grade_type_description AS description, color_code FROM public.grade_types ORDER BY grade_type_id"
         ),
         approval = DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT approval_type_id AS id, approval_type_code AS code, approval_type_description AS description FROM public.approval_types ORDER BY approval_type_id"
+          "SELECT approval_type_id AS id, approval_type_code AS code, approval_type_description AS description, color_code FROM public.approval_types ORDER BY approval_type_id"
         ),
         qualifier = DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT qualifier_type_id AS id, qualifier_type_code AS code, qualifier_type_description AS description FROM public.qualifier_types ORDER BY qualifier_type_id"
+          "SELECT qualifier_type_id AS id, qualifier_type_code AS code, qualifier_type_description AS description, color_code FROM public.qualifier_types ORDER BY qualifier_type_id"
         )
       )
     })
@@ -910,6 +924,255 @@ addContData <- function(id, language) {
       df
     }
 
+
+    class_ranges <- reactiveValues(
+      grade = data.frame(
+        code = character(),
+        description = character(),
+        start_datetime = character(),
+        end_datetime = character(),
+        stringsAsFactors = FALSE
+      ),
+      approval = data.frame(
+        code = character(),
+        description = character(),
+        start_datetime = character(),
+        end_datetime = character(),
+        stringsAsFactors = FALSE
+      ),
+      qualifier = data.frame(
+        code = character(),
+        description = character(),
+        start_datetime = character(),
+        end_datetime = character(),
+        stringsAsFactors = FALSE
+      )
+    )
+
+    ensure_class_cols <- function() {
+      for (nm in c("grade", "approval", "qualifier")) {
+        if (!(nm %in% names(data$df))) {
+          data$df[[nm]] <- ""
+        }
+      }
+    }
+
+    code_to_desc <- function(class_name, code) {
+      types <- class_type_choices()[[class_name]]
+      idx <- match(as.character(code), as.character(types$code))
+      ifelse(is.na(idx), "", as.character(types$description[idx]))
+    }
+
+    ranges_from_table_classes <- function(df, class_name) {
+      if (!(class_name %in% names(df)) || nrow(df) == 0) {
+        return(class_ranges[[class_name]][0, , drop = FALSE])
+      }
+      dt <- parse_datetime(df$datetime)
+      vals <- trimws(as.character(df[[class_name]]))
+      ok <- !is.na(dt) & nzchar(vals)
+      if (!any(ok)) {
+        return(class_ranges[[class_name]][0, , drop = FALSE])
+      }
+      x <- data.table::data.table(datetime = dt[ok], code = vals[ok])
+      data.table::setorder(x, datetime)
+      x[, run := data.table::rleid(code)]
+      out <- x[, .(
+        code = data.table::first(code),
+        start_datetime = format(min(datetime), "%Y-%m-%d %H:%M:%S"),
+        end_datetime = format(max(datetime), "%Y-%m-%d %H:%M:%S")
+      ), by = run]
+      out[, description := code_to_desc(class_name, code)]
+      out[, run := NULL]
+      as.data.frame(out[, .(code, description, start_datetime, end_datetime)])
+    }
+
+    validate_ranges <- function(df, class_name) {
+      if (nrow(df) == 0) return(character())
+      sdt <- parse_datetime(df$start_datetime)
+      edt <- parse_datetime(df$end_datetime)
+      msgs <- character()
+      bad <- which(is.na(sdt) | is.na(edt) | edt < sdt)
+      if (length(bad) > 0) {
+        msgs <- c(msgs, sprintf("Invalid start/end datetime row(s): %s.", paste(bad, collapse = ", ")))
+      }
+      valid <- which(!(is.na(sdt) | is.na(edt) | edt < sdt))
+      if (length(valid) > 1 && class_name %in% c("grade", "approval")) {
+        o <- order(sdt[valid], edt[valid])
+        v <- valid[o]
+        for (i in seq_along(v)[-1]) {
+          if (sdt[v[i]] < edt[v[i - 1]]) {
+            msgs <- c(msgs, sprintf("Overlapping %s ranges in rows %s and %s.", class_name, v[i - 1], v[i]))
+          }
+        }
+      }
+      if (length(valid) > 1 && class_name == "qualifier") {
+        for (i in seq_along(valid)) {
+          for (j in seq_along(valid)) {
+            if (j <= i) next
+            a <- valid[i]; b <- valid[j]
+            same <- trimws(df$code[a]) == trimws(df$code[b])
+            overlaps <- sdt[a] < edt[b] && sdt[b] < edt[a]
+            if (same && overlaps) {
+              msgs <- c(msgs, sprintf("Qualifier row %s overlaps with same qualifier in row %s.", a, b))
+            }
+          }
+        }
+      }
+      unique(msgs)
+    }
+
+    ranges_valid <- reactive({
+      vapply(c("grade", "approval", "qualifier"), function(nm) {
+        length(validate_ranges(class_ranges[[nm]], nm)) == 0
+      }, logical(1))
+    })
+
+    observe({
+      if (!can_insert) {
+        shinyjs::disable("upload")
+        shinyjs::disable("upload_overwrite_all")
+        shinyjs::disable("upload_overwrite_some")
+        return()
+      }
+      if (all(ranges_valid())) {
+        shinyjs::enable("upload")
+        shinyjs::enable("upload_overwrite_all")
+        shinyjs::enable("upload_overwrite_some")
+      } else {
+        shinyjs::disable("upload")
+        shinyjs::disable("upload_overwrite_all")
+        shinyjs::disable("upload_overwrite_some")
+      }
+    })
+
+    output$grade_ranges_warning <- renderUI({
+      msgs <- validate_ranges(class_ranges$grade, "grade")
+      if (length(msgs) == 0) return(NULL)
+      div(style = "color:#b30000;", paste(msgs, collapse = " "))
+    })
+    output$approval_ranges_warning <- renderUI({
+      msgs <- validate_ranges(class_ranges$approval, "approval")
+      if (length(msgs) == 0) return(NULL)
+      div(style = "color:#b30000;", paste(msgs, collapse = " "))
+    })
+    output$qualifier_ranges_warning <- renderUI({
+      msgs <- validate_ranges(class_ranges$qualifier, "qualifier")
+      if (length(msgs) == 0) return(NULL)
+      div(style = "color:#b30000;", paste(msgs, collapse = " "))
+    })
+
+    sync_table_classes_from_ranges <- function() {
+      if (nrow(data$df) == 0) return()
+      new_df <- data$df
+      for (nm in c("grade", "approval", "qualifier")) {
+        if (!(nm %in% names(new_df))) {
+          new_df[[nm]] <- ""
+        }
+      }
+      dt <- parse_datetime(new_df$datetime)
+      if (!any(!is.na(dt))) {
+        data$df <- new_df
+        return()
+      }
+      for (nm in c("grade", "approval", "qualifier")) {
+        new_df[[nm]] <- ""
+        rr <- class_ranges[[nm]]
+        if (nrow(rr) == 0) next
+        sdt <- parse_datetime(rr$start_datetime)
+        edt <- parse_datetime(rr$end_datetime)
+        for (i in seq_len(nrow(rr))) {
+          if (is.na(sdt[i]) || is.na(edt[i])) next
+          idx <- which(!is.na(dt) & dt >= sdt[i] & dt <= edt[i])
+          if (length(idx) == 0) next
+          if (nm == "qualifier") {
+            existing <- trimws(as.character(new_df[[nm]][idx]))
+            new_df[[nm]][idx] <- ifelse(nzchar(existing), paste0(existing, ";", rr$code[i]), rr$code[i])
+          } else {
+            new_df[[nm]][idx] <- rr$code[i]
+          }
+        }
+      }
+      if (!isTRUE(all.equal(data$df, new_df, check.attributes = FALSE))) {
+        data$df <- new_df
+      }
+    }
+
+    range_table <- function(class_name) {
+      out <- class_ranges[[class_name]]
+      out$description <- code_to_desc(class_name, out$code)
+      out
+    }
+
+    observeEvent(data$df, {
+      if (nrow(data$df) == 0) {
+        return()
+      }
+      isolate(sync_table_classes_from_ranges())
+    }, ignoreInit = TRUE)
+
+
+    output$grade_ranges_table <- DT::renderDT({
+      DT::datatable(range_table("grade"), selection = "single", rownames = FALSE, options = list(scrollX = TRUE))
+    }, server = FALSE)
+    output$approval_ranges_table <- DT::renderDT({
+      DT::datatable(range_table("approval"), selection = "single", rownames = FALSE, options = list(scrollX = TRUE))
+    }, server = FALSE)
+    output$qualifier_ranges_table <- DT::renderDT({
+      DT::datatable(range_table("qualifier"), selection = "single", rownames = FALSE, options = list(scrollX = TRUE))
+    }, server = FALSE)
+
+    open_range_modal <- function(class_name, mode = c("add", "edit"), row_idx = NULL) {
+      mode <- match.arg(mode)
+      rows <- class_ranges[[class_name]]
+      edit_row <- if (mode == "edit" && !is.null(row_idx) && nrow(rows) >= row_idx) rows[row_idx, ] else data.frame(code = "", start_datetime = "", end_datetime = "")
+      types <- class_type_choices()[[class_name]]
+      showModal(modalDialog(
+        title = paste(ifelse(mode == "add", "Add", "Edit"), class_name, "range"),
+        selectizeInput(ns(paste0(class_name, "_modal_code")), "Level", choices = stats::setNames(types$code, paste0(types$code, ": ", types$description)), selected = edit_row$code, multiple = FALSE),
+        textInput(ns(paste0(class_name, "_modal_start")), "Start datetime (YYYY-MM-DD HH:MM:SS)", value = edit_row$start_datetime),
+        textInput(ns(paste0(class_name, "_modal_end")), "End datetime (YYYY-MM-DD HH:MM:SS)", value = edit_row$end_datetime),
+        footer = tagList(modalButton("Cancel"), actionButton(ns(paste0("save_", class_name, "_modal")), "Save"))
+      ))
+      session$userData[[paste0("edit_", class_name, "_row")]] <- row_idx
+    }
+
+    for (nm in c("grade", "approval", "qualifier")) {
+      local({
+        class_name <- nm
+        observeEvent(input[[paste0("add_", class_name, "_range")]], {
+          open_range_modal(class_name, "add")
+        })
+        observeEvent(input[[paste0("edit_", class_name, "_range")]], {
+          idx <- input[[paste0(class_name, "_ranges_table_rows_selected")]]
+          req(length(idx) == 1)
+          open_range_modal(class_name, "edit", idx[[1]])
+        })
+        observeEvent(input[[paste0("delete_", class_name, "_range")]], {
+          idx <- input[[paste0(class_name, "_ranges_table_rows_selected")]]
+          req(length(idx) == 1)
+          class_ranges[[class_name]] <- class_ranges[[class_name]][-idx[[1]], , drop = FALSE]
+          sync_table_classes_from_ranges()
+        })
+        observeEvent(input[[paste0("save_", class_name, "_modal")]], {
+          code <- as.character(input[[paste0(class_name, "_modal_code")]])
+          st <- as.character(input[[paste0(class_name, "_modal_start")]])
+          en <- as.character(input[[paste0(class_name, "_modal_end")]])
+          new_row <- data.frame(code = code, description = code_to_desc(class_name, code), start_datetime = st, end_datetime = en, stringsAsFactors = FALSE)
+          rows <- class_ranges[[class_name]]
+          edit_idx <- session$userData[[paste0("edit_", class_name, "_row")]]
+          if (!is.null(edit_idx) && !is.na(edit_idx) && nrow(rows) >= edit_idx) {
+            rows[edit_idx, ] <- new_row
+          } else {
+            rows <- rbind(rows, new_row)
+          }
+          class_ranges[[class_name]] <- rows
+          removeModal()
+          sync_table_classes_from_ranges()
+        })
+      })
+    }
+
+
     output$map_modal_body <- renderUI({
       if (map_modal_state$step == "columns") {
         tagList(
@@ -1061,14 +1324,18 @@ addContData <- function(id, language) {
 
         data$df <- prepare_table_data(df_mapped)
         if ("grade" %in% names(df_mapped)) {
-          data$df$grade <- df_mapped$grade
+          data$df$grade <- as.character(df_mapped$grade)
         }
         if ("approval" %in% names(df_mapped)) {
-          data$df$approval <- df_mapped$approval
+          data$df$approval <- as.character(df_mapped$approval)
         }
         if ("qualifier" %in% names(df_mapped)) {
-          data$df$qualifier <- df_mapped$qualifier
+          data$df$qualifier <- as.character(df_mapped$qualifier)
         }
+        class_ranges$grade <- ranges_from_table_classes(data$df, "grade")
+        class_ranges$approval <- ranges_from_table_classes(data$df, "approval")
+        class_ranges$qualifier <- ranges_from_table_classes(data$df, "qualifier")
+        sync_table_classes_from_ranges()
       },
       ignoreInit = TRUE
     )
@@ -1311,6 +1578,28 @@ addContData <- function(id, language) {
     })
 
     plot_data <- reactiveVal(NULL)
+    last_plot_signature <- reactiveVal(NULL)
+
+    current_plot_signature <- reactive({
+      list(
+        df = data$df,
+        grade = class_ranges$grade,
+        approval = class_ranges$approval,
+        qualifier = class_ranges$qualifier
+      )
+    })
+
+    output$plot_refresh_warning <- renderUI({
+      if (is.null(last_plot_signature())) {
+        return(NULL)
+      }
+      changed <- !isTRUE(all.equal(last_plot_signature(), current_plot_signature(), check.attributes = FALSE))
+      if (!changed) {
+        return(NULL)
+      }
+      div(style = "color:#b30000;margin-top:6px;", "Newly entered data has changed since the last refresh plot action.")
+    })
+
     observeEvent(input$make_plot, {
       req(timeseries())
       pv <- preview_data()
@@ -1457,6 +1746,129 @@ addContData <- function(id, language) {
           )
         )
 
+      # Add class bands (grade/approval/qualifier) for newly entered data
+      has_class_bands <- nrow(class_ranges$grade) > 0 ||
+        nrow(class_ranges$approval) > 0 ||
+        nrow(class_ranges$qualifier) > 0
+      if (has_class_bands && nrow(pv$new_data) > 0) {
+        mindt <- min(pv$new_data$datetime, na.rm = TRUE)
+        maxdt <- max(pv$new_data$datetime, na.rm = TRUE)
+        type_map <- class_type_choices()
+        poly_list <- list()
+        new_data_dt <- sort(unique(pv$new_data$datetime))
+        approval_y <- NULL
+        grade_y <- NULL
+        qualifier_y <- NULL
+
+        add_band <- function(class_name, yset, label_prefix) {
+          rr <- class_ranges[[class_name]]
+          if (nrow(rr) == 0) return(invisible(NULL))
+          sdt <- parse_datetime(rr$start_datetime) - (as.numeric(input$UTC_offset) * 3600)
+          edt <- parse_datetime(rr$end_datetime) - (as.numeric(input$UTC_offset) * 3600)
+          rr$start_dt <- pmax(sdt, mindt)
+          rr$end_dt <- pmin(edt, maxdt)
+
+          # Extend each class band to the next data point to avoid visible gaps
+          next_idx <- findInterval(rr$end_dt, new_data_dt) + 1
+          has_next <- next_idx <= length(new_data_dt)
+          rr$end_dt[has_next] <- new_data_dt[next_idx[has_next]]
+
+          rr <- rr[!is.na(rr$start_dt) & !is.na(rr$end_dt) & rr$end_dt >= rr$start_dt, , drop = FALSE]
+          if (nrow(rr) == 0) return(invisible(NULL))
+          rr$id <- paste0(class_name, "_", seq_len(nrow(rr)))
+          idx <- match(rr$code, type_map[[class_name]]$code)
+          rr$color <- ifelse(is.na(idx), "#BBBBBB", as.character(type_map[[class_name]]$color_code[idx]))
+          rr$description <- ifelse(is.na(idx), rr$description, as.character(type_map[[class_name]]$description[idx]))
+          rr_dt <- data.table::as.data.table(rr)
+          poly_list[[length(poly_list) + 1]] <<- rr_dt[, .(
+            datetime = c(start_dt[1L], start_dt[1L], end_dt[1L], end_dt[1L]),
+            y = yset,
+            color = color[1L],
+            text = paste0(label_prefix, ": ", code[1L], " (", description[1L], ")"),
+            id = id[1L]
+          ), by = id]
+        }
+
+        if (nrow(class_ranges$approval) > 0) {
+          approval_y <- if (nrow(class_ranges$grade) > 0 && nrow(class_ranges$qualifier) > 0) c(2.2, 3.2, 3.2, 2.2) else if (nrow(class_ranges$grade) > 0) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
+          add_band("approval", approval_y, "Approval")
+        }
+        if (nrow(class_ranges$grade) > 0) {
+          grade_y <- if (nrow(class_ranges$qualifier) > 0) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
+          add_band("grade", grade_y, "Grade")
+        }
+        if (nrow(class_ranges$qualifier) > 0) {
+          qualifier_y <- c(0, 1, 1, 0)
+          add_band("qualifier", qualifier_y, "Qualifier")
+        }
+
+        if (length(poly_list) > 0) {
+          polygons_df <- data.table::rbindlist(poly_list, use.names = TRUE)
+          annotation_list <- list()
+          if (!is.null(approval_y)) {
+            annotation_list <- c(annotation_list, list(list(
+              x = 0,
+              y = mean(approval_y[c(1, 2)]),
+              xref = "paper",
+              yref = "y",
+              text = "Approval",
+              showarrow = FALSE,
+              xanchor = "right",
+              yanchor = "middle",
+              font = list(size = 10)
+            )))
+          }
+          if (!is.null(grade_y)) {
+            annotation_list <- c(annotation_list, list(list(
+              x = 0,
+              y = mean(grade_y[c(1, 2)]),
+              xref = "paper",
+              yref = "y",
+              text = "Grade",
+              showarrow = FALSE,
+              xanchor = "right",
+              yanchor = "middle",
+              font = list(size = 10)
+            )))
+          }
+          if (!is.null(qualifier_y)) {
+            annotation_list <- c(annotation_list, list(list(
+              x = 0,
+              y = mean(qualifier_y[c(1, 2)]),
+              xref = "paper",
+              yref = "y",
+              text = "Qualifier",
+              showarrow = FALSE,
+              xanchor = "right",
+              yanchor = "middle",
+              font = list(size = 10)
+            )))
+          }
+
+          bands_plot <- plotly::plot_ly() |>
+            plotly::add_polygons(
+              data = polygons_df,
+              x = ~datetime,
+              y = ~y,
+              split = ~id,
+              fill = "toself",
+              fillcolor = ~color,
+              line = list(width = 1, color = "black"),
+              hoverinfo = "text",
+              hoveron = "fills",
+              text = ~text,
+              showlegend = FALSE
+            ) |>
+            plotly::layout(
+              yaxis = list(showticklabels = FALSE, showgrid = FALSE, zeroline = FALSE),
+              xaxis = list(showgrid = FALSE, showticklabels = FALSE),
+              annotations = annotation_list,
+              margin = list(t = 0, b = 20, l = 80)
+            )
+          plot <- plotly::subplot(plot, bands_plot, nrows = 2, shareX = TRUE, heights = c(0.8, 0.2), margin = 0.02)
+        }
+      }
+
       plot <- plot |>
         plotly::layout(
           title = NULL,
@@ -1516,6 +1928,7 @@ addContData <- function(id, language) {
 
       # Assign the plot to the reactive value so it can be displayed in the UI
       plot_data(plot)
+      last_plot_signature(current_plot_signature())
     })
 
     output$data_preview <- plotly::renderPlotly({
@@ -1622,6 +2035,9 @@ addContData <- function(id, language) {
             datetime = character(),
             value = numeric()
           )
+          class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
+          class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
+          class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
         },
         error = function(e) {
           showNotification(paste('Upload failed:', e$message), type = 'error')
@@ -1687,6 +2103,9 @@ addContData <- function(id, language) {
             datetime = character(),
             value = numeric()
           )
+          class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
+          class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
+          class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
         },
         error = function(e) {
           showNotification(paste('Upload failed:', e$message), type = 'error')
@@ -1756,6 +2175,9 @@ addContData <- function(id, language) {
             datetime = character(),
             value = numeric()
           )
+          class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
+          class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
+          class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
         },
         error = function(e) {
           showNotification(paste('Upload failed:', e$message), type = 'error')
