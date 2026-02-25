@@ -1816,6 +1816,7 @@ addLocation <- function(id, inputs, language) {
 
       showModal(modalDialog(
         title = "Location names in other languages",
+        size = "l",
         uiOutput(ns("fn_language_rows")),
         actionButton(
           ns("add_fn_language_row"),
@@ -2086,7 +2087,7 @@ addLocation <- function(id, inputs, language) {
 
             # Changes to the alias
             if (
-              input$loc_alias !=
+              input$alias !=
                 moduleData$exist_locs[
                   which(moduleData$exist_locs$location_id == selected_loc()),
                   "alias"
@@ -2095,7 +2096,7 @@ addLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET alias = $1 WHERE location_id = $2;",
-                params = list(input$loc_alias, selected_loc())
+                params = list(input$alias, selected_loc())
               )
             }
 
@@ -2641,7 +2642,7 @@ addLocation <- function(id, inputs, language) {
         location_code = input$loc_code,
         name = input$loc_name,
         name_fr = input$loc_name_fr,
-        alias = if (isTruthy(input$loc_alias)) input$loc_alias else NA,
+        alias = if (isTruthy(input$alias)) input$alias else NA,
         latitude = input$lat,
         longitude = input$lon,
         share_with = input$share_with,
@@ -2740,7 +2741,7 @@ addLocation <- function(id, inputs, language) {
           updateTextInput(session, "loc_code", value = character(0))
           updateTextInput(session, "loc_name", value = character(0))
           updateTextInput(session, "loc_name_fr", value = character(0))
-          updateTextInput(session, "loc_alias", value = character(0))
+          updateTextInput(session, "alias", value = character(0))
           updateSelectizeInput(session, "loc_type", selected = character(0))
           updateNumericInput(session, "lat", value = NA)
           updateNumericInput(session, "lon", value = NA)
