@@ -95,6 +95,11 @@ addLocation <- function(id, inputs, language) {
     pending_network_new <- reactiveVal(NULL)
     pending_project_selection <- reactiveVal(character(0))
     pending_project_new <- reactiveVal(NULL)
+    fn_name_row_count <- reactiveVal(1L)
+    fn_names <- reactiveVal(data.frame(
+      language_code = integer(0),
+      name = character(0)
+    ))
 
     # Get some data from aquacache
     moduleData <- reactiveValues()
@@ -149,6 +154,10 @@ addLocation <- function(id, inputs, language) {
         session$userData$AquaCache,
         "SELECT * FROM public.get_shareable_principals_for('public.locations');"
       ) # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
+      moduleData$languages <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT language_code, language_name_en, language_name_fr FROM languages ORDER BY language_name_en"
+      )
     }
 
     getModuleData() # Initial data load
@@ -165,7 +174,8 @@ addLocation <- function(id, inputs, language) {
         moduleData$datums,
         networks,
         projects,
-        moduleData$users
+        moduleData$users,
+        moduleData$languages
       )
       tagList(
         radioButtons(
@@ -411,6 +421,11 @@ addLocation <- function(id, inputs, language) {
                 width = "100%"
               )
             ),
+            actionButton(
+              ns("open_fn_names_modal"),
+              "Add names in other languages",
+              width = "100%"
+            ),
             selectizeInput(
               ns("loc_type"),
               "Location type",
@@ -481,6 +496,11 @@ addLocation <- function(id, inputs, language) {
                 "Alias (optional)",
                 width = "100%"
               )
+            ),
+            actionButton(
+              ns("open_fn_names_modal"),
+              "Add names in other languages",
+              width = "100%"
             ),
             selectizeInput(
               ns("loc_type"),
@@ -1680,6 +1700,129 @@ addLocation <- function(id, inputs, language) {
       ignoreNULL = TRUE
     )
 
+
+
+    language_choices <- reactive({
+      req(moduleData$languages)
+      labels <- ifelse(
+        is.na(moduleData$languages$language_name_fr) |
+          !nzchar(moduleData$languages$language_name_fr),
+        moduleData$languages$language_name_en,
+        paste0(
+          moduleData$languages$language_name_en,
+          " / ",
+          moduleData$languages$language_name_fr
+        )
+      )
+
+      stats::setNames(
+        moduleData$languages$language_code,
+        labels
+      )
+    })
+
+    output$fn_language_rows <- renderUI({
+      req(language_choices())
+      n_rows <- fn_name_row_count()
+      saved <- fn_names()
+
+      tagList(lapply(seq_len(n_rows), function(i) {
+        splitLayout(
+          cellWidths = c("45%", "55%"),
+          selectizeInput(
+            ns(paste0("fn_language_", i)),
+            if (i == 1) "Language" else NULL,
+            choices = language_choices(),
+            selected = if (nrow(saved) >= i) saved$language_code[i] else NULL,
+            options = list(maxItems = 1),
+            width = "100%"
+          ),
+          textInput(
+            ns(paste0("fn_location_name_", i)),
+            if (i == 1) "Location name" else NULL,
+            value = if (nrow(saved) >= i) saved$name[i] else "",
+            width = "100%"
+          )
+        )
+      }))
+    })
+
+    observeEvent(input$open_fn_names_modal, {
+      saved <- fn_names()
+      fn_name_row_count(max(1L, nrow(saved)))
+
+      showModal(modalDialog(
+        title = "Location names in other languages",
+        uiOutput(ns("fn_language_rows")),
+        actionButton(
+          ns("add_fn_language_row"),
+          "Add another language and name"
+        ),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_fn_names"), "Save names")
+        )
+      ))
+    })
+
+    observeEvent(input$add_fn_language_row, {
+      fn_name_row_count(fn_name_row_count() + 1L)
+    })
+
+    observeEvent(input$save_fn_names, {
+      n_rows <- fn_name_row_count()
+      parsed_rows <- lapply(seq_len(n_rows), function(i) {
+        lang <- input[[paste0("fn_language_", i)]]
+        nm <- input[[paste0("fn_location_name_", i)]]
+        list(language_code = lang, name = nm)
+      })
+
+      has_any_value <- vapply(parsed_rows, function(x) {
+        isTruthy(x$language_code) || isTruthy(x$name)
+      }, logical(1))
+
+      if (!any(has_any_value)) {
+        fn_names(data.frame(language_code = integer(0), name = character(0)))
+        removeModal()
+        return()
+      }
+
+      incomplete <- vapply(parsed_rows[has_any_value], function(x) {
+        !isTruthy(x$language_code) || !isTruthy(x$name)
+      }, logical(1))
+
+      if (any(incomplete)) {
+        showNotification(
+          "Each language row must include both a language and a location name.",
+          type = "error"
+        )
+        return()
+      }
+
+      parsed_df <- do.call(
+        rbind,
+        lapply(parsed_rows[has_any_value], function(x) {
+          data.frame(
+            language_code = as.integer(x$language_code),
+            name = as.character(x$name),
+            stringsAsFactors = FALSE
+          )
+        })
+      )
+
+      if (anyDuplicated(parsed_df$language_code)) {
+        showNotification(
+          "Each language can only be selected once.",
+          type = "error"
+        )
+        return()
+      }
+
+      fn_names(parsed_df)
+      removeModal()
+    })
+
     ### Observe the share_with selectizeInput for new user groups ##############################
     observeEvent(
       input$share_with,
@@ -2443,12 +2586,28 @@ addLocation <- function(id, inputs, language) {
           # addACLocation is all done within a transaction, including additions to accessory tables
           AquaCache::addACLocation(con = session$userData$AquaCache, df = df)
 
+          new_loc_id <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT location_id FROM public.locations WHERE location_code = $1",
+            params = list(input$loc_code)
+          )$location_id
+
+          fn_name_values <- fn_names()
+          if (length(new_loc_id) && nrow(fn_name_values) > 0) {
+            for (i in seq_len(nrow(fn_name_values))) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "INSERT INTO public.location_names (location_id, language_code, name) VALUES ($1, $2, $3)",
+                params = list(
+                  new_loc_id[1],
+                  fn_name_values$language_code[i],
+                  fn_name_values$name[i]
+                )
+              )
+            }
+          }
+
           if (isTruthy(input$associate_well) && isTruthy(selected_well_id())) {
-            new_loc_id <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "SELECT location_id FROM public.locations WHERE location_code = $1",
-              params = list(input$loc_code)
-            )$location_id
             if (length(new_loc_id)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -2510,6 +2669,8 @@ addLocation <- function(id, inputs, language) {
           pending_project_new(NULL)
           selected_well_id(NULL)
           selected_well_label(NULL)
+          fn_names(data.frame(language_code = integer(0), name = character(0)))
+          fn_name_row_count(1L)
         },
         error = function(e) {
           # Rollback already happens within AquaCache::addACLocation
