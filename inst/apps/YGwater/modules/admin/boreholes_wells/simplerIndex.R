@@ -1494,6 +1494,16 @@ simplerIndex <- function(id, language) {
       list(files = character(), metadata = metadata)
     }
 
+    null_if_empty <- function(x) {
+      if (is.null(x) || length(x) == 0) {
+        return(NULL)
+      }
+      if (all(is.na(x))) {
+        return(NULL)
+      }
+      x
+    }
+
     convert_utm_to_ll <- function(easting, northing, zone) {
       easting <- null_if_empty(easting)
       northing <- null_if_empty(northing)
@@ -1535,16 +1545,6 @@ simplerIndex <- function(id, language) {
     sanitize_metadata_for_insert <- function(metadata) {
       if (is.null(metadata) || !is.list(metadata)) {
         metadata <- empty_well_entry()$metadata
-      }
-
-      null_if_empty <- function(x) {
-        if (is.null(x) || length(x) == 0) {
-          return(NULL)
-        }
-        if (all(is.na(x))) {
-          return(NULL)
-        }
-        x
       }
 
       parse_numeric <- function(x) {
