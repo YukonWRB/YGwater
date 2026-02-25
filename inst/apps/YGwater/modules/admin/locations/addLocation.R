@@ -32,7 +32,10 @@ addLocationUI <- function(id) {
       }
     ",
         ns("accordion2")
-      ))
+      )),
+      HTML(
+        ".shiny-split-layout > div {overflow: visible;}"
+      )
     ),
     page_fluid(
       uiOutput(ns("banner")),
@@ -184,99 +187,19 @@ addLocation <- function(id, inputs, language) {
             )
           )
         ),
-        # Tell the user that they should auto-generate unless they have a good reason not to, and the code they want uses national hydro network codes already
-        tags$div(
-          "Important: use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it uses national hydro network codes (i.e. a Water Survey of Canada location).",
-          style = "margin-bottom: 10px; font-style: bold; color: #555;"
-        ),
-        splitLayout(
-          cellWidths = c("60%", "40%"),
-          textInput(
-            ns("loc_code"),
-            "Location code (must not exist already)",
-            width = "100%"
-          ),
-          auto_generate_ui(ns = ns),
-        ),
+        # Add toggle for WSC/ not WSC location, which will dictate order of fields and which fields are shown
         conditionalPanel(
           condition = "input.mode == 'add'",
           ns = ns,
-          htmlOutput(ns("hydat_note"))
-        ),
-        # Don't show the HYDAT button unless we detect HYDAT is available
-        actionButton(
-          ns("hydat_fill"),
-          "Auto-fill fields from HYDAT",
-          style = "display: none;"
-        ),
-        splitLayout(
-          cellWidths = c("33%", "33%", "33%"),
-          textInput(
-            ns("loc_name"),
-            "Location name (must not exist already)",
-            if (isTruthy(moduleInputs$location)) {
-              moduleInputs$location
-            } else {
-              NULL
-            },
-            width = "100%"
-          ),
-          textInput(
-            ns("loc_name_fr"),
-            "French location name (must not exist already)",
-            width = "100%"
-          ),
-          textInput(
-            ns("alias"),
-            "Alias (optional)",
-            width = "100%"
+          radioButtons(
+            ns("wsc_location"),
+            "Is this a Water Survey of Canada location?",
+            choices = c("Yes" = "yes", "No" = "no"),
+            inline = TRUE
           )
         ),
-        selectizeInput(
-          ns("loc_type"),
-          "Location type",
-          choices = stats::setNames(
-            moduleData$loc_types$type_id,
-            moduleData$loc_types$type
-          ),
-          multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-          options = list(maxItems = 1),
-          width = "100%"
-        ),
-        splitLayout(
-          cellWidths = c("40%", "40%", "20%"),
-          numericInput(
-            ns("lat"),
-            "Latitude (decimal degrees, WGS84)",
-            value = NA,
-            width = "100%"
-          ) |>
-            tooltip(
-              "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
-            ),
-          numericInput(
-            ns("lon"),
-            "Longitude (decimal degrees, WGS84)",
-            value = NA,
-            width = "100%",
-          ) |>
-            tooltip(
-              "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
-            ),
-          actionButton(
-            ns("open_map"),
-            "Choose or show coordinates on map",
-            icon = icon("map-location-dot"),
-            width = "100%",
-            # Bump it down a bit to align with numericInputs
-            style = "margin-top: 30px;"
-          )
-        ),
-        splitLayout(
-          cellWidths = c("40%", "40%", "20%"),
-          uiOutput(ns("lat_warning")),
-          uiOutput(ns("lon_warning"))
-        ),
+        # Placeholder uiOutput for conditional panel with a different order depending on if WSC or not and with some different fields
+        uiOutput(ns("wsc_conditional_panel")),
 
         # Add UI for well association
         checkboxInput(
@@ -320,23 +243,14 @@ addLocation <- function(id, inputs, language) {
             "Select the user groups that should have access to this timeseries data. 'public_reader' allows anyone with access to the system to view the data. You can select multiple groups IF public_reader is not one of them."
           ),
 
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
-          textInput(
-            ns("loc_contact"),
-            "Contact details (optional)",
-            width = "100%"
-          )
+        textInput(
+          ns("loc_contact"),
+          "Contact details (optional)",
+          width = "100%"
         ),
 
         splitLayout(
-          cellWidths = c("0%", "33.3%", "33.3%", "33.3%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("33.3%", "33.3%", "33.3%"),
           selectizeInput(
             ns("datum_id_from"),
             "Vertical datum from (Assumed datum is station 0)",
@@ -374,10 +288,7 @@ addLocation <- function(id, inputs, language) {
         uiOutput(ns("elev_warning")),
 
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("50%", "50%"),
           selectizeInput(
             ns("network"),
             "Network(s) (type your own if not in list)",
@@ -409,10 +320,7 @@ addLocation <- function(id, inputs, language) {
         ),
 
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("50%", "50%"),
           checkboxInput(
             ns("loc_jurisdictional_relevance"),
             "Publicly relevant (i.e. should be seen by the public)",
@@ -445,6 +353,198 @@ addLocation <- function(id, inputs, language) {
         ),
         actionButton(ns("add_loc"), "Add location", width = "100%")
       )
+    }) # End of renderUI for main UI
+
+    # Don't show the WSC-specific layout if modifying a location.
+    observeEvent(input$mode, {
+      if (input$mode == "modify") {
+        updateRadioButtons(session, "wsc_location", selected = "no")
+      }
+    })
+
+    # Show different field order and some different fields if it's a WSC location, since for WSC locations we can auto-populate some fields from HYDAT. If it's not a WSC location, show the auto-generate button for location codes and put it at the bottom since it's less relevant if not using HYDAT codes.
+    observeEvent(input$wsc_location, {
+      req(input$wsc_location)
+      req(input$mode)
+      req(hydat$exists)
+
+      if (input$wsc_location == 'yes' && hydat$exists && input$mode == "add") {
+        # It's a WSC location and we're adding a new location and hydat is available.
+        output$wsc_conditional_panel <- renderUI({
+          tagList(
+            htmlOutput(ns("hydat_note")),
+            splitLayout(
+              cellWidths = c("60%", "40%"),
+              textInput(
+                ns("loc_code"),
+                "Location code (must not exist already)",
+                width = "100%"
+              ),
+              # Don't show the HYDAT button unless we detect HYDAT is available
+              actionButton(
+                ns("hydat_fill"),
+                "Auto-fill fields from HYDAT",
+                style = "display: none; margin-top: 30px;",
+                width = "100%",
+              )
+            ),
+            splitLayout(
+              cellWidths = c("33%", "33%", "33%"),
+              textInput(
+                ns("loc_name"),
+                "Location name (must not exist already)",
+                if (isTruthy(moduleInputs$location)) {
+                  moduleInputs$location
+                } else {
+                  NULL
+                },
+                width = "100%"
+              ),
+              textInput(
+                ns("loc_name_fr"),
+                "French location name (must not exist already)",
+                width = "100%"
+              ),
+              textInput(
+                ns("alias"),
+                "Alias (optional)",
+                width = "100%"
+              )
+            ),
+            selectizeInput(
+              ns("loc_type"),
+              "Location type",
+              choices = stats::setNames(
+                moduleData$loc_types$type_id,
+                moduleData$loc_types$type
+              ),
+              multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+              options = list(maxItems = 1),
+              width = "100%"
+            ),
+            splitLayout(
+              cellWidths = c("40%", "40%", "20%"),
+              numericInput(
+                ns("lat"),
+                "Latitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%"
+              ) |>
+                tooltip(
+                  "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
+                ),
+              numericInput(
+                ns("lon"),
+                "Longitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%",
+              ) |>
+                tooltip(
+                  "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
+                ),
+              actionButton(
+                ns("open_map"),
+                "Choose or show coordinates on map",
+                icon = icon("map-location-dot"),
+                width = "100%",
+                # Bump it down a bit to align with numericInputs
+                style = "margin-top: 30px;"
+              )
+            ),
+            uiOutput(ns("lat_warning")),
+            uiOutput(ns("lon_warning"))
+          )
+        })
+      } else {
+        # Not a WSC location, or modifying an existing location, so show the regular fields and auto-generate button at the bottom
+        output$wsc_conditional_panel <- renderUI({
+          tagList(
+            splitLayout(
+              cellWidths = c("33%", "33%", "33%"),
+              textInput(
+                ns("loc_name"),
+                "Location name (must not exist already)",
+                if (isTruthy(moduleInputs$location)) {
+                  moduleInputs$location
+                } else {
+                  NULL
+                },
+                width = "100%"
+              ),
+              textInput(
+                ns("loc_name_fr"),
+                "French location name (must not exist already)",
+                width = "100%"
+              ),
+              textInput(
+                ns("alias"),
+                "Alias (optional)",
+                width = "100%"
+              )
+            ),
+            selectizeInput(
+              ns("loc_type"),
+              "Location type",
+              choices = stats::setNames(
+                moduleData$loc_types$type_id,
+                moduleData$loc_types$type
+              ),
+              multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+              options = list(maxItems = 1),
+              width = "100%"
+            ),
+            splitLayout(
+              cellWidths = c("40%", "40%", "20%"),
+              numericInput(
+                ns("lat"),
+                "Latitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%"
+              ) |>
+                tooltip(
+                  "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
+                ),
+              numericInput(
+                ns("lon"),
+                "Longitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%",
+              ) |>
+                tooltip(
+                  "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
+                ),
+              actionButton(
+                ns("open_map"),
+                "Choose or show coordinates on map",
+                icon = icon("map-location-dot"),
+                width = "100%",
+                # Bump it down a bit to align with numericInputs
+                style = "margin-top: 30px;"
+              )
+            ),
+            uiOutput(ns("lat_warning")),
+            uiOutput(ns("lon_warning")),
+
+            # Tell the user that they should auto-generate unless they have a good reason not to, and the code they want uses national hydro network codes already
+            tags$div(
+              strong(
+                "Important: use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it's based on National Hydro Network codes."
+              ),
+              style = "margin-bottom: 10px; font-style: bold; color: #555;"
+            ),
+            splitLayout(
+              cellWidths = c("60%", "40%"),
+              textInput(
+                ns("loc_code"),
+                "Location code (must not exist already)",
+                width = "100%"
+              ),
+              # Auto-generate button, from file 'loc_code_auto_generate.R' for auto-generating location codes from NHN basins (not applicable if WSC location)
+              auto_generate_ui(ns = ns)
+            )
+          )
+        })
+      }
     })
 
     ## Observers to modify existing entry ##########################################
@@ -783,6 +883,11 @@ addLocation <- function(id, inputs, language) {
           "<b>Entering a Water Survey of Canada code will allow you to auto-populate fields with their information if the location code exists.</b><br>"
         )
       })
+      # Show the 'Is this a Water Survey of Canada location?' question if HYDAT is available, since it allows auto-population of fields for WSC stations. If HYDAT is not available, hide the question and related button.
+      shinyjs::show("wsc_location")
+    } else {
+      shinyjs::hide("wsc_location")
+      updateRadioButtons(session, "wsc_location", selected = "no")
     }
 
     observeEvent(
