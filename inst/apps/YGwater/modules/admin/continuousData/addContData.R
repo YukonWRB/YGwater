@@ -79,7 +79,8 @@ addContDataUI <- function(id) {
           div(
             actionButton(ns("add_row"), "Add row to end"),
             actionButton(ns("add_row_above"), "Add row above selection"),
-            actionButton(ns("add_row_below"), "Add row below selection")
+            actionButton(ns("add_row_below"), "Add row below selection"),
+            actionButton(ns("delete_rows_table"), "Delete selected rows")
           ),
           tags$br(),
 
@@ -103,14 +104,16 @@ addContDataUI <- function(id) {
               "Owner organization (applies to these data only)",
               choices = NULL,
               multiple = TRUE,
-              options = list(maxItems = 1, placeholder = "Select owner")
+              options = list(maxItems = 1, placeholder = "Select owner"),
+              width = "100%"
             ),
             selectizeInput(
               ns("contributor"),
               "Contributor organization (applies to these data only)",
               choices = NULL,
               multiple = TRUE,
-              options = list(maxItems = 1, placeholder = "Select contributor")
+              options = list(maxItems = 1, placeholder = "Select contributor"),
+              width = "100%"
             )
           ),
           radioButtons(
@@ -134,18 +137,23 @@ addContDataUI <- function(id) {
             "Show historic range",
             value = TRUE
           ),
-          textInput(
-            ns("preview_start_datetime"),
-            "Preview start datetime (YYYY-MM-DD HH:MM:SS, UTC offset specified above)",
-            placeholder = "Default uses earliest new data datetime"
-          ),
-          textInput(
-            ns("preview_end_datetime"),
-            "Preview end datetime (YYYY-MM-DD HH:MM:SS, UTC offset specified above)",
-            placeholder = "Default uses latest new data datetime"
+          splitLayout(
+            cellWidths = c("50%", "50%"),
+            textInput(
+              ns("preview_start_datetime"),
+              "Preview start datetime (YYYY-MM-DD HH:MM:SS)", # This message adjusted in reaction to the user's specified UTC offset for their data
+              placeholder = "Default uses earliest new data datetime",
+              width = "100%"
+            ),
+            textInput(
+              ns("preview_end_datetime"),
+              "Preview end datetime (YYYY-MM-DD HH:MM:SS)", # This message adjusted in reaction to the user's specified UTC offset for their data
+              placeholder = "Default uses latest new data datetime",
+              width = "100%"
+            )
           ),
           bslib::input_task_button(
-            ns("refresh_plot"),
+            ns("make_plot"),
             "Refresh plot",
             icon = icon("refresh")
           ),
@@ -158,14 +166,13 @@ addContDataUI <- function(id) {
           id = ns("delete_panel"),
           title = "Delete data",
           icon = icon("trash"),
-          actionButton(ns("delete_rows"), "Delete selected rows"),
-          tags$br(),
           textInput(
             ns("delete_cutoff_datetime"),
             "Delete data before/after datetime (YYYY-MM-DD HH:MM:SS)",
             placeholder = "2024-01-01 00:00:00"
           ),
           div(
+            actionButton(ns("delete_rows_accordion"), "Delete selected rows"),
             actionButton(
               ns("delete_before_datetime"),
               "Delete rows before datetime"
@@ -186,39 +193,30 @@ addContDataUI <- function(id) {
         # Add grade panel
         accordion_panel(
           id = ns("grade_panel"),
-          title = "Add grades",
+          title = "Add/modify grades",
           icon = icon("check"),
           div(
-            actionButton(
-              ns("add_grade"),
-              "Add grade column with default value"
-            )
+            "Placeholder for grades functionality"
           )
         ), # end grade accordion panel
 
         # Add qualifiers panel
         accordion_panel(
           id = ns("qualifier_panel"),
-          title = "Add qualifiers",
+          title = "Add/modify qualifiers",
           icon = icon("flag"),
           div(
-            actionButton(
-              ns("add_qc"),
-              "Add QC column with default value"
-            )
+            "Placeholder for qualifiers functionality"
           )
         ), # End qualifiers accordion panel
 
         # Add approvals panel
         accordion_panel(
           id = ns("approval_panel"),
-          title = "Add approval status",
+          title = "Add/modify approval status",
           icon = icon("thumbs-up"),
           div(
-            actionButton(
-              ns("add_approval"),
-              "Add approval column with default value"
-            )
+            "Placeholder for approval functionality"
           )
         ) # End approval panel
       ), # end accordion for data manipulation options
@@ -228,17 +226,20 @@ addContDataUI <- function(id) {
       actionButton(
         ns("upload"),
         "Upload to AquaCache (no overwrite)",
-        style = "font-size: 14px;"
+        style = "font-size: 14px;",
+        class = "btn btn-primary"
       ),
       actionButton(
         ns("upload_overwrite_all"),
         "Upload to AquaCache (replace all points in new data range)",
-        style = "font-size: 14px;"
+        style = "font-size: 14px;",
+        class = "btn btn-primary"
       ),
       actionButton(
         ns("upload_overwrite_some"),
         "Upload to AquaCache (overwrite conflicting points only)",
-        style = "font-size: 14px;"
+        style = "font-size: 14px;",
+        class = "btn btn-primary"
       )
     )
   )
@@ -395,6 +396,33 @@ addContData <- function(id, language) {
           selected = default_owner$default_owner[[1]]
         )
       }
+    })
+
+    # Observe timezone selection and updated labels for preview_start_datetime and preview_end_datetime to reflect the user's specified timezone for the data
+    observeEvent(input$UTC_offset, {
+      offset <- as.numeric(input$UTC_offset)
+      if (is.na(offset) || offset == 0) {
+        start_label <- "Preview start datetime (YYYY-MM-DD HH:MM:SS)"
+        end_label <- "Preview end datetime (YYYY-MM-DD HH:MM:SS)"
+      } else {
+        offset_str <- if (offset > 0) {
+          paste0("+", offset)
+        } else {
+          as.character(offset)
+        }
+        start_label <- paste0(
+          "Preview start datetime (YYYY-MM-DD HH:MM:SS, UTC",
+          offset_str,
+          ")"
+        )
+        end_label <- paste0(
+          "Preview end datetime (YYYY-MM-DD HH:MM:SS, UTC",
+          offset_str,
+          ")"
+        )
+      }
+      updateTextInput(session, "preview_start_datetime", label = start_label)
+      updateTextInput(session, "preview_end_datetime", label = end_label)
     })
 
     ### Observe the owner selectizeInput for new owners ############
@@ -1118,10 +1146,13 @@ addContData <- function(id, language) {
       add_row_relative_to_selection("below")
     })
 
-    observeEvent(input$delete_rows, {
-      req(input$data_table_rows_selected)
-      data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
-    })
+    observeEvent(
+      list(input$delete_rows_table, input$data_table_rows_selected),
+      {
+        req(input$data_table_rows_selected)
+        data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
+      }
+    )
 
     apply_datetime_cutoff <- function(mode = c("before", "after")) {
       mode <- match.arg(mode)
@@ -1280,7 +1311,7 @@ addContData <- function(id, language) {
     })
 
     plot_data <- reactiveVal(NULL)
-    observeEvent(input$refresh_plot, {
+    observeEvent(input$make_plot, {
       req(timeseries())
       pv <- preview_data()
 
@@ -1483,7 +1514,8 @@ addContData <- function(id, language) {
         ) |>
         plotly::config(locale = "en")
 
-      return(plot)
+      # Assign the plot to the reactive value so it can be displayed in the UI
+      plot_data(plot)
     })
 
     output$data_preview <- plotly::renderPlotly({
