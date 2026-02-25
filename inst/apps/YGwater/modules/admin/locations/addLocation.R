@@ -97,7 +97,7 @@ addLocation <- function(id, inputs, language) {
     pending_project_new <- reactiveVal(NULL)
     fn_name_row_count <- reactiveVal(1L)
     fn_names <- reactiveVal(data.frame(
-      language_code = integer(0),
+      language_id = integer(0),
       name = character(0)
     ))
 
@@ -107,12 +107,12 @@ addLocation <- function(id, inputs, language) {
     getModuleData <- function() {
       moduleData$exist_locs <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location_id AS location_code, l.name, l.name_fr, l.alias, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
+        "SELECT l.location_id, l.location_code, l.name, l.name_fr, l.alias, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type AS location_type_id, lt.type AS location_type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location, COALESCE(string_agg(DISTINCT n.name, ', ' ORDER BY n.name), '') AS network 
         FROM locations l
         LEFT JOIN location_types lt ON l.location_type = lt.type_id
         LEFT JOIN locations_networks ln ON l.location_id = ln.location_id
         LEFT JOIN networks n ON ln.network_id = n.network_id
-        GROUP BY l.location_id, l.name, l.name_fr, l.alias, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
+        GROUP BY l.location_id, l.location_code, l.name, l.name_fr, l.alias, l.latitude, l.longitude, l.note, l.contact, l.share_with, l.location_type, lt.type, l.install_purpose, l.current_purpose, l.jurisdictional_relevance, l.anthropogenic_influence, l.sentinel_location"
       )
       moduleData$exist_locs$network <- factor(
         ifelse(
@@ -156,7 +156,7 @@ addLocation <- function(id, inputs, language) {
       ) # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
       moduleData$languages <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT language_code, language_name_en, language_name_fr FROM languages ORDER BY language_name_en"
+        "SELECT language_id, language_name_en, language_name_fr FROM languages ORDER BY language_name_en"
       )
     }
 
@@ -624,7 +624,7 @@ addLocation <- function(id, inputs, language) {
 
           existing_fn_names <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            "SELECT language_code, name FROM public.location_names WHERE location_id = $1 ORDER BY language_code",
+            "SELECT language_id, name FROM public.location_names WHERE location_id = $1 ORDER BY language_id",
             params = list(loc_id)
           )
           fn_names(existing_fn_names)
@@ -700,7 +700,7 @@ addLocation <- function(id, inputs, language) {
         }
       } else {
         selected_loc(NULL)
-        fn_names(data.frame(language_code = integer(0), name = character(0)))
+        fn_names(data.frame(language_id = integer(0), name = character(0)))
         fn_name_row_count(1L)
       }
     })
@@ -1327,7 +1327,7 @@ addLocation <- function(id, inputs, language) {
         "SELECT b.borehole_id AS well_id,
                   b.borehole_name AS well_name,
                   b.location_id,
-                  l.location_id::text AS location_code,
+                  l.location_code,
                   l.name AS location_name,
                   ST_Distance(
                     ST_SetSRID(ST_MakePoint(b.longitude, b.latitude), 4326)::geography,
@@ -1728,7 +1728,7 @@ addLocation <- function(id, inputs, language) {
       )
 
       stats::setNames(
-        moduleData$languages$language_code,
+        moduleData$languages$language_id,
         labels
       )
     })
@@ -1743,9 +1743,9 @@ addLocation <- function(id, inputs, language) {
       }
 
       labels <- vapply(seq_len(nrow(entries)), function(i) {
-        code <- entries$language_code[i]
+        code <- entries$language_id[i]
         lang_row <- moduleData$languages[
-          moduleData$languages$language_code == code,
+          moduleData$languages$language_id == code,
           ,
           drop = FALSE
         ]
@@ -1789,7 +1789,7 @@ addLocation <- function(id, inputs, language) {
               ns(paste0("fn_language_", i)),
               if (i == 1) "Language" else NULL,
               choices = language_choices(),
-              selected = if (nrow(saved) >= i) saved$language_code[i] else NULL,
+              selected = if (nrow(saved) >= i) saved$language_id[i] else NULL,
               options = list(maxItems = 1),
               width = "100%"
             ),
@@ -1840,7 +1840,7 @@ addLocation <- function(id, inputs, language) {
           current <- fn_names()
           current_rows <- max(nrow(current), fn_name_row_count())
           if (current_rows <= 1) {
-            fn_names(data.frame(language_code = integer(0), name = character(0)))
+            fn_names(data.frame(language_id = integer(0), name = character(0)))
             fn_name_row_count(1L)
             return()
           }
@@ -1861,21 +1861,21 @@ addLocation <- function(id, inputs, language) {
       parsed_rows <- lapply(seq_len(n_rows), function(i) {
         lang <- input[[paste0("fn_language_", i)]]
         nm <- input[[paste0("fn_location_name_", i)]]
-        list(language_code = lang, name = nm)
+        list(language_id = lang, name = nm)
       })
 
       has_any_value <- vapply(parsed_rows, function(x) {
-        isTruthy(x$language_code) || isTruthy(x$name)
+        isTruthy(x$language_id) || isTruthy(x$name)
       }, logical(1))
 
       if (!any(has_any_value)) {
-        fn_names(data.frame(language_code = integer(0), name = character(0)))
+        fn_names(data.frame(language_id = integer(0), name = character(0)))
         removeModal()
         return()
       }
 
       incomplete <- vapply(parsed_rows[has_any_value], function(x) {
-        !isTruthy(x$language_code) || !isTruthy(x$name)
+        !isTruthy(x$language_id) || !isTruthy(x$name)
       }, logical(1))
 
       if (any(incomplete)) {
@@ -1890,14 +1890,14 @@ addLocation <- function(id, inputs, language) {
         rbind,
         lapply(parsed_rows[has_any_value], function(x) {
           data.frame(
-            language_code = as.integer(x$language_code),
+            language_id = as.integer(x$language_id),
             name = as.character(x$name),
             stringsAsFactors = FALSE
           )
         })
       )
 
-      if (anyDuplicated(parsed_df$language_code)) {
+      if (anyDuplicated(parsed_df$language_id)) {
         showNotification(
           "Each language can only be selected once.",
           type = "error"
@@ -2031,7 +2031,7 @@ addLocation <- function(id, inputs, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE locations SET location_id = $1 WHERE location_id = $2;",
+                "UPDATE locations SET location_code = $1 WHERE location_id = $2;",
                 params = list(input$loc_code, selected_loc())
               )
               # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
@@ -2517,10 +2517,10 @@ addLocation <- function(id, inputs, language) {
               for (i in seq_len(nrow(fn_name_values))) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "INSERT INTO public.location_names (location_id, language_code, name) VALUES ($1, $2, $3)",
+                  "INSERT INTO public.location_names (location_id, language_id, name) VALUES ($1, $2, $3)",
                   params = list(
                     selected_loc(),
-                    fn_name_values$language_code[i],
+                    fn_name_values$language_id[i],
                     fn_name_values$name[i]
                   )
                 )
@@ -2638,7 +2638,7 @@ addLocation <- function(id, inputs, language) {
       project_ids <- parse_ids(input$project)
       # Make a data.frame to pass to addACLocation
       df <- data.frame(
-        location_id = input$loc_code,
+        location_code = input$loc_code,
         name = input$loc_name,
         name_fr = input$loc_name_fr,
         alias = if (isTruthy(input$loc_alias)) input$loc_alias else NA,
@@ -2695,7 +2695,7 @@ addLocation <- function(id, inputs, language) {
 
           new_loc_id <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            "SELECT location_id FROM public.locations WHERE location_id = $1",
+            "SELECT location_id FROM public.locations WHERE location_code = $1",
             params = list(input$loc_code)
           )$location_id
 
@@ -2704,10 +2704,10 @@ addLocation <- function(id, inputs, language) {
             for (i in seq_len(nrow(fn_name_values))) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "INSERT INTO public.location_names (location_id, language_code, name) VALUES ($1, $2, $3)",
+                "INSERT INTO public.location_names (location_id, language_id, name) VALUES ($1, $2, $3)",
                 params = list(
                   new_loc_id[1],
-                  fn_name_values$language_code[i],
+                  fn_name_values$language_id[i],
                   fn_name_values$name[i]
                 )
               )
@@ -2776,7 +2776,7 @@ addLocation <- function(id, inputs, language) {
           pending_project_new(NULL)
           selected_well_id(NULL)
           selected_well_label(NULL)
-          fn_names(data.frame(language_code = integer(0), name = character(0)))
+          fn_names(data.frame(language_id = integer(0), name = character(0)))
           fn_name_row_count(1L)
         },
         error = function(e) {
