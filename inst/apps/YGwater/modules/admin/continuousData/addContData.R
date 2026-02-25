@@ -191,6 +191,20 @@ addContDataUI <- function(id) {
           )
         ), # end delete accordion panel
 
+        # Add approvals panel
+        accordion_panel(
+          id = ns("approval_panel"),
+          title = "Add/modify approval status",
+          icon = icon("thumbs-up"),
+          div(
+            actionButton(ns("add_approval_range"), "Add approval range"),
+            actionButton(ns("edit_approval_range"), "Edit selected"),
+            actionButton(ns("delete_approval_range"), "Delete selected")
+          ),
+          DT::DTOutput(ns("approval_ranges_table")),
+          uiOutput(ns("approval_ranges_warning"))
+        ), # End approval panel
+
         # Add grade panel
         accordion_panel(
           id = ns("grade_panel"),
@@ -217,21 +231,7 @@ addContDataUI <- function(id) {
           ),
           DT::DTOutput(ns("qualifier_ranges_table")),
           uiOutput(ns("qualifier_ranges_warning"))
-        ), # End qualifiers accordion panel
-
-        # Add approvals panel
-        accordion_panel(
-          id = ns("approval_panel"),
-          title = "Add/modify approval status",
-          icon = icon("thumbs-up"),
-          div(
-            actionButton(ns("add_approval_range"), "Add approval range"),
-            actionButton(ns("edit_approval_range"), "Edit selected"),
-            actionButton(ns("delete_approval_range"), "Delete selected")
-          ),
-          DT::DTOutput(ns("approval_ranges_table")),
-          uiOutput(ns("approval_ranges_warning"))
-        ) # End approval panel
+        ) # End qualifiers accordion panel
       ), # end accordion for data manipulation options
 
       br(),
@@ -1755,6 +1755,10 @@ addContData <- function(id, language) {
         maxdt <- max(pv$new_data$datetime, na.rm = TRUE)
         type_map <- class_type_choices()
         poly_list <- list()
+        new_data_dt <- sort(unique(pv$new_data$datetime))
+        approval_y <- NULL
+        grade_y <- NULL
+        qualifier_y <- NULL
 
         add_band <- function(class_name, yset, label_prefix) {
           rr <- class_ranges[[class_name]]
@@ -1763,6 +1767,12 @@ addContData <- function(id, language) {
           edt <- parse_datetime(rr$end_datetime) - (as.numeric(input$UTC_offset) * 3600)
           rr$start_dt <- pmax(sdt, mindt)
           rr$end_dt <- pmin(edt, maxdt)
+
+          # Extend each class band to the next data point to avoid visible gaps
+          next_idx <- findInterval(rr$end_dt, new_data_dt) + 1
+          has_next <- next_idx <= length(new_data_dt)
+          rr$end_dt[has_next] <- new_data_dt[next_idx[has_next]]
+
           rr <- rr[!is.na(rr$start_dt) & !is.na(rr$end_dt) & rr$end_dt >= rr$start_dt, , drop = FALSE]
           if (nrow(rr) == 0) return(invisible(NULL))
           rr$id <- paste0(class_name, "_", seq_len(nrow(rr)))
@@ -1788,11 +1798,53 @@ addContData <- function(id, language) {
           add_band("grade", grade_y, "Grade")
         }
         if (nrow(class_ranges$qualifier) > 0) {
-          add_band("qualifier", c(0, 1, 1, 0), "Qualifier")
+          qualifier_y <- c(0, 1, 1, 0)
+          add_band("qualifier", qualifier_y, "Qualifier")
         }
 
         if (length(poly_list) > 0) {
           polygons_df <- data.table::rbindlist(poly_list, use.names = TRUE)
+          annotation_list <- list()
+          if (!is.null(approval_y)) {
+            annotation_list <- c(annotation_list, list(list(
+              x = 0,
+              y = mean(approval_y[c(1, 2)]),
+              xref = "paper",
+              yref = "y",
+              text = "Approval",
+              showarrow = FALSE,
+              xanchor = "right",
+              yanchor = "middle",
+              font = list(size = 10)
+            )))
+          }
+          if (!is.null(grade_y)) {
+            annotation_list <- c(annotation_list, list(list(
+              x = 0,
+              y = mean(grade_y[c(1, 2)]),
+              xref = "paper",
+              yref = "y",
+              text = "Grade",
+              showarrow = FALSE,
+              xanchor = "right",
+              yanchor = "middle",
+              font = list(size = 10)
+            )))
+          }
+          if (!is.null(qualifier_y)) {
+            annotation_list <- c(annotation_list, list(list(
+              x = 0,
+              y = mean(qualifier_y[c(1, 2)]),
+              xref = "paper",
+              yref = "y",
+              text = "Qualifier",
+              showarrow = FALSE,
+              xanchor = "right",
+              yanchor = "middle",
+              font = list(size = 10)
+            )))
+          }
+
           bands_plot <- plotly::plot_ly() |>
             plotly::add_polygons(
               data = polygons_df,
@@ -1810,7 +1862,8 @@ addContData <- function(id, language) {
             plotly::layout(
               yaxis = list(showticklabels = FALSE, showgrid = FALSE, zeroline = FALSE),
               xaxis = list(showgrid = FALSE, showticklabels = FALSE),
-              margin = list(t = 0, b = 20, l = 50)
+              annotations = annotation_list,
+              margin = list(t = 0, b = 20, l = 80)
             )
           plot <- plotly::subplot(plot, bands_plot, nrows = 2, shareX = TRUE, heights = c(0.8, 0.2), margin = 0.02)
         }
