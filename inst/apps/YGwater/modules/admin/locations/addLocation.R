@@ -91,12 +91,37 @@ addLocation <- function(id, inputs, language) {
       }
     }
 
+    normalize_optional_text <- function(x) {
+      if (is.null(x) || !length(x) || is.na(x) || !nzchar(trimws(as.character(x)))) {
+        NA_character_
+      } else {
+        as.character(x)
+      }
+    }
+
+    collect_fn_modal_rows <- function(n_rows) {
+      parsed_rows <- lapply(seq_len(n_rows), function(i) {
+        lang <- input[[paste0("fn_language_", i)]]
+        nm <- input[[paste0("fn_location_name_", i)]]
+        data.frame(
+          language_id = if (isTruthy(lang)) as.integer(lang) else NA_integer_,
+          name = if (is.null(nm)) "" else as.character(nm),
+          stringsAsFactors = FALSE
+        )
+      })
+      do.call(rbind, parsed_rows)
+    }
+
     pending_network_selection <- reactiveVal(character(0))
     pending_network_new <- reactiveVal(NULL)
     pending_project_selection <- reactiveVal(character(0))
     pending_project_new <- reactiveVal(NULL)
     fn_name_row_count <- reactiveVal(1L)
     fn_names <- reactiveVal(data.frame(
+      language_id = integer(0),
+      name = character(0)
+    ))
+    fn_names_draft <- reactiveVal(data.frame(
       language_id = integer(0),
       name = character(0)
     ))
@@ -628,6 +653,7 @@ addLocation <- function(id, inputs, language) {
             params = list(loc_id)
           )
           fn_names(existing_fn_names)
+          fn_names_draft(existing_fn_names)
           fn_name_row_count(max(1L, nrow(existing_fn_names)))
           updateTextInput(session, "loc_name_fr", value = details$name_fr)
           updateTextInput(session, "alias", value = details$alias)
@@ -701,6 +727,7 @@ addLocation <- function(id, inputs, language) {
       } else {
         selected_loc(NULL)
         fn_names(data.frame(language_id = integer(0), name = character(0)))
+        fn_names_draft(data.frame(language_id = integer(0), name = character(0)))
         fn_name_row_count(1L)
       }
     })
@@ -1778,7 +1805,7 @@ addLocation <- function(id, inputs, language) {
     output$fn_language_rows <- renderUI({
       req(language_choices())
       n_rows <- fn_name_row_count()
-      saved <- fn_names()
+      saved <- fn_names_draft()
 
       tagList(lapply(seq_len(n_rows), function(i) {
         div(
@@ -1812,6 +1839,7 @@ addLocation <- function(id, inputs, language) {
 
     observeEvent(input$open_fn_names_modal, {
       saved <- fn_names()
+      fn_names_draft(saved)
       fn_name_row_count(max(1L, nrow(saved)))
 
       showModal(modalDialog(
@@ -1831,6 +1859,8 @@ addLocation <- function(id, inputs, language) {
     })
 
     observeEvent(input$add_fn_language_row, {
+      current <- collect_fn_modal_rows(fn_name_row_count())
+      fn_names_draft(current)
       fn_name_row_count(fn_name_row_count() + 1L)
     })
 
@@ -1838,21 +1868,18 @@ addLocation <- function(id, inputs, language) {
       n_rows <- fn_name_row_count()
       lapply(seq_len(n_rows), function(i) {
         observeEvent(input[[paste0("fn_remove_row_", i)]], {
-          current <- fn_names()
-          current_rows <- max(nrow(current), fn_name_row_count())
-          if (current_rows <= 1) {
-            fn_names(data.frame(language_id = integer(0), name = character(0)))
+          current <- collect_fn_modal_rows(fn_name_row_count())
+          if (nrow(current) <= 1) {
+            fn_names_draft(data.frame(language_id = integer(0), name = character(0)))
             fn_name_row_count(1L)
             return()
           }
 
           if (nrow(current) >= i) {
             current <- current[-i, , drop = FALSE]
-            fn_names(current)
-            fn_name_row_count(max(1L, nrow(current)))
-          } else {
-            fn_name_row_count(fn_name_row_count() - 1L)
           }
+          fn_names_draft(current)
+          fn_name_row_count(max(1L, nrow(current)))
         }, ignoreInit = TRUE)
       })
     })
@@ -1870,7 +1897,9 @@ addLocation <- function(id, inputs, language) {
       }, logical(1))
 
       if (!any(has_any_value)) {
-        fn_names(data.frame(language_id = integer(0), name = character(0)))
+        empty_df <- data.frame(language_id = integer(0), name = character(0))
+        fn_names(empty_df)
+        fn_names_draft(empty_df)
         removeModal()
         return()
       }
@@ -1907,6 +1936,7 @@ addLocation <- function(id, inputs, language) {
       }
 
       fn_names(parsed_df)
+      fn_names_draft(parsed_df)
       removeModal()
     })
 
@@ -2023,13 +2053,13 @@ addLocation <- function(id, inputs, language) {
           {
             # Check each field to see if it's been modified; if so, update the DB entry by targeting the location_id and appropriate column name
             # Changes to the location code
-            if (
-              input$loc_code !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "location_code"
-                ]
-            ) {
+            if (!identical(
+              as.character(input$loc_code),
+              as.character(moduleData$exist_locs[
+                which(moduleData$exist_locs$location_id == selected_loc()),
+                "location_code"
+              ])
+            )) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET location_code = $1 WHERE location_id = $2;",
@@ -2050,13 +2080,13 @@ addLocation <- function(id, inputs, language) {
             }
 
             # Changes to the location english name
-            if (
-              input$loc_name !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "name"
-                ]
-            ) {
+            if (!identical(
+              as.character(input$loc_name),
+              as.character(moduleData$exist_locs[
+                which(moduleData$exist_locs$location_id == selected_loc()),
+                "name"
+              ])
+            )) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET name = $1 WHERE location_id = $2;",
@@ -2071,13 +2101,13 @@ addLocation <- function(id, inputs, language) {
             }
 
             # Changes to the location french name
-            if (
-              input$loc_name_fr !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "name_fr"
-                ]
-            ) {
+            if (!identical(
+              normalize_optional_text(input$loc_name_fr),
+              normalize_optional_text(moduleData$exist_locs[
+                which(moduleData$exist_locs$location_id == selected_loc()),
+                "name_fr"
+              ])
+            )) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET name_fr = $1 WHERE location_id = $2;",
@@ -2086,12 +2116,15 @@ addLocation <- function(id, inputs, language) {
             }
 
             # Changes to the alias
+            existing_alias <- moduleData$exist_locs[
+              which(moduleData$exist_locs$location_id == selected_loc()),
+              "alias"
+            ]
             if (
-              input$alias !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "alias"
-                ]
+              !identical(
+                normalize_optional_text(input$alias),
+                normalize_optional_text(existing_alias)
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -2101,13 +2134,13 @@ addLocation <- function(id, inputs, language) {
             }
 
             # Changes to the location type
-            if (
-              input$loc_type !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "location_type"
-                ]
-            ) {
+            if (!identical(
+              as.character(input$loc_type),
+              as.character(moduleData$exist_locs[
+                which(moduleData$exist_locs$location_id == selected_loc()),
+                "location_type_id"
+              ])
+            )) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET location_type = $1 WHERE location_id = $2;",
@@ -2117,13 +2150,13 @@ addLocation <- function(id, inputs, language) {
 
             # Changes to coordinates
             updated_coords <- FALSE
-            if (
-              input$lat !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "latitude"
-                ]
-            ) {
+            if (!identical(
+              as.numeric(input$lat),
+              as.numeric(moduleData$exist_locs[
+                which(moduleData$exist_locs$location_id == selected_loc()),
+                "latitude"
+              ])
+            )) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET latitude = $1 WHERE location_id = $2;",
@@ -2131,13 +2164,13 @@ addLocation <- function(id, inputs, language) {
               )
               updated_coords <- TRUE
             }
-            if (
-              input$lon !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "longitude"
-                ]
-            ) {
+            if (!identical(
+              as.numeric(input$lon),
+              as.numeric(moduleData$exist_locs[
+                which(moduleData$exist_locs$location_id == selected_loc()),
+                "longitude"
+              ])
+            )) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET longitude = $1 WHERE location_id = $2;",
@@ -2344,19 +2377,19 @@ addLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE boreholes.boreholes SET location_id = $1 WHERE borehole_id = $2",
-                params = list(seleced_loc(), selected_well_id())
+                params = list(selected_loc(), selected_well_id())
               )
             }
 
             # Changes to jurisdictional relevance
             if (isTruthy(input$loc_jurisdictional_relevance)) {
-              if (
-                input$loc_jurisdictional_relevance !=
-                  moduleData$exist_locs[
-                    which(moduleData$exist_locs$location_id == selected_loc()),
-                    "jurisdictional_relevance"
-                  ]
-              ) {
+              if (!identical(
+                as.logical(input$loc_jurisdictional_relevance),
+                as.logical(moduleData$exist_locs[
+                  which(moduleData$exist_locs$location_id == selected_loc()),
+                  "jurisdictional_relevance"
+                ])
+              )) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
@@ -2370,13 +2403,13 @@ addLocation <- function(id, inputs, language) {
 
             # Changes to anthropogenic influence
             if (isTruthy(input$loc_anthropogenic_influence)) {
-              if (
-                input$loc_anthropogenic_influence !=
-                  moduleData$exist_locs[
-                    which(moduleData$exist_locs$location_id == selected_loc()),
-                    "anthropogenic_influence"
-                  ]
-              ) {
+              if (!identical(
+                as.logical(input$loc_anthropogenic_influence),
+                as.logical(moduleData$exist_locs[
+                  which(moduleData$exist_locs$location_id == selected_loc()),
+                  "anthropogenic_influence"
+                ])
+              )) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
@@ -2778,6 +2811,7 @@ addLocation <- function(id, inputs, language) {
           selected_well_id(NULL)
           selected_well_label(NULL)
           fn_names(data.frame(language_id = integer(0), name = character(0)))
+          fn_names_draft(data.frame(language_id = integer(0), name = character(0)))
           fn_name_row_count(1L)
         },
         error = function(e) {
