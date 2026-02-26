@@ -269,7 +269,7 @@ app_server <- function(input, output, session) {
       }
 
       # Simple Index
-      if (isTRUE(session$userData$admin_privs$boreholes)) {
+      if (isTRUE(session$userData$admin_privs$boreholes_wells)) {
         nav_show(id = "navbar", target = "wellTasks")
       } else {
         nav_hide(id = "navbar", target = "wellTasks")
@@ -475,6 +475,8 @@ app_server <- function(input, output, session) {
     ui_loaded$addImgSeries <- FALSE
 
     ui_loaded$simplerIndex <- FALSE
+    ui_loaded$editBoreholesWells <- FALSE
+    ui_loaded$manageBoreholeDocuments <- FALSE
 
     ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
@@ -533,6 +535,8 @@ app_server <- function(input, output, session) {
     "addImgs",
     "addImgSeries",
     "simplerIndex",
+    "editBoreholesWells",
+    "manageBoreholeDocuments",
     "adminHome",
     "changePwd",
     "manageUsers",
@@ -2352,6 +2356,20 @@ app_server <- function(input, output, session) {
         output$simplerIndex_ui <- renderUI(simplerIndexUI("simplerIndex")) # Render the UI
         ui_loaded$simplerIndex <- TRUE
         simplerIndex("simplerIndex", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "editBoreholesWells") {
+      if (!ui_loaded$editBoreholesWells) {
+        output$editBoreholesWells_ui <- renderUI(editBoreholesWellsUI("editBoreholesWells"))
+        ui_loaded$editBoreholesWells <- TRUE
+        editBoreholesWells("editBoreholesWells", language = languageSelection)
+      }
+    }
+    if (input$navbar == "manageBoreholeDocuments") {
+      if (!ui_loaded$manageBoreholeDocuments) {
+        output$manageBoreholeDocuments_ui <- renderUI(manageBoreholeDocumentsUI("manageBoreholeDocuments"))
+        ui_loaded$manageBoreholeDocuments <- TRUE
+        manageBoreholeDocuments("manageBoreholeDocuments", language = languageSelection)
       }
     }
     if (input$navbar == "manageNewsContent") {

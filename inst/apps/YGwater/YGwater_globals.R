@@ -135,6 +135,14 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/editBoreholesWells.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
+      package = "YGwater"
+    ))
 
     # Field visit modules
     source(system.file(
