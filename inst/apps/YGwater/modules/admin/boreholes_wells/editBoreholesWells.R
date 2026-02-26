@@ -6,6 +6,14 @@ editBoreholesWellsUI <- function(id) {
     uiOutput(ns("banner")),
     fluidRow(
       column(
+        12,
+        h4("Existing borehole/well records"),
+        DT::DTOutput(ns("records_table"))
+      )
+    ),
+    tags$hr(),
+    fluidRow(
+      column(
         4,
         actionButton(ns("reload"), "Reload", icon = icon("refresh")),
         selectizeInput(
@@ -26,7 +34,7 @@ editBoreholesWellsUI <- function(id) {
           value = NA_real_
         ),
         selectizeInput(
-          ns("driller_id"),
+          ns("drilled_by"),
           "Driller",
           choices = NULL,
           multiple = FALSE,
@@ -43,6 +51,27 @@ editBoreholesWellsUI <- function(id) {
       ),
       column(
         4,
+        h4("Permafrost"),
+        checkboxInput(
+          ns("permafrost_present"),
+          "Permafrost present",
+          value = FALSE
+        ),
+        conditionalPanel(
+          condition = "input.permafrost_present == true",
+          ns = ns,
+          numericInput(
+            ns("permafrost_top"),
+            "Depth to top of permafrost (m)",
+            value = NA_real_
+          ),
+          numericInput(
+            ns("permafrost_bot"),
+            "Depth to bottom of permafrost (m)",
+            value = NA_real_
+          )
+        ),
+        tags$hr(),
         checkboxInput(ns("is_well"), "Has associated well record", value = FALSE),
         conditionalPanel(
           condition = "input.is_well == true",
@@ -92,14 +121,13 @@ editBoreholesWellsUI <- function(id) {
             multiple = TRUE,
             width = "100%"
           )
-        ),
-        actionButton(ns("save"), "Save changes", class = "btn-primary"),
-        actionButton(ns("clear"), "Clear form")
+        )
       ),
       column(
         4,
-        h4("Current values"),
-        DT::DTOutput(ns("records_table"))
+        h4("Actions"),
+        actionButton(ns("save"), "Save changes", class = "btn-primary"),
+        actionButton(ns("clear"), "Clear form")
       )
     )
   )
@@ -145,6 +173,15 @@ editBoreholesWells <- function(id, language) {
       as.numeric(value)
     }
 
+    round_sig <- function(x, digits = 2) {
+      if (!is.numeric(x)) {
+        return(x)
+      }
+      out <- signif(x, digits = digits)
+      out[is.na(x)] <- NA_real_
+      out
+    }
+
     load_data <- function() {
       moduleData$records <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -155,7 +192,11 @@ editBoreholesWells <- function(id, language) {
                 b.completion_date,
                 b.depth_m,
                 b.depth_to_bedrock_m,
-                b.driller_id,
+                b.drilled_by,
+                d.name AS driller_name,
+                b.permafrost_present,
+                b.permafrost_top,
+                b.permafrost_bot,
                 b.notes AS borehole_notes,
                 b.share_with AS borehole_share_with,
                 w.borehole_id IS NOT NULL AS is_well,
@@ -170,6 +211,7 @@ editBoreholesWells <- function(id, language) {
                 w.share_with AS well_share_with
          FROM boreholes.boreholes b
          LEFT JOIN boreholes.wells w ON w.borehole_id = b.borehole_id
+         LEFT JOIN boreholes.drillers d ON d.driller_id = b.drilled_by
          ORDER BY b.borehole_name ASC;"
       )
       moduleData$drillers <- DBI::dbGetQuery(
@@ -209,7 +251,7 @@ editBoreholesWells <- function(id, language) {
 
       updateSelectizeInput(
         session,
-        "driller_id",
+        "drilled_by",
         choices = stats::setNames(moduleData$drillers$driller_id, moduleData$drillers$name),
         server = TRUE
       )
@@ -244,13 +286,20 @@ editBoreholesWells <- function(id, language) {
       updateNumericInput(session, "longitude", value = rec$longitude)
       updateNumericInput(session, "depth_m", value = rec$depth_m)
       updateNumericInput(session, "depth_to_bedrock_m", value = rec$depth_to_bedrock_m)
-      updateSelectizeInput(session, "driller_id", selected = as.character(rec$driller_id))
+      updateSelectizeInput(session, "drilled_by", selected = as.character(rec$drilled_by))
       updateTextAreaInput(session, "borehole_notes", value = rec$borehole_notes)
       updateSelectizeInput(
         session,
         "share_with_borehole",
         selected = parse_role_array(rec$borehole_share_with)
       )
+      updateCheckboxInput(
+        session,
+        "permafrost_present",
+        value = isTRUE(rec$permafrost_present)
+      )
+      updateNumericInput(session, "permafrost_top", value = rec$permafrost_top)
+      updateNumericInput(session, "permafrost_bot", value = rec$permafrost_bot)
       updateCheckboxInput(session, "is_well", value = isTRUE(rec$is_well))
       updateSelectizeInput(session, "well_purpose_id", selected = as.character(rec$well_purpose_id))
       updateNumericInput(session, "casing_diameter_mm", value = rec$casing_diameter_mm)
@@ -275,9 +324,12 @@ editBoreholesWells <- function(id, language) {
       updateNumericInput(session, "longitude", value = NA_real_)
       updateNumericInput(session, "depth_m", value = NA_real_)
       updateNumericInput(session, "depth_to_bedrock_m", value = NA_real_)
-      updateSelectizeInput(session, "driller_id", selected = "")
+      updateSelectizeInput(session, "drilled_by", selected = "")
       updateTextAreaInput(session, "borehole_notes", value = "")
       updateSelectizeInput(session, "share_with_borehole", selected = character(0))
+      updateCheckboxInput(session, "permafrost_present", value = FALSE)
+      updateNumericInput(session, "permafrost_top", value = NA_real_)
+      updateNumericInput(session, "permafrost_bot", value = NA_real_)
       updateCheckboxInput(session, "is_well", value = FALSE)
       updateSelectizeInput(session, "well_purpose_id", selected = "")
       updateNumericInput(session, "casing_diameter_mm", value = NA_real_)
@@ -310,6 +362,13 @@ editBoreholesWells <- function(id, language) {
         well_share <- borehole_share
       }
 
+      permafrost_top <- maybe_num(input$permafrost_top)
+      permafrost_bot <- maybe_num(input$permafrost_bot)
+      if (!isTRUE(input$permafrost_present)) {
+        permafrost_top <- NULL
+        permafrost_bot <- NULL
+      }
+
       tryCatch(
         {
           DBI::dbExecute(session$userData$AquaCache, "BEGIN")
@@ -323,10 +382,13 @@ editBoreholesWells <- function(id, language) {
                  longitude = $4,
                  depth_m = $5,
                  depth_to_bedrock_m = $6,
-                 driller_id = $7,
+                 drilled_by = $7,
                  notes = $8,
-                 share_with = $9::text[]
-             WHERE borehole_id = $10;",
+                 share_with = $9::text[],
+                 permafrost_present = $10,
+                 permafrost_top = $11,
+                 permafrost_bot = $12
+             WHERE borehole_id = $13;",
             params = list(
               trimws(input$borehole_name),
               if (is.null(input$completion_date) || is.na(input$completion_date)) NULL else as.Date(input$completion_date),
@@ -334,9 +396,12 @@ editBoreholesWells <- function(id, language) {
               maybe_num(input$longitude),
               maybe_num(input$depth_m),
               maybe_num(input$depth_to_bedrock_m),
-              suppressWarnings(as.integer(null_if_blank(input$driller_id))),
+              suppressWarnings(as.integer(null_if_blank(input$drilled_by))),
               null_if_blank(input$borehole_notes),
               borehole_share,
+              isTRUE(input$permafrost_present),
+              permafrost_top,
+              permafrost_bot,
               borehole_id
             )
           )
@@ -429,10 +494,25 @@ editBoreholesWells <- function(id, language) {
     output$records_table <- DT::renderDT({
       req(moduleData$records)
       tbl <- moduleData$records[, c(
-        "borehole_id", "borehole_name", "completion_date", "latitude", "longitude",
-        "depth_m", "is_well", "well_purpose_id", "static_water_level_m"
+        "borehole_id", "borehole_name", "driller_name", "completion_date",
+        "latitude", "longitude", "depth_m", "depth_to_bedrock_m",
+        "permafrost_present", "permafrost_top", "permafrost_bot",
+        "is_well", "well_purpose_id", "static_water_level_m",
+        "estimated_yield_lps"
       )]
-      DT::datatable(tbl, rownames = FALSE, selection = "single", options = list(pageLength = 8))
+
+      numeric_cols <- names(tbl)[vapply(tbl, is.numeric, logical(1))]
+      for (col in numeric_cols) {
+        tbl[[col]] <- round_sig(tbl[[col]], digits = 2)
+      }
+
+      DT::datatable(
+        tbl,
+        rownames = FALSE,
+        selection = "single",
+        filter = "top",
+        options = list(pageLength = 8, scrollX = TRUE)
+      )
     })
 
     observeEvent(input$records_table_rows_selected, {

@@ -4,6 +4,7 @@ manageBoreholeDocumentsUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     uiOutput(ns("banner")),
+    tags$style(HTML(".modal-lg { width: 95% !important; max-width: 95% !important; }")),
     fluidRow(
       column(
         4,
@@ -17,14 +18,11 @@ manageBoreholeDocumentsUI <- function(id) {
         ),
         uiOutput(ns("preview")),
         h5("Add existing document association"),
-        selectizeInput(
-          ns("existing_document_id"),
-          "Existing document",
-          choices = NULL,
-          multiple = FALSE,
-          options = list(placeholder = "Select an existing document")
+        actionButton(
+          ns("open_doc_selector"),
+          "Find and select existing document",
+          icon = icon("table")
         ),
-        actionButton(ns("add_existing"), "Associate selected document"),
         tags$hr(),
         h5("Upload and associate new document"),
         fileInput(ns("doc_file"), "Document file", multiple = FALSE),
@@ -82,6 +80,34 @@ manageBoreholeDocuments <- function(id, language) {
       unique(trimws(unlist(strsplit(value, ","))))
     }
 
+    format_array <- function(values) {
+      if (is.null(values)) {
+        return(NA_character_)
+      }
+      if (is.list(values)) {
+        return(vapply(
+          values,
+          function(value) {
+            if (is.null(value) || length(value) == 0) {
+              return(NA_character_)
+            }
+            paste(value, collapse = ", ")
+          },
+          character(1)
+        ))
+      }
+      if (all(is.na(values))) {
+        return(values)
+      }
+      cleaned <- gsub("[{}\"]", "", values)
+      cleaned <- trimws(cleaned)
+      vapply(
+        strsplit(cleaned, ","),
+        function(value) paste(trimws(value), collapse = ", "),
+        character(1)
+      )
+    }
+
     load_data <- function() {
       moduleData$boreholes <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -105,7 +131,7 @@ manageBoreholeDocuments <- function(id, language) {
                 octet_length(d.document) AS document_size_bytes
          FROM files.documents d
          LEFT JOIN files.document_types dt ON dt.document_type_id = d.type
-         ORDER BY d.name ASC;"
+         ORDER BY d.publish_date DESC NULLS LAST, d.name ASC;"
       )
       moduleData$document_types <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -144,6 +170,22 @@ manageBoreholeDocuments <- function(id, language) {
       )
     })
 
+    selectable_documents <- reactive({
+      req(moduleData$all_documents, input$borehole_id)
+      docs <- data.table::as.data.table(moduleData$all_documents)
+      linked <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT document_id FROM boreholes.boreholes_documents WHERE borehole_id = $1;",
+        params = list(as.integer(input$borehole_id))
+      )
+      if (nrow(linked)) {
+        docs <- docs[!document_id %in% linked$document_id]
+      }
+      docs[, authors := format_array(authors)]
+      docs[, tags := format_array(tags)]
+      docs
+    })
+
     observe({
       req(moduleData$boreholes)
       borehole_labels <- sprintf(
@@ -160,18 +202,6 @@ manageBoreholeDocuments <- function(id, language) {
         server = TRUE
       )
 
-      doc_labels <- sprintf(
-        "%s (%s, ID %s)",
-        moduleData$all_documents$name,
-        ifelse(is.na(moduleData$all_documents$document_type_en), "type unknown", moduleData$all_documents$document_type_en),
-        moduleData$all_documents$document_id
-      )
-      updateSelectizeInput(
-        session,
-        "existing_document_id",
-        choices = stats::setNames(moduleData$all_documents$document_id, doc_labels),
-        server = TRUE
-      )
       updateSelectizeInput(
         session,
         "doc_type",
@@ -196,7 +226,7 @@ manageBoreholeDocuments <- function(id, language) {
         display,
         escape = FALSE,
         rownames = FALSE,
-        options = list(pageLength = 8)
+        options = list(pageLength = 8, scrollX = TRUE)
       )
     })
 
@@ -249,8 +279,49 @@ manageBoreholeDocuments <- function(id, language) {
       }
     )
 
-    observeEvent(input$add_existing, {
-      req(input$borehole_id, input$existing_document_id)
+    output$existing_docs_selector_table <- DT::renderDT({
+      docs <- selectable_documents()
+      DT::datatable(
+        docs[, .(
+          document_id,
+          name,
+          document_type_en,
+          publish_date,
+          format,
+          authors,
+          tags,
+          description,
+          url
+        )],
+        rownames = FALSE,
+        selection = "single",
+        filter = "top",
+        options = list(pageLength = 12, scrollX = TRUE)
+      )
+    })
+
+    observeEvent(input$open_doc_selector, {
+      req(input$borehole_id)
+      showModal(modalDialog(
+        title = "Select an existing document to associate",
+        size = "l",
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("associate_selected_doc"), "Associate selected document", class = "btn-primary")
+        ),
+        DT::DTOutput(ns("existing_docs_selector_table"))
+      ))
+    })
+
+    observeEvent(input$associate_selected_doc, {
+      req(input$borehole_id)
+      idx <- input$existing_docs_selector_table_rows_selected
+      req(length(idx) == 1)
+      docs <- selectable_documents()
+      req(nrow(docs) >= idx)
+      selected_doc <- as.integer(docs$document_id[idx])
+
       tryCatch(
         {
           DBI::dbExecute(
@@ -258,8 +329,9 @@ manageBoreholeDocuments <- function(id, language) {
             "INSERT INTO boreholes.boreholes_documents (borehole_id, document_id)
              VALUES ($1, $2)
              ON CONFLICT DO NOTHING;",
-            params = list(as.integer(input$borehole_id), as.integer(input$existing_document_id))
+            params = list(as.integer(input$borehole_id), selected_doc)
           )
+          removeModal()
           docs_refresh(isolate(docs_refresh()) + 1L)
           showNotification("Document association added.", type = "message")
         },
@@ -286,11 +358,14 @@ manageBoreholeDocuments <- function(id, language) {
       total_refs <- 0L
       if (nrow(fk_tables)) {
         for (i in seq_len(nrow(fk_tables))) {
-          q <- sprintf(
-            "SELECT COUNT(*) AS n FROM %s.%s WHERE %s = $1;",
+          q <- paste0(
+            "SELECT COUNT(*) AS n FROM ",
             DBI::dbQuoteIdentifier(session$userData$AquaCache, fk_tables$schema_name[i]),
+            ".",
             DBI::dbQuoteIdentifier(session$userData$AquaCache, fk_tables$table_name[i]),
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, fk_tables$column_name[i])
+            " WHERE ",
+            DBI::dbQuoteIdentifier(session$userData$AquaCache, fk_tables$column_name[i]),
+            " = $1;"
           )
           n <- DBI::dbGetQuery(
             session$userData$AquaCache,
@@ -310,11 +385,14 @@ manageBoreholeDocuments <- function(id, language) {
       )
       if (nrow(arr_cols)) {
         for (i in seq_len(nrow(arr_cols))) {
-          q <- sprintf(
-            "SELECT COUNT(*) AS n FROM %s.%s WHERE $1 = ANY(%s);",
+          q <- paste0(
+            "SELECT COUNT(*) AS n FROM ",
             DBI::dbQuoteIdentifier(session$userData$AquaCache, arr_cols$table_schema[i]),
+            ".",
             DBI::dbQuoteIdentifier(session$userData$AquaCache, arr_cols$table_name[i]),
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, arr_cols$column_name[i])
+            " WHERE $1 = ANY(",
+            DBI::dbQuoteIdentifier(session$userData$AquaCache, arr_cols$column_name[i]),
+            ");"
           )
           n <- DBI::dbGetQuery(
             session$userData$AquaCache,
