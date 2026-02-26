@@ -187,6 +187,10 @@ editBoreholesWells <- function(id, language) {
       out
     }
 
+    is_true <- function(x) {
+      identical(x, TRUE)
+    }
+
     load_data <- function() {
       moduleData$records <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -308,7 +312,7 @@ editBoreholesWells <- function(id, language) {
       updateCheckboxInput(
         session,
         "permafrost_present",
-        value = !is.na(rec$permafrost_top) || !is.na(rec$permafrost_bot)
+        value = is_true(!is.na(rec$permafrost_top) || !is.na(rec$permafrost_bot))
       )
       updateNumericInput(session, "permafrost_top", value = rec$permafrost_top)
       updateNumericInput(session, "permafrost_bot", value = rec$permafrost_bot)
@@ -382,7 +386,7 @@ editBoreholesWells <- function(id, language) {
 
       permafrost_top <- maybe_num(input$permafrost_top)
       permafrost_bot <- maybe_num(input$permafrost_bot)
-      if (!isTRUE(input$permafrost_present)) {
+      if (!is_true(input$permafrost_present)) {
         permafrost_top <- NULL
         permafrost_bot <- NULL
       }
@@ -418,7 +422,7 @@ editBoreholesWells <- function(id, language) {
             )
           )
 
-          if (isTRUE(input$permafrost_present)) {
+          if (is_true(input$permafrost_present)) {
             DBI::dbExecute(
               session$userData$AquaCache,
               "DELETE FROM boreholes.permafrost WHERE borehole_id = $1;",
@@ -447,14 +451,18 @@ editBoreholesWells <- function(id, language) {
             )
           }
 
-          has_well <- DBI::dbGetQuery(
+          has_well_query <- DBI::dbGetQuery(
             session$userData$AquaCache,
             "SELECT EXISTS(SELECT 1 FROM boreholes.wells WHERE borehole_id = $1) AS exists;",
             params = list(borehole_id)
-          )$exists[[1]]
+          )
+          has_well <- FALSE
+          if (nrow(has_well_query) == 1 && "exists" %in% names(has_well_query)) {
+            has_well <- is_true(as.logical(has_well_query$exists[[1]]))
+          }
 
-          if (isTRUE(input$is_well)) {
-            if (isTRUE(has_well)) {
+          if (is_true(input$is_well)) {
+            if (is_true(has_well)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE boreholes.wells
@@ -510,7 +518,7 @@ editBoreholesWells <- function(id, language) {
                 )
               )
             }
-          } else if (isTRUE(has_well)) {
+          } else if (is_true(has_well)) {
             DBI::dbExecute(
               session$userData$AquaCache,
               "DELETE FROM boreholes.wells WHERE borehole_id = $1;",
