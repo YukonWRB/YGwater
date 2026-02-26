@@ -502,6 +502,7 @@ simplerIndexUI <- function(id) {
                 width = "100%"
               )
             ),
+            hr(),
             br(),
 
             # Well identification
@@ -544,6 +545,7 @@ simplerIndexUI <- function(id) {
               ),
 
             # Location information section - remove surveyed_location_top_casing field
+            hr(),
             radioButtons(
               ns("coordinate_system"),
               "Coordinate system *",
@@ -616,7 +618,7 @@ simplerIndexUI <- function(id) {
                 maxItems = 1
               )
             ),
-
+            hr(),
             checkboxInput(
               ns("associate_loc_with_borehole"),
               "Associate borehole with monitoring location",
@@ -652,8 +654,10 @@ simplerIndexUI <- function(id) {
                 "Clear location association",
                 class = "btn btn-outline-secondary",
                 width = "100%"
-              )
+              ),
+              br()
             ),
+            hr(),
 
             selectizeInput(
               ns("purpose_of_borehole"),
@@ -749,6 +753,7 @@ simplerIndexUI <- function(id) {
             ),
 
             # Add permafrost checkbox and conditional inputs
+            hr(),
             checkboxInput(
               ns("permafrost_present"),
               "Permafrost present",
@@ -804,10 +809,12 @@ simplerIndexUI <- function(id) {
                 )
               )
             ),
+            hr(),
 
             dateInput(ns("date_drilled"), "Date drilled *", value = NULL),
 
             ## IS WELL conditional panel ##################
+            hr(),
             checkboxInput(ns("is_well"), "Well constructed", value = FALSE),
 
             # Show well construction fields only if 'is_well' is checked
@@ -989,10 +996,11 @@ simplerIndexUI <- function(id) {
                 inline = TRUE
               )
             ), # End of is_well conditional panel
+            hr(),
 
             # Add upload buttons at the bottom of the scrollable content
             div(
-              style = "margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6;",
+              style = "margin-top: 30px; padding-top: 15px;",
               fluidRow(
                 column(
                   6,
@@ -1338,11 +1346,16 @@ simplerIndex <- function(id, language) {
           selected = target_metadata$share_with_well
         )
 
-        # Drilled by
+        # Drilled by, drilled date
         updateSelectizeInput(
           session,
           "drilled_by",
           selected = target_metadata$drilled_by
+        )
+        updateDateInput(
+          session,
+          "date_drilled",
+          value = target_metadata$date_drilled
         )
 
         # Geographic information
@@ -1403,10 +1416,9 @@ simplerIndex <- function(id, language) {
           "location_search_radius",
           value = target_metadata$location_search_radius
         )
-        updateSelectizeInput(
-          session,
-          "associated_location",
-          selected = target_metadata$associated_location
+        update_location_choices(
+          nearby_locations(),
+          selected_id = target_metadata$location_id
         )
 
         # purposes
@@ -1825,7 +1837,12 @@ simplerIndex <- function(id, language) {
     # Find the fields that are copyable from one borehole to another (i.e. those that are not borehole_id or well-specific fields)
     copyable_metadata_fields <- setdiff(
       well_fields,
-      c("borehole_id", nested_well_specific_fields)
+      c(
+        "borehole_id",
+        "location_id",
+        "associated_location",
+        nested_well_specific_fields
+      )
     )
 
     empty_well_entry <- function() {
@@ -4445,6 +4462,9 @@ simplerIndex <- function(id, language) {
         latitude = input$latitude,
         longitude = input$longitude,
         location_source = input$location_source,
+        associate_loc_with_borehole = input$associate_loc_with_borehole,
+        location_search_radius = input$location_search_radius,
+        associated_location = input$associated_location,
         purpose_of_borehole = input$purpose_of_borehole,
         purpose_borehole_inferred = input$purpose_borehole_inferred,
         depth_to_bedrock = input$depth_to_bedrock,
@@ -4687,6 +4707,28 @@ simplerIndex <- function(id, language) {
               metadata = metadata,
               default = TRUE
             )
+          )
+
+          updateCheckboxInput(
+            session,
+            "associate_loc_with_borehole",
+            value = get_meta_boolean(
+              "associate_loc_with_borehole",
+              metadata = metadata,
+              default = FALSE
+            )
+          )
+          updateNumericInput(
+            session,
+            "location_search_radius",
+            value = get_meta_numeric(
+              "location_search_radius",
+              metadata = metadata
+            )
+          )
+          update_location_choices(
+            nearby_locations(),
+            selected_id = get_meta_value("location_id", metadata = metadata)
           )
 
           # Update numeric inputs
