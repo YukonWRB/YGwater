@@ -77,7 +77,11 @@ editBoreholesWellsUI <- function(id) {
           )
         ),
         tags$hr(),
-        checkboxInput(ns("is_well"), "Has associated well record", value = FALSE),
+        checkboxInput(
+          ns("is_well"),
+          "Has associated well record",
+          value = FALSE
+        ),
         conditionalPanel(
           condition = "input.is_well == true",
           ns = ns,
@@ -154,26 +158,24 @@ editBoreholesWells <- function(id, language) {
 
     moduleData <- reactiveValues()
 
-    parse_role_array <- function(value) {
-      if (is.null(value) || !length(value) || all(is.na(value))) {
-        return(character(0))
-      }
-      value <- gsub("[{}\"]", "", as.character(value))
-      bits <- trimws(unlist(strsplit(value, ",")))
-      bits <- bits[nzchar(bits)]
-      unique(bits)
-    }
-
-    null_if_blank <- function(value) {
-      if (is.null(value) || !length(value) || is.na(value) || !nzchar(trimws(as.character(value)))) {
-        return(NULL)
+    na_if_blank <- function(value) {
+      if (is.null(value)) {
+        return(NA)
+      } else if (
+        !length(value) ||
+          is.na(value) ||
+          !nzchar(trimws(as.character(value)))
+      ) {
+        return(NA)
       }
       value
     }
 
     maybe_num <- function(value) {
-      if (is.null(value) || !length(value) || is.na(value)) {
-        return(NULL)
+      if (is.null(value)) {
+        return(NA)
+      } else if (!length(value) || is.na(value)) {
+        return(NA)
       }
       as.numeric(value)
     }
@@ -264,7 +266,10 @@ editBoreholesWells <- function(id, language) {
       updateSelectizeInput(
         session,
         "drilled_by",
-        choices = stats::setNames(moduleData$drillers$driller_id, moduleData$drillers$name),
+        choices = stats::setNames(
+          moduleData$drillers$driller_id,
+          moduleData$drillers$name
+        ),
         server = TRUE
       )
       updateSelectizeInput(
@@ -290,20 +295,30 @@ editBoreholesWells <- function(id, language) {
 
     observeEvent(input$record_id, {
       req(moduleData$records)
-      rec <- moduleData$records[moduleData$records$borehole_id == as.integer(input$record_id), ]
+      rec <- moduleData$records[
+        moduleData$records$borehole_id == as.integer(input$record_id),
+      ]
       req(nrow(rec) == 1)
       updateTextInput(session, "borehole_name", value = rec$borehole_name)
       updateDateInput(session, "completion_date", value = rec$completion_date)
       updateNumericInput(session, "latitude", value = rec$latitude)
       updateNumericInput(session, "longitude", value = rec$longitude)
       updateNumericInput(session, "depth_m", value = rec$depth_m)
-      updateNumericInput(session, "depth_to_bedrock_m", value = rec$depth_to_bedrock_m)
-      updateSelectizeInput(session, "drilled_by", selected = as.character(rec$drilled_by))
+      updateNumericInput(
+        session,
+        "depth_to_bedrock_m",
+        value = rec$depth_to_bedrock_m
+      )
+      updateSelectizeInput(
+        session,
+        "drilled_by",
+        selected = as.character(rec$drilled_by)
+      )
       updateTextAreaInput(session, "borehole_notes", value = rec$borehole_notes)
       updateSelectizeInput(
         session,
         "share_with_borehole",
-        selected = parse_role_array(rec$borehole_share_with)
+        selected = array_to_text(rec$borehole_share_with)
       )
       updateCheckboxInput(
         session,
@@ -318,18 +333,46 @@ editBoreholesWells <- function(id, language) {
         value = rec$permafrost_ice_description
       )
       updateCheckboxInput(session, "is_well", value = isTRUE(rec$is_well))
-      updateSelectizeInput(session, "well_purpose_id", selected = as.character(rec$well_purpose_id))
-      updateNumericInput(session, "casing_diameter_mm", value = rec$casing_diameter_mm)
-      updateNumericInput(session, "casing_depth_to_m", value = rec$casing_depth_to_m)
-      updateNumericInput(session, "screen_top_depth_m", value = rec$screen_top_depth_m)
-      updateNumericInput(session, "screen_bottom_depth_m", value = rec$screen_bottom_depth_m)
-      updateNumericInput(session, "static_water_level_m", value = rec$static_water_level_m)
-      updateNumericInput(session, "estimated_yield_lps", value = rec$estimated_yield_lps)
+      updateSelectizeInput(
+        session,
+        "well_purpose_id",
+        selected = as.character(rec$well_purpose_id)
+      )
+      updateNumericInput(
+        session,
+        "casing_diameter_mm",
+        value = rec$casing_diameter_mm
+      )
+      updateNumericInput(
+        session,
+        "casing_depth_to_m",
+        value = rec$casing_depth_to_m
+      )
+      updateNumericInput(
+        session,
+        "screen_top_depth_m",
+        value = rec$screen_top_depth_m
+      )
+      updateNumericInput(
+        session,
+        "screen_bottom_depth_m",
+        value = rec$screen_bottom_depth_m
+      )
+      updateNumericInput(
+        session,
+        "static_water_level_m",
+        value = rec$static_water_level_m
+      )
+      updateNumericInput(
+        session,
+        "estimated_yield_lps",
+        value = rec$estimated_yield_lps
+      )
       updateTextAreaInput(session, "well_notes", value = rec$well_notes)
       updateSelectizeInput(
         session,
         "share_with_well",
-        selected = parse_role_array(rec$well_share_with)
+        selected = array_to_text(rec$well_share_with)
       )
     })
 
@@ -343,7 +386,11 @@ editBoreholesWells <- function(id, language) {
       updateNumericInput(session, "depth_to_bedrock_m", value = NA_real_)
       updateSelectizeInput(session, "drilled_by", selected = "")
       updateTextAreaInput(session, "borehole_notes", value = "")
-      updateSelectizeInput(session, "share_with_borehole", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "share_with_borehole",
+        selected = character(0)
+      )
       updateCheckboxInput(session, "permafrost_present", value = FALSE)
       updateNumericInput(session, "permafrost_top", value = NA_real_)
       updateNumericInput(session, "permafrost_bot", value = NA_real_)
@@ -372,13 +419,17 @@ editBoreholesWells <- function(id, language) {
 
       borehole_share <- unique(trimws(input$share_with_borehole))
       borehole_share <- borehole_share[nzchar(borehole_share)]
-      if (!length(borehole_share)) borehole_share <- "public_reader"
+      if (!length(borehole_share)) {
+        borehole_share <- "public_reader"
+      }
+      borehole_share <- share_with_to_array(borehole_share)
 
       well_share <- unique(trimws(input$share_with_well))
       well_share <- well_share[nzchar(well_share)]
       if (!length(well_share)) {
         well_share <- borehole_share
       }
+      well_share <- share_with_to_array(well_share)
 
       permafrost_top <- maybe_num(input$permafrost_top)
       permafrost_bot <- maybe_num(input$permafrost_bot)
@@ -387,9 +438,31 @@ editBoreholesWells <- function(id, language) {
         permafrost_bot <- NULL
       }
 
+      completion_date <- if (is.null(input$completion_date)) {
+        NA
+      } else if (length(input$completion_date) == 0) {
+        NA
+      } else if (nchar(input$completion_date) == 0) {
+        NA
+      } else if (is.na(input$completion_date)) {
+        NA
+      } else {
+        input$completion_date
+      }
+
       tryCatch(
         {
           DBI::dbExecute(session$userData$AquaCache, "BEGIN")
+          print(input$borehole_name)
+          print(input$completion_date)
+          print(input$latitude)
+          print(input$longitude)
+          print(input$depth_m)
+          print(input$depth_to_bedrock_m)
+          print(input$drilled_by)
+          print(input$borehole_notes)
+          print(borehole_share)
+          print(borehole_id)
 
           DBI::dbExecute(
             session$userData$AquaCache,
@@ -406,13 +479,13 @@ editBoreholesWells <- function(id, language) {
              WHERE borehole_id = $10;",
             params = list(
               trimws(input$borehole_name),
-              if (is.null(input$completion_date) || is.na(input$completion_date)) NULL else as.Date(input$completion_date),
+              completion_date,
               maybe_num(input$latitude),
               maybe_num(input$longitude),
               maybe_num(input$depth_m),
               maybe_num(input$depth_to_bedrock_m),
-              suppressWarnings(as.integer(null_if_blank(input$drilled_by))),
-              null_if_blank(input$borehole_notes),
+              suppressWarnings(as.integer(na_if_blank(input$drilled_by))),
+              na_if_blank(input$borehole_notes),
               borehole_share,
               borehole_id
             )
@@ -436,7 +509,7 @@ editBoreholesWells <- function(id, language) {
                 borehole_id,
                 permafrost_top,
                 permafrost_bot,
-                null_if_blank(input$permafrost_ice_description)
+                na_if_blank(input$permafrost_ice_description)
               )
             )
           } else {
@@ -469,14 +542,16 @@ editBoreholesWells <- function(id, language) {
                      share_with = $9::text[]
                  WHERE borehole_id = $10;",
                 params = list(
-                  suppressWarnings(as.integer(null_if_blank(input$well_purpose_id))),
+                  suppressWarnings(as.integer(na_if_blank(
+                    input$well_purpose_id
+                  ))),
                   maybe_num(input$casing_diameter_mm),
                   maybe_num(input$casing_depth_to_m),
                   maybe_num(input$screen_top_depth_m),
                   maybe_num(input$screen_bottom_depth_m),
                   maybe_num(input$static_water_level_m),
                   maybe_num(input$estimated_yield_lps),
-                  null_if_blank(input$well_notes),
+                  na_if_blank(input$well_notes),
                   well_share,
                   borehole_id
                 )
@@ -498,14 +573,16 @@ editBoreholesWells <- function(id, language) {
                  ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[]);",
                 params = list(
                   borehole_id,
-                  suppressWarnings(as.integer(null_if_blank(input$well_purpose_id))),
+                  suppressWarnings(as.integer(na_if_blank(
+                    input$well_purpose_id
+                  ))),
                   maybe_num(input$casing_diameter_mm),
                   maybe_num(input$casing_depth_to_m),
                   maybe_num(input$screen_top_depth_m),
                   maybe_num(input$screen_bottom_depth_m),
                   maybe_num(input$static_water_level_m),
                   maybe_num(input$estimated_yield_lps),
-                  null_if_blank(input$well_notes),
+                  na_if_blank(input$well_notes),
                   well_share
                 )
               )
@@ -535,12 +612,24 @@ editBoreholesWells <- function(id, language) {
     output$records_table <- DT::renderDT({
       req(moduleData$records)
       tbl <- moduleData$records
-      tbl$permafrost_present <- !is.na(tbl$permafrost_top) | !is.na(tbl$permafrost_bot)
+      tbl$permafrost_present <- !is.na(tbl$permafrost_top) |
+        !is.na(tbl$permafrost_bot)
       tbl <- tbl[, c(
-        "borehole_id", "borehole_name", "driller_name", "completion_date",
-        "latitude", "longitude", "depth_m", "depth_to_bedrock_m",
-        "permafrost_present", "permafrost_top", "permafrost_bot", "permafrost_ice_description",
-        "is_well", "well_purpose_id", "static_water_level_m",
+        "borehole_id",
+        "borehole_name",
+        "driller_name",
+        "completion_date",
+        "latitude",
+        "longitude",
+        "depth_m",
+        "depth_to_bedrock_m",
+        "permafrost_present",
+        "permafrost_top",
+        "permafrost_bot",
+        "permafrost_ice_description",
+        "is_well",
+        "well_purpose_id",
+        "static_water_level_m",
         "estimated_yield_lps"
       )]
 

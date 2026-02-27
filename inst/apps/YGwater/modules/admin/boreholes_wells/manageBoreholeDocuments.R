@@ -4,7 +4,9 @@ manageBoreholeDocumentsUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     uiOutput(ns("banner")),
-    tags$style(HTML(".modal-lg { width: 95% !important; max-width: 95% !important; }")),
+    tags$style(HTML(
+      ".modal-lg { width: 95% !important; max-width: 95% !important; }"
+    )),
     fluidRow(
       column(
         4,
@@ -17,17 +19,22 @@ manageBoreholeDocumentsUI <- function(id) {
           options = list(placeholder = "Choose a borehole/well")
         ),
         uiOutput(ns("preview")),
-        h5("Add existing document association"),
+        h5("Associate with existing document"),
         actionButton(
           ns("open_doc_selector"),
           "Find and select existing document",
           icon = icon("table")
         ),
         tags$hr(),
-        h5("Upload and associate new document"),
+        h5("Upload and associate to new document"),
         fileInput(ns("doc_file"), "Document file", multiple = FALSE),
         textInput(ns("doc_name"), "Document name"),
-        selectizeInput(ns("doc_type"), "Document type", choices = NULL, multiple = FALSE),
+        selectizeInput(
+          ns("doc_type"),
+          "Document type",
+          choices = NULL,
+          multiple = FALSE
+        ),
         textAreaInput(ns("doc_description"), "Description", width = "100%"),
         textInput(ns("doc_authors"), "Authors (comma separated)"),
         textInput(ns("doc_tags"), "Tags (comma separated)"),
@@ -40,7 +47,11 @@ manageBoreholeDocumentsUI <- function(id) {
           multiple = TRUE,
           selected = "public_reader"
         ),
-        actionButton(ns("upload_and_associate"), "Upload + associate", class = "btn-primary")
+        actionButton(
+          ns("upload_and_associate"),
+          "Upload + associate",
+          class = "btn-primary"
+        )
       ),
       column(
         8,
@@ -76,7 +87,9 @@ manageBoreholeDocuments <- function(id, language) {
       value <- gsub("[{}\"]", "", as.character(value))
       value <- trimws(value)
       value <- value[nzchar(value)]
-      if (!length(value)) return(character(0))
+      if (!length(value)) {
+        return(character(0))
+      }
       unique(trimws(unlist(strsplit(value, ","))))
     }
 
@@ -197,7 +210,10 @@ manageBoreholeDocuments <- function(id, language) {
       updateSelectizeInput(
         session,
         "borehole_id",
-        choices = stats::setNames(moduleData$boreholes$borehole_id, borehole_labels),
+        choices = stats::setNames(
+          moduleData$boreholes$borehole_id,
+          borehole_labels
+        ),
         selected = isolate(input$borehole_id),
         server = TRUE
       )
@@ -205,7 +221,10 @@ manageBoreholeDocuments <- function(id, language) {
       updateSelectizeInput(
         session,
         "doc_type",
-        choices = stats::setNames(moduleData$document_types$document_type_en, moduleData$document_types$document_type_en)
+        choices = stats::setNames(
+          moduleData$document_types$document_type_en,
+          moduleData$document_types$document_type_en
+        )
       )
       updateSelectizeInput(
         session,
@@ -218,9 +237,18 @@ manageBoreholeDocuments <- function(id, language) {
     output$associated_docs <- DT::renderDT({
       docs <- associated_docs()
       display <- docs[, c(
-        "document_id", "name", "document_type_en", "publish_date", "format", "url"
+        "document_id",
+        "name",
+        "document_type_en",
+        "publish_date",
+        "format",
+        "url"
       )]
-      display$remove <- sprintf("<button class='btn btn-sm btn-danger' onclick=\"Shiny.setInputValue('%s', %s, {priority: 'event'})\">Remove</button>", ns("remove_doc_id"), display$document_id)
+      display$remove <- sprintf(
+        "<button class='btn btn-sm btn-danger' onclick=\"Shiny.setInputValue('%s', %s, {priority: 'event'})\">Remove</button>",
+        ns("remove_doc_id"),
+        display$document_id
+      )
 
       DT::datatable(
         display,
@@ -237,15 +265,23 @@ manageBoreholeDocuments <- function(id, language) {
       }
       first <- docs[1, ]
       if (tolower(first$format) %in% c("png", "jpg", "jpeg", "gif", "webp")) {
-        mime <- paste0("image/", ifelse(tolower(first$format) == "jpg", "jpeg", tolower(first$format)))
+        mime <- paste0(
+          "image/",
+          ifelse(tolower(first$format) == "jpg", "jpeg", tolower(first$format))
+        )
         raw <- first$document[[1]]
         encoded <- openssl::base64_encode(raw)
         return(tagList(
           tags$p(sprintf("Previewing: %s", first$name)),
-          tags$img(src = sprintf("data:%s;base64,%s", mime, encoded), style = "max-width: 100%; border: 1px solid #ddd;")
+          tags$img(
+            src = sprintf("data:%s;base64,%s", mime, encoded),
+            style = "max-width: 100%; border: 1px solid #ddd;"
+          )
         ))
       }
-      tags$p("Thumbnail preview is currently available for image documents only.")
+      tags$p(
+        "Thumbnail preview is currently available for image documents only."
+      )
     })
 
     selected_doc_id <- reactive({
@@ -308,7 +344,11 @@ manageBoreholeDocuments <- function(id, language) {
         easyClose = TRUE,
         footer = tagList(
           modalButton("Cancel"),
-          actionButton(ns("associate_selected_doc"), "Associate selected document", class = "btn-primary")
+          actionButton(
+            ns("associate_selected_doc"),
+            "Associate selected document",
+            class = "btn-primary"
+          )
         ),
         DT::DTOutput(ns("existing_docs_selector_table"))
       ))
@@ -336,7 +376,10 @@ manageBoreholeDocuments <- function(id, language) {
           showNotification("Document association added.", type = "message")
         },
         error = function(e) {
-          showNotification(paste("Failed to add association:", e$message), type = "error")
+          showNotification(
+            paste("Failed to add association:", e$message),
+            type = "error"
+          )
         }
       )
     })
@@ -360,11 +403,20 @@ manageBoreholeDocuments <- function(id, language) {
         for (i in seq_len(nrow(fk_tables))) {
           q <- paste0(
             "SELECT COUNT(*) AS n FROM ",
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, fk_tables$schema_name[i]),
+            DBI::dbQuoteIdentifier(
+              session$userData$AquaCache,
+              fk_tables$schema_name[i]
+            ),
             ".",
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, fk_tables$table_name[i]),
+            DBI::dbQuoteIdentifier(
+              session$userData$AquaCache,
+              fk_tables$table_name[i]
+            ),
             " WHERE ",
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, fk_tables$column_name[i]),
+            DBI::dbQuoteIdentifier(
+              session$userData$AquaCache,
+              fk_tables$column_name[i]
+            ),
             " = $1;"
           )
           n <- DBI::dbGetQuery(
@@ -387,11 +439,20 @@ manageBoreholeDocuments <- function(id, language) {
         for (i in seq_len(nrow(arr_cols))) {
           q <- paste0(
             "SELECT COUNT(*) AS n FROM ",
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, arr_cols$table_schema[i]),
+            DBI::dbQuoteIdentifier(
+              session$userData$AquaCache,
+              arr_cols$table_schema[i]
+            ),
             ".",
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, arr_cols$table_name[i]),
+            DBI::dbQuoteIdentifier(
+              session$userData$AquaCache,
+              arr_cols$table_name[i]
+            ),
             " WHERE $1 = ANY(",
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, arr_cols$column_name[i]),
+            DBI::dbQuoteIdentifier(
+              session$userData$AquaCache,
+              arr_cols$column_name[i]
+            ),
             ");"
           )
           n <- DBI::dbGetQuery(
@@ -438,15 +499,28 @@ manageBoreholeDocuments <- function(id, language) {
         },
         error = function(e) {
           DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
-          showNotification(paste("Failed to remove association:", e$message), type = "error")
+          showNotification(
+            paste("Failed to remove association:", e$message),
+            type = "error"
+          )
         }
       )
     })
 
     observeEvent(input$upload_and_associate, {
-      req(input$borehole_id, input$doc_file, input$doc_name, input$doc_type, input$doc_description)
+      req(
+        input$borehole_id,
+        input$doc_file,
+        input$doc_name,
+        input$doc_type,
+        input$doc_description
+      )
 
-      doc_bytes <- readBin(input$doc_file$datapath, "raw", n = file.info(input$doc_file$datapath)$size)
+      doc_bytes <- readBin(
+        input$doc_file$datapath,
+        "raw",
+        n = file.info(input$doc_file$datapath)$size
+      )
       doc_hash <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT md5($1::bytea) AS md5;",
@@ -465,7 +539,9 @@ manageBoreholeDocuments <- function(id, language) {
       tags <- split_comma_text(input$doc_tags)
       authors <- split_comma_text(input$doc_authors)
       share_with <- split_comma_text(input$doc_share_with)
-      if (!length(share_with)) share_with <- "public_reader"
+      if (!length(share_with)) {
+        share_with <- "public_reader"
+      }
 
       tryCatch(
         {
@@ -480,7 +556,13 @@ manageBoreholeDocuments <- function(id, language) {
               description = input$doc_description,
               tags = if (length(tags)) tags else NULL,
               authors = if (length(authors)) authors else NULL,
-              publish_date = if (is.null(input$doc_publish_date) || is.na(input$doc_publish_date)) NULL else as.Date(input$doc_publish_date),
+              publish_date = if (
+                is.null(input$doc_publish_date) || is.na(input$doc_publish_date)
+              ) {
+                NULL
+              } else {
+                as.Date(input$doc_publish_date)
+              },
               url = if (nzchar(trimws(input$doc_url))) input$doc_url else NULL,
               share_with = share_with,
               geoms = NULL,
@@ -507,17 +589,26 @@ manageBoreholeDocuments <- function(id, language) {
             "INSERT INTO boreholes.boreholes_documents (borehole_id, document_id)
              VALUES ($1, $2)
              ON CONFLICT DO NOTHING;",
-            params = list(as.integer(input$borehole_id), as.integer(document_id))
+            params = list(
+              as.integer(input$borehole_id),
+              as.integer(document_id)
+            )
           )
 
           DBI::dbExecute(session$userData$AquaCache, "COMMIT")
           load_data()
           docs_refresh(isolate(docs_refresh()) + 1L)
-          showNotification("Document associated with borehole/well.", type = "message")
+          showNotification(
+            "Document associated with borehole/well.",
+            type = "message"
+          )
         },
         error = function(e) {
           DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
-          showNotification(paste("Upload/association failed:", e$message), type = "error")
+          showNotification(
+            paste("Upload/association failed:", e$message),
+            type = "error"
+          )
         }
       )
     })
