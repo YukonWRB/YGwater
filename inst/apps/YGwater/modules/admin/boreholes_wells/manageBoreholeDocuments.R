@@ -80,19 +80,6 @@ manageBoreholeDocuments <- function(id, language) {
     moduleData <- reactiveValues()
     docs_refresh <- reactiveVal(0L)
 
-    split_comma_text <- function(value) {
-      if (is.null(value) || !length(value) || all(is.na(value))) {
-        return(character(0))
-      }
-      value <- gsub("[{}\"]", "", as.character(value))
-      value <- trimws(value)
-      value <- value[nzchar(value)]
-      if (!length(value)) {
-        return(character(0))
-      }
-      unique(trimws(unlist(strsplit(value, ","))))
-    }
-
     format_array <- function(values) {
       if (is.null(values)) {
         return(NA_character_)
@@ -535,9 +522,9 @@ manageBoreholeDocuments <- function(id, language) {
         params = list(doc_hash)
       )
 
-      tags <- split_comma_text(input$doc_tags)
-      authors <- split_comma_text(input$doc_authors)
-      share_with <- split_comma_text(input$doc_share_with)
+      tags <- array_to_text(input$doc_tags)
+      authors <- array_to_text(input$doc_authors)
+      share_with <- array_to_text(input$doc_share_with)
       if (!length(share_with)) {
         share_with <- "public_reader"
       }
