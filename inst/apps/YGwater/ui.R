@@ -470,6 +470,16 @@ app_ui <- function(request) {
               title = "Simpler Index",
               value = "simplerIndex",
               uiOutput("simplerIndex_ui")
+            ),
+            nav_panel(
+              title = "Edit borehole/well records",
+              value = "editBoreholesWells",
+              uiOutput("editBoreholesWells_ui")
+            ),
+            nav_panel(
+              title = "Manage borehole documents",
+              value = "manageBoreholeDocuments",
+              uiOutput("manageBoreholeDocuments_ui")
             )
           )
         },
