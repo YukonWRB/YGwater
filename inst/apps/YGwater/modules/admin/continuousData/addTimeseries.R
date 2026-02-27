@@ -117,6 +117,15 @@ addTimeseries <- function(id, language) {
         session$userData$AquaCache,
         "SELECT * FROM public.organization_data_sharing_agreements;"
       )
+      moduleData$basic_corrections <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "
+        SELECT c.correction_id, c.timeseries_id, c.start_dt, c.end_dt, c.value1 AS lower_bound, c.value2 AS upper_bound
+        FROM continuous.corrections c
+        INNER JOIN continuous.correction_types ct ON c.correction_type = ct.correction_type_id
+        WHERE ct.correction_type = 'trim'
+        "
+      )
     }
 
     getModuleData() # Initial data load
@@ -389,6 +398,44 @@ addTimeseries <- function(id, language) {
             )
           )
         ),
+        tags$hr(),
+        tags$h4("Basic corrections (optional)"),
+        tags$p(
+          class = "text-muted",
+          "Use these bounds to filter out values below/above specified thresholds. If left blank, no bound is applied."
+        ),
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          numericInput(
+            ns("correction_lower_bound"),
+            "Filter values below",
+            value = NA,
+            width = "100%"
+          ),
+          numericInput(
+            ns("correction_upper_bound"),
+            "Filter values above",
+            value = NA,
+            width = "100%"
+          )
+        ),
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          dateInput(
+            ns("correction_start_dt"),
+            "Correction start date",
+            value = as.Date("1900-01-01"),
+            format = "yyyy-mm-dd",
+            width = "100%"
+          ),
+          dateInput(
+            ns("correction_end_dt"),
+            "Correction end date",
+            value = as.Date("2100-01-01"),
+            format = "yyyy-mm-dd",
+            width = "100%"
+          )
+        ),
         textAreaInput(
           ns("note"),
           "Note (optional)",
@@ -457,6 +504,70 @@ addTimeseries <- function(id, language) {
 
     selected_tsid <- reactiveVal(NULL)
 
+    getTrimCorrectionForTimeseries <- function(tsid) {
+      req(tsid)
+      corr <- moduleData$basic_corrections[
+        moduleData$basic_corrections$timeseries_id == tsid,
+      ]
+      if (nrow(corr) == 0) {
+        return(NULL)
+      }
+      corr <- corr[order(corr$start_dt, decreasing = TRUE), ]
+      corr[1, ]
+    }
+
+    upsertTrimCorrection <- function(con, tsid, lower_bound, upper_bound, start_dt, end_dt) {
+      existing <- DBI::dbGetQuery(
+        con,
+        "
+        SELECT c.correction_id
+        FROM continuous.corrections c
+        INNER JOIN continuous.correction_types ct ON c.correction_type = ct.correction_type_id
+        WHERE c.timeseries_id = $1 AND ct.correction_type = 'trim'
+        ORDER BY c.start_dt DESC
+        LIMIT 1
+        ",
+        params = list(tsid)
+      )
+
+      if (is.na(lower_bound) && is.na(upper_bound)) {
+        if (nrow(existing) > 0) {
+          DBI::dbExecute(
+            con,
+            "DELETE FROM continuous.corrections WHERE correction_id = $1",
+            params = list(existing$correction_id[1])
+          )
+        }
+        return(invisible(NULL))
+      }
+
+      trim_type_id <- DBI::dbGetQuery(
+        con,
+        "SELECT correction_type_id FROM continuous.correction_types WHERE correction_type = 'trim'"
+      )
+
+      if (nrow(trim_type_id) == 0) {
+        stop("Could not find the 'trim' correction type in continuous.correction_types.")
+      }
+
+      start_ts <- paste0(as.character(start_dt), " 00:00:00+00")
+      end_ts <- paste0(as.character(end_dt), " 00:00:00+00")
+
+      if (nrow(existing) == 0) {
+        DBI::dbExecute(
+          con,
+          "INSERT INTO continuous.corrections (timeseries_id, start_dt, end_dt, correction_type, value1, value2) VALUES ($1, $2, $3, $4, $5, $6)",
+          params = list(tsid, start_ts, end_ts, trim_type_id$correction_type_id[1], lower_bound, upper_bound)
+        )
+      } else {
+        DBI::dbExecute(
+          con,
+          "UPDATE continuous.corrections SET start_dt = $1, end_dt = $2, value1 = $3, value2 = $4 WHERE correction_id = $5",
+          params = list(start_ts, end_ts, lower_bound, upper_bound, existing$correction_id[1])
+        )
+      }
+    }
+
     observeEvent(
       input$reload_module,
       {
@@ -521,6 +632,10 @@ addTimeseries <- function(id, language) {
           "source_fx",
           choices = moduleData$source_fx
         )
+        updateNumericInput(session, "correction_lower_bound", value = NA)
+        updateNumericInput(session, "correction_upper_bound", value = NA)
+        updateDateInput(session, "correction_start_dt", value = as.Date("1900-01-01"))
+        updateDateInput(session, "correction_end_dt", value = as.Date("2100-01-01"))
         showNotification("Module reloaded", type = "message")
       },
       ignoreInit = TRUE
@@ -768,6 +883,19 @@ addTimeseries <- function(id, language) {
             "note",
             value = ifelse(is.na(details$note), "", details$note)
           )
+
+          trim_corr <- getTrimCorrectionForTimeseries(tsid)
+          if (is.null(trim_corr)) {
+            updateNumericInput(session, "correction_lower_bound", value = NA)
+            updateNumericInput(session, "correction_upper_bound", value = NA)
+            updateDateInput(session, "correction_start_dt", value = as.Date("1900-01-01"))
+            updateDateInput(session, "correction_end_dt", value = as.Date("2100-01-01"))
+          } else {
+            updateNumericInput(session, "correction_lower_bound", value = trim_corr$lower_bound)
+            updateNumericInput(session, "correction_upper_bound", value = trim_corr$upper_bound)
+            updateDateInput(session, "correction_start_dt", value = as.Date(trim_corr$start_dt))
+            updateDateInput(session, "correction_end_dt", value = as.Date(trim_corr$end_dt))
+          }
         } else {
           showNotification(
             "Selected timeseries not found in the database.",
@@ -941,7 +1069,11 @@ addTimeseries <- function(id, language) {
         source_fx,
         source_fx_args,
         data,
-        share_with
+        share_with,
+        correction_lower_bound,
+        correction_upper_bound,
+        correction_start_dt,
+        correction_end_dt
       ) {
         promises::future_promise(seed = TRUE, expr = {
           tryCatch(
@@ -1045,6 +1177,15 @@ addTimeseries <- function(id, language) {
                   ifelse(is.na(end_datetime), NA, end_datetime)
                 )
               )[1, 1]
+
+              upsertTrimCorrection(
+                con = con,
+                tsid = new_timeseries_id,
+                lower_bound = correction_lower_bound,
+                upper_bound = correction_upper_bound,
+                start_dt = correction_start_dt,
+                end_dt = correction_end_dt
+              )
 
               # Fetch historical data if source_fx is provided
               if (!is.na(source_fx)) {
@@ -1183,6 +1324,15 @@ addTimeseries <- function(id, language) {
         }
       }
 
+      if (input$correction_start_dt >= input$correction_end_dt) {
+        showNotification(
+          "Correction start date must be before correction end date.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
       # Call the extendedTask to add a new timeseries
       addNewTimeseries$invoke(
         config = session$userData$config,
@@ -1201,7 +1351,11 @@ addTimeseries <- function(id, language) {
         source_fx = input$source_fx,
         source_fx_args = input$source_fx_args,
         data = reactiveValuesToList(moduleData),
-        share_with = input$share_with
+        share_with = input$share_with,
+        correction_lower_bound = input$correction_lower_bound,
+        correction_upper_bound = input$correction_upper_bound,
+        correction_start_dt = input$correction_start_dt,
+        correction_end_dt = input$correction_end_dt
       )
     })
 
@@ -1256,6 +1410,10 @@ addTimeseries <- function(id, language) {
         updateSelectizeInput(session, "source_fx", selected = character(0))
         updateTextInput(session, "source_fx_args", value = "")
         updateTextAreaInput(session, "note", value = "")
+        updateNumericInput(session, "correction_lower_bound", value = NA)
+        updateNumericInput(session, "correction_upper_bound", value = NA)
+        updateDateInput(session, "correction_start_dt", value = as.Date("1900-01-01"))
+        updateDateInput(session, "correction_end_dt", value = as.Date("2100-01-01"))
       }
     })
 
@@ -1295,6 +1453,15 @@ addTimeseries <- function(id, language) {
         if (nrow(existing_timeseries) == 0) {
           showNotification(
             "Selected timeseries does not exist in the database.",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+
+        if (input$correction_start_dt >= input$correction_end_dt) {
+          showNotification(
+            "Correction start date must be before correction end date.",
             type = "error",
             duration = 8
           )
@@ -1699,6 +1866,15 @@ addTimeseries <- function(id, language) {
                 )
               )
             }
+
+            upsertTrimCorrection(
+              con = session$userData$AquaCache,
+              tsid = selected_timeseries$timeseries_id,
+              lower_bound = input$correction_lower_bound,
+              upper_bound = input$correction_upper_bound,
+              start_dt = input$correction_start_dt,
+              end_dt = input$correction_end_dt
+            )
 
             # If recalc_stats is TRUE, we need to recalculate stats from the beginning of the timeseries
             if (recalc_stats) {
