@@ -2,26 +2,27 @@
 #'
 #' @description
 #' Plot a histogram-style bar chart for a continuous AquaCache timeseries using
-#' corrected values. Data are binned by a configurable width and unit, then
-#' aggregated using a selected transformation.
+#' corrected values. Binning and aggregation are pushed to PostgreSQL where
+#' possible for improved performance on high-frequency data.
 #'
 #' @param timeseries_id Timeseries ID from `continuous.timeseries`.
 #' @param start_datetime Start datetime (character, Date, or POSIXct).
 #' @param end_datetime End datetime (character, Date, or POSIXct).
 #' @param bin_width Numeric width for each bin (e.g., `1`, `6`, `24`).
-#' @param bin_width_units Bin units. One of `"hours"`, `"days"`, `"weeks"`, or
-#'   `"months"`.
-#' @param years Number of years to include, counted backward from `end_datetime`.
-#'   Default is `1`. If `years > 1`, bars are grouped by year for each recurring
-#'   intra-year bin (e.g., January bins adjacent).
+#' @param bin_width_units Bin units. One of `"hours"`, `"days"`, `"weeks"`,
+#'   `"months"`, or `"years"`.
+#' @param years Optional numeric vector of calendar years to include
+#'   (e.g., `c(2020, 2021, 2024)`). If `NULL`, years are not filtered.
 #' @param transformation Aggregation applied within each bin. One of `"sum"`,
 #'   `"mean"`, `"min"`, `"max"`, `"median"`, or `"integral"`. `"integral"`
-#'   computes `sum(value * period_seconds)` and is useful for exported-volume-type
-#'   totals when values are rates.
+#'   computes `sum(value * duration_seconds)` and is useful for rate→total use
+#'   cases (e.g., exported volume from flow).
 #' @param title Should a plot title be shown? Default is `TRUE`.
 #' @param custom_title Optional custom title.
 #' @param lang Language for metadata labels in title/axes (`"en"` or `"fr"`).
 #' @param tzone Timezone for binning and axis display. Default is `"UTC"`.
+#' @param colorblind Use the same colorblind palette option as [plotDiscrete()].
+#'   Default is `FALSE`.
 #' @param data If `TRUE`, return plotting data with the plot.
 #' @param con A connection to the AquaCache database. `NULL` uses
 #'   [AquaConnect()] and automatically disconnects.
@@ -34,16 +35,17 @@ plotTimeseriesHistogram <- function(
   end_datetime,
   bin_width = 1,
   bin_width_units = "days",
-  years = 1,
+  years = NULL,
   transformation = "sum",
   title = TRUE,
   custom_title = NULL,
   lang = "en",
   tzone = "UTC",
+  colorblind = FALSE,
   data = FALSE,
   con = NULL
 ) {
-  bin_start <- datetime <- value <- year <- bin_label <- bin_order <- period_seconds <- NULL
+  bin_start <- value <- year <- bin_label <- bin_order <- NULL
 
   if (missing(timeseries_id) || length(timeseries_id) != 1 || !is.numeric(timeseries_id)) {
     stop("timeseries_id must be a single numeric value.")
@@ -54,19 +56,21 @@ plotTimeseriesHistogram <- function(
   }
 
   bin_width_units <- tolower(bin_width_units)
-  valid_units <- c("hours", "days", "weeks", "months")
+  valid_units <- c("hours", "days", "weeks", "months", "years")
   if (!(bin_width_units %in% valid_units)) {
-    stop("bin_width_units must be one of 'hours', 'days', 'weeks', or 'months'.")
+    stop("bin_width_units must be one of 'hours', 'days', 'weeks', 'months', or 'years'.")
   }
 
   if (!is.numeric(bin_width) || length(bin_width) != 1 || is.na(bin_width) || bin_width <= 0) {
     stop("bin_width must be a single positive numeric value.")
   }
 
-  if (!is.numeric(years) || length(years) != 1 || is.na(years) || years < 1) {
-    stop("years must be a single numeric value >= 1.")
+  if (!is.null(years)) {
+    if (!is.numeric(years) || any(is.na(years))) {
+      stop("years must be NULL or a numeric vector of years.")
+    }
+    years <- sort(unique(as.integer(years)))
   }
-  years <- as.integer(years)
 
   transformation <- tolower(transformation)
   valid_transformations <- c("sum", "mean", "min", "max", "median", "integral")
@@ -91,15 +95,13 @@ plotTimeseriesHistogram <- function(
   if (!inherits(start_datetime, "POSIXct") || !inherits(end_datetime, "POSIXct")) {
     stop("start_datetime and end_datetime must be coercible to POSIXct.")
   }
+  if (start_datetime > end_datetime) {
+    stop("start_datetime must be before end_datetime.")
+  }
 
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con), add = TRUE)
-  }
-
-  # When years > 1, override start_datetime to include the requested window.
-  if (years > 1) {
-    start_datetime <- lubridate::`%m-%`(end_datetime, lubridate::years(years))
   }
 
   attr(start_datetime, "tzone") <- "UTC"
@@ -119,64 +121,126 @@ plotTimeseriesHistogram <- function(
     stop("timeseries_id not found in AquaCache metadata.")
   }
 
-  ts_data <- dbGetQueryDT(
-    con,
-    paste0(
-      "SELECT datetime, value_corrected AS value, ",
-      "EXTRACT(EPOCH FROM period) AS period_seconds ",
-      "FROM continuous.measurements_continuous_corrected ",
-      "WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3 ",
-      "ORDER BY datetime"
+  # Build SQL bin expression and x-axis ordering expression.
+  bin_width_int <- as.integer(bin_width)
+  if (!isTRUE(all.equal(bin_width, bin_width_int))) {
+    stop("bin_width must be a whole number for database-side binning.")
+  }
+
+  bin_expr <- switch(
+    bin_width_units,
+    hours = paste0(
+      "to_timestamp(floor(extract(epoch from datetime) / ", bin_width_int * 3600L,
+      ") * ", bin_width_int * 3600L, ")"
     ),
-    params = list(timeseries_id, start_datetime, end_datetime)
+    days = paste0(
+      "to_timestamp(floor(extract(epoch from datetime) / ", bin_width_int * 86400L,
+      ") * ", bin_width_int * 86400L, ")"
+    ),
+    weeks = paste0(
+      "to_timestamp(floor(extract(epoch from datetime) / ", bin_width_int * 604800L,
+      ") * ", bin_width_int * 604800L, ")"
+    ),
+    months = paste0(
+      "date_trunc('year', datetime) + ",
+      "(floor((extract(month from datetime) - 1) / ", bin_width_int,
+      ")::int * interval '", bin_width_int, " month')"
+    ),
+    years = paste0(
+      "make_date((floor(extract(year from datetime)::numeric / ", bin_width_int,
+      ")::int * ", bin_width_int, "), 1, 1)::timestamp"
+    )
   )
 
-  if (nrow(ts_data) == 0) {
-    stop("No data found for the requested timeseries and date range.")
-  }
-
-  ts_data[, datetime := as.POSIXct(datetime, tz = tzone)]
-
-  floor_unit <- paste(bin_width, bin_width_units)
-  ts_data[, bin_start := lubridate::floor_date(datetime, unit = floor_unit)]
-
-  if (transformation == "integral") {
-    if (all(is.na(ts_data$period_seconds))) {
-      step_guess <- stats::median(diff(as.numeric(ts_data$datetime)), na.rm = TRUE)
-      if (is.finite(step_guess)) {
-        ts_data[, period_seconds := step_guess]
-      }
-    }
-    ts_data[is.na(period_seconds), period_seconds := 0]
-  }
-
-  agg_fun <- switch(
+  agg_expr <- switch(
     transformation,
-    sum = function(x) sum(x, na.rm = TRUE),
-    mean = function(x) mean(x, na.rm = TRUE),
-    min = function(x) min(x, na.rm = TRUE),
-    max = function(x) max(x, na.rm = TRUE),
-    median = function(x) stats::median(x, na.rm = TRUE),
-    integral = function(x, p) sum(x * p, na.rm = TRUE)
+    sum = "sum(value_corrected)",
+    mean = "avg(value_corrected)",
+    min = "min(value_corrected)",
+    max = "max(value_corrected)",
+    median = "percentile_cont(0.5) within group (order by value_corrected)",
+    integral = "sum(value_corrected * duration_seconds)"
   )
 
-  if (transformation == "integral") {
-    plot_data <- ts_data[, .(value = agg_fun(value, period_seconds)), by = .(bin_start)]
-  } else {
-    plot_data <- ts_data[, .(value = agg_fun(value)), by = .(bin_start)]
+  year_filter_sql <- ""
+  query_params <- list(timeseries_id, start_datetime, end_datetime)
+  if (!is.null(years)) {
+    year_filter_sql <- " AND extract(year from datetime)::int = ANY($4)"
+    query_params <- list(timeseries_id, start_datetime, end_datetime, years)
   }
+
+  sql <- paste0(
+    "WITH base AS (",
+    "  SELECT timeseries_id, datetime, value_corrected, period ",
+    "  FROM continuous.measurements_continuous_corrected ",
+    "  WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3",
+    year_filter_sql,
+    "), prepared AS (",
+    "  SELECT datetime, value_corrected, ",
+    "         coalesce(extract(epoch from period), ",
+    "                  extract(epoch from (lead(datetime) over (order by datetime) - datetime)), ",
+    "                  0) AS duration_seconds ",
+    "  FROM base",
+    "), binned AS (",
+    "  SELECT ", bin_expr, " AS bin_start, ",
+    "         ", agg_expr, " AS value ",
+    "  FROM prepared ",
+    "  GROUP BY 1",
+    ") ",
+    "SELECT bin_start, value FROM binned ORDER BY bin_start"
+  )
+
+  plot_data <- dbGetQueryDT(con, sql, params = query_params)
+
+  if (nrow(plot_data) == 0) {
+    stop("No data found for the requested timeseries/date range/year filter.")
+  }
+
+  plot_data[, bin_start := as.POSIXct(bin_start, tz = tzone)]
 
   units_label <- meta$units[1]
-  y_title <- if (transformation == "integral") {
-    paste0("Integral (", units_label, "·s)")
-  } else {
-    paste0(tools::toTitleCase(transformation), " (", units_label, ")")
+  if (is.na(units_label)) units_label <- ""
+
+  if (transformation == "integral") {
+    units_label <- gsub("/(s|sec|second|seconds)$", "", units_label, ignore.case = TRUE)
+    units_label <- gsub("/(h|hr|hour|hours)$", "", units_label, ignore.case = TRUE)
+    units_label <- gsub("/(d|day|days)$", "", units_label, ignore.case = TRUE)
+    units_label <- gsub("\\bs\\^-1\\b", "", units_label, perl = TRUE, ignore.case = TRUE)
+    units_label <- gsub("\\bh\\^-1\\b", "", units_label, perl = TRUE, ignore.case = TRUE)
+    units_label <- gsub("\\b(day|days|hour|hours|second|seconds)\\^-1\\b", "", units_label, perl = TRUE, ignore.case = TRUE)
+    units_label <- trimws(units_label)
   }
 
-  if (years > 1) {
+  y_title <- if (nzchar(units_label)) {
+    paste0(tools::toTitleCase(transformation), " (", units_label, ")")
+  } else {
+    tools::toTitleCase(transformation)
+  }
+
+  # Same palettes as plotDiscrete
+  if (colorblind) {
+    palette <- c(
+      "#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
+      "#D55E00", "#CC79A7", "#E41A1C", "#377EB8", "#4DAF4A", "#984EA3"
+    )
+  } else {
+    palette <- c(
+      "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF",
+      "#FFA500", "#800080", "#008000", "#000080", "#FFC0CB", "#808080"
+    )
+  }
+
+  # Determine grouping behaviour: if specific multiple years are requested, group by year.
+  years_in_result <- sort(unique(lubridate::year(plot_data$bin_start)))
+  group_by_year <- length(years_in_result) > 1 && bin_width_units != "years"
+
+  if (group_by_year) {
     plot_data[, year := lubridate::year(bin_start)]
 
-    if (bin_width_units == "months") {
+    if (bin_width_units == "years") {
+      plot_data[, bin_label := format(bin_start, "%Y")]
+      plot_data[, bin_order := as.numeric(format(bin_start, "%Y"))]
+    } else if (bin_width_units == "months") {
       plot_data[, bin_label := format(bin_start, "%b")]
       plot_data[, bin_order := lubridate::month(bin_start)]
     } else if (bin_width_units == "weeks") {
@@ -191,26 +255,37 @@ plotTimeseriesHistogram <- function(
     }
 
     plot_data <- plot_data[order(bin_order, year)]
+    year_levels <- as.character(sort(unique(plot_data$year)))
+    custom_colors <- grDevices::colorRampPalette(palette)(length(year_levels))
 
-    p <- plotly::plot_ly(
-      data = plot_data,
-      x = ~bin_label,
-      y = ~value,
-      color = ~as.factor(year),
-      type = "bar"
-    ) |>
-      plotly::layout(
-        barmode = "group",
-        xaxis = list(title = "Bin"),
-        yaxis = list(title = y_title),
-        legend = list(title = list(text = "Year"))
+    p <- plotly::plot_ly(type = "bar")
+    for (i in seq_along(year_levels)) {
+      yv <- year_levels[i]
+      d <- plot_data[as.character(year) == yv]
+      p <- plotly::add_trace(
+        p,
+        data = d,
+        x = ~bin_label,
+        y = ~value,
+        name = yv,
+        marker = list(color = custom_colors[i])
       )
+    }
+
+    p <- plotly::layout(
+      p,
+      barmode = "group",
+      xaxis = list(title = "Bin"),
+      yaxis = list(title = y_title),
+      legend = list(title = list(text = "Year"))
+    )
   } else {
     p <- plotly::plot_ly(
       data = plot_data,
       x = ~bin_start,
       y = ~value,
-      type = "bar"
+      type = "bar",
+      marker = list(color = palette[1])
     ) |>
       plotly::layout(
         xaxis = list(title = "Datetime"),
