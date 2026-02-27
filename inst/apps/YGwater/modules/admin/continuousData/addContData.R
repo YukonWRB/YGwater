@@ -301,7 +301,7 @@ addContData <- function(id, language) {
     ts_meta <- reactiveVal({
       dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
+        "SELECT timeseries_id, location_name AS location, alias, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes, sensor_priority FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
       )
     })
 
@@ -309,7 +309,7 @@ addContData <- function(id, language) {
     observeEvent(input$reload_module, {
       ts_meta(dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
+        "SELECT timeseries_id, location_name AS location, alias, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes, sensor_priority FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
       ))
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -327,9 +327,11 @@ addContData <- function(id, language) {
       df <- ts_meta()
       df$record_rate_minutes <- as.factor(df$record_rate_minutes)
       df$location <- as.factor(df$location)
+      df$alias <- as.factor(df$alias)
       df$media <- as.factor(df$media)
       df$aggregation <- as.factor(df$aggregation)
       df$parameter <- as.factor(df$parameter)
+      df$sensor_priority <- as.factor(df$sensor_priority)
       DT::datatable(
         df,
         selection = 'single',

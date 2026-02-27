@@ -156,7 +156,10 @@ addTimeseries <- function(id, language) {
         radioButtons(
           ns("mode"),
           NULL,
-          choices = c("Add new" = "add", "Modify existing" = "modify"),
+          choices = c(
+            "Add new timeseries" = "add",
+            "Modify existing timeseries" = "modify"
+          ),
           inline = TRUE
         ),
         conditionalPanel(
