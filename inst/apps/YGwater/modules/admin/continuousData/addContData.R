@@ -231,7 +231,20 @@ addContDataUI <- function(id) {
           ),
           DT::DTOutput(ns("qualifier_ranges_table")),
           uiOutput(ns("qualifier_ranges_warning"))
-        ) # End qualifiers accordion panel
+        ), # End qualifiers accordion panel
+
+        accordion_panel(
+          id = ns("correction_panel"),
+          title = "Add/modify corrections",
+          icon = icon("sliders"),
+          div(
+            actionButton(ns("add_correction_range"), "Add correction"),
+            actionButton(ns("edit_correction_range"), "Edit selected"),
+            actionButton(ns("delete_correction_range"), "Delete selected")
+          ),
+          DT::DTOutput(ns("correction_ranges_table")),
+          uiOutput(ns("correction_ranges_warning"))
+        ) # End corrections accordion panel
       ), # end accordion for data manipulation options
 
       br(),
@@ -724,6 +737,13 @@ addContData <- function(id, language) {
       )
     })
 
+    correction_type_choices <- reactive({
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT correction_type_id AS id, correction_type, description, priority, value1, value1_description, value2, value2_description, timestep_window, equation FROM continuous.correction_types WHERE correction_type IN ('delete', 'trim', 'offset linear', 'scale', 'drift linear') ORDER BY priority"
+      )
+    })
+
     map_modal_state <- reactiveValues(
       step = "columns",
       pending_df = NULL,
@@ -961,6 +981,20 @@ addContData <- function(id, language) {
       )
     )
 
+    correction_ranges <- reactiveVal(data.frame(
+      correction_type_id = integer(),
+      correction_type = character(),
+      description = character(),
+      priority = integer(),
+      start_datetime = character(),
+      end_datetime = character(),
+      value1 = numeric(),
+      value2 = numeric(),
+      timestep_window = numeric(),
+      equation = character(),
+      stringsAsFactors = FALSE
+    ))
+
     ensure_class_cols <- function() {
       for (nm in c("grade", "approval", "qualifier")) {
         if (!(nm %in% names(data$df))) {
@@ -1072,6 +1106,59 @@ addContData <- function(id, language) {
       )
     })
 
+    validate_correction_ranges <- function(df) {
+      if (nrow(df) == 0) {
+        return(character())
+      }
+      sdt <- parse_datetime(df$start_datetime)
+      edt <- parse_datetime(df$end_datetime)
+      msgs <- character()
+      bad <- which(is.na(sdt) | is.na(edt) | edt < sdt)
+      if (length(bad) > 0) {
+        msgs <- c(
+          msgs,
+          sprintf(
+            "Invalid correction start/end datetime row(s): %s.",
+            paste(bad, collapse = ", ")
+          )
+        )
+      }
+
+      for (i in seq_len(nrow(df))) {
+        correction_type <- as.character(df$correction_type[i])
+        if (!nzchar(correction_type)) {
+          msgs <- c(msgs, sprintf("Correction type is missing in row %s.", i))
+          next
+        }
+        if (correction_type %in% c("offset two-point", "drift equation")) {
+          msgs <- c(
+            msgs,
+            sprintf(
+              "Correction type '%s' in row %s is not supported in upload preview.",
+              correction_type,
+              i
+            )
+          )
+        }
+        if (correction_type == "drift linear") {
+          if (is.na(df$value1[i])) {
+            msgs <- c(msgs, sprintf("drift linear requires value1 in row %s.", i))
+          }
+          if (is.na(df$timestep_window[i]) || df$timestep_window[i] <= 0) {
+            msgs <- c(
+              msgs,
+              sprintf("drift linear requires a positive timestep_window (seconds) in row %s.", i)
+            )
+          }
+        }
+      }
+      unique(msgs)
+    }
+
+    correction_ranges_valid <- reactive({
+      length(validate_correction_ranges(correction_ranges())) == 0
+    })
+
     observe({
       if (!can_insert) {
         shinyjs::disable("upload")
@@ -1079,7 +1166,7 @@ addContData <- function(id, language) {
         shinyjs::disable("upload_overwrite_some")
         return()
       }
-      if (all(ranges_valid())) {
+      if (all(ranges_valid()) && correction_ranges_valid()) {
         shinyjs::enable("upload")
         shinyjs::enable("upload_overwrite_all")
         shinyjs::enable("upload_overwrite_some")
@@ -1210,6 +1297,195 @@ addContData <- function(id, language) {
       },
       server = FALSE
     )
+
+    output$correction_ranges_warning <- renderUI({
+      msgs <- validate_correction_ranges(correction_ranges())
+      if (length(msgs) == 0) {
+        return(NULL)
+      }
+      div(style = "color:#b30000;", paste(msgs, collapse = " "))
+    })
+
+    output$correction_ranges_table <- DT::renderDT({
+      corr <- correction_ranges()
+      if (nrow(corr) == 0) {
+        return(DT::datatable(corr, rownames = FALSE, options = list(scrollX = TRUE)))
+      }
+      show <- corr[, c(
+        "correction_type",
+        "description",
+        "start_datetime",
+        "end_datetime",
+        "value1",
+        "value2",
+        "timestep_window"
+      ), drop = FALSE]
+      DT::datatable(
+        show,
+        selection = "single",
+        rownames = FALSE,
+        options = list(scrollX = TRUE)
+      )
+    }, server = FALSE)
+
+    open_correction_modal <- function(mode = c("add", "edit"), row_idx = NULL) {
+      mode <- match.arg(mode)
+      types <- correction_type_choices()
+      rows <- correction_ranges()
+      edit_row <- if (
+        mode == "edit" && !is.null(row_idx) && nrow(rows) >= row_idx
+      ) {
+        rows[row_idx, ]
+      } else {
+        data.frame(
+          correction_type_id = NA_integer_,
+          correction_type = "",
+          description = "",
+          priority = NA_integer_,
+          start_datetime = "",
+          end_datetime = "",
+          value1 = NA_real_,
+          value2 = NA_real_,
+          timestep_window = NA_real_,
+          equation = NA_character_,
+          stringsAsFactors = FALSE
+        )
+      }
+
+      showModal(modalDialog(
+        title = paste(ifelse(mode == "add", "Add", "Edit"), "correction"),
+        selectizeInput(
+          ns("correction_modal_type"),
+          "Correction type",
+          choices = stats::setNames(
+            types$id,
+            paste0(types$correction_type, ": ", types$description)
+          ),
+          selected = edit_row$correction_type_id,
+          multiple = FALSE
+        ),
+        textInput(
+          ns("correction_modal_start"),
+          "Start datetime (YYYY-MM-DD HH:MM:SS)",
+          value = edit_row$start_datetime
+        ),
+        textInput(
+          ns("correction_modal_end"),
+          "End datetime (YYYY-MM-DD HH:MM:SS)",
+          value = edit_row$end_datetime
+        ),
+        numericInput(
+          ns("correction_modal_value1"),
+          "value1 (leave blank if not required)",
+          value = edit_row$value1
+        ),
+        numericInput(
+          ns("correction_modal_value2"),
+          "value2 (leave blank if not required)",
+          value = edit_row$value2
+        ),
+        numericInput(
+          ns("correction_modal_window"),
+          "timestep_window in seconds (leave blank if not required)",
+          value = edit_row$timestep_window
+        ),
+        textInput(
+          ns("correction_modal_equation"),
+          "equation (not currently supported in preview)",
+          value = ifelse(is.na(edit_row$equation), "", edit_row$equation)
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_correction_modal"), "Save")
+        )
+      ))
+      session$userData$edit_correction_row <- row_idx
+    }
+
+    observeEvent(input$add_correction_range, {
+      open_correction_modal("add")
+    })
+    observeEvent(input$edit_correction_range, {
+      idx <- input$correction_ranges_table_rows_selected
+      req(length(idx) == 1)
+      open_correction_modal("edit", idx[[1]])
+    })
+    observeEvent(input$delete_correction_range, {
+      idx <- input$correction_ranges_table_rows_selected
+      req(length(idx) == 1)
+      rows <- correction_ranges()
+      correction_ranges(rows[-idx[[1]], , drop = FALSE])
+    })
+
+    observeEvent(input$save_correction_modal, {
+      types <- correction_type_choices()
+      sel_id <- suppressWarnings(as.integer(input$correction_modal_type))
+      req(!is.na(sel_id))
+      type_row <- types[types$id == sel_id, , drop = FALSE]
+      req(nrow(type_row) == 1)
+
+      value1 <- suppressWarnings(as.numeric(input$correction_modal_value1))
+      value2 <- suppressWarnings(as.numeric(input$correction_modal_value2))
+      timestep_window <- suppressWarnings(as.numeric(input$correction_modal_window))
+      equation <- if (nzchar(input$correction_modal_equation)) input$correction_modal_equation else NA_character_
+
+      if (isTRUE(type_row$value1[[1]]) && is.na(value1)) {
+        showNotification("This correction type requires value1.", type = "error")
+        return()
+      }
+      if (isFALSE(type_row$value1[[1]]) && !is.na(value1)) {
+        showNotification("value1 is not allowed for this correction type.", type = "error")
+        return()
+      }
+      if (isTRUE(type_row$value2[[1]]) && is.na(value2)) {
+        showNotification("This correction type requires value2.", type = "error")
+        return()
+      }
+      if (isFALSE(type_row$value2[[1]]) && !is.na(value2)) {
+        showNotification("value2 is not allowed for this correction type.", type = "error")
+        return()
+      }
+      if (isTRUE(type_row$timestep_window[[1]]) && (is.na(timestep_window) || timestep_window <= 0)) {
+        showNotification("This correction type requires a positive timestep_window.", type = "error")
+        return()
+      }
+      if (isFALSE(type_row$timestep_window[[1]]) && !is.na(timestep_window)) {
+        showNotification("timestep_window is not allowed for this correction type.", type = "error")
+        return()
+      }
+      if (isTRUE(type_row$equation[[1]]) && is.na(equation)) {
+        showNotification("This correction type requires an equation.", type = "error")
+        return()
+      }
+      if (isFALSE(type_row$equation[[1]]) && !is.na(equation)) {
+        showNotification("equation is not allowed for this correction type.", type = "error")
+        return()
+      }
+
+      new_row <- data.frame(
+        correction_type_id = sel_id,
+        correction_type = as.character(type_row$correction_type[[1]]),
+        description = as.character(type_row$description[[1]]),
+        priority = as.integer(type_row$priority[[1]]),
+        start_datetime = as.character(input$correction_modal_start),
+        end_datetime = as.character(input$correction_modal_end),
+        value1 = value1,
+        value2 = value2,
+        timestep_window = timestep_window,
+        equation = equation,
+        stringsAsFactors = FALSE
+      )
+
+      rows <- correction_ranges()
+      edit_idx <- session$userData$edit_correction_row
+      if (!is.null(edit_idx) && !is.na(edit_idx) && nrow(rows) >= edit_idx) {
+        rows[edit_idx, ] <- new_row
+      } else {
+        rows <- rbind(rows, new_row)
+      }
+      correction_ranges(rows)
+      removeModal()
+    })
 
     open_range_modal <- function(
       class_name,
@@ -1644,6 +1920,62 @@ addContData <- function(id, language) {
       )
     })
 
+    apply_pending_corrections <- function(df_in) {
+      if (nrow(df_in) == 0) {
+        return(df_in)
+      }
+      corr <- correction_ranges()
+      if (nrow(corr) == 0) {
+        df_in$value_corrected <- df_in$value
+        return(df_in)
+      }
+
+      corr <- corr[order(corr$priority), , drop = FALSE]
+      out <- df_in
+      out$value_corrected <- out$value
+
+      for (i in seq_len(nrow(corr))) {
+        row <- corr[i, ]
+        st <- parse_datetime(row$start_datetime) -
+          (as.numeric(input$UTC_offset) * 3600)
+        en <- parse_datetime(row$end_datetime) -
+          (as.numeric(input$UTC_offset) * 3600)
+        if (is.na(st) || is.na(en)) {
+          next
+        }
+        idx <- which(!is.na(out$datetime) & out$datetime >= st & out$datetime <= en)
+        if (length(idx) == 0) {
+          next
+        }
+
+        if (row$correction_type == "delete") {
+          out$value_corrected[idx] <- NA_real_
+        } else if (row$correction_type == "trim") {
+          if (!is.na(row$value1)) {
+            out$value_corrected[idx[out$value_corrected[idx] < row$value1]] <- NA_real_
+          }
+          if (!is.na(row$value2)) {
+            out$value_corrected[idx[out$value_corrected[idx] > row$value2]] <- NA_real_
+          }
+        } else if (row$correction_type == "offset linear") {
+          if (!is.na(row$value1)) {
+            out$value_corrected[idx] <- out$value_corrected[idx] + row$value1
+          }
+        } else if (row$correction_type == "scale") {
+          if (!is.na(row$value1)) {
+            out$value_corrected[idx] <- out$value_corrected[idx] * (row$value1 / 100)
+          }
+        } else if (row$correction_type == "drift linear") {
+          if (!is.na(row$value1) && !is.na(row$timestep_window) && row$timestep_window > 0) {
+            elapsed <- as.numeric(difftime(out$datetime[idx], st, units = "secs"))
+            out$value_corrected[idx] <- out$value_corrected[idx] + (row$value1 / row$timestep_window) * elapsed
+          }
+        }
+      }
+
+      out
+    }
+
     preview_data <- reactive({
       req(timeseries())
       req(nrow(data$df) > 0)
@@ -1668,6 +2000,8 @@ addContData <- function(id, language) {
       if ("qualifier" %in% names(df_new)) {
         df_new$qualifier <- as.character(df_new$qualifier)
       }
+
+      df_new <- apply_pending_corrections(df_new)
 
       range_start <- min(df_new$datetime, na.rm = TRUE)
       range_end <- max(df_new$datetime, na.rm = TRUE)
@@ -1715,7 +2049,8 @@ addContData <- function(id, language) {
         new_data = df_new,
         db = extra,
         historic = hist_out,
-        parameter = parameter
+        parameter = parameter,
+        corrections = correction_ranges()
       )
     })
 
@@ -1727,7 +2062,8 @@ addContData <- function(id, language) {
         df = data$df,
         grade = class_ranges$grade,
         approval = class_ranges$approval,
-        qualifier = class_ranges$qualifier
+        qualifier = class_ranges$qualifier,
+        corrections = correction_ranges()
       )
     })
 
@@ -1882,7 +2218,7 @@ addContData <- function(id, language) {
           type = "scatter",
           mode = "lines",
           line = list(width = 2.5),
-          name = "New upload",
+          name = "New upload (raw)",
           color = I("#00454e"),
           hoverinfo = "text",
           text = ~ paste0(
@@ -1894,6 +2230,29 @@ addContData <- function(id, language) {
             ")"
           )
         )
+
+      if ("value_corrected" %in% names(pv$new_data)) {
+        plot <- plot |>
+          plotly::add_trace(
+            data = pv$new_data,
+            x = ~datetime,
+            y = ~value_corrected,
+            type = "scatter",
+            mode = "lines",
+            line = list(width = 2.5, dash = "dash"),
+            name = "New upload (corrected preview)",
+            color = I("#0ca36f"),
+            hoverinfo = "text",
+            text = ~ paste0(
+              pv$parameter$param_name,
+              ": ",
+              round(.data$value_corrected, 4),
+              " (",
+              .data$datetime,
+              ")"
+            )
+          )
+      }
 
       # Add class bands (grade/approval/qualifier) for newly entered data
       has_class_bands <- nrow(class_ranges$grade) > 0 ||
@@ -2155,6 +2514,14 @@ addContData <- function(id, language) {
         return(FALSE)
       }
 
+      if (!correction_ranges_valid()) {
+        showNotification(
+          'Correction ranges are invalid. Resolve correction warnings before upload.',
+          type = 'error'
+        )
+        return(FALSE)
+      }
+
       if (is.null(input$owner) || is.null(input$contributor)) {
         showNotification(
           'Please select owner and contributor organizations.',
@@ -2214,6 +2581,33 @@ addContData <- function(id, language) {
       return(TRUE)
     }
 
+    persist_corrections <- function() {
+      corr <- correction_ranges()
+      if (nrow(corr) == 0) {
+        return(invisible(NULL))
+      }
+      for (i in seq_len(nrow(corr))) {
+        st <- parse_datetime(corr$start_datetime[i]) -
+          (as.numeric(input$UTC_offset) * 3600)
+        en <- parse_datetime(corr$end_datetime[i]) -
+          (as.numeric(input$UTC_offset) * 3600)
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO continuous.corrections (timeseries_id, start_dt, end_dt, correction_type, value1, value2, timestep_window, equation) VALUES ($1,$2,$3,$4,$5,$6,make_interval(secs => $7),$8)",
+          params = list(
+            as.integer(timeseries()),
+            st,
+            en,
+            as.integer(corr$correction_type_id[i]),
+            ifelse(is.na(corr$value1[i]), NA, corr$value1[i]),
+            ifelse(is.na(corr$value2[i]), NA, corr$value2[i]),
+            ifelse(is.na(corr$timestep_window[i]), NA, as.integer(corr$timestep_window[i])),
+            ifelse(is.na(corr$equation[i]), NA, corr$equation[i])
+          )
+        )
+      }
+    }
+
     observeEvent(input$upload, {
       check <- check_fx()
       if (!check) {
@@ -2239,7 +2633,8 @@ addContData <- function(id, language) {
             target = "realtime",
             overwrite = "no"
           )
-          showNotification('Data added.', type = 'message')
+          persist_corrections()
+          showNotification('Data and corrections added.', type = 'message')
           data$df <- data.frame(
             datetime = character(),
             value = numeric(),
@@ -2250,6 +2645,7 @@ addContData <- function(id, language) {
           class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
           class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
           class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
+          correction_ranges(correction_ranges()[0, , drop = FALSE])
         },
         error = function(e) {
           showNotification(paste('Upload failed:', e$message), type = 'error')
@@ -2310,7 +2706,11 @@ addContData <- function(id, language) {
             target = "realtime",
             overwrite = "all"
           )
-          showNotification('Data added with overwrite.', type = 'message')
+          persist_corrections()
+          showNotification(
+            'Data and corrections added with overwrite.',
+            type = 'message'
+          )
           data$df <- data.frame(
             datetime = character(),
             value = numeric(),
@@ -2321,6 +2721,7 @@ addContData <- function(id, language) {
           class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
           class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
           class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
+          correction_ranges(correction_ranges()[0, , drop = FALSE])
         },
         error = function(e) {
           showNotification(paste('Upload failed:', e$message), type = 'error')
@@ -2382,8 +2783,9 @@ addContData <- function(id, language) {
             target = "realtime",
             overwrite = "conflict"
           )
+          persist_corrections()
           showNotification(
-            'Data added with selective overwrite.',
+            'Data and corrections added with selective overwrite.',
             type = 'message'
           )
           data$df <- data.frame(
@@ -2396,6 +2798,7 @@ addContData <- function(id, language) {
           class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
           class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
           class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
+          correction_ranges(correction_ranges()[0, , drop = FALSE])
         },
         error = function(e) {
           showNotification(paste('Upload failed:', e$message), type = 'error')
