@@ -355,85 +355,97 @@ addTimeseries <- function(id, language) {
           tooltip(
             "Select the user groups that should have access to this timeseries data. 'public_reader' allows anyone with access to the system to view the data. You can select multiple groups IF public_reader is not one of them."
           ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          verticalLayout(
-            # htmlOutput to tell the user when they should use the source functions and what the arguments are
-            tags$div(
-              class = "alert alert-info",
-              "The source function is used to download data using the AquaCache R package. Leave blank if entering data manually or using other methods. For more information refer to the AquaCache package documentation."
-            ),
-            selectizeInput(
-              ns("source_fx"),
-              "Source function (see AquaCache package documentation for details)",
-              choices = moduleData$source_fx,
-              multiple = TRUE,
-              options = list(
-                maxItems = 1,
-                placeholder = 'Select source function (optional)'
+        accordion(
+          id = ns("accordion2"),
+          open = FALSE,
+          accordion_panel(
+            id = ns("source_fx_panel"),
+            title = "Auto-download options",
+            splitLayout(
+              cellWidths = c("50%", "50%"),
+              verticalLayout(
+                # htmlOutput to tell the user when they should use the source functions and what the arguments are
+                tags$div(
+                  class = "alert alert-info",
+                  "The source function is used to download data using the AquaCache R package. Leave blank if entering data manually or using other methods. For more information refer to the AquaCache package documentation."
+                ),
+                selectizeInput(
+                  ns("source_fx"),
+                  "Source function (see AquaCache package documentation for details)",
+                  choices = moduleData$source_fx,
+                  multiple = TRUE,
+                  options = list(
+                    maxItems = 1,
+                    placeholder = 'Select source function (optional)'
+                  ),
+                  width = "100%"
+                ),
+                actionButton(
+                  ns("source_fx_doc"),
+                  "Open function documentation"
+                )
               ),
-              width = "100%"
-            ),
-            actionButton(
-              ns("source_fx_doc"),
-              "Open function documentation"
+              verticalLayout(
+                # htmlOutput to tell the user how the source function arguments should be formatted
+                tags$div(
+                  class = "alert alert-info",
+                  "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
+                ),
+                textInput(
+                  ns("source_fx_args"),
+                  "Source function arguments",
+                  value = "",
+                  placeholder = "arg1: value1, arg2: value2",
+                  width = "100%"
+                ),
+                actionButton(
+                  ns("args_example"),
+                  "Show example arguments"
+                )
+              )
             )
           ),
-          verticalLayout(
-            # htmlOutput to tell the user how the source function arguments should be formatted
-            tags$div(
-              class = "alert alert-info",
-              "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
+
+          accordion_panel(
+            id = ns("corrections_panel"),
+            title = "Automatic corrections/filters",
+
+            tags$p(
+              class = "text-muted",
+              "Use these bounds to automatically filter out values below/above specified thresholds. Raw data will not be altered. If left blank, no bound is applied."
             ),
-            textInput(
-              ns("source_fx_args"),
-              "Source function arguments",
-              value = "",
-              placeholder = "arg1: value1, arg2: value2",
-              width = "100%"
+            splitLayout(
+              cellWidths = c("50%", "50%"),
+              numericInput(
+                ns("correction_lower_bound"),
+                "Filter values below",
+                value = NA,
+                width = "100%"
+              ),
+              numericInput(
+                ns("correction_upper_bound"),
+                "Filter values above",
+                value = NA,
+                width = "100%"
+              )
             ),
-            actionButton(
-              ns("args_example"),
-              "Show example arguments"
+            splitLayout(
+              cellWidths = c("50%", "50%"),
+              dateInput(
+                ns("correction_start_dt"),
+                "Correction start date",
+                value = as.Date("1900-01-01"),
+                format = "yyyy-mm-dd",
+                width = "100%"
+              ),
+              dateInput(
+                ns("correction_end_dt"),
+                "Correction end date",
+                value = as.Date("2100-01-01"),
+                format = "yyyy-mm-dd",
+                width = "100%"
+              )
             )
-          )
-        ),
-        tags$hr(),
-        tags$h4("Basic corrections (optional)"),
-        tags$p(
-          class = "text-muted",
-          "Use these bounds to filter out values below/above specified thresholds. If left blank, no bound is applied."
-        ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          numericInput(
-            ns("correction_lower_bound"),
-            "Filter values below",
-            value = NA,
-            width = "100%"
-          ),
-          numericInput(
-            ns("correction_upper_bound"),
-            "Filter values above",
-            value = NA,
-            width = "100%"
-          )
-        ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          dateInput(
-            ns("correction_start_dt"),
-            "Correction start date",
-            value = as.Date("1900-01-01"),
-            format = "yyyy-mm-dd",
-            width = "100%"
-          ),
-          dateInput(
-            ns("correction_end_dt"),
-            "Correction end date",
-            value = as.Date("2100-01-01"),
-            format = "yyyy-mm-dd",
-            width = "100%"
           )
         ),
         textAreaInput(
@@ -516,7 +528,14 @@ addTimeseries <- function(id, language) {
       corr[1, ]
     }
 
-    upsertTrimCorrection <- function(con, tsid, lower_bound, upper_bound, start_dt, end_dt) {
+    upsertTrimCorrection <- function(
+      con,
+      tsid,
+      lower_bound,
+      upper_bound,
+      start_dt,
+      end_dt
+    ) {
       existing <- DBI::dbGetQuery(
         con,
         "
@@ -547,23 +566,38 @@ addTimeseries <- function(id, language) {
       )
 
       if (nrow(trim_type_id) == 0) {
-        stop("Could not find the 'trim' correction type in continuous.correction_types.")
+        stop(
+          "Could not find the 'trim' correction type in continuous.correction_types."
+        )
       }
 
       start_ts <- paste0(as.character(start_dt), " 00:00:00+00")
-      end_ts <- paste0(as.character(end_dt), " 00:00:00+00")
+      end_ts <- paste0(as.character(end_dt), " 23:59:59.999+00")
 
       if (nrow(existing) == 0) {
         DBI::dbExecute(
           con,
           "INSERT INTO continuous.corrections (timeseries_id, start_dt, end_dt, correction_type, value1, value2) VALUES ($1, $2, $3, $4, $5, $6)",
-          params = list(tsid, start_ts, end_ts, trim_type_id$correction_type_id[1], lower_bound, upper_bound)
+          params = list(
+            tsid,
+            start_ts,
+            end_ts,
+            trim_type_id$correction_type_id[1],
+            lower_bound,
+            upper_bound
+          )
         )
       } else {
         DBI::dbExecute(
           con,
           "UPDATE continuous.corrections SET start_dt = $1, end_dt = $2, value1 = $3, value2 = $4 WHERE correction_id = $5",
-          params = list(start_ts, end_ts, lower_bound, upper_bound, existing$correction_id[1])
+          params = list(
+            start_ts,
+            end_ts,
+            lower_bound,
+            upper_bound,
+            existing$correction_id[1]
+          )
         )
       }
     }
@@ -634,8 +668,16 @@ addTimeseries <- function(id, language) {
         )
         updateNumericInput(session, "correction_lower_bound", value = NA)
         updateNumericInput(session, "correction_upper_bound", value = NA)
-        updateDateInput(session, "correction_start_dt", value = as.Date("1900-01-01"))
-        updateDateInput(session, "correction_end_dt", value = as.Date("2100-01-01"))
+        updateDateInput(
+          session,
+          "correction_start_dt",
+          value = as.Date("1900-01-01")
+        )
+        updateDateInput(
+          session,
+          "correction_end_dt",
+          value = as.Date("2100-01-01")
+        )
         showNotification("Module reloaded", type = "message")
       },
       ignoreInit = TRUE
@@ -888,13 +930,37 @@ addTimeseries <- function(id, language) {
           if (is.null(trim_corr)) {
             updateNumericInput(session, "correction_lower_bound", value = NA)
             updateNumericInput(session, "correction_upper_bound", value = NA)
-            updateDateInput(session, "correction_start_dt", value = as.Date("1900-01-01"))
-            updateDateInput(session, "correction_end_dt", value = as.Date("2100-01-01"))
+            updateDateInput(
+              session,
+              "correction_start_dt",
+              value = as.Date("1900-01-01")
+            )
+            updateDateInput(
+              session,
+              "correction_end_dt",
+              value = as.Date("2100-01-01")
+            )
           } else {
-            updateNumericInput(session, "correction_lower_bound", value = trim_corr$lower_bound)
-            updateNumericInput(session, "correction_upper_bound", value = trim_corr$upper_bound)
-            updateDateInput(session, "correction_start_dt", value = as.Date(trim_corr$start_dt))
-            updateDateInput(session, "correction_end_dt", value = as.Date(trim_corr$end_dt))
+            updateNumericInput(
+              session,
+              "correction_lower_bound",
+              value = trim_corr$lower_bound
+            )
+            updateNumericInput(
+              session,
+              "correction_upper_bound",
+              value = trim_corr$upper_bound
+            )
+            updateDateInput(
+              session,
+              "correction_start_dt",
+              value = as.Date(trim_corr$start_dt)
+            )
+            updateDateInput(
+              session,
+              "correction_end_dt",
+              value = as.Date(trim_corr$end_dt)
+            )
           }
         } else {
           showNotification(
@@ -1412,8 +1478,16 @@ addTimeseries <- function(id, language) {
         updateTextAreaInput(session, "note", value = "")
         updateNumericInput(session, "correction_lower_bound", value = NA)
         updateNumericInput(session, "correction_upper_bound", value = NA)
-        updateDateInput(session, "correction_start_dt", value = as.Date("1900-01-01"))
-        updateDateInput(session, "correction_end_dt", value = as.Date("2100-01-01"))
+        updateDateInput(
+          session,
+          "correction_start_dt",
+          value = as.Date("1900-01-01")
+        )
+        updateDateInput(
+          session,
+          "correction_end_dt",
+          value = as.Date("2100-01-01")
+        )
       }
     })
 
