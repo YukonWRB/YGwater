@@ -1568,13 +1568,8 @@ app_server <- function(input, output, session) {
                 "boreholes.wells",
                 "boreholes.drillers",
                 "boreholes.borehole_well_purposes"
-              ),
-              list(
-                c("INSERT"),
-                c("INSERT"),
-                c("INSERT"),
-                c("INSERT")
               )
+              # Insert, update, delete by default
             ),
             visit = has_priv(
               tbl = session$userData$table_privs,
@@ -2360,16 +2355,23 @@ app_server <- function(input, output, session) {
     }
     if (input$navbar == "editBoreholesWells") {
       if (!ui_loaded$editBoreholesWells) {
-        output$editBoreholesWells_ui <- renderUI(editBoreholesWellsUI("editBoreholesWells"))
+        output$editBoreholesWells_ui <- renderUI(editBoreholesWellsUI(
+          "editBoreholesWells"
+        ))
         ui_loaded$editBoreholesWells <- TRUE
         editBoreholesWells("editBoreholesWells", language = languageSelection)
       }
     }
     if (input$navbar == "manageBoreholeDocuments") {
       if (!ui_loaded$manageBoreholeDocuments) {
-        output$manageBoreholeDocuments_ui <- renderUI(manageBoreholeDocumentsUI("manageBoreholeDocuments"))
+        output$manageBoreholeDocuments_ui <- renderUI(manageBoreholeDocumentsUI(
+          "manageBoreholeDocuments"
+        ))
         ui_loaded$manageBoreholeDocuments <- TRUE
-        manageBoreholeDocuments("manageBoreholeDocuments", language = languageSelection)
+        manageBoreholeDocuments(
+          "manageBoreholeDocuments",
+          language = languageSelection
+        )
       }
     }
     if (input$navbar == "manageNewsContent") {

@@ -172,8 +172,7 @@ manageBoreholeDocuments <- function(id, language) {
                 d.url,
                 d.description,
                 d.tags,
-                d.authors,
-                d.document
+                d.authors
          FROM boreholes.boreholes_documents bd
          JOIN files.documents d ON d.document_id = bd.document_id
          LEFT JOIN files.document_types dt ON dt.document_type_id = d.type
