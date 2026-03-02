@@ -21,8 +21,6 @@
 #' @param custom_title Optional custom title.
 #' @param lang Language for metadata labels in title/axes (`"en"` or `"fr"`).
 #' @param tzone Timezone for binning and axis display. Default is `"UTC"`.
-#' @param colorblind Use the same colorblind palette option as [plotDiscrete()].
-#'   Default is `FALSE`.
 #' @param data If `TRUE`, return plotting data with the plot.
 #' @param con A connection to the AquaCache database. `NULL` uses
 #'   [AquaConnect()] and automatically disconnects.
@@ -41,13 +39,28 @@ plotTimeseriesHistogram <- function(
   custom_title = NULL,
   lang = "en",
   tzone = "UTC",
-  colorblind = FALSE,
   data = FALSE,
   con = NULL
 ) {
-  bin_start <- value <- year <- bin_label <- bin_order <- NULL
-
-  if (missing(timeseries_id) || length(timeseries_id) != 1 || !is.numeric(timeseries_id)) {
+  # Testing parameters
+  timeseries_id = 100
+  start_datetime = "2025-01-01"
+  end_datetime = "2025-12-31"
+  bin_width = 1
+  bin_width_units = "months"
+  years = c(2023, 2024, 2024)
+  transformation = "integral"
+  title = TRUE
+  custom_title = NULL
+  lang = "en"
+  tzone = "UTC"
+  data = FALSE
+  con = NULL
+  if (
+    missing(timeseries_id) ||
+      length(timeseries_id) != 1 ||
+      !is.numeric(timeseries_id)
+  ) {
     stop("timeseries_id must be a single numeric value.")
   }
 
@@ -58,10 +71,17 @@ plotTimeseriesHistogram <- function(
   bin_width_units <- tolower(bin_width_units)
   valid_units <- c("hours", "days", "weeks", "months", "years")
   if (!(bin_width_units %in% valid_units)) {
-    stop("bin_width_units must be one of 'hours', 'days', 'weeks', 'months', or 'years'.")
+    stop(
+      "bin_width_units must be one of 'hours', 'days', 'weeks', 'months', or 'years'."
+    )
   }
 
-  if (!is.numeric(bin_width) || length(bin_width) != 1 || is.na(bin_width) || bin_width <= 0) {
+  if (
+    !is.numeric(bin_width) ||
+      length(bin_width) != 1 ||
+      is.na(bin_width) ||
+      bin_width <= 0
+  ) {
     stop("bin_width must be a single positive numeric value.")
   }
 
@@ -75,7 +95,9 @@ plotTimeseriesHistogram <- function(
   transformation <- tolower(transformation)
   valid_transformations <- c("sum", "mean", "min", "max", "median", "integral")
   if (!(transformation %in% valid_transformations)) {
-    stop("transformation must be one of 'sum', 'mean', 'min', 'max', 'median', or 'integral'.")
+    stop(
+      "transformation must be one of 'sum', 'mean', 'min', 'max', 'median', or 'integral'."
+    )
   }
 
   if (inherits(start_datetime, "character")) {
@@ -92,7 +114,9 @@ plotTimeseriesHistogram <- function(
     end_datetime <- as.POSIXct(end_datetime, tz = tzone)
   }
 
-  if (!inherits(start_datetime, "POSIXct") || !inherits(end_datetime, "POSIXct")) {
+  if (
+    !inherits(start_datetime, "POSIXct") || !inherits(end_datetime, "POSIXct")
+  ) {
     stop("start_datetime and end_datetime must be coercible to POSIXct.")
   }
   if (start_datetime > end_datetime) {
@@ -107,12 +131,18 @@ plotTimeseriesHistogram <- function(
   attr(start_datetime, "tzone") <- "UTC"
   attr(end_datetime, "tzone") <- "UTC"
 
-  metadata_view <- if (lang == "fr") "continuous.timeseries_metadata_fr" else "continuous.timeseries_metadata_en"
+  metadata_view <- if (lang == "fr") {
+    "continuous.timeseries_metadata_fr"
+  } else {
+    "continuous.timeseries_metadata_en"
+  }
   meta <- dbGetQueryDT(
     con,
     paste0(
       "SELECT timeseries_id, location_name, parameter_name, units ",
-      "FROM ", metadata_view, " WHERE timeseries_id = $1"
+      "FROM ",
+      metadata_view,
+      " WHERE timeseries_id = $1"
     ),
     params = list(timeseries_id)
   )
@@ -130,25 +160,40 @@ plotTimeseriesHistogram <- function(
   bin_expr <- switch(
     bin_width_units,
     hours = paste0(
-      "to_timestamp(floor(extract(epoch from datetime) / ", bin_width_int * 3600L,
-      ") * ", bin_width_int * 3600L, ")"
+      "to_timestamp(floor(extract(epoch from datetime) / ",
+      bin_width_int * 3600L,
+      ") * ",
+      bin_width_int * 3600L,
+      ")"
     ),
     days = paste0(
-      "to_timestamp(floor(extract(epoch from datetime) / ", bin_width_int * 86400L,
-      ") * ", bin_width_int * 86400L, ")"
+      "to_timestamp(floor(extract(epoch from datetime) / ",
+      bin_width_int * 86400L,
+      ") * ",
+      bin_width_int * 86400L,
+      ")"
     ),
     weeks = paste0(
-      "to_timestamp(floor(extract(epoch from datetime) / ", bin_width_int * 604800L,
-      ") * ", bin_width_int * 604800L, ")"
+      "to_timestamp(floor(extract(epoch from datetime) / ",
+      bin_width_int * 604800L,
+      ") * ",
+      bin_width_int * 604800L,
+      ")"
     ),
     months = paste0(
       "date_trunc('year', datetime) + ",
-      "(floor((extract(month from datetime) - 1) / ", bin_width_int,
-      ")::int * interval '", bin_width_int, " month')"
+      "(floor((extract(month from datetime) - 1) / ",
+      bin_width_int,
+      ")::int * interval '",
+      bin_width_int,
+      " month')"
     ),
     years = paste0(
-      "make_date((floor(extract(year from datetime)::numeric / ", bin_width_int,
-      ")::int * ", bin_width_int, "), 1, 1)::timestamp"
+      "make_date((floor(extract(year from datetime)::numeric / ",
+      bin_width_int,
+      ")::int * ",
+      bin_width_int,
+      "), 1, 1)::timestamp"
     )
   )
 
@@ -165,8 +210,12 @@ plotTimeseriesHistogram <- function(
   year_filter_sql <- ""
   query_params <- list(timeseries_id, start_datetime, end_datetime)
   if (!is.null(years)) {
-    year_filter_sql <- " AND extract(year from datetime)::int = ANY($4)"
-    query_params <- list(timeseries_id, start_datetime, end_datetime, years)
+    year_filter_sql <- paste0(
+      " AND extract(year from datetime)::int IN (",
+      paste(years, collapse = ", "),
+      ")"
+    )
+    query_params <- list(timeseries_id, start_datetime, end_datetime)
   }
 
   sql <- paste0(
@@ -182,8 +231,12 @@ plotTimeseriesHistogram <- function(
     "                  0) AS duration_seconds ",
     "  FROM base",
     "), binned AS (",
-    "  SELECT ", bin_expr, " AS bin_start, ",
-    "         ", agg_expr, " AS value ",
+    "  SELECT ",
+    bin_expr,
+    " AS bin_start, ",
+    "         ",
+    agg_expr,
+    " AS value ",
     "  FROM prepared ",
     "  GROUP BY 1",
     ") ",
@@ -199,35 +252,52 @@ plotTimeseriesHistogram <- function(
   plot_data[, bin_start := as.POSIXct(bin_start, tz = tzone)]
 
   units_label <- meta$units[1]
-  if (is.na(units_label)) units_label <- ""
+  if (is.na(units_label)) {
+    units_label <- ""
+  }
 
   if (transformation == "integral") {
-    units_label <- gsub("/(s|sec|second|seconds)$", "", units_label, ignore.case = TRUE)
-    units_label <- gsub("/(h|hr|hour|hours)$", "", units_label, ignore.case = TRUE)
+    units_label <- gsub(
+      "/(s|sec|second|seconds)$",
+      "",
+      units_label,
+      ignore.case = TRUE
+    )
+    units_label <- gsub(
+      "/(h|hr|hour|hours)$",
+      "",
+      units_label,
+      ignore.case = TRUE
+    )
     units_label <- gsub("/(d|day|days)$", "", units_label, ignore.case = TRUE)
-    units_label <- gsub("\\bs\\^-1\\b", "", units_label, perl = TRUE, ignore.case = TRUE)
-    units_label <- gsub("\\bh\\^-1\\b", "", units_label, perl = TRUE, ignore.case = TRUE)
-    units_label <- gsub("\\b(day|days|hour|hours|second|seconds)\\^-1\\b", "", units_label, perl = TRUE, ignore.case = TRUE)
+    units_label <- gsub(
+      "\\bs\\^-1\\b",
+      "",
+      units_label,
+      perl = TRUE,
+      ignore.case = TRUE
+    )
+    units_label <- gsub(
+      "\\bh\\^-1\\b",
+      "",
+      units_label,
+      perl = TRUE,
+      ignore.case = TRUE
+    )
+    units_label <- gsub(
+      "\\b(day|days|hour|hours|second|seconds)\\^-1\\b",
+      "",
+      units_label,
+      perl = TRUE,
+      ignore.case = TRUE
+    )
     units_label <- trimws(units_label)
   }
 
   y_title <- if (nzchar(units_label)) {
-    paste0(tools::toTitleCase(transformation), " (", units_label, ")")
+    paste0(titleCase(transformation), " (", units_label, ")")
   } else {
-    tools::toTitleCase(transformation)
-  }
-
-  # Same palettes as plotDiscrete
-  if (colorblind) {
-    palette <- c(
-      "#000000", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
-      "#D55E00", "#CC79A7", "#E41A1C", "#377EB8", "#4DAF4A", "#984EA3"
-    )
-  } else {
-    palette <- c(
-      "#FF0000", "#00FF00", "#0000FF", "#FFFF00", "#FF00FF", "#00FFFF",
-      "#FFA500", "#800080", "#008000", "#000080", "#FFC0CB", "#808080"
-    )
+    titleCase(transformation)
   }
 
   # Determine grouping behaviour: if specific multiple years are requested, group by year.
@@ -251,12 +321,21 @@ plotTimeseriesHistogram <- function(
       plot_data[, bin_order := as.integer(format(as.Date(bin_start), "%j"))]
     } else {
       plot_data[, bin_label := format(bin_start, "%b %d %H:%M")]
-      plot_data[, bin_order := as.integer(format(as.Date(bin_start), "%j")) * 24L + as.integer(format(bin_start, "%H"))]
+      plot_data[,
+        bin_order := as.integer(format(as.Date(bin_start), "%j")) *
+          24L +
+          as.integer(format(bin_start, "%H"))
+      ]
     }
 
     plot_data <- plot_data[order(bin_order, year)]
     year_levels <- as.character(sort(unique(plot_data$year)))
-    custom_colors <- grDevices::colorRampPalette(palette)(length(year_levels))
+    colors <- rev(grDevices::colorRampPalette(c(
+      "#00454e",
+      "#7A9A01",
+      "#FFA900",
+      "#DC4405"
+    ))(length(year_levels)))
 
     p <- plotly::plot_ly(type = "bar")
     for (i in seq_along(year_levels)) {
@@ -268,7 +347,7 @@ plotTimeseriesHistogram <- function(
         x = ~bin_label,
         y = ~value,
         name = yv,
-        marker = list(color = custom_colors[i])
+        marker = list(color = colors[i])
       )
     }
 
