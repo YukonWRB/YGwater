@@ -3123,7 +3123,7 @@ load_bulletin_timeseries <- function(
         )
 
         # for each survey date
-        for (i in 1:length(basin_dates)) {
+        for (i in seq_along(basin_dates)) {
             basin_swe_mat[i, ] <- NA_real_
 
             # get the weight matrix for available stations on that date
@@ -3157,8 +3157,21 @@ load_bulletin_timeseries <- function(
             swe_samples <- swe_samples[!nan_samples]
             weight_matrix <- weight_matrix[!nan_samples, ]
 
+            # Only calculate basin values if we have at least 2 weight samples
+            # Check each column for at least 2 non-zero entries
+
             # Drop location_id column before normalization and multiplication
             weight_matrix <- weight_matrix[, -1, drop = FALSE]
+
+            for (col_idx in seq_len(ncol(weight_matrix))) {
+                non_zero_count <- sum(
+                    weight_matrix[, col_idx] != 0,
+                    na.rm = TRUE
+                )
+                if (non_zero_count < 3) {
+                    weight_matrix[, col_idx] <- NA
+                }
+            }
 
             # Normalize columns so that each basin's weights sum to 1
             weight_matrix <- sweep(
@@ -3170,7 +3183,8 @@ load_bulletin_timeseries <- function(
 
             # Remove the location_id column for multiplication
             basin_vals <- as.numeric(
-                t(matrix(swe_samples, ncol = 1)) %*% as.matrix(weight_matrix)
+                t(matrix(swe_samples, ncol = 1)) %*%
+                    as.matrix(weight_matrix)
             )
 
             basin_swe_mat[i, ] <- basin_vals
@@ -3605,6 +3619,13 @@ create_survey_summary <- function(
     # Add SWE_Basin attribute to locations data.frame
     locations$basin <- locations_sf$SWE_Basin
 
+    # manually add the two alaska surveys - ideally an 'Alaska' polygon shoud be included in SWE_basins..
+    locations[
+        locations$location %in%
+            c("08AK-SC01", "08AK-SC02"),
+        "basin"
+    ] <- "Alaska"
+
     # Query snow survey dates and snow depths for the stats table
     location_ids_list <- paste0(
         "{",
@@ -3613,8 +3634,8 @@ create_survey_summary <- function(
     )
 
     target_date <- paste(
-        bulletin_year,
-        sprintf("%02d", bulletin_month),
+        year,
+        sprintf("%02d", month),
         "01",
         sep = "-"
     )
@@ -3754,7 +3775,7 @@ create_survey_summary <- function(
         query,
         params = list(
             location_ids_list,
-            bulletin_month,
+            month,
             1,
             "snow water equivalent",
             target_date
@@ -3798,7 +3819,7 @@ create_survey_summary <- function(
         query,
         params = list(
             location_ids_list,
-            bulletin_month,
+            month,
             1,
             "snow water equivalent",
             target_date
@@ -4442,19 +4463,13 @@ get_display_data <- function(
         character(1)
     )
 
-    aggr_tag <- if (dataset$param_name %in% c("precipitation, total")) {
-        "rmd_normal"
-    } else {
-        "rmd_average"
-    }
-
     # get the 'relative_to_med' text description by merging the preposition, aggr_tag, and text_colour
     dataset_state$description <- vapply(
         seq_len(nrow(dataset_state)),
         function(i) {
             trimws(paste(
                 dataset_state$preposition[i],
-                trb(aggr_tag),
+                trb("rmd_normal"),
                 sep = " "
             ))
         },
@@ -4466,6 +4481,13 @@ get_display_data <- function(
         get_text_colour,
         character(1)
     )
+
+    # Order dataset_state by display_value (ascending)
+    dataset_state <- dataset_state[
+        order(dataset_state$display_value, na.last = FALSE),
+        ,
+        drop = FALSE
+    ]
 
     return(dataset_state)
 }
@@ -4480,6 +4502,14 @@ get_future_flow_conditions <- function(hydrometric, swe, language = "English") {
     # Numeric bins for flow and swe (relative_to_med)
     # Numeric bins for flow and swe (relative_to_med)
     # Define bins: <66, 66-90, 90-98, 98-103, 103-110, 110-135, >=135
+    if (is.na(hydrometric) || is.na(swe)) {
+        return(list(
+            val = NA,
+            text_colour = "black",
+            description = "NO DATA",
+            preposition = "NO DATA"
+        ))
+    }
 
     trb <- function(key) {
         tr(
@@ -4545,11 +4575,10 @@ get_future_flow_conditions <- function(hydrometric, swe, language = "English") {
         nrow = 5,
         ncol = 5
     )
-
     val <- lookup[get_level(hydrometric), get_level(swe)]
     text_colour <- get_text_colour(val)
     preposition <- get_rmd_preposition(val)
-    description <- paste(trb(preposition), trb("rmd_average"))
+    description <- paste(trb(preposition), trb("rmd_normal"))
     description <- trimws(description)
 
     return(list(
@@ -5170,8 +5199,9 @@ make_ggplot_map <- function(
         # point_data <- point_data[!is.na(point_data$value), ]
 
         point_data <- point_data[
-            order(point_data$value, decreasing = FALSE, na.last = FALSE),
+            order(point_data[[statistic]], decreasing = FALSE, na.last = FALSE),
         ]
+        # Plot NaN points first (bottom layer)
         p <- p +
             ggplot2::geom_point(
                 data = point_data,
@@ -5355,12 +5385,12 @@ make_ggplot_map <- function(
         }
     }
 
-    month_name_short <- snowbull_months(
-        month = as.numeric(month),
+    prev_month <- snowbull_months(
+        month = as.numeric(month) - 1,
         short = TRUE
     )
+
     # Compose title and subtitle for ggplot (no HTML tags, no <br>, no <b>)
-    title <- tr("maps_snowbull", language)
     switch(
         param_name,
         "snow water equivalent" = "mm",
@@ -5371,8 +5401,8 @@ make_ggplot_map <- function(
     # if start_year_historical and end_year_historical are not null, add period of record to subtitle
     if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
         period_of_record <- paste0(
+            "(",
             tr("snowbull_reference_period", language),
-            " (",
             start_year_historical,
             "-",
             end_year_historical,
@@ -5382,17 +5412,20 @@ make_ggplot_map <- function(
         period_of_record <- ""
     }
 
-    snowbull_date <- paste0(
-        tr(month_name_short, language),
-        " 1, ",
-        year
+    snowbull_date <- paste(
+        tr("oct", language),
+        year - 1,
+        tr("snowbull_to", language),
+        tr(prev_month, language),
+        year,
+        sep = " "
     )
 
     # make the title based on parameter, statistic, and date
 
     subtitle_param <- switch(
         param_name,
-        "snow water equivalent" = tr("snowbull_swe", language),
+        "snow water equivalent" = tr("snowbull_swe_abbrev", language),
         "precipitation, total" = tr("snowbull_precipitation", language),
         "temperature, air" = tr("snowbull_temperature", language),
         ""
@@ -5400,11 +5433,11 @@ make_ggplot_map <- function(
 
     subtitle_statistic <- switch(
         statistic,
-        "relative_to_med" = tr("snowbull_relative_median", language),
+        "relative_to_med" = tr("snowbull_percent_of_normal", language),
         "data" = tr("snowbull_swe", language),
         "percentile" = tr("snowbull_percentile", language),
         "anomalies" = paste(
-            tr("snowbull_anomalies", language),
+            tr("snowbull_deviation", language),
             " (",
             units,
             ")",
@@ -5421,8 +5454,8 @@ make_ggplot_map <- function(
     )
 
     subtitle <- paste(
-        paste(subtitle_param, snowbull_date, sep = ", "),
-        subtitle_statistic,
+        paste(subtitle_param, subtitle_statistic, sep = " "),
+        snowbull_date,
         period_of_record,
         sep = "\n"
     )

@@ -438,10 +438,13 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
+snowbull_percent_of_normal,,Percent of normal,Pourcentage de la normale
 snowbull_historical_median,,Historical median,Médiane historique
 snowbull_anomalies,,Anomalies,Anomalies
+snowbull_deviation,,Deviation from normal, Écart à la normale
 snowbull_values,,Values,Valeurs
 snowbull_swe,,Snow water equivalent,Équivalent en eau de neige
+snowbull_swe_abbrev,,SWE,ÉEN
 snowbull_temperature,,Temperature,Température
 snowbull_precipitation,,Precipitation,Précipitation
 snowbull_percentile,,Percentile,Percentile
@@ -459,10 +462,11 @@ snowbull_no_data,,No data,Aucune donnée
 snowbull_percentile_suffix,,th,ème
 snowbull_snow_survey,,Snow survey,Relevé nivométrique
 snowbull_snow_pillow,,Snow pillow,Coussin à neige
-snowbull_swe_basin,,Basin average SWE,EEN moyen du 
+snowbull_swe_basin,,Basin average SWE,ÉEN moyen du bassin
 snowbull_normal,,Normal,Normal
 snowbull_average,,Average,Moyenne
-snowbull_reference_period,,Reference period, Période de référence
+snowbull_median,,Median,Médiane
+snowbull_reference_period,,reference period,période de référence
 snowbull_communities,,Communities,Communautés
 snowbull_roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles

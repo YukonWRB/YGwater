@@ -4,10 +4,9 @@ con <- YGwater::AquaConnect(
     name = "aquacache",
     host = Sys.getenv("aquacacheHostProd"),
     port = Sys.getenv("aquacachePortProd"),
-    user = Sys.getenv("aquacacheUserProd"),
-    password = Sys.getenv("aquacachePassProd"),
+    user = Sys.getenv("aquacacheAdminUser"),
+    password = Sys.getenv("aquacacheAdminPass"),
 )
-
 
 # ggplotOverlap(
 #     location = "",
@@ -32,7 +31,7 @@ dat <- load_bulletin_timeseries(
 )
 
 make_snowbull_map(
-    year = 2025,
+    year = 2026,
     month = 3,
     statistic = "relative_to_med",
     language = "English",
@@ -46,14 +45,15 @@ make_snowbull_map(
 )
 
 snowBulletin(
-    year = 2025,
+    year = 2026,
     month = 3,
     save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
-    con = con
+    con = con,
+    language = "english",
 )
 
 bulletin_month <- 3
-bulletin_year <- 2025
+bulletin_year <- 2026
 bulletin_scale <- 1
 language <- list(language = "English", abbrev = "en")
 start_year_historical <- 1991
