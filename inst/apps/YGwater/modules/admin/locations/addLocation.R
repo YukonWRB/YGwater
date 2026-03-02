@@ -1908,6 +1908,13 @@ addLocation <- function(id, inputs, language) {
         nm <- input[[paste0("fn_location_name_", i)]]
         list(language_id = lang, name = nm)
       })
+      
+      # If single language provided with no name flage, such that user may go back to having no additional names
+      all_empty <- if(length(parsed_rows) == 1 && parsed_rows[[1]]$name == ""){
+        TRUE
+      } else {
+        FALSE
+      }
 
       has_any_value <- vapply(
         parsed_rows,
@@ -1916,8 +1923,8 @@ addLocation <- function(id, inputs, language) {
         },
         logical(1)
       )
-
-      if (!any(has_any_value)) {
+      
+      if (!any(has_any_value) || all_empty) {
         empty_df <- data.frame(language_id = integer(0), name = character(0))
         fn_names(empty_df)
         fn_names_draft(empty_df)
