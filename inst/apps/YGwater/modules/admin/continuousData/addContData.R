@@ -752,7 +752,7 @@ addContData <- function(id, language) {
       ) {
         df_mapped$grade <- upload_raw()[[input$upload_grade_col]]
       } else {
-        df_mapped$grade <- character()
+        df_mapped$grade <- NULL
       }
       if (
         isTruthy(input$upload_approval_col) &&
@@ -760,7 +760,7 @@ addContData <- function(id, language) {
       ) {
         df_mapped$approval <- upload_raw()[[input$upload_approval_col]]
       } else {
-        df_mapped$approval <- character()
+        df_mapped$approval <- NULL
       }
       if (
         isTruthy(input$upload_qualifier_col) &&
@@ -768,7 +768,7 @@ addContData <- function(id, language) {
       ) {
         df_mapped$qualifier <- upload_raw()[[input$upload_qualifier_col]]
       } else {
-        df_mapped$qualifier <- character()
+        df_mapped$qualifier <- NULL
       }
 
       df_mapped
