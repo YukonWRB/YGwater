@@ -1560,7 +1560,7 @@ addContData <- function(id, language) {
     })
 
     observeEvent(
-      list(input$delete_rows_table, input$data_table_rows_selected),
+      list(input$delete_rows_table, input$delete_rows_accordion),
       {
         req(input$data_table_rows_selected)
         data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
