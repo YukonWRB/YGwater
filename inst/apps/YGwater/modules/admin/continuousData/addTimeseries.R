@@ -34,6 +34,9 @@ addTimeseriesUI <- function(id) {
         ns("accordion2")
       ))
     ),
+    tags$head(tags$style(HTML(
+      ".shiny-split-layout > div {overflow: visible;}"
+    ))),
     page_fluid(
       uiOutput(ns("banner")),
       uiOutput(ns("ui"))
@@ -122,6 +125,19 @@ addTimeseries <- function(id, language) {
     moduleData$source_fx <- choices[grepl("^download", choices)]
 
     output$ui <- renderUI({
+      orgs <- isolate(moduleData$organizations)
+
+      req(
+        moduleData$locations,
+        moduleData$parameters,
+        moduleData$media,
+        moduleData$aggregation_types,
+        moduleData$organizations,
+        moduleData$users,
+        moduleData$timeseries,
+        orgs,
+        moduleData$agreements
+      )
       tagList(
         actionButton(
           ns("reload_module"),
@@ -131,7 +147,10 @@ addTimeseries <- function(id, language) {
         radioButtons(
           ns("mode"),
           NULL,
-          choices = c("Add new" = "add", "Modify existing" = "modify"),
+          choices = c(
+            "Add new timeseries" = "add",
+            "Modify existing timeseries" = "modify"
+          ),
           inline = TRUE
         ),
         conditionalPanel(
@@ -215,10 +234,7 @@ addTimeseries <- function(id, language) {
         ),
 
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("50%", "50%"),
           selectizeInput(
             ns("parameter"),
             "Parameter",
@@ -243,10 +259,7 @@ addTimeseries <- function(id, language) {
           )
         ),
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("50%", "50%"),
           selectizeInput(
             ns("aggregation_type"),
             "Aggregation type",
@@ -289,8 +302,8 @@ addTimeseries <- function(id, language) {
             ns("default_owner"),
             "Default owner (type your own if not in list)",
             choices = stats::setNames(
-              moduleData$organizations$organization_id,
-              moduleData$organizations$name
+              orgs$organization_id,
+              orgs$name
             ),
             multiple = TRUE,
             options = list(
@@ -327,7 +340,7 @@ addTimeseries <- function(id, language) {
         ),
         selectizeInput(
           ns("share_with"),
-          "Share with groups (1 or more, type your own if not in list)",
+          "Share with groups (1 or more, or 'public_reader' to share with everyone)",
           choices = moduleData$users$role_name,
           selected = "public_reader",
           multiple = TRUE,
@@ -336,46 +349,64 @@ addTimeseries <- function(id, language) {
           tooltip(
             "Select the user groups that should have access to this timeseries data. 'public_reader' allows anyone with access to the system to view the data. You can select multiple groups IF public_reader is not one of them."
           ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          verticalLayout(
-            # htmlOutput to tell the user when they should use the source functions and what the arguments are
-            tags$div(
-              class = "alert alert-info",
-              "The source function is used to download data using the AquaCache R package. Leave blank if entering data manually or using other methods. For more information refer to the AquaCache package documentation."
-            ),
-            selectizeInput(
-              ns("source_fx"),
-              "Source function (see AquaCache package documentation for details)",
-              choices = moduleData$source_fx,
-              multiple = TRUE,
-              options = list(
-                maxItems = 1,
-                placeholder = 'Select source function (optional)'
+        accordion(
+          id = ns("accordion2"),
+          open = FALSE,
+          accordion_panel(
+            id = ns("source_fx_panel"),
+            title = "Auto-download options",
+            splitLayout(
+              cellWidths = c("50%", "50%"),
+              verticalLayout(
+                # htmlOutput to tell the user when they should use the source functions and what the arguments are
+                tags$div(
+                  class = "alert alert-info",
+                  "The source function is used to download data using the AquaCache R package. Leave blank if entering data manually or using other methods. For more information refer to the AquaCache package documentation."
+                ),
+                selectizeInput(
+                  ns("source_fx"),
+                  "Source function (see AquaCache package documentation for details)",
+                  choices = moduleData$source_fx,
+                  multiple = TRUE,
+                  options = list(
+                    maxItems = 1,
+                    placeholder = 'Select source function (optional)'
+                  ),
+                  width = "100%"
+                ),
+                actionButton(
+                  ns("source_fx_doc"),
+                  "Open function documentation"
+                )
               ),
-              width = "100%"
-            ),
-            actionButton(
-              ns("source_fx_doc"),
-              "Open function documentation"
+              verticalLayout(
+                # htmlOutput to tell the user how the source function arguments should be formatted
+                tags$div(
+                  class = "alert alert-info",
+                  "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
+                ),
+                textInput(
+                  ns("source_fx_args"),
+                  "Source function arguments",
+                  value = "",
+                  placeholder = "arg1: value1, arg2: value2",
+                  width = "100%"
+                ),
+                actionButton(
+                  ns("args_example"),
+                  "Show example arguments"
+                )
+              )
             )
           ),
-          verticalLayout(
-            # htmlOutput to tell the user how the source function arguments should be formatted
-            tags$div(
-              class = "alert alert-info",
-              "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
-            ),
-            textInput(
-              ns("source_fx_args"),
-              "Source function arguments",
-              value = "",
-              placeholder = "arg1: value1, arg2: value2",
-              width = "100%"
-            ),
-            actionButton(
-              ns("args_example"),
-              "Show example arguments"
+          accordion_panel(
+            id = ns("corrections_panel"),
+            title = "Automatic corrections/filters",
+
+            tags$p(
+              # class = "text-muted",
+              # "Use these bounds to automatically filter out values below/above specified thresholds. Raw data will not be altered. If left blank, no bound is applied."
+              "This functionality is being developed."
             )
           )
         ),
@@ -404,7 +435,7 @@ addTimeseries <- function(id, language) {
           )
         )
       )
-    })
+    }) # End of output$ui
 
     # Render the timeseries table for modification
     output$ts_table <- DT::renderDT({

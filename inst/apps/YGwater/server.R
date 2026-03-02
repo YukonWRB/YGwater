@@ -8,11 +8,93 @@
 app_server <- function(input, output, session) {
   # Initial setup #############################################################
 
+  # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
+  session$userData$config <- config
+
+  # Initial database connections without edit privileges
+  session$userData$AquaCache <- AquaConnect(
+    name = config$dbName,
+    host = config$dbHost,
+    port = config$dbPort,
+    username = config$dbUser,
+    password = config$dbPass,
+    silent = TRUE
+  )
+
+  # Logging to the database tracking table
+
+  get_client_ip <- function(session) {
+    req <- session$request
+
+    # Prefer X-Forwarded-For when behind proxies
+    xff <- req$HTTP_X_FORWARDED_FOR
+    if (!is.null(xff) && nzchar(xff)) {
+      # XFF is a comma-separated chain; the left-most is the original client
+      return(trimws(strsplit(xff, ",")[[1]][1]))
+    }
+
+    # Fallbacks
+    xri <- req$HTTP_X_REAL_IP
+    if (!is.null(xri) && nzchar(xri)) {
+      return(trimws(xri))
+    }
+
+    req$REMOTE_ADDR
+  }
+
+  tryCatch(
+    {
+      session$userData$usage_id <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
+        params = list(
+          if (config$public) "YGwater/public" else "YGwater/partner",
+          config$dbUser,
+          get_client_ip(session)
+        )
+      )[1, 1]
+    },
+    error = function(e) {
+      session$userData$usage_id <<- NULL
+      warning("Failed to log app usage to database: ", e$message)
+    }
+  )
+
+  session$onUnhandledError(function() {
+    if (!is.null(session$userData$usage_id)) {
+      DBI::dbExecute(
+        session$userData$AquaCache,
+        "UPDATE application.shiny_app_usage SET error_message = $1, session_end = NOW() WHERE id = $2;",
+        params = list(
+          e$message,
+          session$userData$usage_id
+        )
+      )
+    }
+    DBI::dbDisconnect(session$userData$AquaCache)
+  })
+
+  session$onSessionEnded(function() {
+    if (!is.null(session$userData$usage_id)) {
+      DBI::dbExecute(
+        session$userData$AquaCache,
+        "UPDATE application.shiny_app_usage SET session_end = NOW() WHERE id = $1;",
+        params = list(
+          session$userData$usage_id
+        )
+      )
+    }
+    DBI::dbDisconnect(session$userData$AquaCache)
+  })
+
   # Heartbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
   output$keep_alive <- renderText({
     invalidateLater(5000, session)
     Sys.time()
   })
+
+  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
+  session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues when viewing plotly plots on Android devices
 
   # Allow re connection to the same state the app was in if disconnected (e.g. computer put to sleep, etc.)
   session$allowReconnect(TRUE)
@@ -187,7 +269,7 @@ app_server <- function(input, output, session) {
       }
 
       # Simple Index
-      if (isTRUE(session$userData$admin_privs$boreholes)) {
+      if (isTRUE(session$userData$admin_privs$boreholes_wells)) {
         nav_show(id = "navbar", target = "wellTasks")
       } else {
         nav_hide(id = "navbar", target = "wellTasks")
@@ -393,6 +475,8 @@ app_server <- function(input, output, session) {
     ui_loaded$addImgSeries <- FALSE
 
     ui_loaded$simplerIndex <- FALSE
+    ui_loaded$editBoreholesWells <- FALSE
+    ui_loaded$manageBoreholeDocuments <- FALSE
 
     ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
@@ -451,6 +535,8 @@ app_server <- function(input, output, session) {
     "addImgs",
     "addImgSeries",
     "simplerIndex",
+    "editBoreholesWells",
+    "manageBoreholeDocuments",
     "adminHome",
     "changePwd",
     "manageUsers",
@@ -459,31 +545,6 @@ app_server <- function(input, output, session) {
     "viewFeedback",
     "visit"
   )
-
-  # Store the config info in the session. If the user connects with their own credentials these need to be used for plot rendering wrapped in an ExtendedTask or future/promises
-  session$userData$config <- config
-
-  # Initial database connections without edit privileges
-  session$userData$AquaCache <- AquaConnect(
-    name = config$dbName,
-    host = config$dbHost,
-    port = config$dbPort,
-    username = config$dbUser,
-    password = config$dbPass,
-    silent = TRUE
-  )
-
-  # session$userData$use_webgl <- !grepl('Android', session$request$HTTP_USER_AGENT, ignore.case = TRUE) # This does not work with Shiny Server open source
-  session$userData$use_webgl <- FALSE # Force webgl to FALSE for now, as it causes issues when viewing plotly plots on Android devices
-
-  session$onUnhandledError(function() {
-    DBI::dbDisconnect(session$userData$AquaCache)
-    print("Disconnected from AquaCache after unhandled error")
-  })
-
-  session$onSessionEnded(function() {
-    DBI::dbDisconnect(session$userData$AquaCache)
-  })
 
   # Language selection ########################################################
 
@@ -961,6 +1022,40 @@ app_server <- function(input, output, session) {
 
     # Remove the 'admin' button upon logout
     removeUI(selector = "button:contains('Switch to ')")
+
+    # Add log messages to database
+    tryCatch(
+      {
+        new_id <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
+          params = list(
+            if (config$public) "YGwater/public" else "YGwater/partner",
+            config$dbUser,
+            get_client_ip(session)
+          )
+        )[1, 1]
+      },
+      error = function(e) {
+        new_id <<- NULL
+        warning("Failed to log app usage to database: ", e$message)
+      }
+    )
+
+    # Update the old entry with the logout time and the login_to entry
+    if (!is.null(new_id)) {
+      try(
+        {
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "UPDATE application.shiny_app_usage SET session_end = NOW(), login_to = $1 WHERE id = $2;",
+            params = list(new_id, session$userData$usage_id)
+          )
+        }
+      )
+    }
+
+    session$userData$usage_id <- new_id
 
     # Drop old connection
     DBI::dbDisconnect(session$userData$AquaCache)
@@ -1473,13 +1568,8 @@ app_server <- function(input, output, session) {
                 "boreholes.wells",
                 "boreholes.drillers",
                 "boreholes.borehole_well_purposes"
-              ),
-              list(
-                c("INSERT"),
-                c("INSERT"),
-                c("INSERT"),
-                c("INSERT")
               )
+              # Insert, update, delete by default
             ),
             visit = has_priv(
               tbl = session$userData$table_privs,
@@ -1602,6 +1692,40 @@ app_server <- function(input, output, session) {
             easyClose = TRUE,
             footer = modalButton(tr("close", languageSelection$language))
           ))
+
+          # Add log messages to database
+          tryCatch(
+            {
+              new_id <- DBI::dbGetQuery(
+                session$userData$AquaCache,
+                "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
+                params = list(
+                  if (config$public) "YGwater/public" else "YGwater/partner",
+                  input$username,
+                  get_client_ip(session)
+                )
+              )[1, 1]
+            },
+            error = function(e) {
+              new_id <<- NULL
+              warning("Failed to log app usage to database: ", e$message)
+            }
+          )
+
+          # Update the old entry with the logout time
+          if (!is.null(new_id)) {
+            try(
+              {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE application.shiny_app_usage SET session_end = NOW(), login_to = $1 WHERE id = $2;",
+                  params = list(new_id, session$userData$usage_id)
+                )
+              }
+            )
+          }
+
+          session$userData$usage_id <- new_id
 
           return()
         } else {
@@ -2227,6 +2351,27 @@ app_server <- function(input, output, session) {
         output$simplerIndex_ui <- renderUI(simplerIndexUI("simplerIndex")) # Render the UI
         ui_loaded$simplerIndex <- TRUE
         simplerIndex("simplerIndex", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "editBoreholesWells") {
+      if (!ui_loaded$editBoreholesWells) {
+        output$editBoreholesWells_ui <- renderUI(editBoreholesWellsUI(
+          "editBoreholesWells"
+        ))
+        ui_loaded$editBoreholesWells <- TRUE
+        editBoreholesWells("editBoreholesWells", language = languageSelection)
+      }
+    }
+    if (input$navbar == "manageBoreholeDocuments") {
+      if (!ui_loaded$manageBoreholeDocuments) {
+        output$manageBoreholeDocuments_ui <- renderUI(manageBoreholeDocumentsUI(
+          "manageBoreholeDocuments"
+        ))
+        ui_loaded$manageBoreholeDocuments <- TRUE
+        manageBoreholeDocuments(
+          "manageBoreholeDocuments",
+          language = languageSelection
+        )
       }
     }
     if (input$navbar == "manageNewsContent") {

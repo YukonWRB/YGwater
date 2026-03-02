@@ -1,8 +1,8 @@
 # !IMPORTANT! Some helper functions are located at the bottom of this file.
 
 #' @apiTitle AquaCache API version 1
-#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory. Many endpoints can make use of authentication via HTTP Basic Auth. See the documentation for details. In addition, memoisation is used in multiple endpoints to cache results for improved performance.
-#' @apiVersion 1.0.0
+#' @apiDescription API for programmatic access to the aquacache database.
+#' @apiVersion 1.0.1
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
@@ -31,8 +31,8 @@ function(req, res) {
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    req$user <- Sys.getenv("APIaquacacheAnonUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
-    req$password <- Sys.getenv("APIaquacacheAnonPass", "aquacache")
+    req$user <- Sys.getenv("APIaquacacheUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
+    req$password <- Sys.getenv("APIaquacachePass", "aquacache")
     return(plumber::forward())
   }
 
@@ -158,9 +158,9 @@ function(req, res, lang = "en") {
 
 
 #' Return measurements for a timeseries
-#* @param id Timeseries ID (required).
-#* @param start Start date/time (required, ISO 8601 i.e. 2025-01-01 00:00).
-#* @param end End date/time (optional; defaults to now, ISO 8601).
+#* @param id Timeseries IDs to target, separated by commas (required).
+#* @param start Start date/time, inclusive (required, ISO 8601 i.e. 2025-01-01 00:00).
+#* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @get /timeseries/measurements
 #* @serializer csv
@@ -233,17 +233,36 @@ function(req, res, id, start, end = NA, limit = 100000) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
-  WHERE timeseries_id = $1 
-  AND datetime >= $2 
-  AND datetime <= $3 
-  ORDER BY datetime DESC
-  LIMIT $4"
-  out <- DBI::dbGetQuery(
-    con,
-    sql,
-    params = list(as.integer(id), start, end, lim)
-  )
+  # Break id apart by comma and convert to integer vector
+  id <- unlist(strsplit(id, ","))
+  id <- as.integer(id)
+  if (length(id) == 1) {
+    out <- DBI::dbGetQuery(
+      con,
+      "SELECT * FROM continuous.measurements_continuous_corrected 
+      WHERE timeseries_id = $1 
+      AND datetime >= $2 
+      AND datetime <= $3 
+      ORDER BY datetime DESC
+      LIMIT $4",
+      params = list(as.integer(id), start, end, lim)
+    )
+  } else {
+    # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
+    out <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT * FROM continuous.measurements_continuous_corrected 
+          WHERE timeseries_id IN (%s) 
+          AND datetime >= $1 
+          AND datetime <= $2 
+          ORDER BY datetime DESC
+          LIMIT $3",
+        paste(id, collapse = ",")
+      ),
+      params = list(start, end, lim)
+    )
+  }
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"

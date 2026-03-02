@@ -32,7 +32,10 @@ addLocationUI <- function(id) {
       }
     ",
         ns("accordion2")
-      ))
+      )),
+      HTML(
+        ".shiny-split-layout > div {overflow: visible;}"
+      )
     ),
     page_fluid(
       uiOutput(ns("banner")),
@@ -88,10 +91,42 @@ addLocation <- function(id, inputs, language) {
       }
     }
 
+    normalize_optional_text <- function(x) {
+      if (
+        is.null(x) || !length(x) || is.na(x) || !nzchar(trimws(as.character(x)))
+      ) {
+        NA_character_
+      } else {
+        as.character(x)
+      }
+    }
+
+    collect_fn_modal_rows <- function(n_rows) {
+      parsed_rows <- lapply(seq_len(n_rows), function(i) {
+        lang <- input[[paste0("fn_language_", i)]]
+        nm <- input[[paste0("fn_location_name_", i)]]
+        data.frame(
+          language_id = if (isTruthy(lang)) as.integer(lang) else NA_integer_,
+          name = if (is.null(nm)) "" else as.character(nm),
+          stringsAsFactors = FALSE
+        )
+      })
+      do.call(rbind, parsed_rows)
+    }
+
     pending_network_selection <- reactiveVal(character(0))
     pending_network_new <- reactiveVal(NULL)
     pending_project_selection <- reactiveVal(character(0))
     pending_project_new <- reactiveVal(NULL)
+    fn_name_row_count <- reactiveVal(1L)
+    fn_names <- reactiveVal(data.frame(
+      language_id = integer(0),
+      name = character(0)
+    ))
+    fn_names_draft <- reactiveVal(data.frame(
+      language_id = integer(0),
+      name = character(0)
+    ))
 
     # Get some data from aquacache
     moduleData <- reactiveValues()
@@ -146,26 +181,37 @@ addLocation <- function(id, inputs, language) {
         session$userData$AquaCache,
         "SELECT * FROM public.get_shareable_principals_for('public.locations');"
       ) # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
+      moduleData$languages <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT language_id, language_name_en, language_name_fr FROM languages ORDER BY language_name_en"
+      )
     }
 
     getModuleData() # Initial data load
 
     output$ui <- renderUI({
+      networks <- isolate(moduleData$networks)
+      projects <- isolate(moduleData$projects)
+
       req(
         moduleData$exist_locs,
         moduleData$loc_types,
         moduleData$organizations,
         moduleData$agreements,
         moduleData$datums,
-        moduleData$networks,
-        moduleData$projects,
-        moduleData$users
+        networks,
+        projects,
+        moduleData$users,
+        moduleData$languages
       )
       tagList(
         radioButtons(
           ns("mode"),
           NULL,
-          choices = c("Add new" = "add", "Modify existing" = "modify"),
+          choices = c(
+            "Add new location" = "add",
+            "Modify existing location" = "modify"
+          ),
           inline = TRUE
         ),
         conditionalPanel(
@@ -181,99 +227,19 @@ addLocation <- function(id, inputs, language) {
             )
           )
         ),
-        # Tell the user that they should auto-generate unless they have a good reason not to, and the code they want uses national hydro network codes already
-        tags$div(
-          "Important: use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it uses national hydro network codes (i.e. a Water Survey of Canada location).",
-          style = "margin-bottom: 10px; font-style: bold; color: #555;"
-        ),
-        splitLayout(
-          cellWidths = c("60%", "40%"),
-          textInput(
-            ns("loc_code"),
-            "Location code (must not exist already)",
-            width = "100%"
-          ),
-          auto_generate_ui(ns = ns),
-        ),
+        # Add toggle for WSC/ not WSC location, which will dictate order of fields and which fields are shown
         conditionalPanel(
           condition = "input.mode == 'add'",
           ns = ns,
-          htmlOutput(ns("hydat_note"))
-        ),
-        # Don't show the HYDAT button unless we detect HYDAT is available
-        actionButton(
-          ns("hydat_fill"),
-          "Auto-fill fields from HYDAT",
-          style = "display: none;"
-        ),
-        splitLayout(
-          cellWidths = c("33%", "33%", "33%"),
-          textInput(
-            ns("loc_name"),
-            "Location name (must not exist already)",
-            if (isTruthy(moduleInputs$location)) {
-              moduleInputs$location
-            } else {
-              NULL
-            },
-            width = "100%"
-          ),
-          textInput(
-            ns("loc_name_fr"),
-            "French location name (must not exist already)",
-            width = "100%"
-          ),
-          textInput(
-            ns("alias"),
-            "Alias (optional)",
-            width = "100%"
+          radioButtons(
+            ns("wsc_location"),
+            "Is this a Water Survey of Canada location?",
+            choices = c("Yes" = "yes", "No" = "no"),
+            inline = TRUE
           )
         ),
-        selectizeInput(
-          ns("loc_type"),
-          "Location type",
-          choices = stats::setNames(
-            moduleData$loc_types$type_id,
-            moduleData$loc_types$type
-          ),
-          multiple = TRUE, # This is to force a default of nothing selected - overridden with options
-          options = list(maxItems = 1),
-          width = "100%"
-        ),
-        splitLayout(
-          cellWidths = c("40%", "40%", "20%"),
-          numericInput(
-            ns("lat"),
-            "Latitude (decimal degrees, WGS84)",
-            value = NA,
-            width = "100%"
-          ) |>
-            tooltip(
-              "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
-            ),
-          numericInput(
-            ns("lon"),
-            "Longitude (decimal degrees, WGS84)",
-            value = NA,
-            width = "100%",
-          ) |>
-            tooltip(
-              "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
-            ),
-          actionButton(
-            ns("open_map"),
-            "Choose or show coordinates on map",
-            icon = icon("map-location-dot"),
-            width = "100%",
-            # Bump it down a bit to align with numericInputs
-            style = "margin-top: 30px;"
-          )
-        ),
-        splitLayout(
-          cellWidths = c("40%", "40%", "20%"),
-          uiOutput(ns("lat_warning")),
-          uiOutput(ns("lon_warning"))
-        ),
+        # Placeholder uiOutput for conditional panel with a different order depending on if WSC or not and with some different fields
+        uiOutput(ns("wsc_conditional_panel")),
 
         # Add UI for well association
         checkboxInput(
@@ -300,7 +266,8 @@ addLocation <- function(id, inputs, language) {
               width = "100%"
             )
           ),
-          uiOutput(ns("selected_well_note"))
+          uiOutput(ns("selected_well_note")),
+          br()
         ),
 
         selectizeInput(
@@ -316,23 +283,14 @@ addLocation <- function(id, inputs, language) {
             "Select the user groups that should have access to this timeseries data. 'public_reader' allows anyone with access to the system to view the data. You can select multiple groups IF public_reader is not one of them."
           ),
 
-        splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
-          textInput(
-            ns("loc_contact"),
-            "Contact details (optional)",
-            width = "100%"
-          )
+        textInput(
+          ns("loc_contact"),
+          "Contact details (optional)",
+          width = "100%"
         ),
 
         splitLayout(
-          cellWidths = c("0%", "33.3%", "33.3%", "33.3%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("33.3%", "33.3%", "33.3%"),
           selectizeInput(
             ns("datum_id_from"),
             "Vertical datum from (Assumed datum is station 0)",
@@ -370,16 +328,13 @@ addLocation <- function(id, inputs, language) {
         uiOutput(ns("elev_warning")),
 
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("50%", "50%"),
           selectizeInput(
             ns("network"),
             "Network(s) (type your own if not in list)",
             choices = stats::setNames(
-              moduleData$networks$network_id,
-              moduleData$networks$name
+              networks$network_id,
+              networks$name
             ),
             multiple = TRUE,
             options = list(
@@ -392,8 +347,8 @@ addLocation <- function(id, inputs, language) {
             ns("project"),
             "Project(s) (type your own if not in list)",
             choices = stats::setNames(
-              moduleData$projects$project_id,
-              moduleData$projects$name
+              projects$project_id,
+              projects$name
             ),
             multiple = TRUE,
             options = list(
@@ -405,10 +360,7 @@ addLocation <- function(id, inputs, language) {
         ),
 
         splitLayout(
-          cellWidths = c("0%", "50%", "50%"),
-          tags$head(tags$style(HTML(
-            ".shiny-split-layout > div {overflow: visible;}"
-          ))),
+          cellWidths = c("50%", "50%"),
           checkboxInput(
             ns("loc_jurisdictional_relevance"),
             "Publicly relevant (i.e. should be seen by the public)",
@@ -441,6 +393,210 @@ addLocation <- function(id, inputs, language) {
         ),
         actionButton(ns("add_loc"), "Add location", width = "100%")
       )
+    }) # End of renderUI for main UI
+
+    # Don't show the WSC-specific layout if modifying a location.
+    observeEvent(input$mode, {
+      if (input$mode == "modify") {
+        updateRadioButtons(session, "wsc_location", selected = "no")
+      }
+    })
+
+    # Show different field order and some different fields if it's a WSC location, since for WSC locations we can auto-populate some fields from HYDAT. If it's not a WSC location, show the auto-generate button for location codes and put it at the bottom since it's less relevant if not using HYDAT codes.
+    observeEvent(input$wsc_location, {
+      req(input$wsc_location)
+      req(input$mode)
+      req(hydat$exists)
+
+      if (input$wsc_location == 'yes' && hydat$exists && input$mode == "add") {
+        # It's a WSC location and we're adding a new location and hydat is available.
+        output$wsc_conditional_panel <- renderUI({
+          tagList(
+            htmlOutput(ns("hydat_note")),
+            splitLayout(
+              cellWidths = c("60%", "40%"),
+              textInput(
+                ns("loc_code"),
+                "Location code (must not exist already)",
+                width = "100%"
+              ),
+              # Don't show the HYDAT button unless we detect HYDAT is available
+              actionButton(
+                ns("hydat_fill"),
+                "Auto-fill fields from HYDAT",
+                style = "display: none; margin-top: 30px;",
+                width = "100%",
+              )
+            ),
+            splitLayout(
+              cellWidths = c("33%", "33%", "33%"),
+              textInput(
+                ns("loc_name"),
+                "Location name (must not exist already)",
+                if (isTruthy(moduleInputs$location)) {
+                  moduleInputs$location
+                } else {
+                  NULL
+                },
+                width = "100%"
+              ),
+              textInput(
+                ns("loc_name_fr"),
+                "French location name (must not exist already)",
+                width = "100%"
+              ),
+              textInput(
+                ns("alias"),
+                "Alias (optional)",
+                width = "100%"
+              )
+            ),
+            uiOutput(ns("fn_names_summary")),
+            actionButton(
+              ns("open_fn_names_modal"),
+              "Add/Modify names in other languages",
+              width = "100%"
+            ),
+            selectizeInput(
+              ns("loc_type"),
+              "Location type",
+              choices = stats::setNames(
+                moduleData$loc_types$type_id,
+                moduleData$loc_types$type
+              ),
+              multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+              options = list(maxItems = 1),
+              width = "100%"
+            ),
+            splitLayout(
+              cellWidths = c("40%", "40%", "20%"),
+              numericInput(
+                ns("lat"),
+                "Latitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%"
+              ) |>
+                tooltip(
+                  "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
+                ),
+              numericInput(
+                ns("lon"),
+                "Longitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%",
+              ) |>
+                tooltip(
+                  "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
+                ),
+              actionButton(
+                ns("open_map"),
+                "Choose or show coordinates on map",
+                icon = icon("map-location-dot"),
+                width = "100%",
+                # Bump it down a bit to align with numericInputs
+                style = "margin-top: 30px;"
+              )
+            ),
+            uiOutput(ns("lat_warning")),
+            uiOutput(ns("lon_warning"))
+          )
+        })
+      } else {
+        # Not a WSC location, or modifying an existing location, so show the regular fields and auto-generate button at the bottom
+        output$wsc_conditional_panel <- renderUI({
+          tagList(
+            splitLayout(
+              cellWidths = c("33%", "33%", "33%"),
+              textInput(
+                ns("loc_name"),
+                "Location name (must not exist already)",
+                if (isTruthy(moduleInputs$location)) {
+                  moduleInputs$location
+                } else {
+                  NULL
+                },
+                width = "100%"
+              ),
+              textInput(
+                ns("loc_name_fr"),
+                "French location name (must not exist already)",
+                width = "100%"
+              ),
+              textInput(
+                ns("alias"),
+                "Alias (optional)",
+                width = "100%"
+              )
+            ),
+            uiOutput(ns("fn_names_summary")),
+            actionButton(
+              ns("open_fn_names_modal"),
+              "Add/Modify names in other languages",
+              width = "100%"
+            ),
+            selectizeInput(
+              ns("loc_type"),
+              "Location type",
+              choices = stats::setNames(
+                moduleData$loc_types$type_id,
+                moduleData$loc_types$type
+              ),
+              multiple = TRUE, # This is to force a default of nothing selected - overridden with options
+              options = list(maxItems = 1),
+              width = "100%"
+            ),
+            splitLayout(
+              cellWidths = c("40%", "40%", "20%"),
+              numericInput(
+                ns("lat"),
+                "Latitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%"
+              ) |>
+                tooltip(
+                  "Latitude in decimal degrees, e.g. 62.1234. Positive values indicate northern hemisphere."
+                ),
+              numericInput(
+                ns("lon"),
+                "Longitude (decimal degrees, WGS84)",
+                value = NA,
+                width = "100%",
+              ) |>
+                tooltip(
+                  "Longitude in decimal degrees, e.g. -135.1234. Negative values indicate western hemisphere."
+                ),
+              actionButton(
+                ns("open_map"),
+                "Choose or show coordinates on map",
+                icon = icon("map-location-dot"),
+                width = "100%",
+                # Bump it down a bit to align with numericInputs
+                style = "margin-top: 30px;"
+              )
+            ),
+            uiOutput(ns("lat_warning")),
+            uiOutput(ns("lon_warning")),
+
+            # Tell the user that they should auto-generate unless they have a good reason not to, and the code they want uses national hydro network codes already
+            tags$div(
+              strong(
+                "Important: use the auto-generate button to create a unique location code UNLESS you have a specific code to use AND it's based on National Hydro Network codes."
+              ),
+              style = "margin-bottom: 10px; font-style: bold; color: #555;"
+            ),
+            splitLayout(
+              cellWidths = c("60%", "40%"),
+              textInput(
+                ns("loc_code"),
+                "Location code (must not exist already)",
+                width = "100%"
+              ),
+              # Auto-generate button, from file 'loc_code_auto_generate.R' for auto-generating location codes from NHN basins (not applicable if WSC location)
+              auto_generate_ui(ns = ns)
+            )
+          )
+        })
+      }
     })
 
     ## Observers to modify existing entry ##########################################
@@ -493,8 +649,17 @@ addLocation <- function(id, inputs, language) {
         ]
 
         if (nrow(details) > 0) {
-          updateTextInput(session, "loc_code", value = details$location)
+          updateTextInput(session, "loc_code", value = details$location_code)
           updateTextInput(session, "loc_name", value = details$name)
+
+          existing_fn_names <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT language_id, name FROM public.location_names WHERE location_id = $1 ORDER BY language_id",
+            params = list(loc_id)
+          )
+          fn_names(existing_fn_names)
+          fn_names_draft(existing_fn_names)
+          fn_name_row_count(max(1L, nrow(existing_fn_names)))
           updateTextInput(session, "loc_name_fr", value = details$name_fr)
           updateTextInput(session, "alias", value = details$alias)
           updateSelectizeInput(
@@ -566,6 +731,12 @@ addLocation <- function(id, inputs, language) {
         }
       } else {
         selected_loc(NULL)
+        fn_names(data.frame(language_id = integer(0), name = character(0)))
+        fn_names_draft(data.frame(
+          language_id = integer(0),
+          name = character(0)
+        ))
+        fn_name_row_count(1L)
       }
     })
 
@@ -779,6 +950,11 @@ addLocation <- function(id, inputs, language) {
           "<b>Entering a Water Survey of Canada code will allow you to auto-populate fields with their information if the location code exists.</b><br>"
         )
       })
+      # Show the 'Is this a Water Survey of Canada location?' question if HYDAT is available, since it allows auto-population of fields for WSC stations. If HYDAT is not available, hide the question and related button.
+      shinyjs::show("wsc_location")
+    } else {
+      shinyjs::hide("wsc_location")
+      updateRadioButtons(session, "wsc_location", selected = "no")
     }
 
     observeEvent(
@@ -800,7 +976,7 @@ addLocation <- function(id, inputs, language) {
         if (input$mode == "modify") {
           shinyjs::js$backgroundCol(ns("loc_code"), "#fff")
         } else {
-          if (input$loc_code %in% moduleData$exist_locs$location) {
+          if (input$loc_code %in% moduleData$exist_locs$location_code) {
             shinyjs::js$backgroundCol(ns("loc_code"), "#fdd")
             showNotification(
               "This location code already exists and you're on the 'add new timeseries' mode.",
@@ -1228,9 +1404,9 @@ addLocation <- function(id, inputs, language) {
     output$selected_well_note <- renderUI({
       label <- selected_well_label()
       if (is.null(label)) {
-        return(div("Selected well: none"))
+        return(div(strong("Selected well: none")))
       }
-      div(paste("Selected well:", label))
+      div(strong(paste("Selected well:", label)))
     })
 
     observeEvent(
@@ -1571,6 +1747,224 @@ addLocation <- function(id, inputs, language) {
       ignoreNULL = TRUE
     )
 
+    language_choices <- reactive({
+      req(moduleData$languages)
+      labels <- ifelse(
+        is.na(moduleData$languages$language_name_fr) |
+          !nzchar(moduleData$languages$language_name_fr),
+        moduleData$languages$language_name_en,
+        paste0(
+          moduleData$languages$language_name_en,
+          " / ",
+          moduleData$languages$language_name_fr
+        )
+      )
+
+      stats::setNames(
+        moduleData$languages$language_id,
+        labels
+      )
+    })
+
+    output$fn_names_summary <- renderUI({
+      entries <- fn_names()
+      if (!nrow(entries)) {
+        return(div(
+          strong("Names in other languages:"),
+          " none"
+        ))
+      }
+
+      labels <- vapply(
+        seq_len(nrow(entries)),
+        function(i) {
+          code <- entries$language_id[i]
+          lang_row <- moduleData$languages[
+            moduleData$languages$language_id == code,
+            ,
+            drop = FALSE
+          ]
+          lang_label <- if (nrow(lang_row)) {
+            if (
+              is.na(lang_row$language_name_fr[1]) ||
+                !nzchar(lang_row$language_name_fr[1])
+            ) {
+              lang_row$language_name_en[1]
+            } else {
+              paste0(
+                lang_row$language_name_en[1],
+                " / ",
+                lang_row$language_name_fr[1]
+              )
+            }
+          } else {
+            as.character(code)
+          }
+
+          paste0(lang_label, ": ", entries$name[i])
+        },
+        character(1)
+      )
+
+      tagList(
+        strong("Names in other languages:"),
+        tags$ul(lapply(labels, tags$li))
+      )
+    })
+
+    output$fn_language_rows <- renderUI({
+      req(language_choices())
+      n_rows <- fn_name_row_count()
+      saved <- fn_names_draft()
+
+      tagList(lapply(seq_len(n_rows), function(i) {
+        div(
+          style = "margin-bottom: 8px;",
+          splitLayout(
+            cellWidths = c("40%", "45%", "15%"),
+            selectizeInput(
+              ns(paste0("fn_language_", i)),
+              if (i == 1) "Language" else NULL,
+              choices = language_choices(),
+              selected = if (nrow(saved) >= i) saved$language_id[i] else NULL,
+              options = list(maxItems = 1),
+              width = "100%"
+            ),
+            textInput(
+              ns(paste0("fn_location_name_", i)),
+              if (i == 1) "Location name" else NULL,
+              value = if (nrow(saved) >= i) saved$name[i] else "",
+              width = "100%"
+            ),
+            actionButton(
+              ns(paste0("fn_remove_row_", i)),
+              "Remove",
+              style = "margin-top: 30px;",
+              width = "100%"
+            )
+          )
+        )
+      }))
+    })
+
+    observeEvent(input$open_fn_names_modal, {
+      saved <- fn_names()
+      fn_names_draft(saved)
+      fn_name_row_count(max(1L, nrow(saved)))
+
+      showModal(modalDialog(
+        title = "Location names in other languages",
+        size = "l",
+        uiOutput(ns("fn_language_rows")),
+        actionButton(
+          ns("add_fn_language_row"),
+          "Add another language and name"
+        ),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_fn_names"), "Save names")
+        )
+      ))
+    })
+
+    observeEvent(input$add_fn_language_row, {
+      current <- collect_fn_modal_rows(fn_name_row_count())
+      fn_names_draft(current)
+      fn_name_row_count(fn_name_row_count() + 1L)
+    })
+
+    observe({
+      n_rows <- fn_name_row_count()
+      lapply(seq_len(n_rows), function(i) {
+        observeEvent(
+          input[[paste0("fn_remove_row_", i)]],
+          {
+            current <- collect_fn_modal_rows(fn_name_row_count())
+            if (nrow(current) <= 1) {
+              fn_names_draft(data.frame(
+                language_id = integer(0),
+                name = character(0)
+              ))
+              fn_name_row_count(1L)
+              return()
+            }
+
+            if (nrow(current) >= i) {
+              current <- current[-i, , drop = FALSE]
+            }
+            fn_names_draft(current)
+            fn_name_row_count(max(1L, nrow(current)))
+          },
+          ignoreInit = TRUE
+        )
+      })
+    })
+
+    observeEvent(input$save_fn_names, {
+      n_rows <- fn_name_row_count()
+      parsed_rows <- lapply(seq_len(n_rows), function(i) {
+        lang <- input[[paste0("fn_language_", i)]]
+        nm <- input[[paste0("fn_location_name_", i)]]
+        list(language_id = lang, name = nm)
+      })
+
+      has_any_value <- vapply(
+        parsed_rows,
+        function(x) {
+          isTruthy(x$language_id) || isTruthy(x$name)
+        },
+        logical(1)
+      )
+
+      if (!any(has_any_value)) {
+        empty_df <- data.frame(language_id = integer(0), name = character(0))
+        fn_names(empty_df)
+        fn_names_draft(empty_df)
+        removeModal()
+        return()
+      }
+
+      incomplete <- vapply(
+        parsed_rows[has_any_value],
+        function(x) {
+          !isTruthy(x$language_id) || !isTruthy(x$name)
+        },
+        logical(1)
+      )
+
+      if (any(incomplete)) {
+        showNotification(
+          "Each language row must include both a language and a location name.",
+          type = "error"
+        )
+        return()
+      }
+
+      parsed_df <- do.call(
+        rbind,
+        lapply(parsed_rows[has_any_value], function(x) {
+          data.frame(
+            language_id = as.integer(x$language_id),
+            name = as.character(x$name),
+            stringsAsFactors = FALSE
+          )
+        })
+      )
+
+      if (anyDuplicated(parsed_df$language_id)) {
+        showNotification(
+          "Each language can only be selected once.",
+          type = "error"
+        )
+        return()
+      }
+
+      fn_names(parsed_df)
+      fn_names_draft(parsed_df)
+      removeModal()
+    })
+
     ### Observe the share_with selectizeInput for new user groups ##############################
     observeEvent(
       input$share_with,
@@ -1685,15 +2079,17 @@ addLocation <- function(id, inputs, language) {
             # Check each field to see if it's been modified; if so, update the DB entry by targeting the location_id and appropriate column name
             # Changes to the location code
             if (
-              input$loc_code !=
-                moduleData$exist_locs[
+              !identical(
+                as.character(input$loc_code),
+                as.character(moduleData$exist_locs[
                   which(moduleData$exist_locs$location_id == selected_loc()),
-                  "location"
-                ]
+                  "location_code"
+                ])
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE locations SET location = $1 WHERE location_id = $2;",
+                "UPDATE locations SET location_code = $1 WHERE location_id = $2;",
                 params = list(input$loc_code, selected_loc())
               )
               # Update the corresponding entry in the 'vectors' table. the layer_name is 'Locations', should match on 'feature_name' = input$loc_code
@@ -1704,7 +2100,7 @@ addLocation <- function(id, inputs, language) {
                   input$loc_code,
                   moduleData$exist_locs[
                     which(moduleData$exist_locs$location_id == selected_loc()),
-                    'location'
+                    'location_code'
                   ]
                 )
               )
@@ -1712,11 +2108,13 @@ addLocation <- function(id, inputs, language) {
 
             # Changes to the location english name
             if (
-              input$loc_name !=
-                moduleData$exist_locs[
+              !identical(
+                as.character(input$loc_name),
+                as.character(moduleData$exist_locs[
                   which(moduleData$exist_locs$location_id == selected_loc()),
                   "name"
-                ]
+                ])
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -1733,11 +2131,13 @@ addLocation <- function(id, inputs, language) {
 
             # Changes to the location french name
             if (
-              input$loc_name_fr !=
-                moduleData$exist_locs[
+              !identical(
+                normalize_optional_text(input$loc_name_fr),
+                normalize_optional_text(moduleData$exist_locs[
                   which(moduleData$exist_locs$location_id == selected_loc()),
                   "name_fr"
-                ]
+                ])
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -1747,27 +2147,32 @@ addLocation <- function(id, inputs, language) {
             }
 
             # Changes to the alias
+            existing_alias <- moduleData$exist_locs[
+              which(moduleData$exist_locs$location_id == selected_loc()),
+              "alias"
+            ]
             if (
-              input$loc_alias !=
-                moduleData$exist_locs[
-                  which(moduleData$exist_locs$location_id == selected_loc()),
-                  "alias"
-                ]
+              !identical(
+                normalize_optional_text(input$alias),
+                normalize_optional_text(existing_alias)
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE locations SET alias = $1 WHERE location_id = $2;",
-                params = list(input$loc_alias, selected_loc())
+                params = list(input$alias, selected_loc())
               )
             }
 
             # Changes to the location type
             if (
-              input$loc_type !=
-                moduleData$exist_locs[
+              !identical(
+                as.character(input$loc_type),
+                as.character(moduleData$exist_locs[
                   which(moduleData$exist_locs$location_id == selected_loc()),
-                  "location_type"
-                ]
+                  "location_type_id"
+                ])
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -1779,11 +2184,13 @@ addLocation <- function(id, inputs, language) {
             # Changes to coordinates
             updated_coords <- FALSE
             if (
-              input$lat !=
-                moduleData$exist_locs[
+              !identical(
+                as.numeric(input$lat),
+                as.numeric(moduleData$exist_locs[
                   which(moduleData$exist_locs$location_id == selected_loc()),
                   "latitude"
-                ]
+                ])
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -1793,11 +2200,13 @@ addLocation <- function(id, inputs, language) {
               updated_coords <- TRUE
             }
             if (
-              input$lon !=
-                moduleData$exist_locs[
+              !identical(
+                as.numeric(input$lon),
+                as.numeric(moduleData$exist_locs[
                   which(moduleData$exist_locs$location_id == selected_loc()),
                   "longitude"
-                ]
+                ])
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -2005,18 +2414,20 @@ addLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE boreholes.boreholes SET location_id = $1 WHERE borehole_id = $2",
-                params = list(seleced_loc(), selected_well_id())
+                params = list(selected_loc(), selected_well_id())
               )
             }
 
             # Changes to jurisdictional relevance
             if (isTruthy(input$loc_jurisdictional_relevance)) {
               if (
-                input$loc_jurisdictional_relevance !=
-                  moduleData$exist_locs[
+                !identical(
+                  as.logical(input$loc_jurisdictional_relevance),
+                  as.logical(moduleData$exist_locs[
                     which(moduleData$exist_locs$location_id == selected_loc()),
                     "jurisdictional_relevance"
-                  ]
+                  ])
+                )
               ) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
@@ -2032,11 +2443,13 @@ addLocation <- function(id, inputs, language) {
             # Changes to anthropogenic influence
             if (isTruthy(input$loc_anthropogenic_influence)) {
               if (
-                input$loc_anthropogenic_influence !=
-                  moduleData$exist_locs[
+                !identical(
+                  as.logical(input$loc_anthropogenic_influence),
+                  as.logical(moduleData$exist_locs[
                     which(moduleData$exist_locs$location_id == selected_loc()),
                     "anthropogenic_influence"
-                  ]
+                  ])
+                )
               ) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
@@ -2168,6 +2581,27 @@ addLocation <- function(id, inputs, language) {
               }
             }
 
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "DELETE FROM public.location_names WHERE location_id = $1",
+              params = list(selected_loc())
+            )
+
+            fn_name_values <- fn_names()
+            if (nrow(fn_name_values) > 0) {
+              for (i in seq_len(nrow(fn_name_values))) {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "INSERT INTO public.location_names (location_id, language_id, name) VALUES ($1, $2, $3)",
+                  params = list(
+                    selected_loc(),
+                    fn_name_values$language_id[i],
+                    fn_name_values$name[i]
+                  )
+                )
+              }
+            }
+
             # Show a notification that the location was updated
             showNotification("Location updated successfully", type = "message")
             # Commit the transaction
@@ -2206,8 +2640,8 @@ addLocation <- function(id, inputs, language) {
         if (
           input$loc_code %in%
             moduleData$exist_locs[
-              moduleData$exist_locs$location != input$loc_code,
-              "location"
+              moduleData$exist_locs$location_code != input$loc_code,
+              "location_code"
             ]
         ) {
           showModal(modalDialog(
@@ -2282,7 +2716,7 @@ addLocation <- function(id, inputs, language) {
         location_code = input$loc_code,
         name = input$loc_name,
         name_fr = input$loc_name_fr,
-        alias = if (isTruthy(input$loc_alias)) input$loc_alias else NA,
+        alias = if (isTruthy(input$alias)) input$alias else NA,
         latitude = input$lat,
         longitude = input$lon,
         share_with = input$share_with,
@@ -2334,12 +2768,28 @@ addLocation <- function(id, inputs, language) {
           # addACLocation is all done within a transaction, including additions to accessory tables
           AquaCache::addACLocation(con = session$userData$AquaCache, df = df)
 
+          new_loc_id <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT location_id FROM public.locations WHERE location_code = $1",
+            params = list(input$loc_code)
+          )$location_id
+
+          fn_name_values <- fn_names()
+          if (length(new_loc_id) && nrow(fn_name_values) > 0) {
+            for (i in seq_len(nrow(fn_name_values))) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "INSERT INTO public.location_names (location_id, language_id, name) VALUES ($1, $2, $3)",
+                params = list(
+                  new_loc_id[1],
+                  fn_name_values$language_id[i],
+                  fn_name_values$name[i]
+                )
+              )
+            }
+          }
+
           if (isTruthy(input$associate_well) && isTruthy(selected_well_id())) {
-            new_loc_id <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "SELECT location_id FROM public.locations WHERE location = $1",
-              params = list(input$loc_code)
-            )$location_id
             if (length(new_loc_id)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -2365,7 +2815,7 @@ addLocation <- function(id, inputs, language) {
           updateTextInput(session, "loc_code", value = character(0))
           updateTextInput(session, "loc_name", value = character(0))
           updateTextInput(session, "loc_name_fr", value = character(0))
-          updateTextInput(session, "loc_alias", value = character(0))
+          updateTextInput(session, "alias", value = character(0))
           updateSelectizeInput(session, "loc_type", selected = character(0))
           updateNumericInput(session, "lat", value = NA)
           updateNumericInput(session, "lon", value = NA)
@@ -2401,6 +2851,12 @@ addLocation <- function(id, inputs, language) {
           pending_project_new(NULL)
           selected_well_id(NULL)
           selected_well_label(NULL)
+          fn_names(data.frame(language_id = integer(0), name = character(0)))
+          fn_names_draft(data.frame(
+            language_id = integer(0),
+            name = character(0)
+          ))
+          fn_name_row_count(1L)
         },
         error = function(e) {
           # Rollback already happens within AquaCache::addACLocation

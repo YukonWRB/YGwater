@@ -2,14 +2,14 @@ location_name,location,Liard,Pelly,Stewart,Peel,Porcupine,White,Central_Yukon,Lo
 Pine Lake Airstrip,10AA-SC03,1.4,0,0,0,0,0,0,0,0,1.2,0
 Frances River,10AB-SC01,2.3,0,0,0,0,0,0,0,0,0,0
 Watson Lake Airport,10AA-SC01,0.7,0,0,0,0,0,0,0,0,0,0
-Hyland River B,10AD-SC01B,2.3,0,0,0,0,0,0,0,0,0,0
+Hyland River Composite,10AD-SC01,2.3,0,0,0,0,0,0,0,0,0,0
 Finlayson Airstrip,09BA-SC05,0.3,0.7,0,0,0,0,0,0,0,0,0
 Tintina Airstrip,10AA-SC02,1.2,0,0,0,0,0,0,0,0,0.3,0
 Ford Lake,10AA-SC04,0.3,0,0,0,0,0,0,0,0,0.6,0
 Hoole River,09BA-SC03,0.3,0.7,0,0,0,0,0,0,0,0.6,0
 Rose Creek,09BC-SC01,0,1.95,0,0,0,0,1.5,0,0,0,0
 Pelly Farm,09CD-SC03,0,1.22,0.45,0,0,0,1.5,0,0,0,0
-Twin Creeks A,09BA-SC02,0,1.22,0,0,0,0,0,0,0,0,0
+Twin Creeks Composite,09BA-SC02,0,1.22,0,0,0,0,0,0,0,0,0
 Burns Lake,09BA-SC04,1.2,1.32,0,0,0,0,0,0,0,0,0
 Fuller Lake,09BB-SC03,0,1.22,0.45,0,0,0,0,0,0,0,0
 Plata Airstrip,09DA-SC01,0,0.45,2.1,0,0,0,0,0,0,0,0
@@ -18,7 +18,7 @@ Calumet,09DD-SC01,0,0,1.4,0.4,0,0,0,0,0,0,0
 Withers Lake,09DB-SC01,0,0,1.4,0,0,0,0,0,0,0,0
 Rackla Lake,09DB-SC02,0,0,0.7,0.8,0,0,0,0,0,0,0
 Bonnet Plume Lake,10MB-SC01,0,0,0.45,0.8,0,0,0,0,0,0,0
-Mayo Airport A,09DC-SC01,0,0,0.45,0,0,0,0,0,0,0,0
+Mayo Airport Composite,09DC-SC01,0,0,0.45,0,0,0,0,0,0,0,0
 Riff's Ridge,09FA-SC01,0,0,0,2,2,0,0,0,0,0,0
 Ogilvie River,10MA-SC02,0,0,0,2,0.5,0,0,0,0,0,0
 Blackstone River,10MA-SC01,0,0,0,2,0,0,0,0.5,0,0,0
@@ -41,7 +41,7 @@ Satasha Lake,09AH-SC03,0,0,0,0,0,0,1.5,0,0.3,0,0.3
 Williams Creek,09AH-SC04,0,0,0,0,0,0,0,0,0,0,0
 Russell Lake,09BB-SC04,0,1.22,0.75,0,0,0,0,0,0,0,0
 Log Cabin (B.C.),09AA-SC03,0,0,0,0,0,0,0,0,1.5,0,0
-Atlin (B.C),09AA-SC04,0,0,0,0,0,0,0,0,1.5,0.3,0
+Atlin (B.C.),09AA-SC04,0,0,0,0,0,0,0,0,1.5,0.3,0
 Mount Berdoe,09AH-SC01,0,0,0,0,0,0,1.5,0,0,0,0
 Tagish,09AA-SC01,0,0,0,0,0,0,0,0,1.5,0.6,0
 Montana Mountain,09AA-SC02,0,0,0,0,0,0,0,0,1.5,0,0
@@ -49,7 +49,7 @@ Meadow Creek,09AD-SC01,0,0,0,0,0,0,0,0,0,2.1,0
 Jordan Lake,09AD-SC02,0,0,0,0,0,0,0,0,0,2.1,0
 Moore Creek Bridge,08AK-SC02,0,0,0,0,0,0,0,0,0.7,0,0
 Mt McIntyre B,09AB-SC01B,0,0,0,0,0,0,0,0,1,0,0
-Whitehorse Airport B_Ice Lake,09AB-SC02,0,0,0,0,0,0,0,0,0.8,0,0
+Whitehorse Airport Composite,09AB-SC02,0,0,0,0,0,0,0,0,0.8,0,0
 Canyon Lake,08AA-SC01,0,0,0,0,0,0,0.8,0,0.3,0,1.5
 Aishihik Lake,08AA-SC03,0,0,0,0,0,0,0.7,0,0.3,0,1.5
 Eaglecrest,08AK-SC01,0,0,0,0,0,0,0,0,0.3,0,0
