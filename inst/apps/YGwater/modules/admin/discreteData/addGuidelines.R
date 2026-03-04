@@ -908,28 +908,7 @@ FROM vals -- from the 'vals' CTE"
     observeEvent(input$test_guideline, {
       req(nzchar(input$guideline_sql))
 
-      # Make sure the user has saved their guideline first if there's anything pending
-      if (!is.null(input$guidelines_table_rows_selected)) {
-        selected_row <- input$guidelines_table_rows_selected
-        # Check to see if guideline_id is -1 (new guideline not yet saved) or if the selected row isn't an exact match between moduleData$guidelines and moduleData$guidelines_temp
-        if (
-          moduleData$guidelines$guideline_id[selected_row] == -1 ||
-            !identical(
-              moduleData$guidelines[selected_row, ],
-              moduleData$guidelines_temp[selected_row, ]
-            )
-        ) {
-          showModal(modalDialog(
-            title = "Save guideline first",
-            "Please save your guideline first before testing it. Click 'Save Guideline' in the sidebar after making any changes or entering a new guideline, then try testing again.",
-            easyClose = TRUE,
-            footer = tagList(
-              modalButton("Close")
-            )
-          ))
-          return()
-        }
-      } else {
+      if (is.null(input$guidelines_table_rows_selected)) {
         showModal(modalDialog(
           title = "Select or add a guideline first",
           "Please select an existing guideline from the table or add a new one (and make sure it's selected in the table) before testing.",
@@ -977,6 +956,7 @@ FROM vals -- from the 'vals' CTE"
     observeEvent(input$run_test_guideline, {
       result <- NULL
       err <- NULL
+      sample_id <- NULL
 
       req_df <- isolate(moduleData$requirements_df)
       # collect supplied values
@@ -1017,56 +997,58 @@ FROM vals -- from the 'vals' CTE"
       # run in a transaction and ROLLBACK
       tryCatch(
         {
-          gid <- moduleData$guidelines$guideline_id[
-            input$guidelines_table_rows_selected
-          ]
           DBI::dbExecute(session$userData$AquaCache, "BEGIN;")
-          if (nrow(req_df) == 0) {
-            # No parameters required, just run the SQL directly
-            gid <- moduleData$guidelines$guideline_id[
-              input$guidelines_table_rows_selected
-            ]
+          uses_sample_id <- grepl("\\$1\\b", input$guideline_sql)
 
-            result <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "SELECT discrete.get_guideline_value($1, NULL) AS value",
-              params = list(gid)
-            )[1, 1]
-          } else {
-            # Create a throwaway sample
+          # Only create a temporary sample when needed
+          if (uses_sample_id || nrow(req_df) > 0) {
             sample_id <- DBI::dbGetQuery(
               session$userData$AquaCache,
               "
-        INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner)
-        VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2)
-        RETURNING sample_id
-      "
+          INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner)
+          VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2)
+          RETURNING sample_id
+        "
             )$sample_id
+          }
 
-            # Insert supplied results
-            for (i in 1:nrow(req_df)) {
-              if (is.na(req_df$values[i])) {
-                next
-              }
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "INSERT INTO discrete.results
+          # Insert supplied results
+          for (i in 1:nrow(req_df)) {
+            if (is.na(req_df$values[i])) {
+              next
+            }
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "INSERT INTO discrete.results
              (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result)
              VALUES ($1,$2,$3,$4,$5,$6)",
-                params = list(
-                  sample_id,
-                  2,
-                  req_df$parameter_id[i],
-                  req_df$sample_fraction_id[i],
-                  req_df$result_speciation_id[i],
-                  req_df$values[i]
-                )
+              params = list(
+                sample_id,
+                2,
+                req_df$parameter_id[i],
+                req_df$sample_fraction_id[i],
+                req_df$result_speciation_id[i],
+                req_df$values[i]
               )
-            }
+            )
+          }
+
+          # Evaluate current SQL from the editor directly so testing works before save
+          test_sql <- paste0(
+            "WITH q AS (",
+            input$guideline_sql,
+            ") SELECT (SELECT * FROM q)::numeric AS value"
+          )
+          if (uses_sample_id) {
             result <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              "SELECT discrete.get_guideline_value($1, $2) AS value",
-              params = list(gid, sample_id)
+              test_sql,
+              params = list(sample_id)
+            )[1, 1]
+          } else {
+            result <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              test_sql
             )[1, 1]
           }
 
@@ -1130,6 +1112,31 @@ FROM vals -- from the 'vals' CTE"
           )
         ))
         return()
+      }
+
+      # Match DB-side trigger rules with clearer UI feedback
+      param_row <- moduleData$parameters[
+        moduleData$parameters$parameter_id == guideline$parameter_id,
+      ]
+      if (nrow(param_row) == 1) {
+        if (isTRUE(param_row$sample_fraction) && is.na(guideline$sample_fraction_id)) {
+          showModal(modalDialog(
+            title = "Error",
+            "This parameter requires a Sample Fraction. Please select one before saving.",
+            easyClose = TRUE,
+            footer = tagList(modalButton("Close"))
+          ))
+          return()
+        }
+        if (isTRUE(param_row$result_speciation) && is.na(guideline$result_speciation_id)) {
+          showModal(modalDialog(
+            title = "Error",
+            "This parameter requires a Result Speciation. Please select one before saving.",
+            easyClose = TRUE,
+            footer = tagList(modalButton("Close"))
+          ))
+          return()
+        }
       }
 
       tryCatch(
