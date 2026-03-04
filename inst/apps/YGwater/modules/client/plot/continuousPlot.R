@@ -143,7 +143,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
     )
 
-    selected_timeseries_id <- reactiveVal(
+    selected_timeseries_ids <- reactiveVal(
       if (!is.null(inputs$timeseries_id)) {
         as.numeric(inputs$timeseries_id)
       } else {
@@ -321,7 +321,9 @@ contPlot <- function(id, language, windowDims, inputs) {
         z = as.numeric(z),
         location = as.factor(location),
         sub_location = as.factor(sub_location),
-        loc_code = as.factor(loc_code)
+        loc_code = as.factor(loc_code),
+        networks = as.factor(networks),
+        projects = as.factor(projects)
       )]
 
       # Convert to periods
@@ -384,53 +386,53 @@ contPlot <- function(id, language, windowDims, inputs) {
       network_col <- tr("generic_name_col", language$language)
       project_col <- tr("generic_name_col", language$language)
       param_grp_col <- tr("param_group_col", language$language)
-      network_choices <- if (
-        nrow(moduleData$networks) > 0 &&
-          network_col %in% names(moduleData$networks)
-      ) {
-        stats::setNames(
-          moduleData$networks$network_id[order(moduleData$networks[[
-            network_col
-          ]])],
-          moduleData$networks[[network_col]][order(moduleData$networks[[
-            network_col
-          ]])]
-        )
-      } else {
-        NULL
-      }
-      project_choices <- if (
-        nrow(moduleData$projects) > 0 &&
-          project_col %in% names(moduleData$projects)
-      ) {
-        stats::setNames(
-          moduleData$projects$project_id[order(moduleData$projects[[
-            project_col
-          ]])],
-          moduleData$projects[[project_col]][order(moduleData$projects[[
-            project_col
-          ]])]
-        )
-      } else {
-        NULL
-      }
-      param_grp_choices <- if (
-        nrow(moduleData$param_groups) > 0 &&
-          param_grp_col %in% names(moduleData$param_groups)
-      ) {
-        stats::setNames(
-          moduleData$param_groups$group_id[order(moduleData$param_groups[[
-            param_grp_col
-          ]])],
-          moduleData$param_groups[[
-            param_grp_col
-          ]][order(moduleData$param_groups[[
-            param_grp_col
-          ]])]
-        )
-      } else {
-        NULL
-      }
+      # network_choices <- if (
+      #   nrow(moduleData$networks) > 0 &&
+      #     network_col %in% names(moduleData$networks)
+      # ) {
+      #   stats::setNames(
+      #     moduleData$networks$network_id[order(moduleData$networks[[
+      #       network_col
+      #     ]])],
+      #     moduleData$networks[[network_col]][order(moduleData$networks[[
+      #       network_col
+      #     ]])]
+      #   )
+      # } else {
+      #   NULL
+      # }
+      # project_choices <- if (
+      #   nrow(moduleData$projects) > 0 &&
+      #     project_col %in% names(moduleData$projects)
+      # ) {
+      #   stats::setNames(
+      #     moduleData$projects$project_id[order(moduleData$projects[[
+      #       project_col
+      #     ]])],
+      #     moduleData$projects[[project_col]][order(moduleData$projects[[
+      #       project_col
+      #     ]])]
+      #   )
+      # } else {
+      #   NULL
+      # }
+      # param_grp_choices <- if (
+      #   nrow(moduleData$param_groups) > 0 &&
+      #     param_grp_col %in% names(moduleData$param_groups)
+      # ) {
+      #   stats::setNames(
+      #     moduleData$param_groups$group_id[order(moduleData$param_groups[[
+      #       param_grp_col
+      #     ]])],
+      #     moduleData$param_groups[[
+      #       param_grp_col
+      #     ]][order(moduleData$param_groups[[
+      #       param_grp_col
+      #     ]])]
+      #   )
+      # } else {
+      #   NULL
+      # }
       tags <- tagList(
         bslib::accordion(
           id = ns("accordion1"),
@@ -482,12 +484,30 @@ contPlot <- function(id, language, windowDims, inputs) {
             title = tr("cont_table_heading", language$language),
             value = ns("table_panel"),
             div(
-              DT::dataTableOutput(ns("timeseries_table"))
+              # checkboxInput(
+              #   ns("select_multiple"),
+              #   tr("plot_select_multiple", language$language)
+              # ),
+              DT::dataTableOutput(ns("timeseries_table")),
+              uiOutput(ns("selected_timeseries_output"))
             ) # End div
           ), # End table_panel
           bslib::accordion_panel(
             title = tr("cont_table_plot_heading", language$language),
             value = ns("plot_options_panel"),
+            selectizeInput(
+              ns("plot_type"),
+              label = tr("plot_type", language$language),
+              # Choice names (and an additional option for timeseries_multi) are updated later based on the 'multiple timeseries' checkbox
+              choices = stats::setNames(
+                c("timeseries", "overlap_yrs", "histogram"),
+                c(
+                  tr("plot_type_ts", language$language),
+                  tr("plot_type_overlap", language$language),
+                  tr("plot_type_histogram", language$language)
+                )
+              )
+            ),
             fluidRow(
               column(
                 width = 6,
@@ -618,22 +638,69 @@ contPlot <- function(id, language, windowDims, inputs) {
       return(tags)
     }) # End renderUI
 
+    # Observe changes to timeseries selections Update plot type choices accordingly and reset selected plot type if it's no longer valid.
+    observe({
+      ids <- selected_timeseries_ids()
+      updateSelectizeInput(
+        session,
+        "plot_type",
+        choices = if (length(ids) > 1) {
+          stats::setNames(
+            c(
+              "timeseries", # several plots, one per timeseries
+              "timeseries_all", # all one plot
+              "overlap_yrs", # several plots
+              "histogram" # several plots
+            ),
+            c(
+              tr("plot_type_ts_many", language$language),
+              tr("plot_type_ts_all", language$language),
+              tr("plot_type_overlap_many", language$language),
+              tr("plot_type_histogram_many", language$language)
+            )
+          )
+        } else {
+          stats::setNames(
+            c("timeseries", "overlap_yrs", "histogram"),
+
+            c(
+              tr("plot_type_ts", language$language),
+              tr("plot_type_overlap", language$language),
+              tr("plot_type_histogram", language$language)
+            )
+          )
+        }
+      )
+      # If the currently selected plot type is no longer valid, reset it
+      if (
+        length(ids) == 1 &&
+          input$plot_type %in%
+            c("timeseries_all", "overlap_yrs_many", "histogram_many")
+      ) {
+        updateSelectizeInput(
+          session,
+          "plot_type",
+          selected = "timeseries"
+        )
+      }
+    })
+
     # Automatically select a timeseries if none is selected or if the current selection is invalid
     observeEvent(
       timeseries_table_reactive(),
       {
         ts <- timeseries_table_reactive()
-        current <- selected_timeseries_id()
+        current <- selected_timeseries_ids()
 
         if (!is.null(current) && current %in% ts$timeseries_id) {
           return()
         }
-        selected_timeseries_id(NULL)
+        selected_timeseries_ids(NULL)
       },
       ignoreNULL = FALSE
     )
 
-    # Update selected_timeseries_id() when a row is selected in the table
+    # Update selected_timeseries_ids() when a row is selected in the table
     observeEvent(input$timeseries_table_rows_selected, {
       ts <- timeseries_table_reactive()
       if (
@@ -641,14 +708,14 @@ contPlot <- function(id, language, windowDims, inputs) {
           length(input$timeseries_table_rows_selected) == 1 &&
           nrow(ts) >= input$timeseries_table_rows_selected
       ) {
-        selected_timeseries_id(ts$timeseries_id[
+        selected_timeseries_ids(ts$timeseries_id[
           input$timeseries_table_rows_selected
         ])
       } else {
-        selected_timeseries_id(NULL)
+        selected_timeseries_ids(NULL)
       }
       # Update the date range input to reflect the selected timeseries
-      selected_id <- selected_timeseries_id()
+      selected_id <- selected_timeseries_ids()
       if (is.null(selected_id)) {
         return()
       }
@@ -710,6 +777,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       dt <- DT::datatable(
         ts,
         rownames = FALSE,
+        # Switch up selection mode based on whether multiple selection is allowed. Max 4 selections.
         selection = list(mode = "single"),
         options = list(
           pageLength = 10,
@@ -820,12 +888,12 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     proxy <- DT::dataTableProxy(ns("timeseries_table"))
 
-    # Keep selection in sync with selected_timeseries_id()
+    # Keep selection in sync with selected_timeseries_ids()
     observeEvent(
-      list(selected_timeseries_id(), timeseries_table_reactive()),
+      list(selected_timeseries_ids(), timeseries_table_reactive()),
       {
         ts <- timeseries_table_reactive()
-        id <- selected_timeseries_id()
+        id <- selected_timeseries_ids()
 
         if (is.null(id) || nrow(ts) == 0) {
           DT::selectRows(proxy, NULL)
@@ -843,7 +911,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     # Observe buttons to update date range
     observeEvent(input$last_30, {
       ts <- timeseries_table_reactive()
-      selected_id <- selected_timeseries_id()
+      selected_id <- selected_timeseries_ids()
       if (is.null(selected_id)) {
         return()
       }
@@ -863,7 +931,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     observeEvent(input$entire_record, {
       ts <- timeseries_table_reactive()
-      selected_id <- selected_timeseries_id()
+      selected_id <- selected_timeseries_ids()
       if (is.null(selected_id)) {
         return()
       }
@@ -885,7 +953,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       ts <- timeseries_table_reactive()
       validate(need(nrow(ts) > 0, tr("error", language$language)))
 
-      selected_id <- selected_timeseries_id()
+      selected_id <- selected_timeseries_ids()
       selected_row <- if (!is.null(selected_id)) {
         which(ts$timeseries_id == selected_id)
       } else {
@@ -946,7 +1014,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     }
 
     selected_location_id <- reactive({
-      ts_id <- selected_timeseries_id()
+      ts_id <- selected_timeseries_ids()
       if (is.null(ts_id)) {
         return(NULL)
       }
@@ -961,7 +1029,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     selected_sub_location <- reactive({
-      ts_id <- selected_timeseries_id()
+      ts_id <- selected_timeseries_ids()
       if (is.null(ts_id)) {
         return(NA_character_)
       }
@@ -1060,7 +1128,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     timeseries_metadata <- reactive({
-      ts_id <- selected_timeseries_id()
+      ts_id <- selected_timeseries_ids()
       if (is.null(ts_id)) {
         return(NULL)
       }
@@ -1129,7 +1197,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     timeseries_ownership <- reactive({
-      ts_id <- selected_timeseries_id()
+      ts_id <- selected_timeseries_ids()
       if (is.null(ts_id)) {
         return(NULL)
       }
@@ -1203,7 +1271,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
-      if (is.null(selected_timeseries_id())) {
+      if (is.null(selected_timeseries_ids())) {
         showModal(modalDialog(
           title = tr("error", language$language),
           tr("cont_table_intro", language$language),
@@ -1273,7 +1341,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     }) # End renderPlotly
 
     output$metadata_message <- renderUI({
-      if (is.null(selected_timeseries_id())) {
+      if (is.null(selected_timeseries_ids())) {
         return(
           tags$em(tr("metadata_select_prompt", language$language))
         )

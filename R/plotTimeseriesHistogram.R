@@ -1,22 +1,17 @@
 #' Plot binned/aggregated continuous data as a histogram
 #'
 #' @description
-#' Plot a histogram-style bar chart for a continuous AquaCache timeseries using
-#' corrected values. Binning and aggregation are pushed to PostgreSQL where
-#' possible for improved performance on high-frequency data.
+#' Plot a histogram-style bar chart for a continuous AquaCache timeseries using corrected values. Binning and aggregation are pushed to PostgreSQL where possible for improved performance on high-frequency data.
 #'
 #' @param timeseries_id Timeseries ID from `continuous.timeseries`.
 #' @param start_datetime Start datetime (character, Date, or POSIXct).
 #' @param end_datetime End datetime (character, Date, or POSIXct).
 #' @param bin_width Numeric width for each bin (e.g., `1`, `6`, `24`).
-#' @param bin_width_units Bin units. One of `"hours"`, `"days"`, `"weeks"`,
-#'   `"months"`, or `"years"`.
+#' @param bin_width_units Bin units. One of `"hours"`, `"days"`, `"weeks"`, `"months"`, or `"years"`.
 #' @param years Optional numeric vector of calendar years to include
 #'   (e.g., `c(2020, 2021, 2024)`). If `NULL`, years are not filtered.
-#' @param transformation Aggregation applied within each bin. One of `"sum"`,
-#'   `"mean"`, `"min"`, `"max"`, `"median"`, or `"integral"`. `"integral"`
-#'   computes `sum(value * duration_seconds)` and is useful for rate→total use
-#'   cases (e.g., exported volume from flow).
+#' @param transformation Aggregation applied within each bin. One of `"sum"`, `"mean"`, `"min"`, `"max"`, `"median"`, or `"integral"`. `"integral"` computes `sum(value * duration_seconds)` and is useful for rate→total use cases (e.g., exported volume from flow).
+#' @param threshold A number between 0 and 1 indicating the minimum proportion of non-missing values required in a bin for it to be included in the plot. Default is `0` (include all bins regardless of missingness).
 #' @param title Should a plot title be shown? Default is `TRUE`.
 #' @param custom_title Optional custom title.
 #' @param lang Language for metadata labels in title/axes (`"en"` or `"fr"`).
@@ -35,6 +30,7 @@ plotTimeseriesHistogram <- function(
   bin_width_units = "days",
   years = NULL,
   transformation = "sum",
+  threshold = 0,
   title = TRUE,
   custom_title = NULL,
   lang = "en",
@@ -44,18 +40,18 @@ plotTimeseriesHistogram <- function(
 ) {
   # Testing parameters
   timeseries_id = 100
-  start_datetime = "2025-01-01"
+  start_datetime = "2022-01-01"
   end_datetime = "2025-12-31"
   bin_width = 1
   bin_width_units = "months"
-  years = c(2023, 2024, 2024)
-  transformation = "integral"
+  years = c(2022, 2023, 2024, 2025)
+  transformation = "max"
   title = TRUE
   custom_title = NULL
   lang = "en"
   tzone = "UTC"
   data = FALSE
-  con = NULL
+  # con = NULL
   if (
     missing(timeseries_id) ||
       length(timeseries_id) != 1 ||
@@ -181,8 +177,7 @@ plotTimeseriesHistogram <- function(
       ")"
     ),
     months = paste0(
-      "date_trunc('year', datetime) + ",
-      "(floor((extract(month from datetime) - 1) / ",
+      "date_trunc('year', datetime) + (floor((extract(month from datetime) - 1) / ",
       bin_width_int,
       ")::int * interval '",
       bin_width_int,
@@ -219,28 +214,37 @@ plotTimeseriesHistogram <- function(
   }
 
   sql <- paste0(
-    "WITH base AS (",
-    "  SELECT timeseries_id, datetime, value_corrected, period ",
-    "  FROM continuous.measurements_continuous_corrected ",
-    "  WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3",
+    "WITH base AS (
+      SELECT 
+        timeseries_id, 
+        datetime, 
+        value_corrected, 
+        period
+      FROM continuous.measurements_continuous_corrected
+      WHERE timeseries_id = $1 
+        AND datetime >= $2 
+        AND datetime <= $3",
     year_filter_sql,
-    "), prepared AS (",
-    "  SELECT datetime, value_corrected, ",
-    "         coalesce(extract(epoch from period), ",
-    "                  extract(epoch from (lead(datetime) over (order by datetime) - datetime)), ",
-    "                  0) AS duration_seconds ",
-    "  FROM base",
-    "), binned AS (",
-    "  SELECT ",
+    "), 
+    prepared AS (
+      SELECT 
+        datetime, 
+        value_corrected, 
+        coalesce(extract(epoch from period), 
+                 extract(epoch from (lead(datetime) over (order by datetime) - datetime)), 
+                      0) AS duration_seconds 
+      FROM base
+    ), 
+    binned AS (
+      SELECT ",
     bin_expr,
-    " AS bin_start, ",
-    "         ",
+    " AS bin_start,",
     agg_expr,
-    " AS value ",
-    "  FROM prepared ",
-    "  GROUP BY 1",
-    ") ",
-    "SELECT bin_start, value FROM binned ORDER BY bin_start"
+    " AS value
+      FROM prepared 
+      GROUP BY 1
+    ) 
+    SELECT bin_start, value FROM binned ORDER BY bin_start"
   )
 
   plot_data <- dbGetQueryDT(con, sql, params = query_params)
@@ -364,7 +368,7 @@ plotTimeseriesHistogram <- function(
       x = ~bin_start,
       y = ~value,
       type = "bar",
-      marker = list(color = palette[1])
+      marker = list(color = "#00454e")
     ) |>
       plotly::layout(
         xaxis = list(title = "Datetime"),

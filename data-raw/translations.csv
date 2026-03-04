@@ -142,10 +142,10 @@ img_type_man,input choice,Manual (one-off),Manuelle (non-série)
 map_options,,Map options,Options de la carte
 map_load_addtional_layers,,Load additional layers,Charger des couches supplémentaires
 date_range_lab,input label,Date Range,Intervalle de dates
-date_sep,dateRangeInput separator, to , à 
+date_sep,dateRangeInput separator, to , à
+plot_select_multiple,,Select + plot multiple timeseries,Sélectionner + tracer plusieurs séries temporelles
 plot_type,,Plot type,Type de graphique
 plot_type_tooltip,,Timeseries plots show changes over time and can display multiple traces or subplots. Overlapping years plots help compare data from different years at the same location.,Les graphiques de longues séries temporelles montrent les changements au fil du temps et peuvent afficher plusieurs tracés ou sous-graphiques. Les graphiques d’années superposées permettent de comparer les données de différentes années pour un même point de surveillance.
-plot_type_overlap,,Overlapping years,Années superposées
 plot_select_years,,Select years to plot,Sélectionnez les années à tracer
 plot_select_yrs,,"For periods overlapping the new year, select the December year","Pour les périodes chevauchant la nouvelle année, sélectionnez l’année de décembre."
 plot_long_time_to_plot,,Plotting can take a while for large time ranges at max resolution.,La génération du graphique peut prendre un certain temps pour les longs intervalles de temps à résolution maximale.
@@ -156,6 +156,12 @@ plot_resolution_daily,,Daily,Journalière
 plot_timezone_offset,,Plot time zone (UTC offset),Fuseau horaire du graphique (décalage UTC)
 plot_timezone_offset_placeholder,,Select UTC offset,Choisir le décalage UTC
 plot_type_ts,,Timeseries,Série temporelle
+plot_type_ts_many,,Timeseries (one per plot),Série temporelle (une par graphique)
+plot_type_ts_all,,Timeseries (all on one plot),Séries temporelles (tous sur un graphique)
+plot_type_overlap,,Overlapping years,Années superposées
+plot_type_overlap_many,,Overlapping years (one timeseries per plot),Années superposées (un graphique par série temporelle)
+plot_type_histogram,,Histogram,Histogramme
+plot_type_histogram_many,,Histogram (one timeseries per plot),Histogramme (un graphique par série temporelle)
 none_fm,,None,Aucune
 none_m,,None,Aucun
 plot_hist_range,,Plot historic range,Tracer la plage historique
