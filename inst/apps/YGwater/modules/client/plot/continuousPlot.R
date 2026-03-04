@@ -145,7 +145,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     selected_timeseries_ids <- reactiveVal(
       if (!is.null(inputs$timeseries_id)) {
-        as.numeric(inputs$timeseries_id)
+        utils::head(as.numeric(inputs$timeseries_id), 4)
       } else {
         NULL
       }
@@ -484,12 +484,12 @@ contPlot <- function(id, language, windowDims, inputs) {
             title = tr("cont_table_heading", language$language),
             value = ns("table_panel"),
             div(
-              # checkboxInput(
-              #   ns("select_multiple"),
-              #   tr("plot_select_multiple", language$language)
-              # ),
               DT::dataTableOutput(ns("timeseries_table")),
-              uiOutput(ns("selected_timeseries_output"))
+              uiOutput(ns("selected_timeseries_output")),
+              actionButton(
+                ns("add_new_timeseries"),
+                label = "Add another timeseries"
+              )
             ) # End div
           ), # End table_panel
           bslib::accordion_panel(
