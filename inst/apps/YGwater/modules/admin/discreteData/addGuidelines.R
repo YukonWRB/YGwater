@@ -394,25 +394,29 @@ addGuidelines <- function(id, language) {
     observeEvent(input$add_guideline, {
       new <- data.frame(
         guideline_id = -1, # Identifies the newly added row
-        guideline_name = "",
-        publisher = "",
-        reference = "",
-        note = "",
-        parameter = "",
+        guideline_name = "<new guideline>",
+        publisher = "<publisher>",
+        reference = NA_character_,
+        note = NA_character_,
+        parameter = "<select parameter>",
         units = "",
-        fraction = "",
-        speciation = "",
+        fraction = "<auto/optional>",
+        speciation = "<auto/optional>",
         parameter_id = NA,
         sample_fraction_id = NA,
         result_speciation_id = NA,
-        guideline_sql = ""
+        guideline_sql = "SELECT NULL::numeric -- replace with guideline SQL"
       )
       moduleData$guidelines <- rbind(moduleData$guidelines, new) # Appended here so that the data.table updates
       moduleData$guidelines_temp <- rbind(moduleData$guidelines_temp, new)
 
       # Select the new row in the data.table
-      DT::dataTableProxy(ns("guidelines_table")) |>
-        DT::selectRows(nrow(moduleData$guidelines))
+      new_row <- nrow(moduleData$guidelines)
+      rows_per_page <- 10
+      target_page <- ceiling(new_row / rows_per_page)
+      proxy <- DT::dataTableProxy(ns("guidelines_table"))
+      DT::selectPage(proxy, target_page)
+      DT::selectRows(proxy, new_row)
 
       # Show the user a modal telling them to edit their new guideline to the right
       showModal(modalDialog(
