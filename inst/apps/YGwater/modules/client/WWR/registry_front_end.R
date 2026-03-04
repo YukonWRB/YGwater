@@ -3,8 +3,9 @@ wellRegistryUI <- function(id) {
 
   tagList(
     # styling for custom legend
-    tags$style(HTML(
-      "
+    tags$style(
+      HTML(
+        "
   /* Remove leaflet control background and border for custom legend */
   .leaflet-control.custom-legend {
     background: transparent !important;
@@ -12,7 +13,17 @@ wellRegistryUI <- function(id) {
     box-shadow: none !important;
   }
 "
-    )),
+      ),
+      # Make chekboxes tighter together in the sidebar
+      HTML(
+        "
+    .compact-checkboxes .checkbox {
+      margin-top: -5px;
+      margin-bottom: -5px;
+    }
+  "
+      )
+    ),
     # Custom JavaScript to create pie chart style cluster icons
     tags$script(HTML(
       "
@@ -180,20 +191,23 @@ wellRegistry <- function(id, language) {
                 language$language
               )
             ),
-            checkboxInput(
-              ns("well_name_starts_with"),
-              label = tr("well_name_starts", language$language),
-              value = FALSE
-            ),
-            checkboxInput(
-              ns("well_name_ends_with"),
-              label = tr("well_name_ends", language$language),
-              value = FALSE
-            ),
-            checkboxInput(
-              ns("well_name_case_sensitive"),
-              label = tr("well_name_case_sensitive", language$language),
-              value = FALSE
+            div(
+              class = "compact-checkboxes",
+              checkboxInput(
+                ns("well_name_starts_with"),
+                label = tr("well_name_starts", language$language),
+                value = FALSE
+              ),
+              checkboxInput(
+                ns("well_name_ends_with"),
+                label = tr("well_name_ends", language$language),
+                value = FALSE
+              ),
+              checkboxInput(
+                ns("well_name_case_sensitive"),
+                label = tr("well_name_case_sensitive", language$language),
+                value = FALSE
+              )
             ),
             sliderInput(
               ns("yrs"),
@@ -213,26 +227,32 @@ wellRegistry <- function(id, language) {
               step = 1,
               sep = ""
             ),
-            # Add checkboxInput for wells with no known completion date
-            checkboxInput(
-              ns("include_unknown_completion"),
-              label = tr("include_unknown_well_completion", language$language),
-              value = TRUE
-            ),
-            # Checkbox for missing well depth
-            checkboxInput(
-              ns("include_missing_depth"),
-              label = tr("include_missing_well_depth", language$language),
-              value = TRUE
-            ),
-            # Checkbox for wells with missing depth to water
-            checkboxInput(
-              ns("include_missing_depth_to_water"),
-              label = tr(
-                "include_missing_well_depth_to_water",
-                language$language
+            div(
+              class = "compact-checkboxes",
+              # Add checkboxInput for wells with no known completion date
+              checkboxInput(
+                ns("include_unknown_completion"),
+                label = tr(
+                  "include_unknown_well_completion",
+                  language$language
+                ),
+                value = TRUE
               ),
-              value = TRUE
+              # Checkbox for missing well depth
+              checkboxInput(
+                ns("include_missing_depth"),
+                label = tr("include_missing_well_depth", language$language),
+                value = TRUE
+              ),
+              # Checkbox for wells with missing depth to water
+              checkboxInput(
+                ns("include_missing_depth_to_water"),
+                label = tr(
+                  "include_missing_well_depth_to_water",
+                  language$language
+                ),
+                value = TRUE
+              )
             ),
             # # Checkbox for wells with missing depth to bedrock
             # checkboxInput(

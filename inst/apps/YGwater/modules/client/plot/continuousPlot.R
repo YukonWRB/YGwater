@@ -143,13 +143,48 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
     )
 
-    selected_timeseries_ids <- reactiveVal(
-      if (!is.null(inputs$timeseries_id)) {
-        utils::head(as.numeric(inputs$timeseries_id), 4)
+    initial_timeseries_ids <- if (!is.null(inputs$timeseries_id)) {
+      utils::head(unique(as.numeric(inputs$timeseries_id)), 4)
+    } else {
+      numeric(0)
+    }
+    selected_timeseries_slots <- reactiveVal(
+      if (length(initial_timeseries_ids) > 0) {
+        initial_timeseries_ids
       } else {
-        NULL
+        NA_real_
       }
     )
+    active_timeseries_slot <- reactiveVal(1L)
+
+    selected_timeseries_ids <- reactive({
+      slots <- selected_timeseries_slots()
+      ids <- as.numeric(slots[!is.na(slots)])
+      if (length(ids) == 0) {
+        return(NULL)
+      }
+      ids
+    })
+
+    selected_timeseries_id_active <- reactive({
+      slots <- selected_timeseries_slots()
+      if (length(slots) == 0) {
+        return(NULL)
+      }
+      idx <- active_timeseries_slot()
+      if (
+        is.null(idx) || is.na(idx) ||
+          idx < 1 || idx > length(slots) ||
+          is.na(slots[[idx]])
+      ) {
+        filled_idx <- which(!is.na(slots))
+        if (length(filled_idx) == 0) {
+          return(NULL)
+        }
+        idx <- filled_idx[[1]]
+      }
+      as.numeric(slots[[idx]])
+    })
 
     location_network_filter <- reactive({
       loc_ids <- moduleData$locs$location_id
@@ -685,22 +720,35 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
     })
 
-    # Automatically select a timeseries if none is selected or if the current selection is invalid
+    # Keep selected slots valid when table rows change
     observeEvent(
       timeseries_table_reactive(),
       {
         ts <- timeseries_table_reactive()
-        current <- selected_timeseries_ids()
+        slots <- selected_timeseries_slots()
 
-        if (!is.null(current) && current %in% ts$timeseries_id) {
+        if (nrow(ts) == 0) {
+          selected_timeseries_slots(NA_real_)
+          active_timeseries_slot(1L)
           return()
         }
-        selected_timeseries_ids(NULL)
+
+        valid_slots <- slots[!is.na(slots) & slots %in% ts$timeseries_id]
+        if (length(valid_slots) == 0) {
+          selected_timeseries_slots(NA_real_)
+          active_timeseries_slot(1L)
+          return()
+        }
+
+        selected_timeseries_slots(as.numeric(valid_slots))
+        active_timeseries_slot(
+          min(active_timeseries_slot(), length(valid_slots))
+        )
       },
       ignoreNULL = FALSE
     )
 
-    # Update selected_timeseries_ids() when a row is selected in the table
+    # Update active slot when a row is selected in the table
     observeEvent(input$timeseries_table_rows_selected, {
       ts <- timeseries_table_reactive()
       if (
@@ -708,14 +756,29 @@ contPlot <- function(id, language, windowDims, inputs) {
           length(input$timeseries_table_rows_selected) == 1 &&
           nrow(ts) >= input$timeseries_table_rows_selected
       ) {
-        selected_timeseries_ids(ts$timeseries_id[
-          input$timeseries_table_rows_selected
-        ])
-      } else {
-        selected_timeseries_ids(NULL)
+        selected_id <- ts$timeseries_id[input$timeseries_table_rows_selected]
+        slots <- selected_timeseries_slots()
+        idx <- active_timeseries_slot()
+
+        if (
+          is.null(idx) || is.na(idx) ||
+            idx < 1 || idx > length(slots)
+        ) {
+          idx <- 1L
+        }
+
+        duplicate_idx <- which(!is.na(slots) & slots == selected_id)
+        if (length(duplicate_idx) > 0 && duplicate_idx[[1]] != idx) {
+          active_timeseries_slot(duplicate_idx[[1]])
+        } else {
+          slots[[idx]] <- as.numeric(selected_id)
+          selected_timeseries_slots(as.numeric(slots))
+          active_timeseries_slot(idx)
+        }
       }
-      # Update the date range input to reflect the selected timeseries
-      selected_id <- selected_timeseries_ids()
+
+      # Update the date range input to reflect the active selected timeseries
+      selected_id <- selected_timeseries_id_active()
       if (is.null(selected_id)) {
         return()
       }
@@ -886,14 +949,110 @@ contPlot <- function(id, language, windowDims, inputs) {
       dt
     })
 
+    output$selected_timeseries_output <- renderUI({
+      slots <- selected_timeseries_slots()
+      ts <- timeseries_table_reactive()
+      selected_count <- sum(!is.na(slots))
+      show_delete <- selected_count > 1
+
+      if (length(slots) == 0) {
+        return(NULL)
+      }
+
+      rows <- lapply(seq_along(slots), function(i) {
+        ts_id <- slots[[i]]
+        label <- tr("metadata_select_prompt", language$language)
+        if (!is.na(ts_id)) {
+          row_match <- ts[timeseries_id == ts_id]
+          if (nrow(row_match) > 0) {
+            row_match <- row_match[1]
+            label_parts <- c(
+              as.character(row_match$location),
+              as.character(row_match$sub_location),
+              as.character(row_match$parameter),
+              paste0("ID: ", row_match$timeseries_id)
+            )
+            label_parts <- label_parts[
+              !is.na(label_parts) & nzchar(label_parts)
+            ]
+            label <- paste(label_parts, collapse = " | ")
+          } else {
+            label <- paste0("ID: ", ts_id)
+          }
+        }
+
+        row_style <- if (active_timeseries_slot() == i) {
+          "border-left: 4px solid #0097A9; padding-left: 10px;"
+        } else {
+          "padding-left: 14px;"
+        }
+
+        fluidRow(
+          style = paste0("margin-top: 8px; ", row_style),
+          column(
+            width = 10,
+            tags$div(
+              tags$strong(paste0("Timeseries ", i, ": ")),
+              label
+            )
+          ),
+          column(
+            width = 2,
+            if (show_delete && !is.na(ts_id)) {
+              actionButton(
+                ns(paste0("delete_timeseries_", i)),
+                label = "Delete",
+                class = "btn btn-outline-danger btn-sm"
+              )
+            }
+          )
+        )
+      })
+
+      do.call(tagList, rows)
+    })
+
+    observeEvent(input$add_new_timeseries, {
+      slots <- selected_timeseries_slots()
+      if (length(slots) >= 4) {
+        return()
+      }
+      selected_timeseries_slots(c(slots, NA_real_))
+      active_timeseries_slot(length(slots) + 1L)
+    })
+
+    observe({
+      if (length(selected_timeseries_slots()) >= 4) {
+        shinyjs::hide("add_new_timeseries")
+      } else {
+        shinyjs::show("add_new_timeseries")
+      }
+    })
+
+    lapply(seq_len(4), function(i) {
+      observeEvent(input[[paste0("delete_timeseries_", i)]], {
+        slots <- selected_timeseries_slots()
+        if (i > length(slots) || is.na(slots[[i]])) {
+          return()
+        }
+
+        slots <- slots[-i]
+        if (length(slots) == 0) {
+          slots <- NA_real_
+        }
+        selected_timeseries_slots(as.numeric(slots))
+        active_timeseries_slot(min(i, length(slots)))
+      }, ignoreInit = TRUE)
+    })
+
     proxy <- DT::dataTableProxy(ns("timeseries_table"))
 
-    # Keep selection in sync with selected_timeseries_ids()
+    # Keep table highlight in sync with active selected timeseries slot
     observeEvent(
-      list(selected_timeseries_ids(), timeseries_table_reactive()),
+      list(selected_timeseries_slots(), active_timeseries_slot(), timeseries_table_reactive()),
       {
         ts <- timeseries_table_reactive()
-        id <- selected_timeseries_ids()
+        id <- selected_timeseries_id_active()
 
         if (is.null(id) || nrow(ts) == 0) {
           DT::selectRows(proxy, NULL)
@@ -911,7 +1070,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     # Observe buttons to update date range
     observeEvent(input$last_30, {
       ts <- timeseries_table_reactive()
-      selected_id <- selected_timeseries_ids()
+      selected_id <- selected_timeseries_id_active()
       if (is.null(selected_id)) {
         return()
       }
@@ -931,7 +1090,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     observeEvent(input$entire_record, {
       ts <- timeseries_table_reactive()
-      selected_id <- selected_timeseries_ids()
+      selected_id <- selected_timeseries_id_active()
       if (is.null(selected_id)) {
         return()
       }
@@ -1014,7 +1173,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     }
 
     selected_location_id <- reactive({
-      ts_id <- selected_timeseries_ids()
+      ts_id <- selected_timeseries_id_active()
       if (is.null(ts_id)) {
         return(NULL)
       }
@@ -1029,7 +1188,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     selected_sub_location <- reactive({
-      ts_id <- selected_timeseries_ids()
+      ts_id <- selected_timeseries_id_active()
       if (is.null(ts_id)) {
         return(NA_character_)
       }
@@ -1128,7 +1287,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     timeseries_metadata <- reactive({
-      ts_id <- selected_timeseries_ids()
+      ts_id <- selected_timeseries_id_active()
       if (is.null(ts_id)) {
         return(NULL)
       }
@@ -1197,7 +1356,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     timeseries_ownership <- reactive({
-      ts_id <- selected_timeseries_ids()
+      ts_id <- selected_timeseries_id_active()
       if (is.null(ts_id)) {
         return(NULL)
       }
