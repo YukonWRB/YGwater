@@ -25,6 +25,7 @@ function(req, res) {
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
 
   hdr <- req$HTTP_AUTHORIZATION %||% ""
+  req$is_authenticated <- nzchar(hdr)
   if (hdr == "") {
     if (!is_public_ok) {
       res$status <- 401
@@ -47,6 +48,10 @@ function(req, res) {
   req$user <- substr(cred, 1, i - 1)
   req$password <- substr(cred, i + 1, nchar(cred))
   plumber::forward()
+}
+
+request_cache_allowed <- function(req) {
+  !isTRUE(req$is_authenticated)
 }
 
 #' List available locations
@@ -639,15 +644,27 @@ function(
   }
 
   latest_stamp <- get_snowbull_stamp(con, year, month)
-  map_payload <- snowbull_leaflet_mem(
-    stamp = latest_stamp,
-    year = year,
-    month = month,
-    statistic = statistic,
-    language = language,
-    param_name = "snow water equivalent",
-    con = con
-  )
+  if (request_cache_allowed(req)) {
+    map_payload <- snowbull_leaflet_mem(
+      stamp = latest_stamp,
+      year = year,
+      month = month,
+      statistic = statistic,
+      language = language,
+      param_name = "snow water equivalent",
+      con = con
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    map_payload <- YGwater:::create_snowbull_leaflet_html(
+      year = year,
+      month = month,
+      param_name = "snow water equivalent",
+      statistic = statistic,
+      language = language,
+      con = con
+    )
+  }
 
   res$headers[["X-Map-Year"]] <- as.character(map_payload$year)
   res$headers[["X-Map-Month"]] <- as.character(map_payload$month)
@@ -726,17 +743,31 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = FALSE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = FALSE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$measurements,
@@ -774,17 +805,31 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = FALSE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = FALSE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$locations,
@@ -822,17 +867,31 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = TRUE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = TRUE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$stats,
@@ -870,17 +929,31 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = TRUE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = TRUE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$trends,

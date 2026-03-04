@@ -66,6 +66,7 @@ test_that("tests for API V1", {
       "timeseries_id",
       "location_id",
       "location_name",
+      "alias_name",
       "depth_height_m",
       "latitude",
       "longitude",
@@ -77,6 +78,7 @@ test_that("tests for API V1", {
       "units",
       "aggregation_type",
       "recording_rate",
+      "sensor_priority",
       "start_datetime",
       "end_datetime",
       "note"
