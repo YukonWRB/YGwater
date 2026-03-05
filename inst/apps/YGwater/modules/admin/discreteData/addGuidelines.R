@@ -573,8 +573,21 @@ LEFT JOIN (
 
     # Respond to row selections in the datatable and update the left sidebar inputs accordingly
     observeEvent(input$guidelines_table_rows_selected, {
-      req(input$guidelines_table_rows_selected)
       selected_row <- input$guidelines_table_rows_selected
+      if (is.null(selected_row) || !length(selected_row)) {
+        updateTextInput(session, "guideline_name", value = "")
+        updateSelectizeInput(session, "publisher", selected = NULL)
+        updateSelectizeInput(session, "series", selected = NULL)
+        updateSelectizeInput(session, "sample_fraction", selected = NULL)
+        updateSelectizeInput(session, "media_type", selected = NULL)
+        updateTextInput(session, "reference", value = "")
+        updateTextAreaInput(session, "note", value = "")
+        updateSelectizeInput(session, "parameter_id", selected = NULL)
+        updateSelectizeInput(session, "result_speciation", selected = NULL)
+        updateTextAreaInput(session, "guideline_sql", value = "")
+        shinyjs::hide("save_guideline")
+        return()
+      }
       guideline <- moduleData$guidelines[selected_row, ]
 
       updateTextInput(
@@ -621,7 +634,7 @@ LEFT JOIN (
       )
 
       shinyjs::show("save_guideline")
-    })
+    }, ignoreNULL = FALSE)
 
     # Observe changes in the input fields and update the reactiveValues data.frame accordingly
     observe({
@@ -849,11 +862,7 @@ LEFT JOIN (
             tolower(moduleData$publishers$publisher_name) == tolower(p_name)
           ]
         }
-        prior_selection <- ensure_character(pending_publisher_selection())
-        new_value <- pending_publisher_new()
-        retained <- prior_selection[prior_selection != new_value]
-        retained <- retained[nzchar(retained)]
-        selected_values <- unique(c(retained, ensure_character(new_id)))
+        selected_values <- ensure_character(new_id[1])
 
         updateSelectizeInput(
           session,
@@ -987,11 +996,7 @@ LEFT JOIN (
             tolower(moduleData$series$series_name) == tolower(s_name)
           ]
         }
-        prior_selection <- ensure_character(pending_series_selection())
-        new_value <- pending_series_new()
-        retained <- prior_selection[prior_selection != new_value]
-        retained <- retained[nzchar(retained)]
-        selected_values <- unique(c(retained, ensure_character(new_id)))
+        selected_values <- ensure_character(new_id[1])
 
         updateSelectizeInput(
           session,
