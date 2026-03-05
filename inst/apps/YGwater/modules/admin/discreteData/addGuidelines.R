@@ -82,7 +82,6 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
         bg = config$sidebar_bg,
         open = list(mobile = "always-above"),
 
-        textInput(ns("guideline_name"), "Guideline Name", width = "100%"),
         selectizeInput(
           ns("publisher"),
           "Publisher",
@@ -94,7 +93,26 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
             create = TRUE,
             placeholder = "Select publisher or type to add new"
           )
-        ),
+        ) |>
+          tooltip(
+            "Select the publisher of the guideline, i.e. CCME or EPA. You can create new publishers by typing a name and pressing enter."
+          ),
+        selectizeInput(
+          ns("series"),
+          "Guideline series",
+          choices = NULL,
+          width = "100%",
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = "Optional - type to add new",
+            create = TRUE
+          )
+        ) |>
+          tooltip(
+            "If the guideline is part of a series of related guidelines (i.e. CCME Water Quality Guidelines for the Protection of Aquatic Life), select the series here. You can create new series by typing a name and pressing enter."
+          ),
+        textInput(ns("guideline_name"), "Guideline Name", width = "100%"),
         textInput(
           ns("reference"),
           "Reference",
@@ -456,7 +474,7 @@ addGuidelines <- function(id, language) {
       new_row <- nrow(moduleData$guidelines)
       rows_per_page <- 10
       target_page <- ceiling(new_row / rows_per_page)
-      proxy <- DT::dataTableProxy(ns("guidelines_table"))
+      proxy <- DT::dataTableProxy("guidelines_table")
       DT::selectPage(proxy, target_page)
       DT::selectRows(proxy, new_row)
 
@@ -646,7 +664,11 @@ addGuidelines <- function(id, language) {
           ),
           footer = tagList(
             modalButton("Cancel"),
-            actionButton(ns("add_publisher"), "Add publisher", class = "btn-primary")
+            actionButton(
+              ns("add_publisher"),
+              "Add publisher",
+              class = "btn-primary"
+            )
           )
         ))
       },
@@ -1468,7 +1490,7 @@ FROM vals -- from the 'vals' CTE"
           moduleData$guidelines_temp <- moduleData$guidelines
 
           # Clear table selection and hide save button
-          DT::dataTableProxy(ns("guidelines_table")) |>
+          DT::dataTableProxy("guidelines_table") |>
             DT::selectRows(NULL)
           shinyjs::hide("save_guideline")
 
