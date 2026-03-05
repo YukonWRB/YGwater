@@ -173,8 +173,10 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
       idx <- active_timeseries_slot()
       if (
-        is.null(idx) || is.na(idx) ||
-          idx < 1 || idx > length(slots) ||
+        is.null(idx) ||
+          is.na(idx) ||
+          idx < 1 ||
+          idx > length(slots) ||
           is.na(slots[[idx]])
       ) {
         filled_idx <- which(!is.na(slots))
@@ -520,11 +522,11 @@ contPlot <- function(id, language, windowDims, inputs) {
             value = ns("table_panel"),
             div(
               DT::dataTableOutput(ns("timeseries_table")),
-              uiOutput(ns("selected_timeseries_output")),
-              actionButton(
-                ns("add_new_timeseries"),
-                label = "Add another timeseries"
-              )
+              uiOutput(ns("selected_timeseries_output")) #,
+              # actionButton(
+              #   ns("add_new_timeseries"),
+              #   label = "Add another timeseries"
+              # )
             ) # End div
           ), # End table_panel
           bslib::accordion_panel(
@@ -534,13 +536,17 @@ contPlot <- function(id, language, windowDims, inputs) {
               ns("plot_type"),
               label = tr("plot_type", language$language),
               # Choice names (and an additional option for timeseries_multi) are updated later based on the 'multiple timeseries' checkbox
+              # choices = stats::setNames(
+              #   c("timeseries", "overlap_yrs", "histogram"),
+              #   c(
+              #     tr("plot_type_ts", language$language),
+              #     tr("plot_type_overlap", language$language),
+              #     tr("plot_type_histogram", language$language)
+              #   )
+              # )
               choices = stats::setNames(
-                c("timeseries", "overlap_yrs", "histogram"),
-                c(
-                  tr("plot_type_ts", language$language),
-                  tr("plot_type_overlap", language$language),
-                  tr("plot_type_histogram", language$language)
-                )
+                c("timeseries"),
+                c(tr("plot_type_ts", language$language))
               )
             ),
             fluidRow(
@@ -564,6 +570,23 @@ contPlot <- function(id, language, windowDims, inputs) {
                   ns("entire_record"),
                   tr("plot_all_record", language$language)
                 ),
+                # conditionalPanel(
+                #   condition = "input.plot_type == 'overlap_yrs'",
+                #   ns = ns,
+                #   selectizeInput(
+                #     ns("plot_years"),
+                #     label = tr("plot_years_overlap", language$language),
+                #     choices = 2:10,
+                #     selected = 5,
+                #     multiple = FALSE,
+                #     options = list(
+                #       placeholder = tr(
+                #         "plot_years_overlap_placeholder",
+                #         language$language
+                #       )
+                #     )
+                #   )
+                # ),
                 selectizeInput(
                   ns("plot_timezone"),
                   label = tr("plot_timezone_offset", language$language),
@@ -695,23 +718,22 @@ contPlot <- function(id, language, windowDims, inputs) {
             )
           )
         } else {
+          # stats::setNames(
+          #   c("timeseries", "overlap_yrs", "histogram"),
+          #   c(
+          #     tr("plot_type_ts", language$language),
+          #     tr("plot_type_overlap", language$language),
+          #     tr("plot_type_histogram", language$language)
+          #   )
+          # )
           stats::setNames(
-            c("timeseries", "overlap_yrs", "histogram"),
-
-            c(
-              tr("plot_type_ts", language$language),
-              tr("plot_type_overlap", language$language),
-              tr("plot_type_histogram", language$language)
-            )
+            c("timeseries"),
+            c(tr("plot_type_ts", language$language))
           )
         }
       )
       # If the currently selected plot type is no longer valid, reset it
-      if (
-        length(ids) == 1 &&
-          input$plot_type %in%
-            c("timeseries_all", "overlap_yrs_many", "histogram_many")
-      ) {
+      if (length(ids) == 1 && (input$plot_type == "timeseries_all")) {
         updateSelectizeInput(
           session,
           "plot_type",
@@ -719,6 +741,37 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
       }
     })
+
+    observeEvent(
+      input$plot_type,
+      {
+        # If any of the overlaping years plots, the year doesn't matter. Modify the label.
+        if (input$plot_type %in% c("overlap_yrs", "overlap_yrs_many")) {
+          updateDateRangeInput(
+            session,
+            "date_range",
+            label = tr("date_range_select_doy", language$language)
+          )
+          # Hide the 'entire record' button since it doesn't make sense in this context
+          shinyjs::hide("entire_record")
+          # Hide checkboxes for 'approvals', 'grades', and 'qualifiers' since those don't work as the years overlap
+          shinyjs::hide("show_approvals")
+          shinyjs::hide("show_grades")
+          shinyjs::hide("show_qualifiers")
+        } else {
+          updateDateRangeInput(
+            session,
+            "date_range",
+            label = tr("date_range_lab", language$language)
+          )
+          shinyjs::show("entire_record")
+          shinyjs::show("show_approvals")
+          shinyjs::show("show_grades")
+          shinyjs::show("show_qualifiers")
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     # Keep selected slots valid when table rows change
     observeEvent(
@@ -760,10 +813,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         slots <- selected_timeseries_slots()
         idx <- active_timeseries_slot()
 
-        if (
-          is.null(idx) || is.na(idx) ||
-            idx < 1 || idx > length(slots)
-        ) {
+        if (is.null(idx) || is.na(idx) || idx < 1 || idx > length(slots)) {
           idx <- 1L
         }
 
@@ -1030,26 +1080,34 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     lapply(seq_len(4), function(i) {
-      observeEvent(input[[paste0("delete_timeseries_", i)]], {
-        slots <- selected_timeseries_slots()
-        if (i > length(slots) || is.na(slots[[i]])) {
-          return()
-        }
+      observeEvent(
+        input[[paste0("delete_timeseries_", i)]],
+        {
+          slots <- selected_timeseries_slots()
+          if (i > length(slots) || is.na(slots[[i]])) {
+            return()
+          }
 
-        slots <- slots[-i]
-        if (length(slots) == 0) {
-          slots <- NA_real_
-        }
-        selected_timeseries_slots(as.numeric(slots))
-        active_timeseries_slot(min(i, length(slots)))
-      }, ignoreInit = TRUE)
+          slots <- slots[-i]
+          if (length(slots) == 0) {
+            slots <- NA_real_
+          }
+          selected_timeseries_slots(as.numeric(slots))
+          active_timeseries_slot(min(i, length(slots)))
+        },
+        ignoreInit = TRUE
+      )
     })
 
     proxy <- DT::dataTableProxy(ns("timeseries_table"))
 
     # Keep table highlight in sync with active selected timeseries slot
     observeEvent(
-      list(selected_timeseries_slots(), active_timeseries_slot(), timeseries_table_reactive()),
+      list(
+        selected_timeseries_slots(),
+        active_timeseries_slot(),
+        timeseries_table_reactive()
+      ),
       {
         ts <- timeseries_table_reactive()
         id <- selected_timeseries_id_active()
@@ -1291,6 +1349,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       if (is.null(ts_id)) {
         return(NULL)
       }
+
       ts_tbl <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste0(
@@ -1305,9 +1364,11 @@ contPlot <- function(id, language, windowDims, inputs) {
           ";"
         )
       )
+
       if (nrow(ts_tbl) == 0) {
         return(NULL)
       }
+
       if (language$abbrev == "fr") {
         parameter <- ts_tbl$`nom_paramètre`
         media <- ts_tbl$`type_de_média`
@@ -1517,7 +1578,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         selection = "none",
         options = list(
           dom = "t",
-          paging = FALSE,
+          pageLength = 10,
           ordering = FALSE,
           searching = FALSE,
           scrollX = TRUE,
@@ -1557,7 +1618,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         selection = "none",
         options = list(
           dom = "t",
-          paging = FALSE,
+          pageLength = 10,
           ordering = FALSE,
           searching = FALSE,
           scrollX = TRUE,
@@ -1590,15 +1651,16 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     output$timeseries_ownership_table <- DT::renderDataTable({
       ownership <- timeseries_ownership()
+      date_targets <- c(0, 1)
       req(ownership)
       DT::datatable(
         ownership,
         rownames = FALSE,
         selection = "none",
         options = list(
-          dom = "t",
-          paging = FALSE,
-          ordering = FALSE,
+          paging = TRUE,
+          pageLength = 5,
+          ordering = TRUE,
           searching = FALSE,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
