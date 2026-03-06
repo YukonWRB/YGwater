@@ -220,7 +220,7 @@ app_ui <- function(request) {
             )
           }
         ),
-        if (config$g_drive) {
+        if (config$network) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
             value = "reports",
@@ -234,22 +234,18 @@ app_ui <- function(request) {
               value = "waterInfo",
               uiOutput("waterInfo_ui")
             ),
-            if (config$g_drive) {
-              nav_panel(
-                title = uiOutput("reportsNavWQTitle"),
-                value = "WQReport",
-                uiOutput("WQReport_ui")
-              )
-            },
-            if (config$g_drive) {
-              nav_panel(
-                title = uiOutput("reportsNavSnowbullTitle"),
-                value = "snowBulletin",
-                uiOutput("snowBulletin_ui")
-              )
-            }
+            nav_panel(
+              title = uiOutput("reportsNavWQTitle"),
+              value = "WQReport",
+              uiOutput("WQReport_ui")
+            ),
+            nav_panel(
+              title = uiOutput("reportsNavSnowbullTitle"),
+              value = "snowBulletin",
+              uiOutput("snowBulletin_ui")
+            )
           ) # End reports nav_menu
-        }, # End if config$g_drive
+        }, # End if config$network
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",
