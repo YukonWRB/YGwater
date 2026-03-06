@@ -36,6 +36,7 @@ Imports:
     lubridate,
     magrittr,
     openxlsx,
+    readxl,
     plotly,
     remotes,
     rlang,

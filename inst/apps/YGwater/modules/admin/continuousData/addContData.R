@@ -679,11 +679,12 @@ addContData <- function(id, language) {
 
       ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
-        return(openxlsx::read.xlsx(
-          input$file$datapath,
-          sheet = 1,
-          startRow = starting_row
-        ))
+
+        out <- readxl::read_xlsx(input$file$datapath, sheet = 1,
+                          skip = starting_row - 1) |> 
+          as.data.frame() 
+        
+        return(out)
       } else if (ext == "csv") {
         # .csv files more complex due to ungraceful handling of non-equal
         #  number of columns and column names by read.table
@@ -936,7 +937,13 @@ addContData <- function(id, language) {
 
     prepare_table_data <- function(df) {
       df <- df[, c("datetime", "value")]
-      df$datetime <- as.character(df$datetime)
+      
+      df$datetime <- if(inherits(df$datetime, "POSIXct")){
+        format(df$datetime, "%Y-%m-%d %H:%M:%S")
+      } else {
+        as.character(df$datetime)
+      }
+      
       df$value <- suppressWarnings(as.numeric(df$value))
       df
     }
