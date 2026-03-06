@@ -275,6 +275,8 @@ app_ui <- function(request) {
             uiOutput("contData_ui")
           )
         ), # End data nav_menu
+
+        # Forecaster on Duty (FOD) reports are only possible with access to the G Drive
         if (!config$public & config$g_drive) {
           # if public or if g drive access is not possible, don't show the tab for FOD reports
           nav_panel(

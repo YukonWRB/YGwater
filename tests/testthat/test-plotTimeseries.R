@@ -1,6 +1,6 @@
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
-con <- AquaConnect()
+con <- AquaConnect(silent = TRUE)
 on.exit(DBI::dbDisconnect(con), add = TRUE)
 
 test_that("timeseries plot is as expected for one year with no historic range or slider", {
