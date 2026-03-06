@@ -98,7 +98,7 @@ YGwater <- function(
       "magick",
       reason = "required to use Simpler Index in the app"
     )
-    rland::check_installed(
+    rlang::check_installed(
       "readxl",
       reason = "required to use YGwater app with public = FALSE"
     )
