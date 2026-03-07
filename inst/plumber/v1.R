@@ -961,6 +961,46 @@ function(req, res) {
   )
 }
 
+# End point to pass postgres function get_csw_layer() output directly as CSV, as it comes out of the DB.
+#' Return CSW layer data
+#* @get /csw-layer
+#* @serializer csv
+function(req, res) {
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  out <- DBI::dbGetQuery(con, "SELECT * FROM public.get_csw_layer()")
+
+  if (nrow(out) == 0) {
+    res$headers[["X-Status"]] <- "info"
+    return(data.frame(
+      status = "info",
+      message = "No CSW layer data found in the database.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  return(out)
+}
+
 
 # Helper function to serialize data.frame to CSV with optional header lines
 csv_with_header <- function(df, header_lines = NULL) {
