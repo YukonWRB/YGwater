@@ -19,7 +19,8 @@ function(req, res) {
     "^/openapi.json$", # <-- needed for the UI to load without auth
     "^/openapi.yaml$", # <-- sometimes used
     "^/timeseries/measurements$",
-    "^/samples/results$/"
+    "^/samples/results$/",
+    "^/csw-layer$"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
