@@ -335,6 +335,7 @@ app_server <- function(input, output, session) {
     "FOD",
     "snowInfo",
     "waterInfo",
+    "waterTemp",
     "WQReport",
     "snowBulletin",
     "imgTableView",
@@ -440,6 +441,7 @@ app_server <- function(input, output, session) {
     ui_loaded$docTableView <- FALSE
     ui_loaded$snowInfo <- FALSE
     ui_loaded$waterInfo <- FALSE
+    ui_loaded$waterTemp <- FALSE
     ui_loaded$WQReport <- FALSE
     ui_loaded$snowBulletin <- FALSE
     ui_loaded$discData <- FALSE
@@ -503,6 +505,7 @@ app_server <- function(input, output, session) {
     "mapSnowbull",
     "snowInfo",
     "waterInfo",
+    "waterTemp",
     "WQReport",
     "snowBulletin",
     "imgTableView",
@@ -690,6 +693,9 @@ app_server <- function(input, output, session) {
     })
     output$reportsNavWaterTitle <- renderUI({
       tr("reports_water", languageSelection$language)
+    })
+    output$reportsNavWaterTempTitle <- renderUI({
+      tr("reports_watertemp", languageSelection$language)
     })
     output$reportsNavWQTitle <- renderUI({
       tr("reports_wq", languageSelection$language)
@@ -1830,6 +1836,7 @@ app_server <- function(input, output, session) {
           "FOD",
           "snowInfo",
           "waterInfo",
+          "waterTemp",
           "WQReport",
           "snowBulletin",
           "imgTableView",
@@ -2062,6 +2069,14 @@ app_server <- function(input, output, session) {
         ui_loaded$waterInfo <- TRUE
         # Call the server
         waterInfoMod("waterInfo", language = languageSelection)
+      }
+    }
+    if (input$navbar == "waterTemp") {
+      if (!ui_loaded$waterTemp) {
+        output$waterTemp_ui <- renderUI(waterTempUIMod("waterTemp"))
+        ui_loaded$waterTemp <- TRUE
+        # Call the server
+        waterTempMod("waterTemp", language = languageSelection, inputs = NULL, windowDims = windowDims)
       }
     }
     if (input$navbar == "WQReport") {

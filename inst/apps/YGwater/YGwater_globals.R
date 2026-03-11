@@ -558,6 +558,10 @@ YGwater_globals <- function(
       "apps/YGwater/modules/client/reports/waterInfo.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/waterTemp.R",
+      package = "YGwater"
+    ))
   }
 
   # Map modules
