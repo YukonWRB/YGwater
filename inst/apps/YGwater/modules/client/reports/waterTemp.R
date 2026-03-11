@@ -554,7 +554,7 @@ waterTempMod <- function(id, language, windowDims, inputs){
     # Download Handler ----
     output$generate_report <- downloadHandler(
       filename = function() {
-        paste0("temperature_report_bundle", Sys.Date(), ".zip")
+        paste0(unique(historic()$name), " Temperature Report Bundle", Sys.Date(), ".zip")
       },
       
       content = function(file) {
@@ -582,6 +582,8 @@ waterTempMod <- function(id, language, windowDims, inputs){
           saveRDS(save_plots$seven_day_max_plot, paste0(bundle_dir, "/seven_day_avg_max_plot.rds"))
           incProgress(6/10)
           
+          write.csv(daily_stats(), paste0(bundle_dir, "/daily_summary.csv"), row.names = FALSE)
+          incProgress(7/10)
           
           # Store parameters to R markdown as list
           params <- list(
