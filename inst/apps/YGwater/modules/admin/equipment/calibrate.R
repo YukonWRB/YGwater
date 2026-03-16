@@ -685,6 +685,16 @@ table.on("click", "tr", function() {
     )
     reset_check <- reactiveValues(sensors = FALSE)
     initial_instr_table <- reactiveValues(value = TRUE)
+    modal_action_button <- function(id, label, class = "btn-primary") {
+      tags$button(
+        id = ns(id),
+        type = "button",
+        class = paste("btn", class, "action-button"),
+        `data-dismiss` = "modal",
+        `data-bs-dismiss` = "modal",
+        label
+      )
+    }
 
     ### Hide a bunch of buttons until they can be used
     # Delete buttons to remove a calibration sheet
@@ -4995,7 +5005,7 @@ table.on("click", "tr", function() {
                 title = "Are you sure?",
                 HTML(warnings),
                 footer = tagList(
-                  actionButton(ns("ok_check_ph"), "Yes, I'm sure"),
+                  modal_action_button("ok_check_ph", "Yes, I'm sure"),
                   modalButton("Cancel")
                 )
               ))
@@ -5019,7 +5029,6 @@ table.on("click", "tr", function() {
     observeEvent(
       input$ok_check_ph,
       {
-        removeModal()
         validation_check$ph <- TRUE
       },
       ignoreInit = TRUE
@@ -5199,7 +5208,7 @@ table.on("click", "tr", function() {
                 title = "Are you sure?",
                 message,
                 footer = tagList(
-                  actionButton(ns("ok_check_temp"), "Yes, I'm sure"),
+                  modal_action_button("ok_check_temp", "Yes, I'm sure"),
                   modalButton("Cancel")
                 )
               ))
@@ -5222,7 +5231,6 @@ table.on("click", "tr", function() {
     observeEvent(
       input$ok_check_temp,
       {
-        removeModal()
         validation_check$temp <- TRUE
       },
       ignoreInit = TRUE
@@ -5373,7 +5381,7 @@ table.on("click", "tr", function() {
                 title = "Are you sure?",
                 "ORP difference is > 5 mV; are you sure about your entries?",
                 footer = tagList(
-                  actionButton(ns("ok_check_orp"), "Yes, I'm sure"),
+                  modal_action_button("ok_check_orp", "Yes, I'm sure"),
                   modalButton("Cancel")
                 )
               ))
@@ -5396,7 +5404,6 @@ table.on("click", "tr", function() {
     observeEvent(
       input$ok_check_orp,
       {
-        removeModal()
         validation_check$orp <- TRUE
       },
       ignoreInit = TRUE
@@ -5659,7 +5666,7 @@ table.on("click", "tr", function() {
                   title = "Are you sure?",
                   message,
                   footer = tagList(
-                    actionButton(ns("ok_check_spc"), "Yes, I'm sure"),
+                    modal_action_button("ok_check_spc", "Yes, I'm sure"),
                     modalButton("Cancel")
                   )
                 ))
@@ -5683,7 +5690,6 @@ table.on("click", "tr", function() {
     observeEvent(
       input$ok_check_spc,
       {
-        removeModal()
         validation_check$spc <- TRUE
       },
       ignoreInit = TRUE
@@ -5962,7 +5968,7 @@ table.on("click", "tr", function() {
                 title = "Are you sure?",
                 "Your post-cal values are a bit off from the standard. Please check you entries before moving on.",
                 footer = tagList(
-                  actionButton(ns("ok_check_turb"), "Yes, I'm sure"),
+                  modal_action_button("ok_check_turb", "Yes, I'm sure"),
                   modalButton("Cancel")
                 )
               ))
@@ -5983,7 +5989,6 @@ table.on("click", "tr", function() {
     )
 
     observeEvent(input$ok_check_turb, {
-      removeModal()
       validation_check$turb <- TRUE
     })
 
@@ -6142,7 +6147,7 @@ table.on("click", "tr", function() {
                 title = "Are you sure?",
                 message,
                 footer = tagList(
-                  actionButton(ns("ok_check_DO"), "Yes, I'm sure"),
+                  modal_action_button("ok_check_do", "Yes, I'm sure"),
                   modalButton("Cancel")
                 )
               ))
@@ -6164,7 +6169,6 @@ table.on("click", "tr", function() {
     )
 
     observeEvent(input$ok_check_do, {
-      removeModal()
       validation_check$do <- TRUE
     })
 
@@ -6305,7 +6309,7 @@ table.on("click", "tr", function() {
                 title = "Are you sure?",
                 "You indicated FALSE or 'Not Checked' for one of the values. Are you sure about that? Should you be using a different sensor?",
                 footer = tagList(
-                  actionButton(ns("ok_check_depth"), "Yes, I'm sure"),
+                  modal_action_button("ok_check_depth", "Yes, I'm sure"),
                   modalButton("Cancel")
                 )
               ))
@@ -6324,7 +6328,6 @@ table.on("click", "tr", function() {
     )
 
     observeEvent(input$ok_check_depth, {
-      removeModal()
       validation_check$depth <- TRUE
     })
 
@@ -6494,7 +6497,7 @@ table.on("click", "tr", function() {
               "Finalized calibrations cannot be edited.",
               footer = tagList(
                 modalButton("Cancel"),
-                actionButton(ns("confirm_finalize"), "OK")
+                modal_action_button("confirm_finalize", "OK")
               )
             )
           )
@@ -6506,7 +6509,6 @@ table.on("click", "tr", function() {
     observeEvent(
       input$confirm_finalize,
       {
-        removeModal()
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
