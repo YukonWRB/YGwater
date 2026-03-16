@@ -3234,14 +3234,31 @@ load_bulletin_timeseries <- function(
         # Process basin names for better display on map
         snowbull_timeseries$swe$basins$metadata <- basins_shp
         snowbull_timeseries$swe$basins$metadata$key <- snowbull_timeseries$swe$basins$metadata$name
-        snowbull_timeseries$swe$basins$metadata$annotation <- snowbull_timeseries$swe$basins$metadata$Label
-        snowbull_timeseries$swe$basins$metadata$annotation <- gsub(
+        snowbull_timeseries$swe$basins$metadata$annotation_en <- snowbull_timeseries$swe$basins$metadata$Label
+        snowbull_timeseries$swe$basins$metadata$annotation_fr <- snowbull_timeseries$swe$basins$metadata$Label_fr
+        snowbull_timeseries$swe$basins$metadata$annotation_en <- gsub(
             "_",
             " ",
-            as.character(snowbull_timeseries$swe$basins$metadata$annotation)
+            as.character(snowbull_timeseries$swe$basins$metadata$annotation_en)
         )
-        snowbull_timeseries$swe$basins$metadata$annotation <- vapply(
-            snowbull_timeseries$swe$basins$metadata$annotation,
+        snowbull_timeseries$swe$basins$metadata$annotation_fr <- gsub(
+            "_",
+            " ",
+            as.character(snowbull_timeseries$swe$basins$metadata$annotation_fr)
+        )
+        snowbull_timeseries$swe$basins$metadata$annotation_en <- vapply(
+            snowbull_timeseries$swe$basins$metadata$annotation_en,
+            FUN.VALUE = character(1),
+            FUN = function(x) {
+                if (is.na(x) || x == "") {
+                    return(x)
+                }
+                # Add line break after first word if it's 5+ characters
+                sub("^(\\S{5,})\\s+", "\\1<br>", x, perl = TRUE)
+            }
+        )
+        snowbull_timeseries$swe$basins$metadata$annotation_fr <- vapply(
+            snowbull_timeseries$swe$basins$metadata$annotation_fr,
             FUN.VALUE = character(1),
             FUN = function(x) {
                 if (is.na(x) || x == "") {
@@ -3578,14 +3595,6 @@ create_survey_summary <- function(
         "08AK-SC02"
     )
 
-    # con <- YGwater::AquaConnect(
-    #     name = "aquacache",
-    #     host = Sys.getenv("aquacacheHostDev"),
-    #     port = Sys.getenv("aquacachePortDev"),
-    #     user = Sys.getenv("aquacacheUserDev"),
-    #     password = Sys.getenv("aquacachePassDev"),
-    # )
-
     locations <- download_discrete_ts_locations(
         con = con,
         param_name = "snow water equivalent",
@@ -3844,17 +3853,6 @@ create_survey_summary <- function(
         surveys_table[["swe_historical_median"]]
 
     surveys_table <- surveys_table[surveys_table$location %in% stations, ]
-
-    # surveys_table$location_id <- NULL
-
-    # surveys_table[, c(
-    #     "name",
-    #     "location",
-    #     "survey_date",
-    #     "snow_depth",
-    #     "relative_to_med",
-    #     "last_year_snow_water_equivalent"
-    # )]
 
     surveys_table[["record_flag"]] <- !is.na(surveys_table[[
         "snow_water_equivalent"
@@ -4436,8 +4434,14 @@ get_display_data <- function(
     dataset_state <- to_numeric_cols(dataset_state, numeric_cols)
 
     # update the annotations to display the value for the selected type
-    dataset_state$annotation <- paste0(
-        dataset_state$annotation,
+    dataset_state$annotation_fr <- paste0(
+        dataset_state$annotation_fr,
+        "<br>(",
+        round(dataset_state[[statistic]], 0),
+        "%)"
+    )
+    dataset_state$annotation_en <- paste0(
+        dataset_state$annotation_en,
         "<br>(",
         round(dataset_state[[statistic]], 0),
         "%)"
@@ -4673,10 +4677,10 @@ make_leaflet_map <- function(
 ) {
     month_str <- snowbull_months(month = month, short = TRUE)
 
-    # Get the first two characters of the language (lowercase)
+    # Get the first two characters of the language (lowercase) for normalization
     lang_short <- tolower(substr(language, 1, 2))
     if (lang_short == "en") {
-        lang_short <- "English"
+        language <- "English"
     } else if (lang_short == "fr") {
         language <- "Français"
     } else {
@@ -4686,7 +4690,7 @@ make_leaflet_map <- function(
                 language
             )
         )
-        lang_short <- "English" # default to English if unrecognized
+        language <- "English" # default to English if unrecognized
     }
 
     # processed data is values for one point in time, based on bulletin_data
@@ -4770,7 +4774,11 @@ make_leaflet_map <- function(
                 data = poly_data,
                 lng = poly_data$x_adjusted,
                 lat = poly_data$y_adjusted,
-                label = lapply(poly_data$annotation, htmltools::HTML),
+                label = if (language == "English") {
+                    lapply(poly_data$annotation_en, htmltools::HTML)
+                } else {
+                    lapply(poly_data$annotation_fr, htmltools::HTML)
+                },
                 labelOptions = leaflet::labelOptions(
                     noHide = static_style_elements$basins$labelOptions$noHide %||%
                         TRUE,
@@ -5029,7 +5037,7 @@ make_leaflet_map <- function(
 #' @param point_data_secondary sf object containing secondary point data (pillows)
 #' @param statistic Character string indicating which SWE value to visualize
 #' @param snowbull_shapefiles List containing all loaded shapefiles
-#' @param language Character string for language (default "English")
+#' @param language Character string for language ("English" or "Français, default "English")
 #' @param month Integer month for map title
 #' @param year Integer year for map title
 #' @param filename Optional character string for PNG output file path
@@ -5112,6 +5120,22 @@ make_ggplot_map <- function(
     requireNamespace("ggplot2")
     requireNamespace("shadowtext")
 
+    # Get the first two characters of the language (lowercase) for normalization
+    lang_short <- tolower(substr(language, 1, 2))
+    if (lang_short == "en") {
+        language <- "English"
+    } else if (lang_short == "fr") {
+        language <- "Français"
+    } else {
+        warning(
+            sprintf(
+                "Unrecognized language '%s'. Defaulting to English.",
+                language
+            )
+        )
+        language <- "English" # default to English if unrecognized
+    }
+
     # processed data is values for one point in time, based on bulletin_data
     static_style_elements <- get_static_style_elements()
 
@@ -5141,7 +5165,11 @@ make_ggplot_map <- function(
         basin_labels_df <- data.frame(
             x = poly_data$x_adjusted,
             y = poly_data$y_adjusted,
-            annotation = poly_data$annotation
+            annotation = if (language == "English") {
+                poly_data$annotation_en
+            } else {
+                poly_data$annotation_fr
+            }
         )
         basin_labels_df$annotation <- gsub(
             "<br>",
@@ -5405,6 +5433,7 @@ make_ggplot_map <- function(
         period_of_record <- paste0(
             "(",
             tr("snowbull_reference_period", language),
+            " ",
             start_year_historical,
             "-",
             end_year_historical,
@@ -5456,7 +5485,7 @@ make_ggplot_map <- function(
     )
 
     subtitle <- paste(
-        paste(subtitle_param, subtitle_statistic, sep = " "),
+        paste(subtitle_param, subtitle_statistic, sep = "\n"),
         snowbull_date,
         period_of_record,
         sep = "\n"

@@ -48,11 +48,6 @@ language <- list(
   abbrev = tolower(substr(language, 1, 2))
 )
 
-# Redefine translations function with bulletin translations.
-trb <- function(key) {
-  tr(key, lang = language$language, translations = data$snowbull_translations)
-}
-
 bulletin_year <- params$year
 bulletin_month <- params$month
 bulletin_scale <- params$scale
@@ -230,6 +225,18 @@ titles <- titles[[params$language]]
 
 
 ```{r Functions, echo=FALSE}
+
+fmt_tr_key <- function(key) {
+  gsub("[ .]", "_", tolower(key))
+}
+
+# Redefine translations function with bulletin translations.
+trb <- function(key) {
+  tr(key, lang = language$language, translations = data$snowbull_translations)
+}
+
+
+
 #### -------------------- Conditional text colours ------------------------ ####
 
 get_text_fmt <- function(colour) {
@@ -408,7 +415,7 @@ snowbullSWE <- function(
 
   custom_title <- sprintf(
     trb("plot_snowcourse_title"),
-    paste("B", subplot),
+    trimws(paste("B", subplot)),
     loc_name
   )
 
@@ -473,7 +480,7 @@ snowBullPrecip <- function(
   # Create plot C
   custom_title <- sprintf(
     trb("plot_precip_title"),
-    paste("C", subplot),
+    trimws(paste("C", subplot)),
     loc_name
   )
 
@@ -1300,9 +1307,6 @@ paste0("À la station météorologique de Tagish, l’équivalent en eau de la n
 graphics::par(mfrow = c(1, 2))
 
 ## A1 Tagish
-fmt_tr_key <- function(key) {
-  gsub("[ .]", "_", tolower(key))
-}
 
 # Plot SWE
 tryCatch(
@@ -1340,6 +1344,7 @@ tryCatch(
 par(mfrow = c(1, 2))
 
 
+# A3 Log cabin
 tryCatch(
   {
     snowbullpillow(
@@ -1355,7 +1360,7 @@ tryCatch(
 
 
 # B
-# Plotting
+# Snow course plotting
 tryCatch(
   {
     snowbullSWE(
@@ -1460,7 +1465,6 @@ paste0(" cet été.")
 ```{r MarshLake_levels, echo=FALSE, eval=include, fig.width=9, fig.height=fig.height_full}
 # E1
 # Set station ID
-
 
 # Plotting
 tryCatch(
@@ -1626,9 +1630,7 @@ if ("Central Yukon" %in% params$basins) {
 } else {
   include <- FALSE
 }
-```
 
-```{r, echo=FALSE}
 basin_name <- "Central_Yukon"
 basin_swe <- basins_table[basins_table$name == basin_name, ]
 
@@ -2102,9 +2104,7 @@ if ("Lower Yukon" %in% params$basins) {
 } else {
   include <- FALSE
 }
-```
 
-```{r, echo=FALSE}
 basin_name <- "Lower_Yukon"
 pillow_name <- "King Solomon Dome Meteorological"
 pillow_id <- pillows_table[pillows_table$name == pillow_name, ]$key
@@ -2664,10 +2664,8 @@ tryCatch(
 ```{r table, fig.width=10, results='asis', echo=FALSE}
 tryCatch(
   {
-    # tabl <- stats$station_stats
 
     tabl <- create_survey_summary(con = con, year = bulletin_year, month = bulletin_month)
-
 
     # Round values
     tabl$elevation <- round(as.numeric(tabl$elevation), 0)
@@ -2706,24 +2704,35 @@ tryCatch(
 
     #### French version versus English version of table ####
     if (language$abbrev == "fr") {
-      # Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
+      # A.R. to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
       tabl$sample_date[is.na(tabl$sample_date)] <- "A.R."
       tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "A.R."
+      
       # Subset to columns of interest
       tabl <- tabl[, c("location_name_fr", "location_id", "elevation", "sample_date", "depth", "swe", "relative_to_med", "swe_prevyear", "swe_med", "years", "sub_basin")]
+      
       # Rename columns
       colnames(tabl) <- c("Nom", "Code", "Élévation (m)", "Date du relevé (mm-jj)", "Épaisseur de neige (cm)", "Équivalent en eau (EEN, mm)", "% de l'EEN médian", "Année dernière (EEN, mm)", "normale (EEN, mm)", "Nombre d'années avec données", "sub_basin")
       size <- 9
       wdth <- c(1.3, 0.8, 0.7, 0.6, 0.7, 0.7, 0.6)
+
       # Remove 'Parcours nivométrique' from name
       tabl[, 1] <- sub("(parcours nivométrique)", "", tabl[, 1])
-      tabl[, 1] <- sub(", composite", "(composite)", tabl[, 1])
-      tabl[, 1] <- sub(" composite", "(composite)", tabl[, 1])
+
+      # Remove 'composite' from name (years of record has 'C' for composite stations)
+      tabl[, 1] <- sub(", composite", "", tabl[, 1])
+      tabl[, 1] <- sub(" composite", "", tabl[, 1])
+      # tabl[, 1] <- sub(", composite", "(composite)", tabl[, 1])
+      # tabl[, 1] <- sub(" composite", "(composite)", tabl[, 1])
+
+      # Remove 'A' and 'B' from name (years of record has 'C' for composite stations)
+      tabl[, 1] <- sub(" A", "", tabl[, 1])
+      tabl[, 1] <- sub(" B", "", tabl[, 1])
 
       # Capitalize first letter of location name
       tabl[, 1] <- paste0(toupper(substr(tabl$Nom, 1, 1)), substr(tabl$Nom, 2, nchar(tabl$Nom)))
     } else {
-      # Not N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
+      # N.S to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
       tabl$sample_date[is.na(tabl$sample_date)] <- "N.S."
       tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "N.S."
       # Subset to columns of interest
@@ -2795,6 +2804,7 @@ tryCatch(
       flextable::font(fontname = "Nunito Sans", part = "all") %>%
       flextable::fontsize(size = size, part = "all") %>%
       flextable::fontsize(j = 2, size = 7.5) %>%
+      flextable::fontsize(j = 3, size = 7.5) %>%
       flextable::line_spacing(space = 1) %>%
       flextable::padding(padding.top = 0.8, padding.bottom = 0.8)
   },
@@ -2823,9 +2833,9 @@ paste0("
 N.S. - No survey
 
 ** SWE notes: **
-E - Estimate  
-B - Survey date is outside of valid sampling range  
-R - New record  
+E - Estimated results from snow depth readings and average snow densities observed in location historical records.
+B - Survey date is outside of valid sampling range.
+R - New record.
 
 ** Median historical SWE and Years of record notes: **
 C - Composite historical record. Current location measurements combined with historical record from discontinued nearby location, adjusted based on overlapping years of record.
@@ -2842,9 +2852,9 @@ paste0("
 A.R. - Aucun relevé
 
 ### Notes au sujet de l'EEN :
-E - Estimation  
-B - Date du relevé en dehors de la plage d’échantillonnage valide  
-R - Nouveau record  
+E - Estimation des résultats à partir de la profondeur de neige et des densités moyennes de neige observées dans les relevés historiques de l’emplacement.
+B - Date du relevé en dehors de la plage d’échantillonnage valide.
+R - Nouveau record.
 
 ### Notes au sujet de la normale de l'EEN et du nombre d'années avec données :
 C - Données historiques composites. Les mesures à la station sont combinées avec les données historiques de la station voisine abandonnée, ajustées en fonction des années avec relevés concomitants.
