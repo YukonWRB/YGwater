@@ -443,10 +443,10 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
-snowbull_percent_of_normal,,Percent of normal,Pourcentage de la normale
+snowbull_percent_of_normal,,Percent of Normal,Pourcentage de la Normale
 snowbull_historical_median,,Historical median,Médiane historique
 snowbull_anomalies,,Anomalies,Anomalies
-snowbull_deviation,,Deviation from normal, Écart à la normale
+snowbull_deviation,,Deviation from Normal, Écart à la Normale
 snowbull_values,,Values,Valeurs
 snowbull_swe,,Snow water equivalent,Équivalent en eau de neige
 snowbull_swe_abbrev,,SWE,ÉEN

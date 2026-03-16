@@ -382,11 +382,17 @@ hydrometDiscrete <- function(
       # Ensure ref_period_start_datetime and ref_period_end_datetime are Date objects
       ref_period_start_datetime <- as.Date(ref_period_start_datetime)
       ref_period_end_datetime <- as.Date(ref_period_end_datetime)
+
       # Filter all_discrete for datetimes within the reference period
       stats_ref <- all_discrete[
         all_discrete$datetime >= ref_period_start_datetime &
           all_discrete$datetime <= ref_period_end_datetime,
       ]
+
+      historical_record_ref <- all_discrete[
+        all_discrete$datetime < startDay,
+      ]
+
       stats_discrete <- stats_ref %>%
         dplyr::group_by(.data$month) %>%
         dplyr::summarise(
@@ -426,10 +432,10 @@ hydrometDiscrete <- function(
             )
         )
       # Calculate all-time high/low using all data
-      ath <- all_discrete %>%
+      ath <- historical_record_ref %>%
         dplyr::group_by(.data$month) %>%
         dplyr::summarise(value = max(.data$value, na.rm = TRUE), type = "ath")
-      atl <- all_discrete %>%
+      atl <- historical_record_ref %>%
         dplyr::group_by(.data$month) %>%
         dplyr::summarise(value = min(.data$value, na.rm = TRUE), type = "atl")
       stats_discrete <- dplyr::bind_rows(stats_discrete, ath, atl)
