@@ -1054,7 +1054,7 @@ plotTimeseries <- function(
   plot <- plotly::plot_ly()
   if (historic_range) {
     # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
-    # plot <- plot %>%
+    # plot <- plot |>
     #   plotly::add_ribbons(
     #     data = range_data,
     #     x = ~datetime,
@@ -1074,7 +1074,7 @@ plotTimeseries <- function(
     #       as.Date(datetime),
     #       ")"
     #     )
-    #   ) %>%
+    #   ) |>
     #   plotly::add_ribbons(
     #     data = range_data,
     #     x = ~datetime,
@@ -1096,7 +1096,7 @@ plotTimeseries <- function(
     #     )
     #   )
     for (rd in range_runs) {
-      plot <- plot %>%
+      plot <- plot |>
         plotly::add_ribbons(
           data = rd,
           x = ~datetime,
@@ -1116,7 +1116,7 @@ plotTimeseries <- function(
             ")"
           ),
           showlegend = FALSE
-        ) %>%
+        ) |>
         plotly::add_ribbons(
           data = rd,
           x = ~datetime,
@@ -1141,7 +1141,7 @@ plotTimeseries <- function(
     # Add *visible* dummy legend keys (one point is enough)
     key_rd <- range_runs[[1]][1]
 
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_ribbons(
         data = key_rd,
         x = ~datetime,
@@ -1152,7 +1152,7 @@ plotTimeseries <- function(
         line = list(width = 0.2),
         hoverinfo = "none",
         showlegend = TRUE
-      ) %>%
+      ) |>
       plotly::add_ribbons(
         data = key_rd,
         x = ~datetime,
@@ -1187,7 +1187,7 @@ plotTimeseries <- function(
     }
 
     # Add the raw data first so it's below the corrected data
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data,
         x = ~datetime,
@@ -1211,7 +1211,7 @@ plotTimeseries <- function(
 
   # Add the corrected data trace
   if (imputed) {
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data[trace_data$imputed == FALSE, ],
         x = ~datetime,
@@ -1231,7 +1231,7 @@ plotTimeseries <- function(
           ")"
         )
       )
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data[trace_data$imputed == TRUE, ],
         x = ~datetime,
@@ -1260,7 +1260,7 @@ plotTimeseries <- function(
         )
       )
   } else {
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data,
         x = ~datetime,
@@ -1387,7 +1387,7 @@ plotTimeseries <- function(
 
     if (length(poly_list) > 0) {
       polygons_df <- data.table::rbindlist(poly_list, use.names = TRUE)
-      bands_subplot <- bands_subplot %>%
+      bands_subplot <- bands_subplot |>
         plotly::add_polygons(
           data = polygons_df,
           x = ~datetime,
@@ -1458,7 +1458,7 @@ plotTimeseries <- function(
       )
     }
 
-    bands_subplot <- bands_subplot %>%
+    bands_subplot <- bands_subplot |>
       plotly::layout(
         yaxis = list(
           showticklabels = FALSE,
@@ -1486,7 +1486,7 @@ plotTimeseries <- function(
     )
   }
 
-  plot <- plot %>%
+  plot <- plot |>
     plotly::layout(
       title = if (title) {
         list(
@@ -1539,7 +1539,7 @@ plotTimeseries <- function(
         orientation = legend_position
       ),
       font = list(family = "Nunito Sans")
-    ) %>%
+    ) |>
     plotly::config(locale = lang)
 
   # Return the plot and data if requested ##########################

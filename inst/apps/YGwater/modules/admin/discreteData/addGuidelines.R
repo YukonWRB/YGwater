@@ -82,13 +82,37 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
         bg = config$sidebar_bg,
         open = list(mobile = "always-above"),
 
-        textInput(ns("guideline_name"), "Guideline Name", width = "100%"),
-        textInput(
+        selectizeInput(
           ns("publisher"),
           "Publisher",
-          placeholder = "CA-CCME, US-EPA, BC-MOE, etc.",
-          width = "100%"
-        ),
+          choices = NULL,
+          width = "100%",
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            create = TRUE,
+            placeholder = "Select publisher or type to add new"
+          )
+        ) |>
+          tooltip(
+            "Select the publisher of the guideline, i.e. CCME or EPA. You can create new publishers by typing a name and pressing enter."
+          ),
+        selectizeInput(
+          ns("series"),
+          "Guideline series",
+          choices = NULL,
+          width = "100%",
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = "Optional - type to add new",
+            create = TRUE
+          )
+        ) |>
+          tooltip(
+            "If the guideline is part of a series of related guidelines (i.e. CCME Water Quality Guidelines for the Protection of Aquatic Life), select the series here. You can create new series by typing a name and pressing enter."
+          ),
+        textInput(ns("guideline_name"), "Guideline Name", width = "100%"),
         textInput(
           ns("reference"),
           "Reference",
@@ -112,14 +136,29 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
         ),
         selectizeInput(
           ns("sample_fraction"),
-          "Sample Fraction",
+          "Guideline Fractions",
           choices = NULL,
           width = "100%",
           multiple = TRUE,
-          options = list(maxItems = 1)
+          options = list(
+            placeholder = "Optional - select one or more fractions"
+          )
         ) |>
           tooltip(
-            "Required for most parameters. If visible after selecting a parameter, it's required."
+            "Select one or more fractions that this guideline applies to (e.g., dissolved, total)."
+          ),
+        selectizeInput(
+          ns("media_type"),
+          "Guideline Media Types",
+          choices = NULL,
+          width = "100%",
+          multiple = TRUE,
+          options = list(
+            placeholder = "Optional - select one or more media types"
+          )
+        ) |>
+          tooltip(
+            "Select one or more media types that this guideline applies to (e.g., freshwater, saltwater)."
           ),
         selectizeInput(
           ns("result_speciation"),
@@ -249,6 +288,75 @@ addGuidelines <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
+    ensure_character <- function(x) {
+      if (is.null(x)) {
+        character(0)
+      } else {
+        as.character(x)
+      }
+    }
+
+    parse_id_csv <- function(x) {
+      vals <- ensure_character(x)
+      vals <- vals[nzchar(vals)]
+      if (!length(vals)) {
+        return(integer(0))
+      }
+      parts <- trimws(unlist(strsplit(vals[1], ",")))
+      parts <- parts[nzchar(parts)]
+      out <- suppressWarnings(as.integer(parts))
+      unique(out[!is.na(out)])
+    }
+
+    load_guidelines <- function() {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT g.guideline_id, g.guideline_name, gp.publisher_name AS publisher, gs.series_name AS series, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, fr.fractions, mt.media_types, rs.result_speciation AS speciation, g.parameter_id, g.result_speciation_id, g.guideline_sql, g.publisher AS publisher_id, g.series AS series_id, fr.fraction_ids, mt.media_ids
+FROM discrete.guidelines AS g
+LEFT JOIN discrete.guideline_publishers gp ON gp.publisher_id = g.publisher
+LEFT JOIN discrete.guideline_series gs ON gs.series_id = g.series
+JOIN public.parameters AS p ON p.parameter_id = g.parameter_id
+LEFT JOIN discrete.result_speciations rs ON rs.result_speciation_id = g.result_speciation_id
+LEFT JOIN (
+  SELECT gf.guideline_id,
+         string_agg(sf.sample_fraction, ', ' ORDER BY sf.sample_fraction) AS fractions,
+         string_agg(gf.fraction_id::text, ',' ORDER BY gf.fraction_id::text) AS fraction_ids
+  FROM discrete.guidelines_fractions gf
+  JOIN discrete.sample_fractions sf ON sf.sample_fraction_id = gf.fraction_id
+  GROUP BY gf.guideline_id
+) fr ON fr.guideline_id = g.guideline_id
+LEFT JOIN (
+  SELECT gm.guideline_id,
+         string_agg(mt.media_type, ', ' ORDER BY mt.media_type) AS media_types,
+         string_agg(gm.media_id::text, ',' ORDER BY gm.media_id::text) AS media_ids
+  FROM discrete.guidelines_media_types gm
+  JOIN public.media_types mt ON mt.media_id = gm.media_id
+  GROUP BY gm.guideline_id
+) mt ON mt.guideline_id = g.guideline_id"
+      )
+    }
+
+    load_publishers <- function() {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT publisher_id, publisher_name, country, prov_terr_state FROM discrete.guideline_publishers ORDER BY publisher_name"
+      )
+    }
+
+    load_series <- function() {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT series_id, series_name, series_name_fr, publisher_id FROM discrete.guideline_series ORDER BY series_name"
+      )
+    }
+
+    load_media_types <- function() {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT media_id, media_type FROM public.media_types ORDER BY media_type"
+      )
+    }
+
     output$banner <- renderUI({
       req(language$language)
       application_notifications_ui(
@@ -260,10 +368,10 @@ addGuidelines <- function(id, language) {
     })
 
     moduleData <- reactiveValues(
-      guidelines = DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id"
-      ),
+      guidelines = load_guidelines(),
+      publishers = load_publishers(),
+      series = load_series(),
+      media_types = load_media_types(),
       parameters = DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT parameter_id, param_name, unit_default,result_speciation, sample_fraction FROM public.parameters ORDER BY param_name"
@@ -309,7 +417,7 @@ addGuidelines <- function(id, language) {
             ),
             columnDefs = list(
               list(
-                targets = c(0, 9:12), # guideline_id and SQL columns; index starts at 0
+                targets = c(0, 11:17), # guideline_id and id/sql columns; index starts at 0
                 visible = FALSE
               )
             ),
@@ -324,10 +432,20 @@ addGuidelines <- function(id, language) {
     observeEvent(
       list(
         moduleData$parameters,
+        moduleData$publishers,
+        moduleData$series,
+        moduleData$media_types,
         moduleData$sample_fractions,
         moduleData$result_speciations
       ),
       {
+        selected_parameter <- ensure_character(input$parameter_id)
+        selected_publisher <- ensure_character(input$publisher)
+        selected_series <- ensure_character(input$series)
+        selected_media <- ensure_character(input$media_type)
+        selected_fraction <- ensure_character(input$sample_fraction)
+        selected_speciation <- ensure_character(input$result_speciation)
+
         updateSelectizeInput(
           session,
           "parameter_id",
@@ -340,7 +458,34 @@ addGuidelines <- function(id, language) {
               ")"
             )
           ),
-          selected = NULL
+          selected = selected_parameter
+        )
+        updateSelectizeInput(
+          session,
+          "publisher",
+          choices = stats::setNames(
+            moduleData$publishers$publisher_id,
+            moduleData$publishers$publisher_name
+          ),
+          selected = selected_publisher
+        )
+        updateSelectizeInput(
+          session,
+          "series",
+          choices = stats::setNames(
+            moduleData$series$series_id,
+            moduleData$series$series_name
+          ),
+          selected = selected_series
+        )
+        updateSelectizeInput(
+          session,
+          "media_type",
+          choices = stats::setNames(
+            moduleData$media_types$media_id,
+            moduleData$media_types$media_type
+          ),
+          selected = selected_media
         )
         updateSelectizeInput(
           session,
@@ -349,7 +494,7 @@ addGuidelines <- function(id, language) {
             moduleData$sample_fractions$sample_fraction_id,
             moduleData$sample_fractions$sample_fraction
           ),
-          selected = NULL
+          selected = selected_fraction
         )
         updateSelectizeInput(
           session,
@@ -358,7 +503,7 @@ addGuidelines <- function(id, language) {
             moduleData$result_speciations$result_speciation_id,
             moduleData$result_speciations$result_speciation
           ),
-          selected = NULL
+          selected = selected_speciation
         )
       }
     )
@@ -375,13 +520,6 @@ addGuidelines <- function(id, language) {
         shinyjs::hide("result_speciation")
         updateSelectizeInput(session, "result_speciation", selected = NULL)
       }
-
-      if (param$sample_fraction) {
-        shinyjs::show("sample_fraction")
-      } else {
-        shinyjs::hide("sample_fraction")
-        updateSelectizeInput(session, "sample_fraction", selected = NULL)
-      }
     })
 
     # Show the user help file as a new html document:
@@ -394,25 +532,34 @@ addGuidelines <- function(id, language) {
     observeEvent(input$add_guideline, {
       new <- data.frame(
         guideline_id = -1, # Identifies the newly added row
-        guideline_name = "",
-        publisher = "",
-        reference = "",
-        note = "",
-        parameter = "",
-        units = "",
-        fraction = "",
-        speciation = "",
+        guideline_name = "<new guideline>",
+        publisher = "<select or create publisher>",
+        series = "<optional series>",
+        fractions = "<optional fractions>",
+        media_types = "<optional media>",
+        reference = NA_character_,
+        note = NA_character_,
+        parameter = NA_character_,
+        units = NA_character_,
+        speciation = NA_character_,
         parameter_id = NA,
-        sample_fraction_id = NA,
         result_speciation_id = NA,
-        guideline_sql = ""
+        guideline_sql = NA_character_,
+        publisher_id = NA,
+        series_id = NA,
+        fraction_ids = NA_character_,
+        media_ids = NA_character_
       )
       moduleData$guidelines <- rbind(moduleData$guidelines, new) # Appended here so that the data.table updates
       moduleData$guidelines_temp <- rbind(moduleData$guidelines_temp, new)
 
       # Select the new row in the data.table
-      DT::dataTableProxy(ns("guidelines_table")) |>
-        DT::selectRows(nrow(moduleData$guidelines))
+      new_row <- nrow(moduleData$guidelines)
+      rows_per_page <- 10
+      target_page <- ceiling(new_row / rows_per_page)
+      proxy <- DT::dataTableProxy("guidelines_table")
+      DT::selectPage(proxy, target_page)
+      DT::selectRows(proxy, new_row)
 
       # Show the user a modal telling them to edit their new guideline to the right
       showModal(modalDialog(
@@ -426,8 +573,21 @@ addGuidelines <- function(id, language) {
 
     # Respond to row selections in the datatable and update the left sidebar inputs accordingly
     observeEvent(input$guidelines_table_rows_selected, {
-      req(input$guidelines_table_rows_selected)
       selected_row <- input$guidelines_table_rows_selected
+      if (is.null(selected_row) || !length(selected_row)) {
+        updateTextInput(session, "guideline_name", value = "")
+        updateSelectizeInput(session, "publisher", selected = NULL)
+        updateSelectizeInput(session, "series", selected = NULL)
+        updateSelectizeInput(session, "sample_fraction", selected = NULL)
+        updateSelectizeInput(session, "media_type", selected = NULL)
+        updateTextInput(session, "reference", value = "")
+        updateTextAreaInput(session, "note", value = "")
+        updateSelectizeInput(session, "parameter_id", selected = NULL)
+        updateSelectizeInput(session, "result_speciation", selected = NULL)
+        updateTextAreaInput(session, "guideline_sql", value = "")
+        shinyjs::hide("save_guideline")
+        return()
+      }
       guideline <- moduleData$guidelines[selected_row, ]
 
       updateTextInput(
@@ -435,18 +595,32 @@ addGuidelines <- function(id, language) {
         "guideline_name",
         value = guideline$guideline_name
       )
-      updateTextInput(session, "publisher", value = guideline$publisher)
+      updateSelectizeInput(
+        session,
+        "publisher",
+        selected = guideline$publisher_id
+      )
+      updateSelectizeInput(
+        session,
+        "series",
+        selected = guideline$series_id
+      )
+      updateSelectizeInput(
+        session,
+        "sample_fraction",
+        selected = parse_id_csv(guideline$fraction_ids)
+      )
+      updateSelectizeInput(
+        session,
+        "media_type",
+        selected = parse_id_csv(guideline$media_ids)
+      )
       updateTextInput(session, "reference", value = guideline$reference)
       updateTextAreaInput(session, "note", value = guideline$note)
       updateSelectizeInput(
         session,
         "parameter_id",
         selected = guideline$parameter_id
-      )
-      updateSelectizeInput(
-        session,
-        "sample_fraction",
-        selected = guideline$sample_fraction_id
       )
       updateSelectizeInput(
         session,
@@ -460,7 +634,7 @@ addGuidelines <- function(id, language) {
       )
 
       shinyjs::show("save_guideline")
-    })
+    }, ignoreNULL = FALSE)
 
     # Observe changes in the input fields and update the reactiveValues data.frame accordingly
     observe({
@@ -474,12 +648,33 @@ addGuidelines <- function(id, language) {
       } else {
         input$guideline_name
       }
-      moduleData$guidelines_temp[selected_row, "publisher"] <- if (
-        nchar(input$publisher) == 0
+      moduleData$guidelines_temp[selected_row, "publisher_id"] <- if (
+        is.null(input$publisher)
       ) {
         NA
       } else {
-        input$publisher
+        as.integer(input$publisher)
+      }
+      moduleData$guidelines_temp[selected_row, "series_id"] <- if (
+        is.null(input$series)
+      ) {
+        NA
+      } else {
+        as.integer(input$series)
+      }
+      moduleData$guidelines_temp[selected_row, "fraction_ids"] <- if (
+        is.null(input$sample_fraction) || !length(input$sample_fraction)
+      ) {
+        NA_character_
+      } else {
+        paste(as.integer(input$sample_fraction), collapse = ",")
+      }
+      moduleData$guidelines_temp[selected_row, "media_ids"] <- if (
+        is.null(input$media_type) || !length(input$media_type)
+      ) {
+        NA_character_
+      } else {
+        paste(as.integer(input$media_type), collapse = ",")
       }
       moduleData$guidelines_temp[selected_row, "reference"] <- if (
         nchar(input$reference) == 0
@@ -495,20 +690,7 @@ addGuidelines <- function(id, language) {
       } else {
         input$note
       }
-      moduleData$guidelines_temp[selected_row, "parameter_id"] <- if (
-        is.null(input$parameter_id)
-      ) {
-        NA
-      } else {
-        as.integer(input$parameter_id)
-      }
-      moduleData$guidelines_temp[selected_row, "sample_fraction_id"] <- if (
-        is.null(input$sample_fraction)
-      ) {
-        NA
-      } else {
-        as.integer(input$sample_fraction)
-      }
+      moduleData$guidelines_temp[selected_row, "parameter_id"] <- if (is.null(input$parameter_id)) NA else as.integer(input$parameter_id)
       moduleData$guidelines_temp[selected_row, "result_speciation_id"] <- if (
         is.null(input$result_speciation)
       ) {
@@ -523,7 +705,321 @@ addGuidelines <- function(id, language) {
       } else {
         input$guideline_sql
       }
+
+      # Keep display column in sync for datatable
+      moduleData$guidelines_temp[selected_row, "publisher"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "publisher_id"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "publisher_id"])
+      ) {
+        NA_character_
+      } else {
+        pid <- moduleData$guidelines_temp[selected_row, "publisher_id"]
+        moduleData$publishers$publisher_name[
+          match(pid, moduleData$publishers$publisher_id)
+        ]
+      }
+      moduleData$guidelines_temp[selected_row, "series"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "series_id"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "series_id"])
+      ) {
+        NA_character_
+      } else {
+        sid <- moduleData$guidelines_temp[selected_row, "series_id"]
+        moduleData$series$series_name[
+          match(sid, moduleData$series$series_id)
+        ]
+      }
+      moduleData$guidelines_temp[selected_row, "fractions"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "fraction_ids"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "fraction_ids"]) ||
+          moduleData$guidelines_temp[selected_row, "fraction_ids"] == ""
+      ) {
+        NA_character_
+      } else {
+        fids <- parse_id_csv(moduleData$guidelines_temp[selected_row, "fraction_ids"])
+        paste(
+          moduleData$sample_fractions$sample_fraction[
+            match(fids, moduleData$sample_fractions$sample_fraction_id)
+          ],
+          collapse = ", "
+        )
+      }
+      moduleData$guidelines_temp[selected_row, "media_types"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "media_ids"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "media_ids"]) ||
+          moduleData$guidelines_temp[selected_row, "media_ids"] == ""
+      ) {
+        NA_character_
+      } else {
+        mids <- parse_id_csv(moduleData$guidelines_temp[selected_row, "media_ids"])
+        paste(
+          moduleData$media_types$media_type[
+            match(mids, moduleData$media_types$media_id)
+          ],
+          collapse = ", "
+        )
+      }
     })
+
+    pending_publisher_selection <- reactiveVal(character(0))
+    pending_publisher_new <- reactiveVal(NULL)
+
+    # Allow creating new guideline publishers directly from selectize
+    observeEvent(
+      input$publisher,
+      {
+        vals <- ensure_character(input$publisher)
+        pending_publisher_selection(vals)
+
+        existing_ids <- ensure_character(moduleData$publishers$publisher_id)
+        new_vals <- setdiff(vals, existing_ids)
+        new_vals <- new_vals[nzchar(new_vals)]
+
+        if (!length(new_vals)) {
+          pending_publisher_new(NULL)
+          return()
+        }
+
+        new_val <- trimws(new_vals[length(new_vals)])
+        if (!nzchar(new_val)) {
+          pending_publisher_new(NULL)
+          return()
+        }
+
+        existing_match <- moduleData$publishers$publisher_id[
+          tolower(moduleData$publishers$publisher_name) == tolower(new_val)
+        ]
+        if (length(existing_match)) {
+          updateSelectizeInput(
+            session,
+            "publisher",
+            selected = as.character(existing_match[1])
+          )
+          pending_publisher_selection(as.character(existing_match[1]))
+          pending_publisher_new(NULL)
+          return()
+        }
+
+        pending_publisher_new(new_val)
+
+        showModal(modalDialog(
+          title = "Add new publisher",
+          textInput(
+            ns("publisher_name"),
+            "Publisher name",
+            value = new_val
+          ),
+          textInput(
+            ns("publisher_country"),
+            "Country (optional)"
+          ),
+          textInput(
+            ns("publisher_prov_terr_state"),
+            "Province/Territory/State (optional)"
+          ),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("add_publisher"),
+              "Add publisher",
+              class = "btn-primary"
+            )
+          )
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$add_publisher,
+      {
+        if (!isTruthy(input$publisher_name)) {
+          shinyjs::js$backgroundCol(ns("publisher_name"), "#fdd")
+          return()
+        }
+
+        p_name <- trimws(input$publisher_name)
+        p_country <- trimws(input$publisher_country)
+        p_state <- trimws(input$publisher_prov_terr_state)
+
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO discrete.guideline_publishers (publisher_name, country, prov_terr_state) VALUES ($1, $2, $3) ON CONFLICT (publisher_name) DO NOTHING",
+          params = list(
+            p_name,
+            if (nzchar(p_country)) p_country else NA_character_,
+            if (nzchar(p_state)) p_state else NA_character_
+          )
+        )
+
+        moduleData$publishers <- load_publishers()
+        new_id <- moduleData$publishers$publisher_id[
+          moduleData$publishers$publisher_name == p_name
+        ]
+        if (!length(new_id)) {
+          new_id <- moduleData$publishers$publisher_id[
+            tolower(moduleData$publishers$publisher_name) == tolower(p_name)
+          ]
+        }
+        selected_values <- ensure_character(new_id[1])
+
+        updateSelectizeInput(
+          session,
+          "publisher",
+          choices = stats::setNames(
+            moduleData$publishers$publisher_id,
+            moduleData$publishers$publisher_name
+          ),
+          selected = selected_values
+        )
+
+        pending_publisher_selection(selected_values)
+        pending_publisher_new(NULL)
+        removeModal()
+        showModal(modalDialog(
+          "New publisher added.",
+          easyClose = TRUE,
+          footer = tagList(modalButton("Close"))
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    pending_series_selection <- reactiveVal(character(0))
+    pending_series_new <- reactiveVal(NULL)
+
+    # Allow creating new guideline series directly from selectize
+    observeEvent(
+      input$series,
+      {
+        vals <- ensure_character(input$series)
+        pending_series_selection(vals)
+
+        existing_ids <- ensure_character(moduleData$series$series_id)
+        new_vals <- setdiff(vals, existing_ids)
+        new_vals <- new_vals[nzchar(new_vals)]
+
+        if (!length(new_vals)) {
+          pending_series_new(NULL)
+          return()
+        }
+
+        new_val <- trimws(new_vals[length(new_vals)])
+        if (!nzchar(new_val)) {
+          pending_series_new(NULL)
+          return()
+        }
+
+        existing_match <- moduleData$series$series_id[
+          tolower(moduleData$series$series_name) == tolower(new_val)
+        ]
+        if (length(existing_match)) {
+          updateSelectizeInput(
+            session,
+            "series",
+            selected = as.character(existing_match[1])
+          )
+          pending_series_selection(as.character(existing_match[1]))
+          pending_series_new(NULL)
+          return()
+        }
+
+        preselected_publisher <- ensure_character(input$publisher)
+        pending_series_new(new_val)
+
+        showModal(modalDialog(
+          title = "Add new guideline series",
+          textInput(
+            ns("series_name"),
+            "Series name",
+            value = new_val
+          ),
+          textInput(
+            ns("series_name_fr"),
+            "Series name (French, optional)"
+          ),
+          selectizeInput(
+            ns("series_publisher_id"),
+            "Publisher",
+            choices = stats::setNames(
+              moduleData$publishers$publisher_id,
+              moduleData$publishers$publisher_name
+            ),
+            selected = if (length(preselected_publisher)) preselected_publisher else NULL,
+            multiple = TRUE,
+            options = list(maxItems = 1)
+          ),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(ns("add_series"), "Add series", class = "btn-primary")
+          )
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$add_series,
+      {
+        if (!isTruthy(input$series_name)) {
+          shinyjs::js$backgroundCol(ns("series_name"), "#fdd")
+          return()
+        }
+        if (!isTruthy(input$series_publisher_id)) {
+          shinyjs::js$backgroundCol(ns("series_publisher_id"), "#fdd")
+          return()
+        }
+
+        s_name <- trimws(input$series_name)
+        s_name_fr <- trimws(input$series_name_fr)
+        s_pub <- as.integer(input$series_publisher_id)
+
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO discrete.guideline_series (series_name, series_name_fr, publisher_id) VALUES ($1, $2, $3) ON CONFLICT (series_name) DO NOTHING",
+          params = list(
+            s_name,
+            if (nzchar(s_name_fr)) s_name_fr else NA_character_,
+            s_pub
+          )
+        )
+
+        moduleData$series <- load_series()
+        new_id <- moduleData$series$series_id[
+          moduleData$series$series_name == s_name
+        ]
+        if (!length(new_id)) {
+          new_id <- moduleData$series$series_id[
+            tolower(moduleData$series$series_name) == tolower(s_name)
+          ]
+        }
+        selected_values <- ensure_character(new_id[1])
+
+        updateSelectizeInput(
+          session,
+          "series",
+          choices = stats::setNames(
+            moduleData$series$series_id,
+            moduleData$series$series_name
+          ),
+          selected = selected_values
+        )
+
+        pending_series_selection(selected_values)
+        pending_series_new(NULL)
+        removeModal()
+        showModal(modalDialog(
+          "New guideline series added.",
+          easyClose = TRUE,
+          footer = tagList(modalButton("Close"))
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     # ObserveEvents for when the user inserts parameter_id = X or other via modals.
     # helper to show a modal with selectize and a confirm button
@@ -908,28 +1404,7 @@ FROM vals -- from the 'vals' CTE"
     observeEvent(input$test_guideline, {
       req(nzchar(input$guideline_sql))
 
-      # Make sure the user has saved their guideline first if there's anything pending
-      if (!is.null(input$guidelines_table_rows_selected)) {
-        selected_row <- input$guidelines_table_rows_selected
-        # Check to see if guideline_id is -1 (new guideline not yet saved) or if the selected row isn't an exact match between moduleData$guidelines and moduleData$guidelines_temp
-        if (
-          moduleData$guidelines$guideline_id[selected_row] == -1 ||
-            !identical(
-              moduleData$guidelines[selected_row, ],
-              moduleData$guidelines_temp[selected_row, ]
-            )
-        ) {
-          showModal(modalDialog(
-            title = "Save guideline first",
-            "Please save your guideline first before testing it. Click 'Save Guideline' in the sidebar after making any changes or entering a new guideline, then try testing again.",
-            easyClose = TRUE,
-            footer = tagList(
-              modalButton("Close")
-            )
-          ))
-          return()
-        }
-      } else {
+      if (is.null(input$guidelines_table_rows_selected)) {
         showModal(modalDialog(
           title = "Select or add a guideline first",
           "Please select an existing guideline from the table or add a new one (and make sure it's selected in the table) before testing.",
@@ -977,6 +1452,7 @@ FROM vals -- from the 'vals' CTE"
     observeEvent(input$run_test_guideline, {
       result <- NULL
       err <- NULL
+      sample_id <- NULL
 
       req_df <- isolate(moduleData$requirements_df)
       # collect supplied values
@@ -1017,56 +1493,58 @@ FROM vals -- from the 'vals' CTE"
       # run in a transaction and ROLLBACK
       tryCatch(
         {
-          gid <- moduleData$guidelines$guideline_id[
-            input$guidelines_table_rows_selected
-          ]
           DBI::dbExecute(session$userData$AquaCache, "BEGIN;")
-          if (nrow(req_df) == 0) {
-            # No parameters required, just run the SQL directly
-            gid <- moduleData$guidelines$guideline_id[
-              input$guidelines_table_rows_selected
-            ]
+          uses_sample_id <- grepl("\\$1\\b", input$guideline_sql)
 
-            result <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "SELECT discrete.get_guideline_value($1, NULL) AS value",
-              params = list(gid)
-            )[1, 1]
-          } else {
-            # Create a throwaway sample
+          # Only create a temporary sample when needed
+          if (uses_sample_id || nrow(req_df) > 0) {
             sample_id <- DBI::dbGetQuery(
               session$userData$AquaCache,
               "
-        INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner)
-        VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2)
-        RETURNING sample_id
-      "
+          INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner)
+          VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2)
+          RETURNING sample_id
+        "
             )$sample_id
+          }
 
-            # Insert supplied results
-            for (i in 1:nrow(req_df)) {
-              if (is.na(req_df$values[i])) {
-                next
-              }
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "INSERT INTO discrete.results
+          # Insert supplied results
+          for (i in 1:nrow(req_df)) {
+            if (is.na(req_df$values[i])) {
+              next
+            }
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "INSERT INTO discrete.results
              (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result)
              VALUES ($1,$2,$3,$4,$5,$6)",
-                params = list(
-                  sample_id,
-                  2,
-                  req_df$parameter_id[i],
-                  req_df$sample_fraction_id[i],
-                  req_df$result_speciation_id[i],
-                  req_df$values[i]
-                )
+              params = list(
+                sample_id,
+                2,
+                req_df$parameter_id[i],
+                req_df$sample_fraction_id[i],
+                req_df$result_speciation_id[i],
+                req_df$values[i]
               )
-            }
+            )
+          }
+
+          # Evaluate current SQL from the editor directly so testing works before save
+          test_sql <- paste0(
+            "WITH q AS (",
+            input$guideline_sql,
+            ") SELECT (SELECT * FROM q)::numeric AS value"
+          )
+          if (uses_sample_id) {
             result <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              "SELECT discrete.get_guideline_value($1, $2) AS value",
-              params = list(gid, sample_id)
+              test_sql,
+              params = list(sample_id)
+            )[1, 1]
+          } else {
+            result <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              test_sql
             )[1, 1]
           }
 
@@ -1118,7 +1596,7 @@ FROM vals -- from the 'vals' CTE"
       if (
         is.na(guideline$guideline_name) ||
           is.na(guideline$parameter_id) ||
-          is.na(guideline$publisher) ||
+          is.na(guideline$publisher_id) ||
           is.na(guideline$guideline_sql)
       ) {
         showModal(modalDialog(
@@ -1132,17 +1610,27 @@ FROM vals -- from the 'vals' CTE"
         return()
       }
 
+      # Match DB-side trigger rules with clearer UI feedback
+      param_row <- moduleData$parameters[
+        moduleData$parameters$parameter_id == guideline$parameter_id,
+      ]
+      if (nrow(param_row) == 1) {
+        if (
+          isTRUE(param_row$result_speciation) &&
+            is.na(guideline$result_speciation_id)
+        ) {
+          showModal(modalDialog(
+            title = "Error",
+            "This parameter requires a Result Speciation. Please select one before saving.",
+            easyClose = TRUE,
+            footer = tagList(modalButton("Close"))
+          ))
+          return()
+        }
+      }
+
       tryCatch(
         {
-          sf <- if (
-            is.null(guideline$sample_fraction_id) ||
-              is.na(guideline$sample_fraction_id) ||
-              guideline$sample_fraction_id == ""
-          ) {
-            NA_integer_
-          } else {
-            as.integer(guideline$sample_fraction_id)
-          }
           rs <- if (
             is.null(guideline$result_speciation_id) ||
               is.na(guideline$result_speciation_id) ||
@@ -1161,35 +1649,38 @@ FROM vals -- from the 'vals' CTE"
           } else {
             guideline$reference
           }
+          fraction_ids <- parse_id_csv(guideline$fraction_ids)
+          media_ids <- parse_id_csv(guideline$media_ids)
+          guideline_id <- guideline$guideline_id
 
           if (guideline$guideline_id == -1) {
             # New guideline - perform INSERT
-            DBI::dbExecute(
+            guideline_id <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              "INSERT INTO discrete.guidelines (guideline_name, publisher, reference, note, parameter_id, sample_fraction_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+              "INSERT INTO discrete.guidelines (guideline_name, publisher, series, reference, note, parameter_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING guideline_id",
               params = list(
                 guideline$guideline_name,
-                guideline$publisher,
+                guideline$publisher_id,
+                guideline$series_id,
                 ref,
                 guideline$note,
                 guideline$parameter_id,
-                sf,
                 rs,
                 guideline$guideline_sql
               )
-            )
+            )$guideline_id[1]
           } else {
             # Existing guideline - perform UPDATE
             DBI::dbExecute(
               session$userData$AquaCache,
-              "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, reference = $3, note = $4, parameter_id = $5, sample_fraction_id = $6, result_speciation_id = $7, guideline_sql = $8 WHERE guideline_id = $9",
+              "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, series = $3, reference = $4, note = $5, parameter_id = $6, result_speciation_id = $7, guideline_sql = $8 WHERE guideline_id = $9",
               params = list(
                 guideline$guideline_name,
-                guideline$publisher,
+                guideline$publisher_id,
+                guideline$series_id,
                 ref,
                 guideline$note,
                 guideline$parameter_id,
-                sf,
                 rs,
                 guideline$guideline_sql,
                 guideline$guideline_id
@@ -1197,11 +1688,40 @@ FROM vals -- from the 'vals' CTE"
             )
           }
 
-          # Refresh the guidelines data from the database
-          moduleData$guidelines <- DBI::dbGetQuery(
+          # Update many-to-many links for guideline fractions
+          DBI::dbExecute(
             session$userData$AquaCache,
-            "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id"
+            "DELETE FROM discrete.guidelines_fractions WHERE guideline_id = $1",
+            params = list(guideline_id)
           )
+          if (length(fraction_ids)) {
+            for (i in seq_along(fraction_ids)) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "INSERT INTO discrete.guidelines_fractions (guideline_id, fraction_id) VALUES ($1, $2)",
+                params = list(guideline_id, fraction_ids[i])
+              )
+            }
+          }
+
+          # Update many-to-many links for guideline media types
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "DELETE FROM discrete.guidelines_media_types WHERE guideline_id = $1",
+            params = list(guideline_id)
+          )
+          if (length(media_ids)) {
+            for (i in seq_along(media_ids)) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "INSERT INTO discrete.guidelines_media_types (guideline_id, media_id) VALUES ($1, $2)",
+                params = list(guideline_id, media_ids[i])
+              )
+            }
+          }
+
+          # Refresh the guidelines data from the database
+          moduleData$guidelines <- load_guidelines()
           moduleData$guidelines_temp <- moduleData$guidelines
 
           showModal(modalDialog(
@@ -1265,20 +1785,19 @@ FROM vals -- from the 'vals' CTE"
           }
 
           # Refresh the data, which will re-render the datatable without the deleted row
-          moduleData$guidelines <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            "SELECT g.guideline_id, g.guideline_name, g.publisher, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, sf.sample_fraction AS fraction, rs.result_speciation AS speciation, g.parameter_id, g.sample_fraction_id, g.result_speciation_id, g.guideline_sql FROM discrete.guidelines as g LEFT JOIN sample_fractions sf ON sf.sample_fraction_id = g.sample_fraction_id JOIN public.parameters as p ON p.parameter_id = g.parameter_id LEFT JOIN result_speciations rs ON rs.result_speciation_id = g.result_speciation_id"
-          )
+          moduleData$guidelines <- load_guidelines()
           moduleData$guidelines_temp <- moduleData$guidelines
 
           # Clear table selection and hide save button
-          DT::dataTableProxy(ns("guidelines_table")) |>
+          DT::dataTableProxy("guidelines_table") |>
             DT::selectRows(NULL)
           shinyjs::hide("save_guideline")
 
           # Reset inputs
           updateTextInput(session, "guideline_name", value = "")
-          updateTextInput(session, "publisher", value = "")
+          updateSelectizeInput(session, "publisher", selected = NULL)
+          updateSelectizeInput(session, "series", selected = NULL)
+          updateSelectizeInput(session, "media_type", selected = NULL)
           updateTextInput(session, "reference", value = "")
           updateTextAreaInput(session, "note", value = "")
           updateSelectizeInput(session, "parameter_id", selected = NULL)

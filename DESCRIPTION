@@ -1,6 +1,6 @@
 Package: YGwater
 Title: R functions and applications for the Yukon Water Science and Stewardship Branch
-Version: 1.8.9
+Version: 1.8.10
 Authors@R: c(
     person("Ghislain", "de Laplante", email = "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -36,6 +36,7 @@ Imports:
     lubridate,
     magrittr,
     openxlsx,
+    readxl,
     plotly,
     remotes,
     rlang,
@@ -57,7 +58,6 @@ Suggests:
     bslib,
     bsicons,
     cachem,
-    callthat,
     curl,
     DT,
     exifr,
@@ -100,7 +100,6 @@ Suggests:
 Remotes:
     github::ropensci/weathercan,
     github::YukonWRB/AquaCache,
-    github::edgararuiz/callthat
 Config/testthat/edition: 3
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

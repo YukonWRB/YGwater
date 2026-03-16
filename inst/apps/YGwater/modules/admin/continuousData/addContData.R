@@ -679,11 +679,12 @@ addContData <- function(id, language) {
 
       ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
-        return(openxlsx::read.xlsx(
-          input$file$datapath,
-          sheet = 1,
-          startRow = starting_row
-        ))
+
+        out <- readxl::read_xlsx(input$file$datapath, sheet = 1,
+                          skip = starting_row - 1) |> 
+          as.data.frame() 
+        
+        return(out)
       } else if (ext == "csv") {
         # .csv files more complex due to ungraceful handling of non-equal
         #  number of columns and column names by read.table
@@ -752,7 +753,7 @@ addContData <- function(id, language) {
       ) {
         df_mapped$grade <- upload_raw()[[input$upload_grade_col]]
       } else {
-        df_mapped$grade <- character()
+        df_mapped$grade <- NULL
       }
       if (
         isTruthy(input$upload_approval_col) &&
@@ -760,7 +761,7 @@ addContData <- function(id, language) {
       ) {
         df_mapped$approval <- upload_raw()[[input$upload_approval_col]]
       } else {
-        df_mapped$approval <- character()
+        df_mapped$approval <- NULL
       }
       if (
         isTruthy(input$upload_qualifier_col) &&
@@ -768,7 +769,7 @@ addContData <- function(id, language) {
       ) {
         df_mapped$qualifier <- upload_raw()[[input$upload_qualifier_col]]
       } else {
-        df_mapped$qualifier <- character()
+        df_mapped$qualifier <- NULL
       }
 
       df_mapped
@@ -936,7 +937,13 @@ addContData <- function(id, language) {
 
     prepare_table_data <- function(df) {
       df <- df[, c("datetime", "value")]
-      df$datetime <- as.character(df$datetime)
+      
+      df$datetime <- if(inherits(df$datetime, "POSIXct")){
+        format(df$datetime, "%Y-%m-%d %H:%M:%S")
+      } else {
+        as.character(df$datetime)
+      }
+      
       df$value <- suppressWarnings(as.numeric(df$value))
       df
     }
@@ -1560,7 +1567,7 @@ addContData <- function(id, language) {
     })
 
     observeEvent(
-      list(input$delete_rows_table, input$data_table_rows_selected),
+      list(input$delete_rows_table, input$delete_rows_accordion),
       {
         req(input$data_table_rows_selected)
         data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
