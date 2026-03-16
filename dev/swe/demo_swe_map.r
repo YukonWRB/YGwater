@@ -8,21 +8,12 @@ con <- YGwater::AquaConnect(
     password = Sys.getenv("aquacacheAdminPass"),
 )
 
-# ggplotOverlap(
-#     location = "",
-#     continuous_data = timeseries,
-#     parameter = "swe",
-#     snowbulletin = TRUE,
-#     start_year_historical = 2010,
-#     end_year_historical = 2020
-# )
-
 load_all()
 dat <- load_bulletin_timeseries(
     con = con,
-    load_swe = TRUE,
+    load_swe = FALSE,
     load_temp = FALSE,
-    load_precip = FALSE,
+    load_precip = TRUE,
     load_streamflow = FALSE,
     start_year_historical = 1991,
     end_year_historical = 2020,
@@ -36,7 +27,7 @@ make_snowbull_map(
     statistic = "relative_to_med",
     language = "English",
     format = "ggplot",
-    param_name = "snow water equivalent",
+    param_name = "precipitation, total",
     snowbull_timeseries = dat,
     con = con,
     filename = "map.png",
@@ -44,13 +35,24 @@ make_snowbull_map(
     end_year_historical = 2020
 )
 
+
+load_all()
 snowBulletin(
     year = 2026,
     month = 3,
     save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
     con = con,
-    language = "english",
+    language = "french",
 )
+
+# ggplotOverlap(
+#     location = "",
+#     continuous_data = timeseries,
+#     parameter = "swe",
+#     snowbulletin = TRUE,
+#     start_year_historical = 2010,
+#     end_year_historical = 2020
+# )
 
 bulletin_month <- 3
 bulletin_year <- 2026
@@ -70,6 +72,13 @@ param_name <- "snow water equivalent"
 
 epsg <- "EPSG:3005"
 
+
+plot(dat$swe$surveys$timeseries$data$datetime, )
+
+
+length(unique(year(dat$swe$surveys$timeseries$data$datetime[
+    !is.na(dat$swe$surveys$timeseries$data[, '45'])
+])))
 
 plot(dat$fdd$timeseries$data[, 'datetime'], dat$fdd$timeseries$data[, '489'])
 
