@@ -1417,7 +1417,7 @@ table.on("click", "tr", function() {
         }
         DBI::dbExecute(
           session$userData$AquaCache,
-          "INSERT INTO sensor_types (sensor_type) VALUES ($1, $2)",
+          "INSERT INTO sensor_types (sensor_type, sensor_type_description) VALUES ($1, $2)",
           params = list(
             input$new_sensor_type,
             if (input$new_sensor_desc == "") NA else input$new_sensor_desc
@@ -1543,16 +1543,71 @@ table.on("click", "tr", function() {
       ignoreInit = TRUE
     )
 
+    empty_restarted_cal_table <- function() {
+      data.frame(
+        "Saved calibrations (recovered session)" = "",
+        check.names = FALSE
+      )
+    }
+    remove_calibration_entry <- function(tbl, label) {
+      if (is.null(tbl) || nrow(tbl) == 0) {
+        return(tbl)
+      }
+      tbl[tbl[, 1] != label, , drop = FALSE]
+    }
+    latest_sensor_event_matches <- function(
+      obs_datetimes,
+      reference_datetime,
+      tolerance_secs = 5
+    ) {
+      if (length(obs_datetimes) == 0 || all(is.na(obs_datetimes))) {
+        return(FALSE)
+      }
+      latest_obs_datetime <- max(obs_datetimes, na.rm = TRUE)
+      abs(
+        as.numeric(
+          difftime(latest_obs_datetime, reference_datetime, units = "secs")
+        )
+      ) <= tolerance_secs
+    }
+    current_temp_reference <- function() {
+      if (
+        !is.null(calibration_data$temp) &&
+          nrow(calibration_data$temp) > 0 &&
+          !is.na(calibration_data$temp$temp_reference[1])
+      ) {
+        return(calibration_data$temp$temp_reference[1])
+      }
+      input$temp_reference
+    }
+    convert_to_spc <- function(value) {
+      temp_reference <- current_temp_reference()
+      if (length(temp_reference) == 0 || is.na(temp_reference)) {
+        stop(
+          "Temperature calibration must be saved first when entering non-specific conductivity."
+        )
+      }
+      value / (1 + 0.02 * (temp_reference - 25))
+    }
+    sql_string_or_null <- function(value) {
+      if (length(value) == 0 || all(is.na(value))) {
+        return("NULL")
+      }
+      as.character(
+        DBI::dbQuoteString(
+          session$userData$AquaCache,
+          as.character(value[1])
+        )
+      )
+    }
+
     # Render messages and notes, show/hide messages based on selection ################################################
     # Initiate data.frame to populate with saved calibrations later
     send_table$saved <- data.frame(
       "Saved calibrations" = "Nothing saved yet",
       check.names = FALSE
     ) #Title is modified later for clarity if user want to restart a cal
-    send_table$restarted_cal <- data.frame(
-      "Saved calibrations (recovered session)" = "",
-      check.names = FALSE
-    )
+    send_table$restarted_cal <- empty_restarted_cal_table()
     # Initiate data.frame for instrument details when maintaining
     sensors_data$instrument_table <- data.frame(
       "Select an instrument first" = NA,
@@ -1741,6 +1796,7 @@ table.on("click", "tr", function() {
         label = "Sensor Temp",
         value = NA
       )
+      calibration_data$temp <- NULL
       shinyjs::hide("delete_temp")
     }
     reset_orp <- function() {
@@ -1765,6 +1821,7 @@ table.on("click", "tr", function() {
       shinyjs::hide("delete_orp")
     }
     reset_spc <- function() {
+      updateCheckboxInput(session, "spc_or_not", value = FALSE)
       updateNumericInput(
         session,
         "spc1_std",
@@ -1840,6 +1897,7 @@ table.on("click", "tr", function() {
         label = "High Turb Post-cal Value",
         value = "124"
       )
+      calibration_data$turb <- NULL
       shinyjs::hide("delete_turb")
     }
     reset_do <- function() {
@@ -3157,16 +3215,10 @@ table.on("click", "tr", function() {
         if (length(sensors_data$instrument$obs_datetime) == 0) {
           sensors_data$datetime_exists <- FALSE
         } else {
-          sensors_data$datetime_exists <- if (
-            max(sensors_data$instrument$obs_datetime) >
-              (sensors_data$datetime - 5) |
-              max(sensors_data$instrument$obs_datetime) >
-                (sensors_data$datetime + 5)
-          ) {
-            TRUE
-          } else {
-            FALSE
-          }
+          sensors_data$datetime_exists <- latest_sensor_event_matches(
+            sensors_data$instrument$obs_datetime,
+            sensors_data$datetime
+          )
         }
 
         sensor_id <- sensors_data$sensors[
@@ -3321,16 +3373,10 @@ table.on("click", "tr", function() {
         sort = FALSE
       )
 
-      sensors_data$datetime_exists <- if (
-        max(sensors_data$instrument$obs_datetime) >
-          (sensors_data$datetime - 5) |
-          max(sensors_data$instrument$obs_datetime) >
-            (sensors_data$datetime + 5)
-      ) {
-        TRUE
-      } else {
-        FALSE
-      }
+      sensors_data$datetime_exists <- latest_sensor_event_matches(
+        sensors_data$instrument$obs_datetime,
+        sensors_data$datetime
+      )
 
       df <- data.frame(
         "Date/time" = substr(sub$obs_datetime, 1, 16),
@@ -3524,16 +3570,10 @@ table.on("click", "tr", function() {
         } else {
           #add the data to the array_maintenance_changes table
           # Check if the datetime exists in the instrument table, which means we're editing an entry from this same session
-          sensors_data$datetime_exists <- if (
-            max(sensors_data$instrument$obs_datetime) >
-              (sensors_data$datetime - 5) |
-              max(sensors_data$instrument$obs_datetime) >
-                (sensors_data$datetime + 5)
-          ) {
-            TRUE
-          } else {
-            FALSE
-          }
+          sensors_data$datetime_exists <- latest_sensor_event_matches(
+            sensors_data$instrument$obs_datetime,
+            sensors_data$datetime
+          )
 
           sensor_id <- sensors_data$sensors[
             sensors_data$sensors$sensor_serial == input$add_sensor_serial,
@@ -3554,11 +3594,11 @@ table.on("click", "tr", function() {
                 sensor_id,
                 ", ",
                 col_comment,
-                " = '",
-                input$add_comment,
-                "', WHERE obs_datetime = '",
-                sensors_data$datetime,
-                "' AND instrument_id = ",
+                " = ",
+                sql_string_or_null(comment_text),
+                " WHERE obs_datetime = ",
+                sql_string_or_null(as.character(sensors_data$datetime)),
+                " AND instrument_id = ",
                 sensors_data$instrument_id,
                 ";"
               )
@@ -4116,6 +4156,12 @@ table.on("click", "tr", function() {
               if (i == "calibrate_temperature") {
                 output_name <- "Temperature calibration"
                 complete$temperature <- TRUE
+                calibration_data$temp <- data.frame(
+                  calibration_id = incomplete_ID,
+                  temp_reference_desc = sheet$temp_reference_desc,
+                  temp_reference = sheet$temp_reference,
+                  temp_observed = sheet$temp_observed
+                )
                 updateTextInput(
                   session,
                   "temp_reference_desc",
@@ -4503,6 +4549,21 @@ table.on("click", "tr", function() {
             reset_turb()
             reset_do()
             reset_depth()
+            send_table$saved <- data.frame(
+              "Saved calibrations" = "Nothing saved yet",
+              check.names = FALSE
+            )
+            send_table$restarted_cal <- empty_restarted_cal_table()
+            output$saved <- renderTable({
+              send_table$saved
+            })
+            output$restart_table <- renderTable({
+              send_table$restarted_cal
+            })
+            shinyjs::hide("restart_table")
+            restarted$restarted <- FALSE
+            calibration_data$restarted_id <- 0
+            calibration_data$next_id <- NULL
           }
           alert("Deleted", type = "success", timer = 2000)
         }
@@ -4515,8 +4576,18 @@ table.on("click", "tr", function() {
       input$spc_or_not,
       {
         if (input$spc_or_not) {
-          post_condy_val <- input$spc2_std /
-            (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+          temp_reference <- current_temp_reference()
+          if (!isTRUE(complete$temperature) || length(temp_reference) == 0 || is.na(temp_reference)) {
+            alert(
+              "Calibrate temperature first!",
+              "You must save a temperature calibration before entering non-specific conductivity.",
+              type = "error",
+              timer = 3000
+            )
+            updateCheckboxInput(session, "spc_or_not", value = FALSE)
+            return()
+          }
+          post_condy_val <- convert_to_spc(input$spc2_std)
           updateNumericInput(
             session,
             "spc1_pre",
@@ -4772,8 +4843,7 @@ table.on("click", "tr", function() {
           return()
         }
 
-        dt <- input$obs_datetime + 7 * 60 * 60
-        attr(dt, "tzone") <- "UTC"
+        dt <- lubridate::with_tz(input$obs_datetime, tzone = "UTC")
 
         id_sensor_holder <- instruments_data$sheet[
           instruments_data$sheet$serial_no == input$ID_sensor_holder,
@@ -4815,51 +4885,28 @@ table.on("click", "tr", function() {
           complete$basic <- TRUE
         } else {
           # Modify an existing entry
-          if (is.na(id_handheld_meter)) {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              paste0(
-                "UPDATE calibrations SET observer = '",
-                input$observer,
-                "', obs_datetime = '",
-                dt,
-                "', id_sensor_holder = ",
-                id_sensor_holder,
-                " WHERE calibration_id = ",
-                calibration_data$next_id,
-                ";"
-              )
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            paste0(
+              "UPDATE calibrations SET observer = ",
+              sql_string_or_null(input$observer),
+              ", obs_datetime = ",
+              sql_string_or_null(as.character(dt)),
+              ", id_sensor_holder = ",
+              id_sensor_holder,
+              ", id_handheld_meter = ",
+              if (is.na(id_handheld_meter)) {
+                "NULL"
+              } else {
+                id_handheld_meter
+              },
+              ", purpose = ",
+              sql_string_or_null(purpose_text),
+              " WHERE calibration_id = ",
+              calibration_data$next_id,
+              ";"
             )
-          } else {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              paste0(
-                "UPDATE calibrations SET observer = '",
-                input$observer,
-                "', obs_datetime = '",
-                dt,
-                "', id_sensor_holder = ",
-                id_sensor_holder,
-                ", id_handheld_meter = ",
-                id_handheld_meter,
-                " WHERE calibration_id = ",
-                calibration_data$next_id,
-                ";"
-              )
-            )
-          }
-          if (!is.na(purpose_text)) {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              paste0(
-                "UPDATE calibrations SET purpose = '",
-                purpose_text,
-                "' WHERE calibration_id = ",
-                calibration_data$next_id,
-                ";"
-              )
-            )
-          }
+          )
         }
         if (
           "Basic info" %in%
@@ -5142,16 +5189,14 @@ table.on("click", "tr", function() {
         #reset the fields
         reset_ph()
         #remove from display tables
-        send_table$saved <- send_table$saved[
-          send_table$saved[1] != "pH calibration",
-          ,
-          drop = FALSE
-        ]
-        send_table$restarted_cal <- send_table$restarted_cal[
-          send_table$restarted_cal[1] != "pH calibration",
-          ,
-          drop = FALSE
-        ]
+        send_table$saved <- remove_calibration_entry(
+          send_table$saved,
+          "pH calibration"
+        )
+        send_table$restarted_cal <- remove_calibration_entry(
+          send_table$restarted_cal,
+          "pH calibration"
+        )
         if (nrow(send_table$saved) == 0) {
           if (!restarted$restarted) {
             send_table$saved <- data.frame(
@@ -5260,9 +5305,9 @@ table.on("click", "tr", function() {
             DBI::dbExecute(
               session$userData$AquaCache,
               paste0(
-                "UPDATE calibrate_temperature SET temp_reference_desc = '",
-                input$temp_reference_desc,
-                "', temp_reference = ",
+                "UPDATE calibrate_temperature SET temp_reference_desc = ",
+                sql_string_or_null(input$temp_reference_desc),
+                ", temp_reference = ",
                 input$temp_reference,
                 ", temp_observed = ",
                 input$temp_observed,
@@ -5318,16 +5363,14 @@ table.on("click", "tr", function() {
         #reset the fields
         reset_temp()
         #remove from display tables
-        send_table$saved <- send_table$saved[
-          send_table$saved[1] != "Temperature calibration",
-          ,
-          drop = FALSE
-        ] #drop = FALSE is necessary to return a table and not a vector, which is default if returning only one col
-        send_table$restarted_cal <- send_table$restarted_cal[
-          send_table$restarted_cal[1] != "Temperature calibration",
-          ,
-          drop = FALSE
-        ]
+        send_table$saved <- remove_calibration_entry(
+          send_table$saved,
+          "Temperature calibration"
+        )
+        send_table$restarted_cal <- remove_calibration_entry(
+          send_table$restarted_cal,
+          "Temperature calibration"
+        )
         if (nrow(send_table$saved) == 0) {
           if (!restarted$restarted) {
             send_table$saved <- data.frame(
@@ -5488,16 +5531,14 @@ table.on("click", "tr", function() {
         #reset the fields
         reset_orp()
         #remove from display tables
-        send_table$saved <- send_table$saved[
-          send_table$saved[1] != "ORP calibration",
-          ,
-          drop = FALSE
-        ]
-        send_table$restarted_cal <- send_table$restarted_cal[
-          send_table$restarted_cal[1] != "ORP calibration",
-          ,
-          drop = FALSE
-        ]
+        send_table$saved <- remove_calibration_entry(
+          send_table$saved,
+          "ORP calibration"
+        )
+        send_table$restarted_cal <- remove_calibration_entry(
+          send_table$restarted_cal,
+          "ORP calibration"
+        )
         if (nrow(send_table$saved) == 0) {
           if (!restarted$restarted) {
             send_table$saved <- data.frame(
@@ -5530,7 +5571,7 @@ table.on("click", "tr", function() {
       input$save_cal_spc,
       {
         validation_check$spc <- FALSE
-        if (input$spc_or_not & is.null(calibration_data$temp)) {
+        if (isTRUE(input$spc_or_not) && !isTRUE(complete$temperature)) {
           alert(
             "Calibrate temperature first!",
             "You must calibrate temperature first if entering non-specific conductivity",
@@ -5544,6 +5585,25 @@ table.on("click", "tr", function() {
           )
           return()
         } else {
+          temp_reference <- if (isTRUE(input$spc_or_not)) {
+            current_temp_reference()
+          } else {
+            NA_real_
+          }
+          if (isTRUE(input$spc_or_not) && (length(temp_reference) == 0 || is.na(temp_reference))) {
+            alert(
+              "Calibrate temperature first!",
+              "Temperature calibration data is missing. Re-save temperature calibration before entering non-specific conductivity.",
+              type = "error",
+              timer = 3000
+            )
+            updateSelectizeInput(
+              session,
+              "selection",
+              selected = "Temperature calibration"
+            )
+            return()
+          }
           if (is.na(input$spc1_post)) {
             updateNumericInput(session, "spc1_post", value = input$spc1_std)
           }
@@ -5572,14 +5632,12 @@ table.on("click", "tr", function() {
               spc1_ref <- input$spc1_std
               spc2_ref <- input$spc2_std
               spc1_post <- if (input$spc_or_not) {
-                input$spc1_post /
-                  (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+                convert_to_spc(input$spc1_post)
               } else {
                 input$spc1_post
               }
               spc2_post <- if (input$spc_or_not) {
-                input$spc2_post /
-                  (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+                convert_to_spc(input$spc2_post)
               } else {
                 input$spc2_post
               }
@@ -5705,27 +5763,23 @@ table.on("click", "tr", function() {
             calibration_id = calibration_data$next_id,
             spc1_std = input$spc1_std,
             spc1_pre = if (input$spc_or_not) {
-              input$spc1_pre /
-                (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+              convert_to_spc(input$spc1_pre)
             } else {
               input$spc1_pre
             },
             spc1_post = if (input$spc_or_not) {
-              input$spc1_post /
-                (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+              convert_to_spc(input$spc1_post)
             } else {
               input$spc1_post
             },
             spc2_std = input$spc2_std,
             spc2_pre = if (input$spc_or_not) {
-              input$spc2_pre /
-                (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+              convert_to_spc(input$spc2_pre)
             } else {
               input$spc2_pre
             },
             spc2_post = if (input$spc_or_not) {
-              input$spc2_post /
-                (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+              convert_to_spc(input$spc2_post)
             } else {
               input$spc2_post
             }
@@ -5790,19 +5844,17 @@ table.on("click", "tr", function() {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   paste0(
-                    "UPDATE calibrate_specific_conductance SET spc1_std = ",
-                    input$spc1_std,
-                    ", spc1_pre = ",
-                    if (input$spc_or_not) {
-                      input$spc1_pre /
-                        (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+                "UPDATE calibrate_specific_conductance SET spc1_std = ",
+                input$spc1_std,
+                ", spc1_pre = ",
+                if (input$spc_or_not) {
+                      convert_to_spc(input$spc1_pre)
                     } else {
                       input$spc1_pre
                     },
                     ", spc1_post = ",
                     if (input$spc_or_not) {
-                      input$spc1_post /
-                        (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+                      convert_to_spc(input$spc1_post)
                     } else {
                       input$spc1_post
                     },
@@ -5810,15 +5862,13 @@ table.on("click", "tr", function() {
                     input$spc2_std,
                     ", spc2_pre = ",
                     if (input$spc_or_not) {
-                      input$spc2_pre /
-                        (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+                      convert_to_spc(input$spc2_pre)
                     } else {
                       input$spc2_pre
                     },
                     ", spc2_post = ",
                     if (input$spc_or_not) {
-                      input$spc2_post /
-                        (1 + 0.02 * (calibration_data$temp$temp_reference - 25))
+                      convert_to_spc(input$spc2_post)
                     } else {
                       input$spc2_post
                     },
@@ -5888,16 +5938,14 @@ table.on("click", "tr", function() {
         #reset the fields
         reset_spc()
         #remove from display tables
-        send_table$saved <- send_table$saved[
-          send_table$saved[1] != "Conductivity calibration",
-          ,
-          drop = FALSE
-        ]
-        send_table$restarted_cal <- send_table$restarted_cal[
-          send_table$restarted_cal[1] != "Conductivity calibration",
-          ,
-          drop = FALSE
-        ]
+        send_table$saved <- remove_calibration_entry(
+          send_table$saved,
+          "Conductivity calibration"
+        )
+        send_table$restarted_cal <- remove_calibration_entry(
+          send_table$restarted_cal,
+          "Conductivity calibration"
+        )
         if (nrow(send_table$saved) == 0) {
           if (!restarted$restarted) {
             send_table$saved <- data.frame(
@@ -6083,16 +6131,14 @@ table.on("click", "tr", function() {
         #reset the fields
         reset_turb()
         #remove from display tables
-        send_table$saved <- send_table$saved[
-          send_table$saved[1] != "Turbidity calibration",
-          ,
-          drop = FALSE
-        ]
-        send_table$restarted_cal <- send_table$restarted_cal[
-          send_table$restarted_cal[1] != "Turbidity calibration",
-          ,
-          drop = FALSE
-        ]
+        send_table$saved <- remove_calibration_entry(
+          send_table$saved,
+          "Turbidity calibration"
+        )
+        send_table$restarted_cal <- remove_calibration_entry(
+          send_table$restarted_cal,
+          "Turbidity calibration"
+        )
         if (nrow(send_table$saved) == 0) {
           if (!restarted$restarted) {
             send_table$saved <- data.frame(
@@ -6255,16 +6301,14 @@ table.on("click", "tr", function() {
         #reset the fields
         reset_do()
         #remove from display tables
-        send_table$saved <- send_table$saved[
-          send_table$saved[1] != "DO calibration",
-          ,
-          drop = FALSE
-        ]
-        send_table$restarted_cal <- send_table$restarted_cal[
-          send_table$restarted_cal[1] != "DO calibration",
-          ,
-          drop = FALSE
-        ]
+        send_table$saved <- remove_calibration_entry(
+          send_table$saved,
+          "DO calibration"
+        )
+        send_table$restarted_cal <- remove_calibration_entry(
+          send_table$restarted_cal,
+          "DO calibration"
+        )
         if (nrow(send_table$saved) == 0) {
           if (!restarted$restarted) {
             send_table$saved <- data.frame(
@@ -6427,16 +6471,14 @@ table.on("click", "tr", function() {
         #reset the fields
         reset_depth()
         #remove from display tables
-        send_table$saved <- send_table$saved[
-          send_table$saved[1] != "Depth calibration",
-          ,
-          drop = FALSE
-        ]
-        send_table$restarted_cal <- send_table$restarted_cal[
-          send_table$restarted_cal[1] != "Depth calibration",
-          ,
-          drop = FALSE
-        ]
+        send_table$saved <- remove_calibration_entry(
+          send_table$saved,
+          "Depth calibration"
+        )
+        send_table$restarted_cal <- remove_calibration_entry(
+          send_table$restarted_cal,
+          "Depth calibration"
+        )
         if (nrow(send_table$saved) == 0) {
           if (!restarted$restarted) {
             send_table$saved <- data.frame(
@@ -6546,23 +6588,29 @@ table.on("click", "tr", function() {
         complete$depth <- FALSE
         # Reset data.frames
         calibration_data$basic <- NULL
-        calibration_data$temperature <- NULL
+        calibration_data$temp <- NULL
         calibration_data$spc <- NULL
         calibration_data$ph <- NULL
         calibration_data$orp <- NULL
-        calibration_data$turbidity <- NULL
+        calibration_data$turb <- NULL
         calibration_data$do <- NULL
         calibration_data$depth <- NULL
+        calibration_data$restarted_id <- 0
         # Reset tables
         send_table$saved <- data.frame(
           "Saved calibrations" = "Nothing saved yet",
           check.names = FALSE
         ) #Title is modified later for clarity if user want to restart a cal
+        send_table$restarted_cal <- empty_restarted_cal_table()
         output$saved <- renderTable({
           # Display local calibrations table
           send_table$saved
         })
+        output$restart_table <- renderTable({
+          send_table$restarted_cal
+        })
         shinyjs::hide("restart_table")
+        restarted$restarted <- FALSE
         updateNumericInput(session, "restart_index", value = 0) #in case the user was restarting an old calibration
         updateTabsetPanel(session, "tab_panel", selected = "Calibrate")
         updateSelectizeInput(
