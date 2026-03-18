@@ -483,6 +483,7 @@ deploy_recover <- function(id, language) {
       update_sub_location_choices()
       update_z_choices()
     }
+    refresh_module_data()
 
     current_records <- reactive({
       req(moduleData$deployment_records)
@@ -854,17 +855,15 @@ deploy_recover <- function(id, language) {
               ns("reload_module"),
               "Reload module data",
               icon = icon("refresh"),
-              width = "100%"
+              width = "100%",
+              style = "margin-bottom: 5px;"
             ),
-            br(),
-            br(),
             actionButton(
               ns("clear_selection"),
               "Clear selected record",
-              width = "100%"
+              width = "100%",
+              style = "margin-bottom: 15px;"
             ),
-            br(),
-            br(),
             uiOutput(ns("selected_record_ui")),
             selectizeInput(
               ns("instrument_id"),
@@ -980,26 +979,7 @@ deploy_recover <- function(id, language) {
               width = "100%",
               height = "120px"
             ),
-            actionButton(
-              ns("deploy_btn"),
-              "Deploy new instrument",
-              width = "100%",
-              class = "btn-primary"
-            ),
-            br(),
-            br(),
-            actionButton(
-              ns("update_btn"),
-              "Update selected record",
-              width = "100%"
-            ),
-            br(),
-            br(),
-            actionButton(
-              ns("recover_btn"),
-              "Recover selected deployment",
-              width = "100%"
-            )
+            uiOutput(ns("record_action_button"))
           ),
           column(
             8,
@@ -1023,7 +1003,7 @@ deploy_recover <- function(id, language) {
       }
 
       div(
-        class = "alert alert-secondary",
+        class = "alert alert-primary",
         tags$strong(paste0(
           "Editing record #",
           record$metadata_id[[1]],
@@ -1041,6 +1021,36 @@ deploy_recover <- function(id, language) {
           tagList(tags$br(), safe_text(record$sub_location_name[[1]]))
         }
       )
+    })
+
+    output$record_action_button <- renderUI({
+      has_selected <- !is.null(selected_metadata_id())
+      can_insert <- isTRUE(moduleData$permissions$can_insert[[1]])
+      can_update <- isTRUE(moduleData$permissions$can_update[[1]])
+
+      if (has_selected) {
+        update_button <- actionButton(
+          ns("update_btn"),
+          "Update selected record",
+          width = "100%",
+          class = "btn-primary"
+        )
+        if (!can_update) {
+          update_button <- shinyjs::disabled(update_button)
+        }
+        return(update_button)
+      }
+
+      deploy_button <- actionButton(
+        ns("deploy_btn"),
+        "Deploy new instrument",
+        width = "100%",
+        class = "btn-primary"
+      )
+      if (!can_insert) {
+        deploy_button <- shinyjs::disabled(deploy_button)
+      }
+      deploy_button
     })
 
     output$current_table <- DT::renderDT({
@@ -1071,34 +1081,6 @@ deploy_recover <- function(id, language) {
           initComplete = table_header_style
         )
       )
-    })
-
-    observe({
-      can_insert <- isTRUE(moduleData$permissions$can_insert[[1]])
-      can_update <- isTRUE(moduleData$permissions$can_update[[1]])
-      has_selected <- !is.null(selected_metadata_id())
-      record <- selected_record()
-      can_recover <- can_update &&
-        !is.null(record) &&
-        record$deployment_status[[1]] == "Currently deployed"
-
-      if (can_insert && !has_selected) {
-        shinyjs::enable(ns("deploy_btn"))
-      } else {
-        shinyjs::disable(ns("deploy_btn"))
-      }
-
-      if (can_update && has_selected) {
-        shinyjs::enable(ns("update_btn"))
-      } else {
-        shinyjs::disable(ns("update_btn"))
-      }
-
-      if (can_recover) {
-        shinyjs::enable(ns("recover_btn"))
-      } else {
-        shinyjs::disable(ns("recover_btn"))
-      }
     })
 
     observeEvent(
@@ -1266,53 +1248,5 @@ deploy_recover <- function(id, language) {
       },
       ignoreInit = TRUE
     )
-
-    observeEvent(
-      input$recover_btn,
-      {
-        tryCatch(
-          {
-            metadata_id <- selected_metadata_id()
-            values <- collect_form_values()
-            if (is.na(values$end_datetime)) {
-              values$end_datetime <- as.POSIXct(Sys.time(), tz = "UTC")
-              updateCheckboxInput(session, "has_end_datetime", value = TRUE)
-              shinyWidgets::updateAirDateInput(
-                session,
-                "end_datetime",
-                value = values$end_datetime,
-                tz = air_datetime_widget_timezone(input$end_timezone)
-              )
-            }
-            upsert_record(
-              values = values,
-              metadata_id = metadata_id,
-              recovery_only = TRUE
-            )
-            refresh_module_data()
-            selected_metadata_id(metadata_id)
-            populate_form_from_record(selected_record())
-            sync_table_selection(metadata_id)
-            showNotification(
-              "Deployment recovered.",
-              type = "message",
-              duration = 10
-            )
-          },
-          error = function(e) {
-            showNotification(
-              paste("Failed to recover deployment:", e$message),
-              type = "error",
-              duration = 15
-            )
-          }
-        )
-      },
-      ignoreInit = TRUE
-    )
-
-    refresh_module_data()
-    reset_form(clear_selection = TRUE)
-    sync_table_selection(NULL)
   }) # End of moduleServer
 }
