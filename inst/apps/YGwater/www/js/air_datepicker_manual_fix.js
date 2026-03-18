@@ -506,12 +506,16 @@
     return null;
   }
 
+  function normalizeFixedOffsetTimezone(tz) {
+    return String(tz || "").trim().replace(/^YG/, "");
+  }
+
   function isFixedOffsetTimezone(tz) {
-    return /^UTC[+-]\d{2}:\d{2}$/.test(String(tz || ""));
+    return /^UTC[+-]\d{2}:\d{2}$/.test(normalizeFixedOffsetTimezone(tz));
   }
 
   function parseFixedOffsetMinutes(tz) {
-    var match = /^UTC([+-])(\d{2}):(\d{2})$/.exec(String(tz || ""));
+    var match = /^UTC([+-])(\d{2}):(\d{2})$/.exec(normalizeFixedOffsetTimezone(tz));
     if (!match) {
       return 0;
     }

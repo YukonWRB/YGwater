@@ -155,7 +155,7 @@ addContDataUI <- function(id) {
               multiple = FALSE,
               timepicker = TRUE,
               update_on = "change",
-              tz = format_utc_offset(0L),
+              tz = air_datetime_widget_timezone(format_utc_offset(0L)),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -169,7 +169,7 @@ addContDataUI <- function(id) {
               multiple = FALSE,
               timepicker = TRUE,
               update_on = "change",
-              tz = format_utc_offset(0L),
+              tz = air_datetime_widget_timezone(format_utc_offset(0L)),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -207,7 +207,7 @@ addContDataUI <- function(id) {
             multiple = FALSE,
             timepicker = TRUE,
             update_on = "change",
-            tz = format_utc_offset(0L),
+            tz = air_datetime_widget_timezone(format_utc_offset(0L)),
             timepickerOpts = shinyWidgets::timepickerOptions(
               minutesStep = 15,
               timeFormat = "HH:mm"
@@ -733,11 +733,13 @@ addContData <- function(id, language) {
 
       ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
+        out <- readxl::read_xlsx(
+          input$file$datapath,
+          sheet = 1,
+          skip = starting_row - 1
+        ) |>
+          as.data.frame()
 
-        out <- readxl::read_xlsx(input$file$datapath, sheet = 1,
-                          skip = starting_row - 1) |> 
-          as.data.frame() 
-        
         return(out)
       } else if (ext == "csv") {
         # .csv files more complex due to ungraceful handling of non-equal
@@ -991,13 +993,13 @@ addContData <- function(id, language) {
 
     prepare_table_data <- function(df) {
       df <- df[, c("datetime", "value")]
-      
-      df$datetime <- if(inherits(df$datetime, "POSIXct")){
+
+      df$datetime <- if (inherits(df$datetime, "POSIXct")) {
         format(df$datetime, "%Y-%m-%d %H:%M:%S")
       } else {
         as.character(df$datetime)
       }
-      
+
       df$value <- suppressWarnings(as.numeric(df$value))
       df
     }
@@ -1014,7 +1016,8 @@ addContData <- function(id, language) {
       parse_utc_offset_minutes(
         selected_offset_tz(value, default),
         default = "UTC+00:00"
-      ) * 60
+      ) *
+        60
     }
 
     class_offset_tz <- function(class_name) {
@@ -1478,7 +1481,9 @@ addContData <- function(id, language) {
           multiple = FALSE,
           timepicker = TRUE,
           update_on = "change",
-          tz = isolate(class_offset_tz(class_name)),
+          tz = air_datetime_widget_timezone(isolate(class_offset_tz(
+            class_name
+          ))),
           timepickerOpts = shinyWidgets::timepickerOptions(
             minutesStep = 15,
             timeFormat = "HH:mm"
@@ -1496,7 +1501,9 @@ addContData <- function(id, language) {
           multiple = FALSE,
           timepicker = TRUE,
           update_on = "change",
-          tz = isolate(class_offset_tz(class_name)),
+          tz = air_datetime_widget_timezone(isolate(class_offset_tz(
+            class_name
+          ))),
           timepickerOpts = shinyWidgets::timepickerOptions(
             minutesStep = 15,
             timeFormat = "HH:mm"
@@ -1876,7 +1883,7 @@ addContData <- function(id, language) {
       apply_datetime_cutoff("after")
     })
 
-    data_table_proxy <- DT::dataTableProxy(ns("data_table"))
+    data_table_proxy <- DT::dataTableProxy("data_table")
 
     output$data_table <- DT::renderDT(
       {
@@ -2489,7 +2496,10 @@ addContData <- function(id, language) {
         return(FALSE)
       }
       # Make sure datetime is in POSIXct format or can be converted to it
-      parsed_datetime <- table_datetimes_to_utc(data$df$datetime, input$UTC_offset)
+      parsed_datetime <- table_datetimes_to_utc(
+        data$df$datetime,
+        input$UTC_offset
+      )
       if (any(is.na(parsed_datetime))) {
         showNotification(
           'Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.',

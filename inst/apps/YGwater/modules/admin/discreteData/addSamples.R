@@ -386,7 +386,7 @@ addSamples <- function(id, language) {
         session,
         "datetime",
         value = coerce_utc_datetime(details$datetime),
-        tz = normalize_input_timezone(input$timezone)
+        tz = air_datetime_widget_timezone(input$timezone)
       )
       if (is.na(details$target_datetime)) {
         shinyWidgets::updateAirDateInput(
@@ -399,7 +399,7 @@ addSamples <- function(id, language) {
           session,
           "target_datetime",
           value = coerce_utc_datetime(details$target_datetime),
-          tz = normalize_input_timezone(input$timezone)
+          tz = air_datetime_widget_timezone(input$timezone)
         )
       }
       updateSelectizeInput(
@@ -599,7 +599,7 @@ addSamples <- function(id, language) {
       getModuleData()
       selected_sample_ids(integer())
       reset_form()
-      DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
+      DT::dataTableProxy("sample_table") |> DT::selectRows(NULL)
     })
 
     observeEvent(
@@ -665,7 +665,7 @@ addSamples <- function(id, language) {
       if (identical(input$mode, "add")) {
         selected_sample_ids(integer())
         reset_form()
-        DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
+        DT::dataTableProxy("sample_table") |> DT::selectRows(NULL)
       }
     })
 
@@ -833,7 +833,7 @@ addSamples <- function(id, language) {
               multiple = FALSE,
               timepicker = TRUE,
               update_on = "change",
-              tz = default_input_timezone(),
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -850,7 +850,7 @@ addSamples <- function(id, language) {
               multiple = FALSE,
               timepicker = TRUE,
               update_on = "change",
-              tz = default_input_timezone(),
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -1202,7 +1202,7 @@ addSamples <- function(id, language) {
       multi_enabled <- isTRUE(input$multi_edit)
       if (!multi_enabled && length(idx) > 1) {
         idx <- idx[1]
-        DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(idx)
+        DT::dataTableProxy("sample_table") |> DT::selectRows(idx)
       }
       if (!length(idx)) {
         selected_sample_ids(integer())
@@ -1226,7 +1226,7 @@ addSamples <- function(id, language) {
           ids <- ids[1]
           selected_sample_ids(ids)
           row_idx <- match(ids, moduleData$samples_display$sample_id)
-          DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(row_idx)
+          DT::dataTableProxy("sample_table") |> DT::selectRows(row_idx)
           update_form_from_sample(ids)
         } else if (length(ids) == 1) {
           update_form_from_sample(ids)
@@ -1337,7 +1337,7 @@ addSamples <- function(id, language) {
           getModuleData()
           reset_form()
           selected_sample_ids(integer())
-          DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
+          DT::dataTableProxy("sample_table") |> DT::selectRows(NULL)
           showNotification(
             sprintf("Sample %s added successfully.", res$sample_id[1]),
             type = "message"
@@ -1462,7 +1462,7 @@ addSamples <- function(id, language) {
         selected_rows <- which(
           moduleData$samples_display$sample_id %in% sample_ids
         )
-        proxy <- DT::dataTableProxy(ns("sample_table"))
+        proxy <- DT::dataTableProxy("sample_table")
         if (length(selected_rows)) {
           proxy |> DT::selectRows(selected_rows)
         } else {
@@ -1494,13 +1494,13 @@ addSamples <- function(id, language) {
           showNotification("Owner is required.", type = "error")
           return()
         }
-      if (is.na(form$datetime)) {
-        showNotification(
-          "Sample datetime is required.",
-          type = "error"
-        )
-        return()
-      }
+        if (is.na(form$datetime)) {
+          showNotification(
+            "Sample datetime is required.",
+            type = "error"
+          )
+          return()
+        }
 
         update_sql <- "
         UPDATE discrete.samples

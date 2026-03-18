@@ -97,7 +97,7 @@ continuousCorrectionsUI <- function(id) {
                 multiple = FALSE,
                 timepicker = TRUE,
                 update_on = "change",
-                tz = default_input_timezone(),
+                tz = air_datetime_widget_timezone(default_input_timezone()),
                 timepickerOpts = shinyWidgets::timepickerOptions(
                   minutesStep = 15,
                   timeFormat = "HH:mm"
@@ -114,7 +114,7 @@ continuousCorrectionsUI <- function(id) {
                 multiple = FALSE,
                 timepicker = TRUE,
                 update_on = "change",
-                tz = default_input_timezone(),
+                tz = air_datetime_widget_timezone(default_input_timezone()),
                 timepickerOpts = shinyWidgets::timepickerOptions(
                   minutesStep = 15,
                   timeFormat = "HH:mm"

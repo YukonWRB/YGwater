@@ -92,7 +92,11 @@ deploy_recover <- function(id, language) {
 
     shift_datetime_input_timezone <- function(input_id, tz_name) {
       current_value <- coerce_utc_datetime(input[[input_id]])
-      if (is.null(current_value) || !length(current_value) || all(is.na(current_value))) {
+      if (
+        is.null(current_value) ||
+          !length(current_value) ||
+          all(is.na(current_value))
+      ) {
         return(invisible(NULL))
       }
       shinyWidgets::updateAirDateInput(
@@ -330,14 +334,14 @@ deploy_recover <- function(id, language) {
         session,
         "start_datetime",
         value = default_datetime(),
-        tz = normalize_input_timezone(input$start_timezone)
+        tz = air_datetime_widget_timezone(input$start_timezone)
       )
       updateCheckboxInput(session, "has_end_datetime", value = FALSE)
       shinyWidgets::updateAirDateInput(
         session,
         "end_datetime",
         value = default_datetime(),
-        tz = normalize_input_timezone(input$end_timezone)
+        tz = air_datetime_widget_timezone(input$end_timezone)
       )
       updateTextAreaInput(session, "note", value = "")
     }
@@ -633,7 +637,7 @@ deploy_recover <- function(id, language) {
         session,
         "start_datetime",
         value = coerce_utc_datetime(record$start_datetime[[1]]),
-        tz = normalize_input_timezone(input$start_timezone)
+        tz = air_datetime_widget_timezone(input$start_timezone)
       )
       updateCheckboxInput(
         session,
@@ -648,7 +652,7 @@ deploy_recover <- function(id, language) {
         } else {
           coerce_utc_datetime(record$end_datetime[[1]])
         },
-        tz = normalize_input_timezone(input$end_timezone)
+        tz = air_datetime_widget_timezone(input$end_timezone)
       )
       updateTextAreaInput(
         session,
@@ -658,15 +662,15 @@ deploy_recover <- function(id, language) {
     }
 
     sync_table_selection <- function(metadata_id = selected_metadata_id()) {
-      current_proxy <- DT::dataTableProxy(ns("current_table"))
-      all_proxy <- DT::dataTableProxy(ns("all_table"))
+      current_proxy <- DT::dataTableProxy("current_table")
+      all_proxy <- DT::dataTableProxy("all_table")
 
       selection_sync_in_progress(TRUE)
       on.exit(selection_sync_in_progress(FALSE), add = TRUE)
 
       if (is.null(metadata_id)) {
-        current_proxy |> DT::selectRows(NULL)
-        all_proxy |> DT::selectRows(NULL)
+        DT::selectRows(current_proxy, selected = NULL)
+        DT::selectRows(all_proxy, selected = NULL)
         return(invisible(NULL))
       }
 
@@ -921,7 +925,7 @@ deploy_recover <- function(id, language) {
                   maxDate = Sys.Date() + 365,
                   startView = Sys.Date(),
                   update_on = "change",
-                  tz = default_input_timezone(),
+                  tz = air_datetime_widget_timezone(default_input_timezone()),
                   timepickerOpts = shinyWidgets::timepickerOptions(
                     minutesStep = 15,
                     timeFormat = "HH:mm"
@@ -961,7 +965,7 @@ deploy_recover <- function(id, language) {
                     maxDate = Sys.Date() + 365,
                     startView = Sys.Date(),
                     update_on = "change",
-                    tz = default_input_timezone(),
+                    tz = air_datetime_widget_timezone(default_input_timezone()),
                     timepickerOpts = shinyWidgets::timepickerOptions(
                       minutesStep = 15,
                       timeFormat = "HH:mm"
@@ -1277,7 +1281,7 @@ deploy_recover <- function(id, language) {
                 session,
                 "end_datetime",
                 value = values$end_datetime,
-                tz = normalize_input_timezone(input$end_timezone)
+                tz = air_datetime_widget_timezone(input$end_timezone)
               )
             }
             upsert_record(

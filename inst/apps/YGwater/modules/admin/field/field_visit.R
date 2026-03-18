@@ -49,7 +49,11 @@ visit <- function(id, language) {
     # Functions for reuse within the module
     shift_datetime_input_timezone <- function(input_id, tz_name) {
       current_value <- coerce_utc_datetime(input[[input_id]])
-      if (is.null(current_value) || !length(current_value) || all(is.na(current_value))) {
+      if (
+        is.null(current_value) ||
+          !length(current_value) ||
+          all(is.na(current_value))
+      ) {
         return(invisible(NULL))
       }
       shinyWidgets::updateAirDateInput(
@@ -112,13 +116,13 @@ visit <- function(id, language) {
         session,
         "visit_datetime_start",
         value = now_utc,
-        tz = normalize_input_timezone(input$timezone)
+        tz = air_datetime_widget_timezone(input$timezone)
       )
       shinyWidgets::updateAirDateInput(
         session,
         "visit_datetime_end",
         value = now_utc,
-        tz = normalize_input_timezone(input$timezone)
+        tz = air_datetime_widget_timezone(input$timezone)
       )
       updateSelectizeInput(session, "location", selected = character(0))
       updateSelectizeInput(session, "sub_location", selected = character(0))
@@ -224,7 +228,7 @@ visit <- function(id, language) {
               maxDate = Sys.Date() + 1,
               startView = Sys.Date(),
               update_on = "change",
-              tz = default_input_timezone(),
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -243,7 +247,7 @@ visit <- function(id, language) {
               maxDate = Sys.Date() + 1,
               startView = Sys.Date(),
               update_on = "change",
-              tz = default_input_timezone(),
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -487,10 +491,10 @@ visit <- function(id, language) {
         if (identical(input$mode, "add")) {
           selected_visit(NULL)
           reset_visit_form()
-          DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+          DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
         } else if (identical(input$mode, "modify")) {
           selected_visit(NULL)
-          DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+          DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
         }
       },
       ignoreNULL = TRUE
@@ -502,7 +506,7 @@ visit <- function(id, language) {
         getModuleData()
         selected_visit(NULL)
         # Clear table row selection
-        DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+        DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
         reset_visit_form()
         updateSelectizeInput(
           session,
@@ -633,14 +637,14 @@ visit <- function(id, language) {
             session,
             "visit_datetime_start",
             value = start_value,
-            tz = normalize_input_timezone(input$timezone)
+            tz = air_datetime_widget_timezone(input$timezone)
           )
           end_value <- coerce_utc_datetime(visit_data$end_datetime)
           shinyWidgets::updateAirDateInput(
             session,
             "visit_datetime_end",
             value = end_value,
-            tz = normalize_input_timezone(input$timezone)
+            tz = air_datetime_widget_timezone(input$timezone)
           )
 
           updateTextInput(
@@ -875,7 +879,7 @@ visit <- function(id, language) {
             getModuleData()
             selected_visit(NULL)
             reset_visit_form()
-            DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+            DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
           },
           error = function(e) {
             showNotification(
@@ -996,7 +1000,7 @@ visit <- function(id, language) {
                 moduleData$visit_display$field_visit_id == visit_id
               )
               if (length(row_index) == 1) {
-                DT::dataTableProxy(ns("visit_table")) |>
+                DT::dataTableProxy("visit_table") |>
                   DT::selectRows(row_index)
               }
             }

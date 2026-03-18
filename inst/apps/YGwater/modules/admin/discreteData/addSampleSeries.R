@@ -188,7 +188,7 @@ addSampleSeries <- function(id, language) {
               multiple = FALSE,
               timepicker = TRUE,
               update_on = "change",
-              tz = default_input_timezone(),
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -205,7 +205,7 @@ addSampleSeries <- function(id, language) {
               multiple = FALSE,
               timepicker = TRUE,
               update_on = "change",
-              tz = default_input_timezone(),
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -363,7 +363,7 @@ addSampleSeries <- function(id, language) {
       )
     })
 
-    table_proxy <- DT::dataTableProxy(ns("ss_table"))
+    table_proxy <- DT::dataTableProxy("ss_table")
 
     observeEvent(input$reload_module, {
       getModuleData()
@@ -599,7 +599,7 @@ addSampleSeries <- function(id, language) {
           } else {
             coerce_utc_datetime(details$synch_from)
           },
-          tz = normalize_input_timezone(input$timezone),
+          tz = air_datetime_widget_timezone(input$timezone),
           clear = is.na(details$synch_from)
         )
         shinyWidgets::updateAirDateInput(
@@ -610,7 +610,7 @@ addSampleSeries <- function(id, language) {
           } else {
             coerce_utc_datetime(details$synch_to)
           },
-          tz = normalize_input_timezone(input$timezone),
+          tz = air_datetime_widget_timezone(input$timezone),
           clear = is.na(details$synch_to)
         )
         updateSelectizeInput(
@@ -799,13 +799,23 @@ addSampleSeries <- function(id, language) {
 
       synch_from_input <- input$synch_from
       synch_from <- scalar_utc_datetime(synch_from_input)
-      if (!is.null(synch_from_input) && length(synch_from_input) && any(!is.na(synch_from_input)) && is.na(synch_from)) {
+      if (
+        !is.null(synch_from_input) &&
+          length(synch_from_input) &&
+          any(!is.na(synch_from_input)) &&
+          is.na(synch_from)
+      ) {
         showNotification("Invalid 'synchronize from' value.", type = "error")
         return()
       }
       synch_to_input <- input$synch_to
       synch_to <- scalar_utc_datetime(synch_to_input)
-      if (!is.null(synch_to_input) && length(synch_to_input) && any(!is.na(synch_to_input)) && is.na(synch_to)) {
+      if (
+        !is.null(synch_to_input) &&
+          length(synch_to_input) &&
+          any(!is.na(synch_to_input)) &&
+          is.na(synch_to)
+      ) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }
@@ -904,13 +914,23 @@ addSampleSeries <- function(id, language) {
       )
       synch_from_input <- input$synch_from
       synch_from <- scalar_utc_datetime(synch_from_input)
-      if (!is.null(synch_from_input) && length(synch_from_input) && any(!is.na(synch_from_input)) && is.na(synch_from)) {
+      if (
+        !is.null(synch_from_input) &&
+          length(synch_from_input) &&
+          any(!is.na(synch_from_input)) &&
+          is.na(synch_from)
+      ) {
         showNotification("Invalid 'synchronize from' value.", type = "error")
         return()
       }
       synch_to_input <- input$synch_to
       synch_to <- scalar_utc_datetime(synch_to_input)
-      if (!is.null(synch_to_input) && length(synch_to_input) && any(!is.na(synch_to_input)) && is.na(synch_to)) {
+      if (
+        !is.null(synch_to_input) &&
+          length(synch_to_input) &&
+          any(!is.na(synch_to_input)) &&
+          is.na(synch_to)
+      ) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }

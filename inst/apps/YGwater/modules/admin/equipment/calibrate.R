@@ -116,7 +116,7 @@ calibrateUI <- function(id) {
                       maxDate = Sys.Date() + 1,
                       startView = Sys.Date(),
                       update_on = "change",
-                      tz = default_input_timezone(),
+                      tz = air_datetime_widget_timezone(default_input_timezone()),
                       timepickerOpts = shinyWidgets::timepickerOptions(
                         minutesStep = 15,
                         timeFormat = "HH:mm"
@@ -692,7 +692,11 @@ table.on("click", "tr", function() {
 
     shift_obs_datetime_timezone <- function(tz_name) {
       current_value <- coerce_utc_datetime(input$obs_datetime)
-      if (is.null(current_value) || !length(current_value) || all(is.na(current_value))) {
+      if (
+        is.null(current_value) ||
+          !length(current_value) ||
+          all(is.na(current_value))
+      ) {
         return(invisible(NULL))
       }
       shinyWidgets::updateAirDateInput(
@@ -1600,7 +1604,8 @@ table.on("click", "tr", function() {
         as.numeric(
           difftime(latest_obs_datetime, reference_datetime, units = "secs")
         )
-      ) <= tolerance_secs
+      ) <=
+        tolerance_secs
     }
     current_temp_reference <- function() {
       if (
@@ -1735,7 +1740,7 @@ table.on("click", "tr", function() {
         session,
         "obs_datetime",
         value = default_obs_datetime(),
-        tz = normalize_input_timezone(input$timezone)
+        tz = air_datetime_widget_timezone(input$timezone)
       )
       output$ID_sensor_holder <- renderUI({
         div(
@@ -2148,7 +2153,7 @@ table.on("click", "tr", function() {
           2
       ) {
         selection <- NULL
-        proxy <- DT::dataTableProxy(ns("my_table"))
+        proxy <- DT::dataTableProxy("my_table")
         DT::selectRows(proxy, selection, selected = FALSE)
         if (initial_instr_table$value) {
           output$calibration_instruments_table <- DT::renderDT(
@@ -3585,10 +3590,13 @@ table.on("click", "tr", function() {
     observeEvent(
       input$submit_sensor_change,
       {
-        comment_text <- trimws(if (is.null(input$add_comment)) "" else input$add_comment)
-        sensor_serial_text <- trimws(if (is.null(input$add_sensor_serial)) "" else input$add_sensor_serial)
-        if (
-          is.null(input$sensor_change_name)) {
+        comment_text <- trimws(
+          if (is.null(input$add_comment)) "" else input$add_comment
+        )
+        sensor_serial_text <- trimws(
+          if (is.null(input$add_sensor_serial)) "" else input$add_sensor_serial
+        )
+        if (is.null(input$sensor_change_name)) {
           alert(
             "Please fill in all fields!",
             "You need a few more characters if you've already written something. Come on, make us a useful note!",
@@ -3596,8 +3604,8 @@ table.on("click", "tr", function() {
             timer = 3000
           )
           return()
-          } else if (
-            input$sensor_change_name == "" ||
+        } else if (
+          input$sensor_change_name == "" ||
             nchar(comment_text) < 5 ||
             nchar(sensor_serial_text) < 2
         ) {
@@ -4409,7 +4417,7 @@ table.on("click", "tr", function() {
                 "obs_datetime"
               ]
             ),
-            tz = normalize_input_timezone(input$timezone)
+            tz = air_datetime_widget_timezone(input$timezone)
           )
           output$ID_sensor_holder <- renderUI({
             div(
@@ -4620,7 +4628,11 @@ table.on("click", "tr", function() {
       {
         if (input$spc_or_not) {
           temp_reference <- current_temp_reference()
-          if (!isTRUE(complete$temperature) || length(temp_reference) == 0 || is.na(temp_reference)) {
+          if (
+            !isTRUE(complete$temperature) ||
+              length(temp_reference) == 0 ||
+              is.na(temp_reference)
+          ) {
             alert(
               "Calibrate temperature first!",
               "You must save a temperature calibration before entering non-specific conductivity.",
@@ -5633,7 +5645,10 @@ table.on("click", "tr", function() {
           } else {
             NA_real_
           }
-          if (isTRUE(input$spc_or_not) && (length(temp_reference) == 0 || is.na(temp_reference))) {
+          if (
+            isTRUE(input$spc_or_not) &&
+              (length(temp_reference) == 0 || is.na(temp_reference))
+          ) {
             alert(
               "Calibrate temperature first!",
               "Temperature calibration data is missing. Re-save temperature calibration before entering non-specific conductivity.",
@@ -5887,10 +5902,10 @@ table.on("click", "tr", function() {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   paste0(
-                "UPDATE calibrate_specific_conductance SET spc1_std = ",
-                input$spc1_std,
-                ", spc1_pre = ",
-                if (input$spc_or_not) {
+                    "UPDATE calibrate_specific_conductance SET spc1_std = ",
+                    input$spc1_std,
+                    ", spc1_pre = ",
+                    if (input$spc_or_not) {
                       convert_to_spc(input$spc1_pre)
                     } else {
                       input$spc1_pre

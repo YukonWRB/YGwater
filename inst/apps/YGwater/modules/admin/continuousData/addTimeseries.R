@@ -484,7 +484,7 @@ addTimeseries <- function(id, language) {
         getModuleData()
         selected_tsid(NULL)
         # Clear table row selection
-        DT::dataTableProxy(ns("ts_table")) |>
+        DT::dataTableProxy("ts_table") |>
           DT::selectRows(NULL)
         updateSelectizeInput(
           session,

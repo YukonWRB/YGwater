@@ -249,36 +249,46 @@ YGwater_globals <- function(
       sign * (as.integer(parts[[3]]) * 60L + as.integer(parts[[4]]))
     }
 
+    normalize_input_timezone_token <<- function(tz_name) {
+      tz_name <- as.character(tz_name[[1]])
+      if (!length(tz_name) || is.na(tz_name) || !nzchar(tz_name)) {
+        return(NA_character_)
+      }
+      tz_name <- trimws(tz_name)
+      sub("^YG", "", tz_name)
+    }
+
+    is_input_timezone_offset <<- function(tz_name) {
+      tz_name <- normalize_input_timezone_token(tz_name)
+      !is.na(tz_name) && grepl("^UTC[+-]\\d{2}:\\d{2}$", tz_name)
+    }
+
     parse_utc_offset_minutes <<- function(
       tz_name,
       default = default_input_timezone()
     ) {
-      tz_name <- as.character(tz_name[[1]])
-      if (!length(tz_name) || is.na(tz_name) || !nzchar(tz_name)) {
-        tz_name <- default
-      }
+      tz_name <- normalize_input_timezone(tz_name, default = default)
       matched <- regexec("^UTC([+-])(\\d{2}):(\\d{2})$", tz_name)
       parts <- regmatches(tz_name, matched)[[1]]
       if (length(parts) != 4) {
-        if (!identical(tz_name, default)) {
-          return(parse_utc_offset_minutes(default, default = "UTC+00:00"))
-        }
         return(0L)
       }
       sign <- if (identical(parts[[2]], "-")) -1L else 1L
       sign * (as.integer(parts[[3]]) * 60L + as.integer(parts[[4]]))
     }
 
+    air_datetime_widget_timezone <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      paste0("YG", normalize_input_timezone(tz_name, default = default))
+    }
+
     datetime_to_posix_tz <<- function(
       tz_name,
       default = default_input_timezone()
     ) {
-      offset_minutes <- parse_utc_offset_minutes(tz_name, default = default)
-      sign <- if (offset_minutes >= 0) "+" else "-"
-      offset_minutes <- abs(offset_minutes)
-      hours <- offset_minutes %/% 60
-      minutes <- offset_minutes %% 60
-      sprintf("UTC%s%02d:%02d", sign, hours, minutes)
+      air_datetime_widget_timezone(tz_name, default = default)
     }
 
     default_input_timezone <<- function() {
@@ -294,7 +304,35 @@ YGwater_globals <- function(
     }
 
     input_timezone_choices <<- function() {
-      offsets <- seq(-12 * 60L, 14 * 60L, by = 15L)
+      # offsets from here: https://en.wikipedia.org/wiki/List_of_UTC_time_offsets
+      offsets <- c(
+        -12:-10,
+        9.5,
+        -9:-4,
+        -3.5,
+        -3:3,
+        3.5,
+        4,
+        4.5,
+        5,
+        5.5,
+        5.75,
+        6,
+        6.5,
+        7,
+        8,
+        8.75,
+        9,
+        9.5,
+        10,
+        10.5,
+        11,
+        12,
+        12.75,
+        13,
+        14
+      ) *
+        60L
       labels <- vapply(offsets, format_utc_offset, character(1))
       stats::setNames(labels, labels)
     }
@@ -303,7 +341,7 @@ YGwater_globals <- function(
       tz_name,
       default = default_input_timezone()
     ) {
-      tz_name <- as.character(tz_name[[1]])
+      tz_name <- normalize_input_timezone_token(tz_name)
       if (
         !length(tz_name) ||
           is.na(tz_name) ||
@@ -350,7 +388,7 @@ YGwater_globals <- function(
         session,
         inputId = input_id,
         value = current_value,
-        tz = tz_name
+        tz = air_datetime_widget_timezone(tz_name)
       )
       invisible(NULL)
     }
@@ -378,13 +416,13 @@ YGwater_globals <- function(
         if (is.null(data) || !is.list(data) || is.null(data$date)) {
           return(NULL)
         }
-        tz_name <- as.character(data$tz[[1]])
+        tz_name <- normalize_input_timezone_token(data$tz[[1]])
         if (!length(tz_name) || is.na(tz_name) || !nzchar(tz_name)) {
           tz_name <- "UTC"
         }
         res <- try(
           {
-            if (grepl("^UTC[+-]\\d{2}:\\d{2}$", tz_name)) {
+            if (is_input_timezone_offset(tz_name)) {
               offset_minutes <- parse_utc_offset_minutes(
                 tz_name,
                 default = "UTC+00:00"
