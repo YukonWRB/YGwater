@@ -52,6 +52,21 @@ app_ui <- function(request) {
         $('html').attr('lang', message.lang);
       });"
       )),
+      # Disable the login/logout button after it's clicked to prevent multiple clicks while waiting for response
+      # Since re-enabling happens in an observer but the 'disable' is right in the browser, it's possible to click the button and have it disable before the server is ready - and until it's ready it won't accept the click anyways. The JS hook below ensures that it's only disabled once the server is ready to handle it, which prevents the button from getting stuck in a disabled state if clicked too early.
+      tags$script(HTML(
+        "
+      $(document).on('shiny:connected', function() {
+        $('#loginBtn').prop('disabled', false);
+        $('#logoutBtn').prop('disabled', false);
+      });
+
+      $(document).on('shiny:disconnected', function() {
+        $('#loginBtn').prop('disabled', true);
+        $('#logoutBtn').prop('disabled', true);
+      });
+      "
+      )),
       tags$script(
         "Shiny.addCustomMessageHandler(
       'toggleDropdown',
@@ -140,15 +155,13 @@ app_ui <- function(request) {
                   class = "login-btn-container",
                   actionButton(
                     "loginBtn",
-                    "Login",
-                    onclick = "$(this).prop('disabled', true);"
-                  ), # Disable the login button after it's clicked to prevent multiple clicks while waiting for response
+                    "Login"
+                  ),
                   actionButton(
                     "logoutBtn",
                     "Logout",
-                    style = "display: none;",
-                    onclick = "$(this).prop('disabled', true);"
-                  ) # disable the logout button after it's clicked to prevent multiple clicks while waiting for response, and initially hide it until user is logged in
+                    style = "display: none;"
+                  )
                 ) # Initially hidden
               }
             ),
