@@ -2839,7 +2839,7 @@ tryCatch(
       # Subset to columns of interest
       tabl <- tabl[, c("location_name_fr", "location", "elevation", "sample_date", "depth", "swe", "relative_to_med", "swe_prevyear", "swe_med", "years", "sub_basin")]
       # Rename columns
-      colnames(tabl) <- c("Nom", "Code", "Élévation (m)", "Date du relevé (mm-jj)", "Épaisseur de neige (cm)", "Équivalent en eau (ÉEN, mm)", "% de l'ÉEN médian", "Année dernière (ÉEN, mm)", "normale (ÉEN, mm)", "Nombre d'années avec données", "sub_basin")
+      colnames(tabl) <- c("Nom", "Code", "Élévation (m)", "Date du relevé (mm-jj)", "Épaisseur de neige (cm)", "Équivalent en eau (ÉEN, mm)", "% de l'ÉEN médian", "Année dernière (ÉEN, mm)", "ÉEN médian historique (mm)", "Nombre d'années avec données", "sub_basin")
       size <- 9
       wdth <- c(1.3, 0.8, 0.7, 0.6, 0.7, 0.7, 0.6)
 
@@ -2872,7 +2872,7 @@ tryCatch(
     #### Set up basin names ####
     # Order rows
     target <- c("Upper_Yukon", "Teslin_Big_Salmon", "Central_Yukon", "Pelly", "Stewart", "White", "Lower_Yukon", "Porcupine", "Peel", "Liard", "Alsek", "Alaska")
-    tabl <- tabl %>% dplyr::arrange(factor(sub_basin, levels = target))
+    tabl <- tabl %>% dplyr::arrange(factor(sub_basin, levels = target), factor(if (language$abbrev == "fr") Code else Identifier))
 
     ## Change basin names
     # Add River Basin to names
