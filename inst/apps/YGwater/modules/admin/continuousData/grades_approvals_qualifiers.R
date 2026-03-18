@@ -42,15 +42,41 @@ grades_approvals_qualifiersUI <- function(id) {
           fluidRow(
             column(
               width = 4,
-              textInput(
-                ns("start_dt"),
-                "Start datetime (UTC)",
-                placeholder = "YYYY-MM-DD HH:MM:SS"
+              selectizeInput(
+                ns("timezone"),
+                "Input timezone",
+                choices = input_timezone_choices(),
+                selected = default_input_timezone(),
+                multiple = FALSE,
+                width = "100%"
               ),
-              textInput(
+              shinyWidgets::airDatepickerInput(
+                ns("start_dt"),
+                "Start datetime",
+                value = NULL,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                update_on = "change",
+                tz = default_input_timezone(),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
+              ),
+              shinyWidgets::airDatepickerInput(
                 ns("end_dt"),
-                "End datetime (UTC)",
-                placeholder = "YYYY-MM-DD HH:MM:SS"
+                "End datetime",
+                value = NULL,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                update_on = "change",
+                tz = default_input_timezone(),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
               ),
               div(
                 class = "text-muted small",
@@ -157,21 +183,6 @@ grades_approvals_qualifiers <- function(id, language) {
       )
     })
 
-    parse_datetime <- function(value) {
-      if (is.null(value) || !nzchar(value)) {
-        return(NA)
-      }
-      suppressWarnings({
-        parsed <- as.POSIXct(value, tz = "UTC")
-      })
-      if (is.na(parsed)) {
-        suppressWarnings({
-          parsed <- as.POSIXct(strptime(value, "%Y-%m-%d", tz = "UTC"))
-        })
-      }
-      parsed
-    }
-
     format_datetime <- function(value) {
       if (is.null(value) || is.na(value)) {
         return("")
@@ -199,6 +210,11 @@ grades_approvals_qualifiers <- function(id, language) {
         }
       }
       NA
+    }
+
+    shift_range_datetime_inputs <- function(tz_name) {
+      shift_air_datetime_input_timezone(session, input, "start_dt", tz_name)
+      shift_air_datetime_input_timezone(session, input, "end_dt", tz_name)
     }
 
     load_privileges <- function() {
@@ -350,21 +366,31 @@ grades_approvals_qualifiers <- function(id, language) {
           if (default_start >= default_end) {
             default_start <- default_end - 1 * 3600
           }
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "start_dt",
-            value = format_datetime(default_start)
+            value = coerce_utc_datetime(default_start),
+            tz = normalize_input_timezone(input$timezone)
           )
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "end_dt",
-            value = format_datetime(default_end)
+            value = coerce_utc_datetime(default_end),
+            tz = normalize_input_timezone(input$timezone)
           )
         } else {
           selected_ts(NULL)
         }
       },
       ignoreNULL = FALSE
+    )
+
+    observeEvent(
+      input$timezone,
+      {
+        shift_range_datetime_inputs(normalize_input_timezone(input$timezone))
+      },
+      ignoreInit = TRUE
     )
     
     # observe user clicked 'full time series' button
@@ -410,15 +436,17 @@ grades_approvals_qualifiers <- function(id, language) {
           if (ts_start >= ts_end) {
             ts_start <- ts_end - 1 * 3600
           }
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "start_dt",
-            value = format_datetime(ts_start)
+            value = coerce_utc_datetime(ts_start),
+            tz = normalize_input_timezone(input$timezone)
           )
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "end_dt",
-            value = format_datetime(ts_end)
+            value = coerce_utc_datetime(ts_end),
+            tz = normalize_input_timezone(input$timezone)
           )
         }
       })
@@ -472,15 +500,17 @@ grades_approvals_qualifiers <- function(id, language) {
           if (year_start >= ts_end) {
             year_start <- ts_end - 1 * 3600
           }
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "start_dt",
-            value = format_datetime(year_start)
+            value = coerce_utc_datetime(year_start),
+            tz = normalize_input_timezone(input$timezone)
           )
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "end_dt",
-            value = format_datetime(ts_end)
+            value = coerce_utc_datetime(ts_end),
+            tz = normalize_input_timezone(input$timezone)
           )
         }
       })
@@ -489,21 +519,13 @@ grades_approvals_qualifiers <- function(id, language) {
       if (is.null(selected_ts())) {
         return(NULL)
       }
-      start_str <- input$start_dt
-      end_str <- input$end_dt
-      if (is.null(start_str) || !nzchar(start_str)) {
-        return("Enter a start datetime.")
-      }
-      start_dt <- parse_datetime(start_str)
+      start_dt <- scalar_utc_datetime(input$start_dt)
       if (is.na(start_dt)) {
-        return("Start datetime is invalid. Use format YYYY-MM-DD HH:MM:SS.")
+        return("Select a start datetime.")
       }
-      if (is.null(end_str) || !nzchar(end_str)) {
-        return("Enter an end datetime.")
-      }
-      end_dt <- parse_datetime(end_str)
+      end_dt <- scalar_utc_datetime(input$end_dt)
       if (is.na(end_dt)) {
-        return("End datetime is invalid. Use format YYYY-MM-DD HH:MM:SS.")
+        return("Select an end datetime.")
       }
       if (start_dt >= end_dt) {
         return("Start datetime must be before end datetime.")
@@ -573,8 +595,8 @@ grades_approvals_qualifiers <- function(id, language) {
       if (!is.null(range_error())) {
         return(data.frame())
       }
-      start_dt <- parse_datetime(input$start_dt)
-      end_dt <- parse_datetime(input$end_dt)
+      start_dt <- scalar_utc_datetime(input$start_dt)
+      end_dt <- scalar_utc_datetime(input$end_dt)
       if (is.na(start_dt) || is.na(end_dt) || start_dt >= end_dt) {
         return(data.frame())
       }
@@ -810,15 +832,17 @@ grades_approvals_qualifiers <- function(id, language) {
             "attribute_value",
             selected = as.character(row$type_id)
           )
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "start_dt",
-            value = format_datetime(row$start_dt)
+            value = coerce_utc_datetime(row$start_dt),
+            tz = normalize_input_timezone(input$timezone)
           )
-          updateTextInput(
+          shinyWidgets::updateAirDateInput(
             session,
             "end_dt",
-            value = format_datetime(row$end_dt)
+            value = coerce_utc_datetime(row$end_dt),
+            tz = normalize_input_timezone(input$timezone)
           )
         }
       },
@@ -858,8 +882,8 @@ grades_approvals_qualifiers <- function(id, language) {
         showNotification(err, type = "error")
         return()
       }
-      start_dt <- parse_datetime(input$start_dt)
-      end_dt <- parse_datetime(input$end_dt)
+      start_dt <- scalar_utc_datetime(input$start_dt)
+      end_dt <- scalar_utc_datetime(input$end_dt)
       if (is.na(start_dt) || is.na(end_dt)) {
         showNotification("Start or end datetime is invalid.", type = "error")
         return()
@@ -1023,8 +1047,17 @@ grades_approvals_qualifiers <- function(id, language) {
           return()
         }
         times <- sort(times)
-        updateTextInput(session, "start_dt", value = unname(format_datetime(times[1])))
-        updateTextInput(session, "end_dt", value = unname(format_datetime(times[length(times)]))
+        shinyWidgets::updateAirDateInput(
+          session,
+          "start_dt",
+          value = coerce_utc_datetime(times[1]),
+          tz = normalize_input_timezone(input$timezone)
+        )
+        shinyWidgets::updateAirDateInput(
+          session,
+          "end_dt",
+          value = coerce_utc_datetime(times[length(times)]),
+          tz = normalize_input_timezone(input$timezone)
         )
         next_edge("start")
       },
@@ -1044,10 +1077,20 @@ grades_approvals_qualifiers <- function(id, language) {
           return()
         }
         if (identical(next_edge(), "start")) {
-          updateTextInput(session, "start_dt", value = format_datetime(dt))
+          shinyWidgets::updateAirDateInput(
+            session,
+            "start_dt",
+            value = coerce_utc_datetime(dt),
+            tz = normalize_input_timezone(input$timezone)
+          )
           next_edge("end")
         } else {
-          updateTextInput(session, "end_dt", value = format_datetime(dt))
+          shinyWidgets::updateAirDateInput(
+            session,
+            "end_dt",
+            value = coerce_utc_datetime(dt),
+            tz = normalize_input_timezone(input$timezone)
+          )
           next_edge("start")
         }
       },
@@ -1141,7 +1184,10 @@ grades_approvals_qualifiers <- function(id, language) {
       p <- plotly::layout(
         p,
         title = NULL,
-        xaxis = list(title = "Datetime", range = c(parse_datetime(input$start_dt), parse_datetime(input$end_dt))),
+          xaxis = list(title = "Datetime", range = c(
+            scalar_utc_datetime(input$start_dt),
+            scalar_utc_datetime(input$end_dt)
+          )),
         yaxis = list(title = "Value"),
         dragmode = "select",
         legend = list(orientation = "h", yanchor = "bottom", y = 1.02)

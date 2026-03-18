@@ -93,19 +93,35 @@ calibrateUI <- function(id) {
                 ns = ns,
                 condition = "input.selection == 'Basic calibration info'",
                 uiOutput(ns("observer")),
-                shinyWidgets::airDatepickerInput(
-                  ns("obs_datetime"),
-                  label = "Calibration date/time (modify with the menu only)",
-                  value = .POSIXct(Sys.time(), tz = "MST"),
-                  range = FALSE,
-                  multiple = FALSE,
-                  timepicker = TRUE,
-                  maxDate = Sys.Date() + 1,
-                  startView = Sys.Date(),
-                  update_on = "change",
-                  timepickerOpts = shinyWidgets::timepickerOptions(
-                    minutesStep = 15,
-                    timeFormat = "HH:mm"
+                fluidRow(
+                  column(
+                    4,
+                    selectizeInput(
+                      ns("timezone"),
+                      "Input timezone",
+                      choices = input_timezone_choices(),
+                      selected = default_input_timezone(),
+                      multiple = FALSE
+                    )
+                  ),
+                  column(
+                    8,
+                    shinyWidgets::airDatepickerInput(
+                      ns("obs_datetime"),
+                      label = "Calibration date/time",
+                      value = .POSIXct(Sys.time(), tz = "UTC"),
+                      range = FALSE,
+                      multiple = FALSE,
+                      timepicker = TRUE,
+                      maxDate = Sys.Date() + 1,
+                      startView = Sys.Date(),
+                      update_on = "change",
+                      tz = default_input_timezone(),
+                      timepickerOpts = shinyWidgets::timepickerOptions(
+                        minutesStep = 15,
+                        timeFormat = "HH:mm"
+                      )
+                    )
                   )
                 ),
                 textOutput(ns("instrument_reminder")),
@@ -670,6 +686,22 @@ table.on("click", "tr", function() {
     instruments_data <- reactiveValues()
     select_data <- reactiveValues() # Holds data to populate select menus
     sensors_data <- reactiveValues(datetime = .POSIXct(Sys.time(), tz = "UTC")) #get the time here so that multiple maintenance events are on same line
+    default_obs_datetime <- function() {
+      .POSIXct(Sys.time(), tz = "UTC")
+    }
+
+    shift_obs_datetime_timezone <- function(tz_name) {
+      current_value <- coerce_utc_datetime(input$obs_datetime)
+      if (is.null(current_value) || !length(current_value) || all(is.na(current_value))) {
+        return(invisible(NULL))
+      }
+      shinyWidgets::updateAirDateInput(
+        session,
+        "obs_datetime",
+        value = current_value,
+        tz = tz_name
+      )
+    }
 
     send_table <- reactiveValues()
     messages <- reactiveValues()
@@ -1680,6 +1712,14 @@ table.on("click", "tr", function() {
       }
     })
 
+    observeEvent(
+      input$timezone,
+      {
+        shift_obs_datetime_timezone(normalize_input_timezone(input$timezone))
+      },
+      ignoreInit = TRUE
+    )
+
     # Create reset functions for each calibration type ################################################
     reset_basic <- function(keep_observer = FALSE) {
       if (!keep_observer) {
@@ -1694,7 +1734,8 @@ table.on("click", "tr", function() {
       shinyWidgets::updateAirDateInput(
         session,
         "obs_datetime",
-        value = .POSIXct(Sys.time(), tz = "MST")
+        value = default_obs_datetime(),
+        tz = normalize_input_timezone(input$timezone)
       )
       output$ID_sensor_holder <- renderUI({
         div(
@@ -4362,11 +4403,13 @@ table.on("click", "tr", function() {
           shinyWidgets::updateAirDateInput(
             session,
             "obs_datetime",
-            value = calibrations$incomplete_calibrations[
-              restart_value,
-              "obs_datetime"
-            ] -
-              7 * 60 * 60
+            value = coerce_utc_datetime(
+              calibrations$incomplete_calibrations[
+                restart_value,
+                "obs_datetime"
+              ]
+            ),
+            tz = normalize_input_timezone(input$timezone)
           )
           output$ID_sensor_holder <- renderUI({
             div(
@@ -4843,7 +4886,7 @@ table.on("click", "tr", function() {
           return()
         }
 
-        dt <- lubridate::with_tz(input$obs_datetime, tzone = "UTC")
+        dt <- scalar_utc_datetime(input$obs_datetime)
 
         id_sensor_holder <- instruments_data$sheet[
           instruments_data$sheet$serial_no == input$ID_sensor_holder,

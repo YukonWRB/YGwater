@@ -105,20 +105,6 @@ addSamples <- function(id, language) {
       )
     )
 
-    parse_datetime_input <- function(value) {
-      if (is.null(value) || !nzchar(value)) {
-        return(NA)
-      }
-      formats <- c("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d")
-      for (fmt in formats) {
-        parsed <- as.POSIXct(value, format = fmt, tz = "UTC")
-        if (!is.na(parsed)) {
-          return(parsed)
-        }
-      }
-      NA
-    }
-
     format_datetime_input <- function(value) {
       if (is.null(value) || !length(value)) {
         return("")
@@ -137,6 +123,21 @@ addSamples <- function(id, language) {
       } else {
         value
       }
+    }
+
+    shift_sample_datetime_inputs <- function(tz_name) {
+      shift_air_datetime_input_timezone(
+        session,
+        input,
+        "datetime",
+        tz_name
+      )
+      shift_air_datetime_input_timezone(
+        session,
+        input,
+        "target_datetime",
+        tz_name
+      )
     }
 
     format_integer_array <- function(values) {
@@ -240,8 +241,8 @@ addSamples <- function(id, language) {
         } else {
           as.numeric(input$z)
         },
-        datetime = parse_datetime_input(input$datetime),
-        target_datetime = parse_datetime_input(input$target_datetime),
+        datetime = scalar_utc_datetime(input$datetime),
+        target_datetime = scalar_utc_datetime(input$target_datetime),
         collection_method = collection_method,
         sample_type = sample_type,
         linked_with = linked_with,
@@ -307,8 +308,16 @@ addSamples <- function(id, language) {
       updateSelectizeInput(session, "sub_location", selected = character(0))
       updateSelectizeInput(session, "media", selected = character(0))
       updateNumericInput(session, "z", value = NA)
-      updateTextInput(session, "datetime", value = "")
-      updateTextInput(session, "target_datetime", value = "")
+      shinyWidgets::updateAirDateInput(
+        session,
+        "datetime",
+        clear = TRUE
+      )
+      shinyWidgets::updateAirDateInput(
+        session,
+        "target_datetime",
+        clear = TRUE
+      )
       updateSelectizeInput(
         session,
         "collection_method",
@@ -373,16 +382,26 @@ addSamples <- function(id, language) {
         selected = as.character(details$media_id)
       )
       updateNumericInput(session, "z", value = details$z)
-      updateTextInput(
+      shinyWidgets::updateAirDateInput(
         session,
         "datetime",
-        value = format_datetime_input(details$datetime)
+        value = coerce_utc_datetime(details$datetime),
+        tz = normalize_input_timezone(input$timezone)
       )
-      updateTextInput(
-        session,
-        "target_datetime",
-        value = format_datetime_input(details$target_datetime)
-      )
+      if (is.na(details$target_datetime)) {
+        shinyWidgets::updateAirDateInput(
+          session,
+          "target_datetime",
+          clear = TRUE
+        )
+      } else {
+        shinyWidgets::updateAirDateInput(
+          session,
+          "target_datetime",
+          value = coerce_utc_datetime(details$target_datetime),
+          tz = normalize_input_timezone(input$timezone)
+        )
+      }
       updateSelectizeInput(
         session,
         "collection_method",
@@ -582,6 +601,14 @@ addSamples <- function(id, language) {
       reset_form()
       DT::dataTableProxy(ns("sample_table")) |> DT::selectRows(NULL)
     })
+
+    observeEvent(
+      input$timezone,
+      {
+        shift_sample_datetime_inputs(normalize_input_timezone(input$timezone))
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$location,
@@ -786,19 +813,48 @@ addSamples <- function(id, language) {
         ),
         fluidRow(
           column(
-            6,
-            textInput(
-              ns("datetime"),
-              "Sample datetime (UTC)",
-              placeholder = "YYYY-MM-DD HH:MM"
+            3,
+            selectizeInput(
+              ns("timezone"),
+              "Input timezone",
+              choices = input_timezone_choices(),
+              selected = default_input_timezone(),
+              multiple = FALSE,
+              width = "100%"
             )
           ),
           column(
-            6,
-            textInput(
+            4,
+            shinyWidgets::airDatepickerInput(
+              ns("datetime"),
+              "Sample datetime",
+              value = NULL,
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              update_on = "change",
+              tz = default_input_timezone(),
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
+            )
+          ),
+          column(
+            5,
+            shinyWidgets::airDatepickerInput(
               ns("target_datetime"),
-              "Target datetime (UTC, optional)",
-              placeholder = "YYYY-MM-DD HH:MM"
+              "Target datetime (optional)",
+              value = NULL,
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              update_on = "change",
+              tz = default_input_timezone(),
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
             )
           )
         ),
@@ -1217,7 +1273,7 @@ addSamples <- function(id, language) {
       }
       if (is.na(form$datetime)) {
         showNotification(
-          "Sample datetime is required and must be in YYYY-MM-DD HH:MM format.",
+          "Sample datetime is required.",
           type = "error"
         )
         return()
@@ -1438,13 +1494,13 @@ addSamples <- function(id, language) {
           showNotification("Owner is required.", type = "error")
           return()
         }
-        if (is.na(form$datetime)) {
-          showNotification(
-            "Sample datetime is required and must be in YYYY-MM-DD HH:MM format.",
-            type = "error"
-          )
-          return()
-        }
+      if (is.na(form$datetime)) {
+        showNotification(
+          "Sample datetime is required.",
+          type = "error"
+        )
+        return()
+      }
 
         update_sql <- "
         UPDATE discrete.samples

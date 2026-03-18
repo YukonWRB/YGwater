@@ -36,6 +36,8 @@ app_ui <- function(request) {
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
       tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
       tags$script(src = "js/idle_timer.js"), # JS to report user activity for inactivity logout
+      tags$script(src = "js/usage_tracking.js"), # JS telemetry for usage analytics events
+      tags$script(src = "js/air_datepicker_manual_fix.js"), # Fix manual text entry for shinyWidgets::airDatepickerInput
       # JS below is for updating the title of the page from the server, when the user changes language
       tags$script(HTML(
         "
@@ -136,8 +138,17 @@ app_ui <- function(request) {
                 # 'public' is a global variable established in the globals file
                 div(
                   class = "login-btn-container",
-                  actionButton("loginBtn", "Login"),
-                  actionButton("logoutBtn", "Logout", style = "display: none;")
+                  actionButton(
+                    "loginBtn",
+                    "Login",
+                    onclick = "$(this).prop('disabled', true);"
+                  ), # Disable the login button after it's clicked to prevent multiple clicks while waiting for response
+                  actionButton(
+                    "logoutBtn",
+                    "Logout",
+                    style = "display: none;",
+                    onclick = "$(this).prop('disabled', true);"
+                  ) # disable the logout button after it's clicked to prevent multiple clicks while waiting for response, and initially hide it until user is logged in
                 ) # Initially hidden
               }
             ),
