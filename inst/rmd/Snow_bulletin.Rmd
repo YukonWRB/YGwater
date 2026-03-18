@@ -2831,7 +2831,6 @@ tryCatch(
     # tabl[tabl$location_id %in% c("10AD-SC01B", "09BA-SC02B", "09AB-SC02B"), c("years")] <- paste0(tabl[tabl$location_id %in% c("10AD-SC01B", "09BA-SC02B", "09AB-SC02B"), c("years")], " C")
     # Handle composite station indicators
     tabl$composite_flag <- grepl("\\(composite\\)", tabl[["location_name"]])
-    tabl[["location_name"]] <- gsub(" \\(composite\\)", "", tabl[["location_name"]])
     tabl$years <- as.character(tabl$years)
     tabl$swe_med <- as.character(tabl$swe_med)
     tabl$swe_med <- ifelse(tabl$composite_flag, paste0(tabl$swe_med, " C"), tabl$swe_med)
@@ -2852,17 +2851,9 @@ tryCatch(
       wdth <- c(1.3, 0.8, 0.7, 0.6, 0.7, 0.7, 0.6)
 
       # Remove 'Parcours nivométrique' from name
-      tabl[, 1] <- sub("(parcours nivométrique)", "", tabl[, 1])
-
-      # Remove 'composite' from name (years of record has 'C' for composite stations)
-      tabl[, 1] <- sub(", composite", "", tabl[, 1])
-      tabl[, 1] <- sub(" composite", "", tabl[, 1])
-      # tabl[, 1] <- sub(", composite", "(composite)", tabl[, 1])
-      # tabl[, 1] <- sub(" composite", "(composite)", tabl[, 1])
-
-      # Remove 'A' and 'B' from name (years of record has 'C' for composite stations)
-      tabl[, 1] <- sub(" A", "", tabl[, 1])
-      tabl[, 1] <- sub(" B", "", tabl[, 1])
+      tabl[, 1] <- sub(" \\(parcours nivométrique\\)", "", tabl[, 1])
+      tabl[, 1] <- sub(" \\(parcours nivométrique, composite\\)", "", tabl[, 1])
+      tabl[, 1] <- sub(" \\(parcours nivométrique composite\\)", "", tabl[, 1])
 
       # Capitalize first letter of location name
       tabl[, 1] <- paste0(toupper(substr(tabl$Nom, 1, 1)), substr(tabl$Nom, 2, nchar(tabl$Nom)))
@@ -2875,9 +2866,15 @@ tryCatch(
       colnames(tabl) <- c("Name", "Identifier", "Elevation (m)", "Date of Survey (mm-dd)", "Snow depth (cm)", "Water content (SWE) (mm)", "% of median SWE", "Last year SWE (mm)", "Median historical SWE (mm)", "Years of record", "sub_basin")
       size <- 9
       wdth <- c(1.2, 0.8, 0.7, 0.7, 0.7, 0.7, 0.6)
+
+      # Remove '(composite)' from name
+      tabl[, 1] <- gsub(" \\(composite\\)", "", tabl[, 1])
       # Remove 'Snow Course' from name
       tabl[, 1] <- sub(" Snow Course", "", tabl[, 1])
     }
+
+    # Remove 'A' and 'B' from name (years of record has 'C' for composite stations)
+    tabl[, 1] <- sub(" (A|B)(?= |$)", "", tabl[, 1], perl = TRUE)
 
     #### Set up basin names ####
     # Order rows
