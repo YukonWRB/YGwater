@@ -858,7 +858,7 @@ RAPPELEZ VOUS DE SUPPRIMER CETTE PAGE UNE FOIS TERMINÉ.
 
 `r if (language$abbrev == "en") {
 "The Department of Environment, Water Science and Stewardship issues the Yukon Snow Survey Bulletin and Water Supply Forecast three times annually -- early March, April and May. The bulletin provides a summary of winter meteorological and streamflow conditions for the Yukon, as well as current snow depth and snow water equivalent observations for 57 locations. This information is used to evaluate the potential for spring flooding caused by both breakup ice jams and large spring snowmelt (freshet) flows. It is important to note that other processes such as summer rain and glacier melt can significantly influence maximum annual water levels in specific Yukon basins."} else {
-"Le Bulletin des relevés nivométriques et des prévisions hydrologiques du Yukon est publié trois fois par année – au début des mois de mars, d’avril et de mai – par la Sciences et intendance de l'eau du ministère de l’Environnement. Il présente un sommaire des conditions météorologiques et des cours d’eau en hiver au Yukon, ainsi que des mesures de l’épaisseur de neige et de l’équivalent en eau de la neige prises dans 57 stations. Ces mesures servent à évaluer les probabilités d’inondations printanières dues aux débâcles et aux fortes crues provoquées par la fonte des neiges. Il est à noter que d’autres phénomènes, comme les pluies estivales et la fonte des glaciers, peuvent influer considérablement sur les niveaux d’eau maximaux annuels dans certains bassins hydrographiques du territoire."
+"Le Bulletin des relevés nivométriques et des prévisions hydrologiques du Yukon est publié trois fois par année – au début des mois de mars, d’avril et de mai – par la direction des sciences et de l'intendance de l'eau du ministère de l’Environnement. Il présente un sommaire des conditions météorologiques et des cours d’eau en hiver au Yukon, ainsi que des mesures de l’épaisseur de neige et de l’équivalent en eau de la neige prises dans 57 stations. Ces mesures servent à évaluer les probabilités d’inondations printanières dues aux débâcles et aux fortes crues provoquées par la fonte des neiges. Il est à noter que d’autres phénomènes, comme les pluies estivales et la fonte des glaciers, peuvent influer considérablement sur les niveaux d’eau maximaux annuels dans certains bassins hydrographiques du territoire."
 }`
 
 
@@ -955,7 +955,7 @@ paste0(
 paste0(
 "Pour en savoir plus sur le Bulletin, l’accumulation de neige ou les prévisions de ruissellement, veuillez écrire à ",
 "[waterlevels@yukon.ca](mailto:waterlevels@yukon.ca){.email}\n\n",
-"Sciences et intendance de l'eau, ministère de l’Environnement  \n",
+"Direction des sciences et de l'intendance de l'eau, ministère de l’Environnement  \n",
 "(867) 667-3171 ou (sans frais au Yukon, aux Territoires du Nord-Ouest et au Nunavut)  1-800-661-0408, poste 3171  \n",
 "Télécopieur: 867-667-3195 | Courriel: [waterscience@yukon.ca](mailto:waterscience@yukon.ca){.email}\n\n",
 "On peut consulter le présent bulletin et les bulletins précédents au [Yukon.ca/fr/releves-nivometriques](https://yukon.ca/fr/releves-nivometriques)\n\n",
@@ -963,7 +963,7 @@ paste0(
 "Veuillez utiliser le titre suivant pour citer le présent document :  \n",
 "*Bulletin des relevés nivométriques et des prévisions hydrologiques du Yukon,  1^er^ ", month_names[bulletin_month], " ", bulletin_year, "*\n\n",
 "\u00A9 ", month_names[bulletin_month], " ", bulletin_year, "  \n",
-"Sciences et intendance de l'eau  \n",
+"Direction des sciences et de l'intendance de l'eau  \n",
 "Ministère de l’Environnement  \n",
 "Gouvernement du Yukon  \n",
 "C.P. 2703, Whitehorse (Yukon) Y1A 2C6"
@@ -1019,7 +1019,7 @@ Agencies cooperating with the Department of Environment in the Snow Survey Progr
 ")
 } else {
 paste0("
-Le Bulletin des relevés nivométriques fait partie du Programme des relevés nivométriques du Yukon, qui relève de la Sciences et intendance de l'eau du ministère de l’Environnement. La Direction veut assurer l’intendance de l’eau au Yukon et exercer une surveillance responsable et collaborative pour orienter la gestion et la protection des eaux du territoire.
+Le Bulletin des relevés nivométriques fait partie du Programme des relevés nivométriques du Yukon, qui relève de la direction des sciences et de l'intendance de l'eau du ministère de l’Environnement. La Direction veut assurer de l’intendance de l’eau au Yukon et exercer une surveillance responsable et collaborative pour orienter la gestion et la protection des eaux du territoire.
 
 Nous sommes reconnaissants de pouvoir surveiller les niveaux de neige et d’eau sur les territoires des 14", knitr::asis_output("\U00A0"), "Premières Nations du Yukon et de collaborer avec bon nombre d’entre elles pour différents aspects de notre travail. Bien que les conclusions transmises dans le présent rapport se fondent principalement sur des observations faites sur le terrain et sur des données scientifiques, nous reconnaissons le lien profond et millénaire des Premières Nations du Yukon avec la neige et l’eau ainsi que leur grand savoir en la matière.
 
@@ -1079,7 +1079,7 @@ paste0("
 paste0("
 **Changement de nom**
 
-- La direction des Ressources en eau s'appelle maintenant Sciences et intendance de l'eau pour mieux représenter le travail de la direction en tant que spécialistes de l'eau et notre rôle (aux côtés de nos partenaires) en tant qu'intendants de l'eau. Veuillez noter que ce changement n'a pas d'incidence sur les activités et nous pouvons continuer à être contactés au 867-667-3171 ou par courriel à [waterscience@yukon.ca](mailto:waterscience@yukon.ca){.email} pour les demandes générales et [waterlevels@yukon.ca](mailto:waterlevels@yukon.ca){.email} pour les demandes liées aux prévisions.
+- La direction des Ressources en eau s'appelle maintenant la **direction des sciences et de l'intendance de l'eau** pour mieux représenter le travail de la direction en tant que spécialistes de l'eau et notre rôle (aux côtés de nos partenaires) en tant qu'intendants de l'eau. Veuillez noter que ce changement n'a pas d'incidence sur les activités et nous pouvons continuer à être contactés au 867-667-3171 ou par courriel à [waterscience@yukon.ca](mailto:waterscience@yukon.ca){.email} pour les demandes générales et [waterlevels@yukon.ca](mailto:waterlevels@yukon.ca){.email} pour les demandes liées aux prévisions.
 
 **Disponibilité des données**
 
