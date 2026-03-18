@@ -150,6 +150,63 @@ mapLocs <- function(id, language) {
     observeFilterInput("project")
     observeFilterInput("network")
 
+    filtered_parameters <- reactive({
+      req(moduleData$parameters)
+
+      params <- moduleData$parameters
+      selected_groups <- input$param_group
+
+      if (
+        !is.null(selected_groups) &&
+          length(selected_groups) > 0 &&
+          !"all" %in% selected_groups
+      ) {
+        params <- params[group_id %in% selected_groups]
+      }
+
+      params
+    })
+
+    parameter_choices <- reactive({
+      params <- filtered_parameters()
+
+      stats::setNames(
+        c("all", params$parameter_id),
+        c(
+          tr("all_m", language$language),
+          params[[tr("param_name_col", language$language)]]
+        )
+      )
+    })
+
+    observe({
+      req(language$language, filtered_parameters())
+
+      available_params <- filtered_parameters()$parameter_id
+      selected_params <- isolate(input$param)
+
+      if (
+        is.null(selected_params) ||
+          length(selected_params) == 0 ||
+          "all" %in% selected_params
+      ) {
+        selected_params <- "all"
+      } else {
+        selected_params <- intersect(selected_params, available_params)
+
+        if (length(selected_params) == 0) {
+          selected_params <- "all"
+        }
+      }
+
+      updateSelectizeInput(
+        session,
+        "param",
+        choices = parameter_choices(),
+        selected = selected_params
+      )
+    })
+
     # Create UI elements #####
     output$banner <- renderUI({
       application_notifications_ui(
@@ -236,16 +293,7 @@ mapLocs <- function(id, language) {
             selectizeInput(
               ns("param"),
               label = tr("parameter", language$language),
-              choices = stats::setNames(
-                c("all", moduleData$parameters$parameter_id),
-                c(
-                  tr("all_m", language$language),
-                  moduleData$parameters[[tr(
-                    "param_name_col",
-                    language$language
-                  )]]
-                )
-              ),
+              choices = parameter_choices(),
               selected = "all",
               multiple = TRUE
             ),
