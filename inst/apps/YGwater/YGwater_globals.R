@@ -277,11 +277,46 @@ YGwater_globals <- function(
       sign * (as.integer(parts[[3]]) * 60L + as.integer(parts[[4]]))
     }
 
+    offset_minutes_to_widget_timezone <<- function(offset_minutes) {
+      offset_minutes <- as.integer(offset_minutes[[1]])
+      if (is.na(offset_minutes)) {
+        return("UTC")
+      }
+      fixed_map <- c(
+        `-570` = "Pacific/Marquesas",
+        `-210` = "America/St_Johns",
+        `210` = "Asia/Tehran",
+        `270` = "Asia/Kabul",
+        `330` = "Asia/Kolkata",
+        `345` = "Asia/Kathmandu",
+        `390` = "Asia/Yangon",
+        `525` = "Australia/Eucla",
+        `570` = "Australia/Darwin",
+        `630` = "Australia/Lord_Howe",
+        `765` = "Pacific/Chatham",
+        `780` = "Pacific/Tongatapu",
+        `840` = "Pacific/Kiritimati"
+      )
+      mapped_tz <- unname(fixed_map[as.character(offset_minutes)])
+      if (length(mapped_tz) && !is.na(mapped_tz[[1]]) && nzchar(mapped_tz[[1]])) {
+        return(mapped_tz[[1]])
+      }
+      if (offset_minutes == 0L) {
+        return("UTC")
+      }
+      if (offset_minutes %% 60L == 0L) {
+        return(sprintf("Etc/GMT%+d", -offset_minutes %/% 60L))
+      }
+      "UTC"
+    }
+
     air_datetime_widget_timezone <<- function(
       tz_name,
       default = default_input_timezone()
     ) {
-      paste0("YG", normalize_input_timezone(tz_name, default = default))
+      offset_minutes_to_widget_timezone(
+        parse_utc_offset_minutes(tz_name, default = default)
+      )
     }
 
     datetime_to_posix_tz <<- function(
