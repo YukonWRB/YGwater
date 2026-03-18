@@ -6,7 +6,7 @@ params:
   basins: basins
   language: language
   title_var: title_var
-  reference_docx: reference_  
+  reference_docx: reference_docx
   start_year_historical: start_year_historical
   end_year_historical: end_year_historical
   con: con
@@ -14,10 +14,12 @@ params:
 editor_options: 
   markdown: 
     wrap: 72
+
+output:
+  word_document:
+    reference_docx: "`r params$reference_docx`"
     
 title: "`r params$title_var`"
-
-
 date: "`r if (params$language == 'english') paste0(month.name[params$month],' 1, ', params$year) else paste0('Le 1^er^ ', c('janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre')[params$month],' ', params$year)`"
 ---
 
@@ -38,9 +40,10 @@ if (tolower(language) == "french") {
 }
 
 
-# snowbull_basins <- suppressWarnings(
-#   yaml::read_yaml("inst/rmd/snowbull_basins.yaml")
-# )
+# Redefine translations function with bulletin translations.
+trb <- function(key) {
+  tr(key, lang = language$language, translations = data$snowbull_translations)
+}
 
 
 language <- list(
@@ -248,13 +251,6 @@ titles <- titles[[params$language]]
 fmt_tr_key <- function(key) {
   gsub("[ .]", "_", tolower(key))
 }
-
-# Redefine translations function with bulletin translations.
-trb <- function(key) {
-  tr(key, lang = language$language, translations = data$snowbull_translations)
-}
-
-
 
 #### -------------------- Conditional text colours ------------------------ ####
 
@@ -847,7 +843,7 @@ Certaines autres choses nécessitent une vérification et peuvent nécessiter un
 - Certains passages utilisant du texte ajusté automatiquement (habituellement en couleur) peuvent requérir un ajustement pour le féminin et/ou le pluriel.
 - Certains paragraphes doivent être attachés manuellement à leurs images, sinon ils peuvent se retrouver sur des pages différentes. Pour ce faire, sélectionnez l'image et le paragraphe qui vont ensemble, puis cliquez sur la petite flèche 'bas-droite' dans la section 'paragraphe' du volet Accueil. Cela ouvrira un menu où vous pourrez contrôler les paramètres de paragraphe. Sélectionnez le deuxième onglet et cochez les cases 'Conserver avec le suivant' et 'Conserver les lignes ensemble'. Cela garantira que l'image et le paragraphe restent ensemble sur la même page.
 - Les paragraphes immédiatement après les graphiques C et D nécessitent une modification manuelle, car ils ne sont pas toujours les mêmes et dépendent de l'interprétation experte.
-- Vérifiez soigneusement chaque hydrogramme et graphique EEN pour des données erronées. Selon la source, des modifications peuvent être nécessaires, soit à la source de données WSS (Aquarius), soit auprès du relevé hydrométrique du Canada. Une fois les modifications apportées, les nouvelles données doivent être synchronisées avec la base de données locale à l'aide de la fonction AquaCache::synchronize_contiuous.
+- Vérifiez soigneusement chaque hydrogramme et graphique ÉEN pour des données erronées. Selon la source, des modifications peuvent être nécessaires, soit à la source de données WSS (Aquarius), soit auprès du relevé hydrométrique du Canada. Une fois les modifications apportées, les nouvelles données doivent être synchronisées avec la base de données locale à l'aide de la fonction AquaCache::synchronize_contiuous.
 - Si les données de précipitations sont manquantes, assurez-vous qu'elles ont été entrées à la base de données manuellement (Mike Smith est la source des données).
 - Si les graphiques CDDF ont des points de données manquants, vous devrez imputer les données manquantes. La plupart du temps, un jour est manquant parce que quelques heures de températures sont manquantes. La base de données importe automatiquement des données de température horaires et quotidiennes en tant que séries chronologiques distinctes. Vous pouvez donc utiliser les données horaires pour imputer les données quotidiennes manquantes. Utilisez la fonction AquaCache::imputeMissing pour ce faire, en commençant par les données horaires; ensuite, imputez les données quotidiennes à l'aide des données horaires. Consultez la documentation de la fonction pour obtenir de l'aide.
 
@@ -1096,9 +1092,9 @@ paste0("
 - Une nouvelle station météorologique a été établie au parc territorial Ni'iinlii Njik en septembre 2025, Fishing Branch (09FA-M1), qui comprend la surveillance continue du couvert de neige.
 - Un nouveau relevé nivométrique a été établi à Crow Mountain (09FD-SC02) près d'Old Crow en 2025.
 - Les relevés nivométriques ayant deux emplacements d'échantillonnage distincts sont maintenant affichés en tant que dossier composite. Quatre relevés nivométriques sont touchés par ce changement : Aéroport de Whitehorse (09AB-SC02), Twin Creeks (09BA-SC02), Aéroport de Mayo (09DC-SC01) et Rivière Hyland (10AD-SC01). Les notes de bas de page du tableau 1 fournissent des explications supplémentaires sur les méthodes utilisées pour compiler chaque dossier composite et les dossiers historiques qui ont été transformés pour tenir compte des variations entre les emplacements appariés, améliorant ainsi les comparaisons historiques.
-- Les lectures réelles de l'EEN du tensiomètre à neige de Log Cabin ont commencé en juin 2023. Les gammes historiques ont été augmentées en prolongeant les séries chronologiques rétrospectivement à l'aide d'estimations composites de deux dossiers de régression :
-  1. Les séries d'EEN entre le 1er mars et le 1er mai (ou le 15 mai si disponible) ont été créées par interpolation linéaire des résultats discrets des relevés nivométriques au relevé nivométrique adjacent de Log Cabin de 1980 à 2023;
-  2. Les séries d'EEN pour l'accumulation de neige antérieure (1er octobre au 1er mars) et la fonte printanière (1er mai au 15 juin) ont été dérivées des estimations des densités historiques moyennes de la neige observées au relevé nivométrique de Log Cabin et de la série continue de profondeur de neige de la station météorologique Fraser exploitée par Avalanche Canada entre novembre 2019 et juin 2023.
+- Les lectures réelles de l'ÉEN du tensiomètre à neige de Log Cabin ont commencé en juin 2023. Les gammes historiques ont été augmentées en prolongeant les séries chronologiques rétrospectivement à l'aide d'estimations composites de deux dossiers de régression :
+  1. Les séries d'ÉEN entre le 1er mars et le 1er mai (ou le 15 mai si disponible) ont été créées par interpolation linéaire des résultats discrets des relevés nivométriques au relevé nivométrique adjacent de Log Cabin de 1980 à 2023;
+  2. Les séries d'ÉEN pour l'accumulation de neige antérieure (1er octobre au 1er mars) et la fonte printanière (1er mai au 15 juin) ont été dérivées des estimations des densités historiques moyennes de la neige observées au relevé nivométrique de Log Cabin et de la série continue de profondeur de neige de la station météorologique Fraser exploitée par Avalanche Canada entre novembre 2019 et juin 2023.
 
 **Changements apportés au bulletin**
 
@@ -1116,7 +1112,7 @@ paste0("
 `r if (language$abbrev == "en") {
   paste0("Weather conditions for the winter to date are presented in two maps, one showing temperature anomalies (deviation from normal), and another showing precipitation anomalies (percent of normal). Territory-wide snowpack data are presented in a third map showing Snow Water Equivalent (SWE) as a percent of normal for each station, as well as the basin-averaged estimated SWE for 11 watersheds (or river basins). Where available, complementary meteorological and hydrological data are presented for each basin through a series of plots, detailed below. Not all basins contain the instrumentation to support all five figure types. Normals are the calculated median of a fixed reference period from fall 1990 to spring 2020. The gray shaded areas represent data within the reference period: top light gray band (above average range), dark gray band (average range), lower gray band (below average range).")
 } else {
-  paste0("Les conditions météorologiques du Yukon sont présentées sur deux cartes, une illustrant les anomalies de températures (écarts par rapport aux normales climatiques), et l'autre, les anomalies de précipitations (en pourcentage de la normale). L'accumulation de neige sur l'ensemble du territoire est présentée sur une troisième carte montrant l'équivalent en eau de la neige (EEN) exprimé en pourcentage de la normale pour chaque station, de même que l'EEN estimé moyen du bassin pour 11 bassins hydrographiques. Lorsque disponibles, des données météorologiques et hydrologiques complémentaires sont communiquées pour chaque bassin au moyen d'une série de graphiques détaillés ci-après. Les bassins ne sont pas tous équipés des instruments permettant de relever des données pour les cinq types de figures. Les normales climatiques sont calculées à partir de la médiane d'une période de référence fixe allant de l'automne 1990 au printemps 2020. Les zones ombrées en gris représentent les données de la période de référence : bande grise pâle supérieure (gamme au-dessus de la moyenne), bande grise foncée (gamme moyenne), bande grise inférieure (gamme sous la moyenne).")
+  paste0("Les conditions météorologiques du Yukon sont présentées sur deux cartes, une illustrant les anomalies de températures (écarts par rapport aux normales climatiques), et l'autre, les anomalies de précipitations (en pourcentage de la normale). L'accumulation de neige sur l'ensemble du territoire est présentée sur une troisième carte montrant l'équivalent en eau de la neige (ÉEN) exprimé en pourcentage de la normale pour chaque station, de même que l'ÉEN estimé moyen du bassin pour 11 bassins hydrographiques. Lorsque disponibles, des données météorologiques et hydrologiques complémentaires sont communiquées pour chaque bassin au moyen d'une série de graphiques détaillés ci-après. Les bassins ne sont pas tous équipés des instruments permettant de relever des données pour les cinq types de figures. Les normales climatiques sont calculées à partir de la médiane d'une période de référence fixe allant de l'automne 1990 au printemps 2020. Les zones ombrées en gris représentent les données de la période de référence : bande grise pâle supérieure (gamme au-dessus de la moyenne), bande grise foncée (gamme moyenne), bande grise inférieure (gamme sous la moyenne).")
 }`
 
 `r if (language$abbrev == "en") {
@@ -1124,7 +1120,7 @@ paste0("
 "-   **Figure A:** Daily SWE data starting in September at one specific location in the watershed, showing the current winter snowpack evolution (black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record.")
 } else {
   paste0(
-  "-   **Figure A:** Données quotidiennes de l'EEN commençant en septembre à un endroit spécifique du bassin versant, montrant l'évolution du couvert de neige hivernal actuel (ligne noire) comparée aux données historiques de la période de référence d'automne 1990 à printemps 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (respectivement lignes bleue et brune) sur l'ensemble de la période d'observation.")
+  "-   **Figure A:** Données quotidiennes de l'ÉEN commençant en septembre à un endroit spécifique du bassin versant, montrant l'évolution du couvert de neige hivernal actuel (ligne noire) comparée aux données historiques de la période de référence d'automne 1990 à printemps 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (respectivement lignes bleue et brune) sur l'ensemble de la période d'observation.")
 }
 `
 
@@ -1137,7 +1133,7 @@ paste0("
 -   **Figure B:** Current, basin-averaged estimated SWE from snow survey data (black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, serving as an indicator of potential runoff volumes in the spring (acknowledging that snow sublimation, evapotranspiration, rain and glacier melt also significantly affect runoff).")
 } else {
 paste0("
--   **Figure B:** Estimation de l'EEN moyen actuel du bassin à partir des relevés nivométriques, comparée avec les données historiques de la période de référence 1991-2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, servant d'indicateur des volumes de ruissellement potentiels au printemps (en reconnaissant que la sublimation de la neige, l'évapotranspiration, la pluie et la fonte des glaciers influent également considérablement sur le ruissellement).")
+-   **Figure B:** Estimation de l'ÉEN moyen actuel du bassin à partir des relevés nivométriques, comparée avec les données historiques de la période de référence 1991-2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, servant d'indicateur des volumes de ruissellement potentiels au printemps (en reconnaissant que la sublimation de la neige, l'évapotranspiration, la pluie et la fonte des glaciers influent également considérablement sur le ruissellement).")
 }
 `
 
@@ -1252,11 +1248,11 @@ En février, les températures sont restées normales au Yukon, Mayo signalant d
 
 **Accumulation de neige**
 
-Les données d'accumulation de neige du territoire sont présentées à la Carte 3 ci-dessous, montrant l'équivalent en eau de la neige (EEN) en pourcentage de la normale pour chaque station, ainsi que l'EEN moyen estimé du bassin pour 11 bassins versants (ou fleuves). Nouveau pour 2026, les résultats des relevés nivométriques sont comparés aux données historiques d'une période de référence normale (appelée la période de référence 1991-2020). La normale est la médiane de la période de référence d'automne 1990 à printemps 2020, notant que la période de référence utilise des « années hydrologiques » par opposition aux années civiles. Ceci est important car l'accumulation de neige commence à s'accumuler à l'automne et influence les niveaux d'eau et les débits de l'été suivant.
+Les données d'accumulation de neige du territoire sont présentées à la Carte 3 ci-dessous, montrant l'équivalent en eau de la neige (ÉEN) en pourcentage de la normale pour chaque station, ainsi que l'ÉEN moyen estimé du bassin pour 11 bassins versants (ou fleuves). Nouveau pour 2026, les résultats des relevés nivométriques sont comparés aux données historiques d'une période de référence normale (appelée la période de référence 1991-2020). La normale est la médiane de la période de référence d'automne 1990 à printemps 2020, notant que la période de référence utilise des « années hydrologiques » par opposition aux années civiles. Ceci est important car l'accumulation de neige commence à s'accumuler à l'automne et influence les niveaux d'eau et les débits de l'été suivant.
 
 Le relevé nivométrique du 1er mars a révélé que l'accumulation de neige varie de près de la normale dans le bassin de la rivière Stewart à bien au-dessus de la normale dans le bassin de la rivière Teslin/Big Salmon.
 
-Les accumulations de neige du bassin Teslin/Big Salmon (153 %), du Yukon central (région de Carmacks) (147 %), White (147 %), Liard (146 %) et du Yukon inférieur (région de Dawson/Klondike) (136 %) sont toutes bien au-dessus de la normale au 1er mars. Le Yukon supérieur (zone des lacs du Sud/Whitehorse) (130 %), Peel (127 %), Pelly (122 %) et Alsek (110 %) sont tous au-dessus de la normale. Le bassin de la rivière Stewart (98 %) est près de la normale. Bien que les conditions météorologiques défavorables aient empêché la collecte de suffisamment de mesures de neige dans les hautes terres du bassin de la rivière Porcupine pour établir une estimation de l'EEN du bassin au 1er mars, le relevé nivométrique d'Old Crow a montré une accumulation de neige normale et la modélisation climatique suggère une accumulation de neige près de la normale pour le bassin.
+Les accumulations de neige du bassin Teslin/Big Salmon (153 %), du Yukon central (région de Carmacks) (147 %), White (147 %), Liard (146 %) et du Yukon inférieur (région de Dawson/Klondike) (136 %) sont toutes bien au-dessus de la normale au 1er mars. Le Yukon supérieur (zone des lacs du Sud/Whitehorse) (130 %), Peel (127 %), Pelly (122 %) et Alsek (110 %) sont tous au-dessus de la normale. Le bassin de la rivière Stewart (98 %) est près de la normale. Bien que les conditions météorologiques défavorables aient empêché la collecte de suffisamment de mesures de neige dans les hautes terres du bassin de la rivière Porcupine pour établir une estimation de l'ÉEN du bassin au 1er mars, le relevé nivométrique d'Old Crow a montré une accumulation de neige normale et la modélisation climatique suggère une accumulation de neige près de la normale pour le bassin.
 ")}`
 
 
@@ -1326,9 +1322,6 @@ dat$precipitation$metadata <- dat$precipitation$metadata[!idx, ]
 dat$precipitation$timeseries$data[, "388"] <- NA
 dat$precipitation$timeseries$data[, "16"] <- NA
 dat$precipitation$timeseries$data[, "383"] <- NA
-
-# dat$precipitation$timeseries$data <- subset(dat$precipitation$timeseries$data, select = -`16`) # HJ
-# dat$precipitation$timeseries$data <- subset(dat$precipitation$timeseries$data, select = -`383`) #
 
 
 # Plot SWE
@@ -1413,7 +1406,7 @@ pillow_wc <- pillows_table[pillows_table$name == met_name_wc, ]
 `r if (language$abbrev == "en") {
 paste0("At Tagish Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillow_ta$relative_to_med, "%** of normal (Figure", knitr::asis_output("\U00A0"), "A1) while at Wolf Creek Subalpine Meteorological Station, SWE is estimated to be **", pillow_wc$relative_to_med, "%** of normal (Figure", knitr::asis_output("\U00A0"), "A2). Established in 2023, Log Cabin Meteorological Station registered SWE at **", pillow_lc$relative_to_med, "%** of normal when compared with the manual snow survey record for that site (Figure", knitr::asis_output("\U00A0"), "A3). The Upper Yukon basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B)." )
 } else {
-paste0("À la station météorologique de Tagish, l’équivalent en eau de la neige (EEN) est estimé à **", pillow_ta$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale (figure", knitr::asis_output("\U00A0"), "A1), tandis qu’à la station subalpine du ruisseau Wolf, il est estimé à **", pillow_wc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale (figure", knitr::asis_output("\U00A0"), "A2). Installé en 2023, la station météorologique de Log Cabin a enregistré un EEN de **", pillow_lc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale si l’on compare avec les archives du relevé manuel de l’enneigement pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A3). L’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** au 1^er^ ", month_names[bulletin_month], " (figure", knitr::asis_output("\U00A0"), "B)." )
+paste0("À la station météorologique de Tagish, l’équivalent en eau de la neige (ÉEN) est estimé à **", pillow_ta$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale (figure", knitr::asis_output("\U00A0"), "A1), tandis qu’à la station subalpine du ruisseau Wolf, il est estimé à **", pillow_wc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale (figure", knitr::asis_output("\U00A0"), "A2). Installé en 2023, la station météorologique de Log Cabin a enregistré un ÉEN de **", pillow_lc$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale si l’on compare avec les archives du relevé manuel de l’enneigement pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A3). L’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** au 1^er^ ", month_names[bulletin_month], " (figure", knitr::asis_output("\U00A0"), "B)." )
 }`
 
 
@@ -1767,7 +1760,7 @@ future <- get_future_flow_conditions(hydrometric = flow$relative_to_med, swe = b
 `r if (language$abbrev == "en") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'ÉEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r CentralYukon_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2145,7 +2138,7 @@ future <- get_future_flow_conditions(hydrometric = flow$relative_to_med, swe = b
 `r if (language$abbrev == "en") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'ÉEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r White_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2237,7 +2230,7 @@ future_kl <- get_future_flow_conditions(hydrometric = flow_klondike$relative_to_
 paste0("Established in 2022, King Solomon Dome Meteorological Station registered Snow Water Equivalent (SWE) at **", pillows$relative_to_med, "%** of normal when compared with the manual snow survey record for that site (Figure", knitr::asis_output("\U00A0"), "A). The basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%**
 of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Installée en 2022, la station météorologique du dôme King Solomon a enregistré un EEN de **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale par rapport aux relevés nivométriques manuels pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Installée en 2022, la station météorologique du dôme King Solomon a enregistré un ÉEN de **", pillows$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale par rapport aux relevés nivométriques manuels pour cet emplacement (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], " l’EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r LowerYukonRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2401,7 +2394,7 @@ future <- get_future_flow_conditions(hydrometric = flow$relative_to_med, swe = b
 `r if (language$abbrev == "en") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'ÉEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }` -->
 
 ```{r Porcupine_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2524,7 +2517,7 @@ future <- get_future_flow_conditions(hydrometric = flow$relative_to_med, swe = b
 `r if (language$abbrev == "en") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'ÉEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r Peel_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2607,7 +2600,7 @@ future <- get_future_flow_conditions(hydrometric = flow$relative_to_med, swe = b
 `r if (language$abbrev == "en") {
 paste0("At Hyland Meteorological Station, Snow Water Equivalent (SWE) is estimated to be **", pillow$relative_to_med, "%** of normal (Figure", knitr::asis_output("\U00A0"), "A). The basin-averaged SWE is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("À la station météorologique Hyland, l’EEN est estimé à **", pillow$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("À la station météorologique Hyland, l’EEN est estimé à **", pillow$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale (figure", knitr::asis_output("\U00A0"), "A). Au 1^er^ ", month_names[bulletin_month], ", l'ÉEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r LiardRiver_Snow, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2733,7 +2726,7 @@ future <- get_future_flow_conditions(hydrometric = flow$relative_to_med, swe = b
 `r if (language$abbrev == "en") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
-paste0("Au 1^er^ ", month_names[bulletin_month], ", l'EEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
+paste0("Au 1^er^ ", month_names[bulletin_month], ", l'ÉEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
 }`
 
 ```{r Alsek_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
@@ -2846,7 +2839,7 @@ tryCatch(
       # Subset to columns of interest
       tabl <- tabl[, c("location_name_fr", "location", "elevation", "sample_date", "depth", "swe", "relative_to_med", "swe_prevyear", "swe_med", "years", "sub_basin")]
       # Rename columns
-      colnames(tabl) <- c("Nom", "Code", "Élévation (m)", "Date du relevé (mm-jj)", "Épaisseur de neige (cm)", "Équivalent en eau (EEN, mm)", "% de l'EEN médian", "Année dernière (EEN, mm)", "normale (EEN, mm)", "Nombre d'années avec données", "sub_basin")
+      colnames(tabl) <- c("Nom", "Code", "Élévation (m)", "Date du relevé (mm-jj)", "Épaisseur de neige (cm)", "Équivalent en eau (ÉEN, mm)", "% de l'ÉEN médian", "Année dernière (ÉEN, mm)", "normale (ÉEN, mm)", "Nombre d'années avec données", "sub_basin")
       size <- 9
       wdth <- c(1.3, 0.8, 0.7, 0.6, 0.7, 0.7, 0.6)
 
@@ -2960,18 +2953,17 @@ hyland_corrections <- as.numeric(strsplit(gsub(".*?([0-9]\\.[0-9]+).*?([0-9]\\.[
 `r 
 if (language$abbrev== "en") {
 paste0("
-
+<p>&nbsp;</p>
 **Date notes:**
 
-**N.S.** - No survey  
+**N.S.** - No survey\n
 **B** - Survey date is outside of valid sampling range 
- 
-
+<p>&nbsp;</p>
 **SWE notes:**
 
-**E** - Estimated results from snow depth readings and average snow densities observed in location historical records.  
-**R** - New record .
-
+**E** - Estimated results from snow depth readings and average snow densities observed in location historical records.\n
+**R** - New record.
+<p>&nbsp;</p>
 **Median historical SWE and Years of record notes: **
 
 **C** - Composite historical record. measurements are combined with historical record from another nearby location. Historical median from composite can include adjustments to account for variation between the paired sampling locations: 
@@ -2986,33 +2978,31 @@ paste0("
 ")
 } else {
 paste0("
-
+<p>&nbsp;</p>
 **Notes au sujet des dates :**
 
-**A.R.** - Aucun relevé.
+**A.R.** - Aucun relevé.\n
 **B** - Date du relevé en dehors de la plage d'échantillonnage valide.
+<p>&nbsp;</p>
+**Notes au sujet de l'ÉEN :**
 
-**Notes au sujet de l'EEN :**
-
-**E** - Estimation des résultats à partir de la profondeur de neige et des densités moyennes de neige observées dans les relevés historiques de l’emplacement. 
+**E** - Estimation des résultats à partir de la profondeur de neige et des densités moyennes de neige observées dans les relevés historiques de l’emplacement.\n
 **R** - Nouveau record.
-
-**Notes au sujet de la normale de l'EEN et du nombre d'années avec données :**
+<p>&nbsp;</p>
+**Notes au sujet de la normale de l'ÉEN et du nombre d'années avec données :**
 
 **C** - Données historiques composites. Les mesures à la station actuelle sont combinées avec les données historiques d'une autre station voisine abandonnée. La normale historique composite peut inclure des ajustements pour tenir compte des variations entre les emplacements d'échantillonnage appariés :
 
-- **Aéroport de Whitehorse** (09AB-SC02) combine les relevés de l'ancienne station nivométrique de l'aéroport de Whitehorse située dans l'enceinte de l'aéroport avec les nouveaux relevés pris à quelques centaines de mètres à l'ouest de l'aéroport. Deux années de relevés concomitants existent (2023‑2024). La nouvelle station nivométrique utilise les données historiques de l'EEN de l'ancienne station (1965‑2022) sans ajustement.
+- **Aéroport de Whitehorse** (09AB-SC02) combine les relevés de l'ancienne station nivométrique de l'aéroport de Whitehorse située dans l'enceinte de l'aéroport avec les nouveaux relevés pris à quelques centaines de mètres à l'ouest de l'aéroport. Deux années de relevés concomitants existent (2023‑2024). La nouvelle station nivométrique utilise les données historiques de l'ÉEN de l'ancienne station (1965‑2022) sans ajustement.
 
-- **Twin Creeks** (09BA-SC02) est basée principalement sur les relevés de la station nivométrique Twin Creeks A située à l'extrémité ouest de la piste d'atterrissage Twin Creeks depuis 1977 jusqu'à maintenant. Les relevés concomitants pris à l'extrémité est de la piste (Twin Creeks B) comblent une lacune de données de 2017-2020. Six années de relevés concomitants (2016 et 2021‑2025) sont utilisées pour ajuster les données historiques d'EEN copiées de la station B à la station A (un facteur de correction de 1.201 s'applique aux données d'EEN de 2017‑2020).
+- **Twin Creeks** (09BA-SC02) est basée principalement sur les relevés de la station nivométrique Twin Creeks A située à l'extrémité ouest de la piste d'atterrissage Twin Creeks depuis 1977 jusqu'à maintenant. Les relevés concomitants pris à l'extrémité est de la piste (Twin Creeks B) comblent une lacune de données de 2017-2020. Six années de relevés concomitants (2016 et 2021‑2025) sont utilisées pour ajuster les données historiques d'ÉEN copiées de la station B à la station A (un facteur de correction de 1.201 s'applique aux données d'ÉEN de 2017‑2020).
 
 - **Aéroport de Mayo** (09DC-SC01) comprend l'union de deux cours à cinq stations. Les résultats actuels consistent en une simple moyenne des deux cours. La normale historique est composée des résultats suivants : les relevés de 1968-1986 proviennent uniquement de 09DC-SC01A (Aéroport de Mayo A); les relevés de 1987-2025 proviennent de la moyenne de 09DC-SC01A et 09DC-SC01B (Aéroport de Mayo B).
 
-- **Rivière Hyland** (10AD-SC01) combine les relevés de l'ancienne station nivométrique de la rivière Hyland située près de la piste d'atterrissage de la rivière Hyland avec les nouveaux relevés pris à 6 kilomètres au nord de l'ancienne station depuis 2018. Cinq années de relevés concomitants (2018‑2022) ont été utilisées pour ajuster les données historiques d'EEN copiées de l'ancienne station à la nouvelle (un facteur de correction de 1.092 s'applique aux résultats d'EEN de 1976‑2017).
+- **Rivière Hyland** (10AD-SC01) combine les relevés de l'ancienne station nivométrique de la rivière Hyland située près de la piste d'atterrissage de la rivière Hyland avec les nouveaux relevés pris à 6 kilomètres au nord de l'ancienne station depuis 2018. Cinq années de relevés concomitants (2018‑2022) ont été utilisées pour ajuster les données historiques d'ÉEN copiées de l'ancienne station à la nouvelle (un facteur de correction de 1.092 s'applique aux résultats d'ÉEN de 1976‑2017).
 ")
 }
 `
-
-
 \newpage
 # `r titles$MAP4`
 

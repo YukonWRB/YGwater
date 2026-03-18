@@ -5254,9 +5254,6 @@ make_ggplot_map <- function(
     }
 
     if (!is.null(point_data)) {
-        # point_data <<- point_data
-        # point_data <- point_data[!is.na(point_data$value), ]
-
         point_data <- point_data[
             order(point_data[[statistic]], decreasing = FALSE, na.last = FALSE),
         ]
@@ -5290,22 +5287,6 @@ make_ggplot_map <- function(
                 bg.r = 0.2
             )
     }
-
-    # if (!is.null(point_data_secondary)) {
-    #     p <- p +
-    #         ggplot2::geom_point(
-    #             data = point_data_secondary,
-    #             ggplot2::aes(
-    #                 x = .data$x,
-    #                 y = .data$y
-    #             ),
-    #             fill = point_data_secondary$fill_colour,
-    #             color = static_style_elements$surveys$color,
-    #             size = static_style_elements$surveys$radius / 2.5,
-    #             shape = 22,
-    #             stroke = static_style_elements$surveys$weight * 0.5
-    #         )
-    # }
 
     # Add communities using pre-calculated adjusted coordinates
     if (!is.null(snowbull_shapefiles$communities)) {
@@ -5450,13 +5431,6 @@ make_ggplot_map <- function(
     )
 
     # Compose title and subtitle for ggplot (no HTML tags, no <br>, no <b>)
-    switch(
-        param_name,
-        "snow water equivalent" = "mm",
-        "precipitation, total" = "mm",
-        "temperature, air" = "\u00B0C",
-    )
-
     # if start_year_historical and end_year_historical are not null, add period of record to subtitle
     if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
         period_of_record <- paste0(
@@ -5495,14 +5469,14 @@ make_ggplot_map <- function(
     subtitle_param <- switch(
         param_name,
         "snow water equivalent" = paste0(
-            tools::toTitleCase(tr("snowbull_swe", language)),
+            tr("snowbull_swe", language),
             "\n"
         ),
         "precipitation, total" = paste0(
             tr("snowbull_precipitation", language),
-            " "
+            "\n"
         ),
-        "temperature, air" = paste0(tr("snowbull_temperature", language), " "),
+        "temperature, air" = paste0(tr("snowbull_temperature", language), "\n"),
         ""
     )
 
