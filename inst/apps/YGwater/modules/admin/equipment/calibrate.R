@@ -400,25 +400,48 @@ calibrateUI <- function(id) {
               selectizeInput(
                 ns("make"),
                 label = "Instrument make",
-                choices = "placeholder"
+                choices = "placeholder",
+                options = list(
+                  placeholder = "Not specified",
+                  onInitialize = I('function() { this.setValue(""); }')
+                )
               ),
               selectizeInput(
                 ns("model"),
                 label = "Instrument model",
-                choices = "placeholder"
+                choices = "placeholder",
+                options = list(
+                  placeholder = "Not specified",
+                  onInitialize = I('function() { this.setValue(""); }')
+                )
               ),
               selectizeInput(
                 ns("type"),
                 label = "Instrument type",
-                choices = "placeholder"
+                choices = "placeholder",
+                options = list(
+                  placeholder = "Not specified",
+                  onInitialize = I('function() { this.setValue(""); }')
+                )
               ),
               selectizeInput(
                 ns("instrument_owner"),
                 "Instrument owner",
                 choices = NULL,
                 multiple = TRUE,
-                options(
-                  maxItems = 1
+                options = list(
+                  maxItems = 1,
+                  placeholder = "Not specified",
+                  onInitialize = I('function() { this.setValue(""); }')
+                )
+              ),
+              selectizeInput(
+                ns("supplier_id"),
+                "Supplier",
+                choices = NULL,
+                options = list(
+                  placeholder = "Not specified",
+                  onInitialize = I('function() { this.setValue(""); }')
                 )
               ),
               checkboxInput(
@@ -439,7 +462,23 @@ calibrateUI <- function(id) {
                 ns("date_purchased"),
                 label = "Date purchased (if known)"
               ),
+              numericInput(
+                ns("purchase_price"),
+                "Purchase price (if known)",
+                value = NA,
+                min = 0,
+                step = 0.01
+              ),
+              checkboxInput(
+                ns("takes_measurements"),
+                "Instrument takes measurements?",
+                value = FALSE
+              ),
               dateInput(ns("date_retired"), label = "Date retired (if known)"),
+              dateInput(
+                ns("date_end_of_life"),
+                label = "Expected end of life (if known)"
+              ),
               uiOutput(ns("retired_by")),
               actionButton(ns("save_cal_instrument"), "Save new instrument")
             ),
@@ -532,7 +571,11 @@ calibrateUI <- function(id) {
               selectizeInput(
                 ns("add_sensor_type_dropdown"),
                 "ADD a slot w/ sensor (CHANGE assigned sensor to the right)",
-                choices = "placeholder"
+                choices = "placeholder",
+                options = list(
+                  placeholder = "Not specified",
+                  onInitialize = I('function() { this.setValue(""); }')
+                )
               ),
               selectizeInput(
                 ns("new_sensor_serial"),
@@ -563,7 +606,11 @@ calibrateUI <- function(id) {
                 ns("change_sensor"),
                 "Assign a new sensor or leave as-is to log only maintenance note",
                 choices = "placeholder",
-                width = "500px"
+                width = "500px",
+                options = list(
+                  placeholder = "Not specified",
+                  onInitialize = I('function() { this.setValue(""); }')
+                )
               ),
               selectizeInput(
                 ns("add_sensor_serial"),
@@ -689,6 +736,198 @@ table.on("click", "tr", function() {
     default_obs_datetime <- function() {
       .POSIXct(Sys.time(), tz = "UTC")
     }
+    db_table_exists <- function(schema, table) {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.tables
+          WHERE table_schema = $1 AND table_name = $2
+        ) AS present",
+        params = list(schema, table)
+      )$present[[1]]
+    }
+    db_table_fields <- function(schema, table) {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT column_name
+         FROM information_schema.columns
+         WHERE table_schema = $1 AND table_name = $2",
+        params = list(schema, table)
+      )$column_name
+    }
+    empty_string_to_na <- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        return(NA_character_)
+      }
+      value <- trimws(as.character(value[[1]]))
+      if (!nzchar(value)) {
+        return(NA_character_)
+      }
+      value
+    }
+    empty_integer_to_na <- function(value) {
+      value <- empty_string_to_na(value)
+      if (is.na(value)) {
+        return(NA_integer_)
+      }
+      as.integer(value)
+    }
+    empty_numeric_to_na <- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        return(NA_real_)
+      }
+      as.numeric(value[[1]])
+    }
+    empty_date_to_na <- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        return(as.Date(NA))
+      }
+      as.Date(value[[1]])
+    }
+    sanitize_alnum <- function(value) {
+      value <- empty_string_to_na(value)
+      if (is.na(value)) {
+        return("")
+      }
+      gsub("[^[:alnum:]]", "", value)
+    }
+    instrument_fields <- db_table_fields("instruments", "instruments")
+    suppliers_table_exists <- db_table_exists("instruments", "suppliers")
+    has_supplier_column <- suppliers_table_exists &&
+      "supplier_id" %in% instrument_fields
+    build_supplier_choices <- function(suppliers) {
+      if (!has_supplier_column) {
+        return(character())
+      }
+      supplier_ids <- if (nrow(suppliers) > 0) {
+        as.character(suppliers$supplier_id)
+      } else {
+        character()
+      }
+      supplier_names <- if (nrow(suppliers) > 0) {
+        suppliers$supplier_name
+      } else {
+        character()
+      }
+      stats::setNames(
+        c("new", supplier_ids),
+        c("Add new supplier", supplier_names)
+      )
+    }
+    refresh_suppliers_data <- function() {
+      if (has_supplier_column) {
+        instruments_data$suppliers <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT * FROM instruments.suppliers ORDER BY supplier_name"
+        )
+      } else {
+        instruments_data$suppliers <- data.frame(
+          supplier_id = integer(),
+          supplier_name = character(),
+          contact_name = character(),
+          contact_phone = character(),
+          contact_email = character(),
+          note = character()
+        )
+      }
+      select_data$suppliers <- build_supplier_choices(
+        instruments_data$suppliers
+      )
+    }
+    load_instruments_sheet <- function() {
+      purchase_price_select <- if ("purchase_price" %in% instrument_fields) {
+        "i.purchase_price"
+      } else {
+        "NULL::numeric AS purchase_price"
+      }
+      takes_measurements_select <- if (
+        "takes_measurements" %in% instrument_fields
+      ) {
+        "COALESCE(i.takes_measurements, FALSE) AS takes_measurements"
+      } else {
+        "NULL::boolean AS takes_measurements"
+      }
+      supplier_join <- if (has_supplier_column) {
+        " LEFT JOIN instruments.suppliers suppliers ON i.supplier_id = suppliers.supplier_id"
+      } else {
+        ""
+      }
+      supplier_id_select <- if (has_supplier_column) {
+        "i.supplier_id"
+      } else {
+        "NULL::integer AS supplier_id"
+      }
+      supplier_name_select <- if (has_supplier_column) {
+        "suppliers.supplier_name AS supplier"
+      } else {
+        "NULL::text AS supplier"
+      }
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste0(
+          "SELECT i.instrument_id,
+                  i.obs_datetime,
+                  CONCAT(observers.observer_first, ' ', observers.observer_last, ' (', observers.organization, ')') AS observer,
+                  i.holds_replaceable_sensors,
+                  i.serial_no,
+                  i.asset_tag,
+                  i.date_in_service,
+                  i.date_purchased,
+                  ",
+          purchase_price_select,
+          ",
+                  ",
+          takes_measurements_select,
+          ",
+                  i.retired_by,
+                  i.date_retired,
+                  i.date_end_of_life,
+                  instrument_make.make,
+                  instrument_model.model,
+                  instrument_type.type,
+                  i.owner AS owner_id,
+                  organizations.name AS owner,
+                  ",
+          supplier_id_select,
+          ",
+                  ",
+          supplier_name_select,
+          "
+           FROM instruments.instruments AS i
+           LEFT JOIN instruments.instrument_make ON i.make = instrument_make.make_id
+           LEFT JOIN instruments.instrument_model ON i.model = instrument_model.model_id
+           LEFT JOIN instruments.instrument_type ON i.type = instrument_type.type_id
+           LEFT JOIN public.organizations ON i.owner = organizations.organization_id
+           LEFT JOIN instruments.observers ON i.observer = observers.observer_id",
+          supplier_join,
+          "
+           ORDER BY i.instrument_id"
+        )
+      )
+    }
+    refresh_instruments_sheet <- function() {
+      instruments_data$sheet <- load_instruments_sheet()
+      instruments_data$handhelds <- instruments_data$sheet[
+        instruments_data$sheet$type == "Handheld" &
+          is.na(instruments_data$sheet$date_retired),
+        ,
+        drop = FALSE
+      ]
+      instruments_data$others <- instruments_data$sheet[
+        instruments_data$sheet$type != "Handheld" &
+          is.na(instruments_data$sheet$date_retired),
+        ,
+        drop = FALSE
+      ]
+      instruments_data$maintainable_sensors <- instruments_data$sheet[
+        !is.na(instruments_data$sheet$holds_replaceable_sensors) &
+          instruments_data$sheet$holds_replaceable_sensors,
+        ,
+        drop = FALSE
+      ]
+      instruments_data$sheet
+    }
 
     shift_obs_datetime_timezone <- function(tz_name) {
       current_value <- coerce_utc_datetime(input$obs_datetime)
@@ -730,6 +969,51 @@ table.on("click", "tr", function() {
         `data-bs-dismiss` = "modal",
         label
       )
+    }
+    selectize_empty_options <- function(maxItems = NULL, clear = TRUE) {
+      opts <- list(placeholder = "Not specified")
+      if (clear) {
+        opts$onInitialize <- I('function() { this.setValue(""); }')
+      }
+      if (!is.null(maxItems)) {
+        opts$maxItems <- maxItems
+      }
+      opts
+    }
+    abbreviate_with_tooltip <- function(values, visible_chars = 10) {
+      if (length(values) == 0) {
+        return(values)
+      }
+      vapply(
+        values,
+        function(value) {
+          if (is.na(value) || !nzchar(as.character(value))) {
+            return("")
+          }
+          value <- as.character(value)
+          short <- if (nchar(value) > visible_chars) {
+            paste0(substr(value, 1, visible_chars), "...")
+          } else {
+            value
+          }
+          sprintf(
+            "<span title=\"%s\">%s</span>",
+            htmltools::htmlEscape(value, attribute = TRUE),
+            htmltools::htmlEscape(short)
+          )
+        },
+        character(1)
+      )
+    }
+    format_owner_column_for_dt <- function(df, visible_chars = 10) {
+      if (!("owner" %in% colnames(df))) {
+        return(df)
+      }
+      df$owner <- abbreviate_with_tooltip(
+        df$owner,
+        visible_chars = visible_chars
+      )
+      df
     }
 
     ### Hide a bunch of buttons until they can be used
@@ -791,10 +1075,7 @@ table.on("click", "tr", function() {
     shinyjs::hide("spc2_post")
 
     # Get the data from the database, make initial tables, populate UI elements ########################################
-    instruments_sheet <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT i.instrument_id, i.obs_datetime,  CONCAT(observers.observer_first, ' ', observers.observer_last, '(', observers.organization, ')') AS observer, i.holds_replaceable_sensors, i.serial_no, i.asset_tag, i.date_in_service, i.date_purchased, i.retired_by, i.date_retired, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id LEFT JOIN observers ON i.observer = observers.observer_id ORDER BY i.instrument_id"
-    )
+    instruments_sheet <- refresh_instruments_sheet()
 
     calibrations <- reactiveValues()
     calibrations$calibrations <- DBI::dbGetQuery(
@@ -819,17 +1100,6 @@ table.on("click", "tr", function() {
       session$userData$AquaCache,
       "SELECT * FROM instrument_type"
     )
-    instruments_data$handhelds <- instruments_sheet[
-      instruments_sheet$type == "Handheld" &
-        is.na(instruments_sheet$date_retired),
-    ]
-    instruments_data$others <- instruments_sheet[
-      instruments_sheet$type != "Handheld" &
-        is.na(instruments_sheet$date_retired),
-    ]
-    instruments_data$maintainable_sensors <- instruments_sheet[
-      instruments_sheet$holds_replaceable_sensors,
-    ]
     instruments_data$instrument_maintenance <- DBI::dbGetQuery(
       session$userData$AquaCache,
       "SELECT * FROM instrument_maintenance"
@@ -838,9 +1108,10 @@ table.on("click", "tr", function() {
       session$userData$AquaCache,
       "SELECT * FROM organizations"
     )
+    refresh_suppliers_data()
     select_data$organizations <- stats::setNames(
-      c(instruments_data$organizations$organization_id, "new"),
-      c(instruments_data$organizations$name, "Add new organization")
+      c("new", instruments_data$organizations$organization_id),
+      c("Add new organization", instruments_data$organizations$name)
     )
     updateSelectizeInput(
       session,
@@ -861,7 +1132,14 @@ table.on("click", "tr", function() {
     # Create initial tables for managing instruments
     initial_manage_instruments_table <- instruments_sheet[,
       !colnames(instruments_sheet) %in%
-        c("instrument_id", "observer", "obs_datetime")
+        c(
+          "instrument_id",
+          "observer",
+          "obs_datetime",
+          "owner_id",
+          "supplier_id"
+        ),
+      drop = FALSE
     ]
     initial_calibrate_instruments_table <- instruments_sheet[
       is.na(instruments_sheet$date_retired),
@@ -870,21 +1148,29 @@ table.on("click", "tr", function() {
           "instrument_id",
           "observer",
           "obs_datetime",
+          "owner_id",
           "retired_by",
           "date_retired",
           "date_purchased",
-          "date_in_service"
-        )
+          "date_in_service",
+          "date_end_of_life",
+          "purchase_price",
+          "supplier_id"
+        ),
+      drop = FALSE
     ]
     output$manage_instruments_table <- DT::renderDT(
-      initial_manage_instruments_table,
-      rownames = FALSE,
-      selection = "single"
+      DT::datatable(
+        format_owner_column_for_dt(initial_manage_instruments_table),
+        rownames = FALSE,
+        selection = "single",
+        escape = FALSE
+      )
     )
     output$calibration_instruments_table <- DT::renderDT(
       {
         DT::datatable(
-          initial_calibrate_instruments_table,
+          format_owner_column_for_dt(initial_calibrate_instruments_table),
           rownames = FALSE,
           filter = 'top',
           selection = "multiple",
@@ -902,6 +1188,7 @@ table.on("click", "tr", function() {
             ns("observer"),
             label = "Calibrator name",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = input$last_observer_id
           )
         })
@@ -910,6 +1197,7 @@ table.on("click", "tr", function() {
             ns("add_sensor_name"),
             label = "What's your name?",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = input$last_observer_id
           )
         })
@@ -918,6 +1206,7 @@ table.on("click", "tr", function() {
             ns("sensor_change_name"),
             label = "Observer name",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = input$last_observer_id
           )
         })
@@ -926,6 +1215,7 @@ table.on("click", "tr", function() {
             ns("maintain_recorder"),
             label = "Maintenance recorder",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = input$last_observer_id
           )
         })
@@ -943,20 +1233,23 @@ table.on("click", "tr", function() {
           ")"
         )
         select_data$recorder <- stats::setNames(
-          c(instruments_data$observers$observer_id, "new"),
-          c(instruments_data$observers$observer_string, "Add new observer")
+          c("new", instruments_data$observers$observer_id),
+          c("Add new observer", instruments_data$observers$observer_string)
         )
         select_data$makes <- stats::setNames(
-          c(instruments_data$makes$make_id, "new"),
-          c(instruments_data$makes$make, "Add new make")
+          c("new", instruments_data$makes$make_id),
+          c("Add new make", instruments_data$makes$make)
         )
         select_data$models <- stats::setNames(
-          c(instruments_data$models$model_id, "new"),
-          c(instruments_data$models$model, "Add new model")
+          c("new", instruments_data$models$model_id),
+          c("Add new model", instruments_data$models$model)
         )
         select_data$types <- stats::setNames(
-          c(instruments_data$types$type_id, "new"),
-          c(instruments_data$types$type, "Add new type")
+          c("new", instruments_data$types$type_id),
+          c("Add new type", instruments_data$types$type)
+        )
+        select_data$suppliers <- build_supplier_choices(
+          instruments_data$suppliers
         )
 
         # look for a cookie with the last observer ID
@@ -970,28 +1263,32 @@ table.on("click", "tr", function() {
           selectizeInput(
             ns("observer"),
             label = "Calibrator name",
-            choices = select_data$recorder
+            choices = select_data$recorder,
+            options = selectize_empty_options()
           )
         })
         output$add_sensor_name <- renderUI({
           selectizeInput(
             ns("add_sensor_name"),
             label = "What's your name?",
-            choices = select_data$recorder
+            choices = select_data$recorder,
+            options = selectize_empty_options()
           )
         })
         output$sensor_change_name <- renderUI({
           selectizeInput(
             ns("sensor_change_name"),
             label = "Observer name",
-            choices = select_data$recorder
+            choices = select_data$recorder,
+            options = selectize_empty_options()
           )
         })
         output$maintain_recorder <- renderUI({
           selectizeInput(
             ns("maintain_recorder"),
             label = "Maintenance recorder",
-            choices = select_data$recorder
+            choices = select_data$recorder,
+            options = selectize_empty_options()
           )
         })
         output$ID_sensor_holder <- renderUI({
@@ -1016,11 +1313,21 @@ table.on("click", "tr", function() {
         })
 
         tmp <- stats::setNames(
-          c(sensors_data$sensor_types$sensor_type_id, "new"),
-          c(sensors_data$sensor_types$sensor_type, "Add new type")
+          c("new", sensors_data$sensor_types$sensor_type_id),
+          c("Add new type", sensors_data$sensor_types$sensor_type)
         )
-        updateSelectizeInput(session, "change_sensor", choices = tmp)
-        updateSelectizeInput(session, "add_sensor_type_dropdown", choices = tmp)
+        updateSelectizeInput(
+          session,
+          "change_sensor",
+          choices = tmp,
+          selected = character(0)
+        )
+        updateSelectizeInput(
+          session,
+          "add_sensor_type_dropdown",
+          choices = tmp,
+          selected = character(0)
+        )
 
         # Create initial tables for managing incomplete calibrations
         incomplete_calibrations <- calibrations$calibrations[
@@ -1136,8 +1443,8 @@ table.on("click", "tr", function() {
           ")"
         )
         select_data$recorder <- stats::setNames(
-          c(instruments_data$observers$observer_id, "new"),
-          c(instruments_data$observers$observer_string, "Add new observer")
+          c("new", instruments_data$observers$observer_id),
+          c("Add new observer", instruments_data$observers$observer_string)
         )
 
         selected_id <- max(instruments_data$observers$observer_id)
@@ -1147,6 +1454,7 @@ table.on("click", "tr", function() {
             ns("observer"),
             label = "Calibrator name",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = selected_id
           )
         })
@@ -1155,6 +1463,7 @@ table.on("click", "tr", function() {
             ns("recorder"),
             label = "Observer name",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = selected_id
           )
         })
@@ -1163,6 +1472,7 @@ table.on("click", "tr", function() {
             ns("add_sensor_name"),
             label = "What's your name?",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = selected_id
           )
         })
@@ -1171,6 +1481,7 @@ table.on("click", "tr", function() {
             ns("sensor_change_name"),
             label = "Observer name",
             choices = select_data$recorder,
+            options = selectize_empty_options(clear = FALSE),
             selected = selected_id
           )
         })
@@ -1228,8 +1539,8 @@ table.on("click", "tr", function() {
           "SELECT * FROM instrument_make"
         )
         select_data$makes <- stats::setNames(
-          c(instruments_data$makes$make_id, "new"),
-          c(instruments_data$makes$make, "Add new make")
+          c("new", instruments_data$makes$make_id),
+          c("Add new make", instruments_data$makes$make)
         )
         updateSelectizeInput(
           session,
@@ -1286,8 +1597,8 @@ table.on("click", "tr", function() {
           "SELECT * FROM instrument_model"
         )
         select_data$models <- stats::setNames(
-          c(instruments_data$models$model_id, "new"),
-          c(instruments_data$models$model, "Add new model")
+          c("new", instruments_data$models$model_id),
+          c("Add new model", instruments_data$models$model)
         )
         updateSelectizeInput(
           session,
@@ -1364,14 +1675,91 @@ table.on("click", "tr", function() {
           "SELECT * FROM organizations"
         )
         select_data$organizations <- stats::setNames(
-          c(instruments_data$organizations$organization_id, "new"),
-          c(instruments_data$organizations$name, "Add new organization")
+          c("new", instruments_data$organizations$organization_id),
+          c("Add new organization", instruments_data$organizations$name)
         )
         updateSelectizeInput(
           session,
           "instrument_owner",
           choices = select_data$organizations,
           selected = max(instruments_data$organizations$organization_id)
+        )
+        removeModal()
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    ## Add new supplier ################################################
+    observeEvent(
+      input$supplier_id,
+      {
+        if (input$supplier_id == "new") {
+          showModal(modalDialog(
+            title = "Add new supplier",
+            textInput(ns("new_supplier_name"), "Supplier name"),
+            textInput(
+              ns("new_supplier_contact_name"),
+              "Contact name (optional)"
+            ),
+            textInput(
+              ns("new_supplier_contact_phone"),
+              "Contact phone (optional)"
+            ),
+            textInput(
+              ns("new_supplier_contact_email"),
+              "Contact email (optional)"
+            ),
+            textInput(ns("new_supplier_note"), "Note (optional)"),
+            actionButton(ns("add_new_supplier"), "Add new supplier")
+          ))
+        }
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$add_new_supplier,
+      {
+        if (!has_supplier_column) {
+          alert(
+            title = "Error",
+            text = "Suppliers table is not available in this database.",
+            type = "error",
+            timer = 4000
+          )
+          return()
+        }
+        if (!nzchar(trimws(input$new_supplier_name))) {
+          alert(
+            title = "Error",
+            text = "Please enter a supplier name.",
+            type = "error",
+            timer = 4000
+          )
+          return()
+        }
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          paste0(
+            "INSERT INTO instruments.suppliers ",
+            "(supplier_name, contact_name, contact_phone, contact_email, note) ",
+            "VALUES ($1, $2, $3, $4, $5)"
+          ),
+          params = list(
+            trimws(input$new_supplier_name),
+            empty_string_to_na(input$new_supplier_contact_name),
+            empty_string_to_na(input$new_supplier_contact_phone),
+            empty_string_to_na(input$new_supplier_contact_email),
+            empty_string_to_na(input$new_supplier_note)
+          )
+        )
+        refresh_suppliers_data()
+        updateSelectizeInput(
+          session,
+          "supplier_id",
+          choices = select_data$suppliers,
+          selected = max(instruments_data$suppliers$supplier_id)
         )
         removeModal()
       },
@@ -1422,8 +1810,8 @@ table.on("click", "tr", function() {
           "SELECT * FROM instrument_type"
         )
         select_data$types <- stats::setNames(
-          c(instruments_data$types$type_id, "new"),
-          c(instruments_data$types$type, "Add new type")
+          c("new", instruments_data$types$type_id),
+          c("Add new type", instruments_data$types$type)
         )
         updateSelectizeInput(
           session,
@@ -1464,8 +1852,8 @@ table.on("click", "tr", function() {
           "SELECT * FROM sensor_types"
         )
         tmp <- stats::setNames(
-          c(sensors_data$sensor_types$sensor_type_id, "new"),
-          c(sensors_data$sensor_types$sensor_type, "Add new type")
+          c("new", sensors_data$sensor_types$sensor_type_id),
+          c("Add new type", sensors_data$sensor_types$sensor_type)
         )
         updateSelectizeInput(
           session,
@@ -1732,7 +2120,8 @@ table.on("click", "tr", function() {
           selectizeInput(
             ns("observer"),
             label = "Calibrator name",
-            choices = select_data$recorder
+            choices = select_data$recorder,
+            options = selectize_empty_options()
           )
         })
       }
@@ -2159,7 +2548,7 @@ table.on("click", "tr", function() {
           output$calibration_instruments_table <- DT::renderDT(
             {
               DT::datatable(
-                initial_calibrate_instruments_table,
+                format_owner_column_for_dt(initial_calibrate_instruments_table),
                 rownames = FALSE,
                 filter = 'top',
                 selection = "multiple",
@@ -2172,7 +2561,9 @@ table.on("click", "tr", function() {
           output$calibration_instruments_table <- DT::renderDT(
             {
               DT::datatable(
-                instruments_data$calibrate_instruments,
+                format_owner_column_for_dt(
+                  instruments_data$calibrate_instruments
+                ),
                 rownames = FALSE,
                 filter = 'top',
                 selection = "multiple",
@@ -2552,7 +2943,8 @@ table.on("click", "tr", function() {
           selectizeInput(
             ns("observer"),
             label = "Calibrator name",
-            choices = select_data$recorder
+            choices = select_data$recorder,
+            options = selectize_empty_options()
           )
         })
       } else if (input$tab_panel == "Add/modify instruments") {
@@ -2599,9 +2991,7 @@ table.on("click", "tr", function() {
             ns("retired_by"),
             label = "Retired by",
             choices = select_data$recorder,
-            options = list(
-              onInitialize = I('function() { this.setValue(""); }')
-            )
+            options = selectize_empty_options()
           )
         })
         updateSelectizeInput(
@@ -2634,18 +3024,37 @@ table.on("click", "tr", function() {
           choices = select_data$organizations,
           selected = NULL
         )
+        updateSelectizeInput(
+          session,
+          "supplier_id",
+          choices = select_data$suppliers,
+          selected = ""
+        )
         updateCheckboxInput(session, "replaceableSensors", value = FALSE)
+        updateCheckboxInput(session, "takes_measurements", value = FALSE)
+        updateNumericInput(session, "purchase_price", value = NA)
         updateDateInput(session, "date_retired", value = NA) #Reset the retired date to NA
         updateDateInput(session, "date_in_service", value = NA)
         updateDateInput(session, "date_purchased", value = NA)
+        updateDateInput(session, "date_end_of_life", value = NA)
         instruments_data$manage_instruments <- instruments_data$sheet[,
           !colnames(instruments_data$sheet) %in%
-            c("instrument_id", "observer", "obs_datetime")
+            c(
+              "instrument_id",
+              "observer",
+              "obs_datetime",
+              "owner_id",
+              "supplier_id"
+            ),
+          drop = FALSE
         ]
         output$manage_instruments_table <- DT::renderDT(
-          instruments_data$manage_instruments,
-          rownames = FALSE,
-          selection = "single"
+          DT::datatable(
+            format_owner_column_for_dt(instruments_data$manage_instruments),
+            rownames = FALSE,
+            selection = "single",
+            escape = FALSE
+          )
         )
       } else if (input$tab_panel == "Maintain instruments") {
         instruments_data$maintain_instruments <- instruments_data$sheet[,
@@ -2658,8 +3067,14 @@ table.on("click", "tr", function() {
               "asset_tag",
               "date_in_service",
               "date_purchased",
-              "holds_replaceable_sensors"
-            )
+              "holds_replaceable_sensors",
+              "date_end_of_life",
+              "purchase_price",
+              "takes_measurements",
+              "supplier_id",
+              "supplier"
+            ),
+          drop = FALSE
         ]
         temp_maintain <- instruments_data$maintain_instruments[, c(
           "make",
@@ -2669,9 +3084,12 @@ table.on("click", "tr", function() {
           "owner"
         )]
         output$maintain_instr_table <- DT::renderDT(
-          temp_maintain,
-          rownames = FALSE,
-          selection = "single"
+          DT::datatable(
+            format_owner_column_for_dt(temp_maintain),
+            rownames = FALSE,
+            selection = "single",
+            escape = FALSE
+          )
         ) #Table is in the sidebar, for instrument selection
         temp <- data.frame(
           "Observer" = "No one",
@@ -2687,13 +3105,7 @@ table.on("click", "tr", function() {
         shinyjs::hide("clear_selection")
       } else if (input$tab_panel == "Change/maintain sensors") {
         #reload instruments_data$sheet to mitigate conflicts
-        instruments_data$sheet <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT i.instrument_id, i.obs_datetime, CONCAT(observers.observer_first, ' ', observers.observer_last, '(', observers.organization, ')') AS observer, i.holds_replaceable_sensors, i.serial_no, i.asset_tag, i.date_in_service, i.date_purchased, i.retired_by, i.date_retired, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id LEFT JOIN observers ON i.observer = observers.observer_id ORDER BY i.instrument_id"
-        )
-        instruments_data$maintainable_sensors <- instruments_data$sheet[
-          instruments_data$sheet$holds_replaceable_sensors,
-        ]
+        refresh_instruments_sheet()
         temp_table <- instruments_data$maintainable_sensors[, c(
           "make",
           "model",
@@ -2702,9 +3114,12 @@ table.on("click", "tr", function() {
           "owner"
         )]
         output$manage_sensors_table <- DT::renderDT(
-          temp_table,
-          rownames = FALSE,
-          selection = "single"
+          DT::datatable(
+            format_owner_column_for_dt(temp_table),
+            rownames = FALSE,
+            selection = "single",
+            escape = FALSE
+          )
         )
         updateSelectizeInput(
           session,
@@ -2986,6 +3401,9 @@ table.on("click", "tr", function() {
     observeEvent(
       input$add_sensor_type_dropdown,
       {
+        if (input$tab_panel != "Change/maintain sensors") {
+          return()
+        }
         if (input$add_sensor_type_dropdown == "new") {
           showModal(modalDialog(
             title = "Add new sensor type",
@@ -3015,6 +3433,9 @@ table.on("click", "tr", function() {
     observeEvent(
       input$change_sensor,
       {
+        if (input$tab_panel != "Change/maintain sensors") {
+          return()
+        }
         if (input$change_sensor == "new") {
           showModal(modalDialog(
             title = "Add new sensor type",
@@ -3747,6 +4168,7 @@ table.on("click", "tr", function() {
               ns("recorder"),
               label = "Observer name",
               choices = select_data$recorder,
+              options = selectize_empty_options(clear = FALSE),
               selected = recorder
             )
           })
@@ -3774,7 +4196,17 @@ table.on("click", "tr", function() {
           updateSelectizeInput(
             session,
             "instrument_owner",
-            selected = modify_record$owner
+            selected = modify_record$owner_id
+          )
+          updateSelectizeInput(
+            session,
+            "supplier_id",
+            choices = select_data$suppliers,
+            selected = if (is.na(modify_record$supplier_id)) {
+              ""
+            } else {
+              as.character(modify_record$supplier_id)
+            }
           )
           updateDateInput(
             session,
@@ -3786,10 +4218,25 @@ table.on("click", "tr", function() {
             "date_purchased",
             value = modify_record$date_purchased
           )
+          updateNumericInput(
+            session,
+            "purchase_price",
+            value = modify_record$purchase_price
+          )
+          updateCheckboxInput(
+            session,
+            "takes_measurements",
+            value = isTRUE(modify_record$takes_measurements)
+          )
           updateDateInput(
             session,
             "date_retired",
             value = modify_record$date_retired
+          )
+          updateDateInput(
+            session,
+            "date_end_of_life",
+            value = modify_record$date_end_of_life
           )
           if (is.na(modify_record$retired_by)) {
             output$retired_by <- renderUI({
@@ -3797,9 +4244,7 @@ table.on("click", "tr", function() {
                 ns("retired_by"),
                 label = "Retired by",
                 choices = select_data$recorder,
-                options = list(
-                  onInitialize = I('function() { this.setValue(""); }')
-                )
+                options = selectize_empty_options()
               )
             })
           } else {
@@ -3808,6 +4253,7 @@ table.on("click", "tr", function() {
                 ns("retired_by"),
                 label = "Retired by",
                 choices = select_data$recorder,
+                options = selectize_empty_options(clear = FALSE),
                 selected = modify_record$retired_by
               )
             })
@@ -3824,25 +4270,36 @@ table.on("click", "tr", function() {
               ns("recorder"),
               label = "Observer name",
               choices = select_data$recorder,
+              options = selectize_empty_options(),
               selected = ""
             )
           })
           updateSelectizeInput(session, "make", selected = "")
-          updateSelectInput(session, "model", selected = "")
+          updateSelectizeInput(session, "model", selected = "")
           updateSelectizeInput(session, "type", selected = "")
+          updateSelectizeInput(session, "instrument_owner", selected = NULL)
+          updateSelectizeInput(
+            session,
+            "supplier_id",
+            choices = select_data$suppliers,
+            selected = ""
+          )
           updateTextInput(session, "asset_tag", value = "")
           updateCheckboxInput(session, "replaceableSensors", value = FALSE)
+          updateCheckboxInput(session, "takes_measurements", value = FALSE)
+          updateNumericInput(session, "purchase_price", value = NA)
+          updateDateInput(session, "date_in_service", value = NA)
+          updateDateInput(session, "date_purchased", value = NA)
           output$retired_by <- renderUI({
             selectizeInput(
               ns("retired_by"),
               label = "Retired by",
               choices = select_data$recorder,
-              options = list(
-                onInitialize = I('function() { this.setValue(""); }')
-              )
+              options = selectize_empty_options()
             )
           })
           updateDateInput(session, "date_retired", value = NA)
+          updateDateInput(session, "date_end_of_life", value = NA)
           updateActionButton(
             session,
             "save_cal_instrument",
@@ -3862,220 +4319,145 @@ table.on("click", "tr", function() {
       {
         #save the new record or the changes to existing record
         #reload instruments_data$sheet to mitigate conflicts
-        instruments_data$sheet <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT i.instrument_id, i.obs_datetime,  CONCAT(observers.observer_first, ' ', observers.observer_last, '(', observers.organization, ')') AS observer, i.holds_replaceable_sensors, i.serial_no, i.asset_tag, i.date_in_service, i.date_purchased, i.retired_by, i.date_retired, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id LEFT JOIN observers ON i.observer = observers.observer_id ORDER BY i.instrument_id"
-        )
+        refresh_instruments_sheet()
+        serial_no_clean <- sanitize_alnum(input$serial_no)
+        owner_id <- empty_integer_to_na(input$instrument_owner)
+        duplicate_serial <- nrow(instruments_data$sheet) > 0 &&
+          serial_no_clean %in% instruments_data$sheet$serial_no
+        serial_changed <- !identical(serial_no_clean, input$existing_serial_no)
+        missing_required <- any(is.na(c(
+          empty_integer_to_na(input$recorder),
+          empty_integer_to_na(input$make),
+          empty_integer_to_na(input$model),
+          empty_integer_to_na(input$type),
+          owner_id
+        )))
+        invalid_serial <- !nzchar(serial_no_clean) ||
+          nchar(serial_no_clean) < 4 ||
+          grepl("Search", serial_no_clean, ignore.case = TRUE)
+        save_success <- FALSE
 
-        if (nrow(instruments_data$sheet) == 0) {
-          #if there are no instruments listed yet...
-          check <- FALSE #definitely does not exist yet
-        } else {
-          check <- input$serial_no %in% instruments_data$sheet$serial_no #check to make sure the serial no does not already exist
+        instrument_values <- list(
+          observer = empty_integer_to_na(input$recorder),
+          obs_datetime = .POSIXct(Sys.time(), tz = "UTC"),
+          make = empty_integer_to_na(input$make),
+          model = empty_integer_to_na(input$model),
+          type = empty_integer_to_na(input$type),
+          holds_replaceable_sensors = isTRUE(input$replaceableSensors),
+          serial_no = serial_no_clean,
+          asset_tag = empty_string_to_na(sanitize_alnum(input$asset_tag)),
+          date_in_service = empty_date_to_na(input$date_in_service),
+          date_purchased = empty_date_to_na(input$date_purchased),
+          owner = owner_id,
+          retired_by = empty_string_to_na(input$retired_by),
+          date_retired = empty_date_to_na(input$date_retired),
+          date_end_of_life = empty_date_to_na(input$date_end_of_life)
+        )
+        if ("purchase_price" %in% instrument_fields) {
+          instrument_values$purchase_price <- empty_numeric_to_na(
+            input$purchase_price
+          )
         }
+        if ("takes_measurements" %in% instrument_fields) {
+          instrument_values$takes_measurements <- isTRUE(
+            input$takes_measurements
+          )
+        }
+        if (has_supplier_column) {
+          instrument_values$supplier_id <- empty_integer_to_na(
+            input$supplier_id
+          )
+        }
+
         if (input$existing_serial_no == "New record") {
           #add a new row with the next instrument_id
-          if (check) {
+          if (duplicate_serial) {
             alert(
               "Serial number already exists!",
               text = "You selected 'New record' and then entered an existing serial number.",
               type = "error",
               timer = 3000
             )
-            new_entry <- FALSE
-          } else if (
-            nchar(input$recorder) < 1 |
-              nchar(input$make) < 1 |
-              nchar(input$model) < 1 |
-              nchar(input$type) < 1 |
-              (nchar(input$serial_no) < 4 |
-                (grepl("Search", input$serial_no, ignore.case = TRUE)))
-          ) {
-            #long statement to check if all entries are satisfactorily filled in.
+          } else if (missing_required || invalid_serial) {
             alert(
               "Unfilled mandatory entries!",
-              text = "You need to provide your name, instrument make, model, type, and serial number of minimum 2 characters.",
+              text = "You need to provide your name, instrument owner, make, model, type, and a serial number with at least 4 characters.",
               type = "error",
               timer = 3000
             )
-            new_entry <- FALSE
           } else {
-            #Make a new entry
-            instrument.df <- data.frame(
-              observer = input$recorder,
-              obs_datetime = as.character(.POSIXct(Sys.time(), tz = "UTC")),
-              make = input$make,
-              model = input$model,
-              type = input$type,
-              holds_replaceable_sensors = input$replaceableSensors,
-              serial_no = gsub("[^[:alnum:]]", "", input$serial_no),
-              asset_tag = gsub("[^[:alnum:]]", "", input$asset_tag),
-              date_in_service = if (length(input$date_in_service) < 1) {
-                NA
-              } else {
-                as.character(input$date_in_service)
-              },
-              date_purchased = if (length(input$date_purchased) < 1) {
-                NA
-              } else {
-                as.character(input$date_purchased)
-              },
-              owner = input$instrument_owner,
-              retired_by = input$retired_by,
-              date_retired = if (length(input$date_retired) < 1) {
-                NA
-              } else {
-                as.character(input$date_retired)
-              }
-            )
             DBI::dbAppendTable(
               session$userData$AquaCache,
-              "instruments",
-              instrument.df
+              DBI::Id(schema = "instruments", table = "instruments"),
+              as.data.frame(instrument_values, optional = TRUE)
             )
 
             alert(
-              paste0("Serial number ", input$serial_no, " added"),
+              paste0("Serial number ", serial_no_clean, " added"),
               type = "success",
               timer = 2000
             )
+            save_success <- TRUE
           }
         } else {
           #Modify an existing entry
-          if (
-            nchar(input$recorder) < 1 |
-              nchar(input$make) < 1 |
-              nchar(input$model) < 1 |
-              nchar(input$type) < 1 |
-              (nchar(input$serial_no) < 4 |
-                nchar(input$instrument_owner) < 1 |
-                (grepl("Search", input$serial_no, ignore.case = TRUE)))
-          ) {
-            #long statement to check if all entries are satisfactorily filled in.
+          if (serial_changed && duplicate_serial) {
+            alert(
+              "Serial number already exists!",
+              text = "Please use a unique serial number when editing an instrument.",
+              type = "error",
+              timer = 4000
+            )
+          } else if (missing_required || invalid_serial) {
             alert(
               "Unfilled mandatory entries!",
-              text = "You need to provide your name, instrument make, model, type, and serial number of minimum 2 characters.",
+              text = "You need to provide your name, instrument owner, make, model, type, and a serial number with at least 4 characters.",
               type = "error",
               timer = 4000
             )
           } else {
+            set_clause <- paste0(
+              names(instrument_values),
+              " = $",
+              seq_along(instrument_values),
+              collapse = ", "
+            )
             DBI::dbExecute(
               session$userData$AquaCache,
               paste0(
-                "UPDATE instruments SET observer = ",
-                input$recorder,
-                ", obs_datetime = '",
-                as.character(.POSIXct(Sys.time(), tz = "UTC")),
-                "', make = ",
-                input$make,
-                ", model = ",
-                input$model,
-                ", type = ",
-                input$type,
-                ", owner = '",
-                input$instrument_owner,
-                "', holds_replaceable_sensors = ",
-                input$replaceableSensors,
-                " WHERE serial_no = '",
-                input$existing_serial_no,
-                "'"
+                "UPDATE instruments.instruments SET ",
+                set_clause,
+                " WHERE serial_no = $",
+                length(instrument_values) + 1
+              ),
+              params = c(
+                unname(instrument_values),
+                list(input$existing_serial_no)
               )
             )
 
-            if (nchar(input$asset_tag) > 0) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                paste0(
-                  "UPDATE instruments SET asset_tag = '",
-                  gsub("[^[:alnum:]]", "", input$asset_tag),
-                  "' WHERE serial_no = '",
-                  input$existing_serial_no,
-                  "'"
-                )
-              )
-            }
-            if (length(input$date_in_service) > 0) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                paste0(
-                  "UPDATE instruments SET date_in_service = '",
-                  input$date_in_service,
-                  "' WHERE serial_no = '",
-                  input$existing_serial_no,
-                  "'"
-                )
-              )
-            }
-            if (length(input$date_purchased) > 0) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                paste0(
-                  "UPDATE instruments SET date_purchased = '",
-                  input$date_purchased,
-                  "' WHERE serial_no = '",
-                  input$existing_serial_no,
-                  "'"
-                )
-              )
-            }
-            if (nchar(input$retired_by) > 0) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                paste0(
-                  "UPDATE instruments SET retired_by = '",
-                  input$retired_by,
-                  "' WHERE serial_no = '",
-                  input$existing_serial_no,
-                  "'"
-                )
-              )
-            }
-            if (length(input$date_retired) > 0) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                paste0(
-                  "UPDATE instruments SET date_retired = '",
-                  input$date_retired,
-                  "' WHERE serial_no = '",
-                  input$existing_serial_no,
-                  "'"
-                )
-              )
-            }
-
             alert(
-              paste0("Serial number ", input$existing_serial_no, " modified"),
+              paste0("Serial number ", serial_no_clean, " modified"),
               type = "success",
               timer = 2000
             )
-            new_entry <- TRUE
+            save_success <- TRUE
           }
         }
 
+        if (!save_success) {
+          return()
+        }
+
         #Reload the instruments sheet to integrate modifications
-        instruments_sheet <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT i.instrument_id, i.obs_datetime,  CONCAT(observers.observer_first, ' ', observers.observer_last, '(', observers.organization, ')') AS observer, i.holds_replaceable_sensors, i.serial_no, i.asset_tag, i.date_in_service, i.date_purchased, i.retired_by, i.date_retired, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id LEFT JOIN observers ON i.observer = observers.observer_id ORDER BY i.instrument_id"
-        )
-        instruments_data$sheet <- instruments_sheet
-        instruments_data$handhelds <- instruments_sheet[
-          instruments_sheet$type == "Handheld" &
-            is.na(instruments_sheet$date_retired),
-        ]
-        instruments_data$others <- instruments_sheet[
-          instruments_sheet$type != "Handheld" &
-            is.na(instruments_sheet$date_retired),
-        ]
-        instruments_data$maintainable_sensors <- instruments_sheet[
-          instruments_sheet$holds_replaceable_sensors,
-        ]
+        instruments_sheet <- refresh_instruments_sheet()
 
         #Reset some fields, show/hide others
         updateSelectizeInput(
           session,
           "existing_serial_no",
           choices = c("New record", instruments_data$sheet$serial_no),
-          selected = input$existing_serial_no
+          selected = serial_no_clean
         )
         updateTextInput(session, "serial_no", value = "")
         output$observer <- renderUI({
@@ -4113,12 +4495,22 @@ table.on("click", "tr", function() {
         #Re-render the tables
         instruments_data$manage_instruments <- instruments_data$sheet[,
           !colnames(instruments_data$sheet) %in%
-            c("instrument_id", "observer", "obs_datetime")
+            c(
+              "instrument_id",
+              "observer",
+              "obs_datetime",
+              "owner_id",
+              "supplier_id"
+            ),
+          drop = FALSE
         ]
         output$manage_instruments_table <- DT::renderDT(
-          instruments_data$manage_instruments,
-          rownames = FALSE,
-          selection = "single"
+          DT::datatable(
+            format_owner_column_for_dt(instruments_data$manage_instruments),
+            rownames = FALSE,
+            selection = "single",
+            escape = FALSE
+          )
         )
         temp_table <- instruments_data$maintainable_sensors[, c(
           "make",
@@ -4129,9 +4521,12 @@ table.on("click", "tr", function() {
         )]
         temp_table$type <- gsub(" .*", "", temp_table$type)
         output$manage_sensors_table <- DT::renderDT(
-          temp_table,
-          rownames = FALSE,
-          selection = "single"
+          DT::datatable(
+            format_owner_column_for_dt(temp_table),
+            rownames = FALSE,
+            selection = "single",
+            escape = FALSE
+          )
         )
 
         instruments_data$calibrate_instruments <- instruments_data$sheet[,
@@ -4140,16 +4535,23 @@ table.on("click", "tr", function() {
               "instrument_id",
               "observer",
               "obs_datetime",
+              "owner_id",
               "retired_by",
               "date_retired",
               "date_purchased",
-              "date_in_service"
-            )
+              "date_in_service",
+              "date_end_of_life",
+              "purchase_price",
+              "supplier_id"
+            ),
+          drop = FALSE
         ]
         output$calibration_instruments_table <- DT::renderDT(
           {
             DT::datatable(
-              instruments_data$calibrate_instruments,
+              format_owner_column_for_dt(
+                instruments_data$calibrate_instruments
+              ),
               rownames = FALSE,
               selection = "multiple",
               callback = htmlwidgets::JS(table_reset)

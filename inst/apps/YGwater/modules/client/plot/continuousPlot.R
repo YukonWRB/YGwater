@@ -687,6 +687,7 @@ contPlot <- function(id, language, windowDims, inputs) {
                       )
                     )
                   ),
+                  uiOutput(ns("historic_range_note")),
                   checkboxInput(
                     ns("show_unusable"),
                     tr("plot_show_unusable", language$language),
@@ -886,6 +887,134 @@ contPlot <- function(id, language, windowDims, inputs) {
       any(selected_param_ids %in% snow_param_ids)
     })
 
+    current_plot_type <- reactive({
+      if (is.null(input$plot_type) || length(input$plot_type) == 0) {
+        return("timeseries")
+      }
+
+      plot_type <- as.character(input$plot_type[[1]])
+      if (
+        !(plot_type %in%
+          c(
+            "timeseries",
+            "timeseries_all",
+            "overlap_yrs",
+            "histogram"
+          ))
+      ) {
+        return("timeseries")
+      }
+
+      plot_type
+    })
+
+    current_plot_resolution <- reactive({
+      normalize_plot_resolution(input$plot_resolution)
+    })
+
+    selected_historic_range_metadata <- reactive({
+      if (is.null(moduleData) || is.null(moduleData$timeseries)) {
+        return(data.frame(
+          aggregation_type = character(),
+          record_rate = numeric()
+        ))
+      }
+
+      ids <- selected_timeseries_ids()
+      if (is.null(ids) || length(ids) == 0) {
+        return(data.frame(
+          aggregation_type = character(),
+          record_rate = numeric()
+        ))
+      }
+
+      ts_rows <- moduleData$timeseries[timeseries_id %in% as.numeric(ids)]
+      if (nrow(ts_rows) == 0) {
+        return(data.frame(
+          aggregation_type = character(),
+          record_rate = numeric()
+        ))
+      }
+
+      aggregation_type <- if ("aggregation_type" %in% names(ts_rows)) {
+        ts_rows$aggregation_type
+      } else if (
+        "aggregation_type_id" %in%
+          names(ts_rows) &&
+          !is.null(moduleData$aggregation_types) &&
+          "aggregation_type_id" %in% names(moduleData$aggregation_types) &&
+          "aggregation_type" %in% names(moduleData$aggregation_types)
+      ) {
+        moduleData$aggregation_types[
+          match(
+            ts_rows$aggregation_type_id,
+            moduleData$aggregation_types$aggregation_type_id
+          ),
+          "aggregation_type"
+        ][[1]]
+      } else {
+        rep(NA_character_, nrow(ts_rows))
+      }
+
+      record_rate <- if ("record_rate" %in% names(ts_rows)) {
+        ts_rows$record_rate
+      } else {
+        rep(NA_real_, nrow(ts_rows))
+      }
+
+      data.frame(
+        aggregation_type = aggregation_type,
+        record_rate = record_rate
+      )
+    })
+
+    historic_range_ui_state <- reactive({
+      plot_type <- current_plot_type()
+      if (!(plot_type %in% c("timeseries", "timeseries_all", "overlap_yrs"))) {
+        return(list(disabled = FALSE, note = NULL))
+      }
+
+      hist_meta <- selected_historic_range_metadata()
+      note <- historic_range_meaningless_note(
+        aggregation_types = hist_meta$aggregation_type,
+        resolution = current_plot_resolution(),
+        record_rate_seconds = hist_meta$record_rate,
+        lang = language$abbrev
+      )
+
+      list(disabled = !is.null(note), note = note)
+    })
+
+    observe({
+      hist_state <- historic_range_ui_state()
+
+      if (isTRUE(hist_state$disabled)) {
+        updateCheckboxInput(session, "show_hist", value = FALSE)
+        updateSelectizeInput(
+          session,
+          "historic_range_overlap",
+          selected = "none"
+        )
+        shinyjs::disable("show_hist")
+        shinyjs::disable("historic_range_overlap")
+      } else {
+        shinyjs::enable("show_hist")
+        shinyjs::enable("historic_range_overlap")
+      }
+    })
+
+    output$historic_range_note <- renderUI({
+      hist_state <- historic_range_ui_state()
+      if (!isTRUE(hist_state$disabled)) {
+        return(NULL)
+      }
+
+      tags$div(
+        class = "text-muted small",
+        hist_state$note
+      )
+    })
+
     apply_default_doy_range <- function(use_snow_defaults) {
       current_year <- lubridate::year(Sys.Date())
 
@@ -1081,8 +1210,8 @@ contPlot <- function(id, language, windowDims, inputs) {
       if (is.null(selected_id)) {
         return()
       }
-      # In some cases the min date is not a year after the max date, so take the min one to prevent a blank date range.
-      safe_min <- min(
+      # In some cases the min date is not a year after the max date, so take the max one to prevent a blank date range.
+      safe_min <- max(
         ts$end_date[ts$timeseries_id == selected_id] - 365,
         ts$start_date[ts$timeseries_id == selected_id],
         na.rm = TRUE
@@ -1422,7 +1551,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         return()
       }
       end_date <- ts$end_date[selected_row]
-      safe_start_date <- min(
+      safe_start_date <- max(
         end_date - 30,
         ts$start_date[selected_row],
         na.rm = TRUE
@@ -1528,18 +1657,8 @@ contPlot <- function(id, language, windowDims, inputs) {
         selected_years <- sort(unique(selected_years[!is.na(selected_years)]))
       }
 
-      plot_resolution <- if (
-        is.null(input$plot_resolution) ||
-          length(input$plot_resolution) == 0 ||
-          is.na(input$plot_resolution[[1]])
-      ) {
-        "day"
-      } else {
-        tolower(as.character(input$plot_resolution[[1]]))
-      }
-      if (!(plot_resolution %in% c("max", "hour", "day"))) {
-        plot_resolution <- "day"
-      }
+      plot_resolution <- current_plot_resolution()
+      hist_state <- historic_range_ui_state()
 
       list(
         plot_type = plot_type,
@@ -1566,8 +1685,11 @@ contPlot <- function(id, language, windowDims, inputs) {
           NULL
         },
         years = selected_years,
-        historic_range = isTRUE(input$show_hist),
-        historic_range_overlap = if (
+        historic_range = !isTRUE(hist_state$disabled) &&
+          isTRUE(input$show_hist),
+        historic_range_overlap = if (isTRUE(hist_state$disabled)) {
+          "none"
+        } else if (
           is.null(input$historic_range_overlap) ||
             length(input$historic_range_overlap) == 0
         ) {
@@ -2109,11 +2231,7 @@ contPlot <- function(id, language, windowDims, inputs) {
                 gridy = FALSE,
                 slider = FALSE,
                 tzone = plot_timezone,
-                resolution = if (identical(plot_resolution, "hour")) {
-                  "day"
-                } else {
-                  plot_resolution
-                }
+                resolution = plot_resolution
               )
             }
             return(normalize_plot_result(plot))

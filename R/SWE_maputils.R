@@ -3913,7 +3913,7 @@ create_survey_summary <- function(
         basin = "sub_basin",
         num_years = "years"
     )
-    surveys_table <- setNames(
+    surveys_table <- stats::setNames(
         surveys_table,
         ifelse(
             names(surveys_table) %in% names(rename_map),
@@ -4711,7 +4711,7 @@ make_leaflet_map <- function(
     if (lang_short == "en") {
         language <- "English"
     } else if (lang_short == "fr") {
-        language <- "Français"
+        language <- "Fran\u00e7ais"
     } else {
         warning(
             sprintf(
@@ -4790,7 +4790,10 @@ make_leaflet_map <- function(
                 weight = 2 * static_style_elements$basins$weight,
                 opacity = static_style_elements$basins$opacity,
                 fillOpacity = static_style_elements$basins$fillOpacity,
-                label = ~ lapply(annotation, htmltools::HTML),
+                label = ~ lapply(
+                    if (language == "English") annotation_en else annotation_fr,
+                    htmltools::HTML
+                ),
                 popup = ~ lapply(popup_content, htmltools::HTML),
                 popupOptions = leaflet::popupOptions(
                     maxWidth = static_style_elements$basins$popupOptions$maxWidth,
@@ -5066,7 +5069,7 @@ make_leaflet_map <- function(
 #' @param point_data_secondary sf object containing secondary point data (pillows)
 #' @param statistic Character string indicating which SWE value to visualize
 #' @param snowbull_shapefiles List containing all loaded shapefiles
-#' @param language Character string for language ("English" or "Français, default "English")
+#' @param language Character string for language ("English" or "Fran\u00e7ais, default "English")
 #' @param month Integer month for map title
 #' @param year Integer year for map title
 #' @param filename Optional character string for PNG output file path
@@ -5154,7 +5157,7 @@ make_ggplot_map <- function(
     if (lang_short == "en") {
         language <- "English"
     } else if (lang_short == "fr") {
-        language <- "Français"
+        language <- "Fran\u00e7ais"
     } else {
         warning(
             sprintf(

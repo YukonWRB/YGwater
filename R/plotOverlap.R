@@ -707,6 +707,17 @@ plotOverlap <- function(
     }
   }
 
+  if (historic_range != "none") {
+    historic_range_meta <- fetch_historic_range_timeseries_metadata(con, tsid)
+    if (historic_range_is_meaningless(
+      aggregation_types = historic_range_meta$aggregation_type,
+      resolution = resolution,
+      record_rate_seconds = historic_range_meta$record_rate_seconds
+    )) {
+      historic_range <- "none"
+    }
+  }
+
   # Get the plotting data ################
   ## start with daily means data ################
   daily_end <- endDay
@@ -735,6 +746,12 @@ plotOverlap <- function(
       "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
       .con = con
     )
+  )
+  hourly_uses_corrected <- continuous_trace_uses_corrected_source(
+    con = con,
+    timeseries_id = tsid,
+    start_date = daily_start,
+    end_date = daily_end
   )
 
   #Fill in any missing days in daily with NAs
@@ -775,48 +792,63 @@ plotOverlap <- function(
             .con = con
           )
         ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+      } else if (resolution == "hour") {
+        new_realtime <- fetch_hourly_trace_data(
+          con = con,
+          timeseries_id = tsid,
+          start_date = start_UTC,
+          end_date = end_UTC,
+          use_corrected_source = hourly_uses_corrected
+        )
       } else if (resolution == "day") {
         new_realtime <- data.table::data.table()
       }
 
       if (nrow(new_realtime) > 0) {
-        # Fill in any missing data points in realtime with NAs
-        # Must use calculate_period to get the correct number of hours in the period as it can change.
-        new_realtime <- suppressWarnings(calculate_period(
-          new_realtime,
-          timeseries_id = tsid,
-          con = con
-        ))
-        # if calculate_period didn't return a column for new_realtime, it couldn't be done. No need to continue
-        if ("period" %in% colnames(new_realtime)) {
-          new_realtime[, "period_secs" := as.numeric(lubridate::period(period))]
-          # Shift datetime and add period_secs to compute the 'expected' next datetime
-          new_realtime[,
-            "expected" := data.table::shift(
-              new_realtime$datetime,
-              type = "lead"
-            ) -
-              new_realtime$period_secs
-          ]
-          # Create 'gap_exists' column to identify where gaps are
-          new_realtime[,
-            "gap_exists" := new_realtime$datetime < new_realtime$expected &
-              !is.na(new_realtime$expected)
-          ]
-          # Find indices where gaps exist
-          gap_indices <- which(new_realtime$gap_exists)
-          # Create a data.table of NA rows to be inserted
-          na_rows <- data.table::data.table(
-            datetime = new_realtime[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
-            value = NA
-          )
-          # Combine with NA rows
-          new_realtime <- data.table::rbindlist(
-            list(new_realtime[, c("datetime", "value")], na_rows),
-            use.names = TRUE
-          )
-          # order by datetime
-          data.table::setorder(new_realtime, "datetime")
+        # Fill in any missing data points in realtime with NAs.
+        if (resolution == "hour") {
+          new_realtime <- add_gap_markers(
+            new_realtime,
+            period_seconds = 3600
+          )[, c("datetime", "value")]
+        } else {
+          # Must use calculate_period to get the correct number of hours in the period as it can change.
+          new_realtime <- suppressWarnings(calculate_period(
+            new_realtime,
+            timeseries_id = tsid,
+            con = con
+          ))
+          # if calculate_period didn't return a column for new_realtime, it couldn't be done. No need to continue
+          if ("period" %in% colnames(new_realtime)) {
+            new_realtime[, "period_secs" := as.numeric(lubridate::period(period))]
+            # Shift datetime and add period_secs to compute the 'expected' next datetime
+            new_realtime[,
+              "expected" := data.table::shift(
+                new_realtime$datetime,
+                type = "lead"
+              ) -
+                new_realtime$period_secs
+            ]
+            # Create 'gap_exists' column to identify where gaps are
+            new_realtime[,
+              "gap_exists" := new_realtime$datetime < new_realtime$expected &
+                !is.na(new_realtime$expected)
+            ]
+            # Find indices where gaps exist
+            gap_indices <- which(new_realtime$gap_exists)
+            # Create a data.table of NA rows to be inserted
+            na_rows <- data.table::data.table(
+              datetime = new_realtime[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
+              value = NA
+            )
+            # Combine with NA rows
+            new_realtime <- data.table::rbindlist(
+              list(new_realtime[, c("datetime", "value")], na_rows),
+              use.names = TRUE
+            )
+            # order by datetime
+            data.table::setorder(new_realtime, "datetime")
+          }
         }
 
         realtime <- data.table::rbindlist(list(realtime, new_realtime))

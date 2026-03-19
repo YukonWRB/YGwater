@@ -33,7 +33,7 @@
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
-#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "day".
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
@@ -177,7 +177,7 @@ plotTimeseries <- function(
 
   if (!is.null(resolution)) {
     resolution <- tolower(resolution)
-    if (!(resolution %in% c("max", "day"))) {
+    if (!(resolution %in% c("max", "hour", "day"))) {
       stop(
         "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
@@ -643,6 +643,17 @@ plotTimeseries <- function(
     }
   }
 
+  if (historic_range) {
+    historic_range_meta <- fetch_historic_range_timeseries_metadata(con, tsid)
+    if (historic_range_is_meaningless(
+      aggregation_types = historic_range_meta$aggregation_type,
+      resolution = resolution,
+      record_rate_seconds = historic_range_meta$record_rate_seconds
+    )) {
+      historic_range <- FALSE
+    }
+  }
+
   if (title) {
     if (is.null(custom_title)) {
       if (lang == "fr") {
@@ -776,6 +787,24 @@ plotTimeseries <- function(
       params = list(tsid, start_date, end_date)
     )
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
+  } else if (resolution == "hour") {
+    trace_data <- fetch_hourly_trace_data(
+      con = con,
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      raw = raw,
+      use_corrected_source = if (raw) {
+        TRUE
+      } else {
+        continuous_trace_uses_corrected_source(
+          con = con,
+          timeseries_id = tsid,
+          start_date = start_date,
+          end_date = end_date
+        )
+      }
+    )
   } else if (resolution == "max") {
     trace_data <- dbGetQueryDT(
       con,
@@ -856,47 +885,51 @@ plotTimeseries <- function(
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
   if (!is.infinite(min_trace)) {
-    trace_data <- suppressWarnings(calculate_period(
-      trace_data,
-      timeseries_id = tsid,
-      con = con
-    ))
-    # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
-    if ("period" %in% colnames(trace_data)) {
-      trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
-      # Shift datetime and add period_secs to compute the 'expected' next datetime
-      trace_data[,
-        "expected" := data.table::shift(datetime, type = "lead") - period_secs
-      ]
-      # Create 'gap_exists' column to identify where gaps are
-      trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
-      # Find indices where gaps exist
-      gap_indices <- which(trace_data$gap_exists)
-      # Create a data.table of NA rows to be inserted
-      na_rows <- data.table::data.table(
-        datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
-        value = NA,
-        imputed = FALSE
-      )
-      if (raw) {
-        na_rows[, "value_raw" := NA]
-        # Combine with NA rows
-        trace_data <- data.table::rbindlist(
-          list(
-            trace_data[, c("datetime", "value", "value_raw", "imputed")],
-            na_rows
-          ),
-          use.names = TRUE
+    if (resolution == "hour") {
+      trace_data <- add_gap_markers(trace_data, period_seconds = 3600)
+    } else {
+      trace_data <- suppressWarnings(calculate_period(
+        trace_data,
+        timeseries_id = tsid,
+        con = con
+      ))
+      # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
+      if ("period" %in% colnames(trace_data)) {
+        trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
+        # Shift datetime and add period_secs to compute the 'expected' next datetime
+        trace_data[,
+          "expected" := data.table::shift(datetime, type = "lead") - period_secs
+        ]
+        # Create 'gap_exists' column to identify where gaps are
+        trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
+        # Find indices where gaps exist
+        gap_indices <- which(trace_data$gap_exists)
+        # Create a data.table of NA rows to be inserted
+        na_rows <- data.table::data.table(
+          datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
+          value = NA,
+          imputed = FALSE
         )
-      } else {
-        # Combine with NA rows
-        trace_data <- data.table::rbindlist(
-          list(trace_data[, c("datetime", "value", "imputed")], na_rows),
-          use.names = TRUE
-        )
+        if (raw) {
+          na_rows[, "value_raw" := NA]
+          # Combine with NA rows
+          trace_data <- data.table::rbindlist(
+            list(
+              trace_data[, c("datetime", "value", "value_raw", "imputed")],
+              na_rows
+            ),
+            use.names = TRUE
+          )
+        } else {
+          # Combine with NA rows
+          trace_data <- data.table::rbindlist(
+            list(trace_data[, c("datetime", "value", "imputed")], na_rows),
+            use.names = TRUE
+          )
+        }
+        # order by datetime
+        data.table::setorder(trace_data, datetime)
       }
-      # order by datetime
-      data.table::setorder(trace_data, datetime)
     }
 
     # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)

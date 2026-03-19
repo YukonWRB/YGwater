@@ -43,3 +43,20 @@ test_that("plotMultiTimeseries returns data as expected", {
     c("datetime", "min", "max", "q75", "q25")
   )
 })
+
+test_that("plotMultiTimeseries accepts hourly resolution", {
+  plot <- plotMultiTimeseries(
+    locations = c("09EA004", "09EA004"),
+    parameters = c(1165, 1150),
+    start_date = "2022-06-01",
+    end_date = "2022-06-03",
+    resolution = "hour",
+    historic_range = TRUE,
+    data = TRUE
+  )$data
+
+  expect_equal(length(plot), 2)
+  expect_named(plot$`09EA004_1165`, c("range_data", "trace_data"))
+  expect_named(plot$`09EA004_1165`$trace_data, c("datetime", "value"))
+  expect_gt(nrow(plot$`09EA004_1165`$trace_data), 10)
+})
