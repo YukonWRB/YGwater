@@ -59,6 +59,314 @@ addTimeseries <- function(id, language) {
     })
 
     moduleData <- reactiveValues()
+    selected_tsid <- reactiveVal(NULL)
+    instrument_association_cleared <- reactiveVal(FALSE)
+
+    safe_text <- function(x) {
+      ifelse(is.na(x), "", as.character(x))
+    }
+
+    nullable_text <- function(x) {
+      if (is.null(x) || !length(x)) {
+        return(NA_character_)
+      }
+
+      value <- x[[1]]
+      if (is.na(value)) {
+        return(NA_character_)
+      }
+
+      value <- trimws(as.character(value))
+      if (!nzchar(value)) {
+        return(NA_character_)
+      }
+
+      value
+    }
+
+    nullable_integer <- function(x) {
+      if (is.null(x) || !length(x)) {
+        return(NA_integer_)
+      }
+
+      value <- x[[1]]
+      if (is.character(value)) {
+        value <- trimws(value)
+        if (!nzchar(value)) {
+          return(NA_integer_)
+        }
+      }
+      if (is.na(value)) {
+        return(NA_integer_)
+      }
+
+      as.integer(value)
+    }
+
+    same_nullable_integer <- function(x, y) {
+      x <- nullable_integer(x)
+      y <- nullable_integer(y)
+
+      if (is.na(x) && is.na(y)) {
+        return(TRUE)
+      }
+      if (is.na(x) || is.na(y)) {
+        return(FALSE)
+      }
+
+      identical(x, y)
+    }
+
+    same_nullable_text <- function(x, y) {
+      x <- nullable_text(x)
+      y <- nullable_text(y)
+
+      if (is.na(x) && is.na(y)) {
+        return(TRUE)
+      }
+      if (is.na(x) || is.na(y)) {
+        return(FALSE)
+      }
+
+      identical(x, y)
+    }
+
+    empty_deployed_instruments <- function() {
+      if (!is.null(moduleData$deployed_instruments)) {
+        return(moduleData$deployed_instruments[0, , drop = FALSE])
+      }
+
+      data.frame(
+        metadata_id = integer(0),
+        location_id = integer(0),
+        sub_location_id = integer(0),
+        z_id = integer(0),
+        z_meters = numeric(0),
+        timeseries_id = integer(0),
+        instrument_id = integer(0),
+        serial_no = character(0),
+        make = character(0),
+        model = character(0),
+        instrument_type = character(0),
+        start_datetime = as.POSIXct(character(0), tz = "UTC"),
+        stringsAsFactors = FALSE
+      )
+    }
+
+    current_z_value <- reactive({
+      if (!isTRUE(input$z_specify) || is.null(input$z) || is.na(input$z)) {
+        return(NA_real_)
+      }
+
+      as.numeric(input$z)
+    })
+
+    current_timeseries_id_for_association <- reactive({
+      if (identical(input$mode, "modify")) {
+        return(nullable_integer(selected_tsid()))
+      }
+
+      NA_integer_
+    })
+
+    current_timeseries_association <- reactive({
+      tsid <- current_timeseries_id_for_association()
+
+      if (
+        is.na(tsid) ||
+          is.null(moduleData$deployed_instruments) ||
+          nrow(moduleData$deployed_instruments) == 0
+      ) {
+        return(empty_deployed_instruments())
+      }
+
+      moduleData$deployed_instruments[
+        !is.na(moduleData$deployed_instruments$timeseries_id) &
+          moduleData$deployed_instruments$timeseries_id == tsid,
+        ,
+        drop = FALSE
+      ]
+    })
+
+    available_instrument_deployments <- reactive({
+      location_id <- nullable_integer(input$location)
+      sub_location_id <- nullable_integer(input$sub_location)
+      z_value <- current_z_value()
+      current_tsid <- current_timeseries_id_for_association()
+
+      if (
+        is.na(location_id) ||
+          is.null(moduleData$deployed_instruments) ||
+          nrow(moduleData$deployed_instruments) == 0
+      ) {
+        return(empty_deployed_instruments())
+      }
+
+      available <- moduleData$deployed_instruments[
+        moduleData$deployed_instruments$location_id == location_id,
+        ,
+        drop = FALSE
+      ]
+
+      if (is.na(sub_location_id)) {
+        available <- available[is.na(available$sub_location_id), , drop = FALSE]
+      } else {
+        available <- available[
+          available$sub_location_id == sub_location_id,
+          ,
+          drop = FALSE
+        ]
+      }
+
+      if (is.na(z_value)) {
+        available <- available[is.na(available$z_id), , drop = FALSE]
+      } else {
+        available <- available[
+          !is.na(available$z_meters) &
+            abs(as.numeric(available$z_meters) - z_value) < 1e-9,
+          ,
+          drop = FALSE
+        ]
+      }
+
+      available <- available[
+        is.na(available$timeseries_id) |
+          (!is.na(current_tsid) & available$timeseries_id == current_tsid),
+        ,
+        drop = FALSE
+      ]
+
+      if (nrow(available) == 0) {
+        return(available)
+      }
+
+      available[
+        order(
+          available$serial_no,
+          safe_text(available$make),
+          safe_text(available$model),
+          safe_text(available$instrument_type),
+          available$metadata_id
+        ),
+        ,
+        drop = FALSE
+      ]
+    })
+
+    build_instrument_association_choices <- function(
+      df,
+      current_tsid = NA_integer_
+    ) {
+      if (is.null(df) || nrow(df) == 0) {
+        return(character(0))
+      }
+
+      labels <- sprintf(
+        "%s | %s | %s | %s | deployed %s",
+        df$serial_no,
+        safe_text(df$make),
+        safe_text(df$model),
+        safe_text(df$instrument_type),
+        format(as.POSIXct(df$start_datetime, tz = "UTC"), "%Y-%m-%d")
+      )
+
+      current_idx <- !is.na(current_tsid) & df$timeseries_id == current_tsid
+      if (any(current_idx, na.rm = TRUE)) {
+        labels[current_idx] <- paste0(
+          labels[current_idx],
+          " [currently associated]"
+        )
+      }
+
+      stats::setNames(df$metadata_id, labels)
+    }
+
+    update_timeseries_instrument_association <- function(
+      con,
+      timeseries_id,
+      deployment_metadata_id = NA_integer_
+    ) {
+      timeseries_id <- nullable_integer(timeseries_id)
+      deployment_metadata_id <- nullable_integer(deployment_metadata_id)
+
+      if (is.na(timeseries_id)) {
+        stop("A timeseries_id is required to update instrument associations.")
+      }
+
+      if (is.na(deployment_metadata_id)) {
+        DBI::dbExecute(
+          con,
+          "
+          UPDATE public.locations_metadata_instruments
+          SET timeseries_id = NULL
+          WHERE timeseries_id = $1
+            AND start_datetime <= NOW()
+            AND (end_datetime IS NULL OR end_datetime > NOW())
+          ",
+          params = list(timeseries_id)
+        )
+        return(invisible(NULL))
+      }
+
+      selected_deployment <- DBI::dbGetQuery(
+        con,
+        "
+        SELECT metadata_id, timeseries_id
+        FROM public.locations_metadata_instruments
+        WHERE metadata_id = $1
+          AND start_datetime <= NOW()
+          AND (end_datetime IS NULL OR end_datetime > NOW())
+        ",
+        params = list(deployment_metadata_id)
+      )
+
+      if (nrow(selected_deployment) == 0) {
+        stop(
+          paste(
+            "The selected instrument deployment is no longer currently deployed.",
+            "Reload the module and try again."
+          )
+        )
+      }
+
+      if (
+        !is.na(selected_deployment$timeseries_id[[1]]) &&
+          selected_deployment$timeseries_id[[1]] != timeseries_id
+      ) {
+        stop(
+          paste(
+            "The selected instrument already has a different timeseries",
+            "association. Use Field -> Deploy/recover instruments to",
+            "change existing associations."
+          )
+        )
+      }
+
+      DBI::dbExecute(
+        con,
+        "
+        UPDATE public.locations_metadata_instruments
+        SET timeseries_id = NULL
+        WHERE timeseries_id = $1
+          AND metadata_id <> $2
+          AND start_datetime <= NOW()
+          AND (end_datetime IS NULL OR end_datetime > NOW())
+        ",
+        params = list(timeseries_id, deployment_metadata_id)
+      )
+
+      DBI::dbExecute(
+        con,
+        "
+        UPDATE public.locations_metadata_instruments
+        SET timeseries_id = $1
+        WHERE metadata_id = $2
+        ",
+        params = list(timeseries_id, deployment_metadata_id)
+      )
+
+      invisible(NULL)
+    }
 
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
@@ -116,6 +424,38 @@ addTimeseries <- function(id, language) {
       moduleData$owners_agreements <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT * FROM public.organization_data_sharing_agreements;"
+      )
+      moduleData$deployed_instruments <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "
+        SELECT
+          lmi.metadata_id,
+          lmi.location_id,
+          lmi.sub_location_id,
+          lmi.z_id,
+          lz.z_meters,
+          lmi.timeseries_id,
+          lmi.instrument_id,
+          i.serial_no,
+          mk.make,
+          mdl.model,
+          it.type AS instrument_type,
+          lmi.start_datetime
+        FROM public.locations_metadata_instruments AS lmi
+        INNER JOIN instruments.instruments AS i
+          ON lmi.instrument_id = i.instrument_id
+        LEFT JOIN instruments.instrument_make AS mk
+          ON i.make = mk.make_id
+        LEFT JOIN instruments.instrument_model AS mdl
+          ON i.model = mdl.model_id
+        LEFT JOIN instruments.instrument_type AS it
+          ON i.type = it.type_id
+        LEFT JOIN public.locations_z AS lz
+          ON lmi.z_id = lz.z_id
+        WHERE lmi.start_datetime <= NOW()
+          AND (lmi.end_datetime IS NULL OR lmi.end_datetime > NOW())
+        ORDER BY i.serial_no ASC, lmi.start_datetime DESC, lmi.metadata_id DESC
+        "
       )
     }
 
@@ -353,6 +693,31 @@ addTimeseries <- function(id, language) {
           id = ns("accordion2"),
           open = FALSE,
           accordion_panel(
+            id = ns("instrument_association_panel"),
+            title = "Instrument association (optional)",
+            uiOutput(ns("instrument_association_ui")),
+            selectizeInput(
+              ns("instrument_deployment"),
+              paste(
+                "Associate this timeseries with a currently deployed",
+                "instrument"
+              ),
+              choices = NULL,
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = "Optional - select a deployed instrument",
+                plugins = list("clear_button")
+              ),
+              width = "100%"
+            ),
+            actionButton(
+              ns("remove_instrument_association"),
+              "Remove instrument association",
+              width = "100%"
+            )
+          ),
+          accordion_panel(
             id = ns("source_fx_panel"),
             title = "Auto-download options",
             splitLayout(
@@ -476,11 +841,185 @@ addTimeseries <- function(id, language) {
     }) |>
       bindEvent(moduleData$timeseries_display)
 
-    selected_tsid <- reactiveVal(NULL)
+    output$instrument_association_ui <- renderUI({
+      available <- available_instrument_deployments()
+      current_assoc <- current_timeseries_association()
+      z_value <- current_z_value()
+      current_tsid <- current_timeseries_id_for_association()
+
+      tagList(
+        div(
+          class = "alert alert-info",
+          tags$p(
+            paste(
+              "This list only includes instruments that are currently deployed",
+              "at the same location, sub-location, and elevation/depth and do",
+              "not already have a timeseries association."
+            )
+          ),
+          tags$p(
+            paste(
+              "For new deployments, re-deployments, or changing instrument",
+              "timeseries associations outside this form, use",
+              "Field -> Deploy/recover instruments."
+            )
+          )
+        ),
+        if (identical(input$mode, "modify") && is.na(current_tsid)) {
+          div(
+            class = "alert alert-warning",
+            "Select a timeseries to modify before changing its instrument association."
+          )
+        },
+        if (
+          identical(input$mode, "modify") &&
+            !is.na(current_tsid) &&
+            nrow(current_assoc) > 0
+        ) {
+          div(
+            class = "alert alert-primary",
+            tags$strong("Current deployed association"),
+            tags$br(),
+            sprintf(
+              "%s | %s | %s | %s",
+              current_assoc$serial_no[[1]],
+              safe_text(current_assoc$make[[1]]),
+              safe_text(current_assoc$model[[1]]),
+              safe_text(current_assoc$instrument_type[[1]])
+            ),
+            tags$br(),
+            paste(
+              "Deployment metadata_id:",
+              current_assoc$metadata_id[[1]]
+            )
+          )
+        } else if (identical(input$mode, "modify") && !is.na(current_tsid)) {
+          div(
+            class = "alert alert-secondary",
+            "No deployed instruments associated with this timeseries."
+          )
+        },
+        if (is.na(nullable_integer(input$location))) {
+          div(
+            class = "alert alert-warning",
+            "Select a location to load eligible deployed instruments."
+          )
+        } else if (isTRUE(input$z_specify) && is.na(z_value)) {
+          div(
+            class = "alert alert-warning",
+            paste(
+              "Specify the elevation/depth value to match deployed",
+              "instruments at this z."
+            )
+          )
+        } else if (nrow(available) == 0) {
+          div(
+            class = "alert alert-warning",
+            paste(
+              "No currently deployed instruments without a timeseries",
+              "association match the current location, sub-location, and",
+              "elevation/depth."
+            )
+          )
+        } else {
+          div(
+            class = "alert alert-success",
+            paste(
+              nrow(available),
+              "eligible deployed instrument(s) match the current location,",
+              "sub-location, and elevation/depth."
+            )
+          )
+        }
+      )
+    })
+
+    observe({
+      available <- available_instrument_deployments()
+      current_tsid <- current_timeseries_id_for_association()
+      current_input <- if (is.null(input$instrument_deployment)) {
+        character(0)
+      } else {
+        as.character(input$instrument_deployment)
+      }
+      choices <- build_instrument_association_choices(available, current_tsid)
+      choice_values <- unname(as.character(available$metadata_id))
+
+      preferred <- character(0)
+      current_assoc <- current_timeseries_association()
+      if (nrow(current_assoc) > 0) {
+        preferred <- as.character(current_assoc$metadata_id[[1]])
+      }
+
+      selected <- if (
+        length(current_input) &&
+          current_input[[1]] %in% choice_values
+      ) {
+        current_input[[1]]
+      } else if (isTRUE(instrument_association_cleared())) {
+        character(0)
+      } else if (
+        length(preferred) &&
+          preferred[[1]] %in% choice_values
+      ) {
+        preferred[[1]]
+      } else {
+        character(0)
+      }
+
+      updateSelectizeInput(
+        session,
+        "instrument_deployment",
+        choices = choices,
+        selected = selected
+      )
+    })
+
+    observeEvent(
+      input$instrument_deployment,
+      {
+        if (length(input$instrument_deployment)) {
+          instrument_association_cleared(FALSE)
+        } else {
+          instrument_association_cleared(TRUE)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$remove_instrument_association,
+      {
+        instrument_association_cleared(TRUE)
+        updateSelectizeInput(
+          session,
+          "instrument_deployment",
+          selected = character(0)
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      selected_tsid(),
+      {
+        instrument_association_cleared(FALSE)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$mode,
+      {
+        instrument_association_cleared(FALSE)
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$reload_module,
       {
+        instrument_association_cleared(FALSE)
         getModuleData()
         selected_tsid(NULL)
         # Clear table row selection
@@ -961,6 +1500,7 @@ addTimeseries <- function(id, language) {
         note,
         source_fx,
         source_fx_args,
+        instrument_deployment,
         data,
         share_with
       ) {
@@ -1066,6 +1606,12 @@ addTimeseries <- function(id, language) {
                   ifelse(is.na(end_datetime), NA, end_datetime)
                 )
               )[1, 1]
+
+              update_timeseries_instrument_association(
+                con = con,
+                timeseries_id = new_timeseries_id,
+                deployment_metadata_id = instrument_deployment
+              )
 
               # Fetch historical data if source_fx is provided
               if (!is.na(source_fx)) {
@@ -1221,6 +1767,7 @@ addTimeseries <- function(id, language) {
         note = input$note,
         source_fx = input$source_fx,
         source_fx_args = input$source_fx_args,
+        instrument_deployment = input$instrument_deployment,
         data = reactiveValuesToList(moduleData),
         share_with = input$share_with
       )
@@ -1276,6 +1823,11 @@ addTimeseries <- function(id, language) {
         updateSelectizeInput(session, "share_with", selected = "public_reader")
         updateSelectizeInput(session, "source_fx", selected = character(0))
         updateTextInput(session, "source_fx_args", value = "")
+        updateSelectizeInput(
+          session,
+          "instrument_deployment",
+          selected = character(0)
+        )
         updateTextAreaInput(session, "note", value = "")
       }
     })
@@ -1284,6 +1836,29 @@ addTimeseries <- function(id, language) {
     observeEvent(
       input$modify_timeseries,
       {
+        required_errors <- c(
+          if (!isTruthy(input$location)) "Please select a location.",
+          if (!isTruthy(input$parameter)) "Please select a parameter.",
+          if (!isTruthy(input$media)) "Please select a media type.",
+          if (!isTruthy(input$aggregation_type)) {
+            "Please select an aggregation type."
+          },
+          if (!isTruthy(input$default_owner)) {
+            "Please select a default owner."
+          },
+          if (!isTruthy(input$sensor_priority)) {
+            "Please select a sensor priority."
+          }
+        )
+        if (length(required_errors) > 0) {
+          showNotification(
+            required_errors[[1]],
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+
         if (input$mode != "modify") {
           # This is an error: show the user a notification to select 'modify' mode
           showNotification(
@@ -1327,56 +1902,67 @@ addTimeseries <- function(id, language) {
 
         tryCatch(
           {
-            if (input$location != selected_timeseries$location_id) {
+            input_location_id <- nullable_integer(input$location)
+            input_sub_location_id <- nullable_integer(input$sub_location)
+            selected_timeseries_id <- nullable_integer(
+              selected_timeseries$timeseries_id
+            )
+            input_parameter_id <- nullable_integer(input$parameter)
+            input_media_id <- nullable_integer(input$media)
+            input_aggregation_type_id <- nullable_integer(
+              input$aggregation_type
+            )
+            input_sensor_priority <- nullable_integer(input$sensor_priority)
+            input_default_owner <- nullable_integer(input$default_owner)
+            input_data_sharing_agreement_id <- nullable_integer(
+              input$data_sharing_agreement
+            )
+            input_record_rate <- nullable_text(input$record_rate)
+            input_source_fx <- nullable_text(input$source_fx)
+            input_source_fx_args <- nullable_text(input$source_fx_args)
+            input_note <- nullable_text(input$note)
+            input_share_with_values <- if (
+              is.null(input$share_with) || !length(input$share_with)
+            ) {
+              character(0)
+            } else {
+              as.character(input$share_with)
+            }
+
+            if (
+              !same_nullable_integer(
+                input_location_id,
+                selected_timeseries$location_id
+              )
+            ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE timeseries SET location_id = $1 WHERE timeseries_id = $2;",
-                params = list(input$location, selected_timeseries$timeseries_id)
+                params = list(input_location_id, selected_timeseries_id)
               )
             }
 
-            # Is there an existing sub_location_id? If TRUE, then:
-            if (!is.na(selected_timeseries$sub_location_id)) {
-              if (is.null(input$sub_location)) {
-                # If the new input is NULL or length 0, set NULL
+            if (
+              !same_nullable_integer(
+                input_sub_location_id,
+                selected_timeseries$sub_location_id
+              )
+            ) {
+              if (is.na(input_sub_location_id)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET sub_location_id = NULL WHERE timeseries_id = $1;",
-                  params = list(selected_timeseries$timeseries_id)
+                  params = list(selected_timeseries_id)
                 )
-              } else if (!nzchar(input$sub_location)) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE timeseries SET sub_location_id = NULL WHERE timeseries_id = $1;",
-                  params = list(selected_timeseries$timeseries_id)
-                )
-              } else if (
-                input$sub_location != selected_timeseries$sub_location_id
-              ) {
-                # If old and new are not the same, update with new value
+              } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET sub_location_id = $1 WHERE timeseries_id = $2;",
                   params = list(
-                    input$sub_location,
-                    selected_timeseries$timeseries_id
+                    input_sub_location_id,
+                    selected_timeseries_id
                   )
                 )
-              }
-            } else {
-              # If there is no pre-existing sub_location_id:
-              if (!is.null(input$sub_location)) {
-                # could be NULL if not touched
-                if (!is.na(input$sub_location) && !nzchar(input$sub_location)) {
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    "UPDATE timeseries SET sub_location_id = $1 WHERE timeseries_id = $2;",
-                    params = list(
-                      input$sub_location,
-                      selected_timeseries$timeseries_id
-                    )
-                  )
-                }
               }
             }
 
@@ -1405,13 +1991,11 @@ addTimeseries <- function(id, language) {
                     session$userData$AquaCache,
                     "INSERT INTO public.locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
                     params = list(
-                      as.numeric(input$location),
-                      if (
-                        !is.na(input$sub_location) && nzchar(input$sub_location)
-                      ) {
-                        as.numeric(input$sub_location)
+                      input_location_id,
+                      if (is.na(input_sub_location_id)) {
+                        input_sub_location_id
                       } else {
-                        NA
+                        input_sub_location_id
                       },
                       input$z
                     )
@@ -1429,13 +2013,11 @@ addTimeseries <- function(id, language) {
                   session$userData$AquaCache,
                   "INSERT INTO locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
                   params = list(
-                    as.numeric(input$location),
-                    if (
-                      !is.na(input$sub_location) && nzchar(input$sub_location)
-                    ) {
-                      as.numeric(input$sub_location)
+                    input_location_id,
+                    if (is.na(input_sub_location_id)) {
+                      input_sub_location_id
                     } else {
-                      NA
+                      input_sub_location_id
                     },
                     input$z
                   )
@@ -1462,264 +2044,307 @@ addTimeseries <- function(id, language) {
               }
             }
 
-            if (input$parameter != selected_timeseries$parameter_id) {
+            if (
+              !same_nullable_integer(
+                input_parameter_id,
+                selected_timeseries$parameter_id
+              )
+            ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE timeseries SET parameter_id = $1 WHERE timeseries_id = $2",
                 params = list(
-                  input$parameter,
-                  selected_timeseries$timeseries_id
-                )
-              )
-            }
-
-            if (input$media != selected_timeseries$media_id) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE timeseries SET media_id = $1 WHERE timeseries_id = $2",
-                params = list(
-                  input$media,
-                  selected_timeseries$timeseries_id
+                  input_parameter_id,
+                  selected_timeseries_id
                 )
               )
             }
 
             if (
-              input$aggregation_type != selected_timeseries$aggregation_type_id
+              !same_nullable_integer(
+                input_media_id,
+                selected_timeseries$media_id
+              )
+            ) {
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "UPDATE timeseries SET media_id = $1 WHERE timeseries_id = $2",
+                params = list(
+                  input_media_id,
+                  selected_timeseries_id
+                )
+              )
+            }
+
+            if (
+              !same_nullable_integer(
+                input_aggregation_type_id,
+                selected_timeseries$aggregation_type_id
+              )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE timeseries SET aggregation_type_id = $1 WHERE timeseries_id = $2",
                 params = list(
-                  input$aggregation_type,
-                  selected_timeseries$timeseries_id
+                  input_aggregation_type_id,
+                  selected_timeseries_id
                 )
               )
             }
 
-            if (!is.na(selected_timeseries$record_rate)) {
-              if (input$record_rate != selected_timeseries$record_rate) {
-                if (input$record_rate != "") {
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    "UPDATE timeseries SET record_rate = $1 WHERE timeseries_id = $2",
-                    params = list(
-                      input$record_rate,
-                      selected_timeseries$timeseries_id
-                    )
-                  )
-                } else {
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    "UPDATE timeseries SET record_rate = NULL WHERE timeseries_id = $1",
-                    params = list(selected_timeseries$timeseries_id)
-                  )
-                }
-              }
-            } else {
-              if (input$record_rate != "") {
+            if (
+              !same_nullable_text(
+                input_record_rate,
+                selected_timeseries$record_rate
+              )
+            ) {
+              if (!is.na(input_record_rate)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET record_rate = $1 WHERE timeseries_id = $2",
                   params = list(
-                    input$record_rate,
-                    selected_timeseries$timeseries_id
+                    input_record_rate,
+                    selected_timeseries_id
                   )
                 )
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET record_rate = NULL WHERE timeseries_id = $1",
-                  params = list(selected_timeseries$timeseries_id)
+                  params = list(selected_timeseries_id)
                 )
               }
             }
 
-            if (!is.na(selected_timeseries$sensor_priority)) {
-              if (
-                input$sensor_priority != selected_timeseries$sensor_priority
-              ) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE timeseries SET sensor_priority = $1 WHERE timeseries_id = $2",
-                  params = list(
-                    input$sensor_priority,
-                    selected_timeseries$timeseries_id
-                  )
-                )
-              }
-            } else {
+            if (
+              !same_nullable_integer(
+                input_sensor_priority,
+                selected_timeseries$sensor_priority
+              )
+            ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE timeseries SET sensor_priority = $1 WHERE timeseries_id = $2",
                 params = list(
-                  input$sensor_priority,
-                  selected_timeseries$timeseries_id
+                  input_sensor_priority,
+                  selected_timeseries_id
                 )
               )
             }
 
             # Changes to default_owner
-            if (!is.na(selected_timeseries$default_owner)) {
-              if (input$default_owner != selected_timeseries$default_owner) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE timeseries SET default_owner = $1 WHERE timeseries_id = $2",
-                  params = list(
-                    input$default_owner,
-                    selected_timeseries$timeseries_id
-                  )
-                )
-              }
-            } else {
+            if (
+              !same_nullable_integer(
+                input_default_owner,
+                selected_timeseries$default_owner
+              )
+            ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE timeseries SET default_owner = $1 WHERE timeseries_id = $2",
                 params = list(
-                  input$default_owner,
-                  selected_timeseries$timeseries_id
+                  input_default_owner,
+                  selected_timeseries_id
                 )
               )
             }
 
             # Changes to data sharing agreement
-            if (isTruthy(input$data_sharing_agreement)) {
-              if (
-                input$data_sharing_agreement !=
-                  moduleData$exist_locs[
-                    which(moduleData$exist_locs$location_id == selected_loc()),
-                    "data_sharing_agreement_id"
-                  ]
-              ) {
+            if (
+              !same_nullable_integer(
+                input_data_sharing_agreement_id,
+                selected_timeseries$default_data_sharing_agreement_id
+              )
+            ) {
+              if (is.na(input_data_sharing_agreement_id)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE timeseries SET data_sharing_agreement_id = %d WHERE timeseries_id = %d",
-                    as.numeric(input$data_sharing_agreement),
-                    selected_timeseries$timeseries_id
+                  "UPDATE timeseries SET default_data_sharing_agreement_id = NULL WHERE timeseries_id = $1",
+                  params = list(selected_timeseries_id)
+                )
+              } else {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE timeseries SET default_data_sharing_agreement_id = $1 WHERE timeseries_id = $2",
+                  params = list(
+                    input_data_sharing_agreement_id,
+                    selected_timeseries_id
                   )
                 )
               }
             }
 
             # Changes to share_with
-            input_share_with <- share_with_to_array(input$share_with)
             parsed_exist_share_with <- array_to_text(
               selected_timeseries$share_with
             )
-            if (any(input$share_with != parsed_exist_share_with)) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE timeseries SET share_with = $1 WHERE timeseries_id = $2;",
-                params = list(
-                  input_share_with,
-                  selected_timeseries$timeseries_id
-                )
+            parsed_exist_share_with <- if (
+              is.null(parsed_exist_share_with) ||
+                length(parsed_exist_share_with) == 0
+            ) {
+              character(0)
+            } else {
+              as.character(parsed_exist_share_with[
+                !is.na(parsed_exist_share_with)
+              ])
+            }
+
+            if (
+              !identical(
+                sort(unique(input_share_with_values)),
+                sort(unique(parsed_exist_share_with))
               )
+            ) {
+              input_share_with <- share_with_to_array(input_share_with_values)
+              if (
+                is.null(input_share_with) ||
+                  length(input_share_with) == 0 ||
+                  (length(input_share_with) == 1 && is.na(input_share_with))
+              ) {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE timeseries SET share_with = NULL WHERE timeseries_id = $1;",
+                  params = list(selected_timeseries_id)
+                )
+              } else {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE timeseries SET share_with = $1 WHERE timeseries_id = $2;",
+                  params = list(
+                    input_share_with,
+                    selected_timeseries_id
+                  )
+                )
+              }
             }
 
             # Changes to source_fx and source_fx_args
-            if (!is.na(selected_timeseries$source_fx)) {
-              if (input$source_fx != selected_timeseries$source_fx) {
+            if (
+              !same_nullable_text(
+                input_source_fx,
+                selected_timeseries$source_fx
+              )
+            ) {
+              if (!is.na(input_source_fx)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET source_fx = $1 WHERE timeseries_id = $2",
                   params = list(
-                    input$source_fx,
-                    selected_timeseries$timeseries_id
+                    input_source_fx,
+                    selected_timeseries_id
+                  )
+                )
+              } else {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE timeseries SET source_fx = NULL WHERE timeseries_id = $1",
+                  params = list(
+                    selected_timeseries_id
                   )
                 )
               }
-            } else {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE timeseries SET source_fx = NULL WHERE timeseries_id = $1",
-                params = list(
-                  selected_timeseries$timeseries_id
-                )
-              )
             }
 
             if (!is.na(selected_timeseries$source_fx_args)) {
-              if (!nzchar(input$source_fx_args)) {
+              if (is.na(input_source_fx_args)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET source_fx_args = NULL WHERE timeseries_id = $1",
                   params = list(
-                    selected_timeseries$timeseries_id
+                    selected_timeseries_id
                   )
                 )
-                return()
-              }
+              } else {
+                # source_fx_args are fetched from DB as json, so we need to handle them accordingly for comparison
+                # The following gives us a data.frame with column names as the keys and values as the values
+                parsed_json <- jsonlite::fromJSON(
+                  selected_timeseries$source_fx_args,
+                  simplifyVector = TRUE,
+                  flatten = TRUE
+                )
 
-              # source_fx_args are fetched from DB as json, so we need to handle them accordingly for comparison
-              # The following gives us a data.frame with column names as the keys and values as the values
-              parsed_json <- jsonlite::fromJSON(
-                selected_timeseries$source_fx_args,
-                simplifyVector = TRUE,
-                flatten = TRUE
+                # Now work the input$source_fx_args into a data.frame with the same shape as parsed_json
+                # split into “arg:value” pairs, trim whitespace
+                arg_pairs <- strsplit(input_source_fx_args, ",")[[1]] # e.g. c("arg1: value1", "arg2: value2")
+                arg_pairs <- trimws(arg_pairs) # remove leading/trailing spaces
+                # split each on “:”, extract keys & values
+                kv <- strsplit(arg_pairs, ":")
+                keys <- sapply(kv, `[`, 1)
+                vals <- sapply(kv, `[`, 2)
+                # build a named list and then a one-row data.frame
+                input_df <- stats::setNames(as.list(vals), keys)
+                input_df <- as.data.frame(input_df, stringsAsFactors = FALSE)
+                # now `parsed_json` and `input_df` have the same shape
+
+                if (!identical(parsed_json, input_df)) {
+                  # Make the source_fx_args a json object
+                  args <- input_source_fx_args
+                  # split into "argument1: value1" etc.
+                  args <- strsplit(args, ",\\s*")[[1]]
+
+                  # split only on first colon
+                  keys <- sub(":.*", "", args)
+                  vals <- sub("^[^:]+:\\s*", "", args)
+
+                  # build named list
+                  args <- stats::setNames(as.list(vals), keys)
+
+                  # convert to JSON
+                  args <- jsonlite::toJSON(args, auto_unbox = TRUE)
+
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    "UPDATE timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
+                    params = list(
+                      args,
+                      selected_timeseries_id
+                    )
+                  )
+                }
+              }
+            } else if (!is.na(input_source_fx_args)) {
+              args <- strsplit(input_source_fx_args, ",\\s*")[[1]]
+              keys <- sub(":.*", "", args)
+              vals <- sub("^[^:]+:\\s*", "", args)
+              args <- stats::setNames(as.list(vals), keys)
+              args <- jsonlite::toJSON(args, auto_unbox = TRUE)
+
+              DBI::dbExecute(
+                session$userData$AquaCache,
+                "UPDATE timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
+                params = list(
+                  args,
+                  selected_timeseries_id
+                )
               )
-
-              # Now work the input$source_fx_args into a data.frame with the same shape as parsed_json
-              # split into “arg:value” pairs, trim whitespace
-              arg_pairs <- strsplit(input$source_fx_args, ",")[[1]] # e.g. c("arg1: value1", "arg2: value2")
-              arg_pairs <- trimws(arg_pairs) # remove leading/trailing spaces
-              # split each on “:”, extract keys & values
-              kv <- strsplit(arg_pairs, ":")
-              keys <- sapply(kv, `[`, 1)
-              vals <- sapply(kv, `[`, 2)
-              # build a named list and then a one-row data.frame
-              input_df <- stats::setNames(as.list(vals), keys)
-              input_df <- as.data.frame(input_df, stringsAsFactors = FALSE)
-              # now `parsed_json` and `input_df` have the same shape
-
-              if (!identical(parsed_json, input_df)) {
-                # Make the source_fx_args a json object
-                args <- input$source_fx_args
-                # split into "argument1: value1" etc.
-                args <- strsplit(args, ",\\s*")[[1]]
-
-                # split only on first colon
-                keys <- sub(":.*", "", args)
-                vals <- sub("^[^:]+:\\s*", "", args)
-
-                # build named list
-                args <- stats::setNames(as.list(vals), keys)
-
-                # convert to JSON
-                args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
-                  params = list(
-                    args,
-                    selected_timeseries$timeseries_id
-                  )
-                )
-              }
             }
 
-            if (!is.na(selected_timeseries$note)) {
-              if (input$note != selected_timeseries$note) {
+            if (!same_nullable_text(input_note, selected_timeseries$note)) {
+              if (!is.na(input_note)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET note = $1 WHERE timeseries_id = $2",
                   params = list(
-                    input$note,
-                    selected_timeseries$timeseries_id
+                    input_note,
+                    selected_timeseries_id
+                  )
+                )
+              } else {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE continuous.timeseries SET note = NULL WHERE timeseries_id = $1",
+                  params = list(
+                    selected_timeseries_id
                   )
                 )
               }
-            } else {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE continuous.timeseries SET note = NULL WHERE timeseries_id = $1",
-                params = list(
-                  selected_timeseries$timeseries_id
-                )
-              )
             }
+
+            update_timeseries_instrument_association(
+              con = session$userData$AquaCache,
+              timeseries_id = selected_timeseries$timeseries_id,
+              deployment_metadata_id = input$instrument_deployment
+            )
 
             # If recalc_stats is TRUE, we need to recalculate stats from the beginning of the timeseries
             if (recalc_stats) {
