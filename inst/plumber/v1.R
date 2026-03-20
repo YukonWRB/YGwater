@@ -255,6 +255,8 @@ function(req, res, id, start, end = NA, limit = 100000) {
     )
   } else {
     # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
+    ids <- paste(id, collapse = ",")
+    ids <- ids[!is.na(ids)]
     out <- DBI::dbGetQuery(
       con,
       sprintf(
@@ -264,7 +266,7 @@ function(req, res, id, start, end = NA, limit = 100000) {
           AND datetime <= $2 
           ORDER BY datetime DESC
           LIMIT $3",
-        paste(id, collapse = ",")
+        ids
       ),
       params = list(start, end, lim)
     )

@@ -62,7 +62,19 @@ test_that("make_snowbull_map runs and returns expected type", {
     con <- tryCatch(YGwater::AquaConnect(silent = TRUE), error = function(e) {
         NULL
     })
-    skip_if(is.null(con), "No DB connection")
+    # Look for the 'spatial' schema to confirm connection is valid. Might be missing on CI
+    if (!is.null(con)) {
+        schemas <- DBI::dbGetQuery(
+            con,
+            "SELECT schema_name FROM information_schema.schemata"
+        )
+        if (!"spatial" %in% schemas$schema_name) {
+            skip("DB connection does not have 'spatial' schema, skipping test")
+        }
+    } else {
+        skip("Unable to connect to DB, skipping test")
+    }
+
     # Test leaflet output and also save as HTML for checking
     result <- make_snowbull_map(
         year = 2025,

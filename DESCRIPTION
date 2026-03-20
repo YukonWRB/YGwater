@@ -57,6 +57,7 @@ Suggests:
     bslib,
     bsicons,
     cachem,
+    callthat,
     curl,
     DT,
     exifr,
