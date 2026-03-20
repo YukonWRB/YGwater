@@ -290,7 +290,16 @@ plotTimeseries <- function(
     parameter_txt <- tolower(as.character(parameter))
     parameter_tbl <- DBI::dbGetQuery(
       con,
-      "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = $1 OR LOWER(param_name_fr) = $1 OR parameter_id::text = $1 LIMIT 1;",
+      paste(
+        "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
+        "p.plot_default_y_orientation,",
+        ac_parameter_unit_select_sql(con, "p", "unit_default"),
+        "FROM parameters p",
+        "WHERE LOWER(p.param_name) = $1",
+        "OR LOWER(p.param_name_fr) = $1",
+        "OR p.parameter_id::text = $1",
+        "LIMIT 1;"
+      ),
       params = list(parameter_txt)
     )
     parameter_code <- parameter_tbl$parameter_id[1]
@@ -577,7 +586,11 @@ plotTimeseries <- function(
     location_id <- exist_check$location_id[1]
     parameter_tbl <- DBI::dbGetQuery(
       con,
-      "SELECT param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = $1;",
+      paste(
+        "SELECT p.param_name, p.param_name_fr, p.plot_default_y_orientation,",
+        ac_parameter_unit_select_sql(con, "p", "unit_default"),
+        "FROM parameters p WHERE p.parameter_id = $1;"
+      ),
       params = list(exist_check$parameter_id[1])
     )
   }

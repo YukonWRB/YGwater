@@ -1994,7 +1994,18 @@ addContData <- function(id, language) {
 
       parameter <- dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT param_name, unit_default, plot_default_y_orientation FROM public.parameters JOIN continuous.timeseries ON parameters.parameter_id = timeseries.parameter_id WHERE timeseries.timeseries_id = $1",
+        paste(
+          "SELECT p.param_name,",
+          YGwater:::ac_parameter_unit_select_sql(
+            session$userData$AquaCache,
+            "p",
+            "unit_default"
+          ),
+          ", p.plot_default_y_orientation",
+          "FROM public.parameters p",
+          "JOIN continuous.timeseries ts ON p.parameter_id = ts.parameter_id",
+          "WHERE ts.timeseries_id = $1"
+        ),
         params = list(timeseries())
       )
 

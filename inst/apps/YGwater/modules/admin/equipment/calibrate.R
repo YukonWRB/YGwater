@@ -1174,7 +1174,8 @@ table.on("click", "tr", function() {
           rownames = FALSE,
           filter = 'top',
           selection = "multiple",
-          callback = htmlwidgets::JS(table_reset)
+          callback = htmlwidgets::JS(table_reset),
+          escape = FALSE
         )
       },
       server = TRUE
@@ -2552,7 +2553,8 @@ table.on("click", "tr", function() {
                 rownames = FALSE,
                 filter = 'top',
                 selection = "multiple",
-                callback = htmlwidgets::JS(table_reset)
+                callback = htmlwidgets::JS(table_reset),
+                escape = FALSE
               )
             },
             server = TRUE
@@ -2567,7 +2569,8 @@ table.on("click", "tr", function() {
                 rownames = FALSE,
                 filter = 'top',
                 selection = "multiple",
-                callback = htmlwidgets::JS(table_reset)
+                callback = htmlwidgets::JS(table_reset),
+                escape = FALSE
               )
             },
             server = TRUE
@@ -4554,7 +4557,8 @@ table.on("click", "tr", function() {
               ),
               rownames = FALSE,
               selection = "multiple",
-              callback = htmlwidgets::JS(table_reset)
+              callback = htmlwidgets::JS(table_reset),
+              escape = FALSE
             )
           },
           server = TRUE

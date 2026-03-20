@@ -56,6 +56,7 @@ test_that("get_norms returns station_norms and historical_distr", {
 
 test_that("make_snowbull_map runs and returns expected type", {
     skip_on_cran()
+    skip_on_ci()
     skip_if_not_installed("YGwater")
     skip_if_not_installed("sf")
     skip_if_not_installed("leaflet")

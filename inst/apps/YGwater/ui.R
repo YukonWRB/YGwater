@@ -480,6 +480,11 @@ app_ui <- function(request) {
               title = "Checks + calibrations",
               value = "calibrate",
               uiOutput("calibrate_ui")
+            ),
+            nav_panel(
+              title = "Create / modify instruments",
+              value = "manageInstruments",
+              uiOutput("manageInstruments_ui")
             )
           )
         },

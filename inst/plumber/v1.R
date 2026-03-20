@@ -309,7 +309,12 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT parameter_id, param_name, param_name_fr, description, description_fr, unit_default AS units FROM public.parameters ORDER BY parameter_id"
+  sql <- paste(
+    "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
+    "p.description, p.description_fr,",
+    YGwater:::ac_parameter_unit_select_sql(con, "p", "units"),
+    "FROM public.parameters p ORDER BY p.parameter_id"
+  )
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {

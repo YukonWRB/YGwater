@@ -788,7 +788,8 @@ deploy_recover <- function(id, language) {
 
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "
+        paste0(
+          "
         SELECT
           ts.timeseries_id,
           ts.location_id,
@@ -799,7 +800,13 @@ deploy_recover <- function(id, language) {
           sl.sub_location_name,
           lz.z_meters,
           p.param_name AS parameter_name,
-          p.unit_default AS units,
+          ",
+          YGwater:::ac_parameter_unit_select_sql(
+            session$userData$AquaCache,
+            "p",
+            "units"
+          ),
+          ",
           m.media_type,
           at.aggregation_type,
           ts.record_rate,
@@ -831,6 +838,7 @@ deploy_recover <- function(id, language) {
           ts.sensor_priority ASC NULLS FIRST,
           ts.timeseries_id ASC
         "
+        )
       )
 
       moduleData$deployment_records <- DBI::dbGetQuery(

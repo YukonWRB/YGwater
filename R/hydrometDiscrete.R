@@ -188,13 +188,7 @@ hydrometDiscrete <- function(
       )
     } else {
       tsid <- exists$timeseries_id
-      units <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT unit_default FROM parameters WHERE parameter_id = ",
-          parameter_code
-        )
-      )[1, 1]
+      units <- ac_get_parameter_unit(con, parameter_code)
     }
 
     # Get the data ------------------------------------------------------------
@@ -695,7 +689,7 @@ hydrometDiscrete <- function(
     if (
       !is.null(ref_period_start_datetime) && !is.null(ref_period_end_datetime)
     ) {
-      # Only plot ATH, ATL, and Median
+      # Only plot the summary lines that should appear in the legend.
       stats_to_plot <- stats_discrete[
         stats_discrete$type %in% c("ath", "atl"),
       ]
@@ -712,14 +706,21 @@ hydrometDiscrete <- function(
         ) +
         ggplot2::scale_color_manual(
           name = "",
+          breaks = c("ath", "atl"),
           labels = c("All-time High", "All-time Low"),
-          values = c("#0097A9", "#834333")
+          values = c(
+            "ath" = "#0097A9",
+            "atl" = "#834333"
+          )
         ) +
         ggnewscale::new_scale_color()
     } else {
+      stats_to_plot <- stats_discrete[
+        stats_discrete$type %in% c("max", "median", "min"),
+      ]
       plot <- plot +
         ggplot2::geom_segment(
-          data = stats_discrete,
+          data = stats_to_plot,
           linewidth = plot_scale * 1.5,
           ggplot2::aes(
             color = .data$type,
@@ -730,8 +731,13 @@ hydrometDiscrete <- function(
         ) +
         ggplot2::scale_color_manual(
           name = "",
+          breaks = c("max", "median", "min"),
           labels = c("Maximum", "Median", "Minimum"),
-          values = c("#0097A9", "#7A9A01", "#834333")
+          values = c(
+            "max" = "#0097A9",
+            "median" = "#7A9A01",
+            "min" = "#834333"
+          )
         ) +
         ggnewscale::new_scale_color()
     }

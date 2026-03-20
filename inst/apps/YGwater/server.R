@@ -83,6 +83,7 @@ app_server <- function(input, output, session) {
     "addTimeseries",
     "deploy_recover",
     "calibrate",
+    "manageInstruments",
     "addContData",
     "continuousCorrections",
     "imputeMissing",
@@ -135,6 +136,7 @@ app_server <- function(input, output, session) {
     "editDiscData",
     "addContData",
     "editContData",
+    "manageInstruments",
     "addSamples",
     "addSampleSeries",
     "syncCont",
@@ -1251,6 +1253,7 @@ app_server <- function(input, output, session) {
 
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$calibrate <- FALSE
+    ui_loaded$manageInstruments <- FALSE
 
     ui_loaded$addContData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
@@ -1318,6 +1321,7 @@ app_server <- function(input, output, session) {
     "addTimeseries",
     "deploy_recover",
     "calibrate",
+    "manageInstruments",
     "addContData",
     "continuousCorrections",
     "imputeMissing",
@@ -2648,6 +2652,7 @@ app_server <- function(input, output, session) {
           "addTimeseries",
           "deploy_recover",
           "calibrate",
+          "manageInstruments",
           "addContData",
           "continuousCorrections",
           "imputeMissing",
@@ -3006,6 +3011,15 @@ app_server <- function(input, output, session) {
         output$calibrate_ui <- renderUI(calibrateUI("calibrate")) # Render the UI
         ui_loaded$calibrate <- TRUE
         calibrate("calibrate", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "manageInstruments") {
+      if (!ui_loaded$manageInstruments) {
+        output$manageInstruments_ui <- renderUI(manageInstrumentsUI(
+          "manageInstruments"
+        ))
+        ui_loaded$manageInstruments <- TRUE
+        manageInstruments("manageInstruments", language = languageSelection)
       }
     }
     if (input$navbar == "addContData") {

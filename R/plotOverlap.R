@@ -332,10 +332,16 @@ plotOverlap <- function(
 
     #Confirm parameter and location exist in the database and that there is only one entry
     parameter_txt <- tolower(as.character(parameter))
+    unit_sql <- DBI::SQL(ac_parameter_unit_select_sql(con, "p", "unit_default"))
     parameter_tbl <- DBI::dbGetQuery(
       con,
       glue::glue_sql(
-        "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",
+        "SELECT p.parameter_id, p.param_name, p.param_name_fr, p.plot_default_y_orientation, {unit_sql}
+         FROM parameters p
+         WHERE LOWER(p.param_name) = {parameter_txt}
+           OR LOWER(p.param_name_fr) = {parameter_txt}
+           OR p.parameter_id::text = {parameter_txt}
+         LIMIT 1;",
         .con = con
       )
     )
@@ -654,7 +660,12 @@ plotOverlap <- function(
     parameter_code <- exist_check$parameter_id[1]
     parameter_tbl <- DBI::dbGetQuery(
       con,
-      "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = $1;",
+      paste(
+        "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
+        "p.plot_default_y_orientation,",
+        ac_parameter_unit_select_sql(con, "p", "unit_default"),
+        "FROM parameters p WHERE p.parameter_id = $1;"
+      ),
       params = list(parameter_code)
     )
 
@@ -672,13 +683,7 @@ plotOverlap <- function(
   }
 
   # Find the ts units
-  units <- DBI::dbGetQuery(
-    con,
-    glue::glue_sql(
-      "SELECT unit_default FROM parameters WHERE parameter_id = {parameter_code};",
-      .con = con
-    )
-  )
+  units <- ac_get_parameter_unit(con, parameter_code)
 
   # Find the necessary datum (latest datum)
   if (datum) {

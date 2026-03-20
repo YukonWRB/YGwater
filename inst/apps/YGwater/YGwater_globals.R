@@ -73,6 +73,10 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/equipment/calibrate.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/admin/instruments/manageInstruments.R",
+      package = "YGwater"
+    ))
 
     # continuous data sub-modules
     source(system.file(
