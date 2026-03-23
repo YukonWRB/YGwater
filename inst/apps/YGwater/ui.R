@@ -244,7 +244,7 @@ app_ui <- function(request) {
               value = "snowBulletin",
               uiOutput("snowBulletin_ui")
             ),
-            nav_panel(title = "Water Temperature TODO TRANSLATION",
+            nav_panel(title = "Water Temperature",
                       value = "waterTemp",
                       uiOutput("waterTemp_ui")
             )

@@ -22,7 +22,7 @@ max_date <- all_ts |>
 
 
 
-For site `r params$site_name`, the maximum temperature recording was `r max_date$value_corrected` and occurred on `r as.Date(max_date$datetime)` at `r format(max_date$datetime, "%H:%m")`.
+For site `r params$site_name`, the maximum temperature recording was `r max_date$value_corrected` and occurred on `r as.Date(max_date$datetime)` at `r format(max_date$datetime, "%H:%m %p")`.
 
 ## Daily Mean
 
