@@ -924,7 +924,7 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-              "INSERT INTO instruments.observers
+            "INSERT INTO instruments.observers
               (observer_first, observer_last, organization)
               VALUES ($1, $2, $3)
               RETURNING observer_id",
@@ -984,7 +984,7 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-              "INSERT INTO instruments.instrument_make
+            "INSERT INTO instruments.instrument_make
               (make, description)
               VALUES ($1, $2)
               RETURNING make_id",
@@ -1043,8 +1043,7 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            paste(
-              "INSERT INTO instruments.instrument_model
+            "INSERT INTO instruments.instrument_model
               (model, description)
               VALUES ($1, $2)
               RETURNING model_id",
@@ -1109,7 +1108,7 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-              "INSERT INTO instruments.instrument_type
+            "INSERT INTO instruments.instrument_type
               (type, description)
               VALUES ($1, $2)
               RETURNING type_id",
@@ -1343,7 +1342,7 @@ manageInstruments <- function(id, language) {
         duplicate_serial <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-              "SELECT instrument_id
+            "SELECT instrument_id
               FROM instruments.instruments
               WHERE serial_no = $1
               AND ($2::integer IS NULL OR instrument_id <> $2)",
@@ -1460,7 +1459,7 @@ manageInstruments <- function(id, language) {
             with_db_feedback(
               DBI::dbExecute(
                 con,
-                  "UPDATE instruments.instrument_maintenance
+                "UPDATE instruments.instrument_maintenance
                   SET instrument_id = $1, observer = $2, obs_datetime = $3,
                   note = $4, date_maintenance_due = $5
                   WHERE event_id = $6",
