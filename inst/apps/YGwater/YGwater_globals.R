@@ -33,6 +33,12 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
+  # Load some helper functions
+  source(system.file(
+    "apps/YGwater/modules/historic_range_helpers.R",
+    package = "YGwater"
+  ))
+
   g_drive <- FALSE
   if (!isFALSE(network_check)) {
     network_check <- dir.exists(network_check)
@@ -302,7 +308,9 @@ YGwater_globals <- function(
         `840` = "Pacific/Kiritimati"
       )
       mapped_tz <- unname(fixed_map[as.character(offset_minutes)])
-      if (length(mapped_tz) && !is.na(mapped_tz[[1]]) && nzchar(mapped_tz[[1]])) {
+      if (
+        length(mapped_tz) && !is.na(mapped_tz[[1]]) && nzchar(mapped_tz[[1]])
+      ) {
         return(mapped_tz[[1]])
       }
       if (offset_minutes == 0L) {
