@@ -185,7 +185,11 @@ snowBulletinMod <- function(id, language) {
         ),
 
         # Make it happen
-        actionButton(ns("go"), label = tr("create_report", language$language)),
+        bslib::input_task_button(
+          ns("go"),
+          label = tr("create_report", language$language),
+          label_busy = tr("generating_working", language$language)
+        ),
         downloadButton(
           ns("download"),
           "download",
@@ -293,139 +297,307 @@ snowBulletinMod <- function(id, language) {
     }
     observeFilterInput("basins")
 
-    outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
+    download_bundle <- reactiveVal(NULL)
 
-    observeEvent(input$go, {
-      tryCatch(
-        {
-          withProgress(
-            message = tr("dl_prep", language$language),
-            value = 0,
-            {
-              incProgress(0.2)
+    show_validation_modal <- function(messages) {
+      messages <- unique(messages[!is.na(messages) & nzchar(messages)])
+      if (!length(messages)) {
+        return(invisible(FALSE))
+      }
 
-              # 1. Create a temporary folder
-              dir <- paste0(tempdir(), "/snowBulletinOutput")
-              dir.create(dir, showWarnings = FALSE)
-              # Delete all files in the folder (if any)
-              files <- list.files(dir, full.names = TRUE)
-              if (length(files) > 0) {
-                unlink(files, recursive = TRUE, force = TRUE)
-              }
+      showModal(modalDialog(
+        title = "Cannot Generate Snow Bulletin Report",
+        tags$p("Please correct the following before starting the report:"),
+        tags$ul(lapply(messages, function(msg) tags$li(msg))),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", language$language))
+      ))
 
-              # 3. Call the appropriate function so it writes all files to 'dir'
-              suppressWarnings({
-                if (selections$stats) {
-                  snowBulletinStats(
-                    year = selections$year,
-                    month = selections$month,
-                    basins = if (selections$basins == "all") {
-                      NULL
-                    } else {
-                      selections$basins
-                    },
-                    save_path = dir,
-                    excel_output = TRUE,
-                    con = session$userData$AquaCache,
-                    source = "aquacache",
-                    synchronize = FALSE
-                  )
-                } else {
-                  snowBulletin(
-                    year = selections$year,
-                    month = selections$month,
-                    basins = if (selections$basins == "all") {
-                      NULL
-                    } else {
-                      selections$basins
-                    },
-                    scale = selections$scale,
-                    save_path = dir,
-                    con = session$userData$AquaCache,
-                    precip_period = selections$precip_period,
-                    cddf_period = selections$cddf_period,
-                    language = tolower(selections$language)
-                  )
-                }
-              })
+      invisible(TRUE)
+    }
 
-              incProgress(0.7)
+    validate_report_request <- function() {
+      issues <- character()
 
-              if (selections$stats) {
-                # Zip up everything in 'dir' and write the zip to `file`
-                files <- list.files(dir, full.names = TRUE)
+      if (
+        is.null(selections$stats) ||
+          length(selections$stats) != 1 ||
+          is.na(selections$stats)
+      ) {
+        issues <- c(
+          issues,
+          "Choose whether to create bulletin statistics or the bulletin report."
+        )
+      }
 
-                zip::zip(
-                  zipfile = paste0(
-                    dir,
-                    "/report.zip",
-                    files = files,
-                    mode = "cherry-pick",
-                    include_directories = FALSE
-                  )
-                )
-                outputFile(paste0(dir, "/report.zip"))
+      if (
+        is.null(selections$year) ||
+          length(selections$year) != 1 ||
+          is.na(selections$year)
+      ) {
+        issues <- c(issues, "Select a valid year.")
+      }
 
-                # Delete everything in the 'dir' except for the .zip file
-                files <- list.files(dir, full.names = TRUE)
-                files <- files[!grepl("report.zip", files)]
-                if (length(files) > 0) {
-                  unlink(files, recursive = TRUE, force = TRUE)
-                }
-              } else {
-                file <- list.files(dir, full.names = TRUE)
-                outputFile(file)
-              }
+      if (
+        is.null(selections$month) ||
+          length(selections$month) != 1 ||
+          is.na(selections$month) ||
+          !selections$month %in% 3:5
+      ) {
+        issues <- c(issues, "Select a valid spring month.")
+      }
 
-              # 5. Now programmatically click the hidden download button
-              shinyjs::click("download")
+      if (
+        is.null(selections$basins) ||
+          length(selections$basins) == 0 ||
+          all(is.na(selections$basins)) ||
+          !any(nzchar(selections$basins))
+      ) {
+        issues <- c(
+          issues,
+          "Select at least one basin, or choose 'All'."
+        )
+      }
 
-              incProgress(1)
-            } # End withProgress content
-          ) # End withProgress
-        },
-        error = function(e) {
-          showNotification(
-            if (selections$stats) {
-              paste0(
-                tr("gen_snowBul_error_stats", language$language),
-                ": ",
-                e$message
-              )
-            } else {
-              paste0(
-                tr("gen_snowBul_error_report", language$language),
-                ": ",
-                e$message
-              )
-            },
-            type = "error",
-            duration = NULL,
-            closeButton = TRUE
+      if (!isTRUE(selections$stats)) {
+        if (
+          is.null(selections$language) ||
+            length(selections$language) == 0 ||
+            anyNA(selections$language) ||
+            !nzchar(selections$language[[1]])
+        ) {
+          issues <- c(issues, "Select a report language.")
+        }
+
+        if (
+          is.null(selections$precip_period) ||
+            length(selections$precip_period) == 0 ||
+            anyNA(selections$precip_period) ||
+            !nzchar(selections$precip_period[[1]])
+        ) {
+          issues <- c(issues, "Select a precipitation comparison period.")
+        }
+
+        if (
+          is.null(selections$cddf_period) ||
+            length(selections$cddf_period) == 0 ||
+            anyNA(selections$cddf_period) ||
+            !nzchar(selections$cddf_period[[1]])
+        ) {
+          issues <- c(issues, "Select a CDDF comparison period.")
+        }
+
+        if (
+          is.null(selections$scale) ||
+            length(selections$scale) != 1 ||
+            is.na(selections$scale) ||
+            selections$scale < 0.5 ||
+            selections$scale > 3
+        ) {
+          issues <- c(
+            issues,
+            "Plot scale must be a number between 0.5 and 3."
           )
         }
+      }
+
+      unique(issues)
+    }
+
+    cleanup_download_bundle <- function(bundle) {
+      if (is.null(bundle) || is.null(bundle$path)) {
+        return(invisible(NULL))
+      }
+
+      bundle_dir <- dirname(bundle$path)
+      if (dir.exists(bundle_dir)) {
+        unlink(bundle_dir, recursive = TRUE, force = TRUE)
+      } else if (file.exists(bundle$path)) {
+        unlink(bundle$path, force = TRUE)
+      }
+
+      invisible(NULL)
+    }
+
+    pick_generated_file <- function(files, pattern = NULL) {
+      files <- files[file.exists(files)]
+      if (!length(files)) {
+        stop("No files were generated for the report.")
+      }
+
+      if (!is.null(pattern)) {
+        matched <- files[grepl(pattern, basename(files), ignore.case = TRUE)]
+        if (length(matched) == 1) {
+          return(matched[[1]])
+        }
+        if (length(matched) > 1) {
+          stop("Multiple report files were generated where only one was expected.")
+        }
+      }
+
+      if (length(files) != 1) {
+        stop("Expected a single generated report file.")
+      }
+
+      files[[1]]
+    }
+
+    report_task <- ExtendedTask$new(function(req, config) {
+      promises::future_promise({
+        tryCatch(
+          {
+            con <- AquaConnect(
+              name = config$dbName,
+              host = config$dbHost,
+              port = config$dbPort,
+              username = config$dbUser,
+              password = config$dbPass,
+              silent = TRUE
+            )
+            on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+            work_dir <- tempfile("snowBulletinOutput_")
+            dir.create(work_dir, recursive = TRUE)
+
+            suppressWarnings({
+              if (isTRUE(req$stats)) {
+                snowBulletinStats(
+                  year = req$year,
+                  month = req$month,
+                  basins = req$basins,
+                  save_path = work_dir,
+                  excel_output = TRUE,
+                  con = con,
+                  source = "aquacache",
+                  synchronize = FALSE
+                )
+
+                files <- list.files(work_dir, full.names = FALSE)
+                if (!length(files)) {
+                  stop("No files were generated for the report.")
+                }
+
+                zip_path <- file.path(work_dir, "report.zip")
+                zip::zip(
+                  zipfile = zip_path,
+                  files = files,
+                  mode = "cherry-pick",
+                  include_directories = FALSE,
+                  root = work_dir
+                )
+
+                return(list(
+                  path = zip_path,
+                  filename = paste0("Snow bulletin stats issued ", Sys.Date(), ".zip")
+                ))
+              }
+
+              snowBulletin(
+                year = req$year,
+                month = req$month,
+                basins = req$basins,
+                scale = req$scale,
+                save_path = work_dir,
+                con = con,
+                precip_period = req$precip_period,
+                cddf_period = req$cddf_period,
+                language = req$report_language
+              )
+
+              report_path <- pick_generated_file(
+                list.files(work_dir, full.names = TRUE),
+                pattern = "\\.docx$"
+              )
+
+              list(
+                path = report_path,
+                filename = paste0("Snow bulletin issued ", Sys.Date(), ".docx")
+              )
+            })
+          },
+          error = function(e) {
+            e$message
+          }
+        )
+      })
+    }) |>
+      bind_task_button("go")
+
+    observeEvent(input$go, {
+      if (show_validation_modal(validate_report_request())) {
+        return()
+      }
+
+      report_task$invoke(
+        req = list(
+          stats = isTRUE(selections$stats),
+          year = selections$year,
+          month = selections$month,
+          basins = if (identical(selections$basins, "all")) {
+            NULL
+          } else {
+            selections$basins
+          },
+          scale = selections$scale,
+          precip_period = selections$precip_period,
+          cddf_period = selections$cddf_period,
+          report_language = tolower(selections$language)
+        ),
+        config = session$userData$config
       )
+    })
+
+    observeEvent(report_task$result(), {
+      result <- report_task$result()
+
+      if (inherits(result, "character")) {
+        showNotification(
+          paste("Error generating snow bulletin report:", result),
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+        return()
+      }
+
+      if (is.null(result$path) || !file.exists(result$path)) {
+        showNotification(
+          "Report was generated, but the output file could not be found for download.",
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+        return()
+      }
+
+      cleanup_download_bundle(download_bundle())
+      download_bundle(result)
+      shinyjs::click("download")
     })
 
     # Listen for the 'go' and make the report when called
     output$download <- downloadHandler(
       filename = function() {
-        if (selections$stats) {
-          paste0("Snow bulletin stats issued ", Sys.Date(), ".zip")
-        } else {
-          paste0("Snow bulletin issued ", Sys.Date(), ".docx")
-        }
+        req(download_bundle())
+        download_bundle()$filename
       },
       content = function(file) {
-        file.copy(outputFile(), file)
-        # Now delete the zip file and the directory it's in
-        unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
-      }, # End content
-      if (selections$stats) {
-        contentType = "application/zip"
-      } else {
-        contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      }
+        bundle <- download_bundle()
+        req(bundle)
+
+        if (!file.exists(bundle$path)) {
+          stop("Generated report file could not be found for download.")
+        }
+
+        copied <- file.copy(bundle$path, file, overwrite = TRUE)
+        if (!isTRUE(copied)) {
+          stop("Unable to copy the generated report to the download location.")
+        }
+
+        cleanup_download_bundle(bundle)
+        download_bundle(NULL)
+      } # End content
     ) # End downloadHandler
+    outputOptions(output, "download", suspendWhenHidden = FALSE)
   }) # End moduleServer
 } # End snowInfoServer

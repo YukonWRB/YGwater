@@ -16,6 +16,7 @@ reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométr
 reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
 reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
+reports_waterTemp,reportsNavWaterTempTitle,Water temperature,Température de l'eau
 data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
@@ -78,7 +79,7 @@ max,modal selection,Max + daily (with stats),Maximale + journalière (avec stats
 ts_subset_msg,modal message,Subset of data (first and last measurement per timeseries),Sous-ensemble de données (première et dernière mesures)
 discrete_subset_msg,modal message,Subset of data (up to 3 results per sample),Sous-ensemble de données (jusqu'à 3 résultats par échantillon)
 loc_meta_msg,modal message,Subset of location metadata (up to first three locations),Sous-ensemble des métadonnées des sites (jusqu'aux trois premiers endroits)
-date_range_select_doy,,Start/end days (year is ignored),Dates de début/fin (l'année est ignorée)
+date_range_select_doy,,Start/end day of year (year is ignored),Dates de début/fin (l'année est ignorée)
 date_start,continuous data selector,With data starting after,Avec des données à partir de
 date_end,continuous data selector,With data ending before,Avec des données avant
 dl_format,modal selection title,Choose a format,Sélectionnez un format
@@ -142,10 +143,10 @@ img_type_man,input choice,Manual (one-off),Manuelle (non-série)
 map_options,,Map options,Options de la carte
 map_load_addtional_layers,,Load additional layers,Charger des couches supplémentaires
 date_range_lab,input label,Date Range,Intervalle de dates
-date_sep,dateRangeInput separator, to , à 
+date_sep,dateRangeInput separator, to , à
+plot_select_multiple,,Select + plot multiple timeseries,Sélectionner + tracer plusieurs séries temporelles
 plot_type,,Plot type,Type de graphique
 plot_type_tooltip,,Timeseries plots show changes over time and can display multiple traces or subplots. Overlapping years plots help compare data from different years at the same location.,Les graphiques de longues séries temporelles montrent les changements au fil du temps et peuvent afficher plusieurs tracés ou sous-graphiques. Les graphiques d’années superposées permettent de comparer les données de différentes années pour un même point de surveillance.
-plot_type_overlap,,Overlapping years,Années superposées
 plot_select_years,,Select years to plot,Sélectionnez les années à tracer
 plot_select_yrs,,"For periods overlapping the new year, select the December year","Pour les périodes chevauchant la nouvelle année, sélectionnez l’année de décembre."
 plot_long_time_to_plot,,Plotting can take a while for large time ranges at max resolution.,La génération du graphique peut prendre un certain temps pour les longs intervalles de temps à résolution maximale.
@@ -156,6 +157,12 @@ plot_resolution_daily,,Daily,Journalière
 plot_timezone_offset,,Plot time zone (UTC offset),Fuseau horaire du graphique (décalage UTC)
 plot_timezone_offset_placeholder,,Select UTC offset,Choisir le décalage UTC
 plot_type_ts,,Timeseries,Série temporelle
+plot_type_ts_many,,Timeseries (one per plot),Série temporelle (une par graphique)
+plot_type_ts_all,,Timeseries (all on one plot),Séries temporelles (tous sur un graphique)
+plot_type_overlap,,Overlapping years,Années superposées
+plot_type_overlap_many,,Overlapping years (one timeseries per plot),Années superposées (un graphique par série temporelle)
+plot_type_histogram,,Histogram,Histogramme
+plot_type_histogram_many,,Histogram (one timeseries per plot),Histogramme (un graphique par série temporelle)
 none_fm,,None,Aucune
 none_m,,None,Aucun
 plot_hist_range,,Plot historic range,Tracer la plage historique
@@ -272,7 +279,7 @@ gen_generate_plots,,Generate plots,Générer les graphiques
 gen_waterInfo_ptype,,Min/max on single plot or separate,Min/max sur le même graphique ou séparé
 gen_waterInfo_ptype_combine,,Single,même
 separate,,Separate,séparés
-gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (EEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
+gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (ÉEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
 gen_snowInfo_inactive,,Include inactive locations,Inclure les emplacements inactifs
 gen_snowInfo_complete,,Complete years only,Années complètes seulement
 gen_snowInfo_ptype,,Combined or separate plots,Graphiques séparés ou combinés
@@ -302,10 +309,15 @@ modify_subplot,,Modify subplot,Modifier le sous-graphe
 remove_subplot,,Remove subplot,Enlever le sous-graphe
 add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the same plot, or 'Add subplot' to create a separate panel.","Cliquez sur « Ajouter un tracé » pour superposer une nouvelle série temporelle sur le même graphique, ou sur « Ajouter un sous-graphe » pour créer un panneau séparé."
 well_purpose,,Well purpose,Usage des puits
-well_completion_yr,,Well completion year,Année d'achèvement des puits
+well_name_contains,,Well name contains,Le nom du puits contient
+well_name_contains_placeholder,,e.g. YOWN,ex. YOWN
+well_name_starts,,Starts with,Commence par
+well_name_ends,,Ends with,Se termine par
+well_name_case_sensitive,,Case sensitive,Respect de la casse
+well_completion_yr,,Well completion year,Année d'achèvement
 include_unknown_well_completion,,Include wells with unknown completion year,Inclure les puits ou l'année d'achèvement est inconnue
 include_missing_well_depth,,Include wells with missing depth,Inclure les puits où la profondeur est manquante
-include_missing_well_depth_to_water,,Include wells with missing depth to water,Inclure les puits où la profondeur
+include_missing_well_depth_to_water,,Include wells with missing depth to water,Inclure les puits où la profondeur jusqu'à l'eau est manquante
 include_missing_well_depth_to_bedrock,,Include wells with missing depth to bedrock,Inclure les puits où la profondeur jusqu'au substratum rocheux est manquante
 borehole_unnamed,,Unnamed well,Puits sans nom
 borehole_well_purpose_col,,purpose_name,purpose_name_fr
@@ -437,14 +449,17 @@ pw_change_success,modal text,Password updated successfully.,Mot de passe mis à 
 pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
-snowbull_relative_median,,Percent of median (%),Pourcentage de la médiane historique (%)
+snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
+snowbull_percent_of_normal,,Percent of normal,pourcentage de la normale
 snowbull_historical_median,,Historical median,Médiane historique
-snowbull_anomalies,,Anomalies (%s),Anomalies (%s)
-snowbull_values,,Values (%s),Valeurs (%s)
-snowbull_swe,,Snow water equivalent,Équivalent en eau de neige
+snowbull_anomalies,,Anomalies,Anomalies
+snowbull_deviation,,Deviation from normal, écart par rapport à la normale
+snowbull_values,,Values,Valeurs
+snowbull_swe,,Snow Water Equivalent,Équivalent en eau de neige
+snowbull_swe_abbrev,,SWE,ÉEN
 snowbull_temperature,,Temperature,Température
 snowbull_precipitation,,Precipitation,Précipitation
-snowbull_percentile,,Percentile (%),Percentile (%)
+snowbull_percentile,,Percentile,Percentile
 snowbull_details,,Map details,Détails de la carte
 app_version,,Current application version:,Version actuelle de l'application :
 snowbull_gen_on,,Map generated on,Carte générée le
@@ -453,15 +468,17 @@ snowbull_map_credits,,Basemap:</b> Esri World Imagery,Crédits de la carte de ba
 snowbull_data_credits,,Data source:</b> AquaCache database,Source des données :</b> Base de données AquaCache
 snowbull_date,,Snow Bulletin Date,Date du bulletin de neige
 snowbull_historical_period,,Historical period for statistics,Période historique pour les statistiques
-snowbull_no_snow,,No snow (no record),Pas de neige (aucun enregistrement historique)
-snowbull_some_snow,,"Snow present (no record)","Neige présente (aucun enregistrement historique)"
+snowbull_no_snow,,No snow (median is zero),Pas de neige (médiane historique égale à zéro)
+snowbull_some_snow,,"Snow present (median is zero)","Neige présente (médiane historique égale à zéro)"
 snowbull_no_data,,No data,Aucune donnée
 snowbull_percentile_suffix,,th,ème
 snowbull_snow_survey,,Snow survey,Relevé nivométrique
 snowbull_snow_pillow,,Snow pillow,Coussin à neige
-snowbull_swe_basin,,Basin average SWE,EEN moyen du 
+snowbull_swe_basin,,Basin average SWE,ÉEN moyen du bassin
 snowbull_normal,,Normal,Normal
 snowbull_average,,Average,Moyenne
+snowbull_median,,Median,Médiane
+snowbull_reference_period,,reference period,période de référence
 snowbull_communities,,Communities,Communautés
 snowbull_roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles
@@ -470,5 +487,6 @@ snowbull_mean_elevation,,Mean elevation,Altitude moyenne
 elevation,,Elevation,Altitude
 coordinates,,Coordinates,Coordonnées
 isocontours,,Isocontours,Isocontours
-snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille
-snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche EEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
+snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (ÉEN) en grille
+snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche ÉEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
+snowbull_to,, to,à

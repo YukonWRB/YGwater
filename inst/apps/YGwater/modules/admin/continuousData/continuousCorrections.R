@@ -75,15 +75,52 @@ continuousCorrectionsUI <- function(id) {
         accordion_panel(
           id = ns("new_correction_panel"),
           title = "New correction",
-          textInput(
-            ns("start_dt"),
-            "Start datetime (UTC)",
-            placeholder = "YYYY-MM-DD HH:MM:SS"
-          ),
-          textInput(
-            ns("end_dt"),
-            "End datetime (UTC)",
-            placeholder = "YYYY-MM-DD HH:MM:SS"
+          fluidRow(
+            column(
+              4,
+              selectizeInput(
+                ns("timezone"),
+                "Input timezone",
+                choices = input_timezone_choices(),
+                selected = default_input_timezone(),
+                multiple = FALSE,
+                width = "100%"
+              )
+            ),
+            column(
+              4,
+              shinyWidgets::airDatepickerInput(
+                ns("start_dt"),
+                "Start datetime",
+                value = NULL,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                update_on = "change",
+                tz = air_datetime_widget_timezone(default_input_timezone()),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
+              )
+            ),
+            column(
+              4,
+              shinyWidgets::airDatepickerInput(
+                ns("end_dt"),
+                "End datetime",
+                value = NULL,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                update_on = "change",
+                tz = air_datetime_widget_timezone(default_input_timezone()),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
+              )
+            )
           ),
           selectizeInput(
             ns("correction_type"),
@@ -143,6 +180,12 @@ continuousCorrections <- function(id, language) {
         "SELECT correction_type_id, correction_type, description, priority, value1, value1_description, value2, value2_description, timestep_window, equation FROM correction_types ORDER BY priority"
       )
     )
+
+    shift_correction_datetime_inputs <- function(tz_name) {
+      shift_air_datetime_input_timezone(session, input, "start_dt", tz_name)
+      shift_air_datetime_input_timezone(session, input, "end_dt", tz_name)
+    }
+
     observe({
       req(session$userData$AquaCache, moduleData)
       updateSelectizeInput(
@@ -250,12 +293,22 @@ continuousCorrections <- function(id, language) {
       if (length(selected_row) > 0) {
         timeseries_id <- ts_meta()[selected_row, "timeseries_id"]
         timeseries(timeseries_id)
-        updateTextInput(session, "start_dt", value = "")
-        updateTextInput(session, "end_dt", value = "")
+        shinyWidgets::updateAirDateInput(session, "start_dt", clear = TRUE)
+        shinyWidgets::updateAirDateInput(session, "end_dt", clear = TRUE)
       } else {
         timeseries(NULL)
       }
     })
+
+    observeEvent(
+      input$timezone,
+      {
+        shift_correction_datetime_inputs(
+          normalize_input_timezone(input$timezone)
+        )
+      },
+      ignoreInit = TRUE
+    )
 
     # Pull and show existing corrections
     existing_corrections <- reactive({
@@ -316,19 +369,23 @@ continuousCorrections <- function(id, language) {
 
     # TODO: Below is problematic, not actually returning the corrected values
     get_preview <- function() {
-      req(timeseries(), input$start_dt, input$end_dt)
-      query <- paste0(
-        "SELECT datetime, value, continuous.apply_corrections(",
-        timeseries(),
-        ", datetime, value) AS corrected FROM measurements_continuous WHERE timeseries_id = ",
-        timeseries(),
-        " AND datetime BETWEEN '",
-        input$start_dt,
-        "' AND '",
-        input$end_dt,
-        "' ORDER BY datetime"
+      req(timeseries())
+      start_dt <- scalar_utc_datetime(input$start_dt)
+      end_dt <- scalar_utc_datetime(input$end_dt)
+      if (is.na(start_dt)) {
+        stop("Select a start datetime.")
+      }
+      if (is.na(end_dt)) {
+        stop("Select an end datetime.")
+      }
+      if (start_dt >= end_dt) {
+        stop("Start datetime must be before end datetime.")
+      }
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT datetime, value, continuous.apply_corrections($1, datetime, value) AS corrected FROM measurements_continuous WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime",
+        params = list(timeseries(), start_dt, end_dt)
       )
-      DBI::dbGetQuery(session$userData$AquaCache, query)
     }
 
     render_preview <- function(dat) {
@@ -341,20 +398,44 @@ continuousCorrections <- function(id, language) {
     }
 
     observeEvent(input$preview, {
-      dat <- get_preview()
-      req(nrow(dat) > 0)
-      render_preview(dat)
+      tryCatch(
+        {
+          dat <- get_preview()
+          req(nrow(dat) > 0)
+          render_preview(dat)
+        },
+        error = function(e) {
+          showNotification(conditionMessage(e), type = "error")
+        }
+      )
     })
 
     observeEvent(input$apply, {
-      req(timeseries(), input$start_dt, input$end_dt, input$correction_type)
+      req(timeseries(), input$correction_type)
+      start_dt <- scalar_utc_datetime(input$start_dt)
+      end_dt <- scalar_utc_datetime(input$end_dt)
+      if (is.na(start_dt)) {
+        showNotification("Select a start datetime.", type = "error")
+        return()
+      }
+      if (is.na(end_dt)) {
+        showNotification("Select an end datetime.", type = "error")
+        return()
+      }
+      if (start_dt >= end_dt) {
+        showNotification(
+          "Start datetime must be before end datetime.",
+          type = "error"
+        )
+        return()
+      }
       DBI::dbExecute(
         session$userData$AquaCache,
         "INSERT INTO corrections (timeseries_id, start_dt, end_dt, correction_type, value1, value2, timestep_window, equation) VALUES ($1,$2,$3,$4,$5,$6,make_interval(secs => $7),$8)",
         params = list(
           as.integer(timeseries()),
-          input$start_dt,
-          input$end_dt,
+          start_dt,
+          end_dt,
           as.integer(input$correction_type),
           input$value1,
           input$value2,

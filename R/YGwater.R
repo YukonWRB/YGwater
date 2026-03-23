@@ -15,6 +15,7 @@
 #' @param accessPath2 Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.
 #' @param logout_timer_min Auto logout timer, in minutes.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
+#' @param analytics FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as `system.file("apps/YGwater/www/html/matomo.html", package = "YGwater")`. This file will be called within the main UI as `tags$head(includeHTML(file))`. Default is FALSE.
 #' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.
 #'
 #' @return Opens a Shiny application.
@@ -33,6 +34,7 @@ YGwater <- function(
   network_check = FALSE,
   logout_timer_min = 10,
   server = FALSE,
+  analytics = FALSE,
   public = TRUE
 ) {
   rlang::check_installed("shiny", reason = "required to use YGwater app")
@@ -42,6 +44,10 @@ YGwater <- function(
   rlang::check_installed("htmltools", reason = "required to use YGwater app")
   rlang::check_installed(
     "future",
+    reason = "required to enable asynchronous operations in YGwater apps"
+  )
+  rlang::check_installed(
+    "promises",
     reason = "required to enable asynchronous operations in YGwater apps"
   )
   rlang::check_installed(
@@ -92,6 +98,10 @@ YGwater <- function(
       "magick",
       reason = "required to use Simpler Index in the app"
     )
+    rlang::check_installed(
+      "readxl",
+      reason = "required to use YGwater app with public = FALSE"
+    )
   }
 
   # Make sure 'network_check' is either FALSE or character
@@ -107,6 +117,25 @@ YGwater <- function(
     stop("YGwater app not found.")
   }
 
+  # Make sure the analytics file can be found if specified
+  # do not change to !analytics because analytics can be a character string with the file path
+  if (analytics != FALSE) {
+    if (!file.exists(analytics)) {
+      warning(
+        "The analytics file specified in the 'analytics' argument cannot be found."
+      )
+      analytics <- FALSE
+    } else {
+      # Ensure that it's an HTML file
+      if (tools::file_ext(analytics) != "html") {
+        warning(
+          "The analytics file specified in the 'analytics' argument is not an HTML file. Analytics will be disabled."
+        )
+        analytics <- FALSE
+      }
+    }
+  }
+
   # Load the global variables, library calls, and possibly in future a connection to the DB.
   source(system.file("apps/YGwater/YGwater_globals.R", package = "YGwater"))
   YGwater_globals(
@@ -119,7 +148,8 @@ YGwater <- function(
     accessPath2 = accessPath2,
     network_check = network_check,
     public = public,
-    logout_timer_min = logout_timer_min
+    logout_timer_min = logout_timer_min,
+    analytics = analytics
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app

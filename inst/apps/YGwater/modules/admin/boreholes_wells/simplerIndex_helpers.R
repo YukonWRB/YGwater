@@ -479,7 +479,7 @@ get_meta_value_multiple <- function(field, metadata, default = "") {
 get_meta_numeric <- function(field, metadata) {
   val <- metadata[[field]]
   if (is_meta_empty(val)) {
-    return(NULL)
+    return(NA_real_)
   }
   return(val)
 }
@@ -487,7 +487,7 @@ get_meta_numeric <- function(field, metadata) {
 get_meta_date <- function(field, metadata) {
   val <- metadata[[field]]
   if (is_meta_empty(val)) {
-    return(NULL)
+    return(NA)
   }
   return(val)
 }

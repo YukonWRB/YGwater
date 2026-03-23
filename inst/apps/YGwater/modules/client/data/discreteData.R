@@ -73,6 +73,14 @@ discData <- function(id, language, inputs) {
       })
     }
 
+    parameter_unit_sql <- function(output_alias = "unit", alias = "p") {
+      YGwater:::ac_parameter_unit_select_sql(
+        session$userData$AquaCache,
+        alias,
+        output_alias
+      )
+    }
+
     # Get the data to populate drop-downs. Runs every time this module is loaded.
     if (session$userData$user_logged_in) {
       # If logged in, get or create data that lives only with this session,
@@ -174,7 +182,9 @@ discData <- function(id, language, inputs) {
       filteredData$params <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste0(
-          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
+          parameter_unit_sql("unit"),
+          " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
           paste(filteredData$samples$sample_id, collapse = ", "),
           ");"
         )
@@ -821,7 +831,9 @@ discData <- function(id, language, inputs) {
         filteredData$params <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
+            parameter_unit_sql("unit"),
+            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1040,7 +1052,9 @@ discData <- function(id, language, inputs) {
         filteredData$params <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
+            parameter_unit_sql("unit"),
+            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1230,7 +1244,9 @@ discData <- function(id, language, inputs) {
         filteredData$params <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
+            parameter_unit_sql("unit"),
+            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1395,7 +1411,9 @@ discData <- function(id, language, inputs) {
         filteredData$params <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
+            parameter_unit_sql("unit"),
+            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1544,7 +1562,9 @@ discData <- function(id, language, inputs) {
         filteredData$params <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
+            parameter_unit_sql("unit"),
+            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1763,7 +1783,7 @@ discData <- function(id, language, inputs) {
     # End of creating and rendering table section
 
     # Create the proxy for datatable manipulations
-    proxy <- DT::dataTableProxy(ns("tbl"))
+    proxy <- DT::dataTableProxy("tbl")
 
     # Show/hide the view button based on if a row is selected #
     observe({
@@ -1812,7 +1832,9 @@ discData <- function(id, language, inputs) {
 
       # Single query using a window function to limit to 3 rows/results per sample_id
       query <- paste0(
-        "SELECT * FROM (SELECT r.sample_id, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY sample_id ORDER BY result_id) AS rn 
+        "SELECT * FROM (SELECT r.sample_id, r.result, p.param_name AS parameter, ",
+        parameter_unit_sql("units"),
+        ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY sample_id ORDER BY result_id) AS rn 
         FROM results r
         JOIN parameters p ON r.parameter_id = p.parameter_id
         JOIN result_types rt ON r.result_type = rt.result_type_id
@@ -2058,7 +2080,9 @@ discData <- function(id, language, inputs) {
         data$results <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
-            "SELECT s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, p.unit_default AS units, rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
+            "SELECT s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, ",
+            parameter_unit_sql("units"),
+            ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
         FROM results r
         JOIN samples s ON r.sample_id = s.sample_id
         JOIN parameters p ON r.parameter_id = p.parameter_id

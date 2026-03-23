@@ -185,9 +185,7 @@ WQReportUI <- function(id) {
             label = NULL,
             start = "2000-01-01",
             end = "2000-12-31",
-            format = "yyyy-mm-dd",
-            language = language$abbrev,
-            separator = tr("date_sep", language$language)
+            format = "yyyy-mm-dd"
           )
         ),
 
@@ -211,7 +209,11 @@ WQReportUI <- function(id) {
             width = "100%"
           )
         ),
-        actionButton(ns("go"), "Create report"),
+        bslib::input_task_button(
+          ns("go"),
+          "Create report",
+          label_busy = "Working..."
+        ),
         downloadButton(
           ns("download"),
           "download",
@@ -432,104 +434,350 @@ WQReport <- function(id, mdb_files, language) {
       }
     })
 
-    outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
+    download_bundle <- reactiveVal(NULL)
 
-    observeEvent(input$go, {
-      tryCatch(
-        {
-          withProgress(
-            message = tr("generating_working", language$language),
-            value = 0,
-            {
-              incProgress(0.5)
+    show_validation_modal <- function(messages) {
+      messages <- unique(messages[!is.na(messages) & nzchar(messages)])
+      if (!length(messages)) {
+        return(invisible(FALSE))
+      }
 
-              if (!is.na(input$SD_SD)) {
-                SD_doy_range <- c(
-                  lubridate::yday(input$SD_date_range[1]),
-                  lubridate::yday(input$SD_date_range[2])
-                )
-              } else {
-                SD_doy_range <- NULL
-              }
+      showModal(modalDialog(
+        title = "Cannot Generate Water Quality Report",
+        tags$p("Please correct the following before starting the report:"),
+        tags$ul(lapply(messages, function(msg) tags$li(msg))),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", language$language))
+      ))
 
-              dir <- paste0(tempdir(), "/WQReport")
+      invisible(TRUE)
+    }
 
-              dir.create(dir, showWarnings = FALSE)
+    normalize_optional_date <- function(value) {
+      if (length(value) == 0 || all(is.na(value))) {
+        return(NULL)
+      }
 
-              EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
-              EQWinReport(
-                date = input$date,
-                date_approx = as.numeric(input$date_approx),
-                stations = if (input$locs_groups == "Locations") {
-                  input$locations_EQ
-                } else {
-                  NULL
-                },
-                stnGrp = if (input$locs_groups == "Location Groups") {
-                  input$location_groups
-                } else {
-                  NULL
-                },
-                parameters = if (input$params_groups == "Parameters") {
-                  input$parameters_EQ
-                } else {
-                  NULL
-                },
-                paramGrp = if (input$params_groups == "Parameter Groups") {
-                  input$parameter_groups
-                } else {
-                  NULL
-                },
-                stds = input$stds,
-                stnStds = input$stnStds,
-                SD_exceed = if (!is.na(input$SD_SD)) input$SD_SD else NULL,
-                SD_start = if (length(input$SD_start) > 0) {
-                  input$SD_start
-                } else {
-                  NULL
-                },
-                SD_end = if (length(input$SD_end) > 0) input$SD_end else NULL,
-                SD_doy = SD_doy_range,
-                save_path = dir,
-                con = EQWin
-              )
-              DBI::dbDisconnect(EQWin)
+      as.Date(value)[[1]]
+    }
 
-              tmpfile <- list.files(dir, full.names = TRUE)
-              outputFile(tmpfile)
+    validate_report_request <- function() {
+      issues <- character()
 
-              # Now programmatically click the hidden download button
-              shinyjs::click("download")
+      if (!identical(input$data_source, "EQ")) {
+        issues <- c(
+          issues,
+          "Water quality reports are currently available only from EQWin."
+        )
+      }
 
-              incProgress(1)
-            } # End withProgress content
-          ) # End withProgress
-        },
-        error = function(e) {
-          showNotification(
-            paste("Error generating water quality report:", e$message),
-            type = "error",
-            duration = NULL,
-            closeButton = TRUE
+      if (
+        is.null(input$EQWin_source) ||
+          length(input$EQWin_source) == 0 ||
+          anyNA(input$EQWin_source) ||
+          !nzchar(input$EQWin_source[[1]])
+      ) {
+        issues <- c(issues, "Select a valid EQWin database.")
+      }
+
+      if (is.null(moduleData$EQ_locs) || is.null(moduleData$EQ_params)) {
+        issues <- c(
+          issues,
+          "EQWin selections are still loading. Please wait a moment and try again."
+        )
+      }
+
+      report_date <- as.Date(input$date)
+      if (length(report_date) != 1 || is.na(report_date)) {
+        issues <- c(issues, "Provide a valid report date.")
+      }
+
+      if (
+        is.null(input$date_approx) ||
+          length(input$date_approx) != 1 ||
+          is.na(input$date_approx) ||
+          input$date_approx < 0
+      ) {
+        issues <- c(
+          issues,
+          "Days around the report date must be zero or greater."
+        )
+      }
+
+      if (identical(input$locs_groups, "Locations")) {
+        if (
+          is.null(input$locations_EQ) ||
+            length(input$locations_EQ) == 0 ||
+            all(is.na(input$locations_EQ)) ||
+            !any(nzchar(input$locations_EQ))
+        ) {
+          issues <- c(
+            issues,
+            "Select at least one station, or switch to location groups."
           )
         }
-      )
+      } else if (identical(input$locs_groups, "Location Groups")) {
+        if (
+          is.null(input$location_groups) ||
+            length(input$location_groups) == 0 ||
+            anyNA(input$location_groups) ||
+            !nzchar(input$location_groups[[1]])
+        ) {
+          issues <- c(issues, "Select a location group.")
+        }
+      } else {
+        issues <- c(
+          issues,
+          "Choose whether to filter by stations or by location groups."
+        )
+      }
+
+      if (identical(input$params_groups, "Parameters")) {
+        if (
+          is.null(input$parameters_EQ) ||
+            length(input$parameters_EQ) == 0 ||
+            all(is.na(input$parameters_EQ)) ||
+            !any(nzchar(input$parameters_EQ))
+        ) {
+          issues <- c(
+            issues,
+            "Select at least one parameter, or switch to parameter groups."
+          )
+        }
+      } else if (identical(input$params_groups, "Parameter Groups")) {
+        if (
+          is.null(input$parameter_groups) ||
+            length(input$parameter_groups) == 0 ||
+            anyNA(input$parameter_groups) ||
+            !nzchar(input$parameter_groups[[1]])
+        ) {
+          issues <- c(issues, "Select a parameter group.")
+        }
+      } else {
+        issues <- c(
+          issues,
+          "Choose whether to filter by parameters or by parameter groups."
+        )
+      }
+
+      if (!is.null(input$SD_SD) && length(input$SD_SD) == 1 && !is.na(input$SD_SD)) {
+        if (!is.numeric(input$SD_SD) || input$SD_SD <= 0) {
+          issues <- c(
+            issues,
+            "Standard deviation threshold must be a number greater than zero."
+          )
+        }
+
+        sd_start <- normalize_optional_date(input$SD_start)
+        sd_end <- normalize_optional_date(input$SD_end)
+        if (!is.null(sd_start) && !is.null(sd_end) && sd_start > sd_end) {
+          issues <- c(
+            issues,
+            "Standard deviation start date must be on or before the end date."
+          )
+        }
+
+        sd_range <- as.Date(input$SD_date_range)
+        if (
+          length(sd_range) != 2 ||
+            any(is.na(sd_range)) ||
+            sd_range[[1]] > sd_range[[2]]
+        ) {
+          issues <- c(
+            issues,
+            "Provide a valid day-of-year range for the standard deviation filter."
+          )
+        }
+      }
+
+      unique(issues)
+    }
+
+    cleanup_download_bundle <- function(bundle) {
+      if (is.null(bundle) || is.null(bundle$path)) {
+        return(invisible(NULL))
+      }
+
+      bundle_dir <- dirname(bundle$path)
+      if (dir.exists(bundle_dir)) {
+        unlink(bundle_dir, recursive = TRUE, force = TRUE)
+      } else if (file.exists(bundle$path)) {
+        unlink(bundle$path, force = TRUE)
+      }
+
+      invisible(NULL)
+    }
+
+    pick_generated_file <- function(files, pattern = NULL) {
+      files <- files[file.exists(files)]
+      if (!length(files)) {
+        stop("No files were generated for the report.")
+      }
+
+      if (!is.null(pattern)) {
+        matched <- files[grepl(pattern, basename(files), ignore.case = TRUE)]
+        if (length(matched) == 1) {
+          return(matched[[1]])
+        }
+        if (length(matched) > 1) {
+          stop("Multiple report files were generated where only one was expected.")
+        }
+      }
+
+      if (length(files) != 1) {
+        stop("Expected a single generated report file.")
+      }
+
+      files[[1]]
+    }
+
+    report_task <- ExtendedTask$new(function(req) {
+      promises::future_promise({
+        tryCatch(
+          {
+            work_dir <- tempfile("WQReport_")
+            dir.create(work_dir, recursive = TRUE)
+
+            EQWin <- AccessConnect(req$eqwin_source, silent = TRUE)
+            on.exit(DBI::dbDisconnect(EQWin), add = TRUE)
+
+            EQWinReport(
+              date = req$date,
+              date_approx = req$date_approx,
+              stations = req$stations,
+              stnGrp = req$stnGrp,
+              parameters = req$parameters,
+              paramGrp = req$paramGrp,
+              stds = req$stds,
+              stnStds = req$stnStds,
+              SD_exceed = req$SD_exceed,
+              SD_start = req$SD_start,
+              SD_end = req$SD_end,
+              SD_doy = req$SD_doy,
+              save_path = work_dir,
+              con = EQWin
+            )
+
+            report_path <- pick_generated_file(
+              list.files(work_dir, full.names = TRUE),
+              pattern = "\\.xlsx$"
+            )
+
+            list(
+              path = report_path,
+              filename = paste0(
+                "water quality report for ",
+                req$date,
+                " Issued ",
+                Sys.Date(),
+                ".xlsx"
+              )
+            )
+          },
+          error = function(e) {
+            e$message
+          }
+        )
+      })
+    }) |>
+      bind_task_button("go")
+
+    observeEvent(input$go, {
+      if (show_validation_modal(validate_report_request())) {
+        return()
+      }
+
+      report_task$invoke(req = list(
+        eqwin_source = input$EQWin_source,
+        date = as.Date(input$date),
+        date_approx = as.numeric(input$date_approx),
+        stations = if (input$locs_groups == "Locations") {
+          input$locations_EQ
+        } else {
+          NULL
+        },
+        stnGrp = if (input$locs_groups == "Location Groups") {
+          input$location_groups
+        } else {
+          NULL
+        },
+        parameters = if (input$params_groups == "Parameters") {
+          input$parameters_EQ
+        } else {
+          NULL
+        },
+        paramGrp = if (input$params_groups == "Parameter Groups") {
+          input$parameter_groups
+        } else {
+          NULL
+        },
+        stds = input$stds,
+        stnStds = input$stnStds,
+        SD_exceed = if (!is.na(input$SD_SD)) input$SD_SD else NULL,
+        SD_start = normalize_optional_date(input$SD_start),
+        SD_end = normalize_optional_date(input$SD_end),
+        SD_doy = if (!is.na(input$SD_SD)) {
+          c(
+            lubridate::yday(input$SD_date_range[1]),
+            lubridate::yday(input$SD_date_range[2])
+          )
+        } else {
+          NULL
+        }
+      ))
+    })
+
+    observeEvent(report_task$result(), {
+      result <- report_task$result()
+
+      if (inherits(result, "character")) {
+        showNotification(
+          paste("Error generating water quality report:", result),
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+        return()
+      }
+
+      if (is.null(result$path) || !file.exists(result$path)) {
+        showNotification(
+          "Report was generated, but the output file could not be found for download.",
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+        return()
+      }
+
+      cleanup_download_bundle(download_bundle())
+      download_bundle(result)
+      shinyjs::click("download")
     })
     # Create the download
     output$download <- downloadHandler(
       filename = function() {
-        paste0(
-          "water quality report for ",
-          input$date,
-          " Issued ",
-          Sys.Date(),
-          ".xlsx"
-        )
+        req(download_bundle())
+        download_bundle()$filename
       },
       content = function(file) {
-        file.copy(outputFile(), file)
+        bundle <- download_bundle()
+        req(bundle)
+
+        if (!file.exists(bundle$path)) {
+          stop("Generated report file could not be found for download.")
+        }
+
+        copied <- file.copy(bundle$path, file, overwrite = TRUE)
+        if (!isTRUE(copied)) {
+          stop("Unable to copy the generated report to the download location.")
+        }
+
+        cleanup_download_bundle(bundle)
+        download_bundle(NULL)
       }, # End content
       contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     ) # End downloadHandler
+    outputOptions(output, "download", suspendWhenHidden = FALSE)
   }) # End moduleServer
 } # End WQReportServer

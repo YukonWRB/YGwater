@@ -183,7 +183,9 @@ snowInfo <- function(
   results <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT r.sample_id, r.result, p.param_name, p.unit_default, rvt.result_value_type AS flag
+      "SELECT r.sample_id, r.result, p.param_name, ",
+      ac_parameter_unit_select_sql(con, "p", "unit_default"),
+      ", rvt.result_value_type AS flag
       FROM results AS r 
       JOIN parameters AS p ON p.parameter_id = r.parameter_id 
       JOIN result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type

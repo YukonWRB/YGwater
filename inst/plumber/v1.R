@@ -1,8 +1,8 @@
 # !IMPORTANT! Some helper functions are located at the bottom of this file.
 
 #' @apiTitle AquaCache API version 1
-#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory. Many endpoints can make use of authentication via HTTP Basic Auth. See the documentation for details. In addition, memoisation is used in multiple endpoints to cache results for improved performance.
-#' @apiVersion 1.0.0
+#' @apiDescription API for programmatic access to the aquacache database.
+#' @apiVersion 1.0.1
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
@@ -19,20 +19,22 @@ function(req, res) {
     "^/openapi.json$", # <-- needed for the UI to load without auth
     "^/openapi.yaml$", # <-- sometimes used
     "^/timeseries/measurements$",
-    "^/samples/results$/"
+    "^/samples/results$/",
+    "^/csw-layer$"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
 
   hdr <- req$HTTP_AUTHORIZATION %||% ""
+  req$is_authenticated <- nzchar(hdr)
   if (hdr == "") {
     if (!is_public_ok) {
       res$status <- 401
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    req$user <- Sys.getenv("APIaquacacheAnonUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
-    req$password <- Sys.getenv("APIaquacacheAnonPass", "aquacache")
+    req$user <- Sys.getenv("APIaquacacheUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
+    req$password <- Sys.getenv("APIaquacachePass", "aquacache")
     return(plumber::forward())
   }
 
@@ -47,6 +49,10 @@ function(req, res) {
   req$user <- substr(cred, 1, i - 1)
   req$password <- substr(cred, i + 1, nchar(cred))
   plumber::forward()
+}
+
+request_cache_allowed <- function(req) {
+  !isTRUE(req$is_authenticated)
 }
 
 #' List available locations
@@ -158,9 +164,9 @@ function(req, res, lang = "en") {
 
 
 #' Return measurements for a timeseries
-#* @param id Timeseries ID (required).
-#* @param start Start date/time (required, ISO 8601 i.e. 2025-01-01 00:00).
-#* @param end End date/time (optional; defaults to now, ISO 8601).
+#* @param id Timeseries IDs to target, separated by commas (required).
+#* @param start Start date/time, inclusive (required, ISO 8601 i.e. 2025-01-01 00:00).
+#* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @get /timeseries/measurements
 #* @serializer csv
@@ -233,17 +239,38 @@ function(req, res, id, start, end = NA, limit = 100000) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
-  WHERE timeseries_id = $1 
-  AND datetime >= $2 
-  AND datetime <= $3 
-  ORDER BY datetime DESC
-  LIMIT $4"
-  out <- DBI::dbGetQuery(
-    con,
-    sql,
-    params = list(as.integer(id), start, end, lim)
-  )
+  # Break id apart by comma and convert to integer vector
+  id <- unlist(strsplit(id, ","))
+  id <- as.integer(id)
+  if (length(id) == 1) {
+    out <- DBI::dbGetQuery(
+      con,
+      "SELECT * FROM continuous.measurements_continuous_corrected 
+      WHERE timeseries_id = $1 
+      AND datetime >= $2 
+      AND datetime <= $3 
+      ORDER BY datetime DESC
+      LIMIT $4",
+      params = list(as.integer(id), start, end, lim)
+    )
+  } else {
+    # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
+    ids <- paste(id, collapse = ",")
+    ids <- ids[!is.na(ids)]
+    out <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT * FROM continuous.measurements_continuous_corrected 
+          WHERE timeseries_id IN (%s) 
+          AND datetime >= $1 
+          AND datetime <= $2 
+          ORDER BY datetime DESC
+          LIMIT $3",
+        ids
+      ),
+      params = list(start, end, lim)
+    )
+  }
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"
@@ -282,7 +309,12 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT parameter_id, param_name, param_name_fr, description, description_fr, unit_default AS units FROM public.parameters ORDER BY parameter_id"
+  sql <- paste(
+    "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
+    "p.description, p.description_fr,",
+    YGwater:::ac_parameter_unit_select_sql(con, "p", "units"),
+    "FROM public.parameters p ORDER BY p.parameter_id"
+  )
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
@@ -620,15 +652,27 @@ function(
   }
 
   latest_stamp <- get_snowbull_stamp(con, year, month)
-  map_payload <- snowbull_leaflet_mem(
-    stamp = latest_stamp,
-    year = year,
-    month = month,
-    statistic = statistic,
-    language = language,
-    param_name = "snow water equivalent",
-    con = con
-  )
+  if (request_cache_allowed(req)) {
+    map_payload <- snowbull_leaflet_mem(
+      stamp = latest_stamp,
+      year = year,
+      month = month,
+      statistic = statistic,
+      language = language,
+      param_name = "snow water equivalent",
+      con = con
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    map_payload <- YGwater:::create_snowbull_leaflet_html(
+      year = year,
+      month = month,
+      param_name = "snow water equivalent",
+      statistic = statistic,
+      language = language,
+      con = con
+    )
+  }
 
   res$headers[["X-Map-Year"]] <- as.character(map_payload$year)
   res$headers[["X-Map-Month"]] <- as.character(map_payload$month)
@@ -707,17 +751,31 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = FALSE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = FALSE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$measurements,
@@ -755,17 +813,31 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = FALSE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = FALSE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$locations,
@@ -803,17 +875,31 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = TRUE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = TRUE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$stats,
@@ -851,22 +937,76 @@ function(req, res) {
   # Find the latest snow sample datetime to use for cache invalidation
   latest <- get_snow_stamp(con)
 
-  out <- snowInfo_mem(
-    stamp = latest,
-    con = con,
-    complete_yrs = TRUE,
-    inactive = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = TRUE,
-    save_path = NULL,
-    headers = "object"
-  )
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
 
   csv_with_header(
     out$trends,
     header_lines = out$headers$trends[[1]]
   )
+}
+
+# End point to pass postgres function get_csw_layer() output directly as CSV, as it comes out of the DB.
+#' Return CSW layer data
+#* @get /csw-layer
+#* @serializer csv
+function(req, res) {
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  out <- DBI::dbGetQuery(con, "SELECT * FROM public.get_csw_layer()")
+
+  if (nrow(out) == 0) {
+    res$headers[["X-Status"]] <- "info"
+    return(data.frame(
+      status = "info",
+      message = "No CSW layer data found in the database.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  return(out)
 }
 
 

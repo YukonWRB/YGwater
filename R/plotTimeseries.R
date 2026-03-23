@@ -33,7 +33,7 @@
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
-#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "day".
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
@@ -177,7 +177,7 @@ plotTimeseries <- function(
 
   if (!is.null(resolution)) {
     resolution <- tolower(resolution)
-    if (!(resolution %in% c("max", "day"))) {
+    if (!(resolution %in% c("max", "hour", "day"))) {
       stop(
         "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
@@ -290,7 +290,16 @@ plotTimeseries <- function(
     parameter_txt <- tolower(as.character(parameter))
     parameter_tbl <- DBI::dbGetQuery(
       con,
-      "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = $1 OR LOWER(param_name_fr) = $1 OR parameter_id::text = $1 LIMIT 1;",
+      paste(
+        "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
+        "p.plot_default_y_orientation,",
+        ac_parameter_unit_select_sql(con, "p", "unit_default"),
+        "FROM parameters p",
+        "WHERE LOWER(p.param_name) = $1",
+        "OR LOWER(p.param_name_fr) = $1",
+        "OR p.parameter_id::text = $1",
+        "LIMIT 1;"
+      ),
       params = list(parameter_txt)
     )
     parameter_code <- parameter_tbl$parameter_id[1]
@@ -577,7 +586,11 @@ plotTimeseries <- function(
     location_id <- exist_check$location_id[1]
     parameter_tbl <- DBI::dbGetQuery(
       con,
-      "SELECT param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = $1;",
+      paste(
+        "SELECT p.param_name, p.param_name_fr, p.plot_default_y_orientation,",
+        ac_parameter_unit_select_sql(con, "p", "unit_default"),
+        "FROM parameters p WHERE p.parameter_id = $1;"
+      ),
       params = list(exist_check$parameter_id[1])
     )
   }
@@ -640,6 +653,17 @@ plotTimeseries <- function(
       resolution <- "day"
     } else {
       resolution <- "max"
+    }
+  }
+
+  if (historic_range) {
+    historic_range_meta <- fetch_historic_range_timeseries_metadata(con, tsid)
+    if (historic_range_is_meaningless(
+      aggregation_types = historic_range_meta$aggregation_type,
+      resolution = resolution,
+      record_rate_seconds = historic_range_meta$record_rate_seconds
+    )) {
+      historic_range <- FALSE
     }
   }
 
@@ -776,6 +800,24 @@ plotTimeseries <- function(
       params = list(tsid, start_date, end_date)
     )
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
+  } else if (resolution == "hour") {
+    trace_data <- fetch_hourly_trace_data(
+      con = con,
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      raw = raw,
+      use_corrected_source = if (raw) {
+        TRUE
+      } else {
+        continuous_trace_uses_corrected_source(
+          con = con,
+          timeseries_id = tsid,
+          start_date = start_date,
+          end_date = end_date
+        )
+      }
+    )
   } else if (resolution == "max") {
     trace_data <- dbGetQueryDT(
       con,
@@ -856,47 +898,51 @@ plotTimeseries <- function(
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
   if (!is.infinite(min_trace)) {
-    trace_data <- suppressWarnings(calculate_period(
-      trace_data,
-      timeseries_id = tsid,
-      con = con
-    ))
-    # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
-    if ("period" %in% colnames(trace_data)) {
-      trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
-      # Shift datetime and add period_secs to compute the 'expected' next datetime
-      trace_data[,
-        "expected" := data.table::shift(datetime, type = "lead") - period_secs
-      ]
-      # Create 'gap_exists' column to identify where gaps are
-      trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
-      # Find indices where gaps exist
-      gap_indices <- which(trace_data$gap_exists)
-      # Create a data.table of NA rows to be inserted
-      na_rows <- data.table::data.table(
-        datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
-        value = NA,
-        imputed = FALSE
-      )
-      if (raw) {
-        na_rows[, "value_raw" := NA]
-        # Combine with NA rows
-        trace_data <- data.table::rbindlist(
-          list(
-            trace_data[, c("datetime", "value", "value_raw", "imputed")],
-            na_rows
-          ),
-          use.names = TRUE
+    if (resolution == "hour") {
+      trace_data <- add_gap_markers(trace_data, period_seconds = 3600)
+    } else {
+      trace_data <- suppressWarnings(calculate_period(
+        trace_data,
+        timeseries_id = tsid,
+        con = con
+      ))
+      # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
+      if ("period" %in% colnames(trace_data)) {
+        trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
+        # Shift datetime and add period_secs to compute the 'expected' next datetime
+        trace_data[,
+          "expected" := data.table::shift(datetime, type = "lead") - period_secs
+        ]
+        # Create 'gap_exists' column to identify where gaps are
+        trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
+        # Find indices where gaps exist
+        gap_indices <- which(trace_data$gap_exists)
+        # Create a data.table of NA rows to be inserted
+        na_rows <- data.table::data.table(
+          datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
+          value = NA,
+          imputed = FALSE
         )
-      } else {
-        # Combine with NA rows
-        trace_data <- data.table::rbindlist(
-          list(trace_data[, c("datetime", "value", "imputed")], na_rows),
-          use.names = TRUE
-        )
+        if (raw) {
+          na_rows[, "value_raw" := NA]
+          # Combine with NA rows
+          trace_data <- data.table::rbindlist(
+            list(
+              trace_data[, c("datetime", "value", "value_raw", "imputed")],
+              na_rows
+            ),
+            use.names = TRUE
+          )
+        } else {
+          # Combine with NA rows
+          trace_data <- data.table::rbindlist(
+            list(trace_data[, c("datetime", "value", "imputed")], na_rows),
+            use.names = TRUE
+          )
+        }
+        # order by datetime
+        data.table::setorder(trace_data, datetime)
       }
-      # order by datetime
-      data.table::setorder(trace_data, datetime)
     }
 
     # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
@@ -1054,7 +1100,7 @@ plotTimeseries <- function(
   plot <- plotly::plot_ly()
   if (historic_range) {
     # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
-    # plot <- plot %>%
+    # plot <- plot |>
     #   plotly::add_ribbons(
     #     data = range_data,
     #     x = ~datetime,
@@ -1074,7 +1120,7 @@ plotTimeseries <- function(
     #       as.Date(datetime),
     #       ")"
     #     )
-    #   ) %>%
+    #   ) |>
     #   plotly::add_ribbons(
     #     data = range_data,
     #     x = ~datetime,
@@ -1096,7 +1142,7 @@ plotTimeseries <- function(
     #     )
     #   )
     for (rd in range_runs) {
-      plot <- plot %>%
+      plot <- plot |>
         plotly::add_ribbons(
           data = rd,
           x = ~datetime,
@@ -1116,7 +1162,7 @@ plotTimeseries <- function(
             ")"
           ),
           showlegend = FALSE
-        ) %>%
+        ) |>
         plotly::add_ribbons(
           data = rd,
           x = ~datetime,
@@ -1141,7 +1187,7 @@ plotTimeseries <- function(
     # Add *visible* dummy legend keys (one point is enough)
     key_rd <- range_runs[[1]][1]
 
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_ribbons(
         data = key_rd,
         x = ~datetime,
@@ -1152,7 +1198,7 @@ plotTimeseries <- function(
         line = list(width = 0.2),
         hoverinfo = "none",
         showlegend = TRUE
-      ) %>%
+      ) |>
       plotly::add_ribbons(
         data = key_rd,
         x = ~datetime,
@@ -1187,7 +1233,7 @@ plotTimeseries <- function(
     }
 
     # Add the raw data first so it's below the corrected data
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data,
         x = ~datetime,
@@ -1211,7 +1257,7 @@ plotTimeseries <- function(
 
   # Add the corrected data trace
   if (imputed) {
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data[trace_data$imputed == FALSE, ],
         x = ~datetime,
@@ -1231,7 +1277,7 @@ plotTimeseries <- function(
           ")"
         )
       )
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data[trace_data$imputed == TRUE, ],
         x = ~datetime,
@@ -1260,7 +1306,7 @@ plotTimeseries <- function(
         )
       )
   } else {
-    plot <- plot %>%
+    plot <- plot |>
       plotly::add_trace(
         data = trace_data,
         x = ~datetime,
@@ -1387,7 +1433,7 @@ plotTimeseries <- function(
 
     if (length(poly_list) > 0) {
       polygons_df <- data.table::rbindlist(poly_list, use.names = TRUE)
-      bands_subplot <- bands_subplot %>%
+      bands_subplot <- bands_subplot |>
         plotly::add_polygons(
           data = polygons_df,
           x = ~datetime,
@@ -1458,7 +1504,7 @@ plotTimeseries <- function(
       )
     }
 
-    bands_subplot <- bands_subplot %>%
+    bands_subplot <- bands_subplot |>
       plotly::layout(
         yaxis = list(
           showticklabels = FALSE,
@@ -1486,7 +1532,7 @@ plotTimeseries <- function(
     )
   }
 
-  plot <- plot %>%
+  plot <- plot |>
     plotly::layout(
       title = if (title) {
         list(
@@ -1539,7 +1585,7 @@ plotTimeseries <- function(
         orientation = legend_position
       ),
       font = list(family = "Nunito Sans")
-    ) %>%
+    ) |>
     plotly::config(locale = lang)
 
   # Return the plot and data if requested ##########################

@@ -73,24 +73,40 @@ imputeMissingUI <- function(id) {
         accordion_panel(
           id = ns("options_panel"),
           title = "Imputation options",
-          shinyWidgets::airDatepickerInput(
-            ns("dt_range_impute"),
-            label = "Imputation datetime range (UTC)",
-            value = c(
-              .POSIXct(Sys.time() - 365 * 24 * 3600, tz = "UTC"),
-              .POSIXct(Sys.time(), tz = "UTC")
+          fluidRow(
+            column(
+              3,
+              selectizeInput(
+                ns("timezone"),
+                "Input timezone",
+                choices = input_timezone_choices(),
+                selected = default_input_timezone(),
+                multiple = FALSE
+              )
             ),
-            range = TRUE,
-            multiple = FALSE,
-            timepicker = TRUE,
-            maxDate = Sys.Date() + 1,
-            startView = Sys.Date(),
-            update_on = "change",
-            timepickerOpts = shinyWidgets::timepickerOptions(
-              minutesStep = 15,
-              timeFormat = "HH:mm"
-            ),
-            width = "100%"
+            column(
+              9,
+              shinyWidgets::airDatepickerInput(
+                ns("dt_range_impute"),
+                label = "Imputation datetime range",
+                value = c(
+                  .POSIXct(Sys.time() - 365 * 24 * 3600, tz = "UTC"),
+                  .POSIXct(Sys.time(), tz = "UTC")
+                ),
+                range = TRUE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                maxDate = Sys.Date() + 1,
+                startView = Sys.Date(),
+                update_on = "change",
+                tz = air_datetime_widget_timezone(default_input_timezone()),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                ),
+                width = "100%"
+              )
+            )
           ),
           numericInput(ns("radius"), "Search radius (km)", value = 10, min = 0),
           selectInput(
@@ -126,6 +142,19 @@ imputeMissingUI <- function(id) {
 imputeMissing <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    shift_impute_range_timezone <- function(tz_name) {
+      current_value <- coerce_utc_datetime(input$dt_range_impute)
+      if (is.null(current_value) || !length(current_value) || all(is.na(current_value))) {
+        return(invisible(NULL))
+      }
+      shinyWidgets::updateAirDateInput(
+        session,
+        "dt_range_impute",
+        value = current_value,
+        tz = tz_name
+      )
+    }
 
     output$banner <- renderUI({
       req(language$language)
@@ -240,6 +269,14 @@ imputeMissing <- function(id, language) {
       )
     })
 
+    observeEvent(
+      input$timezone,
+      {
+        shift_impute_range_timezone(normalize_input_timezone(input$timezone))
+      },
+      ignoreInit = TRUE
+    )
+
     output$ts_plot_pre <- plotly::renderPlotly({
       ts_plot_pre_task$result()
     })
@@ -293,11 +330,12 @@ imputeMissing <- function(id, language) {
 
     observeEvent(input$load, {
       req(selected_ts())
-      start_dt <- input$dt_range_impute[1]
-      end_dt <- input$dt_range_impute[2]
+      datetime_range_utc <- coerce_utc_datetime(input$dt_range_impute)
+      start_dt <- datetime_range_utc[1]
+      end_dt <- datetime_range_utc[2]
       if (is.na(start_dt) || is.na(end_dt)) {
         showNotification(
-          "Please provide valid start and end datetimes in UTC.",
+          "Please provide valid start and end datetimes.",
           type = "error"
         )
         return()

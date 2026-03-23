@@ -3,8 +3,9 @@ wellRegistryUI <- function(id) {
 
   tagList(
     # styling for custom legend
-    tags$style(HTML(
-      "
+    tags$style(
+      HTML(
+        "
   /* Remove leaflet control background and border for custom legend */
   .leaflet-control.custom-legend {
     background: transparent !important;
@@ -12,7 +13,17 @@ wellRegistryUI <- function(id) {
     box-shadow: none !important;
   }
 "
-    )),
+      ),
+      # Make chekboxes tighter together in the sidebar
+      HTML(
+        "
+    .compact-checkboxes .checkbox {
+      margin-top: -5px;
+      margin-bottom: -5px;
+    }
+  "
+      )
+    ),
     # Custom JavaScript to create pie chart style cluster icons
     tags$script(HTML(
       "
@@ -171,6 +182,33 @@ wellRegistry <- function(id, language) {
               multiple = TRUE,
               selected = "all"
             ),
+            textInput(
+              ns("well_name_search"),
+              label = tr("well_name_contains", language$language),
+              value = "",
+              placeholder = tr(
+                "well_name_contains_placeholder",
+                language$language
+              )
+            ),
+            div(
+              class = "compact-checkboxes",
+              checkboxInput(
+                ns("well_name_starts_with"),
+                label = tr("well_name_starts", language$language),
+                value = FALSE
+              ),
+              checkboxInput(
+                ns("well_name_ends_with"),
+                label = tr("well_name_ends", language$language),
+                value = FALSE
+              ),
+              checkboxInput(
+                ns("well_name_case_sensitive"),
+                label = tr("well_name_case_sensitive", language$language),
+                value = FALSE
+              )
+            ),
             sliderInput(
               ns("yrs"),
               label = tr("well_completion_yr", language$language),
@@ -189,26 +227,32 @@ wellRegistry <- function(id, language) {
               step = 1,
               sep = ""
             ),
-            # Add checkboxInput for wells with no known completion date
-            checkboxInput(
-              ns("include_unknown_completion"),
-              label = tr("include_unknown_well_completion", language$language),
-              value = TRUE
-            ),
-            # Checkbox for missing well depth
-            checkboxInput(
-              ns("include_missing_depth"),
-              label = tr("include_missing_well_depth", language$language),
-              value = TRUE
-            ),
-            # Checkbox for wells with missing depth to water
-            checkboxInput(
-              ns("include_missing_depth_to_water"),
-              label = tr(
-                "include_missing_well_depth_to_water",
-                language$language
+            div(
+              class = "compact-checkboxes",
+              # Add checkboxInput for wells with no known completion date
+              checkboxInput(
+                ns("include_unknown_completion"),
+                label = tr(
+                  "include_unknown_well_completion",
+                  language$language
+                ),
+                value = TRUE
               ),
-              value = TRUE
+              # Checkbox for missing well depth
+              checkboxInput(
+                ns("include_missing_depth"),
+                label = tr("include_missing_well_depth", language$language),
+                value = TRUE
+              ),
+              # Checkbox for wells with missing depth to water
+              checkboxInput(
+                ns("include_missing_depth_to_water"),
+                label = tr(
+                  "include_missing_well_depth_to_water",
+                  language$language
+                ),
+                value = TRUE
+              )
             ),
             # # Checkbox for wells with missing depth to bedrock
             # checkboxInput(
@@ -261,6 +305,26 @@ wellRegistry <- function(id, language) {
         session,
         "include_missing_depth_to_water",
         value = TRUE
+      )
+      updateTextInput(
+        session,
+        "well_name_search",
+        value = ""
+      )
+      updateCheckboxInput(
+        session,
+        "well_name_starts_with",
+        value = FALSE
+      )
+      updateCheckboxInput(
+        session,
+        "well_name_ends_with",
+        value = FALSE
+      )
+      updateCheckboxInput(
+        session,
+        "well_name_case_sensitive",
+        value = FALSE
       )
       # updateCheckboxInput(
       #   session,
@@ -385,6 +449,8 @@ wellRegistry <- function(id, language) {
               static_water_level_m = i.static_water_level_m,
               estimated_yield_lps = i.estimated_yield_lps,
               casing_diameter_mm = i.casing_diameter_mm,
+              screen_top_depth_m = i.screen_top_depth_m,
+              screen_bottom_depth_m = i.screen_bottom_depth_m,
               latitude = i.latitude,
               longitude = i.longitude,
               well_purpose_id = i.well_purpose_id
@@ -456,6 +522,30 @@ wellRegistry <- function(id, language) {
                 is.na(casing_diameter_mm),
                 unknown_label,
                 as.character(round(casing_diameter_mm, 1))
+              ),
+              "</div>",
+              "<div><strong>Screen top (m):</strong> ",
+              data.table::fifelse(
+                is.na(screen_top_depth_m),
+                unknown_label,
+                as.character(round(screen_top_depth_m, 4))
+              ),
+              "</div>",
+              "<div><strong>Screen bottom (m):</strong> ",
+              data.table::fifelse(
+                is.na(screen_bottom_depth_m),
+                unknown_label,
+                as.character(round(screen_bottom_depth_m, 4))
+              ),
+              "</div>",
+              "<div><strong>Total screen interval (m):</strong> ",
+              data.table::fifelse(
+                is.na(screen_top_depth_m) | is.na(screen_bottom_depth_m),
+                unknown_label,
+                as.character(round(
+                  pmax(screen_bottom_depth_m - screen_top_depth_m, 0),
+                  4
+                ))
               ),
               "</div>",
               "<div><strong>Latitude:</strong> ",
@@ -683,6 +773,46 @@ wellRegistry <- function(id, language) {
       if (isFALSE(input$include_missing_depth_to_water)) {
         wells_sub <- wells_sub[!is.na(static_water_level_m)]
       }
+
+      # Filter based on well name search
+      search_term <- trimws(input$well_name_search %||% "")
+      if (nzchar(search_term)) {
+        well_names <- wells_sub$borehole_name
+        valid_name <- !is.na(well_names)
+
+        names_for_match <- if (isTRUE(input$well_name_case_sensitive)) {
+          well_names
+        } else {
+          tolower(well_names)
+        }
+
+        search_for_match <- if (isTRUE(input$well_name_case_sensitive)) {
+          search_term
+        } else {
+          tolower(search_term)
+        }
+
+        match_idx <- rep(FALSE, nrow(wells_sub))
+        if (isTRUE(input$well_name_starts_with)) {
+          match_idx[valid_name] <- startsWith(
+            names_for_match[valid_name],
+            search_for_match
+          )
+        } else if (isTRUE(input$well_name_ends_with)) {
+          match_idx[valid_name] <- endsWith(
+            names_for_match[valid_name],
+            search_for_match
+          )
+        } else {
+          match_idx[valid_name] <- grepl(
+            search_for_match,
+            names_for_match[valid_name],
+            fixed = TRUE
+          )
+        }
+        wells_sub <- wells_sub[match_idx]
+      }
+
       # if (isFALSE(input$include_missing_depth_to_bedrock)) {
       #   wells_sub <- wells_sub[!is.na(depth_to_bedrock_m)]
       # }

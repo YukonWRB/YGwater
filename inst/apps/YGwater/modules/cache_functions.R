@@ -16,7 +16,13 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       )
       params <- dbGetQueryDT(
         con,
-        "SELECT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries) ORDER BY param_name ASC;"
+        paste(
+          "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
+          YGwater:::ac_parameter_unit_select_sql(con, "p", "unit"),
+          "FROM parameters p",
+          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries)",
+          "ORDER BY p.param_name ASC;"
+        )
       )
       media <- dbGetQueryDT(
         con,
@@ -180,7 +186,13 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
       )
       params <- DBI::dbGetQuery(
         con,
-        "SELECT parameter_id, param_name, COALESCE(param_name_fr, param_name) AS param_name_fr, unit_default AS unit FROM parameters WHERE parameter_id IN (SELECT DISTINCT parameter_id FROM results) ORDER BY param_name ASC;"
+        paste(
+          "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
+          YGwater:::ac_parameter_unit_select_sql(con, "p", "unit"),
+          "FROM parameters p",
+          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM results)",
+          "ORDER BY p.param_name ASC;"
+        )
       )
       media <- DBI::dbGetQuery(
         con,
@@ -350,7 +362,14 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
         ),
         parameters = dbGetQueryDT(
           con,
-          "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id FROM public.parameters AS p RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
+          paste(
+            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
+            YGwater:::ac_parameter_unit_select_sql(con, "p", "unit_default"),
+            ", pr.group_id, pr.sub_group_id",
+            "FROM public.parameters AS p",
+            "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
+            "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
+          )
         )
       )
     },
@@ -411,13 +430,17 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
         ),
         parameters = dbGetQueryDT(
           con,
-          "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, p.unit_default, pr.group_id, pr.sub_group_id
-             FROM public.parameters AS p
-             LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id
-            WHERE p.parameter_id IN (
-              SELECT DISTINCT parameter_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)"
+          paste(
+            "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr,",
+            YGwater:::ac_parameter_unit_select_sql(con, "p", "unit_default"),
+            ", pr.group_id, pr.sub_group_id",
+            "FROM public.parameters AS p",
+            "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id",
+            "WHERE p.parameter_id IN (",
+            "SELECT DISTINCT parameter_id FROM continuous.timeseries",
+            "UNION",
+            "SELECT DISTINCT parameter_id FROM discrete.results)"
+          )
         ),
         parameter_groups = dbGetQueryDT(
           con,

@@ -20,7 +20,6 @@
 #' @param con A connection to the AquaCache database. If left NULL connection will be attempted with function [AquaConnect()] using default arguments. Note that if synchronize = TRUE this connection must have edit privileges to the database!!!
 #' @param start_year_historical The start year for the historical period used in the snow bulletin.
 #' @param end_year_historical The end year for the historical period used in the snow bulletin.
-#'
 #' @return A snow bulletin in Microsoft Word format.
 #'
 #' @export
@@ -207,9 +206,23 @@ snowBulletin <- function(
   rmarkdown::render(
     input = system.file("rmd", "Snow_bulletin.Rmd", package = "YGwater"),
     output_file = if (language == "french") {
-      paste0("Bulletin nivometrique ", year, "-0", month, " emit ", Sys.Date())
+      paste0(
+        "Bulletin nivometrique ",
+        year,
+        "-0",
+        month,
+        " emit ",
+        format(Sys.time(), "%Y-%m-%d %H%M")
+      )
     } else {
-      paste0("Snow Bulletin ", year, "-0", month, " issued ", Sys.Date())
+      paste0(
+        "Snow Bulletin ",
+        year,
+        "-0",
+        month,
+        " issued ",
+        format(Sys.time(), "%Y-%m-%d %H%M")
+      )
     },
     output_dir = save_path,
     output_format = rmarkdown::word_document(

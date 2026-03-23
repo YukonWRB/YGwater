@@ -226,3 +226,24 @@ test_that("plotOverlap works with no historic range", {
 
   expect_snapshot_file(path)
 })
+
+test_that("plotOverlap accepts hourly resolution", {
+  plot <- plotOverlap(
+    location = "09AB004",
+    parameter = "water level",
+    startDay = "2022-06-01",
+    endDay = "2022-06-02",
+    years = 2022,
+    historic_range = "none",
+    resolution = "hour",
+    hover = FALSE,
+    slider = FALSE,
+    data = TRUE,
+    con = con
+  )$data
+
+  expect_named(plot, c("trace_data", "range_data"))
+  expect_null(plot$range_data)
+  expect_gt(nrow(plot$trace_data), 10)
+  expect_true(any(lubridate::hour(plot$trace_data$datetime) != 0))
+})

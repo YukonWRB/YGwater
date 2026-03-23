@@ -27,6 +27,8 @@ rmd_well_above,,well above,très supérieur à
 rmd_no_data,,NO DATA,DONNEES MANQUANTES
 rmd_average,,average,la moyenne
 rmd_normal,,normal,la normale
+rmd_median,,median,la médiane
+rmd_period_of_record,,period of record,période de référence
 basin_upper_yukon,,Upper Yukon Basin,Bassin sup. du Yukon
 basin_teslin_big_salmon,,Teslin / Big Salmon Basin,Bassin Teslin / Big Salmon
 basin_central_yukon,,Central Yukon Basin,Bassin central du Yukon
@@ -47,7 +49,7 @@ plot_precip_title,,%s: %s Monthly Precipitation,%s : Précipitations mensuelles 
 plot_snowcourse_title,,%s: %s Snow Course Data,%s : Relevés nivométriques - %s
 plot_basin_title,,%s: %s Basin Snow Water Equivalent,%s : Équivalent en eau de la neige du bassin - %s
 plot_level_title,,%s: %s Water Surface Elevation,%s : Niveau d'eau du %s
-plot_flow_title,,%s: %s Streamflow,%s : Débit %s
+plot_flow_title,,%s: %s,%s : %s
 met_whitehorse_eccc_met,,Whitehorse,Whitehorse
 met_log_cabin_meteorological,,Log Cabin (B.C.),Log Cabin (C.-B.)
 met_wolf_creek_buckbrush_taiga_meteorological,,Wolf Creek,ruisseau Wolf

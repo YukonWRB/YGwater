@@ -117,7 +117,11 @@ snowInfoMod <- function(id, language) {
         ),
 
         # Make it happen
-        actionButton(ns("go"), label = tr("create_report", language$language)),
+        bslib::input_task_button(
+          ns("go"),
+          label = tr("create_report", language$language),
+          label_busy = tr("generating_working", language$language)
+        ),
         downloadButton(
           ns("download"),
           "download",
@@ -198,12 +202,153 @@ snowInfoMod <- function(id, language) {
     }
     observeFilterInput("loc")
 
-    outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
+    download_bundle <- reactiveVal(NULL)
+
+    show_validation_modal <- function(messages) {
+      messages <- unique(messages[!is.na(messages) & nzchar(messages)])
+      if (!length(messages)) {
+        return(invisible(FALSE))
+      }
+
+      showModal(modalDialog(
+        title = "Cannot Generate Snow Information Report",
+        tags$p("Please correct the following before starting the report:"),
+        tags$ul(lapply(messages, function(msg) tags$li(msg))),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", language$language))
+      ))
+
+      invisible(TRUE)
+    }
+
+    validate_report_request <- function() {
+      issues <- character()
+
+      if (
+        is.null(selections$loc) ||
+          length(selections$loc) == 0 ||
+          all(is.na(selections$loc)) ||
+          !any(nzchar(selections$loc))
+      ) {
+        issues <- c(
+          issues,
+          "Select at least one snow survey location, or choose 'All locations'."
+        )
+      }
+
+      if (
+        isTRUE(selections$plots) &&
+          (
+            is.null(selections$plot_type) ||
+              length(selections$plot_type) == 0 ||
+              anyNA(selections$plot_type) ||
+              !nzchar(selections$plot_type[[1]])
+          )
+      ) {
+        issues <- c(
+          issues,
+          "Select a plot type, or turn off plot generation."
+        )
+      }
+
+      unique(issues)
+    }
+
+    cleanup_download_bundle <- function(bundle) {
+      if (is.null(bundle) || is.null(bundle$path)) {
+        return(invisible(NULL))
+      }
+
+      bundle_dir <- dirname(bundle$path)
+      if (dir.exists(bundle_dir)) {
+        unlink(bundle_dir, recursive = TRUE, force = TRUE)
+      } else if (file.exists(bundle$path)) {
+        unlink(bundle$path, force = TRUE)
+      }
+
+      invisible(NULL)
+    }
+
+    report_task <- ExtendedTask$new(function(req, config) {
+      promises::future_promise({
+        tryCatch(
+          {
+            con <- AquaConnect(
+              name = config$dbName,
+              host = config$dbHost,
+              port = config$dbPort,
+              username = config$dbUser,
+              password = config$dbPass,
+              silent = TRUE
+            )
+            on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+            work_dir <- tempfile("snowInfoOutput_")
+            dir.create(work_dir, recursive = TRUE)
+
+            suppressWarnings(snowInfo(
+              con = con,
+              locations = req$loc,
+              inactive = req$inactive,
+              stats = req$stats,
+              complete_yrs = req$complete,
+              plots = req$plots,
+              plot_type = req$plot_type,
+              save_path = work_dir,
+              quiet = TRUE
+            ))
+
+            files <- list.files(work_dir, full.names = FALSE)
+            if (!length(files)) {
+              stop("No files were generated for the report.")
+            }
+
+            zip_path <- file.path(work_dir, "report.zip")
+            zip::zip(
+              zipfile = zip_path,
+              files = files,
+              mode = "cherry-pick",
+              include_directories = FALSE,
+              root = work_dir
+            )
+
+            list(
+              path = zip_path,
+              filename = paste0("Snow info report issued ", Sys.Date(), ".zip")
+            )
+          },
+          error = function(e) {
+            e$message
+          }
+        )
+      })
+    }) |>
+      bind_task_button("go")
 
     observeEvent(input$go, {
-      if (!length(selections$loc)) {
+      if (show_validation_modal(validate_report_request())) {
+        return()
+      }
+
+      report_task$invoke(
+        req = list(
+          loc = selections$loc,
+          inactive = selections$inactive,
+          stats = selections$stats,
+          complete = selections$complete,
+          plots = selections$plots,
+          plot_type = selections$plot_type
+        ),
+        config = session$userData$config
+      )
+    })
+
+    observeEvent(report_task$result(), {
+      result <- report_task$result()
+
+      if (inherits(result, "character")) {
         showNotification(
-          tr("gen_no_loc", language$language),
+          paste("Error generating snow information report:", result),
           type = "error",
           duration = NULL,
           closeButton = TRUE
@@ -211,89 +356,45 @@ snowInfoMod <- function(id, language) {
         return()
       }
 
-      tryCatch(
-        {
-          withProgress(
-            message = tr("dl_prep", language$language),
-            value = 0,
-            {
-              incProgress(0.2)
+      if (is.null(result$path) || !file.exists(result$path)) {
+        showNotification(
+          "Report was generated, but the zip archive could not be found for download.",
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+        return()
+      }
 
-              # 1. Create a temporary folder
-              dir <- paste0(tempdir(), "/snowInfoOutput")
-              dir.create(dir, showWarnings = FALSE)
-              # Delete all files in the folder (if any)
-              files <- list.files(dir, full.names = TRUE)
-              if (length(files) > 0) {
-                unlink(files, recursive = TRUE, force = TRUE)
-              }
-
-              # 3. Call snowInfo() so it writes all files to 'dir'
-              suppressWarnings(snowInfo(
-                con = session$userData$AquaCache,
-                locations = selections$loc,
-                inactive = selections$inactive,
-                stats = selections$stats,
-                complete_yrs = selections$complete,
-                plots = selections$plots,
-                plot_type = selections$plot_type,
-                save_path = dir,
-                quiet = TRUE
-              ))
-
-              incProgress(0.7)
-
-              # 4. Zip up everything in 'dir' and write the zip to `file`
-              files <- list.files(dir, full.names = FALSE)
-              if (!length(files)) {
-                stop("No files were generated for the report.")
-              }
-
-              zip::zip(
-                zipfile = file.path(dir, "report.zip"),
-                files = files,
-                mode = "cherry-pick",
-                include_directories = FALSE,
-                root = dir
-              )
-              outputFile(file.path(dir, "report.zip"))
-
-              # Delete everything in the 'dir' except for the .zip file
-              files <- list.files(dir, full.names = TRUE)
-              files <- files[!grepl("report.zip", files)]
-              if (length(files) > 0) {
-                unlink(files, recursive = TRUE, force = TRUE)
-              }
-
-              # 5. Now programmatically click the hidden download button
-              shinyjs::click("download")
-
-              incProgress(1)
-            } # End withProgress content
-          ) # End withProgress
-        },
-        error = function(e) {
-          showNotification(
-            paste("Error generating snow information report:", e$message),
-            type = "error",
-            duration = NULL,
-            closeButton = TRUE
-          )
-        }
-      )
+      cleanup_download_bundle(download_bundle())
+      download_bundle(result)
+      shinyjs::click("download")
     })
 
     # Listen for the 'go' and make the report when called
     output$download <- downloadHandler(
       filename = function() {
-        paste0("Snow info report issued ", Sys.Date(), ".zip")
+        req(download_bundle())
+        download_bundle()$filename
       },
       content = function(file) {
-        file.copy(outputFile(), file)
-        # Now delete the zip file and the directory it's in
-        unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
+        bundle <- download_bundle()
+        req(bundle)
+
+        if (!file.exists(bundle$path)) {
+          stop("Generated report archive could not be found for download.")
+        }
+
+        copied <- file.copy(bundle$path, file, overwrite = TRUE)
+        if (!isTRUE(copied)) {
+          stop("Unable to copy the generated report archive to the download location.")
+        }
+
+        cleanup_download_bundle(bundle)
+        download_bundle(NULL)
       }, # End content
       contentType = "application/zip"
     ) # End downloadHandler
+    outputOptions(output, "download", suspendWhenHidden = FALSE)
   }) # End moduleServer
 } # End snowInfoServer

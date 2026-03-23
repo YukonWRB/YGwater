@@ -10,6 +10,7 @@ YGwater_globals <- function(
   accessPath1,
   accessPath2,
   logout_timer_min,
+  analytics,
   public
 ) {
   library(shiny)
@@ -32,18 +33,26 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
+  g_drive <- FALSE
   if (!isFALSE(network_check)) {
     network_check <- dir.exists(network_check)
     # YG specific code here
-    g_drive <- FALSE
-
     if (!public) {
       # confirm G drive access for FOD reports
       g_drive <- dir.exists(
         "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
       )
     }
+    if (g_drive) {
+      # FOD module (only visible internally)
+      source(system.file(
+        "apps/YGwater/modules/client/FOD/FOD_main.R",
+        package = "YGwater"
+      ))
+    }
+  }
 
+  if (!public) {
     # 'Admin' side modules #####
     # database admin modules
     source(system.file(
@@ -62,6 +71,10 @@ YGwater_globals <- function(
     # equipment sub-modules
     source(system.file(
       "apps/YGwater/modules/admin/equipment/calibrate.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/instruments/manageInstruments.R",
       package = "YGwater"
     ))
 
@@ -126,6 +139,14 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/editBoreholesWells.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
+      package = "YGwater"
+    ))
 
     # Field visit modules
     source(system.file(
@@ -176,21 +197,10 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
 
-    if (g_drive) {
-      # FOD module (only visible internally)
-      source(system.file(
-        "apps/YGwater/modules/client/FOD/FOD_main.R",
-        package = "YGwater"
-      ))
-    }
-
     # Set up a temporary directory for storing R documentation files during app runtime
     .rd_dir <<- file.path(tempdir(), "rdocs")
     dir.create(.rd_dir, showWarnings = FALSE, recursive = TRUE)
     shiny::addResourcePath("rdocs", .rd_dir)
-
-    # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
-    options(shiny.maxRequestSize = 1024 * 1024^2)
 
     # define some functions for later use
     array_to_text <<- function(value) {
@@ -220,50 +230,308 @@ YGwater_globals <- function(
       groups <- gsub('"', '\\"', groups, fixed = TRUE)
       paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
     }
-  } # End of if public = FALSE
 
-  # Take the JSON string coming from the DB and make it into a readable text string
-  parse_source_args <<- function(value) {
-    if (
-      is.null(value) ||
-        length(value) == 0 ||
-        all(is.na(value)) ||
-        !nzchar(value)
+    format_utc_offset <<- function(offset_minutes) {
+      sign <- if (offset_minutes >= 0) "+" else "-"
+      offset_minutes <- abs(as.integer(offset_minutes))
+      hours <- offset_minutes %/% 60
+      minutes <- offset_minutes %% 60
+      sprintf("UTC%s%02d:%02d", sign, hours, minutes)
+    }
+
+    parse_compact_utc_offset <<- function(offset_text) {
+      offset_text <- as.character(offset_text[[1]])
+      if (!length(offset_text) || is.na(offset_text) || !nzchar(offset_text)) {
+        return(0L)
+      }
+      matched <- regexec("^([+-])(\\d{2})(\\d{2})$", offset_text)
+      parts <- regmatches(offset_text, matched)[[1]]
+      if (length(parts) != 4) {
+        return(0L)
+      }
+      sign <- if (identical(parts[[2]], "-")) -1L else 1L
+      sign * (as.integer(parts[[3]]) * 60L + as.integer(parts[[4]]))
+    }
+
+    normalize_input_timezone_token <<- function(tz_name) {
+      tz_name <- as.character(tz_name[[1]])
+      if (!length(tz_name) || is.na(tz_name) || !nzchar(tz_name)) {
+        return(NA_character_)
+      }
+      tz_name <- trimws(tz_name)
+      sub("^YG", "", tz_name)
+    }
+
+    is_input_timezone_offset <<- function(tz_name) {
+      tz_name <- normalize_input_timezone_token(tz_name)
+      !is.na(tz_name) && grepl("^UTC[+-]\\d{2}:\\d{2}$", tz_name)
+    }
+
+    parse_utc_offset_minutes <<- function(
+      tz_name,
+      default = default_input_timezone()
     ) {
-      return("")
+      tz_name <- normalize_input_timezone(tz_name, default = default)
+      matched <- regexec("^UTC([+-])(\\d{2}):(\\d{2})$", tz_name)
+      parts <- regmatches(tz_name, matched)[[1]]
+      if (length(parts) != 4) {
+        return(0L)
+      }
+      sign <- if (identical(parts[[2]], "-")) -1L else 1L
+      sign * (as.integer(parts[[3]]) * 60L + as.integer(parts[[4]]))
     }
-    parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
-    if (is.null(parsed)) {
-      return(value)
-    }
-    if (length(parsed) == 0) {
-      return("")
-    }
-    if (is.list(parsed) && !is.data.frame(parsed)) {
-      parsed <- unlist(parsed)
-    }
-    if (is.null(names(parsed))) {
-      return(paste(parsed, collapse = ", "))
-    }
-    entries <- paste(names(parsed), parsed, sep = ": ")
-    paste(entries, collapse = ", ")
-  }
 
-  # Format source function arguments to JSON for input to database
-  format_source_args <<- function(args) {
-    # split into "argument1: value1" etc.
-    args <- strsplit(args, ",\\s*")[[1]]
+    offset_minutes_to_widget_timezone <<- function(offset_minutes) {
+      offset_minutes <- as.integer(offset_minutes[[1]])
+      if (is.na(offset_minutes)) {
+        return("UTC")
+      }
+      fixed_map <- c(
+        `-570` = "Pacific/Marquesas",
+        `-210` = "America/St_Johns",
+        `210` = "Asia/Tehran",
+        `270` = "Asia/Kabul",
+        `330` = "Asia/Kolkata",
+        `345` = "Asia/Kathmandu",
+        `390` = "Asia/Yangon",
+        `525` = "Australia/Eucla",
+        `570` = "Australia/Darwin",
+        `630` = "Australia/Lord_Howe",
+        `765` = "Pacific/Chatham",
+        `780` = "Pacific/Tongatapu",
+        `840` = "Pacific/Kiritimati"
+      )
+      mapped_tz <- unname(fixed_map[as.character(offset_minutes)])
+      if (length(mapped_tz) && !is.na(mapped_tz[[1]]) && nzchar(mapped_tz[[1]])) {
+        return(mapped_tz[[1]])
+      }
+      if (offset_minutes == 0L) {
+        return("UTC")
+      }
+      if (offset_minutes %% 60L == 0L) {
+        return(sprintf("Etc/GMT%+d", -offset_minutes %/% 60L))
+      }
+      "UTC"
+    }
 
-    # split only on first colon
-    keys <- sub(":.*", "", args)
-    vals <- sub("^[^:]+:\\s*", "", args)
+    air_datetime_widget_timezone <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      offset_minutes_to_widget_timezone(
+        parse_utc_offset_minutes(tz_name, default = default)
+      )
+    }
 
-    # build named list
-    args <- stats::setNames(as.list(vals), keys)
+    datetime_to_posix_tz <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      air_datetime_widget_timezone(tz_name, default = default)
+    }
 
-    # convert to JSON
-    args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-  }
+    default_input_timezone <<- function() {
+      local_tz <- Sys.timezone()
+      if (is.na(local_tz) || !nzchar(local_tz)) {
+        local_tz <- "UTC"
+      }
+      offset <- format(Sys.time(), tz = local_tz, format = "%z")
+      if (!nzchar(offset)) {
+        return("UTC+00:00")
+      }
+      format_utc_offset(parse_compact_utc_offset(offset))
+    }
+
+    input_timezone_choices <<- function() {
+      # offsets from here: https://en.wikipedia.org/wiki/List_of_UTC_time_offsets
+      offsets <- c(
+        -12:-10,
+        9.5,
+        -9:-4,
+        -3.5,
+        -3:3,
+        3.5,
+        4,
+        4.5,
+        5,
+        5.5,
+        5.75,
+        6,
+        6.5,
+        7,
+        8,
+        8.75,
+        9,
+        9.5,
+        10,
+        10.5,
+        11,
+        12,
+        12.75,
+        13,
+        14
+      ) *
+        60L
+      labels <- vapply(offsets, format_utc_offset, character(1))
+      stats::setNames(labels, labels)
+    }
+
+    normalize_input_timezone <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      tz_name <- normalize_input_timezone_token(tz_name)
+      if (
+        !length(tz_name) ||
+          is.na(tz_name) ||
+          !nzchar(tz_name) ||
+          !grepl("^UTC[+-]\\d{2}:\\d{2}$", tz_name)
+      ) {
+        return(default)
+      }
+      tz_name
+    }
+
+    empty_utc_datetime <<- function(n = 1) {
+      structure(rep(NA_real_, n), class = c("POSIXct", "POSIXt"), tzone = "UTC")
+    }
+
+    coerce_utc_datetime <<- function(datetime_value) {
+      if (is.null(datetime_value) || length(datetime_value) == 0) {
+        return(empty_utc_datetime())
+      }
+      out <- suppressWarnings(as.POSIXct(datetime_value, tz = "UTC"))
+      attr(out, "tzone") <- "UTC"
+      out
+    }
+
+    scalar_utc_datetime <<- function(datetime_value) {
+      out <- coerce_utc_datetime(datetime_value)
+      if (!length(out) || is.na(out[1])) {
+        return(empty_utc_datetime())
+      }
+      out[1]
+    }
+
+    shift_air_datetime_input_timezone <<- function(
+      session,
+      input,
+      input_id,
+      tz_name
+    ) {
+      current_value <- coerce_utc_datetime(input[[input_id]])
+      if (!length(current_value) || all(is.na(current_value))) {
+        return(invisible(NULL))
+      }
+      shinyWidgets::updateAirDateInput(
+        session,
+        inputId = input_id,
+        value = current_value,
+        tz = air_datetime_widget_timezone(tz_name)
+      )
+      invisible(NULL)
+    }
+
+    shiny::registerInputHandler(
+      "yg.air.date",
+      function(data, ...) {
+        if (is.null(data) || !is.list(data) || is.null(data$date)) {
+          return(NULL)
+        }
+        res <- try(as.Date(unlist(data$date)), silent = TRUE)
+        if (inherits(res, "try-error")) {
+          warning("Failed to parse dates!")
+          data
+        } else {
+          res
+        }
+      },
+      force = TRUE
+    )
+
+    shiny::registerInputHandler(
+      "yg.air.datetime",
+      function(data, ...) {
+        if (is.null(data) || !is.list(data) || is.null(data$date)) {
+          return(NULL)
+        }
+        tz_name <- normalize_input_timezone_token(data$tz[[1]])
+        if (!length(tz_name) || is.na(tz_name) || !nzchar(tz_name)) {
+          tz_name <- "UTC"
+        }
+        res <- try(
+          {
+            if (is_input_timezone_offset(tz_name)) {
+              offset_minutes <- parse_utc_offset_minutes(
+                tz_name,
+                default = "UTC+00:00"
+              )
+              parsed <- as.POSIXct(unlist(data$date), tz = "UTC")
+              parsed <- parsed - offset_minutes * 60
+            } else {
+              parsed <- as.POSIXct(unlist(data$date), tz = tz_name)
+            }
+            attr(parsed, "tzone") <- "UTC"
+            parsed
+          },
+          silent = TRUE
+        )
+        if (inherits(res, "try-error")) {
+          warning("Failed to parse dates!")
+          data
+        } else {
+          res
+        }
+      },
+      force = TRUE
+    )
+
+    # Take the JSON string coming from the DB and make it into a readable text string
+    parse_source_args <<- function(value) {
+      if (
+        is.null(value) ||
+          length(value) == 0 ||
+          all(is.na(value)) ||
+          !nzchar(value)
+      ) {
+        return("")
+      }
+      parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
+      if (is.null(parsed)) {
+        return(value)
+      }
+      if (length(parsed) == 0) {
+        return("")
+      }
+      if (is.list(parsed) && !is.data.frame(parsed)) {
+        parsed <- unlist(parsed)
+      }
+      if (is.null(names(parsed))) {
+        return(paste(parsed, collapse = ", "))
+      }
+      entries <- paste(names(parsed), parsed, sep = ": ")
+      paste(entries, collapse = ", ")
+    }
+
+    # Format source function arguments to JSON for input to database
+    format_source_args <<- function(args) {
+      # split into "argument1: value1" etc.
+      args <- strsplit(args, ",\\s*")[[1]]
+
+      # split only on first colon
+      keys <- sub(":.*", "", args)
+      vals <- sub("^[^:]+:\\s*", "", args)
+
+      # build named list
+      args <- stats::setNames(as.list(vals), keys)
+
+      # convert to JSON
+      args <- jsonlite::toJSON(args, auto_unbox = TRUE)
+    }
+
+    # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
+    options(shiny.maxRequestSize = 1024 * 1024^2)
+  } # End of if public = FALSE
 
   application_notifications_ui <<- function(
     ns,
@@ -549,6 +817,10 @@ YGwater_globals <- function(
       "apps/YGwater/modules/client/reports/waterInfo.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/waterTemp.R",
+      package = "YGwater"
+    ))
   }
 
   # Map modules
@@ -675,8 +947,11 @@ YGwater_globals <- function(
     network_check = network_check,
     mdb_files = mdb_files,
     logout_timer_min = logout_timer_min,
+    analytics = analytics,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels
   )
+
+  return(config)
 }

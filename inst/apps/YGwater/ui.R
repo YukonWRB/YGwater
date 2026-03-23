@@ -29,13 +29,15 @@ app_ui <- function(request) {
     ),
 
     tags$head(
-      includeHTML(system.file(
-        "apps/YGwater/www/html/matomo.html",
-        package = "YGwater"
-      )), # Include Matomo analytics tracking code
+      # do not change to !analytics because analytics can be a character string with the file path
+      if (config$analytics != FALSE) {
+        includeHTML(config$analytics) # Include analytics html code
+      },
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
       tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
       tags$script(src = "js/idle_timer.js"), # JS to report user activity for inactivity logout
+      tags$script(src = "js/usage_tracking.js"), # JS telemetry for usage analytics events
+      tags$script(src = "js/air_datepicker_manual_fix.js"), # Fix manual text entry for shinyWidgets::airDatepickerInput
       # JS below is for updating the title of the page from the server, when the user changes language
       tags$script(HTML(
         "
@@ -49,6 +51,21 @@ app_ui <- function(request) {
       Shiny.addCustomMessageHandler('updateLang', function(message) {
         $('html').attr('lang', message.lang);
       });"
+      )),
+      # Disable the login/logout button after it's clicked to prevent multiple clicks while waiting for response
+      # Since re-enabling happens in an observer but the 'disable' is right in the browser, it's possible to click the button and have it disable before the server is ready - and until it's ready it won't accept the click anyways. The JS hook below ensures that it's only disabled once the server is ready to handle it, which prevents the button from getting stuck in a disabled state if clicked too early.
+      tags$script(HTML(
+        "
+      $(document).on('shiny:connected', function() {
+        $('#loginBtn').prop('disabled', false);
+        $('#logoutBtn').prop('disabled', false);
+      });
+
+      $(document).on('shiny:disconnected', function() {
+        $('#loginBtn').prop('disabled', true);
+        $('#logoutBtn').prop('disabled', true);
+      });
+      "
       )),
       tags$script(
         "Shiny.addCustomMessageHandler(
@@ -136,8 +153,15 @@ app_ui <- function(request) {
                 # 'public' is a global variable established in the globals file
                 div(
                   class = "login-btn-container",
-                  actionButton("loginBtn", "Login"),
-                  actionButton("logoutBtn", "Logout", style = "display: none;")
+                  actionButton(
+                    "loginBtn",
+                    "Login"
+                  ),
+                  actionButton(
+                    "logoutBtn",
+                    "Logout",
+                    style = "display: none;"
+                  )
                 ) # Initially hidden
               }
             ),
@@ -220,7 +244,7 @@ app_ui <- function(request) {
             )
           }
         ),
-        if (config$g_drive) {
+        if (!config$public) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
             value = "reports",
@@ -234,22 +258,29 @@ app_ui <- function(request) {
               value = "waterInfo",
               uiOutput("waterInfo_ui")
             ),
-            if (config$g_drive) {
+            # WQ report depends on EQWin database access, so only show if on YG internal network
+            if (config$network_check) {
               nav_panel(
                 title = uiOutput("reportsNavWQTitle"),
                 value = "WQReport",
                 uiOutput("WQReport_ui")
               )
             },
-            if (config$g_drive) {
+            # Don't show the snow bulletin menu if not deployed on YG internal network
+            if (config$network_check) {
               nav_panel(
                 title = uiOutput("reportsNavSnowbullTitle"),
                 value = "snowBulletin",
                 uiOutput("snowBulletin_ui")
               )
-            }
+            },
+            nav_panel(
+              title = uiOutput("reportsNavWaterTempTitle"),
+              value = "waterTemp",
+              uiOutput("waterTemp_ui")
+            )
           ) # End reports nav_menu
-        }, # End if config$g_drive
+        }, # End if !config$public for reports nav_menu
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",
@@ -279,6 +310,8 @@ app_ui <- function(request) {
             uiOutput("contData_ui")
           )
         ), # End data nav_menu
+
+        # Forecaster on Duty (FOD) reports are only possible with access to the G Drive
         if (!config$public & config$g_drive) {
           # if public or if g drive access is not possible, don't show the tab for FOD reports
           nav_panel(
@@ -458,6 +491,11 @@ app_ui <- function(request) {
               title = "Checks + calibrations",
               value = "calibrate",
               uiOutput("calibrate_ui")
+            ),
+            nav_panel(
+              title = "Create / modify instruments",
+              value = "manageInstruments",
+              uiOutput("manageInstruments_ui")
             )
           )
         },
@@ -470,6 +508,16 @@ app_ui <- function(request) {
               title = "Simpler Index",
               value = "simplerIndex",
               uiOutput("simplerIndex_ui")
+            ),
+            nav_panel(
+              title = "Edit borehole/well records",
+              value = "editBoreholesWells",
+              uiOutput("editBoreholesWells_ui")
+            ),
+            nav_panel(
+              title = "Manage borehole documents",
+              value = "manageBoreholeDocuments",
+              uiOutput("manageBoreholeDocuments_ui")
             )
           )
         },

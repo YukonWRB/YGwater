@@ -253,7 +253,14 @@ simplerIndexUI <- function(id) {
               actionButton(
                 ns("remove_pdf"),
                 icon("trash"),
-                title = "Remove Selected",
+                title = "Remove selected page",
+                class = "nav-btn"
+              ),
+              # Duplicate a pdf page, useful for nested wells that share a log.
+              actionButton(
+                ns("duplicate_pdf"),
+                icon("copy"),
+                title = "Duplicate selected page",
                 class = "nav-btn"
               )
             )
@@ -263,7 +270,9 @@ simplerIndexUI <- function(id) {
             class = "text-muted",
             "Select a row and click the ",
             tags$strong("page button"),
-            " above to show it in the center pane or the ",
+            " above to show it in the center pane, the ",
+            tags$strong("copy"),
+            " button to duplicate it, or the ",
             tags$strong("trash can"),
             " to delete it."
           ),
@@ -347,7 +356,7 @@ simplerIndexUI <- function(id) {
             )
           ),
 
-          # Replace the Second row with simplified OCR controls
+          # Replace the second row with simplified OCR controls
           accordion(
             id = ns("ocr-controls-accordion"),
             open = FALSE,
@@ -472,6 +481,28 @@ simplerIndexUI <- function(id) {
                   )
               )
             ),
+            # Copy metadata from another borehole if more than 1 borehole (useful for nested wells)
+            conditionalPanel(
+              condition = "input.num_boreholes > 1",
+              ns = ns,
+              selectizeInput(
+                ns("copy_metadata_from_borehole"),
+                "Copy metadata from borehole:",
+                choices = NULL,
+                selected = NULL,
+                options = list(
+                  placeholder = "Choose source borehole",
+                  maxItems = 1
+                )
+              ),
+              actionButton(
+                ns("copy_borehole_metadata"),
+                "Copy metadata",
+                icon = icon("copy"),
+                width = "100%"
+              )
+            ),
+            hr(),
             br(),
 
             # Well identification
@@ -514,6 +545,7 @@ simplerIndexUI <- function(id) {
               ),
 
             # Location information section - remove surveyed_location_top_casing field
+            hr(),
             radioButtons(
               ns("coordinate_system"),
               "Coordinate system *",
@@ -586,7 +618,7 @@ simplerIndexUI <- function(id) {
                 maxItems = 1
               )
             ),
-
+            hr(),
             checkboxInput(
               ns("associate_loc_with_borehole"),
               "Associate borehole with monitoring location",
@@ -622,8 +654,10 @@ simplerIndexUI <- function(id) {
                 "Clear location association",
                 class = "btn btn-outline-secondary",
                 width = "100%"
-              )
+              ),
+              br()
             ),
+            hr(),
 
             selectizeInput(
               ns("purpose_of_borehole"),
@@ -719,6 +753,7 @@ simplerIndexUI <- function(id) {
             ),
 
             # Add permafrost checkbox and conditional inputs
+            hr(),
             checkboxInput(
               ns("permafrost_present"),
               "Permafrost present",
@@ -774,10 +809,12 @@ simplerIndexUI <- function(id) {
                 )
               )
             ),
+            hr(),
 
             dateInput(ns("date_drilled"), "Date drilled *", value = NULL),
 
             ## IS WELL conditional panel ##################
+            hr(),
             checkboxInput(ns("is_well"), "Well constructed", value = FALSE),
 
             # Show well construction fields only if 'is_well' is checked
@@ -959,10 +996,11 @@ simplerIndexUI <- function(id) {
                 inline = TRUE
               )
             ), # End of is_well conditional panel
+            hr(),
 
             # Add upload buttons at the bottom of the scrollable content
             div(
-              style = "margin-top: 30px; padding-top: 15px; border-top: 1px solid #dee2e6;",
+              style = "margin-top: 30px; padding-top: 15px;",
               fluidRow(
                 column(
                   6,
@@ -1007,6 +1045,16 @@ simplerIndexUI <- function(id) {
               'latitude',
               'longitude',
               'location_source',
+              'associate_loc_with_borehole',
+              'location_search_radius',
+              'find_nearby_locations',
+              'associated_location',
+              'clear_location_association',
+              'utm_zone',
+              'drilled_by',
+              'purpose_of_borehole',
+              'purpose_borehole_inferred',
+              'is_well',
               'depth_to_bedrock',
               'permafrost_top',
               'permafrost_bot',
@@ -1191,6 +1239,287 @@ simplerIndex <- function(id, language) {
           borehole_choices(new_choices)
           rv$table_version <- rv$table_version + 1
         }
+      },
+      ignoreInit = TRUE
+    )
+
+    # Observers for duplication of borehole metadata to another borehole
+    observe({
+      target_id <- current_borehole_id()
+      boreholes <- names(rv$borehole_data)
+      if (is.null(boreholes)) {
+        boreholes <- character(0)
+      }
+      source_choices <- setdiff(boreholes, target_id)
+      if (length(source_choices) == 0) {
+        labelled_choices <- character(0)
+      } else {
+        labelled_choices <- stats::setNames(
+          source_choices,
+          paste("Borehole", source_choices)
+        )
+      }
+
+      updateSelectizeInput(
+        session,
+        "copy_metadata_from_borehole",
+        choices = labelled_choices,
+        selected = character(0),
+        server = TRUE
+      )
+    })
+
+    observeEvent(
+      input$copy_borehole_metadata,
+      {
+        target_id <- current_borehole_id()
+        source_id <- input$copy_metadata_from_borehole
+
+        if (is.null(target_id) || !target_id %in% names(rv$borehole_data)) {
+          showNotification(
+            "Select a borehole to receive copied metadata.",
+            type = "warning",
+            duration = 6
+          )
+          return()
+        }
+
+        if (
+          is.null(source_id) ||
+            !nzchar(source_id) ||
+            !source_id %in% names(rv$borehole_data)
+        ) {
+          showNotification(
+            "Choose a source borehole to copy from.",
+            type = "warning",
+            duration = 6
+          )
+          return()
+        }
+
+        if (identical(source_id, target_id)) {
+          showNotification(
+            "Choose a different source borehole.",
+            type = "warning",
+            duration = 6
+          )
+          return()
+        }
+
+        source_metadata <- rv$borehole_data[[source_id]]$metadata
+        target_metadata <- rv$borehole_data[[target_id]]$metadata
+
+        if (is.null(source_metadata)) {
+          showNotification(
+            "The source borehole has no metadata to copy.",
+            type = "warning",
+            duration = 4
+          )
+          return()
+        }
+        if (is.null(target_metadata)) {
+          target_metadata <- empty_well_entry()$metadata
+        }
+
+        for (field in copyable_metadata_fields) {
+          target_metadata[[field]] <- source_metadata[[field]]
+        }
+        target_metadata$borehole_id <- target_id
+
+        # Update the inputs with the new metadata values for the target borehole
+        updateTextInput(session, "name", value = target_metadata$name)
+        updateTextInput(
+          session,
+          "notes_borehole",
+          value = target_metadata$notes_borehole
+        )
+
+        # Share with
+        updateSelectizeInput(
+          session,
+          "share_with_borehole",
+          selected = target_metadata$share_with_borehole
+        )
+        updateSelectizeInput(
+          session,
+          "share_with_well",
+          selected = target_metadata$share_with_well
+        )
+
+        # Drilled by, drilled date
+        updateSelectizeInput(
+          session,
+          "drilled_by",
+          selected = target_metadata$drilled_by
+        )
+        updateDateInput(
+          session,
+          "date_drilled",
+          value = target_metadata$date_drilled
+        )
+
+        # Geographic information
+        updateRadioButtons(
+          session,
+          "coordinate_system",
+          selected = target_metadata$coordinate_system
+        )
+        updateNumericInput(
+          session,
+          "easting",
+          value = target_metadata$easting
+        )
+        updateNumericInput(
+          session,
+          "northing",
+          value = target_metadata$northing
+        )
+        updateSelectizeInput(
+          session,
+          "utm_zone",
+          selected = target_metadata$utm_zone
+        )
+        updateNumericInput(
+          session,
+          "latitude",
+          value = target_metadata$latitude
+        )
+        updateNumericInput(
+          session,
+          "longitude",
+          value = target_metadata$longitude
+        )
+        updateSelectizeInput(
+          session,
+          "location_source",
+          selected = target_metadata$location_source
+        )
+        updateNumericInput(
+          session,
+          "surveyed_ground_elev",
+          value = target_metadata$surveyed_ground_elev
+        )
+        updateRadioButtons(
+          session,
+          "surveyed_ground_elev_unit",
+          selected = target_metadata$surveyed_ground_elev_unit
+        )
+
+        # location association
+        updateCheckboxInput(
+          session,
+          "associate_loc_with_borehole",
+          value = target_metadata$associate_loc_with_borehole
+        )
+        updateNumericInput(
+          session,
+          "location_search_radius",
+          value = target_metadata$location_search_radius
+        )
+        update_location_choices(
+          nearby_locations(),
+          selected_id = target_metadata$location_id
+        )
+
+        # purposes
+        updateSelectizeInput(
+          session,
+          "purpose_of_borehole",
+          selected = target_metadata$purpose_of_borehole
+        )
+        updateRadioButtons(
+          session,
+          "purpose_borehole_inferred",
+          selected = target_metadata$purpose_borehole_inferred
+        )
+        updateSelectizeInput(
+          session,
+          "purpose_of_well",
+          selected = target_metadata$purpose_of_well
+        )
+        updateRadioButtons(
+          session,
+          "purpose_well_inferred",
+          selected = target_metadata$purpose_well_inferred
+        )
+
+        # depth to bedrock
+        updateNumericInput(
+          session,
+          "depth_to_bedrock",
+          value = target_metadata$depth_to_bedrock
+        )
+        updateRadioButtons(
+          session,
+          "depth_to_bedrock_unit",
+          selected = target_metadata$depth_to_bedrock_unit
+        )
+
+        # permafrost
+        updateCheckboxInput(
+          session,
+          "permafrost_present",
+          value = target_metadata$permafrost_present
+        )
+        updateNumericInput(
+          session,
+          "permafrost_top",
+          value = target_metadata$permafrost_top
+        )
+        updateRadioButtons(
+          session,
+          "permafrost_top_unit",
+          selected = target_metadata$permafrost_top_unit
+        )
+        updateNumericInput(
+          session,
+          "permafrost_bot",
+          value = target_metadata$permafrost_bot
+        )
+        updateRadioButtons(
+          session,
+          "permafrost_bot_unit",
+          selected = target_metadata$permafrost_bot_unit
+        )
+
+        # is well
+        updateCheckboxInput(
+          session,
+          "is_well",
+          value = target_metadata$is_well
+        )
+
+        # Casing info
+        updateNumericInput(
+          session,
+          "casing_od",
+          value = target_metadata$casing_od
+        )
+        updateRadioButtons(
+          session,
+          "casing_od_unit",
+          selected = target_metadata$casing_od_unit
+        )
+
+        rv$borehole_data[[target_id]]$metadata <- target_metadata
+
+        updateSelectizeInput(
+          session,
+          "borehole_details_selector",
+          selected = target_id
+        )
+
+        showNotification(
+          paste(
+            "Copied shared metadata from borehole",
+            source_id,
+            "to borehole",
+            target_id,
+            "."
+          ),
+          type = "message",
+          duration = 5
+        )
       },
       ignoreInit = TRUE
     )
@@ -1454,6 +1783,9 @@ simplerIndex <- function(id, language) {
       "latitude",
       "longitude",
       "location_source",
+      "associate_loc_with_borehole",
+      "location_search_radius",
+      "associated_location",
       "purpose_of_borehole",
       "purpose_borehole_inferred",
       "depth_to_bedrock",
@@ -1486,6 +1818,33 @@ simplerIndex <- function(id, language) {
       "purpose_well_inferred"
     )
 
+    nested_well_specific_fields <- c(
+      "drill_depth",
+      "drill_depth_unit",
+      "top_of_screen",
+      "top_of_screen_unit",
+      "bottom_of_screen",
+      "bottom_of_screen_unit",
+      "well_head_stick_up",
+      "well_head_stick_up_unit",
+      "static_water_level",
+      "static_water_level_unit",
+      "estimated_yield",
+      "estimated_yield_unit",
+      "notes_well"
+    )
+
+    # Find the fields that are copyable from one borehole to another (i.e. those that are not borehole_id or well-specific fields)
+    copyable_metadata_fields <- setdiff(
+      well_fields,
+      c(
+        "borehole_id",
+        "location_id",
+        "associated_location",
+        nested_well_specific_fields
+      )
+    )
+
     empty_well_entry <- function() {
       metadata <- stats::setNames(
         as.list(rep(NA, length(well_fields))),
@@ -1494,19 +1853,57 @@ simplerIndex <- function(id, language) {
       list(files = character(), metadata = metadata)
     }
 
+    null_if_empty <- function(x) {
+      if (is.null(x) || length(x) == 0) {
+        return(NULL)
+      }
+      if (all(is.na(x))) {
+        return(NULL)
+      }
+      x
+    }
+
+    convert_utm_to_ll <- function(easting, northing, zone) {
+      easting <- null_if_empty(easting)
+      northing <- null_if_empty(northing)
+      zone <- null_if_empty(zone)
+      if (is.null(easting) || is.null(northing) || is.null(zone)) {
+        return(list(latitude = NULL, longitude = NULL))
+      }
+      easting_num <- suppressWarnings(as.numeric(easting[1]))
+      northing_num <- suppressWarnings(as.numeric(northing[1]))
+      zone_val <- toupper(trimws(as.character(zone[1])))
+      if (
+        length(easting_num) == 0 ||
+          is.na(easting_num) ||
+          length(northing_num) == 0 ||
+          is.na(northing_num) ||
+          !grepl("^[0-9]{1,2}[C-HJ-NP-X]$", zone_val)
+      ) {
+        return(list(latitude = NULL, longitude = NULL))
+      }
+
+      # Only return the number part of the UTM zone (strip N/S)
+      zone_val <- sub("([0-9]{1,2})([C-HJ-NP-X])", "\\1", zone_val)
+      v <- data.frame(lon = easting_num, lat = northing_num) |>
+        terra::vect(
+          crs = paste0(
+            "+proj=utm +zone=",
+            zone_val,
+            " +datum=WGS84 +units=m +no_defs"
+          )
+        ) |>
+        terra::project("epsg:4326")
+      lonlat <- terra::geom(v)[, c("x", "y")]
+      return(list(
+        latitude = lonlat[names(lonlat) == "y"],
+        longitude = lonlat[names(lonlat) == "x"]
+      ))
+    }
+
     sanitize_metadata_for_insert <- function(metadata) {
       if (is.null(metadata) || !is.list(metadata)) {
         metadata <- empty_well_entry()$metadata
-      }
-
-      null_if_empty <- function(x) {
-        if (is.null(x) || length(x) == 0) {
-          return(NULL)
-        }
-        if (all(is.na(x))) {
-          return(NULL)
-        }
-        x
       }
 
       parse_numeric <- function(x) {
@@ -1616,44 +2013,6 @@ simplerIndex <- function(id, language) {
           return(NULL)
         }
         unit_val
-      }
-
-      convert_utm_to_ll <- function(easting, northing, zone) {
-        easting <- null_if_empty(easting)
-        northing <- null_if_empty(northing)
-        zone <- null_if_empty(zone)
-        if (is.null(easting) || is.null(northing) || is.null(zone)) {
-          return(list(latitude = NULL, longitude = NULL))
-        }
-        easting_num <- suppressWarnings(as.numeric(easting[1]))
-        northing_num <- suppressWarnings(as.numeric(northing[1]))
-        zone_val <- toupper(trimws(as.character(zone[1])))
-        if (
-          length(easting_num) == 0 ||
-            is.na(easting_num) ||
-            length(northing_num) == 0 ||
-            is.na(northing_num) ||
-            !grepl("^[0-9]{1,2}[C-HJ-NP-X]$", zone_val)
-        ) {
-          return(list(latitude = NULL, longitude = NULL))
-        }
-
-        # Only return the number part of the UTM zone (strip N/S)
-        zone_val <- sub("([0-9]{1,2})([C-HJ-NP-X])", "\\1", zone_val)
-        v <- data.frame(lon = easting_num, lat = northing_num) |>
-          terra::vect(
-            crs = paste0(
-              "+proj=utm +zone=",
-              zone_val,
-              " +datum=WGS84 +units=m +no_defs"
-            )
-          ) |>
-          terra::project("epsg:4326")
-        lonlat <- terra::geom(v)[, c("x", "y")]
-        return(list(
-          latitude = lonlat[names(lonlat) == "y"],
-          longitude = lonlat[names(lonlat) == "x"]
-        ))
       }
 
       convert_length_to_m <- function(value, unit) {
@@ -2090,7 +2449,7 @@ simplerIndex <- function(id, language) {
         session$userData$AquaCache,
         glue::glue_sql(
           "SELECT location_id,
-                  location,
+                  location_code AS location,
                   name,
                   latitude,
                   longitude,
@@ -3105,6 +3464,114 @@ simplerIndex <- function(id, language) {
       ignoreInit = TRUE
     )
 
+    # Duplicate a pdf page
+    observeEvent(
+      input$duplicate_pdf,
+      {
+        req(rv$files_df)
+
+        selected_row <- if (!is.null(rv$selected_index)) {
+          rv$selected_index
+        } else {
+          rv$display_index
+        }
+
+        if (is.null(selected_row) || selected_row < 1) {
+          showNotification(
+            "Select a document page to duplicate.",
+            type = "warning",
+            duration = 4
+          )
+          return()
+        }
+
+        if (selected_row > nrow(rv$files_df)) {
+          showNotification(
+            "The selected page is no longer available.",
+            type = "warning",
+            duration = 4
+          )
+          return()
+        }
+
+        source_row <- rv$files_df[selected_row, , drop = FALSE]
+        source_tag <- as.character(source_row$tag)
+        source_path <- as.character(source_row$Path)
+        source_filename <- as.character(source_row$NewFilename)
+
+        if (!file.exists(source_path)) {
+          showNotification(
+            "Could not duplicate page because the source image is missing.",
+            type = "error",
+            duration = 5
+          )
+          return()
+        }
+
+        base_name <- tools::file_path_sans_ext(source_filename)
+        ext <- tools::file_ext(source_filename)
+        copy_suffix <- 1
+        new_filename <- source_filename
+        while (
+          new_filename %in%
+            rv$files_df$NewFilename ||
+            file.exists(file.path(dirname(source_path), new_filename))
+        ) {
+          if (nzchar(ext)) {
+            new_filename <- paste0(base_name, "_copy", copy_suffix, ".", ext)
+          } else {
+            new_filename <- paste0(base_name, "_copy", copy_suffix)
+          }
+          copy_suffix <- copy_suffix + 1
+        }
+
+        new_path <- file.path(dirname(source_path), new_filename)
+        copied <- file.copy(source_path, new_path)
+        if (!isTRUE(copied)) {
+          showNotification(
+            "Failed to create duplicate page file.",
+            type = "error",
+            duration = 5
+          )
+          return()
+        }
+
+        duplicated_row <- source_row
+        duplicated_row$Path <- new_path
+        duplicated_row$NewFilename <- new_filename
+        duplicated_row$tag <- paste0(source_tag, "-copy", copy_suffix - 1)
+
+        rv$files_df <- rbind(rv$files_df, duplicated_row)
+        rv$ocr_text <- c(rv$ocr_text, list(rv$ocr_text[[selected_row]]))
+
+        source_borehole <- as.character(duplicated_row$borehole_id)
+        if (
+          !is.null(source_borehole) &&
+            !is.na(source_borehole) &&
+            nzchar(source_borehole) &&
+            source_borehole %in% names(rv$borehole_data)
+        ) {
+          rv$borehole_data[[source_borehole]]$files <- unique(c(
+            rv$borehole_data[[source_borehole]]$files,
+            new_filename
+          ))
+        }
+
+        rv$selected_index <- nrow(rv$files_df)
+        rv$display_index <- rv$selected_index
+
+        sort_files_df()
+        bump_table_version()
+
+        showNotification(
+          "Document page duplicated. You can now assign the copy to another borehole.",
+          type = "message",
+          duration = 4
+        )
+      },
+      ignoreInit = TRUE
+    )
+
     observeEvent(
       list(rv$files_df, rv$selected_index),
       {
@@ -3995,6 +4462,9 @@ simplerIndex <- function(id, language) {
         latitude = input$latitude,
         longitude = input$longitude,
         location_source = input$location_source,
+        associate_loc_with_borehole = input$associate_loc_with_borehole,
+        location_search_radius = input$location_search_radius,
+        associated_location = input$associated_location,
         purpose_of_borehole = input$purpose_of_borehole,
         purpose_borehole_inferred = input$purpose_borehole_inferred,
         depth_to_bedrock = input$depth_to_bedrock,
@@ -4127,7 +4597,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "depth_to_bedrock_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4145,7 +4615,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "drill_depth_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4154,7 +4624,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "top_of_screen_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4163,7 +4633,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "bottom_of_screen_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4172,7 +4642,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "well_head_stick_up_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4181,7 +4651,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "static_water_level_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4199,7 +4669,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "surveyed_ground_elev_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4208,7 +4678,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "permafrost_top_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4217,7 +4687,7 @@ simplerIndex <- function(id, language) {
             selected = get_meta_value(
               "permafrost_bot_unit",
               metadata = metadata,
-              default = "ft"
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -4237,6 +4707,28 @@ simplerIndex <- function(id, language) {
               metadata = metadata,
               default = TRUE
             )
+          )
+
+          updateCheckboxInput(
+            session,
+            "associate_loc_with_borehole",
+            value = get_meta_boolean(
+              "associate_loc_with_borehole",
+              metadata = metadata,
+              default = FALSE
+            )
+          )
+          updateNumericInput(
+            session,
+            "location_search_radius",
+            value = get_meta_numeric(
+              "location_search_radius",
+              metadata = metadata
+            )
+          )
+          update_location_choices(
+            nearby_locations(),
+            selected_id = get_meta_value("location_id", metadata = metadata)
           )
 
           # Update numeric inputs
@@ -4468,6 +4960,15 @@ simplerIndex <- function(id, language) {
             if (length(rv$borehole_data) == 0) {
               clear_borehole_form()
             }
+
+            # Clear the cached borehole/well data so the application shows the new well
+            # For all public users
+            clear_cached(key = "wwr_module_data", env = .GlobalEnv)
+            # For the logged in user
+            clear_cached(
+              key = "wwr_module_data",
+              env = session$userData$app_cache
+            )
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")

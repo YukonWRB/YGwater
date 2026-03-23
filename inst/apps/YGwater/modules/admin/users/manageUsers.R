@@ -49,7 +49,9 @@ manageUsersUI <- function(id) {
 manageUsers <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
     password_requirements <- "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+
     validate_password <- function(password) {
       nchar(password) >= 8 &&
         grepl("[A-Z]", password) &&
@@ -57,6 +59,7 @@ manageUsers <- function(id, language) {
         grepl("[0-9]", password) &&
         !grepl("\\s", password)
     }
+
     generate_password <- function(length = 12) {
       length <- max(length, 8)
       upper <- sample(LETTERS, 1)
@@ -379,31 +382,42 @@ WHERE schema_name NOT LIKE 'pg_%'
       )
     })
 
-    observeEvent(input$create_user, {
-      req(input$user_name, input$user_password)
-      if (!validate_password(input$user_password)) {
-        output$status <- renderText(password_requirements)
-        return(NULL)
-      }
-      tryCatch(
-        {
-          sql <- sprintf(
-            "CREATE ROLE %s WITH LOGIN PASSWORD %s;",
-            DBI::dbQuoteIdentifier(session$userData$AquaCache, input$user_name),
-            DBI::dbQuoteString(session$userData$AquaCache, input$user_password)
-          )
-          DBI::dbExecute(session$userData$AquaCache, sql)
-          load_roles()
-          output$status <- renderText(sprintf(
-            "Created user '%s'. Remember to add them to relevant user groups!",
-            input$user_name
-          ))
-        },
-        error = function(e) {
-          output$status <- renderText(e$message)
+    observeEvent(
+      input$create_user,
+      {
+        req(input$user_name, input$user_password)
+        if (!validate_password(input$user_password)) {
+          output$status <- renderText(password_requirements)
+          return(NULL)
         }
-      )
-    })
+        tryCatch(
+          {
+            sql <- sprintf(
+              "CREATE ROLE %s WITH LOGIN PASSWORD %s;",
+              DBI::dbQuoteIdentifier(
+                session$userData$AquaCache,
+                input$user_name
+              ),
+              DBI::dbQuoteString(
+                session$userData$AquaCache,
+                input$user_password
+              )
+            )
+            DBI::dbExecute(session$userData$AquaCache, sql)
+            load_roles()
+            output$status <- renderText(sprintf(
+              "Created user '%s'. Remember to add them to relevant user groups!",
+              input$user_name
+            ))
+          },
+          error = function(e) {
+            output$status <- renderText(e$message)
+          }
+        )
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     observeEvent(input$add_user_group, {
       req(input$existing_user, input$existing_group)
