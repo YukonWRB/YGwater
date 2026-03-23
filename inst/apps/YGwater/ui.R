@@ -267,6 +267,10 @@ app_ui <- function(request) {
               title = uiOutput("reportsNavSnowbullTitle"),
               value = "snowBulletin",
               uiOutput("snowBulletin_ui")
+            ),
+            nav_panel(title = "Water Temperature",
+                      value = "waterTemp",
+                      uiOutput("waterTemp_ui")
             )
           ) # End reports nav_menu
         }, # End if config$network
