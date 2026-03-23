@@ -8,6 +8,7 @@ snowInfoUIMod <- function(id) {
       type = "text/css",
       href = "css/card_background.css"
     )),
+    uiOutput(ns("info")), # Information about the app
     card(
       card_body(
         class = "custom-card",
@@ -58,9 +59,6 @@ snowInfoMod <- function(id, language) {
     output$menu <- renderUI({
       req(moduleData, language$language, language$abbrev)
       tagList(
-        textOutput(ns("info")), # Information about the app
-        # dividing blank space
-        tags$hr(),
         # selector for location
         selectizeInput(
           ns("loc"),
@@ -131,8 +129,18 @@ snowInfoMod <- function(id, language) {
     }) %>% # End renderUI
       bindEvent(language$language, moduleData$locs) # Re-render the UI if the language or moduleData changes
 
-    output$info <- renderText({
-      tr("gen_snowInfo_info", language$language)
+    output$info <- renderUI({
+      text <- HTML(tr("gen_snowInfo_info", language$language))
+      div(
+        style = paste(
+          "background-color: #F7FAFC;",
+          "border-left: 4px solid #0097A9;",
+          "border-radius: 6px;",
+          "padding: 12px 16px;",
+          "margin-bottom: 12px;"
+        ),
+        tags$p(style = "margin-bottom: 0;", text)
+      )
     }) %>%
       bindEvent(language$language) # Re-render the text if the language changes
 
@@ -238,12 +246,10 @@ snowInfoMod <- function(id, language) {
 
       if (
         isTRUE(selections$plots) &&
-          (
-            is.null(selections$plot_type) ||
-              length(selections$plot_type) == 0 ||
-              anyNA(selections$plot_type) ||
-              !nzchar(selections$plot_type[[1]])
-          )
+          (is.null(selections$plot_type) ||
+            length(selections$plot_type) == 0 ||
+            anyNA(selections$plot_type) ||
+            !nzchar(selections$plot_type[[1]]))
       ) {
         issues <- c(
           issues,
@@ -387,7 +393,9 @@ snowInfoMod <- function(id, language) {
 
         copied <- file.copy(bundle$path, file, overwrite = TRUE)
         if (!isTRUE(copied)) {
-          stop("Unable to copy the generated report archive to the download location.")
+          stop(
+            "Unable to copy the generated report archive to the download location."
+          )
         }
 
         cleanup_download_bundle(bundle)
