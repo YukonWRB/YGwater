@@ -27,7 +27,7 @@ manageInstrumentsUI <- function(id) {
       tags$h5("Record metadata"),
       selectizeInput(
         ns("observer"),
-        "Observer",
+        "Observer (type to add new)",
         choices = NULL,
         multiple = TRUE,
         options = list(
@@ -69,35 +69,35 @@ manageInstrumentsUI <- function(id) {
         textInput(ns("asset_tag"), "Asset tag"),
         selectizeInput(
           ns("make"),
-          "Make",
+          "Make (type to add new)",
           choices = NULL,
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
         ),
         selectizeInput(
           ns("model"),
-          "Model",
+          "Model (type to add new)",
           choices = NULL,
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
         ),
         selectizeInput(
           ns("type"),
-          "Type",
+          "Type (type to add new)",
           choices = NULL,
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
         ),
         selectizeInput(
           ns("owner"),
-          "Owner",
+          "Owner (type to add new)",
           choices = NULL,
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Required", create = TRUE)
         ),
         selectizeInput(
           ns("supplier_id"),
-          "Supplier",
+          "Supplier (type to add new)",
           choices = NULL,
           multiple = TRUE,
           options = list(maxItems = 1, placeholder = "Optional", create = TRUE)
@@ -780,7 +780,6 @@ manageInstruments <- function(id, language) {
         escape = FALSE,
         options = list(
           scrollX = TRUE,
-          pageLength = 12,
           autoWidth = TRUE,
           columnDefs = list(
             list(
@@ -925,12 +924,10 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            paste(
-              "INSERT INTO instruments.observers",
-              "(observer_first, observer_last, organization)",
-              "VALUES ($1, $2, $3)",
-              "RETURNING observer_id"
-            ),
+              "INSERT INTO instruments.observers
+              (observer_first, observer_last, organization)
+              VALUES ($1, $2, $3)
+              RETURNING observer_id",
             params = list(
               trimws(input$new_observer_first),
               trimws(input$new_observer_last),
@@ -987,12 +984,10 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            paste(
-              "INSERT INTO instruments.instrument_make",
-              "(make, description)",
-              "VALUES ($1, $2)",
-              "RETURNING make_id"
-            ),
+              "INSERT INTO instruments.instrument_make
+              (make, description)
+              VALUES ($1, $2)
+              RETURNING make_id",
             params = list(
               trimws(input$new_make),
               blank_to_na(input$new_make_desc)
@@ -1049,11 +1044,10 @@ manageInstruments <- function(id, language) {
           DBI::dbGetQuery(
             con,
             paste(
-              "INSERT INTO instruments.instrument_model",
-              "(model, description)",
-              "VALUES ($1, $2)",
-              "RETURNING model_id"
-            ),
+              "INSERT INTO instruments.instrument_model
+              (model, description)
+              VALUES ($1, $2)
+              RETURNING model_id",
             params = list(
               trimws(input$new_model),
               blank_to_na(input$new_model_desc)
@@ -1115,12 +1109,10 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            paste(
-              "INSERT INTO instruments.instrument_type",
-              "(type, description)",
-              "VALUES ($1, $2)",
-              "RETURNING type_id"
-            ),
+              "INSERT INTO instruments.instrument_type
+              (type, description)
+              VALUES ($1, $2)
+              RETURNING type_id",
             params = list(
               trimws(input$new_type),
               trimws(input$new_type_desc)
@@ -1190,12 +1182,10 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            paste(
-              "INSERT INTO public.organizations",
-              "(name, name_fr, contact_name, phone, email, note)",
-              "VALUES ($1, $2, $3, $4, $5, $6)",
-              "RETURNING organization_id"
-            ),
+            "INSERT INTO public.organizations
+              (name, name_fr, contact_name, phone, email, note)
+              VALUES ($1, $2, $3, $4, $5, $6)
+              RETURNING organization_id",
             params = list(
               trimws(input$new_org_name),
               trimws(input$new_org_name_fr),
@@ -1266,12 +1256,10 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            paste(
-              "INSERT INTO instruments.suppliers",
-              "(supplier_name, contact_name, contact_phone, contact_email, note)",
-              "VALUES ($1, $2, $3, $4, $5)",
-              "RETURNING supplier_id"
-            ),
+            "INSERT INTO instruments.suppliers
+            (supplier_name, contact_name, contact_phone, contact_email, note)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING supplier_id",
             params = list(
               trimws(input$new_supplier_name),
               blank_to_na(input$new_supplier_contact_name),
@@ -1355,12 +1343,10 @@ manageInstruments <- function(id, language) {
         duplicate_serial <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            paste(
-              "SELECT instrument_id",
-              "FROM instruments.instruments",
-              "WHERE serial_no = $1",
-              "AND ($2::integer IS NULL OR instrument_id <> $2)"
-            ),
+              "SELECT instrument_id
+              FROM instruments.instruments
+              WHERE serial_no = $1
+              AND ($2::integer IS NULL OR instrument_id <> $2)",
             params = list(serial_no, current_id)
           )
         )
@@ -1405,18 +1391,10 @@ manageInstruments <- function(id, language) {
           with_db_feedback(
             DBI::dbGetQuery(
               con,
-              paste(
-                "INSERT INTO instruments.instruments",
-                "(obs_datetime, observer, make, model, type,",
-                "holds_replaceable_sensors, serial_no, asset_tag,",
-                "date_in_service, date_purchased, retired_by, date_retired,",
-                "owner, date_end_of_life, supplier_id, purchase_price,",
-                "takes_measurements, cable_length_m, firmware_version,",
-                "voltage, power_active_ma, power_quiescent_ma)",
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,",
-                "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
-                "RETURNING instrument_id"
-              ),
+              "INSERT INTO instruments.instruments 
+                  (obs_datetime, observer, make, model, type, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                RETURNING instrument_id",
               params = params
             )$instrument_id[[1]],
             success = "Instrument record created."
@@ -1425,18 +1403,31 @@ manageInstruments <- function(id, language) {
           result <- with_db_feedback(
             DBI::dbExecute(
               con,
-              paste(
-                "UPDATE instruments.instruments",
-                "SET obs_datetime = $1, observer = $2, make = $3, model = $4,",
-                "type = $5, holds_replaceable_sensors = $6, serial_no = $7,",
-                "asset_tag = $8, date_in_service = $9, date_purchased = $10,",
-                "retired_by = $11, date_retired = $12, owner = $13,",
-                "date_end_of_life = $14, supplier_id = $15, purchase_price = $16,",
-                "takes_measurements = $17, cable_length_m = $18,",
-                "firmware_version = $19, voltage = $20, power_active_ma = $21,",
-                "power_quiescent_ma = $22",
-                "WHERE instrument_id = $23"
-              ),
+              "UPDATE instruments.instruments
+                SET 
+                  obs_datetime = $1, 
+                  observer = $2, 
+                  make = $3, 
+                  model = $4,
+                  type = $5, 
+                  holds_replaceable_sensors = $6, 
+                  serial_no = $7,
+                  asset_tag = $8, 
+                  date_in_service = $9, 
+                  date_purchased = $10,
+                  retired_by = $11, 
+                  date_retired = $12, 
+                  owner = $13,
+                  date_end_of_life = $14, 
+                  supplier_id = $15, 
+                  purchase_price = $16,
+                  takes_measurements = $17, 
+                  cable_length_m = $18,
+                  firmware_version = $19, 
+                  voltage = $20, 
+                  power_active_ma = $21,
+                  power_quiescent_ma = $22
+                WHERE instrument_id = $23",
               params = c(params, current_id)
             ),
             success = "Instrument record updated."
@@ -1453,11 +1444,9 @@ manageInstruments <- function(id, language) {
             with_db_feedback(
               DBI::dbExecute(
                 con,
-                paste(
-                  "INSERT INTO instruments.instrument_maintenance",
-                  "(instrument_id, observer, obs_datetime, note, date_maintenance_due)",
-                  "VALUES ($1, $2, $3, $4, $5)"
-                ),
+                "INSERT INTO instruments.instrument_maintenance
+                  (instrument_id, observer, obs_datetime, note, date_maintenance_due)
+                  VALUES ($1, $2, $3, $4, $5)",
                 params = list(
                   saved_id,
                   int_or_na(input$observer),
@@ -1471,12 +1460,10 @@ manageInstruments <- function(id, language) {
             with_db_feedback(
               DBI::dbExecute(
                 con,
-                paste(
-                  "UPDATE instruments.instrument_maintenance",
-                  "SET instrument_id = $1, observer = $2, obs_datetime = $3,",
-                  "note = $4, date_maintenance_due = $5",
-                  "WHERE event_id = $6"
-                ),
+                  "UPDATE instruments.instrument_maintenance
+                  SET instrument_id = $1, observer = $2, obs_datetime = $3,
+                  note = $4, date_maintenance_due = $5
+                  WHERE event_id = $6",
                 params = list(
                   saved_id,
                   int_or_na(input$observer),
@@ -1492,11 +1479,9 @@ manageInstruments <- function(id, language) {
           with_db_feedback(
             DBI::dbExecute(
               con,
-              paste(
-                "UPDATE instruments.instrument_maintenance",
-                "SET date_maintenance_due = NULL, note = $1",
-                "WHERE event_id = $2"
-              ),
+              "UPDATE instruments.instrument_maintenance
+                SET date_maintenance_due = NULL, note = $1
+                WHERE event_id = $2",
               params = list(
                 safe_text(
                   current_record$maintenance_due_note,
