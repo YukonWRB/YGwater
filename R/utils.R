@@ -159,6 +159,259 @@ lookup_location_id <- function(con, location) {
   result[1, 1]
 }
 
+ac_db_table_exists <- function(con, schema, table) {
+  tryCatch(
+    {
+      DBI::dbExistsTable(con, DBI::Id(schema = schema, table = table))
+    },
+    error = function(...) {
+      FALSE
+    }
+  )
+}
+
+ac_db_column_info <- function(con, schema, table) {
+  DBI::dbGetQuery(
+    con,
+    "SELECT column_name, data_type
+     FROM information_schema.columns
+     WHERE table_schema = $1
+       AND table_name = $2;",
+    params = list(schema, table)
+  )
+}
+
+ac_sql_column_ref <- function(table_alias = NULL, column_name) {
+  if (is.null(table_alias) || !nzchar(table_alias)) {
+    return(column_name)
+  }
+
+  paste0(table_alias, ".", column_name)
+}
+
+ac_parameter_unit_schema <- function(con) {
+  column_info <- ac_db_column_info(con, "public", "parameters")
+  units_table_exists <- ac_db_table_exists(con, "public", "units")
+
+  resolve_column <- function(candidates) {
+    matches <- column_info[column_info$column_name %in% candidates, , drop = FALSE]
+
+    if (nrow(matches) == 0) {
+      return(
+        list(
+          column = NULL,
+          data_type = NULL,
+          storage = NULL
+        )
+      )
+    }
+
+    matches$order <- match(matches$column_name, candidates)
+    matches <- matches[order(matches$order), , drop = FALSE]
+
+    data_type <- matches$data_type[1]
+    storage <- if (data_type %in% c("text", "character varying", "character")) {
+      "text"
+    } else if (units_table_exists) {
+      "unit_id"
+    } else {
+      NULL
+    }
+
+    list(
+      column = matches$column_name[1],
+      data_type = data_type,
+      storage = storage
+    )
+  }
+
+  list(
+    default = resolve_column(c("unit_default", "default_unit_id", "unit_default_id")),
+    solid = resolve_column(c("unit_solid", "solid_unit_id", "unit_solid_id"))
+  )
+}
+
+ac_parameter_unit_expr <- function(
+    con,
+    parameter_alias = NULL,
+    prefer = c("default_or_solid", "default", "solid", "solid_or_default")) {
+  prefer <- match.arg(prefer)
+  unit_schema <- ac_parameter_unit_schema(con)
+
+  column_expr <- function(definition) {
+    if (is.null(definition$column) || is.null(definition$storage)) {
+      return(NULL)
+    }
+
+    column_ref <- ac_sql_column_ref(parameter_alias, definition$column)
+
+    if (identical(definition$storage, "text")) {
+      return(paste0("NULLIF(BTRIM(", column_ref, "), '')"))
+    }
+
+    if (identical(definition$storage, "unit_id")) {
+      return(
+        paste0(
+          "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = ",
+          column_ref,
+          ")"
+        )
+      )
+    }
+
+    NULL
+  }
+
+  order <- switch(
+    prefer,
+    default = "default",
+    solid = "solid",
+    default_or_solid = c("default", "solid"),
+    solid_or_default = c("solid", "default")
+  )
+
+  exprs <- vapply(
+    order,
+    function(name) {
+      expr <- column_expr(unit_schema[[name]])
+      if (is.null(expr)) {
+        ""
+      } else {
+        expr
+      }
+    },
+    character(1)
+  )
+  exprs <- exprs[nzchar(exprs)]
+
+  if (length(exprs) == 0) {
+    return("NULL")
+  }
+
+  if (length(exprs) == 1) {
+    return(exprs[[1]])
+  }
+
+  paste0("COALESCE(", paste(exprs, collapse = ", "), ")")
+}
+
+ac_parameter_unit_select_sql <- function(
+    con,
+    parameter_alias = NULL,
+    output_alias = "unit_default",
+    prefer = c("default_or_solid", "default", "solid", "solid_or_default")) {
+  expr <- ac_parameter_unit_expr(
+    con = con,
+    parameter_alias = parameter_alias,
+    prefer = prefer
+  )
+
+  paste0(expr, " AS ", output_alias)
+}
+
+ac_get_parameter_unit <- function(
+    con,
+    parameter_id,
+    prefer = c("default_or_solid", "default", "solid", "solid_or_default")) {
+  prefer <- match.arg(prefer)
+  unit_sql <- ac_parameter_unit_select_sql(
+    con = con,
+    parameter_alias = "p",
+    output_alias = "unit_name",
+    prefer = prefer
+  )
+
+  out <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT ",
+      unit_sql,
+      " FROM public.parameters p WHERE p.parameter_id = $1;"
+    ),
+    params = list(parameter_id)
+  )
+
+  if (!nrow(out)) {
+    return(NA_character_)
+  }
+
+  out$unit_name[[1]]
+}
+
+ac_get_unit_conversion <- function(con, from_unit, to_unit) {
+  from_unit <- trimws(as.character(from_unit)[1])
+  to_unit <- trimws(as.character(to_unit)[1])
+
+  if (
+    is.na(from_unit) ||
+      is.na(to_unit) ||
+      !nzchar(from_unit) ||
+      !nzchar(to_unit) ||
+      identical(from_unit, to_unit)
+  ) {
+    return(
+      data.frame(
+        conversion_type = "factor",
+        scale_a = 1,
+        scale_b = 0
+      )
+    )
+  }
+
+  if (
+    !ac_db_table_exists(con, "public", "units") ||
+      !ac_db_table_exists(con, "public", "unit_conversions")
+  ) {
+    return(NULL)
+  }
+
+  out <- DBI::dbGetQuery(
+    con,
+    "SELECT uc.conversion_type, uc.scale_a, uc.scale_b
+     FROM public.unit_conversions uc
+     JOIN public.units u_from
+       ON u_from.unit_id = uc.from_unit_id
+     JOIN public.units u_to
+       ON u_to.unit_id = uc.to_unit_id
+     WHERE u_from.unit_name = $1
+       AND u_to.unit_name = $2
+     LIMIT 1;",
+    params = list(from_unit, to_unit)
+  )
+
+  if (!nrow(out)) {
+    return(NULL)
+  }
+
+  out
+}
+
+ac_convert_units <- function(
+    con,
+    values,
+    from_unit,
+    to_unit,
+    strict = TRUE) {
+  conversion <- ac_get_unit_conversion(con, from_unit, to_unit)
+
+  if (is.null(conversion)) {
+    if (strict) {
+      stop(
+        "No unit conversion was found for '",
+        from_unit,
+        "' to '",
+        to_unit,
+        "'."
+      )
+    }
+
+    return(values)
+  }
+
+  as.numeric(conversion$scale_a[[1]]) * values +
+    as.numeric(conversion$scale_b[[1]])
+}
+
 
 # Internal helper functions for default file paths
 

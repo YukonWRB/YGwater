@@ -32,20 +32,6 @@ addSampleSeries <- function(id, language) {
     selected_series <- reactiveVal(NULL)
     moduleData$org_modal_target <- NULL
 
-    parse_datetime_input <- function(value) {
-      if (is.null(value) || !nzchar(value)) {
-        return(NA)
-      }
-      formats <- c("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d")
-      for (fmt in formats) {
-        parsed <- as.POSIXct(value, format = fmt, tz = "UTC")
-        if (!is.na(parsed)) {
-          return(parsed)
-        }
-      }
-      NA
-    }
-
     format_datetime_input <- function(value) {
       if (is.null(value)) {
         return("")
@@ -64,6 +50,21 @@ addSampleSeries <- function(id, language) {
         out <- out[[1]]
       }
       out
+    }
+
+    shift_sync_datetime_inputs <- function(tz_name) {
+      shift_air_datetime_input_timezone(
+        session,
+        input,
+        "synch_from",
+        tz_name
+      )
+      shift_air_datetime_input_timezone(
+        session,
+        input,
+        "synch_to",
+        tz_name
+      )
     }
 
     getModuleData <- function() {
@@ -167,19 +168,48 @@ addSampleSeries <- function(id, language) {
         ),
         fluidRow(
           column(
-            width = 6,
-            textInput(
-              ns("synch_from"),
-              "Synchronize from (UTC, optional)",
-              placeholder = "YYYY-MM-DD HH:MM"
+            width = 3,
+            selectizeInput(
+              ns("timezone"),
+              "Input timezone",
+              choices = input_timezone_choices(),
+              selected = default_input_timezone(),
+              multiple = FALSE,
+              width = "100%"
             )
           ),
           column(
-            width = 6,
-            textInput(
+            width = 4,
+            shinyWidgets::airDatepickerInput(
+              ns("synch_from"),
+              "Synchronize from (optional)",
+              value = NULL,
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              update_on = "change",
+              tz = air_datetime_widget_timezone(default_input_timezone()),
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
+            )
+          ),
+          column(
+            width = 5,
+            shinyWidgets::airDatepickerInput(
               ns("synch_to"),
-              "Synchronize to (UTC, optional)",
-              placeholder = "YYYY-MM-DD HH:MM"
+              "Synchronize to (optional)",
+              value = NULL,
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              update_on = "change",
+              tz = air_datetime_widget_timezone(default_input_timezone()),
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
             )
           )
         ),
@@ -333,7 +363,7 @@ addSampleSeries <- function(id, language) {
       )
     })
 
-    table_proxy <- DT::dataTableProxy(ns("ss_table"))
+    table_proxy <- DT::dataTableProxy("ss_table")
 
     observeEvent(input$reload_module, {
       getModuleData()
@@ -346,6 +376,14 @@ addSampleSeries <- function(id, language) {
       )
       showNotification("Module reloaded", type = "message")
     })
+
+    observeEvent(
+      input$timezone,
+      {
+        shift_sync_datetime_inputs(normalize_input_timezone(input$timezone))
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(
       input$location,
@@ -553,15 +591,27 @@ addSampleSeries <- function(id, language) {
             details$sub_location_id
           }
         )
-        updateTextInput(
+        shinyWidgets::updateAirDateInput(
           session,
           "synch_from",
-          value = format_datetime_input(details$synch_from)
+          value = if (is.na(details$synch_from)) {
+            NULL
+          } else {
+            coerce_utc_datetime(details$synch_from)
+          },
+          tz = air_datetime_widget_timezone(input$timezone),
+          clear = is.na(details$synch_from)
         )
-        updateTextInput(
+        shinyWidgets::updateAirDateInput(
           session,
           "synch_to",
-          value = format_datetime_input(details$synch_to)
+          value = if (is.na(details$synch_to)) {
+            NULL
+          } else {
+            coerce_utc_datetime(details$synch_to)
+          },
+          tz = air_datetime_widget_timezone(input$timezone),
+          clear = is.na(details$synch_to)
         )
         updateSelectizeInput(
           session,
@@ -748,20 +798,24 @@ addSampleSeries <- function(id, language) {
       }
 
       synch_from_input <- input$synch_from
-      if (is.null(synch_from_input)) {
-        synch_from_input <- ""
-      }
-      synch_from <- parse_datetime_input(synch_from_input)
-      if (nzchar(synch_from_input) && is.na(synch_from)) {
+      synch_from <- scalar_utc_datetime(synch_from_input)
+      if (
+        !is.null(synch_from_input) &&
+          length(synch_from_input) &&
+          any(!is.na(synch_from_input)) &&
+          is.na(synch_from)
+      ) {
         showNotification("Invalid 'synchronize from' value.", type = "error")
         return()
       }
       synch_to_input <- input$synch_to
-      if (is.null(synch_to_input)) {
-        synch_to_input <- ""
-      }
-      synch_to <- parse_datetime_input(synch_to_input)
-      if (nzchar(synch_to_input) && is.na(synch_to)) {
+      synch_to <- scalar_utc_datetime(synch_to_input)
+      if (
+        !is.null(synch_to_input) &&
+          length(synch_to_input) &&
+          any(!is.na(synch_to_input)) &&
+          is.na(synch_to)
+      ) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }
@@ -818,8 +872,16 @@ addSampleSeries <- function(id, language) {
         getModuleData()
         updateSelectizeInput(session, "location", selected = character(0))
         updateSelectizeInput(session, "sub_location", selected = character(0))
-        updateTextInput(session, "synch_from", value = "")
-        updateTextInput(session, "synch_to", value = "")
+        shinyWidgets::updateAirDateInput(
+          session,
+          "synch_from",
+          clear = TRUE
+        )
+        shinyWidgets::updateAirDateInput(
+          session,
+          "synch_to",
+          clear = TRUE
+        )
         updateSelectizeInput(session, "default_owner", selected = character(0))
         updateSelectizeInput(
           session,
@@ -851,20 +913,24 @@ addSampleSeries <- function(id, language) {
         need(input$default_owner, "Please select a default owner.")
       )
       synch_from_input <- input$synch_from
-      if (is.null(synch_from_input)) {
-        synch_from_input <- ""
-      }
-      synch_from <- parse_datetime_input(synch_from_input)
-      if (nzchar(synch_from_input) && is.na(synch_from)) {
+      synch_from <- scalar_utc_datetime(synch_from_input)
+      if (
+        !is.null(synch_from_input) &&
+          length(synch_from_input) &&
+          any(!is.na(synch_from_input)) &&
+          is.na(synch_from)
+      ) {
         showNotification("Invalid 'synchronize from' value.", type = "error")
         return()
       }
       synch_to_input <- input$synch_to
-      if (is.null(synch_to_input)) {
-        synch_to_input <- ""
-      }
-      synch_to <- parse_datetime_input(synch_to_input)
-      if (nzchar(synch_to_input) && is.na(synch_to)) {
+      synch_to <- scalar_utc_datetime(synch_to_input)
+      if (
+        !is.null(synch_to_input) &&
+          length(synch_to_input) &&
+          any(!is.na(synch_to_input)) &&
+          is.na(synch_to)
+      ) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }

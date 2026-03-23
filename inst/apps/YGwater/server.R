@@ -21,7 +21,21 @@ app_server <- function(input, output, session) {
     silent = TRUE
   )
 
-  # Logging to the database tracking table
+  # Logging to usage tracking tables ###########################################
+
+  safe_disconnect <- function(con) {
+    if (is.null(con)) {
+      return(invisible(NULL))
+    }
+    try(
+      {
+        if (DBI::dbIsValid(con)) {
+          DBI::dbDisconnect(con)
+        }
+      },
+      silent = TRUE
+    )
+  }
 
   get_client_ip <- function(session) {
     req <- session$request
@@ -42,49 +56,689 @@ app_server <- function(input, output, session) {
     req$REMOTE_ADDR
   }
 
-  tryCatch(
-    {
-      session$userData$usage_id <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
-        params = list(
-          if (config$public) "YGwater/public" else "YGwater/partner",
-          config$dbUser,
-          get_client_ip(session)
-        )
-      )[1, 1]
-    },
-    error = function(e) {
-      session$userData$usage_id <<- NULL
-      warning("Failed to log app usage to database: ", e$message)
-    }
+  nav_menu_values <- c(
+    "maps",
+    "plot",
+    "reports",
+    "images",
+    "data",
+    "info",
+    "continuousDataTasks",
+    "discreteDataTasks",
+    "dbLocsTasks",
+    "fileTasks",
+    "fieldTasks",
+    "equipTasks",
+    "wellTasks",
+    "metadataTasks",
+    "adminTasks"
   )
 
-  session$onUnhandledError(function() {
-    if (!is.null(session$userData$usage_id)) {
-      DBI::dbExecute(
-        session$userData$AquaCache,
-        "UPDATE application.shiny_app_usage SET error_message = $1, session_end = NOW() WHERE id = $2;",
-        params = list(
-          e$message,
-          session$userData$usage_id
+  admin_leaf_pages <- c(
+    "adminHome",
+    "syncCont",
+    "syncDisc",
+    "addLocation",
+    "addSubLocation",
+    "addTimeseries",
+    "deploy_recover",
+    "calibrate",
+    "manageInstruments",
+    "addContData",
+    "continuousCorrections",
+    "imputeMissing",
+    "editContData",
+    "grades_approvals_qualifiers",
+    "addDiscData",
+    "addSamples",
+    "editDiscData",
+    "addGuidelines",
+    "addSampleSeries",
+    "addDocs",
+    "addImgs",
+    "addImgSeries",
+    "manageNewsContent",
+    "manageNotifications",
+    "viewFeedback",
+    "visit",
+    "changePwd",
+    "manageUsers",
+    "simplerIndex",
+    "editBoreholesWells",
+    "manageBoreholeDocuments"
+  )
+
+  map_page_ids <- c(
+    "monitoringLocationsMap",
+    "parameterValuesMap",
+    "rasterValuesMap",
+    "snowBulletinMap",
+    "imgMapView",
+    "WWR",
+    "addLocation",
+    "addSubLocation",
+    "addImgs",
+    "addImgSeries",
+    "visit"
+  )
+
+  data_page_ids <- c(
+    "discData",
+    "contData",
+    "docTableView",
+    "imgTableView",
+    "WWR",
+    "viewFeedback",
+    "simplerIndex",
+    "editBoreholesWells",
+    "manageBoreholeDocuments",
+    "addDiscData",
+    "editDiscData",
+    "addContData",
+    "editContData",
+    "manageInstruments",
+    "addSamples",
+    "addSampleSeries",
+    "syncCont",
+    "syncDisc"
+  )
+
+  is_leaf_page <- function(page_id) {
+    if (is.null(page_id) || length(page_id) == 0) {
+      return(FALSE)
+    }
+    page_id <- as.character(page_id)[1]
+    if (is.na(page_id) || !nzchar(page_id)) {
+      return(FALSE)
+    }
+    !page_id %in% nav_menu_values
+  }
+
+  classify_page_side <- function(page_id) {
+    if (!is_leaf_page(page_id)) {
+      return("system")
+    }
+    if (page_id %in% admin_leaf_pages) {
+      return("admin")
+    }
+    "public"
+  }
+
+  is_plot_trigger_input <- function(input_id) {
+    if (is.null(input_id) || length(input_id) == 0) {
+      return(FALSE)
+    }
+    input_id <- as.character(input_id)[1]
+    if (is.na(input_id) || !nzchar(input_id)) {
+      return(FALSE)
+    }
+    grepl(
+      "(^|_)(go|make_plot|plot|add_new_trace|add_new_subplot|modify_trace|modify_subplot|trace[0-9]+|subplot[0-9]+|aes_apply|last_30|entire_record|stats)$",
+      input_id,
+      perl = TRUE
+    )
+  }
+
+  is_map_filter_input <- function(input_id) {
+    if (is.null(input_id) || length(input_id) == 0) {
+      return(FALSE)
+    }
+    input_id <- as.character(input_id)[1]
+    if (is.na(input_id) || !nzchar(input_id)) {
+      return(FALSE)
+    }
+    noisy_map_ids <- c(
+      "map_zoom",
+      "map_center",
+      "map_bounds",
+      "map_marker_click",
+      "map_marker_mouseover",
+      "map_shape_click",
+      "map_shape_mouseover",
+      "map_click"
+    )
+    if (input_id %in% noisy_map_ids) {
+      return(FALSE)
+    }
+    grepl(
+      "filter|search|select|purpose|network|project|param|location|layer|cluster|date|year|yrs|include_|reset|well_name",
+      input_id,
+      ignore.case = TRUE
+    )
+  }
+
+  is_data_request_input <- function(input_id, page_id = NULL) {
+    if (is.null(input_id) || length(input_id) == 0) {
+      return(FALSE)
+    }
+    input_id <- tolower(as.character(input_id)[1])
+    if (is.na(input_id) || !nzchar(input_id)) {
+      return(FALSE)
+    }
+
+    # Ignore read-only/noise interactions that do not request server-side data.
+    if (
+      grepl("(_rows_selected|_cell_clicked|_cells_selected|_state$)", input_id)
+    ) {
+      return(FALSE)
+    }
+
+    if (
+      grepl(
+        "(^|[._-])(load|reload|refresh|fetch|get|query|search|apply|submit|run|request|download|export|commit|upload|open|show|view)([._-]|$)",
+        input_id
+      )
+    ) {
+      return(TRUE)
+    }
+
+    !is.null(page_id) &&
+      page_id %in% data_page_ids &&
+      grepl(
+        "(^|[._-])(table|dataset|records?|document|docs|image|img|well|borehole|sample|series)([._-]|$)",
+        input_id
+      )
+  }
+
+  summarize_usage_input_value <- function(value, max_values = 5L) {
+    if (is.null(value)) {
+      return(list(type = "null"))
+    }
+    if (is.data.frame(value)) {
+      return(list(
+        type = "data.frame",
+        nrow = nrow(value),
+        ncol = ncol(value)
+      ))
+    }
+    if (is.list(value) && !is.atomic(value)) {
+      return(list(type = "list", length = length(value)))
+    }
+
+    val <- value
+    if (inherits(val, "factor")) {
+      val <- as.character(val)
+    }
+    if (inherits(val, c("POSIXct", "POSIXt", "Date"))) {
+      val <- as.character(val)
+    }
+
+    val_len <- length(val)
+    val_type <- typeof(val)
+    if (!is.atomic(val) || val_len == 0) {
+      return(list(type = val_type, length = val_len))
+    }
+
+    if (is.character(val)) {
+      shown <- utils::head(val, max_values)
+      shown <- substr(shown, 1, 120)
+      return(list(
+        type = "character",
+        length = val_len,
+        values = shown
+      ))
+    }
+
+    if (is.logical(val)) {
+      return(list(
+        type = "logical",
+        length = val_len,
+        values = as.logical(utils::head(val, max_values))
+      ))
+    }
+
+    if (is.numeric(val)) {
+      if (val_len <= max_values) {
+        return(list(
+          type = "numeric",
+          length = val_len,
+          values = as.numeric(val)
+        ))
+      }
+      return(list(
+        type = "numeric",
+        length = val_len,
+        min = suppressWarnings(min(val, na.rm = TRUE)),
+        max = suppressWarnings(max(val, na.rm = TRUE))
+      ))
+    }
+
+    list(type = val_type, length = val_len)
+  }
+
+  session$userData$usage_id <- NULL
+  session$userData$usage_closed <- TRUE
+  session$userData$usage_events_enabled <- TRUE
+  session$userData$usage_events_warned <- FALSE
+
+  active_usage_page <- new.env(parent = emptyenv())
+  active_usage_page$page_id <- NULL
+  active_usage_page$app_side <- NULL
+  active_usage_page$entered_at <- NULL
+
+  insert_usage_session <- function(user_id) {
+    user_id_db <- if (is.null(user_id) || length(user_id) == 0) {
+      NA_character_
+    } else {
+      user_id_db <- as.character(user_id)[1]
+      if (is.na(user_id_db) || !nzchar(user_id_db)) {
+        NA_character_
+      } else {
+        user_id_db
+      }
+    }
+
+    tryCatch(
+      {
+        DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
+          params = list(
+            if (config$public) "YGwater/public" else "YGwater/partner",
+            user_id_db,
+            get_client_ip(session)
+          )
+        )[1, 1]
+      },
+      error = function(e) {
+        warning("Failed to log app usage to database: ", e$message)
+        NULL
+      }
+    )
+  }
+
+  log_usage_event <- function(
+    event_type,
+    page_id = NULL,
+    app_side = "system",
+    duration_ms = NULL,
+    payload = list()
+  ) {
+    if (!isTRUE(session$userData$usage_events_enabled)) {
+      return(FALSE)
+    }
+
+    usage_id <- session$userData$usage_id
+    if (is.null(usage_id) || length(usage_id) == 0) {
+      return(FALSE)
+    }
+
+    event_type_db <- as.character(event_type)[1]
+    if (is.na(event_type_db) || !nzchar(event_type_db)) {
+      return(FALSE)
+    }
+
+    app_side <- as.character(app_side)[1]
+    if (is.na(app_side) || !nzchar(app_side)) {
+      app_side <- classify_page_side(page_id)
+    }
+    if (!app_side %in% c("public", "admin", "system")) {
+      app_side <- "system"
+    }
+
+    if (!is.null(duration_ms)) {
+      duration_ms <- as.numeric(duration_ms)
+      if (!is.finite(duration_ms) || duration_ms < 0) {
+        duration_ms <- NULL
+      } else {
+        duration_ms <- as.integer(round(duration_ms))
+      }
+    }
+
+    payload_json <- tryCatch(
+      {
+        jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null")
+      },
+      error = function(e) {
+        "{}"
+      }
+    )
+
+    usage_id_db <- as.integer(usage_id)[1]
+    if (is.na(usage_id_db)) {
+      return(FALSE)
+    }
+    page_id_db <- if (is.null(page_id) || length(page_id) == 0) {
+      NA_character_
+    } else {
+      page_id_db <- as.character(page_id)[1]
+      if (is.na(page_id_db) || !nzchar(page_id_db)) {
+        NA_character_
+      } else {
+        page_id_db
+      }
+    }
+    app_side_db <- as.character(app_side)[1]
+    duration_ms_db <- if (is.null(duration_ms)) {
+      NA_integer_
+    } else {
+      as.integer(round(as.numeric(duration_ms)))[1]
+    }
+    payload_json_db <- as.character(payload_json)[1]
+
+    tryCatch(
+      {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          paste(
+            "INSERT INTO application.shiny_app_usage_event",
+            "(usage_id, event_type, page_id, app_side, duration_ms, payload)",
+            "VALUES ($1, $2, $3, $4, $5, $6::jsonb);"
+          ),
+          params = list(
+            usage_id_db,
+            event_type_db,
+            page_id_db,
+            app_side_db,
+            duration_ms_db,
+            payload_json_db
+          )
         )
+        TRUE
+      },
+      error = function(e) {
+        session$userData$usage_events_enabled <- FALSE
+        if (!isTRUE(session$userData$usage_events_warned)) {
+          warning(
+            "Failed to log usage event. Event logging disabled for this session: ",
+            e$message
+          )
+          session$userData$usage_events_warned <- TRUE
+        }
+        FALSE
+      }
+    )
+  }
+
+  flush_active_page_event <- function(reason = "page_change") {
+    page_id <- active_usage_page$page_id
+    entered_at <- active_usage_page$entered_at
+    app_side <- active_usage_page$app_side
+
+    if (!is.null(page_id) && !is.null(entered_at)) {
+      duration_ms <- max(
+        0,
+        as.numeric(difftime(Sys.time(), entered_at, units = "secs")) * 1000
+      )
+      log_usage_event(
+        event_type = "page_leave",
+        page_id = page_id,
+        app_side = app_side,
+        duration_ms = duration_ms,
+        payload = list(reason = reason)
       )
     }
-    DBI::dbDisconnect(session$userData$AquaCache)
+
+    active_usage_page$page_id <- NULL
+    active_usage_page$app_side <- NULL
+    active_usage_page$entered_at <- NULL
+  }
+
+  start_page_tracking_for_current_page <- function(reason = "usage_switch") {
+    page_id <- isolate(input$navbar)
+    if (!is_leaf_page(page_id)) {
+      return(invisible(FALSE))
+    }
+
+    app_side <- classify_page_side(page_id)
+    active_usage_page$page_id <- page_id
+    active_usage_page$app_side <- app_side
+    active_usage_page$entered_at <- Sys.time()
+
+    log_usage_event(
+      event_type = "page_enter",
+      page_id = page_id,
+      app_side = app_side,
+      payload = list(reason = reason)
+    )
+    invisible(TRUE)
+  }
+
+  close_usage_session <- function(
+    source,
+    error_message = NULL,
+    login_to = NULL,
+    note = NULL
+  ) {
+    usage_id <- session$userData$usage_id
+    if (is.null(usage_id)) {
+      return(FALSE)
+    }
+    if (isTRUE(session$userData$usage_closed)) {
+      return(TRUE)
+    }
+
+    flush_active_page_event(reason = paste0("session_close_", source))
+
+    log_usage_event(
+      event_type = "session_close_attempt",
+      app_side = "system",
+      payload = list(source = source)
+    )
+
+    source_db <- as.character(source)[1]
+    note_db <- if (is.null(note)) NA_character_ else as.character(note)[1]
+    error_message_db <- if (is.null(error_message)) {
+      NA_character_
+    } else {
+      as.character(error_message)[1]
+    }
+    login_to_db <- if (is.null(login_to)) {
+      NA_integer_
+    } else {
+      as.integer(login_to)[1]
+    }
+    usage_id_db <- as.integer(usage_id)[1]
+    if (is.na(usage_id_db)) {
+      return(FALSE)
+    }
+
+    close_sql <- paste(
+      "UPDATE application.shiny_app_usage",
+      "SET session_end = NOW(),",
+      "session_end_source = $1,",
+      "session_end_note = COALESCE($2, session_end_note),",
+      "error_message = COALESCE($3, error_message),",
+      "login_to = COALESCE($4, login_to)",
+      "WHERE id = $5 AND session_end IS NULL;"
+    )
+    legacy_close_sql <- paste(
+      "UPDATE application.shiny_app_usage",
+      "SET session_end = NOW(),",
+      "error_message = COALESCE($1, error_message),",
+      "login_to = COALESCE($2, login_to)",
+      "WHERE id = $3 AND session_end IS NULL;"
+    )
+    params <- list(
+      source_db,
+      note_db,
+      error_message_db,
+      login_to_db,
+      usage_id_db
+    )
+    legacy_params <- list(error_message_db, login_to_db, usage_id_db)
+
+    close_error <- NULL
+    used_retry <- FALSE
+    used_extended_sql <- TRUE
+    rows_affected <- NA_integer_
+    close_sql_variant <- "extended"
+
+    run_close <- function(con) {
+      execute_close <- function(
+        sql,
+        sql_params,
+        used_extended_sql_flag,
+        sql_variant
+      ) {
+        tryCatch(
+          {
+            rows <- DBI::dbExecute(con, sql, params = sql_params)
+            list(
+              error = NULL,
+              rows = rows,
+              used_extended_sql = used_extended_sql_flag,
+              close_sql_variant = sql_variant
+            )
+          },
+          error = function(e) {
+            list(
+              error = e,
+              rows = NA_integer_,
+              used_extended_sql = used_extended_sql_flag,
+              close_sql_variant = sql_variant
+            )
+          }
+        )
+      }
+
+      minimal_close_sql <- paste(
+        "UPDATE application.shiny_app_usage",
+        "SET session_end = NOW()",
+        "WHERE id = $1 AND session_end IS NULL;"
+      )
+      minimal_params <- list(usage_id_db)
+
+      extended_result <- execute_close(
+        close_sql,
+        params,
+        used_extended_sql_flag = TRUE,
+        sql_variant = "extended"
+      )
+      if (is.null(extended_result$error)) {
+        return(extended_result)
+      }
+
+      legacy_result <- execute_close(
+        legacy_close_sql,
+        legacy_params,
+        used_extended_sql_flag = FALSE,
+        sql_variant = "legacy"
+      )
+      if (is.null(legacy_result$error)) {
+        return(legacy_result)
+      }
+
+      minimal_result <- execute_close(
+        minimal_close_sql,
+        minimal_params,
+        used_extended_sql_flag = FALSE,
+        sql_variant = "minimal"
+      )
+      if (is.null(minimal_result$error)) {
+        return(minimal_result)
+      }
+
+      list(
+        error = simpleError(
+          paste(
+            conditionMessage(extended_result$error),
+            "| legacy:",
+            conditionMessage(legacy_result$error),
+            "| minimal:",
+            conditionMessage(minimal_result$error)
+          )
+        ),
+        rows = NA_integer_,
+        used_extended_sql = FALSE,
+        close_sql_variant = "failed_all"
+      )
+    }
+
+    close_result <- run_close(session$userData$AquaCache)
+    close_error <- close_result$error
+    rows_affected <- close_result$rows
+    used_extended_sql <- close_result$used_extended_sql
+    close_sql_variant <- close_result$close_sql_variant
+
+    if (!is.null(close_error)) {
+      tryCatch(
+        {
+          retry_con <- AquaConnect(
+            name = config$dbName,
+            host = config$dbHost,
+            port = config$dbPort,
+            username = config$dbUser,
+            password = config$dbPass,
+            silent = TRUE
+          )
+          on.exit(safe_disconnect(retry_con), add = TRUE)
+          close_result <- run_close(retry_con)
+          close_error <<- close_result$error
+          rows_affected <<- close_result$rows
+          used_extended_sql <<- close_result$used_extended_sql
+          close_sql_variant <<- close_result$close_sql_variant
+          used_retry <<- TRUE
+        },
+        error = function(e) {
+          close_error <<- e
+        }
+      )
+    }
+
+    if (is.null(close_error)) {
+      session$userData$usage_closed <- TRUE
+      log_usage_event(
+        event_type = "session_closed",
+        app_side = "system",
+        payload = list(
+          source = source,
+          used_retry = used_retry,
+          used_extended_sql = used_extended_sql,
+          close_sql_variant = close_sql_variant,
+          rows_affected = rows_affected
+        )
+      )
+      return(TRUE)
+    }
+
+    log_usage_event(
+      event_type = "session_close_failed",
+      app_side = "system",
+      payload = list(
+        source = source,
+        used_retry = used_retry,
+        used_extended_sql = used_extended_sql,
+        close_sql_variant = close_sql_variant,
+        error = conditionMessage(close_error)
+      )
+    )
+    warning(
+      "Failed to close usage session ",
+      usage_id,
+      " (source: ",
+      source,
+      "): ",
+      conditionMessage(close_error)
+    )
+    FALSE
+  }
+
+  session$userData$usage_id <- insert_usage_session(config$dbUser)
+  session$userData$usage_closed <- is.null(session$userData$usage_id)
+
+  session$onUnhandledError(function(e) {
+    msg <- if (inherits(e, "condition")) {
+      conditionMessage(e)
+    } else if (!is.null(e) && !is.null(e$message)) {
+      e$message
+    } else {
+      "Unhandled error"
+    }
+    close_usage_session(
+      source = "unhandled_error",
+      error_message = msg,
+      note = "onUnhandledError callback"
+    )
+    safe_disconnect(session$userData$AquaCache)
   })
 
   session$onSessionEnded(function() {
-    if (!is.null(session$userData$usage_id)) {
-      DBI::dbExecute(
-        session$userData$AquaCache,
-        "UPDATE application.shiny_app_usage SET session_end = NOW() WHERE id = $1;",
-        params = list(
-          session$userData$usage_id
-        )
-      )
-    }
-    DBI::dbDisconnect(session$userData$AquaCache)
+    close_usage_session(
+      source = "session_end",
+      note = "onSessionEnded callback"
+    )
+    safe_disconnect(session$userData$AquaCache)
   })
 
   # Heartbeat every 5 seconds to keep app alive, prevent disconnects while doing queries and rendering plots. Note: time-consuming operations can still time out unless they use ExtendedTasks as the task otherwise blocks the server.
@@ -139,19 +793,8 @@ app_server <- function(input, output, session) {
       }
 
       # Equipment tasks -----------------------------------------------------
-      if (
-        any(
-          session$userData$admin_privs$calibrate,
-          session$userData$admin_privs$deploy_recover
-        )
-      ) {
+      if (isTRUE(session$userData$admin_privs$calibrate)) {
         nav_show(id = "navbar", target = "equipTasks")
-        if (!isTRUE(session$userData$admin_privs$calibrate)) {
-          nav_hide(id = "navbar", target = "calibrate")
-        }
-        if (!isTRUE(session$userData$admin_privs$deploy_recover)) {
-          nav_hide(id = "navbar", target = "deploy_recover")
-        }
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
       }
@@ -416,6 +1059,162 @@ app_server <- function(input, output, session) {
     ignoreNULL = TRUE
   )
 
+  # Usage analytics: page-level dwell tracking for all leaf pages
+  observeEvent(
+    input$navbar,
+    {
+      page_id <- input$navbar
+      if (!is_leaf_page(page_id)) {
+        return()
+      }
+
+      now_utc <- Sys.time()
+      prev_page <- active_usage_page$page_id
+      prev_entered <- active_usage_page$entered_at
+      prev_side <- active_usage_page$app_side
+      reason <- if (updating_from_url()) "url_nav" else "page_change"
+
+      if (
+        !is.null(prev_page) &&
+          !identical(prev_page, page_id) &&
+          !is.null(prev_entered)
+      ) {
+        duration_ms <- max(
+          0,
+          as.numeric(difftime(now_utc, prev_entered, units = "secs")) * 1000
+        )
+        log_usage_event(
+          event_type = "page_leave",
+          page_id = prev_page,
+          app_side = prev_side,
+          duration_ms = duration_ms,
+          payload = list(reason = reason)
+        )
+      }
+
+      if (is.null(prev_page) || !identical(prev_page, page_id)) {
+        page_side <- classify_page_side(page_id)
+        active_usage_page$page_id <- page_id
+        active_usage_page$app_side <- page_side
+        active_usage_page$entered_at <- now_utc
+
+        log_usage_event(
+          event_type = "page_enter",
+          page_id = page_id,
+          app_side = page_side,
+          payload = list(reason = reason)
+        )
+      }
+    },
+    ignoreNULL = TRUE
+  )
+
+  # Usage analytics: generic data download clicks
+  observeEvent(
+    input$usage_download_click,
+    {
+      event <- input$usage_download_click
+      if (is.null(event)) {
+        return()
+      }
+
+      page_id <- if (is_leaf_page(input$navbar)) input$navbar else NULL
+      app_side <- classify_page_side(page_id)
+
+      log_usage_event(
+        event_type = "data_download",
+        page_id = page_id,
+        app_side = app_side,
+        payload = list(
+          input_id = if (!is.null(event$input_id)) {
+            as.character(event$input_id)
+          } else {
+            NULL
+          },
+          filename_hint = if (!is.null(event$filename_hint)) {
+            as.character(event$filename_hint)
+          } else {
+            NULL
+          },
+          href = if (!is.null(event$href)) as.character(event$href) else NULL,
+          ts = if (!is.null(event$ts)) as.numeric(event$ts) else NULL
+        )
+      )
+    },
+    ignoreNULL = TRUE
+  )
+
+  # Usage analytics: classify tracked input changes
+  observeEvent(
+    input$usage_input_changed,
+    {
+      event <- input$usage_input_changed
+      if (is.null(event) || is.null(event$input_id)) {
+        return()
+      }
+
+      input_id <- as.character(event$input_id)
+      if (!nzchar(input_id)) {
+        return()
+      }
+
+      page_id <- if (is_leaf_page(input$navbar)) input$navbar else NULL
+      if (is.null(page_id)) {
+        return()
+      }
+      app_side <- classify_page_side(page_id)
+      event_ts <- if (!is.null(event$ts)) as.numeric(event$ts) else NULL
+      current_input_value <- tryCatch(input[[input_id]], error = function(e) {
+        NULL
+      })
+      input_value_summary <- summarize_usage_input_value(current_input_value)
+
+      plot_request <- is_plot_trigger_input(input_id)
+      map_filter <- page_id %in% map_page_ids && is_map_filter_input(input_id)
+      data_request <- is_data_request_input(input_id, page_id = page_id)
+
+      if (plot_request) {
+        log_usage_event(
+          event_type = "plot_request",
+          page_id = page_id,
+          app_side = app_side,
+          payload = list(
+            input_id = input_id,
+            ts = event_ts,
+            input_value = input_value_summary
+          )
+        )
+      }
+
+      if (map_filter) {
+        log_usage_event(
+          event_type = "map_filter_applied",
+          page_id = page_id,
+          app_side = app_side,
+          payload = list(
+            input_id = input_id,
+            ts = event_ts,
+            input_value = input_value_summary
+          )
+        )
+      }
+
+      if (data_request && !plot_request && !map_filter) {
+        log_usage_event(
+          event_type = "data_request",
+          page_id = page_id,
+          app_side = app_side,
+          payload = list(
+            input_id = input_id,
+            ts = event_ts,
+            input_value = input_value_summary
+          )
+        )
+      }
+    },
+    ignoreNULL = TRUE
+  )
+
   # Track window dimensions (used to modify plot appearance)
   windowDims <- reactive({
     req(input$window_dimensions)
@@ -456,6 +1255,7 @@ app_server <- function(input, output, session) {
 
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$calibrate <- FALSE
+    ui_loaded$manageInstruments <- FALSE
 
     ui_loaded$addContData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
@@ -524,6 +1324,7 @@ app_server <- function(input, output, session) {
     "addTimeseries",
     "deploy_recover",
     "calibrate",
+    "manageInstruments",
     "addContData",
     "continuousCorrections",
     "imputeMissing",
@@ -970,7 +1771,9 @@ app_server <- function(input, output, session) {
 
   # Log in/out ##########################################
   log_attempts <- reactiveVal(0) # counter for login attempts - prevent brute force attacks
+  login_in_progress <- reactiveVal(FALSE) # prevent duplicate login submissions
   session$userData$user_logged_in <- FALSE # value to track login status
+  session$userData$admin_button_inserted <- FALSE # track whether the admin toggle has been added
   session$userData$can_create_role <- FALSE # track CREATE ROLE privilege
   session$userData$table_privs <- data.frame() # track table privileges
   session$userData$admin_privs <- list() # store privilege flags for UI filtering
@@ -1027,44 +1830,30 @@ app_server <- function(input, output, session) {
     shinyjs::show("loginBtn")
 
     # Remove the 'admin' button upon logout
-    removeUI(selector = "button:contains('Switch to ')")
+    if (isTRUE(session$userData$admin_button_inserted)) {
+      removeUI(selector = "button#admin", multiple = TRUE, immediate = TRUE)
+      session$userData$admin_button_inserted <- FALSE
+    }
 
-    # Add log messages to database
-    tryCatch(
-      {
-        new_id <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
-          params = list(
-            if (config$public) "YGwater/public" else "YGwater/partner",
-            config$dbUser,
-            get_client_ip(session)
-          )
-        )[1, 1]
-      },
-      error = function(e) {
-        new_id <<- NULL
-        warning("Failed to log app usage to database: ", e$message)
+    new_id <- insert_usage_session(config$dbUser)
+    close_usage_session(
+      source = if (show_idle_modal) "logout_idle" else "logout",
+      login_to = new_id,
+      note = if (show_idle_modal) {
+        "automatic logout due to inactivity"
+      } else {
+        "manual logout"
       }
     )
 
-    # Update the old entry with the logout time and the login_to entry
+    session$userData$usage_id <- new_id
+    session$userData$usage_closed <- is.null(new_id)
     if (!is.null(new_id)) {
-      try(
-        {
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            "UPDATE application.shiny_app_usage SET session_end = NOW(), login_to = $1 WHERE id = $2;",
-            params = list(new_id, session$userData$usage_id)
-          )
-        }
-      )
+      start_page_tracking_for_current_page(reason = "logout_switch")
     }
 
-    session$userData$usage_id <- new_id
-
     # Drop old connection
-    DBI::dbDisconnect(session$userData$AquaCache)
+    safe_disconnect(session$userData$AquaCache)
     # Re-create the connection with the base 'config' parameters, no edit privileges
     session$userData$AquaCache <- AquaConnect(
       name = config$dbName,
@@ -1091,6 +1880,9 @@ app_server <- function(input, output, session) {
     # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode which will return them to the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
     admin_vis_flag("viz")
     shinyjs::click("admin")
+
+    # logout button is disabled on click to prevent multiple rapid clicks; re-enable after logout performed (it's hidden at this point but needs to be enabled for later use)
+    shinyjs::runjs("$('#logoutBtn').prop('disabled', false);")
   }
 
   observe({
@@ -1126,6 +1918,7 @@ app_server <- function(input, output, session) {
         footer = modalButton(tr("close", languageSelection$language))
       ))
       return()
+      # button was disabled on click by 'onclick = "$(this).prop('disabled', true);"'; not re-enabled here since we want to prevent further login attempts after too many failed tries
     } else {
       showModal(modalDialog(
         # html below allows the user to press 'Enter' to submit the login form
@@ -1150,15 +1943,32 @@ app_server <- function(input, output, session) {
           actionButton(
             "confirmLogin",
             tr("login_confirm", languageSelection$language),
-            class = "btn-primary"
+            class = "btn-primary",
+            onclick = "$(this).prop('disabled', true);"
           )
         )
       ))
+      # loginBtn button was disabled on click by 'onclick = "$(this).prop('disabled', true);"'; re-enable it so it's available after the modal is closed.
+      shinyjs::runjs("$('#loginBtn').prop('disabled', false);")
     }
   })
 
   # Log in attempt if the button is clicked
   observeEvent(input$confirmLogin, {
+    if (
+      isTRUE(login_in_progress()) || isTRUE(session$userData$user_logged_in)
+    ) {
+      return()
+    }
+
+    login_in_progress(TRUE)
+    on.exit(
+      {
+        login_in_progress(FALSE)
+      },
+      add = TRUE
+    )
+
     if (nchar(input$username) == 0 || nchar(input$password) == 0) {
       clear_modals()
       showModal(modalDialog(
@@ -1187,7 +1997,7 @@ app_server <- function(input, output, session) {
           # Means the connection was successful
 
           # Drop the old connection
-          DBI::dbDisconnect(session$userData$AquaCache)
+          safe_disconnect(session$userData$AquaCache)
           session$userData$AquaCache <- session$userData$AquaCache_new
           session$userData$AquaCache_new <- NULL
 
@@ -1365,23 +2175,28 @@ app_server <- function(input, output, session) {
             deploy_recover = has_priv(
               tbl = session$userData$table_privs,
               c(
+                "public.locations_metadata_instruments",
+                "public.locations",
+                "public.sub_locations",
+                "public.locations_z",
                 "instruments.instruments",
-                "instruments.instrument_maintenance",
-                "instruments.array_maintenance_changes"
+                "instruments.instrument_make",
+                "instruments.instrument_model",
+                "instruments.instrument_type"
               ),
               list(
                 c(
+                  "SELECT",
                   "INSERT",
                   "UPDATE"
                 ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                )
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
               )
             ),
             addContData = has_priv(
@@ -1648,18 +2463,21 @@ app_server <- function(input, output, session) {
             ))
           }
           if (has_admin_privs) {
-            # Create the new element for the 'admin' mode
-            # Other tabs are created if/when the user clicks on the 'admin' actionButton
-            nav_insert(
-              "navbar",
-              nav_item(tagList(actionButton(
-                "admin",
-                "Switch to Admin mode",
-                style = "color: #F2A900;"
-              ))),
-              target = "home",
-              position = "before"
-            )
+            if (!isTRUE(session$userData$admin_button_inserted)) {
+              # Create the new element for the 'admin' mode
+              # Other tabs are created if/when the user clicks on the 'admin' actionButton
+              nav_insert(
+                "navbar",
+                nav_item(tagList(actionButton(
+                  "admin",
+                  "Switch to Admin mode",
+                  style = "color: #F2A900;"
+                ))),
+                target = "home",
+                position = "before"
+              )
+              session$userData$admin_button_inserted <- TRUE
+            }
 
             # Check if the user has CREATE ROLE privileges, used to determine if the 'manage users' tab should be shown in admin mode
             session$userData$can_create_role <- DBI::dbGetQuery(
@@ -1699,39 +2517,18 @@ app_server <- function(input, output, session) {
             footer = modalButton(tr("close", languageSelection$language))
           ))
 
-          # Add log messages to database
-          tryCatch(
-            {
-              new_id <- DBI::dbGetQuery(
-                session$userData$AquaCache,
-                "INSERT INTO application.shiny_app_usage (app_name, user_id, user_ip) VALUES ($1, $2, $3) RETURNING id;",
-                params = list(
-                  if (config$public) "YGwater/public" else "YGwater/partner",
-                  input$username,
-                  get_client_ip(session)
-                )
-              )[1, 1]
-            },
-            error = function(e) {
-              new_id <<- NULL
-              warning("Failed to log app usage to database: ", e$message)
-            }
+          new_id <- insert_usage_session(input$username)
+          close_usage_session(
+            source = "login",
+            login_to = new_id,
+            note = paste0("successful login: ", input$username)
           )
 
-          # Update the old entry with the logout time
-          if (!is.null(new_id)) {
-            try(
-              {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE application.shiny_app_usage SET session_end = NOW(), login_to = $1 WHERE id = $2;",
-                  params = list(new_id, session$userData$usage_id)
-                )
-              }
-            )
-          }
-
           session$userData$usage_id <- new_id
+          session$userData$usage_closed <- is.null(new_id)
+          if (!is.null(new_id)) {
+            start_page_tracking_for_current_page(reason = "login_switch")
+          }
 
           return()
         } else {
@@ -1862,6 +2659,7 @@ app_server <- function(input, output, session) {
           "addTimeseries",
           "deploy_recover",
           "calibrate",
+          "manageInstruments",
           "addContData",
           "continuousCorrections",
           "imputeMissing",
@@ -2228,6 +3026,15 @@ app_server <- function(input, output, session) {
         output$calibrate_ui <- renderUI(calibrateUI("calibrate")) # Render the UI
         ui_loaded$calibrate <- TRUE
         calibrate("calibrate", language = languageSelection) # Call the server
+      }
+    }
+    if (input$navbar == "manageInstruments") {
+      if (!ui_loaded$manageInstruments) {
+        output$manageInstruments_ui <- renderUI(manageInstrumentsUI(
+          "manageInstruments"
+        ))
+        ui_loaded$manageInstruments <- TRUE
+        manageInstruments("manageInstruments", language = languageSelection)
       }
     }
     if (input$navbar == "addContData") {

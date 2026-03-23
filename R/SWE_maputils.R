@@ -51,7 +51,7 @@ snowbull_months <- function(month = NULL, short = FALSE) {
     }
 
     if (!is.null(month)) {
-        months = months[month]
+        months <- months[month]
     }
 
     return(months)
@@ -1195,6 +1195,12 @@ download_continuous_ts_locations <- function(
 
     md_continuous_df <- DBI::dbGetQuery(con, md_query)
 
+    # Remove stations above latitude threshold (e.g., 65 degrees North)
+    latitude_threshold <- 68
+    md_continuous_df <- md_continuous_df[
+        md_continuous_df$latitude <= latitude_threshold,
+    ]
+
     # Keep only the first (best) record_rate per unique location_id
     md_continuous_df <- md_continuous_df[
         !duplicated(md_continuous_df$location_id),
@@ -1258,6 +1264,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
         l.longitude,
         l.location_code as location,
         l.name,
+        l.name_fr,
         dc.conversion_m
         FROM discrete.samples s
         JOIN discrete.results r ON s.sample_id = r.sample_id
@@ -1910,7 +1917,7 @@ get_norms <- function(
     end_year_historical = 2020,
     end_months_historical = c(2, 3, 4, 5),
     october_start = FALSE,
-    completeness_per_aggr_period = 0.5,
+    completeness_per_aggr_period = 0.8,
     completeness_per_norm_period = 0.2
 ) {
     aggr_fun <- get_aggr_fun(param_name)
@@ -2035,6 +2042,14 @@ get_bulletin_value <- function(
         station_names
     )
 
+    completeness_per_aggr_period <- 0.6
+    for (station in station_names) {
+        vals <- ts[idx, station]
+        if (sum(!is.na(vals)) < completeness_per_aggr_period * length(vals)) {
+            station_current[station] <- NA
+        }
+    }
+
     station_current <- as.numeric(station_current)
     station_current[is.nan(station_current)] <- NA
     names(station_current) <- station_names
@@ -2071,6 +2086,9 @@ get_normalized_bulletin_values <- function(
     norms_for_month <- norms$station_norms[
         rownames(norms$station_norms) == as.character(bulletin_month),
     ]
+
+    norms_for_month <- norms_for_month[station_names]
+
     # Calculate the ratio of current_aggr to station_norms for each station
     relative_to_norm <- 100 *
         (bulletin_values /
@@ -3234,14 +3252,31 @@ load_bulletin_timeseries <- function(
         # Process basin names for better display on map
         snowbull_timeseries$swe$basins$metadata <- basins_shp
         snowbull_timeseries$swe$basins$metadata$key <- snowbull_timeseries$swe$basins$metadata$name
-        snowbull_timeseries$swe$basins$metadata$annotation <- snowbull_timeseries$swe$basins$metadata$Label
-        snowbull_timeseries$swe$basins$metadata$annotation <- gsub(
+        snowbull_timeseries$swe$basins$metadata$annotation_en <- snowbull_timeseries$swe$basins$metadata$Label
+        snowbull_timeseries$swe$basins$metadata$annotation_fr <- snowbull_timeseries$swe$basins$metadata$Label_fr
+        snowbull_timeseries$swe$basins$metadata$annotation_en <- gsub(
             "_",
             " ",
-            as.character(snowbull_timeseries$swe$basins$metadata$annotation)
+            as.character(snowbull_timeseries$swe$basins$metadata$annotation_en)
         )
-        snowbull_timeseries$swe$basins$metadata$annotation <- vapply(
-            snowbull_timeseries$swe$basins$metadata$annotation,
+        snowbull_timeseries$swe$basins$metadata$annotation_fr <- gsub(
+            "_",
+            " ",
+            as.character(snowbull_timeseries$swe$basins$metadata$annotation_fr)
+        )
+        snowbull_timeseries$swe$basins$metadata$annotation_en <- vapply(
+            snowbull_timeseries$swe$basins$metadata$annotation_en,
+            FUN.VALUE = character(1),
+            FUN = function(x) {
+                if (is.na(x) || x == "") {
+                    return(x)
+                }
+                # Add line break after first word if it's 5+ characters
+                sub("^(\\S{5,})\\s+", "\\1<br>", x, perl = TRUE)
+            }
+        )
+        snowbull_timeseries$swe$basins$metadata$annotation_fr <- vapply(
+            snowbull_timeseries$swe$basins$metadata$annotation_fr,
             FUN.VALUE = character(1),
             FUN = function(x) {
                 if (is.na(x) || x == "") {
@@ -3426,6 +3461,15 @@ load_bulletin_timeseries <- function(
             }
         }
 
+        water_level$metadata <- merge(
+            water_level$metadata,
+            datums,
+            by.x = "location_id",
+            by.y = "location_id",
+            all.x = TRUE,
+            sort = FALSE
+        )
+
         threshold_levels <- data$flow_level_flood
         threshold_levels <- threshold_levels[
             !is.na(threshold_levels$Flood_level_asl),
@@ -3445,11 +3489,22 @@ load_bulletin_timeseries <- function(
                 sort = FALSE
             )
 
+        for (col in setdiff(names(water_level$timeseries$data), "datetime")) {
+            loc_id <- as.integer(col)
+            datum_row <- datums[datums$location_id == loc_id, ]
+            if (nrow(datum_row) == 1 && !is.na(datum_row$conversion_m)) {
+                water_level$timeseries$data[[
+                    col
+                ]] <- water_level$timeseries$data[[col]] -
+                    datum_row$conversion_m
+            }
+        }
+
         norms <- get_norms(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
             ts = water_level$timeseries$data,
-            october_start = october_start,
+            october_start = FALSE,
             param_name = "water level"
         )
 
@@ -3486,7 +3541,7 @@ load_bulletin_timeseries <- function(
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
             ts = water_flow$timeseries$data,
-            october_start = october_start,
+            october_start = FALSE,
             param_name = "water flow"
         )
 
@@ -3522,9 +3577,10 @@ create_survey_summary <- function(
         "09AA-SC02",
         "09AA-SC03",
         "09AA-SC04",
-        "09AB-SC01",
+        "09AB-SC01B",
         "09AB-SC02",
         "09AD-SC01",
+        "09FD-SC02",
         "09AD-SC02",
         "09AE-SC01",
         "09AH-SC01",
@@ -3577,14 +3633,6 @@ create_survey_summary <- function(
         "08AK-SC01",
         "08AK-SC02"
     )
-
-    # con <- YGwater::AquaConnect(
-    #     name = "aquacache",
-    #     host = Sys.getenv("aquacacheHostDev"),
-    #     port = Sys.getenv("aquacachePortDev"),
-    #     user = Sys.getenv("aquacacheUserDev"),
-    #     password = Sys.getenv("aquacachePassDev"),
-    # )
 
     locations <- download_discrete_ts_locations(
         con = con,
@@ -3796,7 +3844,6 @@ create_survey_summary <- function(
         by.y = "location_id",
         all.x = TRUE
     )
-
     query <- "
     SELECT
         s.location_id,
@@ -3806,13 +3853,13 @@ create_survey_summary <- function(
     FROM discrete.samples s
     JOIN discrete.results r ON s.sample_id = r.sample_id
     WHERE s.location_id = ANY($1)
-      AND EXTRACT(MONTH FROM s.target_datetime) = $2
-      AND EXTRACT(DAY FROM s.target_datetime) = $3
+      AND EXTRACT(MONTH FROM s.target_datetime) = EXTRACT(MONTH FROM DATE($2))
+      AND EXTRACT(DAY FROM s.target_datetime) = EXTRACT(DAY FROM DATE($2))
       AND r.parameter_id = (
-          SELECT parameter_id FROM public.parameters WHERE param_name = $4
+          SELECT parameter_id FROM public.parameters WHERE param_name = $3
       )
       AND r.result IS NOT NULL
-      AND EXTRACT(YEAR FROM s.target_datetime) <= EXTRACT(YEAR FROM DATE($5))
+      AND EXTRACT(YEAR FROM s.target_datetime) < EXTRACT(YEAR FROM DATE($2))
     GROUP BY s.location_id
 "
 
@@ -3821,10 +3868,8 @@ create_survey_summary <- function(
         query,
         params = list(
             location_ids_list,
-            month,
-            1,
-            "snow water equivalent",
-            target_date
+            target_date,
+            "snow water equivalent"
         )
     )
 
@@ -3845,17 +3890,6 @@ create_survey_summary <- function(
 
     surveys_table <- surveys_table[surveys_table$location %in% stations, ]
 
-    # surveys_table$location_id <- NULL
-
-    # surveys_table[, c(
-    #     "name",
-    #     "location",
-    #     "survey_date",
-    #     "snow_depth",
-    #     "relative_to_med",
-    #     "last_year_snow_water_equivalent"
-    # )]
-
     surveys_table[["record_flag"]] <- !is.na(surveys_table[[
         "snow_water_equivalent"
     ]]) &
@@ -3875,10 +3909,11 @@ create_survey_summary <- function(
         survey_date = "sample_date",
         swe_historical_median = "swe_med",
         name = "location_name",
+        name_fr = "location_name_fr",
         basin = "sub_basin",
         num_years = "years"
     )
-    surveys_table <- setNames(
+    surveys_table <- stats::setNames(
         surveys_table,
         ifelse(
             names(surveys_table) %in% names(rename_map),
@@ -4410,7 +4445,7 @@ get_display_data <- function(
         dataset_state <- filter_stations_by_latest_date(
             dataset_state,
             input_date,
-            50
+            800
         )
     }
 
@@ -4436,8 +4471,14 @@ get_display_data <- function(
     dataset_state <- to_numeric_cols(dataset_state, numeric_cols)
 
     # update the annotations to display the value for the selected type
-    dataset_state$annotation <- paste0(
-        dataset_state$annotation,
+    dataset_state$annotation_fr <- paste0(
+        dataset_state$annotation_fr,
+        "<br>(",
+        round(dataset_state[[statistic]], 0),
+        "%)"
+    )
+    dataset_state$annotation_en <- paste0(
+        dataset_state$annotation_en,
         "<br>(",
         round(dataset_state[[statistic]], 0),
         "%)"
@@ -4535,49 +4576,41 @@ get_future_flow_conditions <- function(hydrometric, swe, language = "English") {
     }
 
     # here, we assign a flow condition value based on the combination of flow and swe levels using a lookup table. The values in the table are mapped to the same scale as 'relative to med', for the purpose of looking up a descriptive preposition and colour
-    col1 <- c(
-        60,
-        60,
-        60,
-        60,
-        60
-    )
-    col2 <- c(
-        60,
-        80,
-        80,
-        80,
-        80
-    )
-    col3 <- c(
-        60,
-        80,
-        100,
-        100,
-        100
-    )
-    col4 <- c(
-        60,
-        80,
-        100,
-        120,
-        120
-    )
-    col5 <- c(
-        60,
-        80,
-        100,
-        120,
-        135
+    lookup <- matrix(
+        c(
+            60,
+            60,
+            60,
+            60,
+            80,
+            80,
+            80,
+            80,
+            80,
+            80,
+            100,
+            100,
+            100,
+            100,
+            100,
+            100,
+            120,
+            120,
+            120,
+            120,
+            120,
+            135,
+            135,
+            135,
+            135
+        ),
+        nrow = 5,
+        ncol = 5,
+        byrow = TRUE
     )
 
     # Combine columns into a matrix (columns = swe_levels, rows = flow_levels)
-    lookup <- matrix(
-        c(col1, col2, col3, col4, col5),
-        nrow = 5,
-        ncol = 5
-    )
-    val <- lookup[get_level(hydrometric), get_level(swe)]
+    val <- lookup[get_level(swe), get_level(hydrometric)]
     text_colour <- get_text_colour(val)
     preposition <- get_rmd_preposition(val)
     description <- paste(trb(preposition), trb("rmd_normal"))
@@ -4673,12 +4706,12 @@ make_leaflet_map <- function(
 ) {
     month_str <- snowbull_months(month = month, short = TRUE)
 
-    # Get the first two characters of the language (lowercase)
+    # Get the first two characters of the language (lowercase) for normalization
     lang_short <- tolower(substr(language, 1, 2))
     if (lang_short == "en") {
-        lang_short <- "English"
+        language <- "English"
     } else if (lang_short == "fr") {
-        language <- "Français"
+        language <- "Fran\u00e7ais"
     } else {
         warning(
             sprintf(
@@ -4686,7 +4719,7 @@ make_leaflet_map <- function(
                 language
             )
         )
-        lang_short <- "English" # default to English if unrecognized
+        language <- "English" # default to English if unrecognized
     }
 
     # processed data is values for one point in time, based on bulletin_data
@@ -4757,7 +4790,10 @@ make_leaflet_map <- function(
                 weight = 2 * static_style_elements$basins$weight,
                 opacity = static_style_elements$basins$opacity,
                 fillOpacity = static_style_elements$basins$fillOpacity,
-                label = ~ lapply(annotation, htmltools::HTML),
+                label = ~ lapply(
+                    if (language == "English") annotation_en else annotation_fr,
+                    htmltools::HTML
+                ),
                 popup = ~ lapply(popup_content, htmltools::HTML),
                 popupOptions = leaflet::popupOptions(
                     maxWidth = static_style_elements$basins$popupOptions$maxWidth,
@@ -4770,7 +4806,11 @@ make_leaflet_map <- function(
                 data = poly_data,
                 lng = poly_data$x_adjusted,
                 lat = poly_data$y_adjusted,
-                label = lapply(poly_data$annotation, htmltools::HTML),
+                label = if (language == "English") {
+                    lapply(poly_data$annotation_en, htmltools::HTML)
+                } else {
+                    lapply(poly_data$annotation_fr, htmltools::HTML)
+                },
                 labelOptions = leaflet::labelOptions(
                     noHide = static_style_elements$basins$labelOptions$noHide %||%
                         TRUE,
@@ -5029,7 +5069,7 @@ make_leaflet_map <- function(
 #' @param point_data_secondary sf object containing secondary point data (pillows)
 #' @param statistic Character string indicating which SWE value to visualize
 #' @param snowbull_shapefiles List containing all loaded shapefiles
-#' @param language Character string for language (default "English")
+#' @param language Character string for language ("English" or "Fran\u00e7ais, default "English")
 #' @param month Integer month for map title
 #' @param year Integer year for map title
 #' @param filename Optional character string for PNG output file path
@@ -5112,6 +5152,22 @@ make_ggplot_map <- function(
     requireNamespace("ggplot2")
     requireNamespace("shadowtext")
 
+    # Get the first two characters of the language (lowercase) for normalization
+    lang_short <- tolower(substr(language, 1, 2))
+    if (lang_short == "en") {
+        language <- "English"
+    } else if (lang_short == "fr") {
+        language <- "Fran\u00e7ais"
+    } else {
+        warning(
+            sprintf(
+                "Unrecognized language '%s'. Defaulting to English.",
+                language
+            )
+        )
+        language <- "English" # default to English if unrecognized
+    }
+
     # processed data is values for one point in time, based on bulletin_data
     static_style_elements <- get_static_style_elements()
 
@@ -5141,7 +5197,11 @@ make_ggplot_map <- function(
         basin_labels_df <- data.frame(
             x = poly_data$x_adjusted,
             y = poly_data$y_adjusted,
-            annotation = poly_data$annotation
+            annotation = if (language == "English") {
+                poly_data$annotation_en
+            } else {
+                poly_data$annotation_fr
+            }
         )
         basin_labels_df$annotation <- gsub(
             "<br>",
@@ -5197,9 +5257,6 @@ make_ggplot_map <- function(
     }
 
     if (!is.null(point_data)) {
-        # point_data <<- point_data
-        # point_data <- point_data[!is.na(point_data$value), ]
-
         point_data <- point_data[
             order(point_data[[statistic]], decreasing = FALSE, na.last = FALSE),
         ]
@@ -5233,22 +5290,6 @@ make_ggplot_map <- function(
                 bg.r = 0.2
             )
     }
-
-    # if (!is.null(point_data_secondary)) {
-    #     p <- p +
-    #         ggplot2::geom_point(
-    #             data = point_data_secondary,
-    #             ggplot2::aes(
-    #                 x = .data$x,
-    #                 y = .data$y
-    #             ),
-    #             fill = point_data_secondary$fill_colour,
-    #             color = static_style_elements$surveys$color,
-    #             size = static_style_elements$surveys$radius / 2.5,
-    #             shape = 22,
-    #             stroke = static_style_elements$surveys$weight * 0.5
-    #         )
-    # }
 
     # Add communities using pre-calculated adjusted coordinates
     if (!is.null(snowbull_shapefiles$communities)) {
@@ -5393,18 +5434,12 @@ make_ggplot_map <- function(
     )
 
     # Compose title and subtitle for ggplot (no HTML tags, no <br>, no <b>)
-    switch(
-        param_name,
-        "snow water equivalent" = "mm",
-        "precipitation, total" = "mm",
-        "temperature, air" = "\u00B0C",
-    )
-
     # if start_year_historical and end_year_historical are not null, add period of record to subtitle
     if (!is.null(start_year_historical) && !is.null(end_year_historical)) {
         period_of_record <- paste0(
             "(",
             tr("snowbull_reference_period", language),
+            " ",
             start_year_historical,
             "-",
             end_year_historical,
@@ -5414,22 +5449,37 @@ make_ggplot_map <- function(
         period_of_record <- ""
     }
 
-    snowbull_date <- paste(
-        tr("oct", language),
-        year - 1,
-        tr("snowbull_to", language),
-        tr(prev_month, language),
-        year,
-        sep = " "
-    )
+    if (param_name == "snow water equivalent") {
+        snowbull_date <- paste(
+            tr(snowbull_months(month, short = TRUE), language),
+            "1,",
+            year,
+            sep = " "
+        )
+    } else {
+        snowbull_date <- paste(
+            tr("oct", language),
+            year - 1,
+            tr("snowbull_to", language),
+            tr(prev_month, language),
+            year,
+            sep = " "
+        )
+    }
 
     # make the title based on parameter, statistic, and date
 
     subtitle_param <- switch(
         param_name,
-        "snow water equivalent" = tr("snowbull_swe_abbrev", language),
-        "precipitation, total" = tr("snowbull_precipitation", language),
-        "temperature, air" = tr("snowbull_temperature", language),
+        "snow water equivalent" = paste0(
+            tr("snowbull_swe", language),
+            "\n"
+        ),
+        "precipitation, total" = paste0(
+            tr("snowbull_precipitation", language),
+            "\n"
+        ),
+        "temperature, air" = paste0(tr("snowbull_temperature", language), "\n"),
         ""
     )
 
@@ -5456,7 +5506,7 @@ make_ggplot_map <- function(
     )
 
     subtitle <- paste(
-        paste(subtitle_param, subtitle_statistic, sep = " "),
+        paste(subtitle_param, subtitle_statistic, sep = "\n"),
         snowbull_date,
         period_of_record,
         sep = "\n"
@@ -5754,13 +5804,15 @@ make_snowbull_map <- function(
     for (data_type in names(map_data)) {
         dataset <- timeseries_data[[data_type]]
         if (!is.null(dataset)) {
-            map_data[[data_type]] <- get_display_data(
+            df <- get_display_data(
                 dataset = dataset,
                 year = year,
                 month = month,
                 statistic = statistic,
                 language = "English"
             )
+            map_data[[data_type]] <- df[!is.na(df$historic_median), ]
+
             map_data[[data_type]]$fill_colour <- get_state_style_elements(
                 map_data[[data_type]]$display_value,
                 style_elements = dynamic_style_elements

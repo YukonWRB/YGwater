@@ -93,8 +93,8 @@ addContDataUI <- function(id) {
           selectizeInput(
             ns("UTC_offset"),
             "UTC offset of data",
-            choices = seq(-12, 12, by = 1),
-            selected = 0,
+            choices = input_timezone_choices(),
+            selected = format_utc_offset(0L),
             multiple = FALSE
           ),
           splitLayout(
@@ -138,18 +138,42 @@ addContDataUI <- function(id) {
             value = TRUE
           ),
           splitLayout(
-            cellWidths = c("50%", "50%"),
-            textInput(
-              ns("preview_start_datetime"),
-              "Preview start datetime (YYYY-MM-DD HH:MM:SS)", # This message adjusted in reaction to the user's specified UTC offset for their data
-              placeholder = "Default uses earliest new data datetime",
+            cellWidths = c("33%", "33%", "33%"),
+            selectizeInput(
+              ns("preview_utc_offset"),
+              "Preview UTC offset",
+              choices = input_timezone_choices(),
+              selected = format_utc_offset(0L),
+              multiple = FALSE,
               width = "100%"
             ),
-            textInput(
+            shinyWidgets::airDatepickerInput(
+              ns("preview_start_datetime"),
+              "Preview start datetime",
+              value = NULL,
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              update_on = "change",
+              tz = air_datetime_widget_timezone(format_utc_offset(0L)),
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
+            ),
+            shinyWidgets::airDatepickerInput(
               ns("preview_end_datetime"),
-              "Preview end datetime (YYYY-MM-DD HH:MM:SS)", # This message adjusted in reaction to the user's specified UTC offset for their data
-              placeholder = "Default uses latest new data datetime",
-              width = "100%"
+              "Preview end datetime",
+              value = NULL,
+              range = FALSE,
+              multiple = FALSE,
+              timepicker = TRUE,
+              update_on = "change",
+              tz = air_datetime_widget_timezone(format_utc_offset(0L)),
+              timepickerOpts = shinyWidgets::timepickerOptions(
+                minutesStep = 15,
+                timeFormat = "HH:mm"
+              )
             )
           ),
           bslib::input_task_button(
@@ -167,10 +191,27 @@ addContDataUI <- function(id) {
           id = ns("delete_panel"),
           title = "Delete data",
           icon = icon("trash"),
-          textInput(
+          selectizeInput(
+            ns("delete_utc_offset"),
+            "Delete UTC offset",
+            choices = input_timezone_choices(),
+            selected = format_utc_offset(0L),
+            multiple = FALSE,
+            width = "100%"
+          ),
+          shinyWidgets::airDatepickerInput(
             ns("delete_cutoff_datetime"),
-            "Delete data before/after datetime (YYYY-MM-DD HH:MM:SS)",
-            placeholder = "2024-01-01 00:00:00"
+            "Delete data before/after datetime",
+            value = NULL,
+            range = FALSE,
+            multiple = FALSE,
+            timepicker = TRUE,
+            update_on = "change",
+            tz = air_datetime_widget_timezone(format_utc_offset(0L)),
+            timepickerOpts = shinyWidgets::timepickerOptions(
+              minutesStep = 15,
+              timeFormat = "HH:mm"
+            )
           ),
           div(
             actionButton(ns("delete_rows_accordion"), "Delete selected rows"),
@@ -196,6 +237,14 @@ addContDataUI <- function(id) {
           id = ns("approval_panel"),
           title = "Add/modify approval status",
           icon = icon("thumbs-up"),
+          selectizeInput(
+            ns("approval_utc_offset"),
+            "Approval UTC offset",
+            choices = input_timezone_choices(),
+            selected = format_utc_offset(0L),
+            multiple = FALSE,
+            width = "100%"
+          ),
           div(
             actionButton(ns("add_approval_range"), "Add approval range"),
             actionButton(ns("edit_approval_range"), "Edit selected"),
@@ -210,6 +259,14 @@ addContDataUI <- function(id) {
           id = ns("grade_panel"),
           title = "Add/modify grades",
           icon = icon("check"),
+          selectizeInput(
+            ns("grade_utc_offset"),
+            "Grade UTC offset",
+            choices = input_timezone_choices(),
+            selected = format_utc_offset(0L),
+            multiple = FALSE,
+            width = "100%"
+          ),
           div(
             actionButton(ns("add_grade_range"), "Add grade range"),
             actionButton(ns("edit_grade_range"), "Edit selected"),
@@ -224,6 +281,14 @@ addContDataUI <- function(id) {
           id = ns("qualifier_panel"),
           title = "Add/modify qualifiers",
           icon = icon("flag"),
+          selectizeInput(
+            ns("qualifier_utc_offset"),
+            "Qualifier UTC offset",
+            choices = input_timezone_choices(),
+            selected = format_utc_offset(0L),
+            multiple = FALSE,
+            width = "100%"
+          ),
           div(
             actionButton(ns("add_qualifier_range"), "Add qualifier range"),
             actionButton(ns("edit_qualifier_range"), "Edit selected"),
@@ -416,32 +481,21 @@ addContData <- function(id, language) {
       }
     })
 
-    # Observe timezone selection and updated labels for preview_start_datetime and preview_end_datetime to reflect the user's specified timezone for the data
-    observeEvent(input$UTC_offset, {
-      offset <- as.numeric(input$UTC_offset)
-      if (is.na(offset) || offset == 0) {
-        start_label <- "Preview start datetime (YYYY-MM-DD HH:MM:SS)"
-        end_label <- "Preview end datetime (YYYY-MM-DD HH:MM:SS)"
-      } else {
-        offset_str <- if (offset > 0) {
-          paste0("+", offset)
-        } else {
-          as.character(offset)
-        }
-        start_label <- paste0(
-          "Preview start datetime (YYYY-MM-DD HH:MM:SS, UTC",
-          offset_str,
-          ")"
-        )
-        end_label <- paste0(
-          "Preview end datetime (YYYY-MM-DD HH:MM:SS, UTC",
-          offset_str,
-          ")"
-        )
+    shift_datetime_inputs <- function(input_ids, tz_name) {
+      for (input_id in input_ids) {
+        shift_air_datetime_input_timezone(session, input, input_id, tz_name)
       }
-      updateTextInput(session, "preview_start_datetime", label = start_label)
-      updateTextInput(session, "preview_end_datetime", label = end_label)
-    })
+    }
+
+    shift_class_modal_inputs <- function(class_name, tz_name) {
+      shift_datetime_inputs(
+        c(
+          paste0(class_name, "_modal_start"),
+          paste0(class_name, "_modal_end")
+        ),
+        tz_name
+      )
+    }
 
     ### Observe the owner selectizeInput for new owners ############
     addOrgModal <- function(name) {
@@ -679,11 +733,13 @@ addContData <- function(id, language) {
 
       ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
+        out <- readxl::read_xlsx(
+          input$file$datapath,
+          sheet = 1,
+          skip = starting_row - 1
+        ) |>
+          as.data.frame()
 
-        out <- readxl::read_xlsx(input$file$datapath, sheet = 1,
-                          skip = starting_row - 1) |> 
-          as.data.frame() 
-        
         return(out)
       } else if (ext == "csv") {
         # .csv files more complex due to ungraceful handling of non-equal
@@ -937,16 +993,165 @@ addContData <- function(id, language) {
 
     prepare_table_data <- function(df) {
       df <- df[, c("datetime", "value")]
-      
-      df$datetime <- if(inherits(df$datetime, "POSIXct")){
+
+      df$datetime <- if (inherits(df$datetime, "POSIXct")) {
         format(df$datetime, "%Y-%m-%d %H:%M:%S")
       } else {
         as.character(df$datetime)
       }
-      
+
       df$value <- suppressWarnings(as.numeric(df$value))
       df
     }
+
+    selected_offset_tz <- function(value, default = input$UTC_offset) {
+      fallback <- normalize_input_timezone(
+        default,
+        default = format_utc_offset(0L)
+      )
+      normalize_input_timezone(value, default = fallback)
+    }
+
+    selected_offset_seconds <- function(value, default = input$UTC_offset) {
+      parse_utc_offset_minutes(
+        selected_offset_tz(value, default),
+        default = "UTC+00:00"
+      ) *
+        60
+    }
+
+    class_offset_tz <- function(class_name) {
+      selected_offset_tz(input[[paste0(class_name, "_utc_offset")]])
+    }
+
+    table_datetimes_to_utc <- function(x, tz_name = input$UTC_offset) {
+      out <- parse_datetime(x)
+      valid_idx <- !is.na(out)
+      if (any(valid_idx)) {
+        out[valid_idx] <- out[valid_idx] -
+          selected_offset_seconds(tz_name, default = format_utc_offset(0L))
+      }
+      attr(out, "tzone") <- "UTC"
+      out
+    }
+
+    format_utc_datetimes_for_display <- function(datetime_value, tz_name) {
+      utc_values <- coerce_utc_datetime(datetime_value)
+      out <- rep(NA_character_, length(utc_values))
+      valid_idx <- !is.na(utc_values)
+      if (any(valid_idx)) {
+        display_values <- utc_values[valid_idx] +
+          selected_offset_seconds(tz_name, default = format_utc_offset(0L))
+        out[valid_idx] <- format(
+          display_values,
+          "%Y-%m-%d %H:%M:%S",
+          tz = "UTC"
+        )
+      }
+      out
+    }
+
+    shift_display_datetime_strings <- function(x, from_tz, to_tz) {
+      out <- as.character(x)
+      utc_values <- table_datetimes_to_utc(x, from_tz)
+      valid_idx <- !is.na(utc_values)
+      if (any(valid_idx)) {
+        out[valid_idx] <- format_utc_datetimes_for_display(
+          utc_values[valid_idx],
+          to_tz
+        )
+      }
+      out
+    }
+
+    previous_data_timezone <- reactiveVal(format_utc_offset(0L))
+
+    observeEvent(input$UTC_offset, {
+      master_tz <- selected_offset_tz(
+        input$UTC_offset,
+        default = format_utc_offset(0L)
+      )
+      previous_tz <- previous_data_timezone()
+
+      if (!identical(previous_tz, master_tz) && nrow(data$df) > 0) {
+        data$df$datetime <- shift_display_datetime_strings(
+          data$df$datetime,
+          previous_tz,
+          master_tz
+        )
+      }
+
+      previous_data_timezone(master_tz)
+      shift_datetime_inputs("delete_cutoff_datetime", master_tz)
+
+      for (input_id in c(
+        "preview_utc_offset",
+        "delete_utc_offset",
+        "approval_utc_offset",
+        "grade_utc_offset",
+        "qualifier_utc_offset"
+      )) {
+        updateSelectizeInput(session, input_id, selected = master_tz)
+      }
+    })
+
+    observeEvent(
+      input$preview_utc_offset,
+      {
+        shift_datetime_inputs(
+          c("preview_start_datetime", "preview_end_datetime"),
+          selected_offset_tz(input$preview_utc_offset)
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$delete_utc_offset,
+      {
+        shift_datetime_inputs(
+          "delete_cutoff_datetime",
+          selected_offset_tz(
+            input$delete_utc_offset,
+            default = input$UTC_offset
+          )
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$approval_utc_offset,
+      {
+        shift_class_modal_inputs(
+          "approval",
+          class_offset_tz("approval")
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$grade_utc_offset,
+      {
+        shift_class_modal_inputs(
+          "grade",
+          class_offset_tz("grade")
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$qualifier_utc_offset,
+      {
+        shift_class_modal_inputs(
+          "qualifier",
+          class_offset_tz("qualifier")
+        )
+      },
+      ignoreInit = TRUE
+    )
 
     class_ranges <- reactiveValues(
       grade = data.frame(
@@ -990,7 +1195,7 @@ addContData <- function(id, language) {
       if (!(class_name %in% names(df)) || nrow(df) == 0) {
         return(class_ranges[[class_name]][0, , drop = FALSE])
       }
-      dt <- parse_datetime(df$datetime)
+      dt <- table_datetimes_to_utc(df$datetime, input$UTC_offset)
       vals <- trimws(as.character(df[[class_name]]))
       ok <- !is.na(dt) & nzchar(vals)
       if (!any(ok)) {
@@ -1133,7 +1338,7 @@ addContData <- function(id, language) {
           new_df[[nm]] <- ""
         }
       }
-      dt <- parse_datetime(new_df$datetime)
+      dt <- table_datetimes_to_utc(new_df$datetime, input$UTC_offset)
       if (!any(!is.na(dt))) {
         data$df <- new_df
         return()
@@ -1174,6 +1379,17 @@ addContData <- function(id, language) {
     range_table <- function(class_name) {
       out <- class_ranges[[class_name]]
       out$description <- code_to_desc(class_name, out$code)
+      if (nrow(out) > 0) {
+        tz_name <- class_offset_tz(class_name)
+        out$start_datetime <- format_utc_datetimes_for_display(
+          out$start_datetime,
+          tz_name
+        )
+        out$end_datetime <- format_utc_datetimes_for_display(
+          out$end_datetime,
+          tz_name
+        )
+      }
       out
     }
 
@@ -1253,15 +1469,45 @@ addContData <- function(id, language) {
           selected = edit_row$code,
           multiple = FALSE
         ),
-        textInput(
+        shinyWidgets::airDatepickerInput(
           ns(paste0(class_name, "_modal_start")),
-          "Start datetime (YYYY-MM-DD HH:MM:SS)",
-          value = edit_row$start_datetime
+          "Start datetime",
+          value = if (nzchar(edit_row$start_datetime)) {
+            coerce_utc_datetime(edit_row$start_datetime)
+          } else {
+            NULL
+          },
+          range = FALSE,
+          multiple = FALSE,
+          timepicker = TRUE,
+          update_on = "change",
+          tz = air_datetime_widget_timezone(isolate(class_offset_tz(
+            class_name
+          ))),
+          timepickerOpts = shinyWidgets::timepickerOptions(
+            minutesStep = 15,
+            timeFormat = "HH:mm"
+          )
         ),
-        textInput(
+        shinyWidgets::airDatepickerInput(
           ns(paste0(class_name, "_modal_end")),
-          "End datetime (YYYY-MM-DD HH:MM:SS)",
-          value = edit_row$end_datetime
+          "End datetime",
+          value = if (nzchar(edit_row$end_datetime)) {
+            coerce_utc_datetime(edit_row$end_datetime)
+          } else {
+            NULL
+          },
+          range = FALSE,
+          multiple = FALSE,
+          timepicker = TRUE,
+          update_on = "change",
+          tz = air_datetime_widget_timezone(isolate(class_offset_tz(
+            class_name
+          ))),
+          timepickerOpts = shinyWidgets::timepickerOptions(
+            minutesStep = 15,
+            timeFormat = "HH:mm"
+          )
         ),
         footer = tagList(
           modalButton("Cancel"),
@@ -1294,8 +1540,22 @@ addContData <- function(id, language) {
         })
         observeEvent(input[[paste0("save_", class_name, "_modal")]], {
           code <- as.character(input[[paste0(class_name, "_modal_code")]])
-          st <- as.character(input[[paste0(class_name, "_modal_start")]])
-          en <- as.character(input[[paste0(class_name, "_modal_end")]])
+          st_value <- coerce_utc_datetime(
+            input[[paste0(class_name, "_modal_start")]]
+          )
+          en_value <- coerce_utc_datetime(
+            input[[paste0(class_name, "_modal_end")]]
+          )
+          st <- if (length(st_value) && !is.na(st_value[[1]])) {
+            format(st_value[[1]], "%Y-%m-%d %H:%M:%S", tz = "UTC")
+          } else {
+            ""
+          }
+          en <- if (length(en_value) && !is.na(en_value[[1]])) {
+            format(en_value[[1]], "%Y-%m-%d %H:%M:%S", tz = "UTC")
+          } else {
+            ""
+          }
           new_row <- data.frame(
             code = code,
             description = code_to_desc(class_name, code),
@@ -1491,7 +1751,10 @@ addContData <- function(id, language) {
 
     new_data_row <- function() {
       data.frame(
-        datetime = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+        datetime = format_utc_datetimes_for_display(
+          coerce_utc_datetime(Sys.time()),
+          selected_offset_tz(input$UTC_offset)
+        )[[1]],
         value = numeric(),
         grade = character(),
         approval = character(),
@@ -1581,16 +1844,16 @@ addContData <- function(id, language) {
         return(invisible(NULL))
       }
 
-      cutoff <- parse_datetime(input$delete_cutoff_datetime)
+      cutoff <- scalar_utc_datetime(input$delete_cutoff_datetime)
       if (is.na(cutoff)) {
         showNotification(
-          "Invalid cutoff datetime. Use format YYYY-MM-DD HH:MM:SS.",
+          "Invalid cutoff datetime.",
           type = "error"
         )
         return(invisible(NULL))
       }
 
-      parsed_dt <- parse_datetime(data$df$datetime)
+      parsed_dt <- table_datetimes_to_utc(data$df$datetime, input$UTC_offset)
       if (any(is.na(parsed_dt))) {
         showNotification(
           "Cannot apply cutoff: one or more datetime values in the table are invalid.",
@@ -1620,7 +1883,7 @@ addContData <- function(id, language) {
       apply_datetime_cutoff("after")
     })
 
-    data_table_proxy <- DT::dataTableProxy(ns("data_table"))
+    data_table_proxy <- DT::dataTableProxy("data_table")
 
     output$data_table <- DT::renderDT(
       {
@@ -1659,16 +1922,23 @@ addContData <- function(id, language) {
       req(timeseries())
       req(nrow(data$df) > 0)
 
-      parsed_dt <- parse_datetime(data$df$datetime)
+      parsed_dt <- table_datetimes_to_utc(data$df$datetime, input$UTC_offset)
       parsed_val <- suppressWarnings(as.numeric(data$df$value))
       valid_idx <- !(is.na(parsed_dt) | is.na(parsed_val))
       req(any(valid_idx))
 
       df_new <- data$df[valid_idx, , drop = FALSE]
-      df_new$datetime <- parsed_dt[valid_idx] -
-        (as.numeric(input$UTC_offset) * 3600)
+      df_new$datetime <- parsed_dt[valid_idx]
       df_new$value <- parsed_val[valid_idx]
       df_new$source <- "New upload"
+      preview_offset_seconds <- selected_offset_seconds(
+        input$preview_utc_offset,
+        default = input$UTC_offset
+      )
+      preview_tz <- selected_offset_tz(
+        input$preview_utc_offset,
+        default = input$UTC_offset
+      )
 
       if ("grade" %in% names(df_new)) {
         df_new$grade <- as.character(df_new$grade)
@@ -1683,10 +1953,13 @@ addContData <- function(id, language) {
       range_start <- min(df_new$datetime, na.rm = TRUE)
       range_end <- max(df_new$datetime, na.rm = TRUE)
 
-      custom_start <- parse_datetime(input$preview_start_datetime)
+      custom_start <- scalar_utc_datetime(input$preview_start_datetime)
       if (!is.na(custom_start)) {
-        custom_start <- custom_start - (as.numeric(input$UTC_offset) * 3600)
         range_start <- min(range_start, custom_start)
+      }
+      custom_end <- scalar_utc_datetime(input$preview_end_datetime)
+      if (!is.na(custom_end)) {
+        range_end <- max(range_end, custom_end)
       }
 
       extra <- dbGetQueryDT(
@@ -1707,18 +1980,32 @@ addContData <- function(id, language) {
           "SELECT date AS datetime, min, max, q25, q75 FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date >= $2 AND date <= $3",
           params = list(timeseries(), range_start, range_end + 86400)
         )
-        tz <- dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT timezone_daily_calc FROM timeseries WHERE timeseries_id = $1",
-          params = list(timeseries())
-        )$timezone_daily_calc[[1]]
-        hist_out$datetime <- as.POSIXct(hist_out$datetime, tz = "UTC") -
-          tz * 3600
+      }
+
+      df_new$datetime <- df_new$datetime + preview_offset_seconds
+      if (!is.null(extra)) {
+        extra$datetime <- coerce_utc_datetime(extra$datetime) +
+          preview_offset_seconds
+      }
+      if (!is.null(hist_out) && nrow(hist_out) > 0) {
+        hist_out$datetime <- coerce_utc_datetime(hist_out$datetime) +
+          preview_offset_seconds
       }
 
       parameter <- dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT param_name, unit_default, plot_default_y_orientation FROM public.parameters JOIN continuous.timeseries ON parameters.parameter_id = timeseries.parameter_id WHERE timeseries.timeseries_id = $1",
+        paste(
+          "SELECT p.param_name,",
+          YGwater:::ac_parameter_unit_select_sql(
+            session$userData$AquaCache,
+            "p",
+            "unit_default"
+          ),
+          ", p.plot_default_y_orientation",
+          "FROM public.parameters p",
+          "JOIN continuous.timeseries ts ON p.parameter_id = ts.parameter_id",
+          "WHERE ts.timeseries_id = $1"
+        ),
         params = list(timeseries())
       )
 
@@ -1726,7 +2013,9 @@ addContData <- function(id, language) {
         new_data = df_new,
         db = extra,
         historic = hist_out,
-        parameter = parameter
+        parameter = parameter,
+        display_offset_seconds = preview_offset_seconds,
+        display_tz = preview_tz
       )
     })
 
@@ -1738,7 +2027,11 @@ addContData <- function(id, language) {
         df = data$df,
         grade = class_ranges$grade,
         approval = class_ranges$approval,
-        qualifier = class_ranges$qualifier
+        qualifier = class_ranges$qualifier,
+        preview_historic_range = input$preview_historic_range,
+        preview_start_datetime = input$preview_start_datetime,
+        preview_end_datetime = input$preview_end_datetime,
+        preview_utc_offset = input$preview_utc_offset
       )
     })
 
@@ -1756,7 +2049,7 @@ addContData <- function(id, language) {
       }
       div(
         style = "color:#b30000;margin-top:6px;",
-        "Newly entered data has changed since the last refresh plot action."
+        "Newly entered data or preview settings have changed since the last refresh plot action."
       )
     })
 
@@ -1925,10 +2218,10 @@ addContData <- function(id, language) {
           if (nrow(rr) == 0) {
             return(invisible(NULL))
           }
-          sdt <- parse_datetime(rr$start_datetime) -
-            (as.numeric(input$UTC_offset) * 3600)
-          edt <- parse_datetime(rr$end_datetime) -
-            (as.numeric(input$UTC_offset) * 3600)
+          sdt <- coerce_utc_datetime(rr$start_datetime) +
+            pv$display_offset_seconds
+          edt <- coerce_utc_datetime(rr$end_datetime) +
+            pv$display_offset_seconds
           rr$start_dt <- pmax(sdt, mindt)
           rr$end_dt <- pmin(edt, maxdt)
 
@@ -2093,7 +2386,10 @@ addContData <- function(id, language) {
         plotly::layout(
           title = NULL,
           xaxis = list(
-            title = list(standoff = 0),
+            title = list(
+              text = paste0("Datetime (", pv$display_tz, ")"),
+              standoff = 0
+            ),
             showgrid = FALSE,
             showline = TRUE,
             tickformat = "%b %-d '%y",
@@ -2211,7 +2507,10 @@ addContData <- function(id, language) {
         return(FALSE)
       }
       # Make sure datetime is in POSIXct format or can be converted to it
-      parsed_datetime <- parse_datetime(data$df$datetime)
+      parsed_datetime <- table_datetimes_to_utc(
+        data$df$datetime,
+        input$UTC_offset
+      )
       if (any(is.na(parsed_datetime))) {
         showNotification(
           'Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.',
@@ -2233,8 +2532,7 @@ addContData <- function(id, language) {
       tryCatch(
         {
           upload_data <- data$df
-          upload_data$datetime <- data$parsed_datetime -
-            (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC 0
+          upload_data$datetime <- data$parsed_datetime
           upload_data$value <- data$parsed_value
           upload_data$owner <- as.integer(input$owner)
           upload_data$contributor <- as.integer(input$contributor)
@@ -2304,8 +2602,7 @@ addContData <- function(id, language) {
       tryCatch(
         {
           upload_data <- data$df
-          upload_data$datetime <- data$parsed_datetime -
-            (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
+          upload_data$datetime <- data$parsed_datetime
           upload_data$value <- data$parsed_value
           upload_data$owner <- as.integer(input$owner)
           upload_data$contributor <- as.integer(input$contributor)
@@ -2376,8 +2673,7 @@ addContData <- function(id, language) {
       tryCatch(
         {
           upload_data <- data$df
-          upload_data$datetime <- data$parsed_datetime -
-            (as.numeric(input$UTC_offset) * 3600) # Adjust datetime to UTC
+          upload_data$datetime <- data$parsed_datetime
           upload_data$value <- data$parsed_value
           upload_data$owner <- as.integer(input$owner)
           upload_data$contributor <- as.integer(input$contributor)

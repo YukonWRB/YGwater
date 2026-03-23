@@ -188,13 +188,7 @@ hydrometDiscrete <- function(
       )
     } else {
       tsid <- exists$timeseries_id
-      units <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT unit_default FROM parameters WHERE parameter_id = ",
-          parameter_code
-        )
-      )[1, 1]
+      units <- ac_get_parameter_unit(con, parameter_code)
     }
 
     # Get the data ------------------------------------------------------------
@@ -382,11 +376,17 @@ hydrometDiscrete <- function(
       # Ensure ref_period_start_datetime and ref_period_end_datetime are Date objects
       ref_period_start_datetime <- as.Date(ref_period_start_datetime)
       ref_period_end_datetime <- as.Date(ref_period_end_datetime)
+
       # Filter all_discrete for datetimes within the reference period
       stats_ref <- all_discrete[
         all_discrete$datetime >= ref_period_start_datetime &
           all_discrete$datetime <= ref_period_end_datetime,
       ]
+
+      historical_record_ref <- all_discrete[
+        all_discrete$datetime < startDay,
+      ]
+
       stats_discrete <- stats_ref %>%
         dplyr::group_by(.data$month) %>%
         dplyr::summarise(
@@ -426,10 +426,10 @@ hydrometDiscrete <- function(
             )
         )
       # Calculate all-time high/low using all data
-      ath <- all_discrete %>%
+      ath <- historical_record_ref %>%
         dplyr::group_by(.data$month) %>%
         dplyr::summarise(value = max(.data$value, na.rm = TRUE), type = "ath")
-      atl <- all_discrete %>%
+      atl <- historical_record_ref %>%
         dplyr::group_by(.data$month) %>%
         dplyr::summarise(value = min(.data$value, na.rm = TRUE), type = "atl")
       stats_discrete <- dplyr::bind_rows(stats_discrete, ath, atl)
@@ -689,7 +689,7 @@ hydrometDiscrete <- function(
     if (
       !is.null(ref_period_start_datetime) && !is.null(ref_period_end_datetime)
     ) {
-      # Only plot ATH, ATL, and Median
+      # Only plot the summary lines that should appear in the legend.
       stats_to_plot <- stats_discrete[
         stats_discrete$type %in% c("ath", "atl"),
       ]
@@ -706,14 +706,21 @@ hydrometDiscrete <- function(
         ) +
         ggplot2::scale_color_manual(
           name = "",
+          breaks = c("ath", "atl"),
           labels = c("All-time High", "All-time Low"),
-          values = c("#0097A9", "#834333")
+          values = c(
+            "ath" = "#0097A9",
+            "atl" = "#834333"
+          )
         ) +
         ggnewscale::new_scale_color()
     } else {
+      stats_to_plot <- stats_discrete[
+        stats_discrete$type %in% c("max", "median", "min"),
+      ]
       plot <- plot +
         ggplot2::geom_segment(
-          data = stats_discrete,
+          data = stats_to_plot,
           linewidth = plot_scale * 1.5,
           ggplot2::aes(
             color = .data$type,
@@ -724,8 +731,13 @@ hydrometDiscrete <- function(
         ) +
         ggplot2::scale_color_manual(
           name = "",
+          breaks = c("max", "median", "min"),
           labels = c("Maximum", "Median", "Minimum"),
-          values = c("#0097A9", "#7A9A01", "#834333")
+          values = c(
+            "max" = "#0097A9",
+            "median" = "#7A9A01",
+            "min" = "#834333"
+          )
         ) +
         ggnewscale::new_scale_color()
     }

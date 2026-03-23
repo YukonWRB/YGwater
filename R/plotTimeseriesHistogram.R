@@ -661,29 +661,52 @@ plotTimeseriesHistogram <- function(
       "#DC4405"
     ))(length(year_levels)))
 
-    p <- plotly::plot_ly(type = "bar")
+    # Setting p <- NULL here instead of creating a blank plotly object, because a blank plotly object is by default assigned a continuous trace type. When followed by plotting discrete data, results in a harmeless but annoying warning.
+    p <- NULL
     for (i in seq_along(year_levels)) {
       yv <- year_levels[i]
       d <- plot_data[as.character(year_group) == yv]
-      p <- plotly::add_trace(
-        p,
-        data = d,
-        x = ~bin_label,
-        y = ~value,
-        text = if (isTRUE(completeness_label)) ~completeness_text else NULL,
-        textposition = if (isTRUE(completeness_label)) "outside" else NULL,
-        textangle = if (isTRUE(completeness_label)) label_angle else NULL,
-        textfont = if (isTRUE(completeness_label)) {
-          list(size = label_size)
-        } else {
-          NULL
-        },
-        name = yv,
-        marker = list(
-          color = colors[i],
-          line = list(width = 1 * line_scale, color = colors[i])
+      if (is.null(p)) {
+        p <- plotly::plot_ly(
+          data = d,
+          x = ~bin_label,
+          y = ~value,
+          type = "bar",
+          text = if (isTRUE(completeness_label)) ~completeness_text else NULL,
+          textposition = if (isTRUE(completeness_label)) "outside" else NULL,
+          textangle = if (isTRUE(completeness_label)) label_angle else NULL,
+          textfont = if (isTRUE(completeness_label)) {
+            list(size = label_size)
+          } else {
+            NULL
+          },
+          name = yv,
+          marker = list(
+            color = colors[i],
+            line = list(width = 1 * line_scale, color = colors[i])
+          )
         )
-      )
+      } else {
+        p <- plotly::add_trace(
+          p,
+          data = d,
+          x = ~bin_label,
+          y = ~value,
+          text = if (isTRUE(completeness_label)) ~completeness_text else NULL,
+          textposition = if (isTRUE(completeness_label)) "outside" else NULL,
+          textangle = if (isTRUE(completeness_label)) label_angle else NULL,
+          textfont = if (isTRUE(completeness_label)) {
+            list(size = label_size)
+          } else {
+            NULL
+          },
+          name = yv,
+          marker = list(
+            color = colors[i],
+            line = list(width = 1 * line_scale, color = colors[i])
+          )
+        )
+      }
     }
 
     p <- plotly::layout(
