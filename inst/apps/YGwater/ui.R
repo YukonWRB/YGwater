@@ -244,7 +244,7 @@ app_ui <- function(request) {
             )
           }
         ),
-        if (config$network) {
+        if (!config$public) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
             value = "reports",
@@ -258,22 +258,29 @@ app_ui <- function(request) {
               value = "waterInfo",
               uiOutput("waterInfo_ui")
             ),
+            # WQ report depends on EQWin database access, so only show if on YG internal network
+            if (config$network_check) {
+              nav_panel(
+                title = uiOutput("reportsNavWQTitle"),
+                value = "WQReport",
+                uiOutput("WQReport_ui")
+              )
+            },
+            # Don't show the snow bulletin menu if not deployed on YG internal network
+            if (config$network_check) {
+              nav_panel(
+                title = uiOutput("reportsNavSnowbullTitle"),
+                value = "snowBulletin",
+                uiOutput("snowBulletin_ui")
+              )
+            },
             nav_panel(
-              title = uiOutput("reportsNavWQTitle"),
-              value = "WQReport",
-              uiOutput("WQReport_ui")
-            ),
-            nav_panel(
-              title = uiOutput("reportsNavSnowbullTitle"),
-              value = "snowBulletin",
-              uiOutput("snowBulletin_ui")
-            ),
-            nav_panel(title = "Water Temperature",
-                      value = "waterTemp",
-                      uiOutput("waterTemp_ui")
+              title = uiOutput("reportsNavWaterTempTitle"),
+              value = "waterTemp",
+              uiOutput("waterTemp_ui")
             )
           ) # End reports nav_menu
-        }, # End if config$network
+        }, # End if !config$public for reports nav_menu
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",

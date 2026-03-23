@@ -1504,6 +1504,9 @@ app_server <- function(input, output, session) {
     output$reportsNavSnowbullTitle <- renderUI({
       tr("reports_snowbull", languageSelection$language)
     })
+    output$reportsNavWaterTempTitle <- renderUI({
+      tr("reports_waterTemp", languageSelection$language)
+    })
 
     output$dataNavMenuTitle <- renderUI({
       tr("data", languageSelection$language)
@@ -2874,7 +2877,11 @@ app_server <- function(input, output, session) {
         output$waterTemp_ui <- renderUI(waterTempUIMod("waterTemp"))
         ui_loaded$waterTemp <- TRUE
         # Call the server
-        waterTempMod("waterTemp", language = languageSelection, inputs = NULL, windowDims = windowDims)
+        waterTempMod(
+          "waterTemp",
+          language = languageSelection,
+          inputs = NULL
+        )
       }
     }
     if (input$navbar == "WQReport") {

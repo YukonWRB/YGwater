@@ -16,6 +16,7 @@ reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométr
 reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
 reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
+reports_waterTemp,reportsNavWaterTempTitle,Water temperature,Température de l'eau
 data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
