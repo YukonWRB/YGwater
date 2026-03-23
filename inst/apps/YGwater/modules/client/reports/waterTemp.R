@@ -473,7 +473,13 @@ waterTempMod <- function(id, language, windowDims, inputs){
               column(
                 width = 6,
                 selectizeInput(ns("thresholds_select"), label = "Thresholds", choices = c("20 °C" = 20, "18 °C" = 18, "13 °C" = 13),
-                               multiple = TRUE)
+                               multiple = TRUE),
+                div(br()),
+                div(strong("Plot Description:")),
+                div("Blue: Highlighted Day of the Year Mean"),
+                div("Grey Line: Non-Highlighted Day of the Year Mean"),
+                div("Grey Ribbon: Non-Highlighted Day of the Year Range")
+               
               )
             ),
             fluidRow(
@@ -591,7 +597,8 @@ waterTempMod <- function(id, language, windowDims, inputs){
             daily_max_plot = save_plots$daily_max_plot,
             seven_day_max_plot = save_plots$seven_day_max_plot,
             all_ts = raw_ts(),
-            site_name = unique(historic()$name)
+            site_name = unique(historic()$name),
+            highlight_range = input$highlight_range
           )
           
           
@@ -1367,7 +1374,7 @@ waterTempMod <- function(id, language, windowDims, inputs){
       
       out <- raw_ts() |> 
         dplyr::mutate(date = as.Date(datetime)) |> 
-        dplyr::group_by(date, name) |> 
+        dplyr::group_by(date, `name`) |> 
         dplyr::summarise(daily_mean = mean(value_corrected, na.rm = TRUE),
                          daily_max = max(value_corrected, na.rm = TRUE),
                          daily_min = min(value_corrected, na.rm = TRUE)) |> 
@@ -1414,7 +1421,7 @@ waterTempMod <- function(id, language, windowDims, inputs){
                   size = 1.2) +
         
         labs(
-          title = paste0(unique(historic()$name), "\n"," - Mean Temperature"),
+          title = paste0(unique(historic()$name), "\n"," - Daily Mean Temperature"),
           x = "Date",
           y = "Temperature (°C)"
         ) +
@@ -1424,7 +1431,8 @@ waterTempMod <- function(id, language, windowDims, inputs){
         theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 13),
               axis.text.y = element_text(size = 13),
               axis.title = element_text(size = 16),
-              plot.title = element_text(size = 18))
+              plot.title = element_text(size = 18),
+              axis.line = element_line())
       
       if("20" %in% input$thresholds_select){
         out <- out +
@@ -1468,7 +1476,7 @@ waterTempMod <- function(id, language, windowDims, inputs){
                   color = "blue",
                   size = 1.2) +
         labs(
-          title = paste0(unique(historic()$name), "\n"," - Max Temperature"),
+          title = paste0(unique(historic()$name), "\n"," - Daily Max Temperature"),
           x = "Date",
           y = "Temperature (°C)"
         ) +
@@ -1478,7 +1486,8 @@ waterTempMod <- function(id, language, windowDims, inputs){
         theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 13),
               axis.text.y = element_text(size = 13),
               axis.title = element_text(size = 16),
-              plot.title = element_text(size = 18))
+              plot.title = element_text(size = 18),
+              axis.line = element_line())
       
       if("20" %in% input$thresholds_select){
         out <- out +
@@ -1532,7 +1541,8 @@ waterTempMod <- function(id, language, windowDims, inputs){
         theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 13),
               axis.text.y = element_text(size = 13),
               axis.title = element_text(size = 16),
-              plot.title = element_text(size = 18))
+              plot.title = element_text(size = 18),
+              axis.line = element_line())
       
       if("20" %in% input$thresholds_select){
         out <- out +
@@ -1562,7 +1572,6 @@ waterTempMod <- function(id, language, windowDims, inputs){
     })
     
     observeEvent(input$make_plot, {
-      print(selected_timeseries_ids())
       if (is.null(selected_timeseries_ids())) {
         showModal(modalDialog(
           title = tr("error", language$language),
