@@ -801,7 +801,7 @@ deploy_recover <- function(id, language) {
           lz.z_meters,
           p.param_name AS parameter_name,
           ",
-          YGwater:::ac_parameter_unit_select_sql(
+          ac_parameter_unit_select_sql(
             session$userData$AquaCache,
             "p",
             "units"

@@ -74,7 +74,7 @@ discData <- function(id, language, inputs) {
     }
 
     parameter_unit_sql <- function(output_alias = "unit", alias = "p") {
-      YGwater:::ac_parameter_unit_select_sql(
+      ac_parameter_unit_select_sql(
         session$userData$AquaCache,
         alias,
         output_alias

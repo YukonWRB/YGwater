@@ -326,7 +326,7 @@ addGuidelines <- function(id, language) {
         session$userData$AquaCache,
         paste0(
           "SELECT g.guideline_id, g.guideline_name, gp.publisher_name AS publisher, gs.series_name AS series, g.general_notes, g.applicability_notes, g.reference, p.param_name AS parameter, ",
-          YGwater:::ac_parameter_unit_select_sql(
+          ac_parameter_unit_select_sql(
             session$userData$AquaCache,
             "p",
             "units"
@@ -397,7 +397,7 @@ LEFT JOIN (
         session$userData$AquaCache,
         paste(
           "SELECT p.parameter_id, p.param_name,",
-          YGwater:::ac_parameter_unit_select_sql(
+          ac_parameter_unit_select_sql(
             session$userData$AquaCache,
             "p",
             "unit_default"

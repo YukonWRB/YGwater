@@ -909,7 +909,20 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     current_plot_resolution <- reactive({
-      normalize_plot_resolution(input$plot_resolution)
+      if (
+        is.null(input$plot_resolution) ||
+          length(input$plot_resolution) == 0 ||
+          is.na(input$plot_resolution[[1]])
+      ) {
+        return("day")
+      }
+
+      resolution <- tolower(as.character(input$plot_resolution[[1]]))
+      if (!(resolution %in% c("max", "hour", "day"))) {
+        return("day")
+      }
+
+      resolution
     })
 
     selected_historic_range_metadata <- reactive({

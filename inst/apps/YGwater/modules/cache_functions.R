@@ -18,7 +18,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         con,
         paste(
           "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-          YGwater:::ac_parameter_unit_select_sql(con, "p", "unit"),
+          ac_parameter_unit_select_sql(con, "p", "unit"),
           "FROM parameters p",
           "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries)",
           "ORDER BY p.param_name ASC;"
@@ -188,7 +188,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
         con,
         paste(
           "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-          YGwater:::ac_parameter_unit_select_sql(con, "p", "unit"),
+          ac_parameter_unit_select_sql(con, "p", "unit"),
           "FROM parameters p",
           "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM results)",
           "ORDER BY p.param_name ASC;"
@@ -364,7 +364,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
           con,
           paste(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-            YGwater:::ac_parameter_unit_select_sql(con, "p", "unit_default"),
+            ac_parameter_unit_select_sql(con, "p", "unit_default"),
             ", pr.group_id, pr.sub_group_id",
             "FROM public.parameters AS p",
             "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
@@ -432,7 +432,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
           con,
           paste(
             "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr,",
-            YGwater:::ac_parameter_unit_select_sql(con, "p", "unit_default"),
+            ac_parameter_unit_select_sql(con, "p", "unit_default"),
             ", pr.group_id, pr.sub_group_id",
             "FROM public.parameters AS p",
             "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id",

@@ -29,7 +29,7 @@ test_that("parameter unit SQL supports legacy text unit columns", {
   fake_con <- structure(list(), class = "mock_connection")
 
   expr <- testthat::with_mocked_bindings(
-    YGwater:::ac_parameter_unit_select_sql(fake_con, "p", "unit"),
+    ac_parameter_unit_select_sql(fake_con, "p", "unit"),
     ac_db_column_info = function(...) {
       data.frame(
         column_name = c("unit_default", "unit_solid"),
@@ -52,7 +52,7 @@ test_that("parameter unit SQL supports normalized unit id columns", {
   fake_con <- structure(list(), class = "mock_connection")
 
   expr <- testthat::with_mocked_bindings(
-    YGwater:::ac_parameter_unit_select_sql(fake_con, "p", "unit"),
+    ac_parameter_unit_select_sql(fake_con, "p", "unit"),
     ac_db_column_info = function(...) {
       data.frame(
         column_name = c("unit_default", "unit_solid"),
