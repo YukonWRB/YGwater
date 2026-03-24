@@ -981,6 +981,24 @@ contPlot <- function(id, language, windowDims, inputs) {
       )
     })
 
+    historic_range_meaningless_note <- function(
+      aggregation_types,
+      resolution,
+      record_rate_seconds = NULL,
+      lang = "en"
+    ) {
+      if (
+        !historic_range_is_meaningless(
+          aggregation_types = aggregation_types,
+          resolution = resolution,
+          record_rate_seconds = record_rate_seconds
+        )
+      ) {
+        return(NULL)
+      }
+      return(tr("plot_hist_range_meaningless", lang))
+    }
+
     historic_range_ui_state <- reactive({
       plot_type <- current_plot_type()
       if (!(plot_type %in% c("timeseries", "timeseries_all", "overlap_yrs"))) {

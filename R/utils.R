@@ -573,42 +573,6 @@ historic_range_is_meaningless <- function(
   any(aggregation_types %in% c("sum"))
 }
 
-historic_range_meaningless_note <- function(
-  aggregation_types,
-  resolution,
-  record_rate_seconds = NULL,
-  lang = "en"
-) {
-  if (
-    !historic_range_is_meaningless(
-      aggregation_types = aggregation_types,
-      resolution = resolution,
-      record_rate_seconds = record_rate_seconds
-    )
-  ) {
-    return(NULL)
-  }
-
-  if (identical(lang, "fr")) {
-    return(
-      paste(
-        "Les plages historiques sont basees sur des valeurs quotidiennes.",
-        "Elles sont desactivees pour les series cumulatives a pas de temps",
-        "sous-quotidien, comme les precipitations, parce qu'un ruban",
-        "quotidien serait trompeur sur un trace horaire ou a resolution",
-        "maximale."
-      )
-    )
-  }
-
-  paste(
-    "Historic ranges are based on daily values.",
-    "They are disabled for sub-daily cumulative series such as",
-    "precipitation, because a daily ribbon would be misleading on",
-    "hourly or maximum-resolution plots."
-  )
-}
-
 #' Fetch metadata for historic range timeseries
 #' Retrieves metadata for a set of timeseries IDs, including the aggregation type and record rate in seconds. This information is used to determine if historic ranges are meaningful for the given timeseries based on their aggregation types and record rates.
 #' @param con A DBI connection to the database containing timeseries metadata.

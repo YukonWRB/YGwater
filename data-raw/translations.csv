@@ -168,6 +168,7 @@ none_m,,None,Aucun
 plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec
 plot_hist_range_select_tooltip,,Choose whether the historic range should include all available years of record or only up to the last year shown on the plot.,Choisissez si la plage historique doit inclure toutes les années de données disponibles ou seulement jusqu’à la dernière année affichée sur le graphique.
+plot_hist_range_meaningless,,"Historic ranges are based on daily values. They are disabled for sub-daily cumulative series such as precipitation, because a daily ribbon would be misleading on hourly or maximum-resolution plots.","Les plages historiques sont basées sur des valeurs quotidiennes. Elles sont desactivées pour les séries cumulatives à pas de temps sous-quotidien, comme les précipitations, parce qu'un ruban quotidien serait trompeur sur un tracé horaire ou à resolution maximale."
 plot_extra_options,,Extra options,Options supplémentaires
 plot_apply_vert_datum,,Apply vertical datum,Appliquer le référentiel vertical
 plot_filter,,Filter extreme values,Filtrer les valeurs extrêmes
