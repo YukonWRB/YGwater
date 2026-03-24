@@ -33,12 +33,6 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
-  # Load some helper functions
-  source(system.file(
-    "apps/YGwater/modules/historic_range_helpers.R",
-    package = "YGwater"
-  ))
-
   g_drive <- FALSE
   if (!isFALSE(network_check)) {
     network_check <- dir.exists(network_check)
