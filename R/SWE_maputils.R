@@ -4742,9 +4742,6 @@ make_leaflet_map <- function(
 
     # legend created dynamically based on inputs
     legend_title <- paste0(
-        "<b>",
-        tr("snowbull_symbols", language),
-        "</b><br>",
         switch(
             statistic,
             "relative_to_med" = tr("snowbull_relative_median", language),
@@ -4753,7 +4750,6 @@ make_leaflet_map <- function(
             "anomalies" = tr("snowbull_anomalies", language),
             ""
         ),
-        "<br>",
         tr(month_str, language),
         " ",
         year
@@ -4776,7 +4772,8 @@ make_leaflet_map <- function(
     ) %>%
         leaflet::addProviderTiles(
             leaflet::providers$Esri.WorldImagery,
-            group = "Topographic"
+            group = "Topographic",
+            options = leaflet::providerTileOptions(attribution = NA)
         ) %>%
         leaflet::fitBounds(
             as.numeric(bbox["xmin"]),
@@ -5001,15 +4998,29 @@ make_leaflet_map <- function(
             leaflet::groupOptions(
                 "Communities_small",
                 zoomLevels = seq(8, 18, 0.25)
+            )
+
+        dynamic_style_elements <- remove_unused_bins(
+            dynamic_style_elements,
+            point_data,
+            point_data_secondary,
+            statistic
+        )
+
+        m <- m %>%
+            leaflet::addLegend(
+                position = "bottomright",
+                colors = rev(dynamic_style_elements$colors),
+                title = legend_title,
+                labels = rev(dynamic_style_elements$labels),
+                opacity = 1,
+                layerId = "legend-main"
             ) %>%
             leaflet::addControl(
                 # here we specify a dummy HTML legend since it's much easier than the alternative.
                 # we grab some style elements from the static styles to keep it consistent, but this isn't possible for all cases
                 html = paste0(
                     "<div style='padding: 8px; border-radius: 6px; font-size: 13px; line-height: 1.4; min-width: 140px;'>",
-                    "<b>",
-                    tr("snowbull_symbols", language),
-                    "</b><br>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><circle cx='9' cy='9' r='7' fill='none' stroke='black' stroke-width='2'/></svg> ",
                     tr("snowbull_snow_survey", language),
                     "<br>",
@@ -5025,17 +5036,24 @@ make_leaflet_map <- function(
                     "<br>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><polygon points='9,2 16,9 9,16 2,9' fill='black' stroke='white' stroke-width='2'/></svg> ",
                     tr("snowbull_communities", language),
-                    "<br>",
                     "</div>"
                 ),
-                position = "bottomright"
-            ) %>%
-            leaflet::addLegend(
                 position = "bottomright",
-                colors = dynamic_style_elements$colors,
-                title = legend_title,
-                labels = dynamic_style_elements$labels,
-                opacity = 1
+                layerId = "legend-symbols"
+            ) %>%
+            leaflet::addEasyButton(
+                leaflet::easyButton(
+                    icon = "fa-bars",
+                    title = "Toggle legend",
+                    onClick = leaflet::JS(
+                        "function(btn, map) {",
+                        "var legends = document.querySelectorAll('.legend, [id=\"legend-symbols\"]');",
+                        "legends.forEach(function(legend) {",
+                        "  legend.style.display = legend.style.display === 'none' ? 'block' : 'none';",
+                        "});",
+                        "}"
+                    )
+                )
             )
     }
 
@@ -5064,6 +5082,78 @@ make_leaflet_map <- function(
     }
     return(m)
 }
+
+
+#' Remove unused bins from dynamic style elements based on the presence of data in point datasets
+#'
+#' @description
+#' For the "relative_to_med" statistic, checks if the -2 and -1 bins are present in the point datasets. If not, removes those bins from the dynamic style elements to prevent them from appearing in the legend.
+#' @param dynamic_style_elements List containing bins, colors, and labels for styling
+#' @param point_data sf object containing point-based station data (surveys)
+#' @param point_data_secondary sf object containing secondary point data (pillows)
+#' @param statistic Character string indicating which SWE value to visualize
+#' @return Updated dynamic_style_elements with unused bins removed if necessary
+remove_unused_bins <- function(
+    dynamic_style_elements,
+    point_data,
+    point_data_secondary,
+    statistic
+) {
+    if (statistic != "relative_to_med") {
+        return(dynamic_style_elements)
+    }
+
+    # Check if -2 bin should be removed
+    has_minus_2 <- FALSE
+    if (!is.null(point_data)) {
+        has_minus_2 <- has_minus_2 ||
+            any(point_data$relative_to_med == -2, na.rm = TRUE)
+    }
+    if (!is.null(point_data_secondary)) {
+        has_minus_2 <- has_minus_2 ||
+            any(point_data_secondary$relative_to_med == -2, na.rm = TRUE)
+    }
+
+    if (!has_minus_2) {
+        idx <- which(dynamic_style_elements$bins == -2)
+        if (length(idx) > 0) {
+            dynamic_style_elements$bins <- dynamic_style_elements$bins[-idx]
+            dynamic_style_elements$colors <- dynamic_style_elements$colors[
+                -idx
+            ]
+            dynamic_style_elements$labels <- dynamic_style_elements$labels[
+                -idx
+            ]
+        }
+    }
+
+    # Check if -1 bin should be removed
+    has_minus_1 <- FALSE
+    if (!is.null(point_data)) {
+        has_minus_1 <- has_minus_1 ||
+            any(point_data$relative_to_med == -1, na.rm = TRUE)
+    }
+    if (!is.null(point_data_secondary)) {
+        has_minus_1 <- has_minus_1 ||
+            any(point_data_secondary$relative_to_med == -1, na.rm = TRUE)
+    }
+
+    if (!has_minus_1) {
+        idx <- which(dynamic_style_elements$bins == -1)
+        if (length(idx) > 0) {
+            dynamic_style_elements$bins <- dynamic_style_elements$bins[-idx]
+            dynamic_style_elements$colors <- dynamic_style_elements$colors[
+                -idx
+            ]
+            dynamic_style_elements$labels <- dynamic_style_elements$labels[
+                -idx
+            ]
+        }
+    }
+
+    return(dynamic_style_elements)
+}
+
 
 #' Create a static ggplot2 map for SWE data
 #'
@@ -5367,73 +5457,13 @@ make_ggplot_map <- function(
     #     label = bin_labels,
     #     stringsAsFactors = FALSE
     # )
-
-    # very long conditional for removing bins with value == -2 (no data) from the legend if they do not appear in the map
-    # same for ==-1
-    if (statistic == "relative_to_med") {
-        if (
-            !is.null(point_data) &&
-                !any(point_data$relative_to_med == -2, na.rm = TRUE)
-        ) {
-            idx <- which(dynamic_style_elements$bins == -2)
-            if (length(idx) > 0) {
-                dynamic_style_elements$bins <- dynamic_style_elements$bins[-idx]
-                dynamic_style_elements$colors <- dynamic_style_elements$colors[
-                    -idx
-                ]
-                dynamic_style_elements$labels <- dynamic_style_elements$labels[
-                    -idx
-                ]
-            }
-        }
-        if (
-            !is.null(point_data_secondary) &&
-                !any(point_data_secondary$relative_to_med == -2, na.rm = TRUE)
-        ) {
-            idx <- which(dynamic_style_elements$bins == -2)
-            if (length(idx) > 0) {
-                dynamic_style_elements$bins <- dynamic_style_elements$bins[-idx]
-                dynamic_style_elements$colors <- dynamic_style_elements$colors[
-                    -idx
-                ]
-                dynamic_style_elements$labels <- dynamic_style_elements$labels[
-                    -idx
-                ]
-            }
-        }
-
-        # Remove bins == -1 from dynamic display data if any point_data or point_data_secondary values == -2
-        if (
-            !is.null(point_data) &&
-                !any(point_data$relative_to_med == -1, na.rm = TRUE)
-        ) {
-            idx <- which(dynamic_style_elements$bins == -1)
-            if (length(idx) > 0) {
-                dynamic_style_elements$bins <- dynamic_style_elements$bins[-idx]
-                dynamic_style_elements$colors <- dynamic_style_elements$colors[
-                    -idx
-                ]
-                dynamic_style_elements$labels <- dynamic_style_elements$labels[
-                    -idx
-                ]
-            }
-        }
-        if (
-            !is.null(point_data_secondary) &&
-                !any(point_data_secondary$relative_to_med == -1, na.rm = TRUE)
-        ) {
-            idx <- which(dynamic_style_elements$bins == -1)
-            if (length(idx) > 0) {
-                dynamic_style_elements$bins <- dynamic_style_elements$bins[-idx]
-                dynamic_style_elements$colors <- dynamic_style_elements$colors[
-                    -idx
-                ]
-                dynamic_style_elements$labels <- dynamic_style_elements$labels[
-                    -idx
-                ]
-            }
-        }
-    }
+    # Helper function to remove unused bins from dynamic style elements
+    dynamic_style_elements <- remove_unused_bins(
+        dynamic_style_elements,
+        point_data,
+        point_data_secondary,
+        statistic
+    )
 
     prev_month <- snowbull_months(
         month = as.numeric(month) - 1,
