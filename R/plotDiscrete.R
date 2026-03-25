@@ -485,13 +485,16 @@ plotDiscrete <- function(
       )
     )
     # result_condition_value should get the numeric portion of the string in 'result' only if '<' or '>' show up in columns 'result'
-    data$result_condition_value <- data.table::fifelse(
-      grepl("<", data$result),
-      as.numeric(gsub("<", "", data$result)),
+    # Suppress warnings about NAs introduced by coercion, which will happen for rows where there is no '<' or '>' in the result and is ok
+    data$result_condition_value <- suppressWarnings(
       data.table::fifelse(
-        grepl(">", data$result),
-        as.numeric(gsub(">", "", data$result)),
-        NA
+        grepl("<", data$result),
+        as.numeric(gsub("<", "", data$result)),
+        data.table::fifelse(
+          grepl(">", data$result),
+          as.numeric(gsub(">", "", data$result)),
+          NA
+        )
       )
     )
     # turn column 'result' to a numeric, which will remove the '<' and '>' characters
@@ -797,18 +800,24 @@ plotDiscrete <- function(
 
     if (!is.null(parameters)) {
       if (inherits(parameters, "character")) {
+        unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
         query <- paste0(
-          "SELECT parameter_id, param_name, param_name_fr, unit_default AS units FROM parameters WHERE ",
-          "LOWER(param_name) IN (LOWER('",
+          "SELECT p.parameter_id, p.param_name, p.param_name_fr, ",
+          unit_sql,
+          " FROM parameters p WHERE ",
+          "LOWER(p.param_name) IN (LOWER('",
           paste0(parameters, collapse = "'), LOWER('"),
           "')) ",
-          "OR LOWER(param_name_fr) IN (LOWER('",
+          "OR LOWER(p.param_name_fr) IN (LOWER('",
           paste0(parameters, collapse = "'), LOWER('"),
           "'))"
         )
       } else {
+        unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
         query <- paste0(
-          "SELECT parameter_id, param_name, param_name_fr, unit_default AS units FROM parameters WHERE parameter_id IN (",
+          "SELECT p.parameter_id, p.param_name, p.param_name_fr, ",
+          unit_sql,
+          " FROM parameters p WHERE p.parameter_id IN (",
           paste0(parameters, collapse = ", "),
           ");"
         )

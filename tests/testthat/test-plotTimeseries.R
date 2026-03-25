@@ -325,3 +325,106 @@ test_that("plotTimeseries plots raw and corrected data", {
 
   expect_snapshot_file(path)
 })
+
+test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", {
+  skip_on_cran()
+
+  wl <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
+  )[1, 1]
+  loc_id <- DBI::dbGetQuery(
+    con,
+    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
+  )[1, 1]
+  tsid <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT ts.timeseries_id FROM timeseries ts ",
+      "LEFT JOIN aggregation_types at ",
+      "ON ts.aggregation_type_id = at.aggregation_type_id ",
+      "WHERE ts.parameter_id = $1 AND ts.location_id = $2 ",
+      "AND at.aggregation_type IN ('instantaneous', 'mean') ",
+      "LIMIT 1;"
+    ),
+    params = list(wl, loc_id)
+  )[1, 1]
+
+  start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
+  end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
+
+  agg_type <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT at.aggregation_type FROM timeseries ts ",
+      "LEFT JOIN aggregation_types at ",
+      "ON ts.aggregation_type_id = at.aggregation_type_id ",
+      "WHERE ts.timeseries_id = $1;"
+    ),
+    params = list(tsid)
+  )[1, 1]
+
+  source <- dbGetQueryDT(
+    con,
+    paste0(
+      "SELECT datetime, value_corrected, imputed ",
+      "FROM measurements_continuous_corrected ",
+      "WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ",
+      "ORDER BY datetime;"
+    ),
+    params = list(tsid, start_dt, end_dt)
+  )
+
+  source[,
+    datetime_hour := as.POSIXct(
+      format(datetime, "%Y-%m-%d %H:00:00", tz = "UTC"),
+      tz = "UTC"
+    )
+  ]
+  expected <- source[,
+    .(
+      value = if (agg_type == "sum") {
+        sum(value_corrected, na.rm = TRUE)
+      } else if (agg_type == "median") {
+        stats::median(value_corrected, na.rm = TRUE)
+      } else if (agg_type %in% c("min", "minimum")) {
+        min(value_corrected, na.rm = TRUE)
+      } else if (agg_type %in% c("max", "maximum")) {
+        max(value_corrected, na.rm = TRUE)
+      } else if (agg_type == "(min+max)/2") {
+        mean(c(
+          min(value_corrected, na.rm = TRUE),
+          max(value_corrected, na.rm = TRUE)
+        ))
+      } else {
+        mean(value_corrected, na.rm = TRUE)
+      },
+      imputed = any(imputed)
+    ),
+    by = datetime_hour
+  ]
+  data.table::setnames(expected, "datetime_hour", "datetime")
+  data.table::setorder(expected, datetime)
+
+  out <- plotTimeseries(
+    timeseries_id = tsid,
+    start_date = start_dt,
+    end_date = end_dt,
+    resolution = "hour",
+    tzone = "UTC",
+    slider = FALSE,
+    historic_range = FALSE,
+    data = TRUE,
+    con = con
+  )$data$trace_data
+
+  out <- out[
+    lubridate::minute(datetime) == 0 & lubridate::second(datetime) == 0,
+    .(datetime, value, imputed)
+  ]
+  data.table::setorder(out, datetime)
+
+  expect_equal(out$datetime, expected$datetime)
+  expect_equal(out$value, expected$value, tolerance = 1e-8)
+  expect_equal(out$imputed, expected$imputed)
+})

@@ -16,6 +16,7 @@ reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométr
 reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
 reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
+reports_waterTemp,reportsNavWaterTempTitle,Water temperature,Température de l'eau
 data,dataNavMenuTitle,Data,Données
 images,imagesNavMenuTitle,Images,Images
 images_table,imagesNavTableTitle,Table selection,À partir d'un tableau
@@ -167,6 +168,7 @@ none_m,,None,Aucun
 plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec
 plot_hist_range_select_tooltip,,Choose whether the historic range should include all available years of record or only up to the last year shown on the plot.,Choisissez si la plage historique doit inclure toutes les années de données disponibles ou seulement jusqu’à la dernière année affichée sur le graphique.
+plot_hist_range_meaningless,,"Historic ranges are based on daily values. They are disabled for sub-daily cumulative series such as precipitation, because a daily ribbon would be misleading on hourly or maximum-resolution plots.","Les plages historiques sont basées sur des valeurs quotidiennes. Elles sont desactivées pour les séries cumulatives à pas de temps sous-quotidien, comme les précipitations, parce qu'un ruban quotidien serait trompeur sur un tracé horaire ou à resolution maximale."
 plot_extra_options,,Extra options,Options supplémentaires
 plot_apply_vert_datum,,Apply vertical datum,Appliquer le référentiel vertical
 plot_filter,,Filter extreme values,Filtrer les valeurs extrêmes
@@ -264,7 +266,7 @@ map_add_second_param,,Add secondary parameter,Ajouter paramètre secondaire
 map_edit_second_param,,Edit secondary parameter,Modifier paramètre secondaire
 map_rm_second_param,,Remove secondary parameter,Enlever paramètre secondaire
 map_edit_aes,,Edit map aesthetics,Modifier l'esthétique de la carte
-gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes. In particular, note that very little of the data underlying the trends calculated has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives. En particulier, il convient de souligner que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
+gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations.<br><br>Please note that this is not a polished output, and is to be used strictly for informational purposes.<br>In particular, note that very little of the data underlying the trends calculated has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives.<br>En particulier, veuillez noter que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
 gen_waterInfo_param_select,,One parameter or both,Un ou deux paramètres
 gen_waterInfo_param_select_one,,"One (flow where exists, else level)","Un (débit si existe, autrement niveau)"
 gen_waterInfo_param_select_both,,Both (flow and level where both exist),Deux (débit et niveau lorsque existent)
@@ -278,7 +280,7 @@ gen_generate_plots,,Generate plots,Générer les graphiques
 gen_waterInfo_ptype,,Min/max on single plot or separate,Min/max sur le même graphique ou séparé
 gen_waterInfo_ptype_combine,,Single,même
 separate,,Separate,séparés
-gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (EEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
+gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations.<br><br>Please note that this is not a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (ÉEN) et de la densité pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
 gen_snowInfo_inactive,,Include inactive locations,Inclure les emplacements inactifs
 gen_snowInfo_complete,,Complete years only,Années complètes seulement
 gen_snowInfo_ptype,,Combined or separate plots,Graphiques séparés ou combinés
@@ -287,6 +289,7 @@ gen_snowBul_info,,"This function allows you to create Excel workbooks with the s
 gen_snowBul_toggle_stats,,Statistics,Statistiques
 gen_snowBul_toggle_bulletin,,Bulletin,Bulletin
 gen_snowBul_year,,Year,Année
+gen_waterTemp_info,,"Use this module to build water temperature plots and a report bundle consisting of plots in PNG format, an HTML report, and R data files for further work-up.<br><br>To get started, select a timeseries, select your desired plotting options, and click 'Create Report Figures'.<br>Once the plots are made you can generate and download the report bundle.<br><br><b>Note</b>: This module was created on behalf of and with funding by the Council of Yukon First Nations.","Utilisez ce module pour créer des graphiques de température de l'eau et un ensemble de fichiers comprenant des graphiques au format PNG, un rapport HTML et des fichiers de données R pour travail ultérieur.<br><br>Pour commencer, sélectionnez une série chronologique, les options de tracé souhaitées, puis cliquez sur « Créer les figures du rapport ».<br>Une fois les graphiques créés, vous pouvez générer et télécharger l'ensemble du rapport.<br><br><b>Remarque</b> : Ce module a été créé pour le Conseil des Premières Nations du Yukon et avec son financement."
 month,,Month,Mois
 gen_snowBul_basins,,Basins,Basins versants
 gen_snowBul_lang,,Bulletin language,Langue du bulletin
@@ -449,12 +452,12 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
-snowbull_percent_of_normal,,Percent of Normal,Pourcentage de la Normale
+snowbull_percent_of_normal,,Percent of normal,pourcentage de la normale
 snowbull_historical_median,,Historical median,Médiane historique
 snowbull_anomalies,,Anomalies,Anomalies
-snowbull_deviation,,Deviation from Normal, Écart à la Normale
+snowbull_deviation,,Deviation from normal, écart par rapport à la normale
 snowbull_values,,Values,Valeurs
-snowbull_swe,,Snow water equivalent,Équivalent en eau de neige
+snowbull_swe,,Snow Water Equivalent,Équivalent en eau de neige
 snowbull_swe_abbrev,,SWE,ÉEN
 snowbull_temperature,,Temperature,Température
 snowbull_precipitation,,Precipitation,Précipitation
@@ -486,6 +489,6 @@ snowbull_mean_elevation,,Mean elevation,Altitude moyenne
 elevation,,Elevation,Altitude
 coordinates,,Coordinates,Coordonnées
 isocontours,,Isocontours,Isocontours
-snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (EEN) en grille
-snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche EEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
+snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (ÉEN) en grille
+snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche ÉEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
 snowbull_to,, to,à

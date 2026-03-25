@@ -391,14 +391,7 @@ ggplotOverlap <- function(
     }
 
     # Find the ts units
-    units <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT unit_default FROM parameters WHERE parameter_id = ",
-        parameter_code,
-        ";"
-      )
-    )
+    units <- ac_get_parameter_unit(con, parameter_code)
 
     location_id <- lookup_location_id(con, location)
     if (is.na(location_id)) {

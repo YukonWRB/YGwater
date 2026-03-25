@@ -494,6 +494,20 @@ plotMultiTimeseries <- function(
     }
   }
 
+  if (historic_range && !is.null(timeseries_ids)) {
+    historic_range_meta <- fetch_historic_range_timeseries_metadata(
+      con,
+      timeseries_ids
+    )
+    if (historic_range_is_meaningless(
+      aggregation_types = historic_range_meta$aggregation_type,
+      resolution = resolution,
+      record_rate_seconds = historic_range_meta$record_rate_seconds
+    )) {
+      historic_range <- FALSE
+    }
+  }
+
   data <- list()
   remove <- numeric()
   for (i in 1:nrow(timeseries)) {
@@ -565,10 +579,16 @@ plotMultiTimeseries <- function(
       }
 
       parameter_txt <- tolower(as.character(parameter))
+      unit_sql <- DBI::SQL(ac_parameter_unit_select_sql(con, "p", "unit_default"))
       parameter_tbl <- DBI::dbGetQuery(
         con,
         glue::glue_sql(
-          "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",
+          "SELECT p.parameter_id, p.param_name, p.param_name_fr, p.plot_default_y_orientation, {unit_sql}
+           FROM parameters p
+           WHERE LOWER(p.param_name) = {parameter_txt}
+             OR LOWER(p.param_name_fr) = {parameter_txt}
+             OR p.parameter_id::text = {parameter_txt}
+           LIMIT 1;",
           .con = con
         )
       )
@@ -613,7 +633,11 @@ plotMultiTimeseries <- function(
       timeseries$z[i] <- exist_check$z[1]
       parameter_tbl <- DBI::dbGetQuery(
         con,
-        "SELECT param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE parameter_id = $1;",
+        paste(
+          "SELECT p.param_name, p.param_name_fr, p.plot_default_y_orientation,",
+          ac_parameter_unit_select_sql(con, "p", "unit_default"),
+          "FROM parameters p WHERE p.parameter_id = $1;"
+        ),
         params = list(parameter_code)
       )
     }
@@ -1037,6 +1061,14 @@ plotMultiTimeseries <- function(
           )
         )
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
+      } else if (resolution == "hour") {
+        trace_data <- fetch_hourly_trace_data(
+          con = con,
+          timeseries_id = tsid,
+          start_date = sub.start_date,
+          end_date = sub.end_date,
+          use_corrected_source = corrections_apply
+        )[, c("datetime", "value")]
       } else if (resolution == "max") {
         # limit to 200 000 records for plotting performance
         if (corrections_apply) {
@@ -1084,6 +1116,14 @@ plotMultiTimeseries <- function(
           )
         )
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
+      } else if (resolution == "hour") {
+        trace_data <- fetch_hourly_trace_data(
+          con = con,
+          timeseries_id = tsid,
+          start_date = sub.start_date,
+          end_date = sub.end_date,
+          use_corrected_source = corrections_apply
+        )[, c("datetime", "value")]
       } else if (resolution == "max") {
         # limit to 200 000 records for plotting performance
         if (corrections_apply) {
@@ -1120,34 +1160,40 @@ plotMultiTimeseries <- function(
     # fill gaps with NA values
     # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
     min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
-    if (!is.infinite(min_trace)) {
-      trace_data <- suppressWarnings(calculate_period(
-        trace_data,
-        timeseries_id = tsid,
-        con = con
-      ))
-      if ("period" %in% colnames(trace_data)) {
-        trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
-        # Shift datetime and add period_secs to compute the 'expected' next datetime
-        trace_data[,
-          "expected" := data.table::shift(datetime, type = "lead") - period_secs
+  if (!is.infinite(min_trace)) {
+      if (resolution == "hour") {
+        trace_data <- add_gap_markers(trace_data, period_seconds = 3600)[,
+          c("datetime", "value")
         ]
-        # Create 'gap_exists' column to identify where gaps are
-        trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
-        # Find indices where gaps exist
-        gap_indices <- which(trace_data$gap_exists)
-        # Create a data.table of NA rows to be inserted
-        na_rows <- data.table::data.table(
-          datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
-          value = NA
-        )
-        # Combine with NA rows
-        trace_data <- data.table::rbindlist(
-          list(trace_data[, c("datetime", "value")], na_rows),
-          use.names = TRUE
-        )
-        # order by datetime
-        data.table::setorder(trace_data, datetime)
+      } else {
+        trace_data <- suppressWarnings(calculate_period(
+          trace_data,
+          timeseries_id = tsid,
+          con = con
+        ))
+        if ("period" %in% colnames(trace_data)) {
+          trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
+          # Shift datetime and add period_secs to compute the 'expected' next datetime
+          trace_data[,
+            "expected" := data.table::shift(datetime, type = "lead") - period_secs
+          ]
+          # Create 'gap_exists' column to identify where gaps are
+          trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
+          # Find indices where gaps exist
+          gap_indices <- which(trace_data$gap_exists)
+          # Create a data.table of NA rows to be inserted
+          na_rows <- data.table::data.table(
+            datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
+            value = NA
+          )
+          # Combine with NA rows
+          trace_data <- data.table::rbindlist(
+            list(trace_data[, c("datetime", "value")], na_rows),
+            use.names = TRUE
+          )
+          # order by datetime
+          data.table::setorder(trace_data, datetime)
+        }
       }
 
       # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)

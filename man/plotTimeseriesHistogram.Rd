@@ -17,7 +17,13 @@ plotTimeseriesHistogram(
   title = TRUE,
   custom_title = NULL,
   lang = "en",
-  tzone = "UTC",
+  line_scale = 1,
+  axis_scale = 1,
+  legend_scale = 1,
+  legend_position = "v",
+  gridx = FALSE,
+  gridy = FALSE,
+  tzone = "auto",
   data = FALSE,
   con = NULL
 )
@@ -50,7 +56,19 @@ current year.}
 
 \item{lang}{Language for metadata labels in title/axes (\code{"en"} or \code{"fr"}).}
 
-\item{tzone}{Timezone for binning and axis display. Default is \code{"UTC"}.}
+\item{line_scale}{A scale factor to apply to the bar outline width. Default is \code{1}.}
+
+\item{axis_scale}{A scale factor to apply to the size of axis labels. Default is \code{1}.}
+
+\item{legend_scale}{A scale factor to apply to the size of text in the legend. Default is \code{1}.}
+
+\item{legend_position}{The position of the legend, \code{'v'} for vertical on the right side or \code{'h'} for horizontal on the bottom. Default is \code{'v'}.}
+
+\item{gridx}{Should gridlines be drawn on the x-axis? Default is \code{FALSE}.}
+
+\item{gridy}{Should gridlines be drawn on the y-axis? Default is \code{FALSE}.}
+
+\item{tzone}{The timezone to use for the plot. Default is \code{"auto"}, which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).}
 
 \item{data}{If \code{TRUE}, return plotting data with the plot.}
 

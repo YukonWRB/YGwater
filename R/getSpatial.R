@@ -47,7 +47,7 @@ getRaster <- function(
     cli::cli_abort("PostGIS is not enabled on this database.")
   }
 
-  # Direct past in of rpostgis::dbTableNameFix to remove need for ::: on unexported function
+  # Direct paste in of rpostgis::dbTableNameFix to remove need for ::: on unexported function
   dbTableNameFix <- function(conn = NULL, t.nm, as.identifier = TRUE) {
     ## case of no schema provided
     if (

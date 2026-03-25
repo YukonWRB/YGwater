@@ -8,6 +8,7 @@ waterInfoUIMod <- function(id) {
       type = "text/css",
       href = "css/card_background.css"
     )),
+    uiOutput(ns("info")),
     card(
       card_body(
         class = "custom-card",
@@ -34,7 +35,7 @@ waterInfoMod <- function(id, language) {
     moduleData <- reactiveValues(
       locs = dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT DISTINCT ts.location_id, ts.location_code AS location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM timeseries AS ts JOIN parameters AS p ON ts.parameter_id = p.parameter_id JOIN locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)"
+        "SELECT DISTINCT ts.location_id, l.location_code AS location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM timeseries AS ts JOIN parameters AS p ON ts.parameter_id = p.parameter_id JOIN locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)"
       )
     )
 
@@ -54,8 +55,6 @@ waterInfoMod <- function(id, language) {
     output$menu <- renderUI({
       req(moduleData, language$language, language$abbrev)
       tagList(
-        textOutput(ns("info")),
-        tags$hr(), # dividing blank space
         # selector for one parameter (flow if exists, else level) or both
         selectizeInput(
           ns("param"),
@@ -182,7 +181,11 @@ waterInfoMod <- function(id, language) {
         ),
 
         # Make it happen
-        actionButton(ns("go"), label = tr("create_report", language$language)),
+        bslib::input_task_button(
+          ns("go"),
+          label = tr("create_report", language$language),
+          label_busy = tr("generating_working", language$language)
+        ),
         downloadButton(
           ns("download"),
           "download",
@@ -192,8 +195,18 @@ waterInfoMod <- function(id, language) {
     }) %>% # End renderUI
       bindEvent(language, moduleData) # Re-render the UI if the language or moduleData changes
 
-    output$info <- renderText({
-      tr("gen_waterInfo_info", language$language)
+    output$info <- renderUI({
+      text <- HTML(tr("gen_waterInfo_info", language$language))
+      div(
+        style = paste(
+          "background-color: #F7FAFC;",
+          "border-left: 4px solid #0097A9;",
+          "border-radius: 6px;",
+          "padding: 12px 16px;",
+          "margin-bottom: 12px;"
+        ),
+        tags$p(style = "margin-bottom: 0;", text)
+      )
     }) %>%
       bindEvent(language$language) # Re-render the text if the language changes
 
@@ -281,94 +294,249 @@ waterInfoMod <- function(id, language) {
     }
     observeFilterInput("loc")
 
-    outputFile <- reactiveVal(NULL) # Will hold path to the file if successful at creating
+    download_bundle <- reactiveVal(NULL)
+
+    show_validation_modal <- function(messages) {
+      messages <- unique(messages[
+        !is.na(messages) & gen_waterInfo_infonzchar(messages)
+      ])
+      if (!length(messages)) {
+        return(invisible(FALSE))
+      }
+
+      showModal(modalDialog(
+        title = "Cannot Generate Water Quantity/Info Report",
+        tags$p("Please correct the following before starting the report:"),
+        tags$ul(lapply(messages, function(msg) tags$li(msg))),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", language$language))
+      ))
+
+      invisible(TRUE)
+    }
+
+    validate_report_request <- function() {
+      issues <- character()
+
+      if (
+        is.null(selections$param) ||
+          length(selections$param) == 0 ||
+          anyNA(selections$param) ||
+          !nzchar(selections$param[[1]])
+      ) {
+        issues <- c(
+          issues,
+          "Select whether to report one parameter or both parameters."
+        )
+      }
+
+      if (
+        is.null(selections$loc) ||
+          length(selections$loc) == 0 ||
+          all(is.na(selections$loc)) ||
+          !any(nzchar(selections$loc))
+      ) {
+        issues <- c(
+          issues,
+          "Select at least one location, or choose 'All locations'."
+        )
+      }
+
+      end_date <- as.Date(selections$end)
+      if (length(end_date) != 1 || is.na(end_date)) {
+        issues <- c(issues, "Provide a valid end date.")
+      }
+
+      if (is.null(selections$min_m) || length(selections$min_m) == 0) {
+        issues <- c(
+          issues,
+          "Select at least one month for the low-flow period."
+        )
+      }
+
+      if (is.null(selections$max_m) || length(selections$max_m) == 0) {
+        issues <- c(
+          issues,
+          "Select at least one month for the high-flow period."
+        )
+      }
+
+      if (
+        is.null(selections$prct) ||
+          length(selections$prct) != 1 ||
+          is.na(selections$prct) ||
+          selections$prct < 1 ||
+          selections$prct > 100
+      ) {
+        issues <- c(
+          issues,
+          "Allowed missing data must be a number between 1 and 100."
+        )
+      }
+
+      if (
+        isTRUE(selections$plots) &&
+          (is.null(selections$ptype) ||
+            length(selections$ptype) == 0 ||
+            anyNA(selections$ptype) ||
+            !nzchar(selections$ptype[[1]]))
+      ) {
+        issues <- c(
+          issues,
+          "Select a plot type, or turn off plot generation."
+        )
+      }
+
+      unique(issues)
+    }
+
+    cleanup_download_bundle <- function(bundle) {
+      if (is.null(bundle) || is.null(bundle$path)) {
+        return(invisible(NULL))
+      }
+
+      bundle_dir <- dirname(bundle$path)
+      if (dir.exists(bundle_dir)) {
+        unlink(bundle_dir, recursive = TRUE, force = TRUE)
+      } else if (file.exists(bundle$path)) {
+        unlink(bundle$path, force = TRUE)
+      }
+
+      invisible(NULL)
+    }
+
+    report_task <- ExtendedTask$new(function(req, config) {
+      promises::future_promise({
+        tryCatch(
+          {
+            con <- AquaConnect(
+              name = config$dbName,
+              host = config$dbHost,
+              port = config$dbPort,
+              username = config$dbUser,
+              password = config$dbPass,
+              silent = TRUE
+            )
+            on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+            work_dir <- tempfile("waterInfoOutput_")
+            dir.create(work_dir, recursive = TRUE)
+
+            suppressWarnings(waterInfo(
+              con = con,
+              locations = req$loc,
+              level_flow = req$param,
+              end_date = req$end,
+              months_min = as.numeric(req$min_m),
+              months_max = as.numeric(req$max_m),
+              allowed_missing = req$prct,
+              plots = req$plots,
+              plot_type = req$ptype,
+              save_path = work_dir,
+              quiet = TRUE
+            ))
+
+            files <- list.files(work_dir, full.names = FALSE)
+            if (!length(files)) {
+              stop("No files were generated for the report.")
+            }
+
+            zip_path <- file.path(work_dir, "report.zip")
+            zip::zip(
+              zipfile = zip_path,
+              files = files,
+              mode = "cherry-pick",
+              include_directories = FALSE,
+              root = work_dir
+            )
+
+            list(
+              path = zip_path,
+              filename = paste0("water info report issued ", Sys.Date(), ".zip")
+            )
+          },
+          error = function(e) {
+            e$message
+          }
+        )
+      })
+    }) |>
+      bind_task_button("go")
 
     observeEvent(input$go, {
-      tryCatch(
-        {
-          withProgress(
-            message = tr("dl_prep", language$language),
-            value = 0,
-            {
-              incProgress(0.2)
+      if (show_validation_modal(validate_report_request())) {
+        return()
+      }
 
-              # 1. Create a temporary folder
-              dir <- paste0(tempdir(), "/waterInfoOutput")
-              dir.create(dir, showWarnings = FALSE)
-              # Delete all files in the folder (if any)
-              files <- list.files(dir, full.names = TRUE)
-              if (length(files) > 0) {
-                unlink(files, recursive = TRUE, force = TRUE)
-              }
-
-              # 3. Call waterInfo() so it writes all files to 'dir'
-              suppressWarnings(waterInfo(
-                con = session$userData$AquaCache,
-                locations = selections$loc,
-                level_flow = selections$param,
-                end_date = selections$end,
-                months_min = as.numeric(selections$min_m),
-                months_max = as.numeric(selections$max_m),
-                allowed_missing = selections$prct,
-                plots = selections$plots,
-                plot_type = selections$ptype,
-                save_path = dir,
-                quiet = TRUE
-              ))
-
-              incProgress(0.7)
-
-              # 4. Zip up everything in 'dir' and write the zip to `file`
-              files <- list.files(dir, full.names = FALSE)
-              if (!length(files)) {
-                stop("No files were generated for the report.")
-              }
-
-              zip::zip(
-                zipfile = file.path(dir, "report.zip"),
-                files = files,
-                mode = "cherry-pick",
-                include_directories = FALSE,
-                root = dir
-              )
-              outputFile(file.path(dir, "report.zip"))
-
-              # Delete everything in the 'dir' except for the .zip file
-              files <- list.files(dir, full.names = TRUE)
-              files <- files[!grepl("report.zip", files)]
-              if (length(files) > 0) {
-                unlink(files, recursive = TRUE, force = TRUE)
-              }
-
-              # 5. Now programmatically click the hidden download button
-              shinyjs::click("download")
-
-              incProgress(1)
-            } # End withProgress content
-          ) # End withProgress
-        },
-        error = function(e) {
-          showNotification(
-            paste("Error generating water quantity/info report:", e$message),
-            type = "error",
-            duration = NULL,
-            closeButton = TRUE
-          )
-        }
+      report_task$invoke(
+        req = list(
+          param = selections$param,
+          loc = selections$loc,
+          end = selections$end,
+          min_m = selections$min_m,
+          max_m = selections$max_m,
+          prct = selections$prct,
+          plots = selections$plots,
+          ptype = selections$ptype
+        ),
+        config = session$userData$config
       )
+    })
+
+    observeEvent(report_task$result(), {
+      result <- report_task$result()
+
+      if (inherits(result, "character")) {
+        showNotification(
+          paste("Error generating water quantity/info report:", result),
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+        return()
+      }
+
+      if (is.null(result$path) || !file.exists(result$path)) {
+        showNotification(
+          "Report was generated, but the zip archive could not be found for download.",
+          type = "error",
+          duration = NULL,
+          closeButton = TRUE
+        )
+        return()
+      }
+
+      cleanup_download_bundle(download_bundle())
+      download_bundle(result)
+      shinyjs::click("download")
     })
 
     # Listen for the 'go' and make the report when called
     output$download <- downloadHandler(
       filename = function() {
-        paste0("water info report issued ", Sys.Date(), ".zip")
+        req(download_bundle())
+        download_bundle()$filename
       },
       content = function(file) {
-        file.copy(outputFile(), file)
-        # Now delete the zip file and the directory it's in
-        unlink(dirname(outputFile()), recursive = TRUE, force = TRUE)
+        bundle <- download_bundle()
+        req(bundle)
+
+        if (!file.exists(bundle$path)) {
+          stop("Generated report archive could not be found for download.")
+        }
+
+        copied <- file.copy(bundle$path, file, overwrite = TRUE)
+        if (!isTRUE(copied)) {
+          stop(
+            "Unable to copy the generated report archive to the download location."
+          )
+        }
+
+        cleanup_download_bundle(bundle)
+        download_bundle(NULL)
       }, # End content
       contentType = "application/zip"
     ) # End downloadHandler
+    outputOptions(output, "download", suspendWhenHidden = FALSE)
   }) # End moduleServer
 } # End waterInfoServer

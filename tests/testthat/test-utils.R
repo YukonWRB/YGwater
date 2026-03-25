@@ -24,3 +24,54 @@ test_that("translations work correctly", {
   expect_equal(tr("home", "English"), "Home")
   expect_equal(tr("home", "Français"), "Accueil")
 })
+
+test_that("parameter unit SQL supports legacy text unit columns", {
+  fake_con <- structure(list(), class = "mock_connection")
+
+  expr <- testthat::with_mocked_bindings(
+    ac_parameter_unit_select_sql(fake_con, "p", "unit"),
+    ac_db_column_info = function(...) {
+      data.frame(
+        column_name = c("unit_default", "unit_solid"),
+        data_type = c("text", "text")
+      )
+    },
+    ac_db_table_exists = function(...) {
+      FALSE
+    },
+    .package = "YGwater"
+  )
+
+  expect_equal(
+    expr,
+    "COALESCE(NULLIF(BTRIM(p.unit_default), ''), NULLIF(BTRIM(p.unit_solid), '')) AS unit"
+  )
+})
+
+test_that("parameter unit SQL supports normalized unit id columns", {
+  fake_con <- structure(list(), class = "mock_connection")
+
+  expr <- testthat::with_mocked_bindings(
+    ac_parameter_unit_select_sql(fake_con, "p", "unit"),
+    ac_db_column_info = function(...) {
+      data.frame(
+        column_name = c("unit_default", "unit_solid"),
+        data_type = c("integer", "integer")
+      )
+    },
+    ac_db_table_exists = function(...) {
+      TRUE
+    },
+    .package = "YGwater"
+  )
+
+  expect_equal(
+    expr,
+    paste0(
+      "COALESCE(",
+      "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = p.unit_default), ",
+      "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = p.unit_solid)",
+      ") AS unit"
+    )
+  )
+})

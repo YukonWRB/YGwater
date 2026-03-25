@@ -120,12 +120,25 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
           width = "100%"
         ),
         textAreaInput(
-          ns("note"),
-          "Note",
+          ns("general_notes"),
+          "General Notes",
           placeholder = "Optional",
           width = "100%",
           height = "100px"
-        ),
+        ) |>
+          tooltip(
+            "Use for general context, caveats, or supporting notes about the guideline."
+          ),
+        textAreaInput(
+          ns("applicability_notes"),
+          "Applicability Notes",
+          placeholder = "Optional",
+          width = "100%",
+          height = "100px"
+        ) |>
+          tooltip(
+            "Use for scope, exceptions, or notes about when the guideline applies."
+          ),
         selectizeInput(
           ns("parameter_id"),
           "Parameter",
@@ -311,7 +324,14 @@ addGuidelines <- function(id, language) {
     load_guidelines <- function() {
       DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT g.guideline_id, g.guideline_name, gp.publisher_name AS publisher, gs.series_name AS series, g.note, g.reference, p.param_name AS parameter, p.unit_default AS units, fr.fractions, mt.media_types, rs.result_speciation AS speciation, g.parameter_id, g.result_speciation_id, g.guideline_sql, g.publisher AS publisher_id, g.series AS series_id, fr.fraction_ids, mt.media_ids
+        paste0(
+          "SELECT g.guideline_id, g.guideline_name, gp.publisher_name AS publisher, gs.series_name AS series, g.general_notes, g.applicability_notes, g.reference, p.param_name AS parameter, ",
+          ac_parameter_unit_select_sql(
+            session$userData$AquaCache,
+            "p",
+            "units"
+          ),
+          ", fr.fractions, mt.media_types, rs.result_speciation AS speciation, g.parameter_id, g.result_speciation_id, g.guideline_sql, g.publisher AS publisher_id, g.series AS series_id, fr.fraction_ids, mt.media_ids
 FROM discrete.guidelines AS g
 LEFT JOIN discrete.guideline_publishers gp ON gp.publisher_id = g.publisher
 LEFT JOIN discrete.guideline_series gs ON gs.series_id = g.series
@@ -333,6 +353,7 @@ LEFT JOIN (
   JOIN public.media_types mt ON mt.media_id = gm.media_id
   GROUP BY gm.guideline_id
 ) mt ON mt.guideline_id = g.guideline_id"
+        )
       )
     }
 
@@ -374,7 +395,16 @@ LEFT JOIN (
       media_types = load_media_types(),
       parameters = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT parameter_id, param_name, unit_default,result_speciation, sample_fraction FROM public.parameters ORDER BY param_name"
+        paste(
+          "SELECT p.parameter_id, p.param_name,",
+          ac_parameter_unit_select_sql(
+            session$userData$AquaCache,
+            "p",
+            "unit_default"
+          ),
+          ", p.result_speciation, p.sample_fraction",
+          "FROM public.parameters p ORDER BY p.param_name"
+        )
       ),
       sample_fractions = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -417,7 +447,7 @@ LEFT JOIN (
             ),
             columnDefs = list(
               list(
-                targets = c(0, 11:17), # guideline_id and id/sql columns; index starts at 0
+                targets = c(0, 12:18), # guideline_id and id/sql columns; index starts at 0
                 visible = FALSE
               )
             ),
@@ -531,24 +561,26 @@ LEFT JOIN (
     # Clicking 'Add Guideline' creates a new row in the data.frame, which in turn updates the datatable
     observeEvent(input$add_guideline, {
       new <- data.frame(
-        guideline_id = -1, # Identifies the newly added row
+        guideline_id = -1L, # Identifies the newly added row
         guideline_name = "<new guideline>",
         publisher = "<select or create publisher>",
         series = "<optional series>",
-        fractions = "<optional fractions>",
-        media_types = "<optional media>",
+        general_notes = NA_character_,
+        applicability_notes = NA_character_,
         reference = NA_character_,
-        note = NA_character_,
         parameter = NA_character_,
         units = NA_character_,
+        fractions = "<optional fractions>",
+        media_types = "<optional media>",
         speciation = NA_character_,
-        parameter_id = NA,
-        result_speciation_id = NA,
+        parameter_id = NA_integer_,
+        result_speciation_id = NA_integer_,
         guideline_sql = NA_character_,
-        publisher_id = NA,
-        series_id = NA,
+        publisher_id = NA_integer_,
+        series_id = NA_integer_,
         fraction_ids = NA_character_,
-        media_ids = NA_character_
+        media_ids = NA_character_,
+        stringsAsFactors = FALSE
       )
       moduleData$guidelines <- rbind(moduleData$guidelines, new) # Appended here so that the data.table updates
       moduleData$guidelines_temp <- rbind(moduleData$guidelines_temp, new)
@@ -572,69 +604,83 @@ LEFT JOIN (
     })
 
     # Respond to row selections in the datatable and update the left sidebar inputs accordingly
-    observeEvent(input$guidelines_table_rows_selected, {
-      selected_row <- input$guidelines_table_rows_selected
-      if (is.null(selected_row) || !length(selected_row)) {
-        updateTextInput(session, "guideline_name", value = "")
-        updateSelectizeInput(session, "publisher", selected = NULL)
-        updateSelectizeInput(session, "series", selected = NULL)
-        updateSelectizeInput(session, "sample_fraction", selected = NULL)
-        updateSelectizeInput(session, "media_type", selected = NULL)
-        updateTextInput(session, "reference", value = "")
-        updateTextAreaInput(session, "note", value = "")
-        updateSelectizeInput(session, "parameter_id", selected = NULL)
-        updateSelectizeInput(session, "result_speciation", selected = NULL)
-        updateTextAreaInput(session, "guideline_sql", value = "")
-        shinyjs::hide("save_guideline")
-        return()
-      }
-      guideline <- moduleData$guidelines[selected_row, ]
+    observeEvent(
+      input$guidelines_table_rows_selected,
+      {
+        selected_row <- input$guidelines_table_rows_selected
+        if (is.null(selected_row) || !length(selected_row)) {
+          updateTextInput(session, "guideline_name", value = "")
+          updateSelectizeInput(session, "publisher", selected = NULL)
+          updateSelectizeInput(session, "series", selected = NULL)
+          updateSelectizeInput(session, "sample_fraction", selected = NULL)
+          updateSelectizeInput(session, "media_type", selected = NULL)
+          updateTextInput(session, "reference", value = "")
+          updateTextAreaInput(session, "general_notes", value = "")
+          updateTextAreaInput(session, "applicability_notes", value = "")
+          updateSelectizeInput(session, "parameter_id", selected = NULL)
+          updateSelectizeInput(session, "result_speciation", selected = NULL)
+          updateTextAreaInput(session, "guideline_sql", value = "")
+          shinyjs::hide("save_guideline")
+          return()
+        }
+        guideline <- moduleData$guidelines[selected_row, ]
 
-      updateTextInput(
-        session,
-        "guideline_name",
-        value = guideline$guideline_name
-      )
-      updateSelectizeInput(
-        session,
-        "publisher",
-        selected = guideline$publisher_id
-      )
-      updateSelectizeInput(
-        session,
-        "series",
-        selected = guideline$series_id
-      )
-      updateSelectizeInput(
-        session,
-        "sample_fraction",
-        selected = parse_id_csv(guideline$fraction_ids)
-      )
-      updateSelectizeInput(
-        session,
-        "media_type",
-        selected = parse_id_csv(guideline$media_ids)
-      )
-      updateTextInput(session, "reference", value = guideline$reference)
-      updateTextAreaInput(session, "note", value = guideline$note)
-      updateSelectizeInput(
-        session,
-        "parameter_id",
-        selected = guideline$parameter_id
-      )
-      updateSelectizeInput(
-        session,
-        "result_speciation",
-        selected = guideline$result_speciation_id
-      )
-      updateTextAreaInput(
-        session,
-        "guideline_sql",
-        value = guideline$guideline_sql
-      )
+        updateTextInput(
+          session,
+          "guideline_name",
+          value = guideline$guideline_name
+        )
+        updateSelectizeInput(
+          session,
+          "publisher",
+          selected = guideline$publisher_id
+        )
+        updateSelectizeInput(
+          session,
+          "series",
+          selected = guideline$series_id
+        )
+        updateSelectizeInput(
+          session,
+          "sample_fraction",
+          selected = parse_id_csv(guideline$fraction_ids)
+        )
+        updateSelectizeInput(
+          session,
+          "media_type",
+          selected = parse_id_csv(guideline$media_ids)
+        )
+        updateTextInput(session, "reference", value = guideline$reference)
+        updateTextAreaInput(
+          session,
+          "general_notes",
+          value = guideline$general_notes
+        )
+        updateTextAreaInput(
+          session,
+          "applicability_notes",
+          value = guideline$applicability_notes
+        )
+        updateSelectizeInput(
+          session,
+          "parameter_id",
+          selected = guideline$parameter_id
+        )
+        updateSelectizeInput(
+          session,
+          "result_speciation",
+          selected = guideline$result_speciation_id
+        )
+        updateTextAreaInput(
+          session,
+          "guideline_sql",
+          value = guideline$guideline_sql
+        )
 
-      shinyjs::show("save_guideline")
-    }, ignoreNULL = FALSE)
+        shinyjs::show("save_guideline")
+      },
+      ignoreNULL = FALSE
+    )
 
     # Observe changes in the input fields and update the reactiveValues data.frame accordingly
     observe({
@@ -683,14 +729,27 @@ LEFT JOIN (
       } else {
         input$reference
       }
-      moduleData$guidelines_temp[selected_row, "note"] <- if (
-        nchar(input$note) == 0
+      moduleData$guidelines_temp[selected_row, "general_notes"] <- if (
+        nchar(input$general_notes) == 0
       ) {
         NA
       } else {
-        input$note
+        input$general_notes
       }
-      moduleData$guidelines_temp[selected_row, "parameter_id"] <- if (is.null(input$parameter_id)) NA else as.integer(input$parameter_id)
+      moduleData$guidelines_temp[selected_row, "applicability_notes"] <- if (
+        nchar(input$applicability_notes) == 0
+      ) {
+        NA
+      } else {
+        input$applicability_notes
+      }
+      moduleData$guidelines_temp[selected_row, "parameter_id"] <- if (
+        is.null(input$parameter_id)
+      ) {
+        NA
+      } else {
+        as.integer(input$parameter_id)
+      }
       moduleData$guidelines_temp[selected_row, "result_speciation_id"] <- if (
         is.null(input$result_speciation)
       ) {
@@ -736,7 +795,10 @@ LEFT JOIN (
       ) {
         NA_character_
       } else {
-        fids <- parse_id_csv(moduleData$guidelines_temp[selected_row, "fraction_ids"])
+        fids <- parse_id_csv(moduleData$guidelines_temp[
+          selected_row,
+          "fraction_ids"
+        ])
         paste(
           moduleData$sample_fractions$sample_fraction[
             match(fids, moduleData$sample_fractions$sample_fraction_id)
@@ -751,7 +813,10 @@ LEFT JOIN (
       ) {
         NA_character_
       } else {
-        mids <- parse_id_csv(moduleData$guidelines_temp[selected_row, "media_ids"])
+        mids <- parse_id_csv(moduleData$guidelines_temp[
+          selected_row,
+          "media_ids"
+        ])
         paste(
           moduleData$media_types$media_type[
             match(mids, moduleData$media_types$media_id)
@@ -947,7 +1012,11 @@ LEFT JOIN (
               moduleData$publishers$publisher_id,
               moduleData$publishers$publisher_name
             ),
-            selected = if (length(preselected_publisher)) preselected_publisher else NULL,
+            selected = if (length(preselected_publisher)) {
+              preselected_publisher
+            } else {
+              NULL
+            },
             multiple = TRUE,
             options = list(maxItems = 1)
           ),
@@ -1649,6 +1718,24 @@ FROM vals -- from the 'vals' CTE"
           } else {
             guideline$reference
           }
+          general_notes <- if (
+            is.null(guideline$general_notes) ||
+              is.na(guideline$general_notes) ||
+              guideline$general_notes == ""
+          ) {
+            NA_character_
+          } else {
+            guideline$general_notes
+          }
+          applicability_notes <- if (
+            is.null(guideline$applicability_notes) ||
+              is.na(guideline$applicability_notes) ||
+              guideline$applicability_notes == ""
+          ) {
+            NA_character_
+          } else {
+            guideline$applicability_notes
+          }
           fraction_ids <- parse_id_csv(guideline$fraction_ids)
           media_ids <- parse_id_csv(guideline$media_ids)
           guideline_id <- guideline$guideline_id
@@ -1657,13 +1744,14 @@ FROM vals -- from the 'vals' CTE"
             # New guideline - perform INSERT
             guideline_id <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              "INSERT INTO discrete.guidelines (guideline_name, publisher, series, reference, note, parameter_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING guideline_id",
+              "INSERT INTO discrete.guidelines (guideline_name, publisher, series, reference, general_notes, applicability_notes, parameter_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING guideline_id",
               params = list(
                 guideline$guideline_name,
                 guideline$publisher_id,
                 guideline$series_id,
                 ref,
-                guideline$note,
+                general_notes,
+                applicability_notes,
                 guideline$parameter_id,
                 rs,
                 guideline$guideline_sql
@@ -1673,13 +1761,14 @@ FROM vals -- from the 'vals' CTE"
             # Existing guideline - perform UPDATE
             DBI::dbExecute(
               session$userData$AquaCache,
-              "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, series = $3, reference = $4, note = $5, parameter_id = $6, result_speciation_id = $7, guideline_sql = $8 WHERE guideline_id = $9",
+              "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, series = $3, reference = $4, general_notes = $5, applicability_notes = $6, parameter_id = $7, result_speciation_id = $8, guideline_sql = $9 WHERE guideline_id = $10",
               params = list(
                 guideline$guideline_name,
                 guideline$publisher_id,
                 guideline$series_id,
                 ref,
-                guideline$note,
+                general_notes,
+                applicability_notes,
                 guideline$parameter_id,
                 rs,
                 guideline$guideline_sql,
@@ -1799,7 +1888,8 @@ FROM vals -- from the 'vals' CTE"
           updateSelectizeInput(session, "series", selected = NULL)
           updateSelectizeInput(session, "media_type", selected = NULL)
           updateTextInput(session, "reference", value = "")
-          updateTextAreaInput(session, "note", value = "")
+          updateTextAreaInput(session, "general_notes", value = "")
+          updateTextAreaInput(session, "applicability_notes", value = "")
           updateSelectizeInput(session, "parameter_id", selected = NULL)
           updateSelectizeInput(session, "sample_fraction", selected = NULL)
           updateSelectizeInput(session, "result_speciation", selected = NULL)

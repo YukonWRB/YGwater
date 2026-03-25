@@ -33,7 +33,17 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     )
     moduleData$AC_params <- DBI::dbGetQuery(
       session$userData$AquaCache,
-      "SELECT DISTINCT p.parameter_id, p.param_name, p.unit_default AS unit FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id ORDER BY p.param_name ASC"
+      paste(
+        "SELECT DISTINCT p.parameter_id, p.param_name,",
+        ac_parameter_unit_select_sql(
+          session$userData$AquaCache,
+          "p",
+          "unit"
+        ),
+        "FROM parameters p",
+        "INNER JOIN results AS r ON p.parameter_id = r.parameter_id",
+        "ORDER BY p.param_name ASC"
+      )
     )
     moduleData$AC_loc_params <- DBI::dbGetQuery(
       session$userData$AquaCache,
