@@ -11,14 +11,13 @@ con <- YGwater::AquaConnect(
 load_all()
 dat <- load_bulletin_timeseries(
     con = con,
-    load_swe = FALSE,
+    load_swe = TRUE,
     load_temp = FALSE,
     load_precip = TRUE,
     load_streamflow = FALSE,
     start_year_historical = 1991,
     end_year_historical = 2020,
-    october_start = TRUE,
-    epsg = 3579
+    october_start = TRUE
 )
 
 make_snowbull_map(
@@ -26,11 +25,11 @@ make_snowbull_map(
     month = 3,
     statistic = "relative_to_med",
     language = "English",
-    format = "ggplot",
-    param_name = "precipitation, total",
+    format = "leaflet",
+    param_name = "snow water equivalent",
     snowbull_timeseries = dat,
     con = con,
-    filename = "map.png",
+    filename = "map.html",
     start_year_historical = 1991,
     end_year_historical = 2020
 )

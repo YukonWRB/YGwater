@@ -89,6 +89,13 @@ get_static_style_elements <- function() {
                 fontWeight = "bold",
                 textShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
             ),
+            leaflet_label = list(
+                color = "#222",
+                fontSize = "16px",
+                textShadowSize = 4,
+                fontWeight = "bold",
+                textShadow = "1px 1px 1px #fff, -1px -1px 1px #fff, 1px -1px 1px #fff, -1px 1px 1px #fff"
+            ),
             popupOptions = list(
                 maxWidth = 320,
                 closeButton = TRUE,
@@ -4807,7 +4814,7 @@ make_leaflet_map <- function(
                         "center",
                     textOnly = static_style_elements$basins$labelOptions$textOnly %||%
                         TRUE,
-                    style = static_style_elements$basins$label
+                    style = static_style_elements$basins$leaflet_label
                 ),
                 group = "Basins averages"
             )

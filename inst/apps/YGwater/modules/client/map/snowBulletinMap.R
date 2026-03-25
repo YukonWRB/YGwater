@@ -112,6 +112,7 @@ mapSnowbull <- function(id, language) {
       )
     })
 
+    current_year <- lubridate::year(lubridate::now())
     # --- Server-side sidebar UI ---
     output$sidebar_page <- renderUI({
       div(
@@ -125,8 +126,8 @@ mapSnowbull <- function(id, language) {
           selectInput(
             ns("year"),
             label = NULL,
-            choices = as.character(2025:2000),
-            selected = "2025",
+            choices = as.character(current_year:2000),
+            selected = "2026",
             width = "100%"
           )
         ),
