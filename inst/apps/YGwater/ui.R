@@ -523,7 +523,55 @@ app_ui <- function(request) {
         },
 
         if (!config$public) {
-          nav_menu(title = "Metadata", value = "metadataTasks")
+          nav_menu(
+            title = "Reference data",
+            value = "metadataTasks",
+            nav_panel(
+              title = "Organizations",
+              value = "manageOrganizations",
+              uiOutput("manageOrganizations_ui")
+            ),
+            nav_panel(
+              title = "Networks",
+              value = "manageNetworks",
+              uiOutput("manageNetworks_ui")
+            ),
+            nav_panel(
+              title = "Projects",
+              value = "manageProjects",
+              uiOutput("manageProjects_ui")
+            ),
+            nav_panel(
+              title = "Network / Project Types",
+              value = "manageNetworkProjectTypes",
+              uiOutput("manageNetworkProjectTypes_ui")
+            ),
+            nav_panel(
+              title = "Location Types",
+              value = "manageLocationTypes",
+              uiOutput("manageLocationTypes_ui")
+            ),
+            nav_panel(
+              title = "Media Types",
+              value = "manageMediaTypes",
+              uiOutput("manageMediaTypes_ui")
+            ),
+            nav_panel(
+              title = "Parameter Groups",
+              value = "manageParameterGroups",
+              uiOutput("manageParameterGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameter Sub-Groups",
+              value = "manageParameterSubGroups",
+              uiOutput("manageParameterSubGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameters",
+              value = "manageParameters",
+              uiOutput("manageParameters_ui")
+            )
+          )
         },
 
         if (!config$public) {

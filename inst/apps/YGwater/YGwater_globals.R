@@ -67,6 +67,10 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/locations/addSubLocation.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/admin/metadata/manageReferenceTables.R",
+      package = "YGwater"
+    ))
 
     # equipment sub-modules
     source(system.file(

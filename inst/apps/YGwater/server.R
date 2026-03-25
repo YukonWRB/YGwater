@@ -103,6 +103,15 @@ app_server <- function(input, output, session) {
     "visit",
     "changePwd",
     "manageUsers",
+    "manageOrganizations",
+    "manageNetworks",
+    "manageProjects",
+    "manageNetworkProjectTypes",
+    "manageLocationTypes",
+    "manageMediaTypes",
+    "manageParameterGroups",
+    "manageParameterSubGroups",
+    "manageParameters",
     "simplerIndex",
     "editBoreholesWells",
     "manageBoreholeDocuments"
@@ -918,6 +927,79 @@ app_server <- function(input, output, session) {
         nav_hide(id = "navbar", target = "wellTasks")
       }
 
+      # Reference data ------------------------------------------------------
+      if (
+        any(
+          session$userData$admin_privs$manageOrganizations,
+          session$userData$admin_privs$manageNetworks,
+          session$userData$admin_privs$manageProjects,
+          session$userData$admin_privs$manageNetworkProjectTypes,
+          session$userData$admin_privs$manageLocationTypes,
+          session$userData$admin_privs$manageMediaTypes,
+          session$userData$admin_privs$manageParameterGroups,
+          session$userData$admin_privs$manageParameterSubGroups,
+          session$userData$admin_privs$manageParameters
+        )
+      ) {
+        nav_show(id = "navbar", target = "metadataTasks")
+        if (isTRUE(session$userData$admin_privs$manageOrganizations)) {
+          nav_show(id = "navbar", target = "manageOrganizations")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageOrganizations)) {
+          nav_hide(id = "navbar", target = "manageOrganizations")
+        }
+        if (isTRUE(session$userData$admin_privs$manageNetworks)) {
+          nav_show(id = "navbar", target = "manageNetworks")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageNetworks)) {
+          nav_hide(id = "navbar", target = "manageNetworks")
+        }
+        if (isTRUE(session$userData$admin_privs$manageProjects)) {
+          nav_show(id = "navbar", target = "manageProjects")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageProjects)) {
+          nav_hide(id = "navbar", target = "manageProjects")
+        }
+        if (isTRUE(session$userData$admin_privs$manageNetworkProjectTypes)) {
+          nav_show(id = "navbar", target = "manageNetworkProjectTypes")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageNetworkProjectTypes)) {
+          nav_hide(id = "navbar", target = "manageNetworkProjectTypes")
+        }
+        if (isTRUE(session$userData$admin_privs$manageLocationTypes)) {
+          nav_show(id = "navbar", target = "manageLocationTypes")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageLocationTypes)) {
+          nav_hide(id = "navbar", target = "manageLocationTypes")
+        }
+        if (isTRUE(session$userData$admin_privs$manageMediaTypes)) {
+          nav_show(id = "navbar", target = "manageMediaTypes")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageMediaTypes)) {
+          nav_hide(id = "navbar", target = "manageMediaTypes")
+        }
+        if (isTRUE(session$userData$admin_privs$manageParameterGroups)) {
+          nav_show(id = "navbar", target = "manageParameterGroups")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageParameterGroups)) {
+          nav_hide(id = "navbar", target = "manageParameterGroups")
+        }
+        if (isTRUE(session$userData$admin_privs$manageParameterSubGroups)) {
+          nav_show(id = "navbar", target = "manageParameterSubGroups")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageParameterSubGroups)) {
+          nav_hide(id = "navbar", target = "manageParameterSubGroups")
+        }
+        if (isTRUE(session$userData$admin_privs$manageParameters)) {
+          nav_show(id = "navbar", target = "manageParameters")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageParameters)) {
+          nav_hide(id = "navbar", target = "manageParameters")
+        }
+      } else {
+        nav_hide(id = "navbar", target = "metadataTasks")
+      }
+
       # Admin menu ----------------------------------------------------------
       # Admin menu is always shown because every logged in user can change their own password
       nav_show(id = "navbar", target = "adminTasks")
@@ -1280,6 +1362,16 @@ app_server <- function(input, output, session) {
     ui_loaded$editBoreholesWells <- FALSE
     ui_loaded$manageBoreholeDocuments <- FALSE
 
+    ui_loaded$manageOrganizations <- FALSE
+    ui_loaded$manageNetworks <- FALSE
+    ui_loaded$manageProjects <- FALSE
+    ui_loaded$manageNetworkProjectTypes <- FALSE
+    ui_loaded$manageLocationTypes <- FALSE
+    ui_loaded$manageMediaTypes <- FALSE
+    ui_loaded$manageParameterGroups <- FALSE
+    ui_loaded$manageParameterSubGroups <- FALSE
+    ui_loaded$manageParameters <- FALSE
+
     ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
     ui_loaded$manageNotifications <- FALSE
@@ -1341,6 +1433,15 @@ app_server <- function(input, output, session) {
     "simplerIndex",
     "editBoreholesWells",
     "manageBoreholeDocuments",
+    "manageOrganizations",
+    "manageNetworks",
+    "manageProjects",
+    "manageNetworkProjectTypes",
+    "manageLocationTypes",
+    "manageMediaTypes",
+    "manageParameterGroups",
+    "manageParameterSubGroups",
+    "manageParameters",
     "adminHome",
     "changePwd",
     "manageUsers",
@@ -2053,6 +2154,49 @@ app_server <- function(input, output, session) {
             ]
           }
 
+          lookup_table_privs <- c(
+            network_project_types = has_priv(
+              tbl = session$userData$table_privs,
+              "public.network_project_types",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            location_types = has_priv(
+              tbl = session$userData$table_privs,
+              "public.location_types",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            media_types = has_priv(
+              tbl = session$userData$table_privs,
+              "public.media_types",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            parameter_groups = has_priv(
+              tbl = session$userData$table_privs,
+              "public.parameter_groups",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            parameter_sub_groups = has_priv(
+              tbl = session$userData$table_privs,
+              "public.parameter_sub_groups",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            parameters = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "public.parameters",
+                "public.parameter_relationships",
+                "public.parameter_groups",
+                "public.parameter_sub_groups"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT", "DELETE"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            )
+          )
+
           session$userData$admin_privs <- list(
             addLocation = has_priv(
               tbl = session$userData$table_privs,
@@ -2395,6 +2539,34 @@ app_server <- function(input, output, session) {
               )
               # Insert, update, delete by default
             ),
+            manageOrganizations = has_priv(
+              tbl = session$userData$table_privs,
+              "public.organizations",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            manageNetworks = has_priv(
+              tbl = session$userData$table_privs,
+              c("public.networks", "public.network_project_types"),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT")
+              )
+            ),
+            manageProjects = has_priv(
+              tbl = session$userData$table_privs,
+              c("public.projects", "public.network_project_types"),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT")
+              )
+            ),
+            lookup_tables = lookup_table_privs,
+            manageNetworkProjectTypes = lookup_table_privs[["network_project_types"]],
+            manageLocationTypes = lookup_table_privs[["location_types"]],
+            manageMediaTypes = lookup_table_privs[["media_types"]],
+            manageParameterGroups = lookup_table_privs[["parameter_groups"]],
+            manageParameterSubGroups = lookup_table_privs[["parameter_sub_groups"]],
+            manageParameters = lookup_table_privs[["parameters"]],
             visit = has_priv(
               tbl = session$userData$table_privs,
               c(
@@ -3199,6 +3371,114 @@ app_server <- function(input, output, session) {
         ui_loaded$manageBoreholeDocuments <- TRUE
         manageBoreholeDocuments(
           "manageBoreholeDocuments",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageOrganizations") {
+      if (!ui_loaded$manageOrganizations) {
+        output$manageOrganizations_ui <- renderUI(manageOrganizationsUI(
+          "manageOrganizations"
+        ))
+        ui_loaded$manageOrganizations <- TRUE
+        manageOrganizations(
+          "manageOrganizations",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageNetworks") {
+      if (!ui_loaded$manageNetworks) {
+        output$manageNetworks_ui <- renderUI(manageNetworksUI(
+          "manageNetworks"
+        ))
+        ui_loaded$manageNetworks <- TRUE
+        manageNetworks(
+          "manageNetworks",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageProjects") {
+      if (!ui_loaded$manageProjects) {
+        output$manageProjects_ui <- renderUI(manageProjectsUI(
+          "manageProjects"
+        ))
+        ui_loaded$manageProjects <- TRUE
+        manageProjects(
+          "manageProjects",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageNetworkProjectTypes") {
+      if (!ui_loaded$manageNetworkProjectTypes) {
+        output$manageNetworkProjectTypes_ui <- renderUI(
+          manageNetworkProjectTypesUI("manageNetworkProjectTypes")
+        )
+        ui_loaded$manageNetworkProjectTypes <- TRUE
+        manageNetworkProjectTypes(
+          "manageNetworkProjectTypes",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageLocationTypes") {
+      if (!ui_loaded$manageLocationTypes) {
+        output$manageLocationTypes_ui <- renderUI(manageLocationTypesUI(
+          "manageLocationTypes"
+        ))
+        ui_loaded$manageLocationTypes <- TRUE
+        manageLocationTypes(
+          "manageLocationTypes",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageMediaTypes") {
+      if (!ui_loaded$manageMediaTypes) {
+        output$manageMediaTypes_ui <- renderUI(manageMediaTypesUI(
+          "manageMediaTypes"
+        ))
+        ui_loaded$manageMediaTypes <- TRUE
+        manageMediaTypes(
+          "manageMediaTypes",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageParameterGroups") {
+      if (!ui_loaded$manageParameterGroups) {
+        output$manageParameterGroups_ui <- renderUI(manageParameterGroupsUI(
+          "manageParameterGroups"
+        ))
+        ui_loaded$manageParameterGroups <- TRUE
+        manageParameterGroups(
+          "manageParameterGroups",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageParameterSubGroups") {
+      if (!ui_loaded$manageParameterSubGroups) {
+        output$manageParameterSubGroups_ui <- renderUI(
+          manageParameterSubGroupsUI("manageParameterSubGroups")
+        )
+        ui_loaded$manageParameterSubGroups <- TRUE
+        manageParameterSubGroups(
+          "manageParameterSubGroups",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageParameters") {
+      if (!ui_loaded$manageParameters) {
+        output$manageParameters_ui <- renderUI(manageParametersUI(
+          "manageParameters"
+        ))
+        ui_loaded$manageParameters <- TRUE
+        manageParameters(
+          "manageParameters",
           language = languageSelection
         )
       }
