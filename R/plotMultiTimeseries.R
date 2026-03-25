@@ -423,7 +423,7 @@ plotMultiTimeseries <- function(
     end_date <- end_date + 24 * 60 * 60
   }
 
-  #back to UTC because DB queries are in UTC
+  # back to UTC because DB queries are in UTC
   attr(start_date, "tzone") <- "UTC"
   attr(end_date, "tzone") <- "UTC"
 
@@ -499,11 +499,13 @@ plotMultiTimeseries <- function(
       con,
       timeseries_ids
     )
-    if (historic_range_is_meaningless(
-      aggregation_types = historic_range_meta$aggregation_type,
-      resolution = resolution,
-      record_rate_seconds = historic_range_meta$record_rate_seconds
-    )) {
+    if (
+      historic_range_is_meaningless(
+        aggregation_types = historic_range_meta$aggregation_type,
+        resolution = resolution,
+        record_rate_seconds = historic_range_meta$record_rate_seconds
+      )
+    ) {
       historic_range <- FALSE
     }
   }
@@ -579,7 +581,11 @@ plotMultiTimeseries <- function(
       }
 
       parameter_txt <- tolower(as.character(parameter))
-      unit_sql <- DBI::SQL(ac_parameter_unit_select_sql(con, "p", "unit_default"))
+      unit_sql <- DBI::SQL(ac_parameter_unit_select_sql(
+        con,
+        "p",
+        "unit_default"
+      ))
       parameter_tbl <- DBI::dbGetQuery(
         con,
         glue::glue_sql(
@@ -694,7 +700,7 @@ plotMultiTimeseries <- function(
       if (is.null(record_rate)) {
         # aggregation_type_id may or may not be NULL
         if (is.null(aggregation_type_id)) {
-          #both record_rate and aggregation_type_id are NULL
+          # both record_rate and aggregation_type_id are NULL
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
@@ -707,7 +713,7 @@ plotMultiTimeseries <- function(
             )
           )
         } else {
-          #aggregation_type_id is not NULL but record_rate is
+          # aggregation_type_id is not NULL but record_rate is
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
@@ -722,7 +728,7 @@ plotMultiTimeseries <- function(
           )
         }
       } else if (is.null(aggregation_type_id)) {
-        #record_rate is not NULL but aggregation_type_id is
+        # record_rate is not NULL but aggregation_type_id is
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
@@ -736,7 +742,7 @@ plotMultiTimeseries <- function(
           )
         )
       } else {
-        #both record_rate and aggregation_type_id are not NULL
+        # both record_rate and aggregation_type_id are not NULL
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
@@ -757,7 +763,7 @@ plotMultiTimeseries <- function(
       if (is.null(record_rate)) {
         # aggregation_type_id may or may not be NULL
         if (is.null(aggregation_type_id)) {
-          #both record_rate and aggregation_type_id are NULL
+          # both record_rate and aggregation_type_id are NULL
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
@@ -771,7 +777,7 @@ plotMultiTimeseries <- function(
             )
           )
         } else {
-          #aggregation_type_id is not NULL but record_rate is
+          # aggregation_type_id is not NULL but record_rate is
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
@@ -788,7 +794,7 @@ plotMultiTimeseries <- function(
           )
         }
       } else if (is.null(aggregation_type_id)) {
-        #record_rate is not NULL but aggregation_type_id is
+        # record_rate is not NULL but aggregation_type_id is
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
@@ -804,7 +810,7 @@ plotMultiTimeseries <- function(
           )
         )
       } else {
-        #both record_rate and aggregation_type_id are not NULL
+        # both record_rate and aggregation_type_id are not NULL
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
@@ -982,25 +988,36 @@ plotMultiTimeseries <- function(
     timeseries[i, "start"] <- sub.start_date
     timeseries[i, "end"] <- sub.end_date
 
+    # Find the ts units
+    timeseries[i, "units"] <- parameter_tbl$unit_default[1]
+
     # Find the necessary datum (latest datum)
     if (datum) {
-      datum.conv <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT conversion_m FROM datum_conversions WHERE location_id = ",
+      if (timeseries[i, "units"] != "m") {
+        warning(
+          "Datum conversion is only available for timeseries with units of meters. Skipping datum conversion for timeseries_id ",
+          exist_check$timeseries_id,
+          " at location_id ",
           location_id,
-          " AND current = TRUE"
+          "."
         )
-      )
-      if (is.na(datum.conv$conversion_m)) {
         datum.conv <- data.frame(conversion_m = 0)
+      } else {
+        datum.conv <- DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT conversion_m FROM datum_conversions WHERE location_id = ",
+            location_id,
+            " AND current = TRUE"
+          )
+        )
+        if (is.na(datum.conv$conversion_m)) {
+          datum.conv <- data.frame(conversion_m = 0)
+        }
       }
     } else {
       datum.conv <- data.frame(conversion_m = 0)
     }
-
-    # Find the ts units
-    timeseries[i, "units"] <- parameter_tbl$unit_default[1]
 
     # Get the data ####################################
     tsid <- exist_check$timeseries_id
@@ -1160,7 +1177,7 @@ plotMultiTimeseries <- function(
     # fill gaps with NA values
     # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
     min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
-  if (!is.infinite(min_trace)) {
+    if (!is.infinite(min_trace)) {
       if (resolution == "hour") {
         trace_data <- add_gap_markers(trace_data, period_seconds = 3600)[,
           c("datetime", "value")
@@ -1175,7 +1192,8 @@ plotMultiTimeseries <- function(
           trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
           # Shift datetime and add period_secs to compute the 'expected' next datetime
           trace_data[,
-            "expected" := data.table::shift(datetime, type = "lead") - period_secs
+            "expected" := data.table::shift(datetime, type = "lead") -
+              period_secs
           ]
           # Create 'gap_exists' column to identify where gaps are
           trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
