@@ -31,6 +31,10 @@ addSampleSeries <- function(id, language) {
     moduleData <- reactiveValues()
     selected_series <- reactiveVal(NULL)
     moduleData$org_modal_target <- NULL
+    pending_owner_selection <- reactiveVal(character(0))
+    pending_owner_new <- reactiveVal(NULL)
+    pending_contributor_selection <- reactiveVal(character(0))
+    pending_contributor_new <- reactiveVal(NULL)
 
     format_datetime_input <- function(value) {
       if (is.null(value)) {
@@ -65,6 +69,21 @@ addSampleSeries <- function(id, language) {
         "synch_to",
         tz_name
       )
+    }
+
+    update_org_selectize <- function(input_id, selected = NULL) {
+      args <- list(
+        session = session,
+        inputId = input_id,
+        choices = stats::setNames(
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        )
+      )
+      if (!is.null(selected)) {
+        args$selected <- normalize_selectize_values(selected)
+      }
+      do.call(updateSelectizeInput, args)
     }
 
     getModuleData <- function() {
@@ -417,6 +436,11 @@ addSampleSeries <- function(id, language) {
 
     prompt_new_org <- function(value, target) {
       moduleData$org_modal_target <- target
+      if (identical(target, "default_owner")) {
+        pending_owner_new(value)
+      } else {
+        pending_contributor_new(value)
+      }
       showModal(modalDialog(
         title = if (identical(target, "default_owner")) {
           "Add owner"
@@ -430,24 +454,37 @@ addSampleSeries <- function(id, language) {
         textInput(ns("contact_email"), "Contact email (optional)"),
         textInput(ns("contact_note"), "Contact note (optional)"),
         footer = tagList(
-          modalButton("Cancel"),
+          actionButton(ns("cancel_org_modal"), "Cancel"),
           actionButton(ns("save_org"), "Add organization")
-        )
+        ),
+        easyClose = FALSE
       ))
     }
 
     observeEvent(
       input$default_owner,
       {
-        if (
-          length(input$default_owner) == 0 || identical(input$default_owner, "")
-        ) {
+        resolved <- resolve_selectize_lookup_values(
+          input$default_owner,
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        )
+        pending_owner_selection(resolved$existing_selection)
+
+        if (!length(resolved$submitted_values)) {
+          pending_owner_new(NULL)
           return()
         }
-        if (input$default_owner %in% moduleData$organizations$organization_id) {
+
+        if (!length(resolved$new_values)) {
+          pending_owner_new(NULL)
+          if (resolved$used_label_match) {
+            update_org_selectize("default_owner", resolved$existing_selection)
+          }
           return()
         }
-        prompt_new_org(input$default_owner, "default_owner")
+
+        prompt_new_org(resolved$last_new_value, "default_owner")
       },
       ignoreNULL = TRUE
     )
@@ -455,19 +492,51 @@ addSampleSeries <- function(id, language) {
     observeEvent(
       input$default_contributor,
       {
-        if (
-          length(input$default_contributor) == 0 ||
-            identical(input$default_contributor, "")
-        ) {
+        resolved <- resolve_selectize_lookup_values(
+          input$default_contributor,
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        )
+        pending_contributor_selection(resolved$existing_selection)
+
+        if (!length(resolved$submitted_values)) {
+          pending_contributor_new(NULL)
           return()
         }
-        if (
-          input$default_contributor %in%
-            moduleData$organizations$organization_id
-        ) {
+
+        if (!length(resolved$new_values)) {
+          pending_contributor_new(NULL)
+          if (resolved$used_label_match) {
+            update_org_selectize(
+              "default_contributor",
+              resolved$existing_selection
+            )
+          }
           return()
         }
-        prompt_new_org(input$default_contributor, "default_contributor")
+
+        prompt_new_org(resolved$last_new_value, "default_contributor")
+      },
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$cancel_org_modal,
+      {
+        if (identical(moduleData$org_modal_target, "default_owner")) {
+          update_org_selectize("default_owner", pending_owner_selection())
+          pending_owner_new(NULL)
+        } else if (
+          identical(moduleData$org_modal_target, "default_contributor")
+        ) {
+          update_org_selectize(
+            "default_contributor",
+            pending_contributor_selection()
+          )
+          pending_contributor_new(NULL)
+        }
+        moduleData$org_modal_target <- NULL
+        removeModal()
       },
       ignoreNULL = TRUE
     )
@@ -481,25 +550,56 @@ addSampleSeries <- function(id, language) {
         } else {
           shinyjs::js$backgroundCol(ns("org_name"), "#fff")
         }
+        org_name <- trimws(input$org_name)
+        existing_id <- match_lookup_id_by_label(
+          org_name,
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        )
+        if (length(existing_id)) {
+          if (identical(moduleData$org_modal_target, "default_owner")) {
+            update_org_selectize("default_owner", existing_id[[1]])
+            pending_owner_selection(existing_id[[1]])
+            pending_owner_new(NULL)
+          } else if (
+            identical(moduleData$org_modal_target, "default_contributor")
+          ) {
+            update_org_selectize("default_contributor", existing_id[[1]])
+            pending_contributor_selection(existing_id[[1]])
+            pending_contributor_new(NULL)
+          }
+          moduleData$org_modal_target <- NULL
+          removeModal()
+          showNotification("Existing organization selected.", type = "message")
+          return()
+        }
         df <- data.frame(
-          name = input$org_name,
-          name_fr = if (isTruthy(input$org_name_fr)) input$org_name_fr else NA,
+          name = org_name,
+          name_fr = if (isTruthy(input$org_name_fr)) {
+            trimws(input$org_name_fr)
+          } else {
+            NA
+          },
           contact_name = if (isTruthy(input$contact_name)) {
-            input$contact_name
+            trimws(input$contact_name)
           } else {
             NA
           },
           phone = if (isTruthy(input$contact_phone)) {
-            input$contact_phone
+            trimws(input$contact_phone)
           } else {
             NA
           },
           email = if (isTruthy(input$contact_email)) {
-            input$contact_email
+            trimws(input$contact_email)
           } else {
             NA
           },
-          note = if (isTruthy(input$contact_note)) input$contact_note else NA
+          note = if (isTruthy(input$contact_note)) {
+            trimws(input$contact_note)
+          } else {
+            NA
+          }
         )
 
         DBI::dbExecute(
@@ -519,39 +619,26 @@ addSampleSeries <- function(id, language) {
           session$userData$AquaCache,
           "SELECT organization_id, name FROM organizations ORDER BY name ASC"
         )
-        updateSelectizeInput(
-          session,
-          "default_owner",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          )
+        update_org_selectize("default_owner")
+        update_org_selectize("default_contributor")
+        new_id <- match_lookup_id_by_label(
+          df$name,
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
         )
-        updateSelectizeInput(
-          session,
-          "default_contributor",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          )
-        )
-        new_id <- moduleData$organizations[
-          moduleData$organizations$name == df$name,
-          "organization_id"
-        ]
         if (!length(new_id)) {
           new_id <- moduleData$organizations$organization_id[1]
         }
         if (identical(moduleData$org_modal_target, "default_owner")) {
-          updateSelectizeInput(session, "default_owner", selected = new_id)
+          update_org_selectize("default_owner", new_id)
+          pending_owner_selection(new_id)
+          pending_owner_new(NULL)
         } else if (
           identical(moduleData$org_modal_target, "default_contributor")
         ) {
-          updateSelectizeInput(
-            session,
-            "default_contributor",
-            selected = new_id
-          )
+          update_org_selectize("default_contributor", new_id)
+          pending_contributor_selection(new_id)
+          pending_contributor_new(NULL)
         }
         moduleData$org_modal_target <- NULL
         removeModal()

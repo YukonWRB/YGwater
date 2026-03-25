@@ -61,6 +61,8 @@ addTimeseries <- function(id, language) {
     moduleData <- reactiveValues()
     selected_tsid <- reactiveVal(NULL)
     instrument_association_cleared <- reactiveVal(FALSE)
+    pending_default_owner_selection <- reactiveVal(character(0))
+    pending_default_owner_new <- reactiveVal(NULL)
 
     safe_text <- function(x) {
       ifelse(is.na(x), "", as.character(x))
@@ -101,6 +103,18 @@ addTimeseries <- function(id, language) {
       }
 
       as.integer(value)
+    }
+
+    update_default_owner_selectize <- function(selected = character(0)) {
+      updateSelectizeInput(
+        session,
+        "default_owner",
+        choices = stats::setNames(
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        ),
+        selected = normalize_selectize_values(selected)
+      )
     }
 
     same_nullable_integer <- function(x, y) {
@@ -1343,17 +1357,27 @@ addTimeseries <- function(id, language) {
     observeEvent(
       input$default_owner,
       {
-        if (nchar(input$default_owner) == 0) {
+        resolved <- resolve_selectize_lookup_values(
+          input$default_owner,
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        )
+        pending_default_owner_selection(resolved$existing_selection)
+
+        if (!length(resolved$submitted_values)) {
+          pending_default_owner_new(NULL)
           return()
-        } else if (
-          !input$default_owner %in% moduleData$organizations$organization_id
-        ) {
+        }
+
+        if (length(resolved$new_values)) {
+          pending_default_owner_new(resolved$last_new_value)
           showModal(
             modalDialog(
+              title = "Add new owner",
               textInput(
                 ns("owner_name"),
                 "Owner name",
-                value = input$default_owner
+                value = resolved$last_new_value
               ),
               textInput(ns("owner_name_fr"), "Owner name French (optional)"),
               textInput(ns("contact_name"), "Contact name (optional)"),
@@ -1363,12 +1387,23 @@ addTimeseries <- function(id, language) {
                 ns("contact_note"),
                 "Contact note (optional, for context)"
               ),
-              actionButton(ns("add_owner"), "Add owner")
+              footer = tagList(
+                actionButton(ns("cancel_add_owner"), "Cancel"),
+                actionButton(ns("add_owner"), "Add owner")
+              ),
+              easyClose = FALSE
             )
           )
+          return()
+        }
+
+        pending_default_owner_new(NULL)
+        if (resolved$used_label_match) {
+          update_default_owner_selectize(resolved$existing_selection)
+          return()
         } else {
           # Find associated agreements for this owner
-          owner_id <- as.numeric(input$default_owner)
+          owner_id <- as.numeric(resolved$existing_selection[[1]])
           owner_agreements <- moduleData$owners_agreements[
             moduleData$owners_agreements$organization_id == owner_id,
             "document_id"
@@ -1408,6 +1443,17 @@ addTimeseries <- function(id, language) {
     )
 
     observeEvent(
+      input$cancel_add_owner,
+      {
+        update_default_owner_selectize(pending_default_owner_selection())
+        pending_default_owner_new(NULL)
+        removeModal()
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
       input$add_owner,
       {
         # Check that mandatory fields are filled in
@@ -1415,30 +1461,44 @@ addTimeseries <- function(id, language) {
           shinyjs::js$backgroundCol(ns("owner_name"), "#fdd")
           return()
         }
+        owner_name <- trimws(input$owner_name)
+        existing_id <- match_lookup_id_by_label(
+          owner_name,
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
+        )
+        if (length(existing_id)) {
+          update_default_owner_selectize(existing_id[[1]])
+          pending_default_owner_selection(existing_id[[1]])
+          pending_default_owner_new(NULL)
+          removeModal()
+          showNotification("Existing owner selected.", type = "message")
+          return()
+        }
         # Add the owner to the database
         df <- data.frame(
-          name = input$owner_name,
+          name = owner_name,
           name_fr = if (isTruthy(input$owner_name_fr)) {
-            input$owner_name_fr
+            trimws(input$owner_name_fr)
           } else {
             NA
           },
           contact_name = if (isTruthy(input$contact_name)) {
-            input$contact_name
+            trimws(input$contact_name)
           } else {
             NA
           },
           phone = if (isTruthy(input$contact_phone)) {
-            input$contact_phone
+            trimws(input$contact_phone)
           } else {
             NA
           },
           email = if (isTruthy(input$contact_email)) {
-            input$contact_email
+            trimws(input$contact_email)
           } else {
             NA
           },
-          note = if (isTruthy(input$contact_note)) input$contact_note else NA
+          note = if (isTruthy(input$contact_note)) trimws(input$contact_note) else NA
         )
         DBI::dbExecute(
           session$userData$AquaCache,
@@ -1459,18 +1519,14 @@ addTimeseries <- function(id, language) {
           "SELECT organization_id, name FROM organizations"
         )
         # Update the selectizeInput to the new value
-        updateSelectizeInput(
-          session,
-          "default_owner",
-          choices = stats::setNames(
-            moduleData$organizations$organization_id,
-            moduleData$organizations$name
-          ),
-          selected = moduleData$organizations[
-            moduleData$organizations$name == df$name,
-            "organization_id"
-          ]
+        new_id <- match_lookup_id_by_label(
+          df$name,
+          moduleData$organizations$organization_id,
+          moduleData$organizations$name
         )
+        update_default_owner_selectize(new_id)
+        pending_default_owner_selection(new_id)
+        pending_default_owner_new(NULL)
         removeModal()
         showModal(modalDialog(
           "New owner added.",

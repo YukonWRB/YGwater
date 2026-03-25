@@ -21,6 +21,12 @@ app_server <- function(input, output, session) {
     silent = TRUE
   )
 
+  # Reset the application_name to 'YGwater_shiny'
+  DBI::dbExecute(
+    session$userData$AquaCache,
+    "set application_name TO 'YGwater_shiny'"
+  )
+
   # Logging to usage tracking tables ###########################################
 
   safe_disconnect <- function(con) {
@@ -670,6 +676,11 @@ app_server <- function(input, output, session) {
             username = config$dbUser,
             password = config$dbPass,
             silent = TRUE
+          )
+          # Reset the application_name to 'YGwater_shiny'
+          DBI::dbExecute(
+            retry_con,
+            "set application_name TO 'YGwater_shiny'"
           )
           on.exit(safe_disconnect(retry_con), add = TRUE)
           close_result <- run_close(retry_con)
@@ -1967,6 +1978,11 @@ app_server <- function(input, output, session) {
       password = config$dbPass,
       silent = TRUE
     )
+    # Reset the application_name to 'YGwater_shiny'
+    DBI::dbExecute(
+      session$userData$AquaCache,
+      "set application_name TO 'YGwater_shiny'"
+    )
 
     # Reset the session userData with the default credentials
     session$userData$config$dbUser <- config$dbUser
@@ -2095,8 +2111,8 @@ app_server <- function(input, output, session) {
           password = input$password,
           silent = TRUE
         )
-        test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
         # Test the connection
+        test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
         if (nrow(test) > 0) {
           # Means the connection was successful
 
@@ -2108,6 +2124,12 @@ app_server <- function(input, output, session) {
           # Update the session with the new user's credentials
           session$userData$config$dbUser <- input$username
           session$userData$config$dbPass <- input$password
+
+          # Reset the application_name to 'YGwater_shiny'
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "set application_name TO 'YGwater_shiny'"
+          )
 
           # Check if the user has more than SELECT privileges on relevant tables, used to determine if the 'admin' tab should be shown
 
@@ -2561,11 +2583,15 @@ app_server <- function(input, output, session) {
               )
             ),
             lookup_tables = lookup_table_privs,
-            manageNetworkProjectTypes = lookup_table_privs[["network_project_types"]],
+            manageNetworkProjectTypes = lookup_table_privs[[
+              "network_project_types"
+            ]],
             manageLocationTypes = lookup_table_privs[["location_types"]],
             manageMediaTypes = lookup_table_privs[["media_types"]],
             manageParameterGroups = lookup_table_privs[["parameter_groups"]],
-            manageParameterSubGroups = lookup_table_privs[["parameter_sub_groups"]],
+            manageParameterSubGroups = lookup_table_privs[[
+              "parameter_sub_groups"
+            ]],
             manageParameters = lookup_table_privs[["parameters"]],
             visit = has_priv(
               tbl = session$userData$table_privs,

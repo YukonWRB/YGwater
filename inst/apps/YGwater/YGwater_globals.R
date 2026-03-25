@@ -235,6 +235,98 @@ YGwater_globals <- function(
       paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
     }
 
+    normalize_lookup_key <<- function(value) {
+      if (is.null(value)) {
+        return(character(0))
+      }
+      out <- as.character(value)
+      out[is.na(out)] <- ""
+      gsub("\\s+", " ", tolower(trimws(out)))
+    }
+
+    normalize_selectize_values <<- function(value) {
+      if (is.null(value)) {
+        return(character(0))
+      }
+      out <- as.character(value)
+      out[is.na(out)] <- ""
+      out <- trimws(out)
+      out[nzchar(out)]
+    }
+
+    match_lookup_id_by_label <<- function(value, ids, labels) {
+      value_key <- normalize_lookup_key(value)
+      if (!length(value_key) || !nzchar(value_key[[1]])) {
+        return(character(0))
+      }
+
+      ids_chr <- as.character(ids)
+      ids_chr[is.na(ids_chr)] <- ""
+      ids_chr <- trimws(ids_chr)
+      label_keys <- normalize_lookup_key(labels)
+      valid <- nzchar(ids_chr) & nzchar(label_keys)
+      if (!any(valid)) {
+        return(character(0))
+      }
+
+      idx <- match(value_key[[1]], label_keys[valid])
+      if (is.na(idx)) {
+        return(character(0))
+      }
+
+      ids_chr[valid][idx]
+    }
+
+    resolve_selectize_lookup_values <<- function(values, ids, labels) {
+      submitted <- normalize_selectize_values(values)
+      ids_chr <- as.character(ids)
+      ids_chr[is.na(ids_chr)] <- ""
+      ids_chr <- trimws(ids_chr)
+
+      existing_selection <- character(0)
+      new_values <- character(0)
+      used_label_match <- FALSE
+
+      if (!length(submitted)) {
+        return(list(
+          submitted_values = character(0),
+          existing_selection = character(0),
+          new_values = character(0),
+          last_new_value = NULL,
+          used_label_match = FALSE
+        ))
+      }
+
+      for (value in submitted) {
+        if (value %in% ids_chr) {
+          existing_selection <- c(existing_selection, value)
+          next
+        }
+
+        matched_id <- match_lookup_id_by_label(value, ids, labels)
+        if (length(matched_id)) {
+          existing_selection <- c(existing_selection, matched_id[[1]])
+          used_label_match <- TRUE
+        } else {
+          new_values <- c(new_values, value)
+        }
+      }
+
+      list(
+        submitted_values = submitted,
+        existing_selection = unique(normalize_selectize_values(
+          existing_selection
+        )),
+        new_values = unique(new_values),
+        last_new_value = if (length(new_values)) {
+          new_values[[length(new_values)]]
+        } else {
+          NULL
+        },
+        used_label_match = used_label_match
+      )
+    }
+
     format_utc_offset <<- function(offset_minutes) {
       sign <- if (offset_minutes >= 0) "+" else "-"
       offset_minutes <- abs(as.integer(offset_minutes))

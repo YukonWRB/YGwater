@@ -826,6 +826,30 @@ LEFT JOIN (
       }
     })
 
+    update_publisher_selectize <- function(selected = character(0)) {
+      updateSelectizeInput(
+        session,
+        "publisher",
+        choices = stats::setNames(
+          moduleData$publishers$publisher_id,
+          moduleData$publishers$publisher_name
+        ),
+        selected = ensure_character(selected)
+      )
+    }
+
+    update_series_selectize <- function(selected = character(0)) {
+      updateSelectizeInput(
+        session,
+        "series",
+        choices = stats::setNames(
+          moduleData$series$series_id,
+          moduleData$series$series_name
+        ),
+        selected = ensure_character(selected)
+      )
+    }
+
     pending_publisher_selection <- reactiveVal(character(0))
     pending_publisher_new <- reactiveVal(NULL)
 
@@ -833,38 +857,22 @@ LEFT JOIN (
     observeEvent(
       input$publisher,
       {
-        vals <- ensure_character(input$publisher)
-        pending_publisher_selection(vals)
+        resolved <- resolve_selectize_lookup_values(
+          input$publisher,
+          moduleData$publishers$publisher_id,
+          moduleData$publishers$publisher_name
+        )
+        pending_publisher_selection(resolved$existing_selection)
 
-        existing_ids <- ensure_character(moduleData$publishers$publisher_id)
-        new_vals <- setdiff(vals, existing_ids)
-        new_vals <- new_vals[nzchar(new_vals)]
-
-        if (!length(new_vals)) {
+        if (!length(resolved$new_values)) {
           pending_publisher_new(NULL)
+          if (resolved$used_label_match) {
+            update_publisher_selectize(resolved$existing_selection)
+          }
           return()
         }
 
-        new_val <- trimws(new_vals[length(new_vals)])
-        if (!nzchar(new_val)) {
-          pending_publisher_new(NULL)
-          return()
-        }
-
-        existing_match <- moduleData$publishers$publisher_id[
-          tolower(moduleData$publishers$publisher_name) == tolower(new_val)
-        ]
-        if (length(existing_match)) {
-          updateSelectizeInput(
-            session,
-            "publisher",
-            selected = as.character(existing_match[1])
-          )
-          pending_publisher_selection(as.character(existing_match[1]))
-          pending_publisher_new(NULL)
-          return()
-        }
-
+        new_val <- resolved$last_new_value
         pending_publisher_new(new_val)
 
         showModal(modalDialog(
@@ -883,14 +891,26 @@ LEFT JOIN (
             "Province/Territory/State (optional)"
           ),
           footer = tagList(
-            modalButton("Cancel"),
+            actionButton(ns("cancel_add_publisher"), "Cancel"),
             actionButton(
               ns("add_publisher"),
               "Add publisher",
               class = "btn-primary"
             )
-          )
+          ),
+          easyClose = FALSE
         ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$cancel_add_publisher,
+      {
+        update_publisher_selectize(pending_publisher_selection())
+        pending_publisher_new(NULL)
+        removeModal()
       },
       ignoreInit = TRUE,
       ignoreNULL = TRUE
@@ -907,6 +927,19 @@ LEFT JOIN (
         p_name <- trimws(input$publisher_name)
         p_country <- trimws(input$publisher_country)
         p_state <- trimws(input$publisher_prov_terr_state)
+        existing_id <- match_lookup_id_by_label(
+          p_name,
+          moduleData$publishers$publisher_id,
+          moduleData$publishers$publisher_name
+        )
+        if (length(existing_id)) {
+          update_publisher_selectize(existing_id[[1]])
+          pending_publisher_selection(existing_id[[1]])
+          pending_publisher_new(NULL)
+          removeModal()
+          showNotification("Existing publisher selected.", type = "message")
+          return()
+        }
 
         DBI::dbExecute(
           session$userData$AquaCache,
@@ -923,21 +956,15 @@ LEFT JOIN (
           moduleData$publishers$publisher_name == p_name
         ]
         if (!length(new_id)) {
-          new_id <- moduleData$publishers$publisher_id[
-            tolower(moduleData$publishers$publisher_name) == tolower(p_name)
-          ]
+          new_id <- match_lookup_id_by_label(
+            p_name,
+            moduleData$publishers$publisher_id,
+            moduleData$publishers$publisher_name
+          )
         }
         selected_values <- ensure_character(new_id[1])
 
-        updateSelectizeInput(
-          session,
-          "publisher",
-          choices = stats::setNames(
-            moduleData$publishers$publisher_id,
-            moduleData$publishers$publisher_name
-          ),
-          selected = selected_values
-        )
+        update_publisher_selectize(selected_values)
 
         pending_publisher_selection(selected_values)
         pending_publisher_new(NULL)
@@ -959,38 +986,22 @@ LEFT JOIN (
     observeEvent(
       input$series,
       {
-        vals <- ensure_character(input$series)
-        pending_series_selection(vals)
+        resolved <- resolve_selectize_lookup_values(
+          input$series,
+          moduleData$series$series_id,
+          moduleData$series$series_name
+        )
+        pending_series_selection(resolved$existing_selection)
 
-        existing_ids <- ensure_character(moduleData$series$series_id)
-        new_vals <- setdiff(vals, existing_ids)
-        new_vals <- new_vals[nzchar(new_vals)]
-
-        if (!length(new_vals)) {
+        if (!length(resolved$new_values)) {
           pending_series_new(NULL)
+          if (resolved$used_label_match) {
+            update_series_selectize(resolved$existing_selection)
+          }
           return()
         }
 
-        new_val <- trimws(new_vals[length(new_vals)])
-        if (!nzchar(new_val)) {
-          pending_series_new(NULL)
-          return()
-        }
-
-        existing_match <- moduleData$series$series_id[
-          tolower(moduleData$series$series_name) == tolower(new_val)
-        ]
-        if (length(existing_match)) {
-          updateSelectizeInput(
-            session,
-            "series",
-            selected = as.character(existing_match[1])
-          )
-          pending_series_selection(as.character(existing_match[1]))
-          pending_series_new(NULL)
-          return()
-        }
-
+        new_val <- resolved$last_new_value
         preselected_publisher <- ensure_character(input$publisher)
         pending_series_new(new_val)
 
@@ -1021,10 +1032,22 @@ LEFT JOIN (
             options = list(maxItems = 1)
           ),
           footer = tagList(
-            modalButton("Cancel"),
+            actionButton(ns("cancel_add_series"), "Cancel"),
             actionButton(ns("add_series"), "Add series", class = "btn-primary")
-          )
+          ),
+          easyClose = FALSE
         ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$cancel_add_series,
+      {
+        update_series_selectize(pending_series_selection())
+        pending_series_new(NULL)
+        removeModal()
       },
       ignoreInit = TRUE,
       ignoreNULL = TRUE
@@ -1045,6 +1068,19 @@ LEFT JOIN (
         s_name <- trimws(input$series_name)
         s_name_fr <- trimws(input$series_name_fr)
         s_pub <- as.integer(input$series_publisher_id)
+        existing_id <- match_lookup_id_by_label(
+          s_name,
+          moduleData$series$series_id,
+          moduleData$series$series_name
+        )
+        if (length(existing_id)) {
+          update_series_selectize(existing_id[[1]])
+          pending_series_selection(existing_id[[1]])
+          pending_series_new(NULL)
+          removeModal()
+          showNotification("Existing guideline series selected.", type = "message")
+          return()
+        }
 
         DBI::dbExecute(
           session$userData$AquaCache,
@@ -1061,21 +1097,15 @@ LEFT JOIN (
           moduleData$series$series_name == s_name
         ]
         if (!length(new_id)) {
-          new_id <- moduleData$series$series_id[
-            tolower(moduleData$series$series_name) == tolower(s_name)
-          ]
+          new_id <- match_lookup_id_by_label(
+            s_name,
+            moduleData$series$series_id,
+            moduleData$series$series_name
+          )
         }
         selected_values <- ensure_character(new_id[1])
 
-        updateSelectizeInput(
-          session,
-          "series",
-          choices = stats::setNames(
-            moduleData$series$series_id,
-            moduleData$series$series_name
-          ),
-          selected = selected_values
-        )
+        update_series_selectize(selected_values)
 
         pending_series_selection(selected_values)
         pending_series_new(NULL)

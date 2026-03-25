@@ -1181,6 +1181,57 @@ simplerIndex <- function(id, language) {
         "SELECT * FROM public.get_shareable_principals_for('boreholes.wells');"
       )
     )
+    pending_driller_selection <- reactiveVal(character(0))
+    pending_driller_new <- reactiveVal(NULL)
+    pending_borehole_purpose_selection <- reactiveVal(character(0))
+    pending_borehole_purpose_new <- reactiveVal(NULL)
+    pending_well_purpose_selection <- reactiveVal(character(0))
+    pending_well_purpose_new <- reactiveVal(NULL)
+
+    update_driller_selectize <- function(selected = NULL) {
+      args <- list(
+        session = session,
+        inputId = "drilled_by",
+        choices = stats::setNames(
+          moduleData$drillers$driller_id,
+          moduleData$drillers$name
+        )
+      )
+      if (!is.null(selected)) {
+        args$selected <- normalize_selectize_values(selected)
+      }
+      do.call(updateSelectizeInput, args)
+    }
+
+    update_borehole_purpose_selectize <- function(selected = NULL) {
+      args <- list(
+        session = session,
+        inputId = "purpose_of_borehole",
+        choices = stats::setNames(
+          moduleData$purposes$borehole_well_purpose_id,
+          moduleData$purposes$purpose_name
+        )
+      )
+      if (!is.null(selected)) {
+        args$selected <- normalize_selectize_values(selected)
+      }
+      do.call(updateSelectizeInput, args)
+    }
+
+    update_well_purpose_selectize <- function(selected = NULL) {
+      args <- list(
+        session = session,
+        inputId = "purpose_of_well",
+        choices = stats::setNames(
+          moduleData$purposes$borehole_well_purpose_id,
+          moduleData$purposes$purpose_name
+        )
+      )
+      if (!is.null(selected)) {
+        args$selected <- normalize_selectize_values(selected)
+      }
+      do.call(updateSelectizeInput, args)
+    }
 
     # Update the 'drillers', 'purpose', and 'share_with' list based on the data loaded from Aquacache
     observeEvent(moduleData, {
@@ -2871,27 +2922,46 @@ simplerIndex <- function(id, language) {
     # Observer for new driller creation
     observeEvent(input$drilled_by, {
       req(input$drilled_by)
+      resolved <- resolve_selectize_lookup_values(
+        input$drilled_by,
+        moduleData$drillers$driller_id,
+        moduleData$drillers$name
+      )
+      pending_driller_selection(resolved$existing_selection)
 
-      # If not in existing IDs or names, it's a new driller
-      if (
-        !(input$drilled_by %in% moduleData$drillers$driller_id) &&
-          !(input$drilled_by %in% moduleData$drillers$name)
-      ) {
-        # Create modal dialog
-        showModal(modalDialog(
-          title = "New Driller Information",
-
-          textInput(ns("new_driller_name"), "Name", value = input$drilled_by),
-          textInput(ns("new_driller_address"), "Address"),
-          textInput(ns("new_driller_phone"), "Phone"),
-          textInput(ns("new_driller_email"), "Email"),
-
-          footer = tagList(
-            modalButton("Cancel"),
-            actionButton(ns("save_new_driller"), "Save", class = "btn-primary")
-          )
-        ))
+      if (!length(resolved$new_values)) {
+        pending_driller_new(NULL)
+        if (resolved$used_label_match) {
+          update_driller_selectize(resolved$existing_selection)
+        }
+        return()
       }
+
+      pending_driller_new(resolved$last_new_value)
+      showModal(modalDialog(
+        title = "New Driller Information",
+
+        textInput(
+          ns("new_driller_name"),
+          "Name",
+          value = pending_driller_new()
+        ),
+        textInput(ns("new_driller_address"), "Address"),
+        textInput(ns("new_driller_phone"), "Phone"),
+        textInput(ns("new_driller_email"), "Email"),
+
+        footer = tagList(
+          actionButton(ns("cancel_new_driller"), "Cancel"),
+          actionButton(ns("save_new_driller"), "Save", class = "btn-primary")
+        ),
+        easyClose = FALSE
+      ))
+    })
+
+    observeEvent(input$cancel_new_driller, {
+      update_driller_selectize(pending_driller_selection())
+      pending_driller_new(NULL)
+      removeModal()
     })
 
     # Handle the save button for new drillers in the modal
@@ -2902,6 +2972,19 @@ simplerIndex <- function(id, language) {
       new_driller_address <- input$new_driller_address
       new_driller_phone <- input$new_driller_phone
       new_driller_email <- input$new_driller_email
+      existing_id <- match_lookup_id_by_label(
+        new_driller_name,
+        moduleData$drillers$driller_id,
+        moduleData$drillers$name
+      )
+      if (length(existing_id)) {
+        update_driller_selectize(existing_id[[1]])
+        pending_driller_selection(existing_id[[1]])
+        pending_driller_new(NULL)
+        removeModal()
+        showNotification("Existing driller selected.", type = "message")
+        return()
+      }
 
       # Validate phone number format
       if (!is.null(new_driller_phone) && trimws(new_driller_phone) != "") {
@@ -2978,77 +3061,107 @@ simplerIndex <- function(id, language) {
         ),
         selected = new_driller_id
       )
+      pending_driller_selection(new_driller_id)
+      pending_driller_new(NULL)
       removeModal()
     })
 
     # Observer for new purpose creation
     observeEvent(input$purpose_of_borehole, {
       req(input$purpose_of_borehole)
+      resolved <- resolve_selectize_lookup_values(
+        input$purpose_of_borehole,
+        moduleData$purposes$borehole_well_purpose_id,
+        moduleData$purposes$purpose_name
+      )
+      pending_borehole_purpose_selection(resolved$existing_selection)
 
-      # If not in existing IDs or names, it's a new driller
-      if (
-        !(input$purpose_of_borehole %in%
-          moduleData$purposes$borehole_well_purpose_id) &&
-          !(input$purpose_of_borehole %in% moduleData$purposes$purpose_name)
-      ) {
-        # Create modal dialog
-        showModal(modalDialog(
-          title = "New borehole purpose",
-          textInput(
-            ns("new_borehole_purpose_name"),
-            "Purpose name",
-            value = input$purpose_of_borehole
-          ),
-          textInput(ns("new_borehole_purpose_description"), "Description"),
-
-          footer = tagList(
-            modalButton("Cancel"),
-            actionButton(
-              ns("save_new_borehole_purpose"),
-              "Save",
-              class = "btn-primary"
-            )
-          )
-        ))
+      if (!length(resolved$new_values)) {
+        pending_borehole_purpose_new(NULL)
+        if (resolved$used_label_match) {
+          update_borehole_purpose_selectize(resolved$existing_selection)
+        }
+        return()
       }
+
+      pending_borehole_purpose_new(resolved$last_new_value)
+      showModal(modalDialog(
+        title = "New borehole purpose",
+        textInput(
+          ns("new_borehole_purpose_name"),
+          "Purpose name",
+          value = pending_borehole_purpose_new()
+        ),
+        textInput(ns("new_borehole_purpose_description"), "Description"),
+
+        footer = tagList(
+          actionButton(ns("cancel_new_borehole_purpose"), "Cancel"),
+          actionButton(
+            ns("save_new_borehole_purpose"),
+            "Save",
+            class = "btn-primary"
+          )
+        ),
+        easyClose = FALSE
+      ))
+    })
+
+    observeEvent(input$cancel_new_borehole_purpose, {
+      update_borehole_purpose_selectize(pending_borehole_purpose_selection())
+      pending_borehole_purpose_new(NULL)
+      removeModal()
     })
 
     # Observer for new purpose creation
     observeEvent(input$purpose_of_well, {
       req(input$purpose_of_well)
+      resolved <- resolve_selectize_lookup_values(
+        input$purpose_of_well,
+        moduleData$purposes$borehole_well_purpose_id,
+        moduleData$purposes$purpose_name
+      )
+      pending_well_purpose_selection(resolved$existing_selection)
 
-      # If not in existing IDs or names, it's a new driller
-      if (
-        !(input$purpose_of_well %in%
-          moduleData$purposes$borehole_well_purpose_id) &&
-          !(input$purpose_of_well %in% moduleData$purposes$purpose_name)
-      ) {
-        # Create modal dialog
-        showModal(modalDialog(
-          title = "New well purpose",
-          textInput(
-            ns("new_well_purpose_name"),
-            "Purpose name",
-            value = input$purpose_of_well
-          ),
-          textInput(ns("new_well_purpose_description"), "Description"),
-
-          footer = tagList(
-            modalButton("Cancel"),
-            actionButton(
-              ns("save_new_well_purpose"),
-              "Save",
-              class = "btn-primary"
-            )
-          )
-        ))
+      if (!length(resolved$new_values)) {
+        pending_well_purpose_new(NULL)
+        if (resolved$used_label_match) {
+          update_well_purpose_selectize(resolved$existing_selection)
+        }
+        return()
       }
+
+      pending_well_purpose_new(resolved$last_new_value)
+      showModal(modalDialog(
+        title = "New well purpose",
+        textInput(
+          ns("new_well_purpose_name"),
+          "Purpose name",
+          value = pending_well_purpose_new()
+        ),
+        textInput(ns("new_well_purpose_description"), "Description"),
+
+        footer = tagList(
+          actionButton(ns("cancel_new_well_purpose"), "Cancel"),
+          actionButton(
+            ns("save_new_well_purpose"),
+            "Save",
+            class = "btn-primary"
+          )
+        ),
+        easyClose = FALSE
+      ))
+    })
+
+    observeEvent(input$cancel_new_well_purpose, {
+      update_well_purpose_selectize(pending_well_purpose_selection())
+      pending_well_purpose_new(NULL)
+      removeModal()
     })
 
     # Handle the save button for new drillers in the modal
     observeEvent(input$save_new_borehole_purpose, {
       # Ensure that name and description but have at least 3 characters
-      if (nchar(trimws(input$new_purpose_name)) < 3) {
+      if (nchar(trimws(input$new_borehole_purpose_name)) < 3) {
         showNotification(
           "Purpose name must be at least 3 characters long.",
           type = "error",
@@ -3056,13 +3169,26 @@ simplerIndex <- function(id, language) {
         )
         return() # Exit the function early
       }
-      if (nchar(trimws(input$new_purpose_description)) < 3) {
+      if (nchar(trimws(input$new_borehole_purpose_description)) < 3) {
         showNotification(
           "Purpose description must be at least 3 characters long.",
           type = "error",
           duration = 5
         )
         return() # Exit the function early
+      }
+      existing_id <- match_lookup_id_by_label(
+        input$new_borehole_purpose_name,
+        moduleData$purposes$borehole_well_purpose_id,
+        moduleData$purposes$purpose_name
+      )
+      if (length(existing_id)) {
+        update_borehole_purpose_selectize(existing_id[[1]])
+        pending_borehole_purpose_selection(existing_id[[1]])
+        pending_borehole_purpose_new(NULL)
+        removeModal()
+        showNotification("Existing borehole purpose selected.", type = "message")
+        return()
       }
 
       new_purpose_id <- DBI::dbGetQuery(
@@ -3089,6 +3215,8 @@ simplerIndex <- function(id, language) {
         ),
         selected = new_purpose_id
       )
+      pending_borehole_purpose_selection(new_purpose_id)
+      pending_borehole_purpose_new(NULL)
       removeModal()
     })
 
@@ -3109,6 +3237,19 @@ simplerIndex <- function(id, language) {
           duration = 5
         )
         return() # Exit the function early
+      }
+      existing_id <- match_lookup_id_by_label(
+        input$new_well_purpose_name,
+        moduleData$purposes$borehole_well_purpose_id,
+        moduleData$purposes$purpose_name
+      )
+      if (length(existing_id)) {
+        update_well_purpose_selectize(existing_id[[1]])
+        pending_well_purpose_selection(existing_id[[1]])
+        pending_well_purpose_new(NULL)
+        removeModal()
+        showNotification("Existing well purpose selected.", type = "message")
+        return()
       }
 
       new_purpose_id <- DBI::dbGetQuery(
@@ -3135,6 +3276,8 @@ simplerIndex <- function(id, language) {
         ),
         selected = new_purpose_id
       )
+      pending_well_purpose_selection(new_purpose_id)
+      pending_well_purpose_new(NULL)
       removeModal()
     })
 

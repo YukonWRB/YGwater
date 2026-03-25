@@ -299,6 +299,10 @@ manageInstruments <- function(id, language) {
       value %in% as.character(df[[id_col]])
     }
 
+    lookup_id_from_label <- function(value, df, id_col, label_col) {
+      match_lookup_id_by_label(value, df[[id_col]], df[[label_col]])
+    }
+
     build_record_choices <- function(df) {
       if (is.null(df) || nrow(df) == 0) {
         return(character())
@@ -891,6 +895,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$observers,
+          "observer_id",
+          "observer_label"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "observer", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "observer", selected = character(0))
         showModal(modalDialog(
           title = "Add new observer",
@@ -919,6 +933,28 @@ manageInstruments <- function(id, language) {
             "Observer first name, last name, and organization are required.",
             type = "error"
           )
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          sprintf(
+            "%s %s (%s)",
+            trimws(input$new_observer_first),
+            trimws(input$new_observer_last),
+            trimws(input$new_observer_org)
+          ),
+          instrument_data$observers,
+          "observer_id",
+          "observer_label"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(observer = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing observer selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -959,6 +995,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$makes,
+          "make_id",
+          "make"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "make", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "make", selected = character(0))
         showModal(modalDialog(
           title = "Add new make",
@@ -979,6 +1025,23 @@ manageInstruments <- function(id, language) {
       {
         if (!nzchar(trimws(input$new_make))) {
           showNotification("Make is required.", type = "error")
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_make,
+          instrument_data$makes,
+          "make_id",
+          "make"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(make = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing make selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1018,6 +1081,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$models,
+          "model_id",
+          "model"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "model", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "model", selected = character(0))
         showModal(modalDialog(
           title = "Add new model",
@@ -1038,6 +1111,23 @@ manageInstruments <- function(id, language) {
       {
         if (!nzchar(trimws(input$new_model))) {
           showNotification("Model is required.", type = "error")
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_model,
+          instrument_data$models,
+          "model_id",
+          "model"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(model = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing model selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1077,6 +1167,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$types,
+          "type_id",
+          "type"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "type", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "type", selected = character(0))
         showModal(modalDialog(
           title = "Add new type",
@@ -1103,6 +1203,23 @@ manageInstruments <- function(id, language) {
             "Type and description are required.",
             type = "error"
           )
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_type,
+          instrument_data$types,
+          "type_id",
+          "type"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(type = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing type selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1146,6 +1263,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$owners,
+          "organization_id",
+          "name"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "owner", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "owner", selected = character(0))
         showModal(modalDialog(
           title = "Add new organization",
@@ -1176,6 +1303,23 @@ manageInstruments <- function(id, language) {
             "Organization name and French name are required.",
             type = "error"
           )
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_org_name,
+          instrument_data$owners,
+          "organization_id",
+          "name"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(owner = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing organization selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1223,6 +1367,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$suppliers,
+          "supplier_id",
+          "supplier_name"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "supplier_id", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "supplier_id", selected = character(0))
         showModal(modalDialog(
           title = "Add new supplier",
@@ -1250,6 +1404,23 @@ manageInstruments <- function(id, language) {
       {
         if (!nzchar(trimws(input$new_supplier_name))) {
           showNotification("Supplier name is required.", type = "error")
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_supplier_name,
+          instrument_data$suppliers,
+          "supplier_id",
+          "supplier_name"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(supplier_id = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing supplier selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
