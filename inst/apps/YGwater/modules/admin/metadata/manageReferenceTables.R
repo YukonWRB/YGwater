@@ -208,7 +208,10 @@ reference_table_configs <- function() {
       columns = list(
         reference_text_field("type", "Type", required = TRUE),
         reference_text_field("type_fr", "Type (French)"),
-        reference_text_field("type_suffix", "Type suffix")
+        reference_text_field(
+          "type_suffix",
+          "Type suffix (necessary to generate location codes)"
+        )
       )
     ),
     media_types = list(
@@ -391,6 +394,17 @@ reference_make_select_choices <- function(choice_df) {
   stats::setNames(choice_df$value, choice_df$label)
 }
 
+reference_make_input_choices <- function(choice_df, blank_label = "") {
+  c(stats::setNames("", blank_label), reference_make_select_choices(choice_df))
+}
+
+reference_empty_choices <- function(fields) {
+  stats::setNames(
+    rep(list(NULL), length(fields)),
+    vapply(fields, `[[`, character(1), "name")
+  )
+}
+
 reference_empty_row <- function(fields) {
   empty <- as.data.frame(
     setNames(
@@ -439,13 +453,12 @@ reference_render_fields_ui <- function(ns, fields, choices, values = NULL) {
     }
 
     if (identical(field$input, "select")) {
-      return(selectizeInput(
+      return(selectInput(
         input_id,
         field$label,
-        choices = reference_make_select_choices(choices[[field$name]]),
-        selected = if (is.na(field_value)) character(0) else as.character(field_value),
-        multiple = FALSE,
-        options = list(maxItems = 1)
+        choices = reference_make_input_choices(choices[[field$name]]),
+        selected = if (is.na(field_value)) "" else as.character(field_value),
+        selectize = FALSE
       ))
     }
 
@@ -489,7 +502,10 @@ reference_normalize_value <- function(value, field) {
   }
 
   if (identical(field$input, "select")) {
-    selected_value <- as.character(reference_default(first_value, NA_character_))
+    selected_value <- as.character(reference_default(
+      first_value,
+      NA_character_
+    ))
     if (is.na(selected_value) || !nzchar(selected_value)) {
       return(
         if (identical(field$storage, "integer")) {
@@ -555,11 +571,11 @@ reference_update_fields <- function(session, fields, row, choices) {
     }
 
     if (identical(field$input, "select")) {
-      updateSelectizeInput(
+      updateSelectInput(
         session,
         input_id,
-        choices = reference_make_select_choices(choices[[field$name]]),
-        selected = if (is.na(value)) character(0) else as.character(value)
+        choices = reference_make_input_choices(choices[[field$name]]),
+        selected = if (is.na(value)) "" else as.character(value)
       )
       next
     }
@@ -619,12 +635,16 @@ reference_field_label <- function(config, column_name) {
 }
 
 reference_display_labels <- function(config, column_names) {
-  vapply(column_names, function(column_name) {
-    if (identical(column_name, config$pk)) {
-      return(reference_default(config$id_label, column_name))
-    }
-    reference_field_label(config, column_name)
-  }, character(1))
+  vapply(
+    column_names,
+    function(column_name) {
+      if (identical(column_name, config$pk)) {
+        return(reference_default(config$id_label, column_name))
+      }
+      reference_field_label(config, column_name)
+    },
+    character(1)
+  )
 }
 
 reference_build_display_data <- function(raw, config, choices) {
@@ -694,13 +714,17 @@ reference_prepare_for_dt <- function(df) {
     }
 
     if (is.list(column)) {
-      out[[col_name]] <- vapply(column, function(value) {
-        if (length(value) == 0 || all(is.na(value))) {
-          ""
-        } else {
-          paste(as.character(value), collapse = ", ")
-        }
-      }, character(1))
+      out[[col_name]] <- vapply(
+        column,
+        function(value) {
+          if (length(value) == 0 || all(is.na(value))) {
+            ""
+          } else {
+            paste(as.character(value), collapse = ", ")
+          }
+        },
+        character(1)
+      )
     }
   }
 
@@ -709,7 +733,10 @@ reference_prepare_for_dt <- function(df) {
 
 reference_fetch_records <- function(con, config) {
   order_cols <- reference_default(config$order_by, config$pk)
-  order_sql <- paste(reference_quote_identifier_chr(con, order_cols), collapse = ", ")
+  order_sql <- paste(
+    reference_quote_identifier_chr(con, order_cols),
+    collapse = ", "
+  )
 
   DBI::dbGetQuery(
     con,
@@ -719,6 +746,10 @@ reference_fetch_records <- function(con, config) {
       order_sql
     )
   )
+}
+
+reference_sql_params <- function(values) {
+  unname(as.list(values))
 }
 
 reference_save_record <- function(
@@ -740,7 +771,11 @@ reference_save_record <- function(
       reference_quote_identifier_chr(con, config$pk)
     )
 
-    inserted <- DBI::dbGetQuery(con, insert_sql, params = values)
+    inserted <- DBI::dbGetQuery(
+      con,
+      insert_sql,
+      params = reference_sql_params(values)
+    )
     return(inserted[[config$pk]][1])
   }
 
@@ -752,14 +787,20 @@ reference_save_record <- function(
   if ("modified" %in% existing_columns) {
     set_sql <- paste(
       set_sql,
-      sprintf("%s = CURRENT_TIMESTAMP", reference_quote_identifier_chr(con, "modified")),
+      sprintf(
+        "%s = CURRENT_TIMESTAMP",
+        reference_quote_identifier_chr(con, "modified")
+      ),
       sep = ", "
     )
   }
   if ("modified_by" %in% existing_columns) {
     set_sql <- paste(
       set_sql,
-      sprintf("%s = CURRENT_USER", reference_quote_identifier_chr(con, "modified_by")),
+      sprintf(
+        "%s = CURRENT_USER",
+        reference_quote_identifier_chr(con, "modified_by")
+      ),
       sep = ", "
     )
   }
@@ -775,7 +816,10 @@ reference_save_record <- function(
   DBI::dbExecute(
     con,
     update_sql,
-    params = c(values, list(type.convert(as.character(selected_id), as.is = TRUE)))
+    params = reference_sql_params(c(
+      values,
+      list(type.convert(as.character(selected_id), as.is = TRUE))
+    ))
   )
 
   type.convert(as.character(selected_id), as.is = TRUE)
@@ -801,13 +845,14 @@ clear_reference_caches <- function(session) {
   }
 }
 
-referenceTableManagerUI <- function(id, title = "Reference data") {
+referenceTableManagerUI <- function(id, config, title = NULL) {
   ns <- NS(id)
+  title <- reference_default(title, config$title)
 
-  bslib::page_sidebar(
-    title = NULL,
+  bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       width = 430,
+      open = "always",
       title = title,
       uiOutput(ns("panel_intro")),
       uiOutput(ns("record_summary")),
@@ -817,7 +862,12 @@ referenceTableManagerUI <- function(id, title = "Reference data") {
         actionButton(ns("new_record"), "New record"),
         actionButton(ns("reload"), "Reload")
       ),
-      uiOutput(ns("form_ui"))
+      reference_render_fields_ui(
+        ns,
+        config$columns,
+        choices = reference_empty_choices(config$columns),
+        values = reference_empty_row(config$columns)
+      )
     ),
     uiOutput(ns("banner")),
     uiOutput(ns("table_heading")),
@@ -852,6 +902,7 @@ referenceTableManager <- function(
         module_id = notification_module_id
       )
     })
+    outputOptions(output, "banner", suspendWhenHidden = FALSE)
 
     refresh_editor <- function(selected_id = NULL) {
       selected_id <- if (is.null(selected_id) || !length(selected_id)) {
@@ -868,30 +919,44 @@ referenceTableManager <- function(
       editor_data$records_raw <- raw
       editor_data$records_display <- display
 
-      session$onFlushed(function() {
-        if (is.null(selected_id)) {
-          current_record_id(NULL)
-          current_row(reference_empty_row(config$columns))
-          DT::selectRows(table_proxy, NULL)
-          return()
-        }
+      session$onFlushed(
+        function() {
+          if (is.null(selected_id)) {
+            empty_row <- reference_empty_row(config$columns)
+            current_record_id(NULL)
+            current_row(empty_row)
+            reference_clear_fields(session, config$columns, choices)
+            DT::selectRows(table_proxy, NULL)
+            return()
+          }
 
-        selected_idx <- match(
-          as.character(selected_id),
-          as.character(raw[[config$pk]])
-        )
+          selected_idx <- match(
+            as.character(selected_id),
+            as.character(raw[[config$pk]])
+          )
 
-        if (is.na(selected_idx)) {
-          current_record_id(NULL)
-          current_row(reference_empty_row(config$columns))
-          DT::selectRows(table_proxy, NULL)
-          return()
-        }
+          if (is.na(selected_idx)) {
+            empty_row <- reference_empty_row(config$columns)
+            current_record_id(NULL)
+            current_row(empty_row)
+            reference_clear_fields(session, config$columns, choices)
+            DT::selectRows(table_proxy, NULL)
+            return()
+          }
 
-        current_record_id(as.character(selected_id))
-        current_row(raw[selected_idx, , drop = FALSE])
-        DT::selectRows(table_proxy, selected_idx)
-      }, once = TRUE)
+          selected_row <- raw[selected_idx, , drop = FALSE]
+          current_record_id(as.character(selected_id))
+          current_row(selected_row)
+          reference_update_fields(
+            session,
+            config$columns,
+            selected_row,
+            choices
+          )
+          DT::selectRows(table_proxy, selected_idx)
+        },
+        once = TRUE
+      )
     }
 
     output$panel_intro <- renderUI({
@@ -907,6 +972,7 @@ referenceTableManager <- function(
         )
       )
     })
+    outputOptions(output, "panel_intro", suspendWhenHidden = FALSE)
 
     output$record_summary <- renderUI({
       record_id <- current_record_id()
@@ -916,19 +982,15 @@ referenceTableManager <- function(
         if (is.null(record_id)) {
           paste("New", tolower(config$title), "record")
         } else {
-          paste("Editing", reference_default(config$id_label, config$pk), record_id)
+          paste(
+            "Editing",
+            reference_default(config$id_label, config$pk),
+            record_id
+          )
         }
       )
     })
-
-    output$form_ui <- renderUI({
-      reference_render_fields_ui(
-        session$ns,
-        config$columns,
-        editor_data$choices,
-        values = current_row()
-      )
-    })
+    outputOptions(output, "record_summary", suspendWhenHidden = FALSE)
 
     output$table_heading <- renderUI({
       row_count <- nrow(editor_data$records_display)
@@ -946,23 +1008,28 @@ referenceTableManager <- function(
         )
       )
     })
+    outputOptions(output, "table_heading", suspendWhenHidden = FALSE)
 
-    output$records_table <- DT::renderDT({
-      display <- reference_prepare_for_dt(editor_data$records_display)
-      DT::datatable(
-        display,
-        rownames = FALSE,
-        selection = "single",
-        filter = "top",
-        colnames = unname(reference_display_labels(config, names(display))),
-        options = list(
-          pageLength = 10,
-          lengthChange = FALSE,
-          autoWidth = TRUE,
-          scrollX = TRUE
+    output$records_table <- DT::renderDT(
+      {
+        display <- reference_prepare_for_dt(editor_data$records_display)
+        DT::datatable(
+          display,
+          rownames = FALSE,
+          selection = "single",
+          filter = "top",
+          colnames = unname(reference_display_labels(config, names(display))),
+          options = list(
+            pageLength = 10,
+            lengthChange = FALSE,
+            autoWidth = TRUE,
+            scrollX = TRUE
+          )
         )
-      )
-    }, server = FALSE)
+      },
+      server = FALSE
+    )
+    outputOptions(output, "records_table", suspendWhenHidden = FALSE)
 
     observeEvent(input$reload, {
       selected_id <- current_record_id()
@@ -970,8 +1037,10 @@ referenceTableManager <- function(
     })
 
     observeEvent(input$new_record, {
+      empty_row <- reference_empty_row(config$columns)
       current_record_id(NULL)
-      current_row(reference_empty_row(config$columns))
+      current_row(empty_row)
+      reference_clear_fields(session, config$columns, editor_data$choices)
       DT::selectRows(table_proxy, NULL)
     })
 
@@ -986,8 +1055,15 @@ referenceTableManager <- function(
           editor_data$records_raw[[config$pk]][selected_row]
         )
 
+        form_row <- editor_data$records_raw[selected_row, , drop = FALSE]
         current_record_id(selected_id)
-        current_row(editor_data$records_raw[selected_row, , drop = FALSE])
+        current_row(form_row)
+        reference_update_fields(
+          session,
+          config$columns,
+          form_row,
+          editor_data$choices
+        )
       },
       ignoreInit = TRUE
     )
@@ -1178,10 +1254,10 @@ parameterManagerUI <- function(id) {
   ns <- NS(id)
   config <- reference_table_configs()[["parameters"]]
 
-  bslib::page_sidebar(
-    title = NULL,
+  bslib::layout_sidebar(
     sidebar = bslib::sidebar(
       width = 430,
+      open = "always",
       title = config$title,
       uiOutput(ns("panel_intro")),
       uiOutput(ns("record_summary")),
@@ -1191,7 +1267,12 @@ parameterManagerUI <- function(id) {
         actionButton(ns("new_record"), "New record"),
         actionButton(ns("reload"), "Reload")
       ),
-      uiOutput(ns("form_ui")),
+      reference_render_fields_ui(
+        ns,
+        config$columns,
+        choices = reference_empty_choices(config$columns),
+        values = reference_empty_row(config$columns)
+      ),
       tags$hr(class = "my-3"),
       tags$h5("Group links"),
       tags$p(
@@ -1201,21 +1282,19 @@ parameterManagerUI <- function(id) {
           "Sub-group is optional."
         )
       ),
-      selectizeInput(
+      selectInput(
         ns("relationship_group_id"),
         "Parameter group",
-        choices = character(0),
-        selected = character(0),
-        multiple = FALSE,
-        options = list(maxItems = 1)
+        choices = "",
+        selected = "",
+        selectize = FALSE
       ),
-      selectizeInput(
+      selectInput(
         ns("relationship_sub_group_id"),
         "Parameter sub-group",
-        choices = character(0),
-        selected = character(0),
-        multiple = FALSE,
-        options = list(maxItems = 1, placeholder = "Optional")
+        choices = stats::setNames("", "Optional"),
+        selected = "",
+        selectize = FALSE
       ),
       div(
         class = "d-flex gap-2 flex-wrap mb-2",
@@ -1259,25 +1338,31 @@ manageParameters <- function(id, language) {
         module_id = "manageParameters"
       )
     })
+    outputOptions(output, "banner", suspendWhenHidden = FALSE)
 
     update_relationship_selectors <- function(relationship_choices) {
-      updateSelectizeInput(
+      updateSelectInput(
         session,
         "relationship_group_id",
-        choices = reference_make_select_choices(relationship_choices$groups),
-        selected = character(0)
+        choices = reference_make_input_choices(relationship_choices$groups),
+        selected = ""
       )
-      updateSelectizeInput(
+      updateSelectInput(
         session,
         "relationship_sub_group_id",
-        choices = reference_make_select_choices(relationship_choices$sub_groups),
-        selected = character(0)
+        choices = reference_make_input_choices(
+          relationship_choices$sub_groups,
+          blank_label = "Optional"
+        ),
+        selected = ""
       )
     }
 
     clear_parameter_editor <- function(field_choices, relationship_choices) {
+      empty_row <- reference_empty_row(config$columns)
       current_record_id(NULL)
-      current_row(reference_empty_row(config$columns))
+      current_row(empty_row)
+      reference_clear_fields(session, config$columns, field_choices)
       current_relationships(parameter_relationships_empty())
       update_relationship_selectors(relationship_choices)
       DT::selectRows(table_proxy, NULL)
@@ -1292,6 +1377,7 @@ manageParameters <- function(id, language) {
     ) {
       current_record_id(as.character(selected_id))
       current_row(raw_row)
+      reference_update_fields(session, config$columns, raw_row, field_choices)
       current_relationships(fetch_parameter_relationships(con, selected_id))
       update_relationship_selectors(relationship_choices)
       DT::selectRows(relationship_proxy, NULL)
@@ -1314,32 +1400,35 @@ manageParameters <- function(id, language) {
       editor_data$records_raw <- raw
       editor_data$records_display <- display
 
-      session$onFlushed(function() {
-        update_relationship_selectors(relationship_choices)
+      session$onFlushed(
+        function() {
+          update_relationship_selectors(relationship_choices)
 
-        if (is.null(selected_id)) {
-          clear_parameter_editor(field_choices, relationship_choices)
-          return()
-        }
+          if (is.null(selected_id)) {
+            clear_parameter_editor(field_choices, relationship_choices)
+            return()
+          }
 
-        selected_idx <- match(
-          as.character(selected_id),
-          as.character(raw[[config$pk]])
-        )
+          selected_idx <- match(
+            as.character(selected_id),
+            as.character(raw[[config$pk]])
+          )
 
-        if (is.na(selected_idx)) {
-          clear_parameter_editor(field_choices, relationship_choices)
-          return()
-        }
+          if (is.na(selected_idx)) {
+            clear_parameter_editor(field_choices, relationship_choices)
+            return()
+          }
 
-        populate_parameter_editor(
-          selected_id = selected_id,
-          raw_row = raw[selected_idx, , drop = FALSE],
-          field_choices = field_choices,
-          relationship_choices = relationship_choices
-        )
-        DT::selectRows(table_proxy, selected_idx)
-      }, once = TRUE)
+          populate_parameter_editor(
+            selected_id = selected_id,
+            raw_row = raw[selected_idx, , drop = FALSE],
+            field_choices = field_choices,
+            relationship_choices = relationship_choices
+          )
+          DT::selectRows(table_proxy, selected_idx)
+        },
+        once = TRUE
+      )
     }
 
     output$panel_intro <- renderUI({
@@ -1354,6 +1443,7 @@ manageParameters <- function(id, language) {
         )
       )
     })
+    outputOptions(output, "panel_intro", suspendWhenHidden = FALSE)
 
     output$record_summary <- renderUI({
       record_id <- current_record_id()
@@ -1367,15 +1457,7 @@ manageParameters <- function(id, language) {
         }
       )
     })
-
-    output$form_ui <- renderUI({
-      reference_render_fields_ui(
-        session$ns,
-        config$columns,
-        editor_data$field_choices,
-        values = current_row()
-      )
-    })
+    outputOptions(output, "record_summary", suspendWhenHidden = FALSE)
 
     output$table_heading <- renderUI({
       row_count <- nrow(editor_data$records_display)
@@ -1393,49 +1475,61 @@ manageParameters <- function(id, language) {
         )
       )
     })
+    outputOptions(output, "table_heading", suspendWhenHidden = FALSE)
 
-    output$records_table <- DT::renderDT({
-      display <- reference_prepare_for_dt(editor_data$records_display)
-      DT::datatable(
-        display,
-        rownames = FALSE,
-        selection = "single",
-        filter = "top",
-        colnames = unname(reference_display_labels(config, names(display))),
-        options = list(
-          pageLength = 10,
-          lengthChange = FALSE,
-          autoWidth = TRUE,
-          scrollX = TRUE
+    output$records_table <- DT::renderDT(
+      {
+        display <- reference_prepare_for_dt(editor_data$records_display)
+        DT::datatable(
+          display,
+          rownames = FALSE,
+          selection = "single",
+          filter = "top",
+          colnames = unname(reference_display_labels(config, names(display))),
+          options = list(
+            pageLength = 10,
+            lengthChange = FALSE,
+            autoWidth = TRUE,
+            scrollX = TRUE
+          )
         )
-      )
-    }, server = FALSE)
+      },
+      server = FALSE
+    )
+    outputOptions(output, "records_table", suspendWhenHidden = FALSE)
 
-    output$relationships_table <- DT::renderDT({
-      relationship_display <- current_relationships()[, c(
-        "group_name",
-        "sub_group_name"
-      ), drop = FALSE]
+    output$relationships_table <- DT::renderDT(
+      {
+        relationship_display <- current_relationships()[,
+          c(
+            "group_name",
+            "sub_group_name"
+          ),
+          drop = FALSE
+        ]
 
-      names(relationship_display) <- c(
-        "Parameter group",
-        "Parameter sub-group"
-      )
-
-      DT::datatable(
-        relationship_display,
-        rownames = FALSE,
-        selection = "single",
-        options = list(
-          dom = "t",
-          paging = FALSE,
-          searching = FALSE,
-          info = FALSE,
-          autoWidth = TRUE,
-          scrollX = TRUE
+        names(relationship_display) <- c(
+          "Parameter group",
+          "Parameter sub-group"
         )
-      )
-    }, server = FALSE)
+
+        DT::datatable(
+          relationship_display,
+          rownames = FALSE,
+          selection = "single",
+          options = list(
+            dom = "t",
+            paging = FALSE,
+            searching = FALSE,
+            info = FALSE,
+            autoWidth = TRUE,
+            scrollX = TRUE
+          )
+        )
+      },
+      server = FALSE
+    )
+    outputOptions(output, "relationships_table", suspendWhenHidden = FALSE)
 
     observeEvent(input$reload, {
       selected_id <- current_record_id()
@@ -1475,7 +1569,9 @@ manageParameters <- function(id, language) {
       {
         relationship_choices <- editor_data$relationship_choices
         group_id <- suppressWarnings(as.integer(input$relationship_group_id))
-        sub_group_id <- suppressWarnings(as.integer(input$relationship_sub_group_id))
+        sub_group_id <- suppressWarnings(as.integer(
+          input$relationship_sub_group_id
+        ))
 
         if (is.na(group_id)) {
           showNotification(
@@ -1610,12 +1706,17 @@ manageParameters <- function(id, language) {
                 con,
                 saved_parameter_id
               )
-              desired_relationships <- current_relationships()[, c(
-                "group_id",
-                "sub_group_id"
-              ), drop = FALSE]
+              desired_relationships <- current_relationships()[,
+                c(
+                  "group_id",
+                  "sub_group_id"
+                ),
+                drop = FALSE
+              ]
 
-              existing_keys <- parameter_relationship_keys(existing_relationships)
+              existing_keys <- parameter_relationship_keys(
+                existing_relationships
+              )
               desired_keys <- parameter_relationship_keys(desired_relationships)
 
               delete_ids <- existing_relationships$relationship_id[
@@ -1688,7 +1789,10 @@ manageParameters <- function(id, language) {
 }
 
 manageOrganizationsUI <- function(id) {
-  referenceTableManagerUI(id, title = "Organizations")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["organizations"]]
+  )
 }
 
 manageOrganizations <- function(id, language) {
@@ -1702,7 +1806,10 @@ manageOrganizations <- function(id, language) {
 }
 
 manageNetworksUI <- function(id) {
-  referenceTableManagerUI(id, title = "Networks")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["networks"]]
+  )
 }
 
 manageNetworks <- function(id, language) {
@@ -1716,7 +1823,10 @@ manageNetworks <- function(id, language) {
 }
 
 manageProjectsUI <- function(id) {
-  referenceTableManagerUI(id, title = "Projects")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["projects"]]
+  )
 }
 
 manageProjects <- function(id, language) {
@@ -1730,7 +1840,10 @@ manageProjects <- function(id, language) {
 }
 
 manageNetworkProjectTypesUI <- function(id) {
-  referenceTableManagerUI(id, title = "Network / Project Types")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["network_project_types"]]
+  )
 }
 
 manageNetworkProjectTypes <- function(id, language) {
@@ -1744,7 +1857,10 @@ manageNetworkProjectTypes <- function(id, language) {
 }
 
 manageLocationTypesUI <- function(id) {
-  referenceTableManagerUI(id, title = "Location Types")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["location_types"]]
+  )
 }
 
 manageLocationTypes <- function(id, language) {
@@ -1758,7 +1874,10 @@ manageLocationTypes <- function(id, language) {
 }
 
 manageMediaTypesUI <- function(id) {
-  referenceTableManagerUI(id, title = "Media Types")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["media_types"]]
+  )
 }
 
 manageMediaTypes <- function(id, language) {
@@ -1772,7 +1891,10 @@ manageMediaTypes <- function(id, language) {
 }
 
 manageParameterGroupsUI <- function(id) {
-  referenceTableManagerUI(id, title = "Parameter Groups")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["parameter_groups"]]
+  )
 }
 
 manageParameterGroups <- function(id, language) {
@@ -1786,7 +1908,10 @@ manageParameterGroups <- function(id, language) {
 }
 
 manageParameterSubGroupsUI <- function(id) {
-  referenceTableManagerUI(id, title = "Parameter Sub-Groups")
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["parameter_sub_groups"]]
+  )
 }
 
 manageParameterSubGroups <- function(id, language) {
