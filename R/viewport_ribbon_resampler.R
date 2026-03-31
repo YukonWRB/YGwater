@@ -179,35 +179,40 @@ viewport_ribbon_resample <- function(
     )]
   }
 
-  line_dt <- visible[!is.na(get(line_col)), {
-    local <- .SD
-    idx <- unique(c(
-      1L,
-      which.min(local[[line_col]]),
-      which.max(local[[line_col]]),
-      .N
-    ))
-    local[idx]
-  },
-  by = .(.run, .bin),
-  .SDcols = c(x_col, line_col, ".row_id")]
+  line_dt <- data.table::data.table(
+    x = dt[[x_col]][0],
+    y = numeric(0),
+    .run = integer(0),
+    .bin = integer(0),
+    .row_id = integer(0)
+  )
+  if (!is.null(line_col)) {
+    if (!(line_col %in% names(visible))) {
+      stop("`line_col` was not found in `data`.")
+    }
 
-  if (nrow(line_dt) > 0) {
-    data.table::setorderv(line_dt, c(".row_id"))
-    line_dt <- unique(line_dt, by = ".row_id")
-    data.table::setnames(
-      line_dt,
-      old = c(x_col, line_col),
-      new = c("x", "y")
-    )
-  } else {
-    line_dt <- data.table::data.table(
-      x = dt[[x_col]][0],
-      y = numeric(0),
-      .run = integer(0),
-      .bin = integer(0),
-      .row_id = integer(0)
-    )
+    line_dt <- visible[!is.na(get(line_col)), {
+      local <- .SD
+      idx <- unique(c(
+        1L,
+        which.min(local[[line_col]]),
+        which.max(local[[line_col]]),
+        .N
+      ))
+      local[idx]
+    },
+    by = .(.run, .bin),
+    .SDcols = c(x_col, line_col, ".row_id")]
+
+    if (nrow(line_dt) > 0) {
+      data.table::setorderv(line_dt, c(".row_id"))
+      line_dt <- unique(line_dt, by = ".row_id")
+      data.table::setnames(
+        line_dt,
+        old = c(x_col, line_col),
+        new = c("x", "y")
+      )
+    }
   }
 
   band_list <- list()
@@ -426,5 +431,152 @@ viewport_ribbon_plot <- function(
   list(
     plot = p,
     trace_bundle = trace_bundle
+  )
+}
+
+
+viewport_timeseries_plot <- function(
+  trace_data,
+  range_data = NULL,
+  meta,
+  source = NULL,
+  xlim = NULL,
+  n_bins = 700L,
+  legend_orientation = NULL
+) {
+  trace_dt <- data.table::copy(data.table::as.data.table(trace_data))
+  if (!nrow(trace_dt)) {
+    stop("`trace_data` must contain at least one row.")
+  }
+  if (!all(c("datetime", "value") %in% names(trace_dt))) {
+    stop("`trace_data` must contain `datetime` and `value` columns.")
+  }
+
+  range_dt <- data.table::copy(data.table::as.data.table(range_data))
+  if (!all(c("datetime", "min", "max", "q25", "q75") %in% names(range_dt))) {
+    range_dt <- data.table::data.table()
+  }
+
+  hover <- isTRUE(meta$hover)
+  line_name <- if (!is.null(meta$line_name)) {
+    meta$line_name
+  } else {
+    "Observed"
+  }
+  line_color <- if (!is.null(meta$line_color)) {
+    meta$line_color
+  } else {
+    "#00454e"
+  }
+  line_width <- if (!is.null(meta$line_width)) {
+    meta$line_width
+  } else {
+    1.4
+  }
+
+  line_summary <- viewport_ribbon_resample(
+    data = trace_dt,
+    x_col = "datetime",
+    line_col = "value",
+    xlim = xlim,
+    n_bins = n_bins
+  )
+  line_bundle <- viewport_ribbon_trace_bundle(
+    summary = line_summary,
+    line_name = line_name,
+    line_color = line_color,
+    line_width = line_width,
+    band_styles = list(),
+    hover = hover
+  )
+
+  band_summary <- list(
+    line = data.table::data.table(),
+    bands = list(),
+    meta = NULL
+  )
+  band_bundle <- list(
+    traces = list(),
+    trace_count = 0L,
+    client_points = 0L
+  )
+
+  if (nrow(range_dt) > 0) {
+    band_names <- meta$band_names
+    if (is.null(band_names)) {
+      band_names <- list(
+        historic = "Historic",
+        typical = "Typical"
+      )
+    }
+
+    band_defs <- list()
+    band_defs[[band_names$historic]] <- c("min", "max")
+    band_defs[[band_names$typical]] <- c("q25", "q75")
+
+    band_summary <- viewport_ribbon_resample(
+      data = range_dt,
+      x_col = "datetime",
+      line_col = NULL,
+      bands = band_defs,
+      xlim = xlim,
+      n_bins = n_bins
+    )
+    band_bundle <- viewport_ribbon_trace_bundle(
+      summary = band_summary,
+      line_name = NULL,
+      band_styles = meta$band_styles,
+      hover = hover
+    )
+  }
+
+  traces <- c(band_bundle$traces, line_bundle$traces)
+
+  p <- plotly::plot_ly(source = source)
+  for (trace in traces) {
+    p <- do.call(
+      plotly::add_trace,
+      c(list(p = p), trace)
+    )
+  }
+
+  layout_args <- meta$layout
+  if (is.null(layout_args)) {
+    layout_args <- list()
+  }
+  if (!is.null(legend_orientation)) {
+    if (is.null(layout_args$legend)) {
+      layout_args$legend <- list()
+    }
+    layout_args$legend$orientation <- legend_orientation
+  }
+
+  if (length(layout_args) > 0) {
+    p <- do.call(
+      plotly::layout,
+      c(list(p = p), layout_args)
+    )
+  }
+
+  config_args <- meta$config
+  if (is.null(config_args)) {
+    config_args <- list()
+  }
+  p <- do.call(
+    plotly::config,
+    c(list(p = p), config_args)
+  )
+
+  list(
+    plot = p,
+    trace_bundle = list(
+      traces = traces,
+      trace_count = length(traces),
+      client_points = band_bundle$client_points + line_bundle$client_points
+    ),
+    summaries = list(
+      line = line_summary,
+      bands = band_summary
+    )
   )
 }

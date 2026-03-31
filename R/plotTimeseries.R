@@ -38,6 +38,7 @@
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
+#' @param build_plot Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
@@ -80,6 +81,7 @@ plotTimeseries <- function(
   raw = FALSE,
   imputed = FALSE,
   data = FALSE,
+  build_plot = TRUE,
   con = NULL
 ) {
   # timeseries_id = 1222
@@ -122,6 +124,10 @@ plotTimeseries <- function(
 
   # Deal with non-standard evaluations from data.table to silence check() notes
   period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- NULL
+
+  if (!build_plot && !data) {
+    stop("`build_plot = FALSE` requires `data = TRUE`.")
+  }
 
   if (!is.null(resolution)) {
     if (resolution == "day" && raw) {
@@ -1097,6 +1103,118 @@ plotTimeseries <- function(
     ")"
   )
 
+  corrected_name <- parameter_name
+  if (raw) {
+    corrected_name <- if (lang == "fr") {
+      paste(parameter_name, "(corrig\u00E9)")
+    } else {
+      paste(parameter_name, "(corrected)")
+    }
+  }
+
+  raw_label <- NULL
+  if (raw) {
+    raw_label <- if (lang == "fr") {
+      paste(parameter_name, "(brut)")
+    } else {
+      paste(parameter_name, "(raw)")
+    }
+  }
+
+  adaptive_meta <- list(
+    hover = hover,
+    line_name = corrected_name,
+    line_color = "#00454e",
+    line_width = 2.5 * line_scale,
+    band_names = list(
+      historic = if (lang == "en") "Historic" else "Historique",
+      typical = if (lang == "en") "Typical" else "Typique"
+    ),
+    band_styles = list(
+      Historic = list(
+        fillcolor = "rgba(212, 236, 239, 0.85)",
+        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+      ),
+      Historique = list(
+        fillcolor = "rgba(212, 236, 239, 0.85)",
+        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+      ),
+      Typical = list(
+        fillcolor = "rgba(95, 157, 166, 0.45)",
+        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+      ),
+      Typique = list(
+        fillcolor = "rgba(95, 157, 166, 0.45)",
+        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+      )
+    ),
+    layout = list(
+      title = if (title) {
+        list(
+          text = stn_name,
+          x = 0.05,
+          xref = "container",
+          font = list(
+            size = axis_scale * 18,
+            family = "Nunito Sans",
+            color = "#000000"
+          )
+        )
+      } else {
+        NULL
+      },
+      xaxis = list(
+        title = list(standoff = 0),
+        showgrid = gridx,
+        showline = TRUE,
+        tickformat = if (lang == "en") "%b %-d '%y" else "%d %-b '%y",
+        titlefont = list(size = axis_scale * 14),
+        tickfont = list(size = axis_scale * 12),
+        nticks = 10,
+        rangeslider = list(
+          visible = if (slider & legend_position == "v") TRUE else FALSE
+        ),
+        ticks = "outside",
+        ticklen = 5,
+        tickwidth = 1,
+        tickcolor = "black"
+      ),
+      yaxis = list(
+        title = list(text = y_title, standoff = 10),
+        showgrid = gridy,
+        showline = TRUE,
+        zeroline = FALSE,
+        titlefont = list(size = axis_scale * 14),
+        tickfont = list(size = axis_scale * 12),
+        autorange = if (invert) "reversed" else TRUE,
+        ticks = "outside",
+        ticklen = 5,
+        tickwidth = 1,
+        tickcolor = "black"
+      ),
+      margin = list(b = 0, t = 40 * axis_scale, l = 50 * axis_scale),
+      hovermode = if (hover) "x unified" else "none",
+      legend = list(
+        font = list(size = legend_scale * 12),
+        orientation = legend_position
+      ),
+      font = list(family = "Nunito Sans")
+    ),
+    config = list(locale = lang)
+  )
+
+  if (data && !build_plot) {
+    datalist <- list(
+      trace_data = trace_data,
+      range_data = if (historic_range) {
+        range_data[, c("datetime", "min", "max", "q75", "q25")]
+      } else {
+        data.frame()
+      }
+    )
+    return(list(data = datalist, meta = adaptive_meta))
+  }
+
   plot <- plotly::plot_ly()
   if (historic_range) {
     # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
@@ -1212,26 +1330,11 @@ plotTimeseries <- function(
       )
   }
 
-  corrected_name <- parameter_name
-  if (raw) {
-    corrected_name <- if (lang == "fr") {
-      paste(parameter_name, "(corrig\u00E9)")
-    } else {
-      paste(parameter_name, "(corrected)")
-    }
-  }
-
   if (
     raw &&
       "value_raw" %in% names(trace_data) &&
       any(!is.na(trace_data$value_raw))
   ) {
-    raw_label <- if (lang == "fr") {
-      paste(parameter_name, "(brut)")
-    } else {
-      paste(parameter_name, "(raw)")
-    }
-
     # Add the raw data first so it's below the corrected data
     plot <- plot |>
       plotly::add_trace(

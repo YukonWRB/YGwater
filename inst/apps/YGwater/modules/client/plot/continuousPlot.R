@@ -770,7 +770,10 @@ contPlot <- function(id, language, windowDims, inputs) {
           ) # End plot_options_panel
         ), # End accordion 1
         tags$div(style = "height: 10px;"),
-        plotly::plotlyOutput(ns("plot"), height = "800px", inline = TRUE),
+        div(
+          id = ns("plot_container"),
+          plotly::plotlyOutput(ns("plot"), height = "800px", inline = TRUE)
+        ),
         uiOutput(ns("full_screen_ui")),
 
         # Space so the table and plot aren't in each other's faces
@@ -805,6 +808,16 @@ contPlot <- function(id, language, windowDims, inputs) {
       ) # End tagList
       return(tags)
     }) # End renderUI
+
+    session$onFlushed(function() {
+      shinyjs::runjs(
+        sprintf(
+          "trackContainerSize('%s', '%s');",
+          ns("plot_container"),
+          ns("plot_container_dims")
+        )
+      )
+    }, once = TRUE)
 
     # Observe changes to timeseries selections Update plot type choices accordingly and reset selected plot type if it's no longer valid.
     observe({
@@ -2088,6 +2101,104 @@ contPlot <- function(id, language, windowDims, inputs) {
       ownership_tbl
     })
 
+    adaptiveState <- reactiveValues(
+      active = FALSE,
+      current_xlim = NULL,
+      render_key = NULL,
+      plot_ready = FALSE,
+      last_trace_count = 0L,
+      data = NULL,
+      meta = NULL
+    )
+
+    adaptive_plot_width_px <- reactive({
+      if (!is.null(input$plot_container_dims$width)) {
+        return(input$plot_container_dims$width)
+      }
+
+      if (!is.null(windowDims())) {
+        return(max(480, windowDims()$width - 80))
+      }
+
+      900
+    })
+
+    adaptive_target_bins <- reactive({
+      viewport_ribbon_target_bins(width_px = adaptive_plot_width_px())
+    })
+
+    current_legend_orientation <- reactive({
+      if (!is.null(windowDims()) && windowDims()$width <= windowDims()$height) {
+        return("h")
+      }
+      "v"
+    })
+
+    render_adaptive_timeseries <- function(
+      xlim = NULL,
+      full_render = FALSE,
+      force = FALSE
+    ) {
+      req(isTRUE(adaptiveState$active))
+      req(!is.null(adaptiveState$data), !is.null(adaptiveState$meta))
+
+      key_xlim <- if (is.null(xlim)) {
+        "full"
+      } else {
+        paste(format(xlim, tz = "UTC", usetz = TRUE), collapse = "|")
+      }
+      render_key <- paste(
+        key_xlim,
+        adaptive_target_bins(),
+        current_legend_orientation(),
+        sep = "::"
+      )
+
+      if (!force && identical(adaptiveState$render_key, render_key)) {
+        return(invisible(NULL))
+      }
+
+      built <- viewport_timeseries_plot(
+        trace_data = adaptiveState$data$trace_data,
+        range_data = adaptiveState$data$range_data,
+        meta = adaptiveState$meta,
+        source = ns("plot"),
+        xlim = xlim,
+        n_bins = adaptive_target_bins(),
+        legend_orientation = current_legend_orientation()
+      )
+
+      old_trace_count <- adaptiveState$last_trace_count
+      adaptiveState$current_xlim <- xlim
+      adaptiveState$render_key <- render_key
+      adaptiveState$last_trace_count <- built$trace_bundle$trace_count
+
+      if (full_render || !isTRUE(adaptiveState$plot_ready)) {
+        output$plot <- plotly::renderPlotly({
+          built$plot
+        })
+        adaptiveState$plot_ready <- TRUE
+        return(invisible(NULL))
+      }
+
+      proxy <- plotly::plotlyProxy("plot", session)
+      if (old_trace_count > 0) {
+        proxy <- plotly::plotlyProxyInvoke(
+          proxy,
+          "deleteTraces",
+          seq_len(old_trace_count) - 1L
+        )
+      }
+
+      if (built$trace_bundle$trace_count > 0) {
+        plotly::plotlyProxyInvoke(
+          proxy,
+          "addTraces",
+          built$trace_bundle$traces
+        )
+      }
+    }
+
     # ExtendedTask that does the heavy plotting work
     long_ts_plot <- ExtendedTask$new(function(req) {
       # req is the list returned by plot_request()
@@ -2245,6 +2356,38 @@ contPlot <- function(id, language, windowDims, inputs) {
                 gridy = FALSE
               )
             } else {
+              adaptive_eligible <- !isTRUE(req$grades) &&
+                !isTRUE(req$approvals) &&
+                !isTRUE(req$qualifiers)
+
+              if (adaptive_eligible) {
+                adaptive_payload <- plotTimeseries(
+                  timeseries_id = req$timeseries_id,
+                  start_date = req$start_date,
+                  end_date = req$end_date,
+                  historic_range = req$historic_range,
+                  unusable = req$unusable,
+                  grades = req$grades,
+                  approvals = req$approvals,
+                  qualifiers = req$qualifiers,
+                  lang = req$lang,
+                  webgl = session$userData$use_webgl,
+                  con = con,
+                  data = TRUE,
+                  build_plot = FALSE,
+                  gridx = FALSE,
+                  gridy = FALSE,
+                  slider = FALSE,
+                  tzone = plot_timezone,
+                  resolution = plot_resolution
+                )
+                return(list(
+                  mode = "adaptive_timeseries",
+                  data = adaptive_payload$data,
+                  adaptive = list(meta = adaptive_payload$meta)
+                ))
+              }
+
               plot <- plotTimeseries(
                 timeseries_id = req$timeseries_id,
                 start_date = req$start_date,
@@ -2393,6 +2536,13 @@ contPlot <- function(id, language, windowDims, inputs) {
       if (plot_created()) {
         shinyjs::hide("full_screen_ui")
       }
+      adaptiveState$active <- FALSE
+      adaptiveState$current_xlim <- NULL
+      adaptiveState$render_key <- NULL
+      adaptiveState$plot_ready <- FALSE
+      adaptiveState$last_trace_count <- 0L
+      adaptiveState$data <- NULL
+      adaptiveState$meta <- NULL
       long_ts_plot$invoke(plot_request())
     })
 
@@ -2401,10 +2551,12 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     observeEvent(long_ts_plot$result(), {
-      if (inherits(long_ts_plot$result(), "character")) {
+      result <- long_ts_plot$result()
+
+      if (inherits(result, "character")) {
         showModal(modalDialog(
           title = tr("error", language$language),
-          long_ts_plot$result(),
+          result,
           footer = tagList(
             actionButton(ns("cancel"), tr("cancel", language$language))
           ),
@@ -2413,10 +2565,28 @@ contPlot <- function(id, language, windowDims, inputs) {
         return()
       }
 
-      # Render from the task result
-      output$plot <- plotly::renderPlotly({
-        isolate(long_ts_plot$result()$plot)
-      })
+      if (identical(result$mode, "adaptive_timeseries")) {
+        adaptiveState$active <- TRUE
+        adaptiveState$current_xlim <- NULL
+        adaptiveState$render_key <- NULL
+        adaptiveState$plot_ready <- FALSE
+        adaptiveState$last_trace_count <- 0L
+        adaptiveState$data <- result$data
+        adaptiveState$meta <- result$adaptive$meta
+        render_adaptive_timeseries(full_render = TRUE, force = TRUE)
+      } else {
+        adaptiveState$active <- FALSE
+        adaptiveState$current_xlim <- NULL
+        adaptiveState$render_key <- NULL
+        adaptiveState$plot_ready <- FALSE
+        adaptiveState$last_trace_count <- 0L
+        adaptiveState$data <- NULL
+        adaptiveState$meta <- NULL
+
+        output$plot <- plotly::renderPlotly({
+          isolate(result$plot)
+        })
+      }
 
       # Create a full screen button if necessary
       if (!plot_created()) {
@@ -2604,6 +2774,32 @@ contPlot <- function(id, language, windowDims, inputs) {
       ignoreNULL = TRUE
     )
 
+    relayout_event <- shiny::debounce(
+      reactive(plotly::event_data("plotly_relayout", source = ns("plot"))),
+      millis = 150
+    )
+
+    observeEvent(relayout_event(), {
+      if (!isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)) {
+        return()
+      }
+      relayout <- relayout_event()
+      has_xlim <- !is.null(relayout[["xaxis.range[0]"]]) &&
+        !is.null(relayout[["xaxis.range[1]"]])
+      if (!has_xlim && !isTRUE(relayout[["xaxis.autorange"]])) {
+        return()
+      }
+      xlim <- viewport_ribbon_relayout_xlim(relayout, tz = "UTC")
+      render_adaptive_timeseries(xlim = xlim)
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$plot_container_dims, {
+      if (!isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)) {
+        return()
+      }
+      render_adaptive_timeseries(xlim = adaptiveState$current_xlim)
+    }, ignoreInit = TRUE)
+
     # Observe the full screen button and run the javascript function to make the plot full screen
     observeEvent(
       input$full_screen,
@@ -2616,6 +2812,24 @@ contPlot <- function(id, language, windowDims, inputs) {
                         sendWindowSizeToShiny();
                       }, 700);
                     "
+        )
+        shinyjs::runjs(
+          sprintf(
+            "
+              setTimeout(function() {
+                var container = document.getElementById('%s');
+                if (!container) return;
+                var rect = container.getBoundingClientRect();
+                Shiny.setInputValue('%s', {
+                  width: rect.width,
+                  height: rect.height,
+                  timestamp: new Date().getTime()
+                });
+              }, 700);
+            ",
+            ns("plot_container"),
+            ns("plot_container_dims")
+          )
         )
       },
       ignoreInit = TRUE
