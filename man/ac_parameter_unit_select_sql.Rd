@@ -9,7 +9,8 @@ ac_parameter_unit_select_sql(
   con,
   parameter_alias = NULL,
   output_alias = "unit_default",
-  prefer = c("default_or_solid", "default", "solid", "solid_or_default")
+  prefer = c("default_or_solid", "default", "solid", "solid_or_default"),
+  ...
 )
 }
 \arguments{
