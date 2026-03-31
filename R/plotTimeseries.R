@@ -620,8 +620,8 @@ plotTimeseries <- function(
     parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
   }
 
-  # Find the ts units
-  units <- parameter_tbl$unit_default[1]
+  # Find the resolved timeseries units, which can now depend on matrix state.
+  units <- ac_get_timeseries_unit(con, tsid)
 
   # Find the necessary datum (latest datum)
   if (datum) {

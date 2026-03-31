@@ -111,6 +111,16 @@ manageInstrumentsUI <- function(id) {
           ns("takes_measurements"),
           "Takes measurements",
           value = FALSE
+        ),
+        checkboxInput(
+          ns("can_be_logger"),
+          "Can be logger",
+          value = FALSE
+        ),
+        checkboxInput(
+          ns("can_be_telemetry_component"),
+          "Can be telemetry component",
+          value = FALSE
         )
       ),
       tags$hr(),
@@ -465,7 +475,8 @@ manageInstruments <- function(id, language) {
           "i.supplier_id, s.supplier_name, i.purchase_price,",
           "due.maintenance_event_id, due.date_maintenance_due, due.maintenance_due_note,",
           "i.takes_measurements, i.cable_length_m, i.firmware_version,",
-          "i.voltage, i.power_active_ma, i.power_quiescent_ma",
+          "i.voltage, i.power_active_ma, i.power_quiescent_ma,",
+          "i.can_be_logger, i.can_be_telemetry_component",
           "FROM instruments.instruments AS i",
           "LEFT JOIN instruments.observers AS o ON i.observer = o.observer_id",
           "LEFT JOIN instruments.instrument_make AS mk ON i.make = mk.make_id",
@@ -576,6 +587,12 @@ manageInstruments <- function(id, language) {
       updateNumericInput(session, "power_quiescent_ma", value = NA_real_)
       updateCheckboxInput(session, "holds_replaceable_sensors", value = FALSE)
       updateCheckboxInput(session, "takes_measurements", value = FALSE)
+      updateCheckboxInput(session, "can_be_logger", value = FALSE)
+      updateCheckboxInput(
+        session,
+        "can_be_telemetry_component",
+        value = FALSE
+      )
     }
 
     populate_form <- function(record_id) {
@@ -688,6 +705,16 @@ manageInstruments <- function(id, language) {
         "takes_measurements",
         value = isTRUE(record$takes_measurements)
       )
+      updateCheckboxInput(
+        session,
+        "can_be_logger",
+        value = isTRUE(record$can_be_logger)
+      )
+      updateCheckboxInput(
+        session,
+        "can_be_telemetry_component",
+        value = isTRUE(record$can_be_telemetry_component)
+      )
       invisible(NULL)
     }
 
@@ -725,6 +752,8 @@ manageInstruments <- function(id, language) {
         "purchase_price",
         "holds_replaceable_sensors",
         "takes_measurements",
+        "can_be_logger",
+        "can_be_telemetry_component",
         "cable_length_m",
         "firmware_version",
         "voltage",
@@ -763,6 +792,8 @@ manageInstruments <- function(id, language) {
         "Purchase price dollars",
         "Replaceable sensors",
         "Takes measurements",
+        "Can be logger",
+        "Can be telemetry component",
         "Cable length (m)",
         "Firmware",
         "Input voltage",
@@ -1550,6 +1581,8 @@ manageInstruments <- function(id, language) {
           int_or_na(input$supplier_id),
           num_or_na(input$purchase_price),
           isTRUE(input$takes_measurements),
+          isTRUE(input$can_be_logger),
+          isTRUE(input$can_be_telemetry_component),
           num_or_na(input$cable_length_m),
           blank_to_na(input$firmware_version),
           num_or_na(input$voltage),
@@ -1562,8 +1595,8 @@ manageInstruments <- function(id, language) {
             DBI::dbGetQuery(
               con,
               "INSERT INTO instruments.instruments 
-                  (obs_datetime, observer, make, model, type, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                  (obs_datetime, observer, make, model, type, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, can_be_logger, can_be_telemetry_component, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
                 RETURNING instrument_id",
               params = params
             )$instrument_id[[1]],
@@ -1592,12 +1625,14 @@ manageInstruments <- function(id, language) {
                   supplier_id = $15, 
                   purchase_price = $16,
                   takes_measurements = $17, 
-                  cable_length_m = $18,
-                  firmware_version = $19, 
-                  voltage = $20, 
-                  power_active_ma = $21,
-                  power_quiescent_ma = $22
-                WHERE instrument_id = $23",
+                  can_be_logger = $18,
+                  can_be_telemetry_component = $19,
+                  cable_length_m = $20,
+                  firmware_version = $21,
+                  voltage = $22,
+                  power_active_ma = $23,
+                  power_quiescent_ma = $24
+                WHERE instrument_id = $25",
               params = c(params, current_id)
             ),
             success = "Instrument record updated."

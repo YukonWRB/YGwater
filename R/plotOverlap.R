@@ -682,8 +682,8 @@ plotOverlap <- function(
     }
   }
 
-  # Find the ts units
-  units <- ac_get_parameter_unit(con, parameter_code)
+  # Find the resolved timeseries units, which can now depend on matrix state.
+  units <- ac_get_timeseries_unit(con, tsid)
 
   # Find the necessary datum (latest datum)
   if (datum) {

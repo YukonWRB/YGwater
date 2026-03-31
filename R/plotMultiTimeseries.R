@@ -988,8 +988,11 @@ plotMultiTimeseries <- function(
     timeseries[i, "start"] <- sub.start_date
     timeseries[i, "end"] <- sub.end_date
 
-    # Find the ts units
-    timeseries[i, "units"] <- parameter_tbl$unit_default[1]
+    # Find the resolved timeseries units, which can now depend on matrix state.
+    timeseries[i, "units"] <- ac_get_timeseries_unit(
+      con,
+      exist_check$timeseries_id[1]
+    )
 
     # Find the necessary datum (latest datum)
     if (datum) {

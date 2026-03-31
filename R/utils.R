@@ -197,6 +197,52 @@ ac_db_column_info <- function(con, schema, table) {
   )
 }
 
+#' Check if a database function exists
+#' @param con A DBI connection to the database.
+#' @param schema A string representing the schema name that owns the function.
+#' @param function_name A string representing the function name.
+#' @param arg_count An optional integer representing the number of arguments.
+#' @return A logical value indicating whether the specified function exists.
+#' @noRd
+
+ac_db_function_exists <- function(
+  con,
+  schema,
+  function_name,
+  arg_count = NULL
+) {
+  query <- paste(
+    "SELECT EXISTS (",
+    "  SELECT 1",
+    "  FROM pg_proc p",
+    "  JOIN pg_namespace n",
+    "    ON n.oid = p.pronamespace",
+    "  WHERE n.nspname = $1",
+    "    AND p.proname = $2",
+    if (is.null(arg_count)) {
+      ""
+    } else {
+      "    AND p.pronargs = $3"
+    },
+    ") AS present;"
+  )
+
+  params <- if (is.null(arg_count)) {
+    list(schema, function_name)
+  } else {
+    list(schema, function_name, as.integer(arg_count))
+  }
+
+  tryCatch(
+    {
+      DBI::dbGetQuery(con, query, params = params)$present[[1]]
+    },
+    error = function(...) {
+      FALSE
+    }
+  )
+}
+
 #' Generate a SQL column reference with optional table alias
 #' Constructs a SQL column reference string, optionally prefixed with a table alias. If a table alias is provided and is not empty, the column reference will be in the format "alias.column_name". If no alias is provided, the column reference will simply be "column_name".
 #' @param table_alias An optional string representing the table alias to prefix the column name with. If NULL or an empty string is provided, the column name will be returned without a prefix.
@@ -257,12 +303,19 @@ ac_parameter_unit_schema <- function(con) {
   }
 
   list(
-    default = resolve_column(c(
+    liquid = resolve_column(c(
+      "units_liquid",
       "unit_default",
       "default_unit_id",
       "unit_default_id"
     )),
-    solid = resolve_column(c("unit_solid", "solid_unit_id", "unit_solid_id"))
+    solid = resolve_column(c(
+      "units_solid",
+      "unit_solid",
+      "solid_unit_id",
+      "unit_solid_id"
+    )),
+    gas = resolve_column(c("units_gas"))
   )
 }
 
@@ -279,15 +332,98 @@ ac_parameter_unit_select_sql <- function(
   con,
   parameter_alias = NULL,
   output_alias = "unit_default",
-  prefer = c("default_or_solid", "default", "solid", "solid_or_default")
+  prefer = c("default_or_solid", "default", "solid", "solid_or_default"),
+  ...
 ) {
+  dots <- list(...)
+  matrix_state_alias <- if (
+    is.null(dots$matrix_state_alias)
+  ) {
+    NULL
+  } else {
+    dots$matrix_state_alias
+  }
+  matrix_state_column <- if (
+    is.null(dots$matrix_state_column)
+  ) {
+    "matrix_state_id"
+  } else {
+    dots$matrix_state_column
+  }
+  media_alias <- if (is.null(dots$media_alias)) {
+    NULL
+  } else {
+    dots$media_alias
+  }
+  media_column <- if (is.null(dots$media_column)) {
+    "media_id"
+  } else {
+    dots$media_column
+  }
+
   ac_parameter_unit_expr <- function(
     con,
     parameter_alias = NULL,
-    prefer = c("default_or_solid", "default", "solid", "solid_or_default")
+    prefer = c("default_or_solid", "default", "solid", "solid_or_default"),
+    matrix_state_alias = NULL,
+    matrix_state_column = "matrix_state_id",
+    media_alias = NULL,
+    media_column = "media_id"
   ) {
     prefer <- match.arg(prefer)
     unit_schema <- ac_parameter_unit_schema(con)
+
+    parameter_id_ref <- ac_sql_column_ref(parameter_alias, "parameter_id")
+    matrix_state_ref <- if (is.null(matrix_state_alias) || !nzchar(
+      matrix_state_alias
+    )) {
+      NULL
+    } else {
+      ac_sql_column_ref(matrix_state_alias, matrix_state_column)
+    }
+    media_ref <- if (is.null(media_alias) || !nzchar(media_alias)) {
+      NULL
+    } else {
+      ac_sql_column_ref(media_alias, media_column)
+    }
+
+    if (
+      ac_db_function_exists(con, "public", "get_parameter_unit_name", 2) &&
+        (!is.null(matrix_state_ref) || !is.null(media_ref))
+    ) {
+      resolved_matrix_state_expr <- if (
+        !is.null(media_ref) &&
+          ac_db_function_exists(con, "public", "resolve_matrix_state_id", 3)
+      ) {
+        paste0(
+          "public.resolve_matrix_state_id(",
+          media_ref,
+          ", ",
+          parameter_id_ref,
+          ", ",
+          if (is.null(matrix_state_ref)) {
+            "NULL"
+          } else {
+            matrix_state_ref
+          },
+          ")"
+        )
+      } else {
+        matrix_state_ref
+      }
+
+      if (!is.null(resolved_matrix_state_expr)) {
+        return(
+          paste0(
+            "public.get_parameter_unit_name(",
+            parameter_id_ref,
+            ", ",
+            resolved_matrix_state_expr,
+            ")"
+          )
+        )
+      }
+    }
 
     column_expr <- function(definition) {
       if (is.null(definition$column) || is.null(definition$storage)) {
@@ -315,10 +451,10 @@ ac_parameter_unit_select_sql <- function(
 
     order <- switch(
       prefer,
-      default = "default",
-      solid = "solid",
-      default_or_solid = c("default", "solid"),
-      solid_or_default = c("solid", "default")
+      default = c("liquid", "solid", "gas"),
+      solid = c("solid", "liquid", "gas"),
+      default_or_solid = c("liquid", "solid", "gas"),
+      solid_or_default = c("solid", "liquid", "gas")
     )
 
     exprs <- vapply(
@@ -349,7 +485,11 @@ ac_parameter_unit_select_sql <- function(
   expr <- ac_parameter_unit_expr(
     con = con,
     parameter_alias = parameter_alias,
-    prefer = prefer
+    prefer = prefer,
+    matrix_state_alias = matrix_state_alias,
+    matrix_state_column = matrix_state_column,
+    media_alias = media_alias,
+    media_column = media_column
   )
 
   paste0(expr, " AS ", output_alias)
@@ -384,6 +524,44 @@ ac_get_parameter_unit <- function(
       " FROM public.parameters p WHERE p.parameter_id = $1;"
     ),
     params = list(parameter_id)
+  )
+
+  if (!nrow(out)) {
+    return(NA_character_)
+  }
+
+  out$unit_name[[1]]
+}
+
+#' Get the unit for a timeseries from the database
+#' @param con A DBI connection to the database containing parameter and
+#'   timeseries information.
+#' @param timeseries_id An integer representing the timeseries_id for which to
+#'   retrieve the resolved unit.
+#' @return A string representing the unit associated with the specified
+#'   timeseries_id, or NA if no unit is found.
+#' @noRd
+
+ac_get_timeseries_unit <- function(con, timeseries_id) {
+  unit_sql <- ac_parameter_unit_select_sql(
+    con = con,
+    parameter_alias = "p",
+    output_alias = "unit_name",
+    matrix_state_alias = "ts",
+    media_alias = "ts"
+  )
+
+  out <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT",
+      unit_sql,
+      "FROM public.parameters p",
+      "JOIN continuous.timeseries ts",
+      "ON ts.parameter_id = p.parameter_id",
+      "WHERE ts.timeseries_id = $1;"
+    ),
+    params = list(timeseries_id)
   )
 
   if (!nrow(out)) {

@@ -174,6 +174,17 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
             "Select one or more media types that this guideline applies to (e.g., freshwater, saltwater)."
           ),
         selectizeInput(
+          ns("matrix_state"),
+          "Guideline Matrix State",
+          choices = NULL,
+          width = "100%",
+          multiple = TRUE,
+          options = list(maxItems = 1)
+        ) |>
+          tooltip(
+            "Select the physical matrix state used to resolve units for this guideline."
+          ),
+        selectizeInput(
           ns("result_speciation"),
           "Result Speciation",
           choices = NULL,
@@ -321,6 +332,263 @@ addGuidelines <- function(id, language) {
       unique(out[!is.na(out)])
     }
 
+    nullable_integer <- function(x) {
+      vals <- ensure_character(x)
+      vals <- vals[nzchar(vals)]
+      if (!length(vals)) {
+        return(NA_integer_)
+      }
+
+      suppressWarnings(as.integer(vals[[1]]))
+    }
+
+    matrix_state_label <- function(matrix_state_id) {
+      matrix_state_id <- nullable_integer(matrix_state_id)
+      if (
+        is.na(matrix_state_id) ||
+          is.null(moduleData$matrix_states) ||
+          nrow(moduleData$matrix_states) == 0
+      ) {
+        return(NA_character_)
+      }
+
+      row <- moduleData$matrix_states[
+        moduleData$matrix_states$matrix_state_id == matrix_state_id,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(row) == 0) {
+        return(NA_character_)
+      }
+
+      row$matrix_state_name[[1]]
+    }
+
+    parameter_matrix_state_unit <- function(parameter_id, matrix_state_id) {
+      parameter_id <- nullable_integer(parameter_id)
+      matrix_state_id <- nullable_integer(matrix_state_id)
+
+      if (
+        is.na(parameter_id) ||
+          is.na(matrix_state_id) ||
+          is.null(moduleData$parameters) ||
+          nrow(moduleData$parameters) == 0 ||
+          is.null(moduleData$matrix_states) ||
+          nrow(moduleData$matrix_states) == 0
+      ) {
+        return(NA_character_)
+      }
+
+      param_row <- moduleData$parameters[
+        moduleData$parameters$parameter_id == parameter_id,
+        ,
+        drop = FALSE
+      ]
+      state_row <- moduleData$matrix_states[
+        moduleData$matrix_states$matrix_state_id == matrix_state_id,
+        ,
+        drop = FALSE
+      ]
+
+      if (nrow(param_row) == 0 || nrow(state_row) == 0) {
+        return(NA_character_)
+      }
+
+      unit_col <- paste0("units_", state_row$matrix_state_code[[1]])
+      if (!unit_col %in% names(param_row)) {
+        return(NA_character_)
+      }
+
+      unit_value <- param_row[[unit_col]][[1]]
+      if (is.null(unit_value) || is.na(unit_value) || !nzchar(unit_value)) {
+        return(NA_character_)
+      }
+
+      unit_value
+    }
+
+    supported_matrix_state_ids <- function(parameter_id) {
+      parameter_id <- nullable_integer(parameter_id)
+      if (
+        is.na(parameter_id) ||
+          is.null(moduleData$parameters) ||
+          nrow(moduleData$parameters) == 0 ||
+          is.null(moduleData$matrix_states) ||
+          nrow(moduleData$matrix_states) == 0
+      ) {
+        return(integer(0))
+      }
+
+      param_row <- moduleData$parameters[
+        moduleData$parameters$parameter_id == parameter_id,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(param_row) == 0) {
+        return(integer(0))
+      }
+
+      supported <- vapply(
+        seq_len(nrow(moduleData$matrix_states)),
+        function(i) {
+          unit_col <- paste0(
+            "units_",
+            moduleData$matrix_states$matrix_state_code[[i]]
+          )
+          unit_col %in% names(param_row) &&
+            !is.na(param_row[[unit_col]][[1]]) &&
+            nzchar(param_row[[unit_col]][[1]])
+        },
+        logical(1)
+      )
+
+      as.integer(moduleData$matrix_states$matrix_state_id[supported])
+    }
+
+    resolve_guideline_matrix_state <- function(
+      parameter_id = nullable_integer(input$parameter_id),
+      media_ids = parse_id_csv(input$media_type),
+      current_matrix_state_id = nullable_integer(input$matrix_state)
+    ) {
+      supported_states <- supported_matrix_state_ids(parameter_id)
+      if (!length(supported_states)) {
+        return(NA_integer_)
+      }
+
+      if (
+        !is.na(current_matrix_state_id) &&
+          current_matrix_state_id %in% supported_states
+      ) {
+        return(current_matrix_state_id)
+      }
+
+      media_defaults <- integer(0)
+      if (length(media_ids) && !is.null(moduleData$media_types)) {
+        media_defaults <- unique(na.omit(moduleData$media_types$default_matrix_state_id[
+          match(media_ids, moduleData$media_types$media_id)
+        ]))
+      }
+
+      if (length(media_defaults) == 1 && media_defaults[[1]] %in% supported_states) {
+        return(as.integer(media_defaults[[1]]))
+      }
+
+      if (length(supported_states) == 1) {
+        return(supported_states[[1]])
+      }
+
+      NA_integer_
+    }
+
+    update_matrix_state_selectize <- function(
+      selected = nullable_integer(input$matrix_state),
+      parameter_id = nullable_integer(input$parameter_id)
+    ) {
+      available_ids <- supported_matrix_state_ids(parameter_id)
+      if (!length(available_ids) && !is.na(parameter_id)) {
+        available_ids <- integer(0)
+      } else if (!length(available_ids)) {
+        available_ids <- as.integer(moduleData$matrix_states$matrix_state_id)
+      }
+
+      rows <- moduleData$matrix_states[
+        moduleData$matrix_states$matrix_state_id %in% available_ids,
+        ,
+        drop = FALSE
+      ]
+      rows <- rows[order(rows$matrix_state_name), , drop = FALSE]
+
+      updateSelectizeInput(
+        session,
+        "matrix_state",
+        choices = stats::setNames(
+          rows$matrix_state_id,
+          rows$matrix_state_name
+        ),
+        selected = if (is.na(selected)) character(0) else selected
+      )
+    }
+
+    validate_guideline_matrix_state <- function(
+      parameter_id,
+      matrix_state_id
+    ) {
+      parameter_id <- nullable_integer(parameter_id)
+      matrix_state_id <- nullable_integer(matrix_state_id)
+
+      if (is.na(parameter_id)) {
+        return("Please select a parameter.")
+      }
+      if (is.na(matrix_state_id)) {
+        return("Please select a matrix state.")
+      }
+      if (!matrix_state_id %in% supported_matrix_state_ids(parameter_id)) {
+        parameter_name <- moduleData$parameters$param_name[
+          match(parameter_id, moduleData$parameters$parameter_id)
+        ]
+        return(
+          sprintf(
+            "The selected matrix state does not have units configured for %s.",
+            parameter_name
+          )
+        )
+      }
+
+      NULL
+    }
+
+    parameter_choice_labels <- function(matrix_state_id = nullable_integer(input$matrix_state)) {
+      labels <- moduleData$parameters$param_name
+      units <- vapply(
+        moduleData$parameters$parameter_id,
+        function(pid) {
+          unit_value <- parameter_matrix_state_unit(pid, matrix_state_id)
+          if (is.na(unit_value)) {
+            moduleData$parameters$unit_default[
+              match(pid, moduleData$parameters$parameter_id)
+            ]
+          } else {
+            unit_value
+          }
+        },
+        character(1)
+      )
+      has_units <- !is.na(units) & nzchar(units)
+      labels[has_units] <- paste0(labels[has_units], " (", units[has_units], ")")
+      labels
+    }
+
+    guideline_test_media_id <- function(
+      media_ids = parse_id_csv(input$media_type),
+      matrix_state_id = nullable_integer(input$matrix_state)
+    ) {
+      media_ids <- as.integer(media_ids)
+      matrix_state_id <- nullable_integer(matrix_state_id)
+
+      if (length(media_ids)) {
+        return(media_ids[[1]])
+      }
+
+      if (
+        !is.na(matrix_state_id) &&
+          !is.null(moduleData$media_types) &&
+          nrow(moduleData$media_types) > 0
+      ) {
+        match_idx <- which(
+          moduleData$media_types$default_matrix_state_id == matrix_state_id
+        )
+        if (length(match_idx)) {
+          return(as.integer(moduleData$media_types$media_id[match_idx[[1]]]))
+        }
+      }
+
+      if (!is.null(moduleData$media_types) && nrow(moduleData$media_types) > 0) {
+        return(as.integer(moduleData$media_types$media_id[[1]]))
+      }
+
+      NA_integer_
+    }
+
     load_guidelines <- function() {
       DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -329,13 +597,15 @@ addGuidelines <- function(id, language) {
           ac_parameter_unit_select_sql(
             session$userData$AquaCache,
             "p",
-            "units"
+            "units",
+            matrix_state_alias = "g"
           ),
-          ", fr.fractions, mt.media_types, rs.result_speciation AS speciation, g.parameter_id, g.result_speciation_id, g.guideline_sql, g.publisher AS publisher_id, g.series AS series_id, fr.fraction_ids, mt.media_ids
+          ", ms.matrix_state_name AS matrix_state, fr.fractions, mt.media_types, rs.result_speciation AS speciation, g.parameter_id, g.matrix_state_id, g.result_speciation_id, g.guideline_sql, g.publisher AS publisher_id, g.series AS series_id, fr.fraction_ids, mt.media_ids
 FROM discrete.guidelines AS g
 LEFT JOIN discrete.guideline_publishers gp ON gp.publisher_id = g.publisher
 LEFT JOIN discrete.guideline_series gs ON gs.series_id = g.series
 JOIN public.parameters AS p ON p.parameter_id = g.parameter_id
+LEFT JOIN public.matrix_states ms ON ms.matrix_state_id = g.matrix_state_id
 LEFT JOIN discrete.result_speciations rs ON rs.result_speciation_id = g.result_speciation_id
 LEFT JOIN (
   SELECT gf.guideline_id,
@@ -374,7 +644,10 @@ LEFT JOIN (
     load_media_types <- function() {
       DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT media_id, media_type FROM public.media_types ORDER BY media_type"
+        paste(
+          "SELECT media_id, media_type, default_matrix_state_id",
+          "FROM public.media_types ORDER BY media_type"
+        )
       )
     }
 
@@ -392,6 +665,13 @@ LEFT JOIN (
       guidelines = load_guidelines(),
       publishers = load_publishers(),
       series = load_series(),
+      matrix_states = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste(
+          "SELECT matrix_state_id, matrix_state_code, matrix_state_name",
+          "FROM public.matrix_states ORDER BY matrix_state_name"
+        )
+      ),
       media_types = load_media_types(),
       parameters = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -402,8 +682,15 @@ LEFT JOIN (
             "p",
             "unit_default"
           ),
-          ", p.result_speciation, p.sample_fraction",
-          "FROM public.parameters p ORDER BY p.param_name"
+          ", ul.unit_name AS units_liquid,",
+          "us.unit_name AS units_solid,",
+          "ug.unit_name AS units_gas,",
+          "p.result_speciation, p.sample_fraction",
+          "FROM public.parameters p",
+          "LEFT JOIN public.units ul ON p.units_liquid = ul.unit_id",
+          "LEFT JOIN public.units us ON p.units_solid = us.unit_id",
+          "LEFT JOIN public.units ug ON p.units_gas = ug.unit_id",
+          "ORDER BY p.param_name"
         )
       ),
       sample_fractions = DBI::dbGetQuery(
@@ -447,7 +734,7 @@ LEFT JOIN (
             ),
             columnDefs = list(
               list(
-                targets = c(0, 12:18), # guideline_id and id/sql columns; index starts at 0
+                targets = c(0, 13:20), # guideline_id and id/sql columns; index starts at 0
                 visible = FALSE
               )
             ),
@@ -464,6 +751,7 @@ LEFT JOIN (
         moduleData$parameters,
         moduleData$publishers,
         moduleData$series,
+        moduleData$matrix_states,
         moduleData$media_types,
         moduleData$sample_fractions,
         moduleData$result_speciations
@@ -472,6 +760,7 @@ LEFT JOIN (
         selected_parameter <- ensure_character(input$parameter_id)
         selected_publisher <- ensure_character(input$publisher)
         selected_series <- ensure_character(input$series)
+        selected_matrix_state <- ensure_character(input$matrix_state)
         selected_media <- ensure_character(input$media_type)
         selected_fraction <- ensure_character(input$sample_fraction)
         selected_speciation <- ensure_character(input$result_speciation)
@@ -481,12 +770,7 @@ LEFT JOIN (
           "parameter_id",
           choices = stats::setNames(
             moduleData$parameters$parameter_id,
-            paste0(
-              moduleData$parameters$param_name,
-              " (",
-              moduleData$parameters$unit_default,
-              ")"
-            )
+            parameter_choice_labels()
           ),
           selected = selected_parameter
         )
@@ -507,6 +791,15 @@ LEFT JOIN (
             moduleData$series$series_name
           ),
           selected = selected_series
+        )
+        updateSelectizeInput(
+          session,
+          "matrix_state",
+          choices = stats::setNames(
+            moduleData$matrix_states$matrix_state_id,
+            moduleData$matrix_states$matrix_state_name
+          ),
+          selected = selected_matrix_state
         )
         updateSelectizeInput(
           session,
@@ -537,6 +830,35 @@ LEFT JOIN (
         )
       }
     )
+
+    observe({
+      req(
+        moduleData$parameters,
+        moduleData$matrix_states,
+        moduleData$media_types
+      )
+
+      selected_state <- resolve_guideline_matrix_state(
+        parameter_id = nullable_integer(input$parameter_id),
+        media_ids = parse_id_csv(input$media_type),
+        current_matrix_state_id = nullable_integer(input$matrix_state)
+      )
+
+      update_matrix_state_selectize(
+        selected = selected_state,
+        parameter_id = nullable_integer(input$parameter_id)
+      )
+
+      updateSelectizeInput(
+        session,
+        "parameter_id",
+        choices = stats::setNames(
+          moduleData$parameters$parameter_id,
+          parameter_choice_labels(selected_state)
+        ),
+        selected = ensure_character(input$parameter_id)
+      )
+    })
 
     # Show/hide sample_fraction and result_speciation if they're required for the selected parameter
     observeEvent(list(input$parameter_id), {
@@ -570,10 +892,12 @@ LEFT JOIN (
         reference = NA_character_,
         parameter = NA_character_,
         units = NA_character_,
+        matrix_state = NA_character_,
         fractions = "<optional fractions>",
         media_types = "<optional media>",
         speciation = NA_character_,
         parameter_id = NA_integer_,
+        matrix_state_id = NA_integer_,
         result_speciation_id = NA_integer_,
         guideline_sql = NA_character_,
         publisher_id = NA_integer_,
@@ -614,6 +938,7 @@ LEFT JOIN (
           updateSelectizeInput(session, "series", selected = NULL)
           updateSelectizeInput(session, "sample_fraction", selected = NULL)
           updateSelectizeInput(session, "media_type", selected = NULL)
+          updateSelectizeInput(session, "matrix_state", selected = NULL)
           updateTextInput(session, "reference", value = "")
           updateTextAreaInput(session, "general_notes", value = "")
           updateTextAreaInput(session, "applicability_notes", value = "")
@@ -649,6 +974,10 @@ LEFT JOIN (
           session,
           "media_type",
           selected = parse_id_csv(guideline$media_ids)
+        )
+        update_matrix_state_selectize(
+          selected = guideline$matrix_state_id,
+          parameter_id = guideline$parameter_id
         )
         updateTextInput(session, "reference", value = guideline$reference)
         updateTextAreaInput(
@@ -750,6 +1079,13 @@ LEFT JOIN (
       } else {
         as.integer(input$parameter_id)
       }
+      moduleData$guidelines_temp[selected_row, "matrix_state_id"] <- if (
+        is.null(input$matrix_state)
+      ) {
+        NA
+      } else {
+        as.integer(input$matrix_state)
+      }
       moduleData$guidelines_temp[selected_row, "result_speciation_id"] <- if (
         is.null(input$result_speciation)
       ) {
@@ -823,6 +1159,53 @@ LEFT JOIN (
           ],
           collapse = ", "
         )
+      }
+      moduleData$guidelines_temp[selected_row, "parameter"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "parameter_id"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "parameter_id"])
+      ) {
+        NA_character_
+      } else {
+        pid <- moduleData$guidelines_temp[selected_row, "parameter_id"]
+        moduleData$parameters$param_name[
+          match(pid, moduleData$parameters$parameter_id)
+        ]
+      }
+      moduleData$guidelines_temp[selected_row, "units"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "parameter_id"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "parameter_id"]) ||
+          is.null(moduleData$guidelines_temp[selected_row, "matrix_state_id"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "matrix_state_id"])
+      ) {
+        NA_character_
+      } else {
+        parameter_matrix_state_unit(
+          moduleData$guidelines_temp[selected_row, "parameter_id"],
+          moduleData$guidelines_temp[selected_row, "matrix_state_id"]
+        )
+      }
+      moduleData$guidelines_temp[selected_row, "matrix_state"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "matrix_state_id"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "matrix_state_id"])
+      ) {
+        NA_character_
+      } else {
+        matrix_state_label(
+          moduleData$guidelines_temp[selected_row, "matrix_state_id"]
+        )
+      }
+      moduleData$guidelines_temp[selected_row, "speciation"] <- if (
+        is.null(moduleData$guidelines_temp[selected_row, "result_speciation_id"]) ||
+          is.na(moduleData$guidelines_temp[selected_row, "result_speciation_id"])
+      ) {
+        NA_character_
+      } else {
+        moduleData$result_speciations$result_speciation[
+          match(
+            moduleData$guidelines_temp[selected_row, "result_speciation_id"],
+            moduleData$result_speciations$result_speciation_id
+          )
+        ]
       }
     })
 
@@ -1144,12 +1527,7 @@ LEFT JOIN (
       # choices: names = param_name (shown), values = parameter_id (used)
       ch <- stats::setNames(
         moduleData$parameters$parameter_id,
-        paste0(
-          moduleData$parameters$param_name,
-          " (",
-          moduleData$parameters$unit_default,
-          ")"
-        )
+        parameter_choice_labels()
       )
       showPickModal("pick_param", "Choose a parameter", ch, "confirm_param")
     })
@@ -1162,7 +1540,13 @@ LEFT JOIN (
       # Look up name/units for the chosen parameter
       i <- match(input$pick_param, moduleData$parameters$parameter_id)
       p_name <- moduleData$parameters$param_name[i]
-      p_units <- moduleData$parameters$unit_default[i]
+      p_units <- parameter_matrix_state_unit(
+        input$pick_param,
+        nullable_integer(input$matrix_state)
+      )
+      if (is.na(p_units)) {
+        p_units <- moduleData$parameters$unit_default[i]
+      }
       label <- if (!is.na(p_units) && nzchar(p_units)) {
         paste0("parameter: ", p_name, " [", p_units, "]")
       } else {
@@ -1450,7 +1834,13 @@ FROM vals -- from the 'vals' CTE"
         parameters_df$param_name[match(pid, parameters_df$parameter_id)]
       }
       units <- function(pid) {
-        parameters_df$unit_default[match(pid, parameters_df$parameter_id)]
+        state_id <- nullable_integer(input$matrix_state)
+        unit_value <- parameter_matrix_state_unit(pid, state_id)
+        if (is.na(unit_value)) {
+          parameters_df$unit_default[match(pid, parameters_df$parameter_id)]
+        } else {
+          unit_value
+        }
       }
       fracname <- function(fid) {
         ifelse(
@@ -1552,6 +1942,31 @@ FROM vals -- from the 'vals' CTE"
       result <- NULL
       err <- NULL
       sample_id <- NULL
+      test_media_id <- guideline_test_media_id()
+      test_matrix_state_id <- nullable_integer(input$matrix_state)
+
+      matrix_state_error <- validate_guideline_matrix_state(
+        parameter_id = input$parameter_id,
+        matrix_state_id = input$matrix_state
+      )
+      if (!is.null(matrix_state_error)) {
+        output$test_guideline_result <- renderUI({
+          div(
+            style = "color:red;font-weight:bold;font-size:120%;margin-top:10px;",
+            matrix_state_error
+          )
+        })
+        return()
+      }
+      if (is.na(test_media_id)) {
+        output$test_guideline_result <- renderUI({
+          div(
+            style = "color:red;font-weight:bold;font-size:120%;margin-top:10px;",
+            "No compatible media type is available for testing this guideline."
+          )
+        })
+        return()
+      }
 
       req_df <- isolate(moduleData$requirements_df)
       # collect supplied values
@@ -1599,11 +2014,20 @@ FROM vals -- from the 'vals' CTE"
           if (uses_sample_id || nrow(req_df) > 0) {
             sample_id <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              "
-          INSERT INTO discrete.samples (location_id, media_id, datetime, collection_method, sample_type, owner)
-          VALUES (100, 1, '1800-01-01 00:00', 1, 1, 2)
-          RETURNING sample_id
-        "
+              paste(
+                "INSERT INTO discrete.samples",
+                "(location_id, media_id, datetime, collection_method, sample_type, owner)",
+                "VALUES ($1, $2, $3, $4, $5, $6)",
+                "RETURNING sample_id"
+              ),
+              params = list(
+                100L,
+                test_media_id,
+                "1800-01-01 00:00",
+                1L,
+                1L,
+                2L
+              )
             )$sample_id
           }
 
@@ -1615,14 +2039,15 @@ FROM vals -- from the 'vals' CTE"
             DBI::dbExecute(
               session$userData$AquaCache,
               "INSERT INTO discrete.results
-             (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, result)
-             VALUES ($1,$2,$3,$4,$5,$6)",
+             (sample_id, result_type, parameter_id, sample_fraction_id, result_speciation_id, matrix_state_id, result)
+             VALUES ($1,$2,$3,$4,$5,$6,$7)",
               params = list(
                 sample_id,
                 2,
                 req_df$parameter_id[i],
                 req_df$sample_fraction_id[i],
                 req_df$result_speciation_id[i],
+                test_matrix_state_id,
                 req_df$values[i]
               )
             )
@@ -1695,12 +2120,13 @@ FROM vals -- from the 'vals' CTE"
       if (
         is.na(guideline$guideline_name) ||
           is.na(guideline$parameter_id) ||
+          is.na(guideline$matrix_state_id) ||
           is.na(guideline$publisher_id) ||
           is.na(guideline$guideline_sql)
       ) {
         showModal(modalDialog(
           title = "Error",
-          "Please fill in all required fields: Guideline Name, Publisher, Parameter, and Guideline SQL.",
+          "Please fill in all required fields: Guideline Name, Publisher, Parameter, Matrix State, and Guideline SQL.",
           easyClose = TRUE,
           footer = tagList(
             modalButton("Close")
@@ -1714,6 +2140,19 @@ FROM vals -- from the 'vals' CTE"
         moduleData$parameters$parameter_id == guideline$parameter_id,
       ]
       if (nrow(param_row) == 1) {
+        matrix_state_error <- validate_guideline_matrix_state(
+          guideline$parameter_id,
+          guideline$matrix_state_id
+        )
+        if (!is.null(matrix_state_error)) {
+          showModal(modalDialog(
+            title = "Error",
+            matrix_state_error,
+            easyClose = TRUE,
+            footer = tagList(modalButton("Close"))
+          ))
+          return()
+        }
         if (
           isTRUE(param_row$result_speciation) &&
             is.na(guideline$result_speciation_id)
@@ -1769,12 +2208,13 @@ FROM vals -- from the 'vals' CTE"
           fraction_ids <- parse_id_csv(guideline$fraction_ids)
           media_ids <- parse_id_csv(guideline$media_ids)
           guideline_id <- guideline$guideline_id
+          matrix_state_id <- as.integer(guideline$matrix_state_id)
 
           if (guideline$guideline_id == -1) {
             # New guideline - perform INSERT
             guideline_id <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              "INSERT INTO discrete.guidelines (guideline_name, publisher, series, reference, general_notes, applicability_notes, parameter_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING guideline_id",
+              "INSERT INTO discrete.guidelines (guideline_name, publisher, series, reference, general_notes, applicability_notes, parameter_id, matrix_state_id, result_speciation_id, guideline_sql) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING guideline_id",
               params = list(
                 guideline$guideline_name,
                 guideline$publisher_id,
@@ -1783,6 +2223,7 @@ FROM vals -- from the 'vals' CTE"
                 general_notes,
                 applicability_notes,
                 guideline$parameter_id,
+                matrix_state_id,
                 rs,
                 guideline$guideline_sql
               )
@@ -1791,7 +2232,7 @@ FROM vals -- from the 'vals' CTE"
             # Existing guideline - perform UPDATE
             DBI::dbExecute(
               session$userData$AquaCache,
-              "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, series = $3, reference = $4, general_notes = $5, applicability_notes = $6, parameter_id = $7, result_speciation_id = $8, guideline_sql = $9 WHERE guideline_id = $10",
+              "UPDATE discrete.guidelines SET guideline_name = $1, publisher = $2, series = $3, reference = $4, general_notes = $5, applicability_notes = $6, parameter_id = $7, matrix_state_id = $8, result_speciation_id = $9, guideline_sql = $10 WHERE guideline_id = $11",
               params = list(
                 guideline$guideline_name,
                 guideline$publisher_id,
@@ -1800,6 +2241,7 @@ FROM vals -- from the 'vals' CTE"
                 general_notes,
                 applicability_notes,
                 guideline$parameter_id,
+                matrix_state_id,
                 rs,
                 guideline$guideline_sql,
                 guideline$guideline_id

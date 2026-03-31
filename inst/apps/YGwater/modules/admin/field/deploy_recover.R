@@ -122,6 +122,10 @@ deploy_recover <- function(id, language) {
       ifelse(is.na(x), "", as.character(x))
     }
 
+    plural_suffix <- function(n) {
+      if (isTRUE(!is.na(n) && as.integer(n) == 1L)) "" else "s"
+    }
+
     same_nullable_integer <- function(x, y) {
       x <- as_nullable_integer(x)
       y <- as_nullable_integer(y)
@@ -174,6 +178,35 @@ deploy_recover <- function(id, language) {
         "%s [%s]",
         safe_text(row$location_name[[1]]),
         safe_text(row$location_code[[1]])
+      )
+    }
+
+    lookup_instrument_label <- function(instrument_id) {
+      instrument_id <- as_nullable_integer(instrument_id)
+      if (
+        is.na(instrument_id) ||
+          is.null(moduleData$instruments) ||
+          nrow(moduleData$instruments) == 0
+      ) {
+        return("No instrument selected")
+      }
+
+      row <- moduleData$instruments[
+        moduleData$instruments$instrument_id == instrument_id,
+        ,
+        drop = FALSE
+      ]
+
+      if (nrow(row) == 0) {
+        return(paste("Instrument ID", instrument_id))
+      }
+
+      paste(
+        safe_text(row$serial_no[[1]]),
+        safe_text(row$make[[1]]),
+        safe_text(row$model[[1]]),
+        safe_text(row$instrument_type[[1]]),
+        sep = " | "
       )
     }
 
@@ -231,6 +264,215 @@ deploy_recover <- function(id, language) {
       label
     }
 
+    record_associated_timeseries_id <- function(record) {
+      if (is.null(record) || nrow(record) == 0) {
+        return(NA_integer_)
+      }
+
+      if ("associated_timeseries_id" %in% names(record)) {
+        associated_tsid <- as_nullable_integer(record$associated_timeseries_id[[1]])
+        if (!is.na(associated_tsid)) {
+          return(associated_tsid)
+        }
+      }
+
+      as_nullable_integer(record$timeseries_id[[1]])
+    }
+
+    deployment_has_signal_rows <- function(record) {
+      !is.null(record) &&
+        nrow(record) > 0 &&
+        "signal_row_count" %in% names(record) &&
+        !is.na(record$signal_row_count[[1]]) &&
+        record$signal_row_count[[1]] > 0
+    }
+
+    deployment_association_mode <- function(record) {
+      if (is.null(record) || nrow(record) == 0) {
+        return("")
+      }
+
+      if (deployment_has_signal_rows(record)) {
+        if (
+          !is.na(record$distinct_signal_timeseries_count[[1]]) &&
+            record$distinct_signal_timeseries_count[[1]] > 1
+        ) {
+          return("Signal metadata (multiple timeseries)")
+        }
+        return("Signal metadata")
+      }
+
+      if (!is.na(as_nullable_integer(record$timeseries_id[[1]]))) {
+        return("Legacy deployment link")
+      }
+
+      ""
+    }
+
+    deployment_has_active_topology <- function(record) {
+      if (is.null(record) || nrow(record) == 0) {
+        return(FALSE)
+      }
+
+      count_columns <- c(
+        "connection_count",
+        "signal_row_count",
+        "logger_connection_count",
+        "transmission_setup_count",
+        "transmission_component_count",
+        "telemetry_component_setup_count"
+      )
+      count_columns <- count_columns[count_columns %in% names(record)]
+
+      if (length(count_columns) == 0) {
+        return(FALSE)
+      }
+
+      any(vapply(
+        count_columns,
+        function(column_name) {
+          value <- record[[column_name]][[1]]
+          !is.na(value) && value > 0
+        },
+        logical(1)
+      ))
+    }
+
+    deployment_topology_summary <- function(record) {
+      if (is.null(record) || nrow(record) == 0) {
+        return("")
+      }
+
+      pieces <- character(0)
+
+      if (!is.na(record$connection_count[[1]]) && record$connection_count[[1]] > 0) {
+        pieces <- c(
+          pieces,
+          paste0(
+            "Sensor connection",
+            plural_suffix(record$connection_count[[1]]),
+            ": ",
+            record$connection_count[[1]]
+          )
+        )
+      }
+
+      if (!is.na(record$signal_row_count[[1]]) && record$signal_row_count[[1]] > 0) {
+        signal_piece <- paste0(
+          "Signal row",
+          plural_suffix(record$signal_row_count[[1]]),
+          ": ",
+          record$signal_row_count[[1]]
+        )
+        if (!is.na(record$mapped_signal_count[[1]]) && record$mapped_signal_count[[1]] > 0) {
+          signal_piece <- paste0(
+            signal_piece,
+            " (",
+            record$mapped_signal_count[[1]],
+            " mapped to timeseries"
+          )
+          if (
+            !is.na(record$distinct_signal_timeseries_count[[1]]) &&
+              record$distinct_signal_timeseries_count[[1]] > 0 &&
+              record$distinct_signal_timeseries_count[[1]] !=
+                record$mapped_signal_count[[1]]
+          ) {
+            signal_piece <- paste0(
+              signal_piece,
+              ", ",
+              record$distinct_signal_timeseries_count[[1]],
+              " distinct"
+            )
+          }
+          signal_piece <- paste0(signal_piece, ")")
+        }
+        pieces <- c(pieces, signal_piece)
+      }
+
+      if (
+        !is.na(record$logger_connection_count[[1]]) &&
+          record$logger_connection_count[[1]] > 0
+      ) {
+        pieces <- c(
+          pieces,
+          paste0(
+            "Logger-side connection",
+            plural_suffix(record$logger_connection_count[[1]]),
+            ": ",
+            record$logger_connection_count[[1]]
+          )
+        )
+      }
+
+      if (
+        !is.na(record$transmission_setup_count[[1]]) &&
+          record$transmission_setup_count[[1]] > 0
+      ) {
+        telemetry_piece <- paste0(
+          "Telemetry setup",
+          plural_suffix(record$transmission_setup_count[[1]]),
+          ": ",
+          record$transmission_setup_count[[1]]
+        )
+        if (
+          !is.na(record$transmission_route_count[[1]]) &&
+            record$transmission_route_count[[1]] > 0
+        ) {
+          telemetry_piece <- paste0(
+            telemetry_piece,
+            ", route",
+            plural_suffix(record$transmission_route_count[[1]]),
+            ": ",
+            record$transmission_route_count[[1]]
+          )
+        }
+        if (
+          !is.na(record$transmission_component_count[[1]]) &&
+            record$transmission_component_count[[1]] > 0
+        ) {
+          telemetry_piece <- paste0(
+            telemetry_piece,
+            ", attached component",
+            plural_suffix(record$transmission_component_count[[1]]),
+            ": ",
+            record$transmission_component_count[[1]]
+          )
+        }
+        pieces <- c(pieces, telemetry_piece)
+      }
+
+      if (
+        !is.na(record$telemetry_component_setup_count[[1]]) &&
+          record$telemetry_component_setup_count[[1]] > 0
+      ) {
+        pieces <- c(
+          pieces,
+          paste0(
+            "Used as telemetry component in ",
+            record$telemetry_component_setup_count[[1]],
+            " setup",
+            plural_suffix(record$telemetry_component_setup_count[[1]])
+          )
+        )
+      }
+
+      paste(pieces, collapse = " | ")
+    }
+
+    selected_timeseries_persist_value <- function() {
+      record <- selected_record()
+
+      if (deployment_has_signal_rows(record)) {
+        return(as_nullable_integer(record$timeseries_id[[1]]))
+      }
+
+      as_nullable_integer(selected_timeseries_id())
+    }
+
+    timeseries_association_locked <- function(record = selected_record()) {
+      deployment_has_signal_rows(record)
+    }
+
     find_timeseries_row <- function(timeseries_id) {
       timeseries_id <- as_nullable_integer(timeseries_id)
       if (
@@ -265,6 +507,7 @@ deploy_recover <- function(id, language) {
           timeseries_row$parameter_name[[1]],
           timeseries_row$units[[1]]
         ),
+        safe_text(timeseries_row$matrix_state[[1]]),
         safe_text(timeseries_row$media_type[[1]]),
         safe_text(timeseries_row$aggregation_type[[1]])
       )
@@ -288,6 +531,7 @@ deploy_recover <- function(id, language) {
           lookup_sub_location_label(timeseries_row$sub_location_id[[1]])
         ),
         paste("Elevation / depth:", lookup_z_label(timeseries_row$z_id[[1]])),
+        paste("Matrix state:", safe_text(timeseries_row$matrix_state[[1]])),
         if (!is.na(timeseries_row$record_rate[[1]])) {
           paste("Record rate:", safe_text(timeseries_row$record_rate[[1]]))
         } else {
@@ -378,6 +622,7 @@ deploy_recover <- function(id, language) {
       available[
         order(
           safe_text(available$parameter_name),
+          safe_text(available$matrix_state),
           safe_text(available$media_type),
           safe_text(available$aggregation_type),
           safe_text(available$record_rate),
@@ -394,7 +639,8 @@ deploy_recover <- function(id, language) {
         return(FALSE)
       }
 
-      !same_nullable_integer(values$location_id, record$location_id[[1]]) ||
+      !same_nullable_integer(values$instrument_id, record$instrument_id[[1]]) ||
+        !same_nullable_integer(values$location_id, record$location_id[[1]]) ||
         !same_nullable_integer(
           values$sub_location_id,
           record$sub_location_id[[1]]
@@ -409,6 +655,20 @@ deploy_recover <- function(id, language) {
       }
 
       changes <- character(0)
+
+      if (
+        !same_nullable_integer(values$instrument_id, record$instrument_id[[1]])
+      ) {
+        changes <- c(
+          changes,
+          paste(
+            "Instrument:",
+            lookup_instrument_label(record$instrument_id[[1]]),
+            "->",
+            lookup_instrument_label(values$instrument_id)
+          )
+        )
+      }
 
       if (!same_nullable_integer(values$location_id, record$location_id[[1]])) {
         changes <- c(
@@ -454,7 +714,8 @@ deploy_recover <- function(id, language) {
       if (
         !same_nullable_integer(values$timeseries_id, record$timeseries_id[[1]])
       ) {
-        current_ts <- find_timeseries_row(record$timeseries_id[[1]])
+        current_tsid <- record_associated_timeseries_id(record)
+        current_ts <- find_timeseries_row(current_tsid)
         new_ts <- find_timeseries_row(values$timeseries_id)
 
         changes <- c(
@@ -462,10 +723,10 @@ deploy_recover <- function(id, language) {
           paste(
             "Timeseries:",
             if (is.null(current_ts)) {
-              if (is.na(record$timeseries_id[[1]])) {
+              if (is.na(current_tsid)) {
                 "None"
               } else {
-                paste("Timeseries #", record$timeseries_id[[1]])
+                paste("Timeseries #", current_tsid)
               }
             } else {
               format_timeseries_title(current_ts)
@@ -804,9 +1065,13 @@ deploy_recover <- function(id, language) {
           ac_parameter_unit_select_sql(
             session$userData$AquaCache,
             "p",
-            "units"
+            "units",
+            matrix_state_alias = "ts",
+            media_alias = "ts"
           ),
           ",
+          ts.matrix_state_id,
+          ms.matrix_state_name AS matrix_state,
           m.media_type,
           at.aggregation_type,
           ts.record_rate,
@@ -823,6 +1088,8 @@ deploy_recover <- function(id, language) {
           ON ts.z_id = lz.z_id
         LEFT JOIN public.parameters AS p
           ON ts.parameter_id = p.parameter_id
+        LEFT JOIN public.matrix_states AS ms
+          ON ts.matrix_state_id = ms.matrix_state_id
         LEFT JOIN public.media_types AS m
           ON ts.media_id = m.media_id
         LEFT JOIN continuous.aggregation_types AS at
@@ -854,6 +1121,25 @@ deploy_recover <- function(id, language) {
           lmi.z_id,
           lz.z_meters,
           lmi.timeseries_id,
+          COALESCE(
+            lmi.timeseries_id,
+            CASE
+              WHEN COALESCE(conn.distinct_signal_timeseries_count, 0) = 1
+                THEN conn.signal_timeseries_id
+            END
+          ) AS associated_timeseries_id,
+          COALESCE(conn.connection_count, 0) AS connection_count,
+          COALESCE(conn.signal_row_count, 0) AS signal_row_count,
+          COALESCE(conn.mapped_signal_count, 0) AS mapped_signal_count,
+          COALESCE(conn.distinct_signal_timeseries_count, 0)
+            AS distinct_signal_timeseries_count,
+          COALESCE(conn.logger_connection_count, 0) AS logger_connection_count,
+          COALESCE(tx.transmission_setup_count, 0) AS transmission_setup_count,
+          COALESCE(tx.transmission_route_count, 0) AS transmission_route_count,
+          COALESCE(tx.transmission_component_count, 0)
+            AS transmission_component_count,
+          COALESCE(comp.telemetry_component_setup_count, 0)
+            AS telemetry_component_setup_count,
           lmi.instrument_id,
           i.serial_no,
           mk.make,
@@ -867,6 +1153,62 @@ deploy_recover <- function(id, language) {
           lmi.modified,
           lmi.modified_by
         FROM public.locations_metadata_instruments AS lmi
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(DISTINCT c.connection_id)
+              FILTER (WHERE c.instrument_metadata_id = lmi.metadata_id)
+              AS connection_count,
+            COUNT(s.connection_signal_id)
+              FILTER (WHERE c.instrument_metadata_id = lmi.metadata_id)
+              AS signal_row_count,
+            COUNT(*) FILTER (
+              WHERE c.instrument_metadata_id = lmi.metadata_id
+                AND s.timeseries_id IS NOT NULL
+            ) AS mapped_signal_count,
+            COUNT(DISTINCT s.timeseries_id) FILTER (
+              WHERE c.instrument_metadata_id = lmi.metadata_id
+                AND s.timeseries_id IS NOT NULL
+            ) AS distinct_signal_timeseries_count,
+            MIN(s.timeseries_id) FILTER (
+              WHERE c.instrument_metadata_id = lmi.metadata_id
+                AND s.timeseries_id IS NOT NULL
+            ) AS signal_timeseries_id,
+            COUNT(DISTINCT c.connection_id)
+              FILTER (WHERE c.logger_metadata_id = lmi.metadata_id)
+              AS logger_connection_count
+          FROM public.locations_metadata_instrument_connections AS c
+          LEFT JOIN public.locations_metadata_instrument_connection_signals AS s
+            ON s.connection_id = c.connection_id
+          WHERE
+            (c.instrument_metadata_id = lmi.metadata_id OR
+               c.logger_metadata_id = lmi.metadata_id)
+        ) AS conn ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(DISTINCT ts.transmission_setup_id)
+              AS transmission_setup_count,
+            COUNT(DISTINCT tr.transmission_route_id)
+              AS transmission_route_count,
+            COUNT(DISTINCT tc.transmission_component_id)
+              AS transmission_component_count
+          FROM public.locations_metadata_transmission_setups AS ts
+          LEFT JOIN public.locations_metadata_transmission_routes AS tr
+            ON tr.transmission_setup_id = ts.transmission_setup_id
+          LEFT JOIN public.locations_metadata_transmission_components AS tc
+            ON tc.transmission_setup_id = ts.transmission_setup_id
+          WHERE
+            ts.logger_metadata_id = lmi.metadata_id
+        ) AS tx ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(DISTINCT tc.transmission_setup_id)
+              AS telemetry_component_setup_count
+          FROM public.locations_metadata_transmission_components AS tc
+          INNER JOIN public.locations_metadata_transmission_setups AS ts
+            ON ts.transmission_setup_id = tc.transmission_setup_id
+          WHERE
+            tc.component_metadata_id = lmi.metadata_id
+        ) AS comp ON TRUE
         LEFT JOIN public.locations AS l
           ON lmi.location_id = l.location_id
         LEFT JOIN public.sub_locations AS sl
@@ -971,6 +1313,7 @@ deploy_recover <- function(id, language) {
         return(data.frame(
           timeseries_id = integer(0),
           parameter = character(0),
+          matrix_state = character(0),
           media = character(0),
           aggregation = character(0),
           record_rate = character(0),
@@ -989,6 +1332,7 @@ deploy_recover <- function(id, language) {
           available$parameter_name,
           available$units
         )),
+        matrix_state = safe_text(available$matrix_state),
         media = safe_text(available$media_type),
         aggregation = safe_text(available$aggregation_type),
         record_rate = safe_text(available$record_rate),
@@ -1010,6 +1354,8 @@ deploy_recover <- function(id, language) {
         return(data.frame(
           metadata_id = integer(0),
           timeseries_id = character(0),
+          association_mode = character(0),
+          acquisition_telemetry = character(0),
           serial_no = character(0),
           make = character(0),
           model = character(0),
@@ -1026,9 +1372,19 @@ deploy_recover <- function(id, language) {
       data.frame(
         metadata_id = df$metadata_id,
         timeseries_id = ifelse(
-          is.na(df$timeseries_id),
+          is.na(df$associated_timeseries_id),
           "",
-          as.character(df$timeseries_id)
+          as.character(df$associated_timeseries_id)
+        ),
+        association_mode = vapply(
+          seq_len(nrow(df)),
+          function(i) deployment_association_mode(df[i, , drop = FALSE]),
+          character(1)
+        ),
+        acquisition_telemetry = vapply(
+          seq_len(nrow(df)),
+          function(i) deployment_topology_summary(df[i, , drop = FALSE]),
+          character(1)
         ),
         serial_no = safe_text(df$serial_no),
         make = as.factor(safe_text(df$make)),
@@ -1057,6 +1413,8 @@ deploy_recover <- function(id, language) {
           metadata_id = integer(0),
           deployment_status = character(0),
           timeseries_id = character(0),
+          association_mode = character(0),
+          acquisition_telemetry = character(0),
           serial_no = character(0),
           make = character(0),
           model = character(0),
@@ -1075,9 +1433,19 @@ deploy_recover <- function(id, language) {
         metadata_id = df$metadata_id,
         deployment_status = as.factor(safe_text(df$deployment_status)),
         timeseries_id = ifelse(
-          is.na(df$timeseries_id),
+          is.na(df$associated_timeseries_id),
           "",
-          as.character(df$timeseries_id)
+          as.character(df$associated_timeseries_id)
+        ),
+        association_mode = vapply(
+          seq_len(nrow(df)),
+          function(i) deployment_association_mode(df[i, , drop = FALSE]),
+          character(1)
+        ),
+        acquisition_telemetry = vapply(
+          seq_len(nrow(df)),
+          function(i) deployment_topology_summary(df[i, , drop = FALSE]),
+          character(1)
         ),
         serial_no = safe_text(df$serial_no),
         make = as.factor(safe_text(df$make)),
@@ -1104,7 +1472,7 @@ deploy_recover <- function(id, language) {
         return(invisible(NULL))
       }
 
-      selected_timeseries_id(as_nullable_integer(record$timeseries_id[[1]]))
+      selected_timeseries_id(record_associated_timeseries_id(record))
 
       updateSelectizeInput(
         session,
@@ -1193,7 +1561,7 @@ deploy_recover <- function(id, language) {
         location_id = as_nullable_integer(input$location_id),
         sub_location_id = as_nullable_integer(input$sub_location_id),
         z_id = as_nullable_integer(input$z_id),
-        timeseries_id = as_nullable_integer(selected_timeseries_id()),
+        timeseries_id = selected_timeseries_persist_value(),
         start_datetime = scalar_utc_datetime(input$start_datetime),
         end_datetime = if (isTRUE(input$has_end_datetime)) {
           scalar_utc_datetime(input$end_datetime)
@@ -1208,6 +1576,7 @@ deploy_recover <- function(id, language) {
       if (require_selected && is.null(selected_metadata_id())) {
         stop("Select an existing deployment record first.")
       }
+      current_record <- selected_record()
       if (is.na(values$instrument_id)) {
         stop("Select an instrument.")
       }
@@ -1264,6 +1633,19 @@ deploy_recover <- function(id, language) {
           values$end_datetime <= values$start_datetime
       ) {
         stop("Recovery time must be after the deployment start time.")
+      }
+      if (
+        require_selected &&
+          deployment_has_signal_rows(current_record) &&
+          !same_nullable_integer(values$timeseries_id, current_record$timeseries_id[[1]])
+      ) {
+        stop(
+          paste(
+            "This deployment's timeseries association is managed through",
+            "signal-level connection metadata. Update it under",
+            "Acquisition / telemetry -> Connection signals."
+          )
+        )
       }
       if (!is.na(values$timeseries_id)) {
         timeseries_row <- find_timeseries_row(values$timeseries_id)
@@ -1457,8 +1839,10 @@ deploy_recover <- function(id, language) {
     }
 
     output$timeseries_selection_ui <- renderUI({
+      record <- selected_record()
       timeseries_row <- selected_timeseries_details()
       selected_tsid <- selected_timeseries_id()
+      signal_managed <- deployment_has_signal_rows(record)
       note_ui <- p(
         class = "help-block",
         paste(
@@ -1467,9 +1851,50 @@ deploy_recover <- function(id, language) {
         )
       )
 
+      signal_ui <- if (signal_managed) {
+        div(
+          class = "alert alert-info",
+          paste(
+            "This deployment uses connection-signal metadata. Manage",
+            "timeseries links in Acquisition / telemetry -> Connection",
+            "signals."
+          )
+        )
+      } else {
+        NULL
+      }
+
+      if (signal_managed && is.na(selected_tsid)) {
+        return(tagList(
+          note_ui,
+          signal_ui,
+          div(
+            class = "alert alert-warning",
+            if (
+              !is.na(record$distinct_signal_timeseries_count[[1]]) &&
+                record$distinct_signal_timeseries_count[[1]] > 1
+            ) {
+              paste(
+                "This deployment currently maps to",
+                record$distinct_signal_timeseries_count[[1]],
+                "distinct timeseries through connection-signal metadata."
+              )
+            } else if (
+              !is.na(record$mapped_signal_count[[1]]) &&
+                record$mapped_signal_count[[1]] > 0
+            ) {
+              "This deployment's connection-signal metadata points to a timeseries that could not be loaded."
+            } else {
+              "This deployment has signal-level metadata but no linked timeseries yet."
+            }
+          )
+        ))
+      }
+
       if (is.null(timeseries_row) && is.na(selected_tsid)) {
         return(tagList(
           note_ui,
+          signal_ui,
           div(
             class = "alert alert-info",
             "No timeseries currently associated."
@@ -1480,6 +1905,7 @@ deploy_recover <- function(id, language) {
       if (is.null(timeseries_row)) {
         return(tagList(
           note_ui,
+          signal_ui,
           div(
             class = "alert alert-warning",
             paste0(
@@ -1505,6 +1931,7 @@ deploy_recover <- function(id, language) {
 
       tagList(
         note_ui,
+        signal_ui,
         status_ui,
         div(
           class = "well well-sm",
@@ -1588,15 +2015,25 @@ deploy_recover <- function(id, language) {
     })
 
     output$timeseries_action_button <- renderUI({
-      actionButton(
+      button_label <- if (timeseries_association_locked()) {
+        "Timeseries managed in Connection signals"
+      } else if (is.na(selected_timeseries_id())) {
+        "Associate with a timeseries"
+      } else {
+        "Modify timeseries association"
+      }
+
+      button <- actionButton(
         ns("associate_timeseries"),
-        if (is.na(selected_timeseries_id())) {
-          "Associate with a timeseries"
-        } else {
-          "Modify timeseries association"
-        },
+        button_label,
         width = "100%"
       )
+
+      if (timeseries_association_locked()) {
+        return(shinyjs::disabled(button))
+      }
+
+      button
     })
 
     output$module_ui <- renderUI({
@@ -1782,6 +2219,37 @@ deploy_recover <- function(id, language) {
         ),
         if (!is.na(record$sub_location_name[[1]])) {
           tagList(tags$br(), safe_text(record$sub_location_name[[1]]))
+        },
+        {
+          topology_summary <- deployment_topology_summary(record)
+          association_mode <- deployment_association_mode(record)
+
+          if (nzchar(association_mode) || nzchar(topology_summary)) {
+            tagList(
+              tags$br(),
+              tags$small(
+                paste(
+                  c(
+                    if (nzchar(association_mode)) {
+                      paste("Timeseries association:", association_mode)
+                    },
+                    if (nzchar(topology_summary)) {
+                      topology_summary
+                    }
+                  ),
+                  collapse = " | "
+                )
+              )
+            )
+          }
+        },
+        if (deployment_has_active_topology(record)) {
+          tagList(
+            tags$br(),
+            tags$small(
+              "Changing this deployment record will also affect linked acquisition / telemetry metadata."
+            )
+          )
         }
       )
     })
@@ -1847,6 +2315,19 @@ deploy_recover <- function(id, language) {
     })
 
     show_timeseries_modal <- function() {
+      if (timeseries_association_locked()) {
+        showNotification(
+          paste(
+            "This deployment uses connection-signal metadata. Update",
+            "timeseries links under Acquisition / telemetry -> Connection",
+            "signals."
+          ),
+          type = "warning",
+          duration = 12
+        )
+        return(invisible(NULL))
+      }
+
       available_timeseries_ids <- timeseries_table_data()$timeseries_id
       current_timeseries_id <- selected_timeseries_id()
 
@@ -1900,11 +2381,22 @@ deploy_recover <- function(id, language) {
           title = "Deployment change detected",
           p(
             paste(
-              "You're modifying the instrument's association to a location, sub-location, elevation/depth, and/or timeseries. Is this a new deployment or a correction to the current deployment?"
+              "You're modifying the instrument, deployment location, elevation/depth, and/or timeseries association. Is this a new deployment or a correction to the current deployment?"
             )
           ),
           if (length(changes) > 0) {
             tags$ul(lapply(changes, tags$li))
+          },
+          if (deployment_has_active_topology(record)) {
+            div(
+              class = "alert alert-info",
+              paste(
+                "This deployment currently has linked acquisition /",
+                "telemetry metadata. Choosing 'Modify existing deployment'",
+                "keeps those child records attached to this same deployment;",
+                "choose re-deploy to start a new deployment record instead."
+              )
+            )
           },
           if (!can_redeploy) {
             div(

@@ -298,7 +298,7 @@ waterInfoMod <- function(id, language) {
 
     show_validation_modal <- function(messages) {
       messages <- unique(messages[
-        !is.na(messages) & gen_waterInfo_infonzchar(messages)
+        !is.na(messages) & nzchar(messages)
       ])
       if (!length(messages)) {
         return(invisible(FALSE))

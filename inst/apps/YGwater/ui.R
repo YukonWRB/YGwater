@@ -557,6 +557,11 @@ app_ui <- function(request) {
               uiOutput("manageMediaTypes_ui")
             ),
             nav_panel(
+              title = "Matrix States",
+              value = "manageMatrixStates",
+              uiOutput("manageMatrixStates_ui")
+            ),
+            nav_panel(
               title = "Parameter Groups",
               value = "manageParameterGroups",
               uiOutput("manageParameterGroups_ui")
@@ -570,6 +575,63 @@ app_ui <- function(request) {
               title = "Parameters",
               value = "manageParameters",
               uiOutput("manageParameters_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocol Families",
+              value = "manageCommunicationProtocolFamilies",
+              uiOutput("manageCommunicationProtocolFamilies_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocols",
+              value = "manageCommunicationProtocols",
+              uiOutput("manageCommunicationProtocols_ui")
+            ),
+            nav_panel(
+              title = "Transmission Method Families",
+              value = "manageTransmissionMethodFamilies",
+              uiOutput("manageTransmissionMethodFamilies_ui")
+            ),
+            nav_panel(
+              title = "Transmission Methods",
+              value = "manageTransmissionMethods",
+              uiOutput("manageTransmissionMethods_ui")
+            ),
+            nav_panel(
+              title = "Transmission Component Roles",
+              value = "manageTransmissionComponentRoles",
+              uiOutput("manageTransmissionComponentRoles_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Acquisition / telemetry",
+            value = "acquisitionTelemetryTasks",
+            nav_panel(
+              title = "Instrument / logger connections",
+              value = "manageInstrumentConnections",
+              uiOutput("manageInstrumentConnections_ui")
+            ),
+            nav_panel(
+              title = "Connection signals",
+              value = "manageInstrumentConnectionSignals",
+              uiOutput("manageInstrumentConnectionSignals_ui")
+            ),
+            nav_panel(
+              title = "Transmission setups",
+              value = "manageTransmissionSetups",
+              uiOutput("manageTransmissionSetups_ui")
+            ),
+            nav_panel(
+              title = "Transmission routes",
+              value = "manageTransmissionRoutes",
+              uiOutput("manageTransmissionRoutes_ui")
+            ),
+            nav_panel(
+              title = "Transmission components",
+              value = "manageTransmissionComponents",
+              uiOutput("manageTransmissionComponents_ui")
             )
           )
         },

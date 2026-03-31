@@ -1999,7 +1999,9 @@ addContData <- function(id, language) {
           ac_parameter_unit_select_sql(
             session$userData$AquaCache,
             "p",
-            "unit_default"
+            "unit_default",
+            matrix_state_alias = "ts",
+            media_alias = "ts"
           ),
           ", p.plot_default_y_orientation",
           "FROM public.parameters p",

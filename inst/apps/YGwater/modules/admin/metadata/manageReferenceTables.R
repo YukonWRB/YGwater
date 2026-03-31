@@ -6,12 +6,18 @@ reference_form_input_id <- function(field_name) {
   paste0("field_", field_name)
 }
 
-reference_text_field <- function(name, label, required = FALSE) {
+reference_text_field <- function(
+  name,
+  label,
+  required = FALSE,
+  default = NULL
+) {
   list(
     name = name,
     label = label,
     input = "text",
-    required = required
+    required = required,
+    default = default
   )
 }
 
@@ -19,14 +25,16 @@ reference_textarea_field <- function(
   name,
   label,
   required = FALSE,
-  rows = 4
+  rows = 4,
+  default = NULL
 ) {
   list(
     name = name,
     label = label,
     input = "textarea",
     required = required,
-    rows = rows
+    rows = rows,
+    default = default
   )
 }
 
@@ -36,7 +44,8 @@ reference_select_field <- function(
   choices_query = NULL,
   choices = NULL,
   required = FALSE,
-  storage = "integer"
+  storage = "integer",
+  default = NULL
 ) {
   list(
     name = name,
@@ -45,7 +54,8 @@ reference_select_field <- function(
     required = required,
     storage = storage,
     choices_query = choices_query,
-    choices = choices
+    choices = choices,
+    default = default
   )
 }
 
@@ -53,23 +63,143 @@ reference_numeric_field <- function(
   name,
   label,
   required = FALSE,
-  step = "any"
+  step = "any",
+  default = NULL
 ) {
   list(
     name = name,
     label = label,
     input = "numeric",
     required = required,
-    step = step
+    step = step,
+    default = default
   )
 }
 
-reference_checkbox_field <- function(name, label) {
+reference_checkbox_field <- function(name, label, default = FALSE) {
   list(
     name = name,
     label = label,
     input = "checkbox",
-    required = FALSE
+    required = FALSE,
+    default = isTRUE(default)
+  )
+}
+
+reference_field_default_value <- function(field) {
+  if (!"default" %in% names(field) || is.null(field$default)) {
+    return(NA)
+  }
+
+  field$default
+}
+
+reference_deployment_choices_query <- function(
+  require_logger = FALSE,
+  require_telemetry_component = FALSE
+) {
+  filters <- character(0)
+
+  if (isTRUE(require_logger)) {
+    filters <- c(filters, "COALESCE(i.can_be_logger, FALSE) = TRUE")
+  }
+  if (isTRUE(require_telemetry_component)) {
+    filters <- c(
+      filters,
+      paste(
+        "COALESCE(i.can_be_telemetry_component, FALSE) = TRUE",
+        "OR COALESCE(i.can_be_logger, FALSE) = TRUE"
+      )
+    )
+  }
+
+  where_sql <- if (length(filters)) {
+    paste("WHERE", paste(filters, collapse = " AND "))
+  } else {
+    ""
+  }
+
+  paste(
+    "SELECT lmi.metadata_id AS value,",
+    "CONCAT(",
+    "  '#', lmi.metadata_id::text,",
+    "  ' | ', COALESCE(l.location_code, '?'),",
+    "  ' | ', COALESCE(i.serial_no, '[no serial]'),",
+    "  CASE WHEN mk.make IS NOT NULL THEN CONCAT(' | ', mk.make) ELSE '' END,",
+    "  CASE WHEN mdl.model IS NOT NULL THEN CONCAT(' ', mdl.model) ELSE '' END,",
+    "  CASE WHEN it.type IS NOT NULL THEN CONCAT(' | ', it.type) ELSE '' END,",
+    "  ' | ', to_char(lmi.start_datetime AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), ' UTC'",
+    ") AS label",
+    "FROM public.locations_metadata_instruments AS lmi",
+    "LEFT JOIN public.locations AS l ON lmi.location_id = l.location_id",
+    "LEFT JOIN instruments.instruments AS i ON lmi.instrument_id = i.instrument_id",
+    "LEFT JOIN instruments.instrument_make AS mk ON i.make = mk.make_id",
+    "LEFT JOIN instruments.instrument_model AS mdl ON i.model = mdl.model_id",
+    "LEFT JOIN instruments.instrument_type AS it ON i.type = it.type_id",
+    where_sql,
+    "ORDER BY l.location_code, i.serial_no, lmi.start_datetime DESC, lmi.metadata_id DESC"
+  )
+}
+
+reference_timeseries_choices_query <- function() {
+  paste(
+    "SELECT ts.timeseries_id AS value,",
+    "CONCAT(",
+    "  '#', ts.timeseries_id::text,",
+    "  ' | ', COALESCE(l.location_code, '?'),",
+    "  ' | ', COALESCE(p.param_name, '?'),",
+    "  CASE WHEN ms.matrix_state_name IS NOT NULL THEN CONCAT(' | ', ms.matrix_state_name) ELSE '' END,",
+    "  CASE WHEN mt.media_type IS NOT NULL THEN CONCAT(' | ', mt.media_type) ELSE '' END",
+    ") AS label",
+    "FROM continuous.timeseries AS ts",
+    "LEFT JOIN public.locations AS l ON ts.location_id = l.location_id",
+    "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
+    "LEFT JOIN public.matrix_states AS ms ON ts.matrix_state_id = ms.matrix_state_id",
+    "LEFT JOIN public.media_types AS mt ON ts.media_id = mt.media_id",
+    "ORDER BY l.location_code, p.param_name, ms.matrix_state_name, mt.media_type, ts.timeseries_id"
+  )
+}
+
+reference_connection_choices_query <- function() {
+  paste(
+    "SELECT c.connection_id AS value,",
+    "CONCAT(",
+    "  '#', c.connection_id::text,",
+    "  ' | ', COALESCE(ii.serial_no, '[instrument]'),",
+    "  ' -> ', COALESCE(li.serial_no, '[logger]'),",
+    "  ' | ', COALESCE(cp.protocol_name, '?'),",
+    "  ' | ', to_char(c.start_datetime AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), ' UTC'",
+    ") AS label",
+    "FROM public.locations_metadata_instrument_connections AS c",
+    "LEFT JOIN public.locations_metadata_instruments AS imi",
+    "  ON c.instrument_metadata_id = imi.metadata_id",
+    "LEFT JOIN public.locations_metadata_instruments AS lmi",
+    "  ON c.logger_metadata_id = lmi.metadata_id",
+    "LEFT JOIN instruments.instruments AS ii ON imi.instrument_id = ii.instrument_id",
+    "LEFT JOIN instruments.instruments AS li ON lmi.instrument_id = li.instrument_id",
+    "LEFT JOIN instruments.communication_protocols AS cp ON c.protocol_id = cp.protocol_id",
+    "ORDER BY c.start_datetime DESC, c.connection_id DESC"
+  )
+}
+
+reference_transmission_setup_choices_query <- function() {
+  paste(
+    "SELECT s.transmission_setup_id AS value,",
+    "CONCAT(",
+    "  '#', s.transmission_setup_id::text,",
+    "  ' | ', COALESCE(i.serial_no, '[logger]'),",
+    "  ' | ', COALESCE(tm.method_name, '?'),",
+    "  CASE WHEN s.provider_name IS NOT NULL THEN CONCAT(' | ', s.provider_name) ELSE '' END,",
+    "  CASE WHEN s.platform_identifier IS NOT NULL THEN CONCAT(' | ', s.platform_identifier) ELSE '' END,",
+    "  ' | ', to_char(s.start_datetime AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), ' UTC'",
+    ") AS label",
+    "FROM public.locations_metadata_transmission_setups AS s",
+    "LEFT JOIN public.locations_metadata_instruments AS lmi",
+    "  ON s.logger_metadata_id = lmi.metadata_id",
+    "LEFT JOIN instruments.instruments AS i ON lmi.instrument_id = i.instrument_id",
+    "LEFT JOIN instruments.transmission_methods AS tm",
+    "  ON s.transmission_method_id = tm.transmission_method_id",
+    "ORDER BY s.start_datetime DESC, s.transmission_setup_id DESC"
   )
 }
 
@@ -234,8 +364,49 @@ reference_table_configs <- function() {
           "Media type (French)",
           required = TRUE
         ),
+        reference_select_field(
+          "default_matrix_state_id",
+          "Default matrix state",
+          choices_query = paste(
+            "SELECT matrix_state_id AS value, matrix_state_name AS label",
+            "FROM public.matrix_states",
+            "ORDER BY matrix_state_name"
+          )
+        ),
         reference_textarea_field("description", "Description"),
         reference_textarea_field("description_fr", "Description (French)")
+      )
+    ),
+    matrix_states = list(
+      key = "matrix_states",
+      title = "Matrix States",
+      description = paste(
+        "Manage the physical matrix states used to resolve parameter units",
+        "across continuous, discrete, and raster data."
+      ),
+      schema = "public",
+      table = "matrix_states",
+      pk = "matrix_state_id",
+      id_label = "Matrix State ID",
+      order_by = "matrix_state_name",
+      audit_columns = character(0),
+      columns = list(
+        reference_text_field(
+          "matrix_state_code",
+          "Matrix state code",
+          required = TRUE
+        ),
+        reference_text_field(
+          "matrix_state_name",
+          "Matrix state name",
+          required = TRUE
+        ),
+        reference_text_field(
+          "matrix_state_name_fr",
+          "Matrix state name (French)",
+          required = TRUE
+        ),
+        reference_textarea_field("description", "Description")
       )
     ),
     parameter_groups = list(
@@ -305,12 +476,34 @@ reference_table_configs <- function() {
         reference_text_field("param_name_fr", "Parameter name (French)"),
         reference_textarea_field("description", "Description"),
         reference_textarea_field("description_fr", "Description (French)"),
-        reference_text_field(
-          "unit_default",
-          "Default unit",
+        reference_select_field(
+          "units_liquid",
+          "Liquid unit",
+          choices_query = paste(
+            "SELECT unit_id AS value, unit_name AS label",
+            "FROM public.units",
+            "ORDER BY unit_name"
+          ),
           required = TRUE
         ),
-        reference_text_field("unit_solid", "Solid unit"),
+        reference_select_field(
+          "units_solid",
+          "Solid unit",
+          choices_query = paste(
+            "SELECT unit_id AS value, unit_name AS label",
+            "FROM public.units",
+            "ORDER BY unit_name"
+          )
+        ),
+        reference_select_field(
+          "units_gas",
+          "Gas unit",
+          choices_query = paste(
+            "SELECT unit_id AS value, unit_name AS label",
+            "FROM public.units",
+            "ORDER BY unit_name"
+          )
+        ),
         reference_text_field("cas_number", "CAS number"),
         reference_checkbox_field(
           "result_speciation",
@@ -336,6 +529,417 @@ reference_table_configs <- function() {
           "plot_default_ceiling",
           "Default plot ceiling"
         )
+      )
+    ),
+    communication_protocol_families = list(
+      key = "communication_protocol_families",
+      title = "Communication Protocol Families",
+      description = paste(
+        "Manage high-level protocol families used to organize",
+        "instrument to logger connection metadata."
+      ),
+      schema = "instruments",
+      table = "communication_protocol_families",
+      pk = "protocol_family_id",
+      id_label = "Protocol Family ID",
+      order_by = "family_name",
+      audit_columns = audit_cols,
+      columns = list(
+        reference_text_field("family_code", "Family code", required = TRUE),
+        reference_text_field("family_name", "Family name", required = TRUE),
+        reference_textarea_field("description", "Description")
+      )
+    ),
+    communication_protocols = list(
+      key = "communication_protocols",
+      title = "Communication Protocols",
+      description = paste(
+        "Manage specific instrument to logger protocols such as SDI-12,",
+        "Modbus, analog, and serial variants."
+      ),
+      schema = "instruments",
+      table = "communication_protocols",
+      pk = "protocol_id",
+      id_label = "Protocol ID",
+      order_by = "protocol_name",
+      audit_columns = audit_cols,
+      columns = list(
+        reference_text_field("protocol_code", "Protocol code", required = TRUE),
+        reference_text_field("protocol_name", "Protocol name", required = TRUE),
+        reference_select_field(
+          "protocol_family_id",
+          "Protocol family",
+          choices_query = paste(
+            "SELECT protocol_family_id AS value, family_name AS label",
+            "FROM instruments.communication_protocol_families",
+            "ORDER BY family_name"
+          ),
+          required = TRUE
+        ),
+        reference_checkbox_field("uses_logger_port", "Uses logger port"),
+        reference_checkbox_field("uses_device_address", "Uses device address"),
+        reference_checkbox_field("uses_signal_index", "Uses signal index"),
+        reference_checkbox_field("uses_poll_command", "Uses poll command"),
+        reference_textarea_field("description", "Description")
+      )
+    ),
+    transmission_method_families = list(
+      key = "transmission_method_families",
+      title = "Transmission Method Families",
+      description = paste(
+        "Manage broad telemetry families used when logger data leaves",
+        "a site."
+      ),
+      schema = "instruments",
+      table = "transmission_method_families",
+      pk = "transmission_method_family_id",
+      id_label = "Transmission Family ID",
+      order_by = "family_name",
+      audit_columns = audit_cols,
+      columns = list(
+        reference_text_field("family_code", "Family code", required = TRUE),
+        reference_text_field("family_name", "Family name", required = TRUE),
+        reference_textarea_field("description", "Description")
+      )
+    ),
+    transmission_methods = list(
+      key = "transmission_methods",
+      title = "Transmission Methods",
+      description = paste(
+        "Manage specific telemetry methods such as GOES, cellular IP,",
+        "and satellite messaging."
+      ),
+      schema = "instruments",
+      table = "transmission_methods",
+      pk = "transmission_method_id",
+      id_label = "Transmission Method ID",
+      order_by = "method_name",
+      audit_columns = audit_cols,
+      columns = list(
+        reference_text_field("method_code", "Method code", required = TRUE),
+        reference_text_field("method_name", "Method name", required = TRUE),
+        reference_select_field(
+          "transmission_method_family_id",
+          "Transmission family",
+          choices_query = paste(
+            "SELECT transmission_method_family_id AS value, family_name AS label",
+            "FROM instruments.transmission_method_families",
+            "ORDER BY family_name"
+          ),
+          required = TRUE
+        ),
+        reference_checkbox_field("uses_provider", "Uses provider"),
+        reference_checkbox_field(
+          "uses_platform_identifier",
+          "Uses platform identifier"
+        ),
+        reference_checkbox_field(
+          "uses_route_schedule",
+          "Uses route schedule"
+        ),
+        reference_checkbox_field(
+          "uses_payload_format",
+          "Uses payload format"
+        ),
+        reference_textarea_field("description", "Description")
+      )
+    ),
+    transmission_component_roles = list(
+      key = "transmission_component_roles",
+      title = "Transmission Component Roles",
+      description = paste(
+        "Manage telemetry component roles such as transmitter, antenna,",
+        "battery, and solar panel."
+      ),
+      schema = "instruments",
+      table = "transmission_component_roles",
+      pk = "transmission_component_role_id",
+      id_label = "Transmission Component Role ID",
+      order_by = "role_name",
+      audit_columns = audit_cols,
+      columns = list(
+        reference_text_field("role_code", "Role code", required = TRUE),
+        reference_text_field("role_name", "Role name", required = TRUE),
+        reference_textarea_field("description", "Description")
+      )
+    ),
+    instrument_connections = list(
+      key = "instrument_connections",
+      title = "Instrument / Logger Connections",
+      description = paste(
+        "Manage time-bounded communication links between deployed",
+        "instruments and deployed loggers. Enter timestamps as UTC ISO",
+        "values such as 2026-03-26 14:30:00+00."
+      ),
+      schema = "public",
+      table = "locations_metadata_instrument_connections",
+      pk = "connection_id",
+      id_label = "Connection ID",
+      order_by = c("start_datetime", "connection_id"),
+      audit_columns = audit_cols,
+      columns = list(
+        reference_select_field(
+          "instrument_metadata_id",
+          "Instrument deployment",
+          choices_query = reference_deployment_choices_query(),
+          required = TRUE
+        ),
+        reference_select_field(
+          "logger_metadata_id",
+          "Logger deployment",
+          choices_query = reference_deployment_choices_query(
+            require_logger = TRUE
+          ),
+          required = TRUE
+        ),
+        reference_select_field(
+          "protocol_id",
+          "Communication protocol",
+          choices_query = paste(
+            "SELECT protocol_id AS value, protocol_name AS label",
+            "FROM instruments.communication_protocols",
+            "ORDER BY protocol_name"
+          ),
+          required = TRUE
+        ),
+        reference_text_field("logger_port", "Logger port / interface"),
+        reference_text_field("address_scope", "Address scope"),
+        reference_text_field("device_address", "Device address"),
+        reference_textarea_field(
+          "protocol_config",
+          "Protocol config JSON",
+          required = TRUE,
+          rows = 5,
+          default = "{}"
+        ),
+        reference_textarea_field("note", "Note"),
+        reference_text_field(
+          "start_datetime",
+          "Start datetime (UTC ISO timestamp)",
+          required = TRUE
+        ),
+        reference_text_field(
+          "end_datetime",
+          "End datetime (UTC ISO timestamp)"
+        )
+      )
+    ),
+    instrument_connection_signals = list(
+      key = "instrument_connection_signals",
+      title = "Connection Signals",
+      description = paste(
+        "Manage per-signal mappings for instrument/logger connections,",
+        "including optional links to continuous timeseries."
+      ),
+      schema = "public",
+      table = "locations_metadata_instrument_connection_signals",
+      pk = "connection_signal_id",
+      id_label = "Connection Signal ID",
+      order_by = c("connection_id", "signal_order", "connection_signal_id"),
+      audit_columns = audit_cols,
+      columns = list(
+        reference_select_field(
+          "connection_id",
+          "Connection",
+          choices_query = reference_connection_choices_query(),
+          required = TRUE
+        ),
+        reference_text_field("signal_name", "Signal name", required = TRUE),
+        reference_select_field(
+          "parameter_id",
+          "Parameter",
+          choices_query = paste(
+            "SELECT parameter_id AS value, param_name AS label",
+            "FROM public.parameters",
+            "ORDER BY param_name"
+          )
+        ),
+        reference_numeric_field(
+          "signal_order",
+          "Signal order",
+          step = 1
+        ),
+        reference_text_field("logger_input_label", "Logger input label"),
+        reference_text_field("protocol_signal_ref", "Protocol signal reference"),
+        reference_text_field("acquisition_command", "Acquisition command"),
+        reference_select_field(
+          "timeseries_id",
+          "Timeseries",
+          choices_query = reference_timeseries_choices_query()
+        ),
+        reference_select_field(
+          "signal_units",
+          "Signal units",
+          choices_query = paste(
+            "SELECT unit_id AS value, unit_name AS label",
+            "FROM public.units",
+            "ORDER BY unit_name"
+          )
+        ),
+        reference_numeric_field(
+          "scale_multiplier",
+          "Scale multiplier",
+          required = TRUE,
+          default = 1
+        ),
+        reference_numeric_field(
+          "scale_offset",
+          "Scale offset",
+          required = TRUE,
+          default = 0
+        ),
+        reference_textarea_field("note", "Note")
+      )
+    ),
+    transmission_setups = list(
+      key = "transmission_setups",
+      title = "Transmission Setups",
+      description = paste(
+        "Manage time-bounded telemetry setups for deployed loggers.",
+        "Enter timestamps as UTC ISO values."
+      ),
+      schema = "public",
+      table = "locations_metadata_transmission_setups",
+      pk = "transmission_setup_id",
+      id_label = "Transmission Setup ID",
+      order_by = c("start_datetime", "transmission_setup_id"),
+      audit_columns = audit_cols,
+      columns = list(
+        reference_select_field(
+          "logger_metadata_id",
+          "Logger deployment",
+          choices_query = reference_deployment_choices_query(
+            require_logger = TRUE
+          ),
+          required = TRUE
+        ),
+        reference_select_field(
+          "transmission_method_id",
+          "Transmission method",
+          choices_query = paste(
+            "SELECT transmission_method_id AS value, method_name AS label",
+            "FROM instruments.transmission_methods",
+            "ORDER BY method_name"
+          ),
+          required = TRUE
+        ),
+        reference_text_field("provider_name", "Provider name"),
+        reference_text_field("platform_identifier", "Platform identifier"),
+        reference_textarea_field(
+          "transmission_config",
+          "Transmission config JSON",
+          required = TRUE,
+          rows = 5,
+          default = "{}"
+        ),
+        reference_textarea_field("note", "Note"),
+        reference_text_field(
+          "start_datetime",
+          "Start datetime (UTC ISO timestamp)",
+          required = TRUE
+        ),
+        reference_text_field(
+          "end_datetime",
+          "End datetime (UTC ISO timestamp)"
+        )
+      )
+    ),
+    transmission_routes = list(
+      key = "transmission_routes",
+      title = "Transmission Routes",
+      description = paste(
+        "Manage route-level transmission schedules and endpoints for each",
+        "telemetry setup."
+      ),
+      schema = "public",
+      table = "locations_metadata_transmission_routes",
+      pk = "transmission_route_id",
+      id_label = "Transmission Route ID",
+      order_by = c("transmission_setup_id", "route_name"),
+      audit_columns = audit_cols,
+      columns = list(
+        reference_select_field(
+          "transmission_setup_id",
+          "Transmission setup",
+          choices_query = reference_transmission_setup_choices_query(),
+          required = TRUE
+        ),
+        reference_text_field("route_name", "Route name", required = TRUE),
+        reference_text_field("endpoint_identifier", "Endpoint identifier"),
+        reference_text_field("message_format", "Message format"),
+        reference_text_field(
+          "schedule_reference_time_utc",
+          "Schedule reference time (UTC HH:MM[:SS])"
+        ),
+        reference_numeric_field(
+          "transmit_interval_seconds",
+          "Transmit interval (seconds)",
+          step = 1
+        ),
+        reference_numeric_field(
+          "transmit_window_seconds",
+          "Transmit window (seconds)",
+          step = 1
+        ),
+        reference_numeric_field(
+          "payload_size_bytes",
+          "Payload size (bytes)",
+          step = 1
+        ),
+        reference_textarea_field(
+          "route_config",
+          "Route config JSON",
+          required = TRUE,
+          rows = 5,
+          default = "{}"
+        ),
+        reference_textarea_field("note", "Note")
+      )
+    ),
+    transmission_components = list(
+      key = "transmission_components",
+      title = "Transmission Components",
+      description = paste(
+        "Manage deployed telemetry hardware components attached to each",
+        "transmission setup."
+      ),
+      schema = "public",
+      table = "locations_metadata_transmission_components",
+      pk = "transmission_component_id",
+      id_label = "Transmission Component ID",
+      order_by = c(
+        "transmission_setup_id",
+        "transmission_component_role_id",
+        "component_metadata_id"
+      ),
+      audit_columns = audit_cols,
+      columns = list(
+        reference_select_field(
+          "transmission_setup_id",
+          "Transmission setup",
+          choices_query = reference_transmission_setup_choices_query(),
+          required = TRUE
+        ),
+        reference_select_field(
+          "component_metadata_id",
+          "Component deployment",
+          choices_query = reference_deployment_choices_query(
+            require_telemetry_component = TRUE
+          ),
+          required = TRUE
+        ),
+        reference_select_field(
+          "transmission_component_role_id",
+          "Component role",
+          choices_query = paste(
+            "SELECT transmission_component_role_id AS value, role_name AS label",
+            "FROM instruments.transmission_component_roles",
+            "ORDER BY role_name"
+          ),
+          required = TRUE
+        ),
+        reference_checkbox_field("is_primary", "Primary for this role"),
+        reference_textarea_field("note", "Note")
       )
     )
   )
@@ -408,15 +1012,11 @@ reference_empty_choices <- function(fields) {
 reference_empty_row <- function(fields) {
   empty <- as.data.frame(
     setNames(
-      replicate(length(fields), list(NA), simplify = FALSE),
+      lapply(fields, reference_field_default_value),
       vapply(fields, `[[`, character(1), "name")
     ),
     stringsAsFactors = FALSE
   )
-
-  for (field_name in names(empty)) {
-    empty[[field_name]] <- NA
-  }
 
   empty
 }
@@ -431,7 +1031,7 @@ reference_render_fields_ui <- function(ns, fields, choices, values = NULL) {
     ) {
       values[[field$name]][1]
     } else {
-      NA
+      reference_field_default_value(field)
     }
 
     if (identical(field$input, "text")) {
@@ -600,14 +1200,12 @@ reference_update_fields <- function(session, fields, row, choices) {
 }
 
 reference_clear_fields <- function(session, fields, choices) {
-  empty_row <- as.data.frame(setNames(
-    replicate(length(fields), NA, simplify = FALSE),
-    vapply(fields, `[[`, character(1), "name")
-  ))
-  for (field_name in names(empty_row)) {
-    empty_row[[field_name]] <- NA
-  }
-  reference_update_fields(session, fields, empty_row, choices)
+  reference_update_fields(
+    session,
+    fields,
+    reference_empty_row(fields),
+    choices
+  )
 }
 
 reference_field_label <- function(config, column_name) {
@@ -1890,6 +2488,23 @@ manageMediaTypes <- function(id, language) {
   )
 }
 
+manageMatrixStatesUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["matrix_states"]]
+  )
+}
+
+manageMatrixStates <- function(id, language) {
+  config <- reference_table_configs()[["matrix_states"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageMatrixStates"
+  )
+}
+
 manageParameterGroupsUI <- function(id) {
   referenceTableManagerUI(
     id,
@@ -1926,4 +2541,174 @@ manageParameterSubGroups <- function(id, language) {
 
 manageParametersUI <- function(id) {
   parameterManagerUI(id)
+}
+
+manageCommunicationProtocolFamiliesUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["communication_protocol_families"]]
+  )
+}
+
+manageCommunicationProtocolFamilies <- function(id, language) {
+  config <- reference_table_configs()[["communication_protocol_families"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageCommunicationProtocolFamilies"
+  )
+}
+
+manageCommunicationProtocolsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["communication_protocols"]]
+  )
+}
+
+manageCommunicationProtocols <- function(id, language) {
+  config <- reference_table_configs()[["communication_protocols"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageCommunicationProtocols"
+  )
+}
+
+manageTransmissionMethodFamiliesUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["transmission_method_families"]]
+  )
+}
+
+manageTransmissionMethodFamilies <- function(id, language) {
+  config <- reference_table_configs()[["transmission_method_families"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageTransmissionMethodFamilies"
+  )
+}
+
+manageTransmissionMethodsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["transmission_methods"]]
+  )
+}
+
+manageTransmissionMethods <- function(id, language) {
+  config <- reference_table_configs()[["transmission_methods"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageTransmissionMethods"
+  )
+}
+
+manageTransmissionComponentRolesUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["transmission_component_roles"]]
+  )
+}
+
+manageTransmissionComponentRoles <- function(id, language) {
+  config <- reference_table_configs()[["transmission_component_roles"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageTransmissionComponentRoles"
+  )
+}
+
+manageInstrumentConnectionsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["instrument_connections"]]
+  )
+}
+
+manageInstrumentConnections <- function(id, language) {
+  config <- reference_table_configs()[["instrument_connections"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageInstrumentConnections"
+  )
+}
+
+manageInstrumentConnectionSignalsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["instrument_connection_signals"]]
+  )
+}
+
+manageInstrumentConnectionSignals <- function(id, language) {
+  config <- reference_table_configs()[["instrument_connection_signals"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageInstrumentConnectionSignals"
+  )
+}
+
+manageTransmissionSetupsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["transmission_setups"]]
+  )
+}
+
+manageTransmissionSetups <- function(id, language) {
+  config <- reference_table_configs()[["transmission_setups"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageTransmissionSetups"
+  )
+}
+
+manageTransmissionRoutesUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["transmission_routes"]]
+  )
+}
+
+manageTransmissionRoutes <- function(id, language) {
+  config <- reference_table_configs()[["transmission_routes"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageTransmissionRoutes"
+  )
+}
+
+manageTransmissionComponentsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["transmission_components"]]
+  )
+}
+
+manageTransmissionComponents <- function(id, language) {
+  config <- reference_table_configs()[["transmission_components"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageTransmissionComponents"
+  )
 }

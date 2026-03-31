@@ -117,6 +117,186 @@ addTimeseries <- function(id, language) {
       )
     }
 
+    matrix_state_label <- function(matrix_state_id) {
+      matrix_state_id <- nullable_integer(matrix_state_id)
+      if (
+        is.na(matrix_state_id) ||
+          is.null(moduleData$matrix_states) ||
+          nrow(moduleData$matrix_states) == 0
+      ) {
+        return(NA_character_)
+      }
+
+      row <- moduleData$matrix_states[
+        moduleData$matrix_states$matrix_state_id == matrix_state_id,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(row) == 0) {
+        return(NA_character_)
+      }
+
+      row$matrix_state_name[[1]]
+    }
+
+    parameter_matrix_state_unit <- function(parameter_id, matrix_state_id) {
+      parameter_id <- nullable_integer(parameter_id)
+      matrix_state_id <- nullable_integer(matrix_state_id)
+
+      if (
+        is.na(parameter_id) ||
+          is.na(matrix_state_id) ||
+          is.null(moduleData$parameters) ||
+          nrow(moduleData$parameters) == 0 ||
+          is.null(moduleData$matrix_states) ||
+          nrow(moduleData$matrix_states) == 0
+      ) {
+        return(NA_character_)
+      }
+
+      param_row <- moduleData$parameters[
+        moduleData$parameters$parameter_id == parameter_id,
+        ,
+        drop = FALSE
+      ]
+      state_row <- moduleData$matrix_states[
+        moduleData$matrix_states$matrix_state_id == matrix_state_id,
+        ,
+        drop = FALSE
+      ]
+
+      if (nrow(param_row) == 0 || nrow(state_row) == 0) {
+        return(NA_character_)
+      }
+
+      unit_col <- paste0("units_", state_row$matrix_state_code[[1]])
+      if (!unit_col %in% names(param_row)) {
+        return(NA_character_)
+      }
+
+      unit_value <- param_row[[unit_col]][[1]]
+      if (is.null(unit_value) || is.na(unit_value) || !nzchar(unit_value)) {
+        return(NA_character_)
+      }
+
+      unit_value
+    }
+
+    supported_matrix_state_ids <- function(parameter_id) {
+      parameter_id <- nullable_integer(parameter_id)
+      if (
+        is.na(parameter_id) ||
+          is.null(moduleData$parameters) ||
+          nrow(moduleData$parameters) == 0 ||
+          is.null(moduleData$matrix_states) ||
+          nrow(moduleData$matrix_states) == 0
+      ) {
+        return(integer(0))
+      }
+
+      param_row <- moduleData$parameters[
+        moduleData$parameters$parameter_id == parameter_id,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(param_row) == 0) {
+        return(integer(0))
+      }
+
+      supported <- vapply(
+        seq_len(nrow(moduleData$matrix_states)),
+        function(i) {
+          unit_col <- paste0(
+            "units_",
+            moduleData$matrix_states$matrix_state_code[[i]]
+          )
+          unit_col %in% names(param_row) &&
+            !is.na(param_row[[unit_col]][[1]]) &&
+            nzchar(param_row[[unit_col]][[1]])
+        },
+        logical(1)
+      )
+
+      as.integer(moduleData$matrix_states$matrix_state_id[supported])
+    }
+
+    resolve_matrix_state_selection <- function(
+      parameter_id = nullable_integer(input$parameter),
+      media_id = nullable_integer(input$media),
+      current_matrix_state_id = nullable_integer(input$matrix_state)
+    ) {
+      supported_states <- supported_matrix_state_ids(parameter_id)
+      if (!length(supported_states)) {
+        return(NA_integer_)
+      }
+
+      if (
+        !is.na(current_matrix_state_id) &&
+          current_matrix_state_id %in% supported_states
+      ) {
+        return(current_matrix_state_id)
+      }
+
+      media_default <- NA_integer_
+      if (
+        !is.na(media_id) &&
+          !is.null(moduleData$media) &&
+          nrow(moduleData$media) > 0
+      ) {
+        media_row <- moduleData$media[
+          moduleData$media$media_id == media_id,
+          ,
+          drop = FALSE
+        ]
+        if (nrow(media_row) == 1) {
+          media_default <- nullable_integer(media_row$default_matrix_state_id)
+        }
+      }
+
+      if (!is.na(media_default) && media_default %in% supported_states) {
+        return(media_default)
+      }
+
+      if (length(supported_states) == 1) {
+        return(supported_states[[1]])
+      }
+
+      NA_integer_
+    }
+
+    update_matrix_state_selectize <- function(
+      selected = nullable_integer(input$matrix_state),
+      parameter_id = nullable_integer(input$parameter)
+    ) {
+      available_ids <- supported_matrix_state_ids(parameter_id)
+      if (!length(available_ids) && !is.na(parameter_id)) {
+        available_ids <- integer(0)
+      } else if (!length(available_ids)) {
+        available_ids <- as.integer(moduleData$matrix_states$matrix_state_id)
+      }
+
+      matrix_rows <- moduleData$matrix_states[
+        moduleData$matrix_states$matrix_state_id %in% available_ids,
+        ,
+        drop = FALSE
+      ]
+      matrix_rows <- matrix_rows[
+        order(matrix_rows$matrix_state_name),
+        ,
+        drop = FALSE
+      ]
+
+      updateSelectizeInput(
+        session,
+        "matrix_state",
+        choices = stats::setNames(
+          matrix_rows$matrix_state_id,
+          matrix_rows$matrix_state_name
+        ),
+        selected = if (is.na(selected)) character(0) else selected
+      )
+    }
+
     same_nullable_integer <- function(x, y) {
       x <- nullable_integer(x)
       y <- nullable_integer(y)
@@ -145,6 +325,46 @@ addTimeseries <- function(id, language) {
       identical(x, y)
     }
 
+    validate_timeseries_matrix_state <- function(
+      parameter_id,
+      media_id,
+      matrix_state_id
+    ) {
+      parameter_id <- nullable_integer(parameter_id)
+      media_id <- nullable_integer(media_id)
+      matrix_state_id <- nullable_integer(matrix_state_id)
+
+      if (is.na(parameter_id)) {
+        return("Please select a parameter.")
+      }
+      if (is.na(media_id)) {
+        return("Please select a media type.")
+      }
+      if (is.na(matrix_state_id)) {
+        return(
+          paste(
+            "Please select a matrix state that matches the parameter",
+            "and media type."
+          )
+        )
+      }
+
+      supported_states <- supported_matrix_state_ids(parameter_id)
+      if (!matrix_state_id %in% supported_states) {
+        parameter_name <- moduleData$parameters$param_name[
+          match(parameter_id, moduleData$parameters$parameter_id)
+        ]
+        return(
+          sprintf(
+            "The selected matrix state does not have units configured for %s.",
+            parameter_name
+          )
+        )
+      }
+
+      NULL
+    }
+
     empty_deployed_instruments <- function() {
       if (!is.null(moduleData$deployed_instruments)) {
         return(moduleData$deployed_instruments[0, , drop = FALSE])
@@ -157,6 +377,11 @@ addTimeseries <- function(id, language) {
         z_id = integer(0),
         z_meters = numeric(0),
         timeseries_id = integer(0),
+        associated_timeseries_id = integer(0),
+        connection_count = integer(0),
+        signal_row_count = integer(0),
+        mapped_signal_count = integer(0),
+        distinct_signal_timeseries_count = integer(0),
         instrument_id = integer(0),
         serial_no = character(0),
         make = character(0),
@@ -165,6 +390,81 @@ addTimeseries <- function(id, language) {
         start_datetime = as.POSIXct(character(0), tz = "UTC"),
         stringsAsFactors = FALSE
       )
+    }
+
+    active_deployment_association_rows <- function(
+      con,
+      metadata_id = NA_integer_
+    ) {
+      metadata_id <- nullable_integer(metadata_id)
+
+      sql <- paste(
+        "SELECT",
+        "  lmi.metadata_id,",
+        "  lmi.timeseries_id,",
+        paste(
+          "COALESCE(",
+          "  lmi.timeseries_id,",
+          "  CASE",
+          "    WHEN COALESCE(sig.distinct_signal_timeseries_count, 0) = 1",
+          "      THEN sig.signal_timeseries_id",
+          "  END",
+          ") AS associated_timeseries_id,"
+        ),
+        "  COALESCE(sig.connection_count, 0) AS connection_count,",
+        "  COALESCE(sig.signal_row_count, 0) AS signal_row_count,",
+        "  COALESCE(sig.mapped_signal_count, 0) AS mapped_signal_count,",
+        paste(
+          "COALESCE(sig.distinct_signal_timeseries_count, 0)",
+          "AS distinct_signal_timeseries_count"
+        ),
+        "FROM public.locations_metadata_instruments AS lmi",
+        "LEFT JOIN LATERAL (",
+        "  SELECT",
+        "    COUNT(DISTINCT c.connection_id) AS connection_count,",
+        "    COUNT(s.connection_signal_id) AS signal_row_count,",
+        paste(
+          "COUNT(*) FILTER (WHERE s.timeseries_id IS NOT NULL)",
+          "AS mapped_signal_count,"
+        ),
+        paste(
+          "COUNT(DISTINCT s.timeseries_id)",
+          "FILTER (WHERE s.timeseries_id IS NOT NULL)",
+          "AS distinct_signal_timeseries_count,"
+        ),
+        paste(
+          "MIN(s.timeseries_id)",
+          "FILTER (WHERE s.timeseries_id IS NOT NULL)",
+          "AS signal_timeseries_id"
+        ),
+        "  FROM public.locations_metadata_instrument_connections AS c",
+        "  LEFT JOIN public.locations_metadata_instrument_connection_signals AS s",
+        "    ON s.connection_id = c.connection_id",
+        "  WHERE c.instrument_metadata_id = lmi.metadata_id",
+        "    AND c.start_datetime <= NOW()",
+        "    AND (c.end_datetime IS NULL OR c.end_datetime > NOW())",
+        ") AS sig ON TRUE",
+        "WHERE lmi.start_datetime <= NOW()",
+        "  AND (lmi.end_datetime IS NULL OR lmi.end_datetime > NOW())",
+        if (is.na(metadata_id)) {
+          ""
+        } else {
+          "  AND lmi.metadata_id = $1"
+        }
+      )
+
+      DBI::dbGetQuery(
+        con,
+        sql,
+        params = if (is.na(metadata_id)) NULL else list(metadata_id)
+      )
+    }
+
+    deployment_has_signal_rows <- function(record) {
+      !is.null(record) &&
+        nrow(record) > 0 &&
+        !is.na(record$signal_row_count[[1]]) &&
+        record$signal_row_count[[1]] > 0
     }
 
     current_z_value <- reactive({
@@ -195,8 +495,8 @@ addTimeseries <- function(id, language) {
       }
 
       moduleData$deployed_instruments[
-        !is.na(moduleData$deployed_instruments$timeseries_id) &
-          moduleData$deployed_instruments$timeseries_id == tsid,
+        !is.na(moduleData$deployed_instruments$associated_timeseries_id) &
+          moduleData$deployed_instruments$associated_timeseries_id == tsid,
         ,
         drop = FALSE
       ]
@@ -244,8 +544,9 @@ addTimeseries <- function(id, language) {
       }
 
       available <- available[
-        is.na(available$timeseries_id) |
-          (!is.na(current_tsid) & available$timeseries_id == current_tsid),
+        is.na(available$associated_timeseries_id) |
+          (!is.na(current_tsid) &
+            available$associated_timeseries_id == current_tsid),
         ,
         drop = FALSE
       ]
@@ -284,10 +585,24 @@ addTimeseries <- function(id, language) {
         format(as.POSIXct(df$start_datetime, tz = "UTC"), "%Y-%m-%d")
       )
 
-      current_idx <- !is.na(current_tsid) & df$timeseries_id == current_tsid
+      signal_idx <- !is.na(df$signal_row_count) & df$signal_row_count > 0
+      if (any(signal_idx, na.rm = TRUE)) {
+        labels[signal_idx] <- paste0(labels[signal_idx], " [signal metadata]")
+      }
+
+      current_idx <- !is.na(current_tsid) &
+        df$associated_timeseries_id == current_tsid
       if (any(current_idx, na.rm = TRUE)) {
         labels[current_idx] <- paste0(
           labels[current_idx],
+          ifelse(signal_idx[current_idx], " [currently associated]", "")
+        )
+      }
+
+      legacy_current_idx <- current_idx & !signal_idx
+      if (any(legacy_current_idx, na.rm = TRUE)) {
+        labels[legacy_current_idx] <- paste0(
+          labels[legacy_current_idx],
           " [currently associated]"
         )
       }
@@ -307,7 +622,27 @@ addTimeseries <- function(id, language) {
         stop("A timeseries_id is required to update instrument associations.")
       }
 
+      active_deployments <- active_deployment_association_rows(con)
+
       if (is.na(deployment_metadata_id)) {
+        current_signal_assoc <- active_deployments[
+          !is.na(active_deployments$associated_timeseries_id) &
+            active_deployments$associated_timeseries_id == timeseries_id &
+            active_deployments$signal_row_count > 0,
+          ,
+          drop = FALSE
+        ]
+
+        if (nrow(current_signal_assoc) > 0) {
+          stop(
+            paste(
+              "This timeseries is associated through signal-level connection",
+              "metadata. Manage that association under",
+              "Acquisition / telemetry -> Connection signals."
+            )
+          )
+        }
+
         DBI::dbExecute(
           con,
           "
@@ -322,16 +657,9 @@ addTimeseries <- function(id, language) {
         return(invisible(NULL))
       }
 
-      selected_deployment <- DBI::dbGetQuery(
+      selected_deployment <- active_deployment_association_rows(
         con,
-        "
-        SELECT metadata_id, timeseries_id
-        FROM public.locations_metadata_instruments
-        WHERE metadata_id = $1
-          AND start_datetime <= NOW()
-          AND (end_datetime IS NULL OR end_datetime > NOW())
-        ",
-        params = list(deployment_metadata_id)
+        metadata_id = deployment_metadata_id
       )
 
       if (nrow(selected_deployment) == 0) {
@@ -339,6 +667,23 @@ addTimeseries <- function(id, language) {
           paste(
             "The selected instrument deployment is no longer currently deployed.",
             "Reload the module and try again."
+          )
+        )
+      }
+
+      if (deployment_has_signal_rows(selected_deployment)) {
+        if (
+          !is.na(selected_deployment$associated_timeseries_id[[1]]) &&
+            selected_deployment$associated_timeseries_id[[1]] == timeseries_id
+        ) {
+          return(invisible(NULL))
+        }
+
+        stop(
+          paste(
+            "The selected deployment already uses signal-level connection",
+            "metadata. Manage timeseries links under",
+            "Acquisition / telemetry -> Connection signals."
           )
         )
       }
@@ -352,6 +697,25 @@ addTimeseries <- function(id, language) {
             "The selected instrument already has a different timeseries",
             "association. Use Field -> Deploy/recover instruments to",
             "change existing associations."
+          )
+        )
+      }
+
+      other_signal_assoc <- active_deployments[
+        active_deployments$metadata_id != deployment_metadata_id &
+          !is.na(active_deployments$associated_timeseries_id) &
+          active_deployments$associated_timeseries_id == timeseries_id &
+          active_deployments$signal_row_count > 0,
+        ,
+        drop = FALSE
+      ]
+
+      if (nrow(other_signal_assoc) > 0) {
+        stop(
+          paste(
+            "This timeseries is already linked through signal-level",
+            "connection metadata. Reassign it in",
+            "Acquisition / telemetry -> Connection signals."
           )
         )
       }
@@ -385,7 +749,16 @@ addTimeseries <- function(id, language) {
     getModuleData <- function() {
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.sensor_priority, ts.default_owner, ts.record_rate, ts.share_with, ts.source_fx, ts.source_fx_args, ts.note, ts.default_data_sharing_agreement_id FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+        paste(
+          "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id,",
+          "ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id,",
+          "ts.parameter_id, ts.matrix_state_id, ts.aggregation_type_id,",
+          "ts.sensor_priority, ts.default_owner, ts.record_rate,",
+          "ts.share_with, ts.source_fx, ts.source_fx_args, ts.note,",
+          "ts.default_data_sharing_agreement_id",
+          "FROM timeseries ts",
+          "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+        )
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -395,13 +768,34 @@ addTimeseries <- function(id, language) {
         session$userData$AquaCache,
         "SELECT sub_location_id, sub_location_name, location_id FROM sub_locations ORDER BY sub_location_name ASC"
       )
+      moduleData$matrix_states <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste(
+          "SELECT matrix_state_id, matrix_state_code, matrix_state_name",
+          "FROM public.matrix_states",
+          "ORDER BY matrix_state_name ASC"
+        )
+      )
       moduleData$parameters <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT parameter_id, param_name FROM parameters ORDER BY param_name ASC"
+        paste(
+          "SELECT p.parameter_id, p.param_name,",
+          "ul.unit_name AS units_liquid,",
+          "us.unit_name AS units_solid,",
+          "ug.unit_name AS units_gas",
+          "FROM public.parameters p",
+          "LEFT JOIN public.units ul ON p.units_liquid = ul.unit_id",
+          "LEFT JOIN public.units us ON p.units_solid = us.unit_id",
+          "LEFT JOIN public.units ug ON p.units_gas = ug.unit_id",
+          "ORDER BY p.param_name ASC"
+        )
       )
       moduleData$media <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT media_id, media_type FROM media_types ORDER BY media_type ASC"
+        paste(
+          "SELECT media_id, media_type, default_matrix_state_id",
+          "FROM media_types ORDER BY media_type ASC"
+        )
       )
       moduleData$aggregation_types <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -418,17 +812,32 @@ addTimeseries <- function(id, language) {
 
       moduleData$timeseries_display <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "
-        SELECT ts.timeseries_id, l.name AS location_name, sl.sub_location_name, ts.timezone_daily_calc AS time_zone, p.param_name AS parameter, m.media_type AS media, at.aggregation_type, lz.z_meters AS depth_height_m, ts.sensor_priority, o.name AS owner, ts.record_rate
-        FROM timeseries ts
-        INNER JOIN locations l ON ts.location_id = l.location_id
-        LEFT JOIN sub_locations sl ON ts.sub_location_id = sl.sub_location_id
-        LEFT JOIN locations_z lz ON ts.z_id = lz.z_id
-        INNER JOIN parameters p ON ts.parameter_id = p.parameter_id
-        INNER JOIN media_types m ON ts.media_id = m.media_id
-        INNER JOIN aggregation_types at ON ts.aggregation_type_id = at.aggregation_type_id
-        INNER JOIN organizations o ON ts.default_owner = o.organization_id
-        "
+        paste(
+          "SELECT ts.timeseries_id, l.name AS location_name,",
+          "sl.sub_location_name, ts.timezone_daily_calc AS time_zone,",
+          "p.param_name AS parameter,",
+          ac_parameter_unit_select_sql(
+            session$userData$AquaCache,
+            "p",
+            "units",
+            matrix_state_alias = "ts",
+            media_alias = "ts"
+          ),
+          ", ms.matrix_state_name AS matrix_state, m.media_type AS media,",
+          "at.aggregation_type, lz.z_meters AS depth_height_m,",
+          "ts.sensor_priority, o.name AS owner, ts.record_rate",
+          "FROM timeseries ts",
+          "INNER JOIN locations l ON ts.location_id = l.location_id",
+          "LEFT JOIN sub_locations sl ON ts.sub_location_id = sl.sub_location_id",
+          "LEFT JOIN locations_z lz ON ts.z_id = lz.z_id",
+          "INNER JOIN parameters p ON ts.parameter_id = p.parameter_id",
+          "LEFT JOIN public.matrix_states ms",
+          "ON ts.matrix_state_id = ms.matrix_state_id",
+          "INNER JOIN media_types m ON ts.media_id = m.media_id",
+          "INNER JOIN aggregation_types at",
+          "ON ts.aggregation_type_id = at.aggregation_type_id",
+          "INNER JOIN organizations o ON ts.default_owner = o.organization_id"
+        )
       )
       # Join on files.document_types.document_type_en = 'data sharing agreement' to get only data sharing agreements
       moduleData$agreements <- DBI::dbGetQuery(
@@ -449,6 +858,18 @@ addTimeseries <- function(id, language) {
           lmi.z_id,
           lz.z_meters,
           lmi.timeseries_id,
+          COALESCE(
+            lmi.timeseries_id,
+            CASE
+              WHEN COALESCE(sig.distinct_signal_timeseries_count, 0) = 1
+                THEN sig.signal_timeseries_id
+            END
+          ) AS associated_timeseries_id,
+          COALESCE(sig.connection_count, 0) AS connection_count,
+          COALESCE(sig.signal_row_count, 0) AS signal_row_count,
+          COALESCE(sig.mapped_signal_count, 0) AS mapped_signal_count,
+          COALESCE(sig.distinct_signal_timeseries_count, 0)
+            AS distinct_signal_timeseries_count,
           lmi.instrument_id,
           i.serial_no,
           mk.make,
@@ -456,6 +877,25 @@ addTimeseries <- function(id, language) {
           it.type AS instrument_type,
           lmi.start_datetime
         FROM public.locations_metadata_instruments AS lmi
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(DISTINCT c.connection_id) AS connection_count,
+            COUNT(s.connection_signal_id) AS signal_row_count,
+            COUNT(*) FILTER (WHERE s.timeseries_id IS NOT NULL)
+              AS mapped_signal_count,
+            COUNT(DISTINCT s.timeseries_id)
+              FILTER (WHERE s.timeseries_id IS NOT NULL)
+              AS distinct_signal_timeseries_count,
+            MIN(s.timeseries_id)
+              FILTER (WHERE s.timeseries_id IS NOT NULL)
+              AS signal_timeseries_id
+          FROM public.locations_metadata_instrument_connections AS c
+          LEFT JOIN public.locations_metadata_instrument_connection_signals AS s
+            ON s.connection_id = c.connection_id
+          WHERE c.instrument_metadata_id = lmi.metadata_id
+            AND c.start_datetime <= NOW()
+            AND (c.end_datetime IS NULL OR c.end_datetime > NOW())
+        ) AS sig ON TRUE
         INNER JOIN instruments.instruments AS i
           ON lmi.instrument_id = i.instrument_id
         LEFT JOIN instruments.instrument_make AS mk
@@ -484,6 +924,7 @@ addTimeseries <- function(id, language) {
       req(
         moduleData$locations,
         moduleData$parameters,
+        moduleData$matrix_states,
         moduleData$media,
         moduleData$aggregation_types,
         moduleData$organizations,
@@ -588,7 +1029,7 @@ addTimeseries <- function(id, language) {
         ),
 
         splitLayout(
-          cellWidths = c("50%", "50%"),
+          cellWidths = c("34%", "33%", "33%"),
           selectizeInput(
             ns("parameter"),
             "Parameter",
@@ -609,6 +1050,38 @@ addTimeseries <- function(id, language) {
             ),
             multiple = TRUE,
             options = list(maxItems = 1, placeholder = 'Select media type'),
+            width = "100%"
+          ),
+          selectizeInput(
+            ns("matrix_state"),
+            tagList(
+              "Matrix state ",
+              tooltip(
+                trigger = list(
+                  tags$span(
+                    "Why can't I see other states?",
+                    style = paste(
+                      "font-weight: normal;",
+                      "font-size: 85%;",
+                      "margin-left: 4px;"
+                    )
+                  ),
+                  bsicons::bs_icon("info-circle-fill")
+                ),
+                paste(
+                  "Matrix states are only visible if units have been",
+                  "specified for this parameter in these states. Go to",
+                  "the Reference data -> Parameters to add units. You'll",
+                  "have to reload this module afterwards."
+                )
+              )
+            ),
+            choices = stats::setNames(
+              moduleData$matrix_states$matrix_state_id,
+              moduleData$matrix_states$matrix_state_name
+            ),
+            multiple = TRUE,
+            options = list(maxItems = 1, placeholder = 'Select matrix state'),
             width = "100%"
           )
         ),
@@ -823,6 +1296,8 @@ addTimeseries <- function(id, language) {
       df$location_name <- as.factor(df$location_name)
       df$record_rate <- as.factor(df$record_rate)
       df$media <- as.factor(df$media)
+      df$matrix_state <- as.factor(df$matrix_state)
+      df$units <- as.factor(df$units)
       df$aggregation_type <- as.factor(df$aggregation_type)
       df$parameter <- as.factor(df$parameter)
       df$owner <- as.factor(df$owner)
@@ -877,6 +1352,13 @@ addTimeseries <- function(id, language) {
               "timeseries associations outside this form, use",
               "Field -> Deploy/recover instruments."
             )
+          ),
+          tags$p(
+            paste(
+              "If a deployment already has connection-signal metadata, manage",
+              "the timeseries link in",
+              "Acquisition / telemetry -> Connection signals."
+            )
           )
         ),
         if (identical(input$mode, "modify") && is.na(current_tsid)) {
@@ -902,10 +1384,18 @@ addTimeseries <- function(id, language) {
               safe_text(current_assoc$instrument_type[[1]])
             ),
             tags$br(),
-            paste(
-              "Deployment metadata_id:",
-              current_assoc$metadata_id[[1]]
-            )
+            paste("Deployment metadata_id:", current_assoc$metadata_id[[1]]),
+            if (deployment_has_signal_rows(current_assoc)) {
+              tagList(
+                tags$br(),
+                tags$em(
+                  paste(
+                    "This association is managed through signal-level",
+                    "connection metadata."
+                  )
+                )
+              )
+            }
           )
         } else if (identical(input$mode, "modify") && !is.na(current_tsid)) {
           div(
@@ -1063,6 +1553,7 @@ addTimeseries <- function(id, language) {
             moduleData$media$media_type
           )
         )
+        update_matrix_state_selectize(selected = NA_integer_)
         updateSelectizeInput(
           session,
           "aggregation_type",
@@ -1126,6 +1617,24 @@ addTimeseries <- function(id, language) {
       },
       ignoreInit = TRUE
     )
+
+    observe({
+      req(
+        moduleData$parameters,
+        moduleData$media,
+        moduleData$matrix_states
+      )
+
+      selected_state <- resolve_matrix_state_selection(
+        parameter_id = nullable_integer(input$parameter),
+        media_id = nullable_integer(input$media),
+        current_matrix_state_id = nullable_integer(input$matrix_state)
+      )
+      update_matrix_state_selectize(
+        selected = selected_state,
+        parameter_id = nullable_integer(input$parameter)
+      )
+    })
 
     # Make sure share_with is either public_reader or other groups, not both
     observeEvent(
@@ -1261,6 +1770,10 @@ addTimeseries <- function(id, language) {
             selected = details$parameter_id
           )
           updateSelectizeInput(session, "media", selected = details$media_id)
+          update_matrix_state_selectize(
+            selected = details$matrix_state_id,
+            parameter_id = details$parameter_id
+          )
           updateSelectizeInput(
             session,
             "aggregation_type",
@@ -1549,6 +2062,7 @@ addTimeseries <- function(id, language) {
         z_specify,
         parameter,
         media,
+        matrix_state,
         priority,
         agg_type,
         rate,
@@ -1643,7 +2157,7 @@ addTimeseries <- function(id, language) {
               # Make a new entry to the timeseries table
               new_timeseries_id <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING timeseries_id;",
+                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
                 params = list(
                   as.numeric(loc),
                   ifelse(is.na(sub_loc), NA, sub_loc),
@@ -1651,6 +2165,7 @@ addTimeseries <- function(id, language) {
                   ifelse(is.na(existing_z), NA, existing_z),
                   as.numeric(parameter),
                   as.numeric(media),
+                  as.numeric(matrix_state),
                   as.numeric(priority),
                   as.numeric(agg_type),
                   rate,
@@ -1761,11 +2276,26 @@ addTimeseries <- function(id, language) {
         need(input$location, "Please select a location."),
         need(input$parameter, "Please select a parameter."),
         need(input$media, "Please select a media type."),
+        need(input$matrix_state, "Please select a matrix state."),
         need(input$aggregation_type, "Please select an aggregation type."),
         need(input$default_owner, "Please select a default owner."),
         need(input$sensor_priority, "Please select a sensor priority."),
         need(input$record_rate, "Please specify a record rate.")
       )
+
+      matrix_state_error <- validate_timeseries_matrix_state(
+        parameter_id = input$parameter,
+        media_id = input$media,
+        matrix_state_id = input$matrix_state
+      )
+      if (!is.null(matrix_state_error)) {
+        showNotification(
+          matrix_state_error,
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
 
       if (input$mode != "add") {
         # This is an error: show the user a notification to select 'add' mode
@@ -1816,6 +2346,7 @@ addTimeseries <- function(id, language) {
         z_specify = input$z_specify,
         parameter = input$parameter,
         media = input$media,
+        matrix_state = input$matrix_state,
         priority = input$sensor_priority,
         agg_type = input$aggregation_type,
         rate = input$record_rate,
@@ -1863,6 +2394,7 @@ addTimeseries <- function(id, language) {
         updateNumericInput(session, "z", value = NA)
         updateSelectizeInput(session, "parameter", selected = character(0))
         updateSelectizeInput(session, "media", selected = character(0))
+        update_matrix_state_selectize(selected = NA_integer_)
         updateSelectizeInput(
           session,
           "aggregation_type",
@@ -1896,6 +2428,7 @@ addTimeseries <- function(id, language) {
           if (!isTruthy(input$location)) "Please select a location.",
           if (!isTruthy(input$parameter)) "Please select a parameter.",
           if (!isTruthy(input$media)) "Please select a media type.",
+          if (!isTruthy(input$matrix_state)) "Please select a matrix state.",
           if (!isTruthy(input$aggregation_type)) {
             "Please select an aggregation type."
           },
@@ -1909,6 +2442,20 @@ addTimeseries <- function(id, language) {
         if (length(required_errors) > 0) {
           showNotification(
             required_errors[[1]],
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+
+        matrix_state_error <- validate_timeseries_matrix_state(
+          parameter_id = input$parameter,
+          media_id = input$media,
+          matrix_state_id = input$matrix_state
+        )
+        if (!is.null(matrix_state_error)) {
+          showNotification(
+            matrix_state_error,
             type = "error",
             duration = 8
           )
@@ -1965,6 +2512,7 @@ addTimeseries <- function(id, language) {
             )
             input_parameter_id <- nullable_integer(input$parameter)
             input_media_id <- nullable_integer(input$media)
+            input_matrix_state_id <- nullable_integer(input$matrix_state)
             input_aggregation_type_id <- nullable_integer(
               input$aggregation_type
             )
@@ -2104,29 +2652,27 @@ addTimeseries <- function(id, language) {
               !same_nullable_integer(
                 input_parameter_id,
                 selected_timeseries$parameter_id
-              )
+              ) ||
+                !same_nullable_integer(
+                  input_media_id,
+                  selected_timeseries$media_id
+                ) ||
+                !same_nullable_integer(
+                  input_matrix_state_id,
+                  selected_timeseries$matrix_state_id
+                )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET parameter_id = $1 WHERE timeseries_id = $2",
+                paste(
+                  "UPDATE timeseries",
+                  "SET parameter_id = $1, media_id = $2, matrix_state_id = $3",
+                  "WHERE timeseries_id = $4"
+                ),
                 params = list(
                   input_parameter_id,
-                  selected_timeseries_id
-                )
-              )
-            }
-
-            if (
-              !same_nullable_integer(
-                input_media_id,
-                selected_timeseries$media_id
-              )
-            ) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE timeseries SET media_id = $1 WHERE timeseries_id = $2",
-                params = list(
                   input_media_id,
+                  input_matrix_state_id,
                   selected_timeseries_id
                 )
               )
