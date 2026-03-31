@@ -941,7 +941,7 @@ addSampleSeries <- function(id, language) {
           # Try to get new discrete data
           AquaCache::getNewDiscrete(
             con = session$userData$AquaCache,
-            sample_series_id = new
+            sample_series_id = new$sample_series_id[[1]]
           )
         },
         error = function(e) {
