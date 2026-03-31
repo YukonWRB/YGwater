@@ -895,6 +895,10 @@ YGwater_globals <- function(
       "apps/YGwater/modules/client/plot/continuousPlot_old.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+      package = "YGwater"
+    ))
 
     # Report modules
     if (network_check) {

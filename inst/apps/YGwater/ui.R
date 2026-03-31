@@ -242,6 +242,13 @@ app_ui <- function(request) {
               value = "contPlotOld",
               uiOutput("plotContinuousOld_ui")
             )
+          },
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("plotsNavContAdaptiveTitle"),
+              value = "contPlotAdaptive",
+              uiOutput("plotContinuousAdaptive_ui")
+            )
           }
         ),
         if (!config$public) {
