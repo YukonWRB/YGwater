@@ -221,3 +221,32 @@ test_that("threshold and completeness fields are coherent", {
   expect_true(all(pd$completeness >= 0 & pd$completeness <= 1))
   expect_true(all(grepl("%$", pd$completeness_text)))
 })
+
+test_that("plotTimeseriesHistogram can show data in the past", {
+  skip_on_cran()
+
+  if (
+    !isTRUE(DBI::dbGetQuery(
+      con,
+      "SELECT has_schema_privilege(current_user, 'audit', 'USAGE') AS ok;"
+    )$ok[[1]])
+  ) {
+    skip("Historical queries require USAGE on schema audit.")
+  }
+
+  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+  start_dt <- as.POSIXct("2022-01-31 00:00:00", tz = "UTC")
+  end_dt <- as.POSIXct("2022-02-10 00:00:00", tz = "UTC")
+
+  out <- plotTimeseriesHistogram(
+    timeseries_id = tsid,
+    startDay = 31,
+    endDay = 40,
+    years = 2022,
+    tzone = "UTC",
+    data = TRUE,
+    con = con,
+    as_of = as_of
+  )
+  expect_match(plotly::plotly_build(out$plot)$x$layout$title$text, "As of")
+})

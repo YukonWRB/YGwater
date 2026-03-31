@@ -39,6 +39,10 @@
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
+#' @param as_of Optional point-in-time timestamp at which measurement values and
+#'   stored daily summaries should be reconstructed. Character, Date, and
+#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
+#'   of that day in `tzone`. When `NULL` (default), current data are used.
 #'
 #' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
 #'
@@ -79,7 +83,8 @@ plotMultiTimeseries <- function(
   resolution = NULL,
   tzone = "auto",
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 ) {
   # type <- 'traces'
   # locations <- c("138", "140")
@@ -407,6 +412,8 @@ plotMultiTimeseries <- function(
   if (tzone == "auto") {
     tzone <- Sys.timezone()
   }
+
+  as_of <- normalize_as_of_input(as_of, tzone)
 
   if (inherits(start_date, "character")) {
     start_date <- as.Date(start_date)
@@ -1052,34 +1059,68 @@ plotMultiTimeseries <- function(
       # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
       range_end <- sub.end_date + 1 * 24 * 60 * 60
       range_start <- sub.start_date - 1 * 24 * 60 * 60
-      range_data <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND date BETWEEN '",
-          range_start,
-          "' AND '",
-          range_end,
-          "' ORDER BY date ASC;"
+      if (is.null(as_of)) {
+        range_data <- dbGetQueryDT(
+          con,
+          paste0(
+            "SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            tsid,
+            " AND date BETWEEN '",
+            range_start,
+            "' AND '",
+            range_end,
+            "' ORDER BY date ASC;"
+          )
         )
-      )
+      } else {
+        range_data <- dbGetQueryDT(
+          con,
+          paste(
+            "SELECT date AS datetime, min, max, q75, q25",
+            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "  $1,",
+            "  ARRAY[$2]::INTEGER[],",
+            "  $3::DATE,",
+            "  $4::DATE",
+            ")",
+            "ORDER BY date ASC;"
+          ),
+          params = list(as_of, tsid, range_start, range_end)
+        )
+      }
       range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
       attr(range_data$datetime, "tzone") <- tzone
       if (resolution == "day") {
         # daily data is always generated using corrected data
-        trace_data <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-            tsid,
-            " AND date BETWEEN '",
-            sub.start_date,
-            "' AND '",
-            sub.end_date,
-            "' ORDER BY date DESC;"
+        if (is.null(as_of)) {
+          trace_data <- dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+              tsid,
+              " AND date BETWEEN '",
+              sub.start_date,
+              "' AND '",
+              sub.end_date,
+              "' ORDER BY date DESC;"
+            )
           )
-        )
+        } else {
+          trace_data <- dbGetQueryDT(
+            con,
+            paste(
+              "SELECT date AS datetime, value",
+              "FROM continuous.measurements_calculated_daily_corrected_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3::DATE,",
+              "  $4::DATE",
+              ")",
+              "ORDER BY date DESC;"
+            ),
+            params = list(as_of, tsid, sub.start_date, sub.end_date)
+          )
+        }
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       } else if (resolution == "hour") {
         trace_data <- fetch_hourly_trace_data(
@@ -1087,11 +1128,27 @@ plotMultiTimeseries <- function(
           timeseries_id = tsid,
           start_date = sub.start_date,
           end_date = sub.end_date,
-          use_corrected_source = corrections_apply
+          use_corrected_source = corrections_apply,
+          as_of = as_of
         )[, c("datetime", "value")]
       } else if (resolution == "max") {
         # limit to 200 000 records for plotting performance
-        if (corrections_apply) {
+        if (!is.null(as_of)) {
+          trace_data <- dbGetQueryDT(
+            con,
+            paste(
+              "SELECT datetime, value_corrected AS value",
+              "FROM continuous.measurements_continuous_corrected_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3,",
+              "  $4",
+              ")",
+              "ORDER BY datetime DESC LIMIT 200000;"
+            ),
+            params = list(as_of, tsid, sub.start_date, sub.end_date)
+          )
+        } else if (corrections_apply) {
           trace_data <- dbGetQueryDT(
             con,
             paste0(
@@ -1123,18 +1180,35 @@ plotMultiTimeseries <- function(
     } else {
       #No historic range requested
       if (resolution == "day") {
-        trace_data <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-            tsid,
-            " AND date BETWEEN '",
-            sub.start_date,
-            "' AND '",
-            sub.end_date,
-            "' ORDER BY date DESC;"
+        if (is.null(as_of)) {
+          trace_data <- dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+              tsid,
+              " AND date BETWEEN '",
+              sub.start_date,
+              "' AND '",
+              sub.end_date,
+              "' ORDER BY date DESC;"
+            )
           )
-        )
+        } else {
+          trace_data <- dbGetQueryDT(
+            con,
+            paste(
+              "SELECT date AS datetime, value",
+              "FROM continuous.measurements_calculated_daily_corrected_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3::DATE,",
+              "  $4::DATE",
+              ")",
+              "ORDER BY date DESC;"
+            ),
+            params = list(as_of, tsid, sub.start_date, sub.end_date)
+          )
+        }
         trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       } else if (resolution == "hour") {
         trace_data <- fetch_hourly_trace_data(
@@ -1142,11 +1216,27 @@ plotMultiTimeseries <- function(
           timeseries_id = tsid,
           start_date = sub.start_date,
           end_date = sub.end_date,
-          use_corrected_source = corrections_apply
+          use_corrected_source = corrections_apply,
+          as_of = as_of
         )[, c("datetime", "value")]
       } else if (resolution == "max") {
         # limit to 200 000 records for plotting performance
-        if (corrections_apply) {
+        if (!is.null(as_of)) {
+          trace_data <- dbGetQueryDT(
+            con,
+            paste(
+              "SELECT datetime, value_corrected AS value",
+              "FROM continuous.measurements_continuous_corrected_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3,",
+              "  $4",
+              ")",
+              "ORDER BY datetime DESC LIMIT 200000;"
+            ),
+            params = list(as_of, tsid, sub.start_date, sub.end_date)
+          )
+        } else if (corrections_apply) {
           trace_data <- dbGetQueryDT(
             con,
             paste0(
@@ -1185,11 +1275,12 @@ plotMultiTimeseries <- function(
         trace_data <- add_gap_markers(trace_data, period_seconds = 3600)[,
           c("datetime", "value")
         ]
-      } else {
+      } else if (resolution == "max") {
         trace_data <- suppressWarnings(calculate_period(
           trace_data,
           timeseries_id = tsid,
-          con = con
+          con = con,
+          as_of = as_of
         ))
         if ("period" %in% colnames(trace_data)) {
           trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
@@ -1215,40 +1306,78 @@ plotMultiTimeseries <- function(
           # order by datetime
           data.table::setorder(trace_data, datetime)
         }
+      } else if (resolution == "day") {
+        trace_data <- add_gap_markers(trace_data, period_seconds = 24 * 3600)[,
+          c("datetime", "value")
+        ]
       }
 
       # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
       if (min_trace > sub.start_date) {
-        extra <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-            tsid,
-            " AND date < '",
-            min(trace_data$datetime),
-            "' AND date >= '",
-            sub.start_date,
-            "';"
+        if (is.null(as_of)) {
+          extra <- dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+              tsid,
+              " AND date < '",
+              min(trace_data$datetime),
+              "' AND date >= '",
+              sub.start_date,
+              "';"
+            )
           )
-        )
+        } else {
+          extra <- dbGetQueryDT(
+            con,
+            paste(
+              "SELECT date AS datetime, value",
+              "FROM continuous.measurements_calculated_daily_corrected_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3::DATE,",
+              "  $4::DATE",
+              ")",
+              "WHERE date < $4",
+              "  AND date >= $3;"
+            ),
+            params = list(as_of, tsid, sub.start_date, min(trace_data$datetime))
+          )
+        }
         extra$datetime <- as.POSIXct(extra$datetime, tz = "UTC")
         attr(extra$datetime, "tzone") <- tzone
         trace_data <- rbind(trace_data, extra)
       }
     } else {
       #this means that no trace data could be had because there are no measurements in measurements_continuous or the hourly views table
-      trace_data <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND date >= '",
-          sub.start_date,
-          "' AND date <= '",
-          sub.end_date,
-          "';"
+      if (is.null(as_of)) {
+        trace_data <- dbGetQueryDT(
+          con,
+          paste0(
+            "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            tsid,
+            " AND date >= '",
+            sub.start_date,
+            "' AND date <= '",
+            sub.end_date,
+            "';"
+          )
         )
-      )
+      } else {
+        trace_data <- dbGetQueryDT(
+          con,
+          paste(
+            "SELECT date AS datetime, value",
+            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "  $1,",
+            "  ARRAY[$2]::INTEGER[],",
+            "  $3::DATE,",
+            "  $4::DATE",
+            ");"
+          ),
+          params = list(as_of, tsid, sub.start_date, sub.end_date)
+        )
+      }
       trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
       attr(trace_data$datetime, "tzone") <- tzone
       trace_data <- rbind(trace_data, trace_data)
@@ -1446,11 +1575,13 @@ plotMultiTimeseries <- function(
   }
 
   # Make the title ###################################
+  as_of_title <- format_as_of_title(as_of, tzone, lang)
+  plot_title <- NULL
   if (title) {
     if (is.null(custom_title)) {
       # Group by location to handle different parameters per location
       if (type == 'traces') {
-        title <- timeseries %>%
+        plot_title <- timeseries %>%
           dplyr::group_by(location, name) %>%
           dplyr::mutate(
             name = dplyr::if_else(
@@ -1476,7 +1607,7 @@ plotMultiTimeseries <- function(
           dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
           dplyr::pull("plot_title") # Extract the plot title as a string
       } else {
-        title <- timeseries %>%
+        plot_title <- timeseries %>%
           dplyr::group_by(location, name) %>%
           dplyr::mutate(
             name = dplyr::if_else(
@@ -1492,7 +1623,7 @@ plotMultiTimeseries <- function(
           dplyr::pull("plot_title") # Extract the plot title as a string
       }
     } else {
-      title <- custom_title
+      plot_title <- custom_title
     }
   }
 
@@ -1702,12 +1833,20 @@ plotMultiTimeseries <- function(
 
     # Add other layout parameters
     layout_params <- list(
-      title = list(
-        text = title,
-        x = 0.05,
-        xref = "container",
-        font = list(size = 16 * axis_scale)
-      ),
+      title = if (is.null(plot_title)) {
+        NULL
+      } else {
+        list(
+          text = if (is.null(as_of_title)) {
+            plot_title
+          } else {
+            paste0(plot_title, "<br><sup>", as_of_title, "</sup>")
+          },
+          x = 0.05,
+          xref = "container",
+          font = list(size = 16 * axis_scale)
+        )
+      },
       margin = list(
         l = (80 + (30 * ((n_axes - 1) %/% 2))) * axis_scale,
         r = (80 + (30 * ((n_axes - 2) %/% 2))) * axis_scale,
@@ -1898,6 +2037,20 @@ plotMultiTimeseries <- function(
     ) %>%
       plotly::layout(
         annotations = subtitles,
+        title = if (is.null(plot_title)) {
+          NULL
+        } else {
+          list(
+            text = if (is.null(as_of_title)) {
+              plot_title
+            } else {
+              paste0(plot_title, "<br><sup>", as_of_title, "</sup>")
+            },
+            x = 0.05,
+            xref = "container",
+            font = list(size = 16 * axis_scale)
+          )
+        },
         font = list(family = "Nunito Sans")
       )
 

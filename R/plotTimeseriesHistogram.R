@@ -28,6 +28,10 @@
 #' @param data If `TRUE`, return plotting data with the plot.
 #' @param con A connection to the AquaCache database. `NULL` uses
 #'   [AquaConnect()] and automatically disconnects.
+#' @param as_of Optional point-in-time timestamp at which measurement values
+#'   should be reconstructed. Character, Date, and POSIXct inputs are
+#'   supported. Date-like inputs are interpreted as the end of that day in
+#'   `tzone`. When `NULL` (default), current data are used.
 #'
 #' @return A plotly object, or a list with `plot` and `data` when `data = TRUE`.
 #' @export
@@ -52,7 +56,8 @@ plotTimeseriesHistogram <- function(
   gridy = FALSE,
   tzone = "auto",
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 ) {
   # Testing parameters
   # timeseries_id = 493 # Dawson ECCC precip total
@@ -110,6 +115,8 @@ plotTimeseriesHistogram <- function(
       tzone <- sprintf("Etc/GMT%+d", -as.integer(tzone))
     }
   }
+
+  as_of <- normalize_as_of_input(as_of, tzone)
 
   bin_width_units <- tolower(bin_width_units)
   valid_units <- c("hours", "days", "weeks", "months", "years")
@@ -336,28 +343,56 @@ plotTimeseriesHistogram <- function(
 
   bin_windows <- build_bin_windows(season_windows)
 
-  query_params <- list(timeseries_id)
+  if (is.null(as_of)) {
+    source_sql <- "continuous.measurements_continuous_corrected"
+    query_params <- list(timeseries_id)
+    next_param <- 2L
+  } else {
+    source_sql <- paste(
+      "continuous.measurements_continuous_corrected_at(",
+      "  $1,",
+      "  ARRAY[$2]::INTEGER[],",
+      "  $3,",
+      "  $4",
+      ")"
+    )
+    query_params <- list(
+      as_of,
+      timeseries_id,
+      min(season_windows$season_start_utc),
+      max(season_windows$season_end_utc)
+    )
+    next_param <- 5L
+  }
+
   sql_windows <- character(nrow(season_windows))
-  next_param <- 2L
   for (i in seq_len(nrow(season_windows))) {
     query_params[[next_param]] <- season_windows$season_start_utc[i]
     query_params[[next_param + 1L]] <- season_windows$season_end_utc[i]
     sql_windows[i] <- paste0(
-      "(datetime >= $",
+      "(m.datetime >= $",
       next_param,
-      " AND datetime < $",
+      " AND m.datetime < $",
       next_param + 1L,
       ")"
     )
     next_param <- next_param + 2L
   }
 
+  where_sql <- if (is.null(as_of)) {
+    paste0("m.timeseries_id = $1 AND (", paste(sql_windows, collapse = " OR "), ")")
+  } else {
+    paste(sql_windows, collapse = " OR ")
+  }
+
   sql <- paste0(
-    "SELECT datetime, value_corrected AS value
-     FROM continuous.measurements_continuous_corrected
-     WHERE timeseries_id = $1 AND (",
-    paste(sql_windows, collapse = " OR "),
-    ") ORDER BY datetime"
+    "SELECT m.datetime, m.value_corrected AS value
+     FROM ",
+    source_sql,
+    " m
+     WHERE ",
+    where_sql,
+    " ORDER BY datetime"
   )
   db_data <- dbGetQueryDT(con, sql, params = query_params)
 
@@ -804,6 +839,8 @@ plotTimeseriesHistogram <- function(
       )
   }
 
+  as_of_title <- format_as_of_title(as_of, tzone, lang)
+
   if (isTRUE(title)) {
     if (is.null(custom_title)) {
       custom_title <- paste0(
@@ -818,7 +855,11 @@ plotTimeseriesHistogram <- function(
     p <- plotly::layout(
       p,
       title = list(
-        text = custom_title,
+        text = if (is.null(as_of_title)) {
+          custom_title
+        } else {
+          paste0(custom_title, "<br><sup>", as_of_title, "</sup>")
+        },
         x = 0.05,
         xref = "container",
         font = list(

@@ -36,6 +36,10 @@
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
+#' @param as_of Optional point-in-time timestamp at which measurement values and
+#'   stored daily summaries should be reconstructed. Character, Date, and
+#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
+#'   of that day in `tzone`. When `NULL` (default), current data are used.
 #'
 #' @return An html plot.
 #'
@@ -103,7 +107,8 @@ plotOverlap <- function(
   webgl = TRUE,
   lang = "en",
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 ) {
   # Deal with non-standard evaluations from data.table to silence check() notes
   datetime <- date <- start_dt <- end_dt <- period <- NULL
@@ -140,6 +145,8 @@ plotOverlap <- function(
       "Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again."
     )
   }
+
+  as_of <- normalize_as_of_input(as_of, tzone)
 
   if (!is.null(record_rate)) {
     record_rate <- lubridate::period(record_rate)
@@ -714,11 +721,13 @@ plotOverlap <- function(
 
   if (historic_range != "none") {
     historic_range_meta <- fetch_historic_range_timeseries_metadata(con, tsid)
-    if (historic_range_is_meaningless(
-      aggregation_types = historic_range_meta$aggregation_type,
-      resolution = resolution,
-      record_rate_seconds = historic_range_meta$record_rate_seconds
-    )) {
+    if (
+      historic_range_is_meaningless(
+        aggregation_types = historic_range_meta$aggregation_type,
+        resolution = resolution,
+        record_rate_seconds = historic_range_meta$record_rate_seconds
+      )
+    ) {
       historic_range <- "none"
     }
   }
@@ -745,13 +754,30 @@ plotOverlap <- function(
     daily_end <- daily_end + 60 * 60 * 24
   }
 
-  daily <- dbGetQueryDT(
-    con,
-    glue::glue_sql(
-      "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
-      .con = con
+  if (is.null(as_of)) {
+    daily <- dbGetQueryDT(
+      con,
+      glue::glue_sql(
+        "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
+        .con = con
+      )
     )
-  )
+  } else {
+    daily <- dbGetQueryDT(
+      con,
+      paste(
+        "SELECT date, value, max, min, q75, q25",
+        "FROM continuous.measurements_calculated_daily_corrected_at(",
+        "  $1,",
+        "  ARRAY[$2]::INTEGER[],",
+        "  $3::DATE,",
+        "  $4::DATE",
+        ")",
+        "ORDER BY date ASC;"
+      ),
+      params = list(as_of, tsid, daily_start, daily_end)
+    )
+  }
   hourly_uses_corrected <- continuous_trace_uses_corrected_source(
     con = con,
     timeseries_id = tsid,
@@ -790,20 +816,39 @@ plotOverlap <- function(
     if (nrow(realtime) < 100000) {
       # limits the number of data points to 100000
       if (resolution == "max") {
-        new_realtime <- dbGetQueryDT(
-          con,
-          glue::glue_sql(
-            "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime",
-            .con = con
+        if (is.null(as_of)) {
+          new_realtime <- dbGetQueryDT(
+            con,
+            glue::glue_sql(
+              "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime",
+              .con = con
+            )
           )
-        ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+        } else {
+          new_realtime <- dbGetQueryDT(
+            con,
+            paste(
+              "SELECT datetime, value_corrected AS value",
+              "FROM continuous.measurements_continuous_corrected_at(",
+              "  $1,",
+              "  ARRAY[$2]::INTEGER[],",
+              "  $3,",
+              "  $4",
+              ")",
+              "WHERE value_corrected IS NOT NULL",
+              "ORDER BY datetime"
+            ),
+            params = list(as_of, tsid, start_UTC, end_UTC)
+          )
+        } #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
       } else if (resolution == "hour") {
         new_realtime <- fetch_hourly_trace_data(
           con = con,
           timeseries_id = tsid,
           start_date = start_UTC,
           end_date = end_UTC,
-          use_corrected_source = hourly_uses_corrected
+          use_corrected_source = hourly_uses_corrected,
+          as_of = as_of
         )
       } else if (resolution == "day") {
         new_realtime <- data.table::data.table()
@@ -816,16 +861,19 @@ plotOverlap <- function(
             new_realtime,
             period_seconds = 3600
           )[, c("datetime", "value")]
-        } else {
+        } else if (resolution == "max") {
           # Must use calculate_period to get the correct number of hours in the period as it can change.
           new_realtime <- suppressWarnings(calculate_period(
             new_realtime,
             timeseries_id = tsid,
-            con = con
+            con = con,
+            as_of = as_of
           ))
           # if calculate_period didn't return a column for new_realtime, it couldn't be done. No need to continue
           if ("period" %in% colnames(new_realtime)) {
-            new_realtime[, "period_secs" := as.numeric(lubridate::period(period))]
+            new_realtime[,
+              "period_secs" := as.numeric(lubridate::period(period))
+            ]
             # Shift datetime and add period_secs to compute the 'expected' next datetime
             new_realtime[,
               "expected" := data.table::shift(
@@ -854,6 +902,11 @@ plotOverlap <- function(
             # order by datetime
             data.table::setorder(new_realtime, "datetime")
           }
+        } else if (resolution == "day") {
+          new_realtime <- add_gap_markers(
+            new_realtime,
+            period_seconds = 24 * 3600
+          )[, c("datetime", "value")]
         }
 
         realtime <- data.table::rbindlist(list(realtime, new_realtime))
@@ -1276,11 +1329,17 @@ plotOverlap <- function(
     }
   }
 
+  as_of_title <- format_as_of_title(as_of, tzone, lang)
+
   plot <- plot %>%
     plotly::layout(
       title = if (title) {
         list(
-          text = stn_name,
+          text = if (is.null(as_of_title)) {
+            stn_name
+          } else {
+            paste0(stn_name, "<br><sup>", as_of_title, "</sup>")
+          },
           x = 0.05,
           xref = "container",
           font = list(size = axis_scale * 18)

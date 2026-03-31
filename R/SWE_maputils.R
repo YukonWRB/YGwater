@@ -5093,6 +5093,9 @@ make_leaflet_map <- function(
 #' @param point_data_secondary sf object containing secondary point data (pillows)
 #' @param statistic Character string indicating which SWE value to visualize
 #' @return Updated dynamic_style_elements with unused bins removed if necessary
+#' @noRd
+#' @keywords internal
+
 remove_unused_bins <- function(
     dynamic_style_elements,
     point_data,

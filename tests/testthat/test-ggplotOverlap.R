@@ -281,6 +281,41 @@ test_that("french labels work with overlaping years", {
   expect_snapshot_file(path)
 })
 
+test_that("ggplotOverlap can show data in the past", {
+  con <- AquaConnect(silent = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (
+    !isTRUE(DBI::dbGetQuery(
+      con,
+      "SELECT has_schema_privilege(current_user, 'audit', 'USAGE') AS ok;"
+    )$ok[[1]])
+  ) {
+    skip("Historical queries require USAGE on schema audit.")
+  }
+
+  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+
+  plot <- ggplotOverlap(
+    "09EA004",
+    "water level",
+    startDay = "2022-06-01",
+    endDay = "2022-06-05",
+    years = "2022",
+    tzone = "UTC",
+    returns = "none",
+    historic_range = "last",
+    gridx = FALSE,
+    con = con,
+    as_of = as_of
+  )
+
+  expect_equal(
+    plot$labels$subtitle,
+    paste0("As of ", format(as_of, tz = "UTC", usetz = TRUE))
+  )
+})
+
 test_that("continuous level plot is as expected for multiple years when output to console", {
   skip_on_ci()
 
