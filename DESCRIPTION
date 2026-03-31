@@ -82,6 +82,7 @@ Suggests:
     purrr,
     ragg,
     readxl,
+    reqres,
     reticulate,
     rpostgis,
     RSQLite,
@@ -98,6 +99,7 @@ Suggests:
     weathercan,
     withr,
     zip,
+    plumber2
 Remotes:
     github::ropensci/weathercan,
     github::YukonWRB/AquaCache,
