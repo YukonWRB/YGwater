@@ -1470,7 +1470,6 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
-    ui_loaded$contPlotOld <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -1560,7 +1559,6 @@ app_server <- function(input, output, session) {
     "home",
     "discPlot",
     "contPlot",
-    "contPlotOld",
     "mapLocs",
     "mapParams",
     "mapRaster",
@@ -1763,9 +1761,6 @@ app_server <- function(input, output, session) {
         ),
         tr("tooltip_continuous", languageSelection$language)
       )
-    })
-    output$plotsNavContOldTitle <- renderUI({
-      tr("plots_continuous_old", languageSelection$language)
     })
 
     output$reportsNavMenuTitle <- renderUI({
@@ -3167,7 +3162,6 @@ app_server <- function(input, output, session) {
           "home",
           "discPlot",
           "contPlot",
-          "contPlotOld",
           "mix",
           "map",
           "FOD",
@@ -3274,24 +3268,6 @@ app_server <- function(input, output, session) {
           # inputs temporarily disabled because of issues with narrowing the datatable using inputs.
           # inputs = moduleOutputs$mapLocs
           inputs = NULL
-        )
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
-      }
-    }
-    if (input$navbar == "contPlotOld") {
-      if (!ui_loaded$contPlotOld) {
-        output$plotContinuousOld_ui <- renderUI(contPlotOldUI(
-          "contPlotOld"
-        ))
-        ui_loaded$contPlotOld <- TRUE
-        contPlotOld(
-          "contPlotOld",
-          language = languageSelection,
-          windowDims = windowDims,
-          inputs = moduleOutputs$mapLocs
         )
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL

@@ -890,12 +890,6 @@ YGwater_globals <- function(
 
   # Non-public client-side modules
   if (!public) {
-    # Old plot modules (kept for backward compatibility)
-    source(system.file(
-      "apps/YGwater/modules/client/plot/continuousPlot_old.R",
-      package = "YGwater"
-    ))
-
     # Report modules
     if (network_check) {
       source(system.file(
