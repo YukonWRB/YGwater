@@ -545,321 +545,324 @@ contPlot <- function(id, language, windowDims, inputs) {
               )
             ),
             bslib::layout_sidebar(
-                sidebar = bslib::sidebar(
-                  title = tr("plot_extra_options", language$language),
-                  position = "right",
-                  open = FALSE,
-                  width = 360,
-                  radioButtons(
-                    ns("plot_lang"),
-                    label = tr("language", language$language),
-                    choices = stats::setNames(
-                      c("en", "fr"),
-                      c(
-                        tr("english", language$language),
-                        tr("francais", language$language)
-                      )
-                    ),
-                    selected = language$abbrev,
-                    inline = TRUE
-                  ),
-                  checkboxInput(
-                    ns("plot_filter"),
-                    tr("plot_filter", language$language),
-                    value = FALSE
-                  ),
-                  checkboxInput(
-                    ns("showgridx"),
-                    tr("show_x_grid", language$language),
-                    value = FALSE
-                  ),
-                  checkboxInput(
-                    ns("showgridy"),
-                    tr("show_y_grid", language$language),
-                    value = FALSE
-                  ),
-                  conditionalPanel(
-                    condition = "output.has_multiple_timeseries == 'true'",
-                    ns = ns,
-                    checkboxInput(
-                      ns("shareX"),
-                      label = tooltip(
-                        trigger = list(
-                          tr("share_x_axis", language$language),
-                          bsicons::bs_icon("info-circle-fill")
-                        ),
-                        tr("share_x_axis_tooltip", language$language)
-                      ),
-                      value = TRUE
-                    ),
-                    checkboxInput(
-                      ns("shareY"),
-                      label = tooltip(
-                        trigger = list(
-                          tr("share_y_axis", language$language),
-                          bsicons::bs_icon("info-circle-fill")
-                        ),
-                        tr("share_y_axis_tooltip", language$language)
-                      ),
-                      value = FALSE
+              sidebar = bslib::sidebar(
+                title = tr("plot_extra_options", language$language),
+                position = "right",
+                open = FALSE,
+                width = 360,
+                radioButtons(
+                  ns("plot_lang"),
+                  label = tr("language", language$language),
+                  choices = stats::setNames(
+                    c("en", "fr"),
+                    c(
+                      tr("english", language$language),
+                      tr("francais", language$language)
                     )
                   ),
-                  sliderInput(
-                    ns("line_scale"),
-                    tr("line_scale", language$language),
-                    min = 0.2,
-                    max = 3,
-                    value = 1,
-                    step = 0.1
+                  selected = language$abbrev,
+                  inline = TRUE
+                ),
+                checkboxInput(
+                  ns("plot_filter"),
+                  tr("plot_filter", language$language),
+                  value = FALSE
+                ),
+                checkboxInput(
+                  ns("showgridx"),
+                  tr("show_x_grid", language$language),
+                  value = FALSE
+                ),
+                checkboxInput(
+                  ns("showgridy"),
+                  tr("show_y_grid", language$language),
+                  value = FALSE
+                ),
+                conditionalPanel(
+                  condition = "output.has_multiple_timeseries == 'true'",
+                  ns = ns,
+                  checkboxInput(
+                    ns("shareX"),
+                    label = tooltip(
+                      trigger = list(
+                        tr("share_x_axis", language$language),
+                        bsicons::bs_icon("info-circle-fill")
+                      ),
+                      tr("share_x_axis_tooltip", language$language)
+                    ),
+                    value = TRUE
                   ),
-                  sliderInput(
-                    ns("axis_scale"),
-                    tr("axis_scale", language$language),
-                    min = 0.2,
-                    max = 3,
-                    value = 1,
-                    step = 0.1
-                  ),
-                  sliderInput(
-                    ns("legend_scale"),
-                    tr("legend_scale", language$language),
-                    min = 0.2,
-                    max = 3,
-                    value = 1,
-                    step = 0.1
+                  checkboxInput(
+                    ns("shareY"),
+                    label = tooltip(
+                      trigger = list(
+                        tr("share_y_axis", language$language),
+                        bsicons::bs_icon("info-circle-fill")
+                      ),
+                      tr("share_y_axis_tooltip", language$language)
+                    ),
+                    value = FALSE
                   )
                 ),
-                div(
-                  fluidRow(
-                    class = "align-items-start",
-                    column(
-                      width = 6,
-                      # Show date range and shortcut selection buttons if NOT overlapping years or histogram
-                      conditionalPanel(
-                        condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all'",
-                        ns = ns,
-                        dateRangeInput(
-                          ns("date_range"),
-                          tr("date_range_lab", language$language),
-                          start = Sys.Date() - 365,
-                          end = Sys.Date(),
-                          format = "yyyy-mm-dd",
-                          startview = "month",
-                          language = language$abbrev,
-                          separator = tr("date_sep", language$language)
-                        ),
-                        actionButton(
-                          ns("last_30"),
-                          tr("plot_last_30", language$language)
-                        ),
-                        actionButton(
-                          ns("entire_record"),
-                          tr("plot_all_record", language$language)
-                        )
+                sliderInput(
+                  ns("line_scale"),
+                  tr("line_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                ),
+                sliderInput(
+                  ns("axis_scale"),
+                  tr("axis_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                ),
+                sliderInput(
+                  ns("legend_scale"),
+                  tr("legend_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                )
+              ),
+              div(
+                fluidRow(
+                  class = "align-items-start",
+                  column(
+                    width = 6,
+                    # Show date range and shortcut selection buttons if NOT overlapping years or histogram
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all'",
+                      ns = ns,
+                      dateRangeInput(
+                        ns("date_range"),
+                        tr("date_range_lab", language$language),
+                        start = Sys.Date() - 365,
+                        end = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        startview = "month",
+                        language = language$abbrev,
+                        separator = tr("date_sep", language$language)
                       ),
-                      # Show years to plot ONLY for overlapping years and histograms
-                      conditionalPanel(
-                        condition = "input.plot_type == 'overlap_yrs' || input.plot_type == 'histogram'",
-                        ns = ns,
-                        dateRangeInput(
-                          ns("doy_range"),
-                          tr("date_range_select_doy", language$language),
-                          start = Sys.Date() - 365,
-                          end = Sys.Date(),
-                          format = "yyyy-mm-dd",
-                          language = language$abbrev,
-                          separator = tr("date_sep", language$language)
-                        ),
-                        div(
-                          selectizeInput(
-                            ns("plot_years"),
-                            label = tr("plot_select_years", language$language),
-                            choices = NULL,
-                            multiple = TRUE
-                          ), # Choices are populated based on the location and parameter
-                          style = "display: flex; align-items: center;",
-                          span(
-                            id = ns("log_info_years"),
-                            `data-bs-toggle` = "tooltip",
-                            `data-placement` = "right",
-                            `data-trigger` = "click hover",
-                            title = tr("plot_select_yrs", language$language),
-                            icon(
-                              "info-circle",
-                              style = "font-size: 100%; margin-left: 5px;"
-                            )
-                          )
-                        )
+                      actionButton(
+                        ns("last_30"),
+                        tr("plot_last_30", language$language)
                       ),
-                      # Timezone is applicable to all types
-                      selectizeInput(
-                        ns("plot_timezone"),
-                        label = tr("plot_timezone_offset", language$language),
-                        choices = -12:14,
-                        selected = -7,
-                        multiple = FALSE,
-                        options = list(
-                          placeholder = tr(
-                            "plot_timezone_offset_placeholder",
-                            language$language
-                          )
-                        )
-                      ),
-                      # Don't show the resolution if it's a histogram type plot
-                      conditionalPanel(
-                        condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
-                        ns = ns,
-                        selectInput(
-                          ns("plot_resolution"),
-                          label = tr("plot_resolution_lab", language$language),
-                          choices = stats::setNames(
-                            c("max", "hour", "day"),
-                            c(
-                              tr("plot_resolution_max", language$language),
-                              tr("plot_resolution_hourly", language$language),
-                              tr("plot_resolution_daily", language$language)
-                            )
-                          ),
-                          selected = "day"
-                        ) |>
-                          tooltip(
-                            id = ns("plot_resolution_tooltip"),
-                            div(
-                              class = "text-warning",
-                              shiny::icon("triangle-exclamation"),
-                              tr("plot_long_time_to_plot", language$language)
-                            ),
-                            placement = "right"
-                          )
+                      actionButton(
+                        ns("entire_record"),
+                        tr("plot_all_record", language$language)
                       )
                     ),
-                    column(
-                      width = 6,
-                      conditionalPanel(
-                        condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
-                        ns = ns,
-                        checkboxInput(
-                          ns("apply_datum"),
-                          tr("plot_apply_vert_datum", language$language),
-                          value = FALSE
-                        ),
-                        checkboxInput(
-                          ns("show_hist"),
-                          tr("plot_hist_range", language$language),
-                          value = TRUE
-                        ),
-                        div(
-                          selectizeInput(
-                            ns("historic_range_overlap"),
-                            label = tr("plot_hist_range_select", language$language),
-                            choices = stats::setNames(
-                              c("all", "last", "none"),
-                              c(
-                                tr("all_yrs_record", language$language),
-                                tr("last_yr_only", language$language),
-                                tr("none_fm", language$language)
-                              )
-                            ),
-                            selected = "all"
-                          ),
-                          style = "display: flex; align-items: center;",
-                          span(
-                            id = ns("log_info_hist_range"),
-                            `data-bs-toggle` = "tooltip",
-                            `data-placement` = "right",
-                            `data-trigger` = "click hover",
-                            title = tr(
-                              "plot_hist_range_select_tooltip",
-                              language$language
-                            ),
-                            icon(
-                              "info-circle",
-                              style = "font-size: 100%; margin-left: 5px;"
-                            )
+                    # Show years to plot ONLY for overlapping years and histograms
+                    conditionalPanel(
+                      condition = "input.plot_type == 'overlap_yrs' || input.plot_type == 'histogram'",
+                      ns = ns,
+                      dateRangeInput(
+                        ns("doy_range"),
+                        tr("date_range_select_doy", language$language),
+                        start = Sys.Date() - 365,
+                        end = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        language = language$abbrev,
+                        separator = tr("date_sep", language$language)
+                      ),
+                      div(
+                        selectizeInput(
+                          ns("plot_years"),
+                          label = tr("plot_select_years", language$language),
+                          choices = NULL,
+                          multiple = TRUE
+                        ), # Choices are populated based on the location and parameter
+                        style = "display: flex; align-items: center;",
+                        span(
+                          id = ns("log_info_years"),
+                          `data-bs-toggle` = "tooltip",
+                          `data-placement` = "right",
+                          `data-trigger` = "click hover",
+                          title = tr("plot_select_yrs", language$language),
+                          icon(
+                            "info-circle",
+                            style = "font-size: 100%; margin-left: 5px;"
+                          )
+                        )
+                      )
+                    ),
+                    # Timezone is applicable to all types
+                    selectizeInput(
+                      ns("plot_timezone"),
+                      label = tr("plot_timezone_offset", language$language),
+                      choices = -12:14,
+                      selected = -7,
+                      multiple = FALSE,
+                      options = list(
+                        placeholder = tr(
+                          "plot_timezone_offset_placeholder",
+                          language$language
+                        )
+                      )
+                    ),
+                    # Don't show the resolution if it's a histogram type plot
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
+                      ns = ns,
+                      selectInput(
+                        ns("plot_resolution"),
+                        label = tr("plot_resolution_lab", language$language),
+                        choices = stats::setNames(
+                          c("max", "hour", "day"),
+                          c(
+                            tr("plot_resolution_max", language$language),
+                            tr("plot_resolution_hourly", language$language),
+                            tr("plot_resolution_daily", language$language)
                           )
                         ),
-                        uiOutput(ns("historic_range_note")),
-                        checkboxInput(
-                          ns("show_unusable"),
-                          tr("plot_show_unusable", language$language),
-                          value = FALSE
-                        )
-                      ),
-                      conditionalPanel(
-                        condition = "input.plot_type == 'timeseries'",
-                        ns = ns,
-                        checkboxInput(
-                          ns("show_grades"),
-                          tr("plot_show_grades", language$language),
-                          value = FALSE
-                        ),
-                        checkboxInput(
-                          ns("show_approvals"),
-                          tr("plot_show_approvals", language$language),
-                          value = FALSE
-                        ),
-                        checkboxInput(
-                          ns("show_qualifiers"),
-                          tr("plot_show_qualifiers", language$language),
-                          value = FALSE
-                        )
-                      ),
-                      conditionalPanel(
-                        condition = "input.plot_type == 'histogram'",
-                        ns = ns,
-                        selectizeInput(
-                          ns("hist_transformation"),
-                          label = "Transformation",
-                          choices = c(
-                            "sum",
-                            "min",
-                            "max",
-                            "mean",
-                            "median",
-                            "integral"
+                        selected = "day"
+                      ) |>
+                        tooltip(
+                          id = ns("plot_resolution_tooltip"),
+                          div(
+                            class = "text-warning",
+                            shiny::icon("triangle-exclamation"),
+                            tr("plot_long_time_to_plot", language$language)
                           ),
-                          selected = "sum"
-                        ),
-                        selectizeInput(
-                          ns("hist_bin_units"),
-                          label = "Bin units",
-                          choices = c(
-                            "day",
-                            "week",
-                            "month",
-                            "year"
-                          ),
-                          selected = "month"
-                        ),
-                        numericInput(
-                          ns("hist_bin_width"),
-                          label = "Bin width",
-                          value = 1,
-                          min = 1
-                        ),
-                        numericInput(
-                          ns("hist_threshold"),
-                          label = "Min % of records to show bin (0-100)",
-                          value = 90,
-                          min = 1,
-                          max = 100
-                        ),
-                        checkboxInput(
-                          ns("hist_completeness_labels"),
-                          label = "Show completeness % above bins",
-                          value = TRUE
+                          placement = "right"
                         )
-                      ) # End histogram conditionalPanel
-                    ) # End right column
+                    )
                   ),
-                  tags$div(style = "height: 10px;"),
-                  input_task_button(
-                    ns("make_plot"),
-                    label = tr("create_plot", language$language),
-                    label_busy = tr("processing", language$language),
-                    class = "btn btn-primary"
-                  )
+                  column(
+                    width = 6,
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
+                      ns = ns,
+                      checkboxInput(
+                        ns("apply_datum"),
+                        tr("plot_apply_vert_datum", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_hist"),
+                        tr("plot_hist_range", language$language),
+                        value = TRUE
+                      ),
+                      div(
+                        selectizeInput(
+                          ns("historic_range_overlap"),
+                          label = tr(
+                            "plot_hist_range_select",
+                            language$language
+                          ),
+                          choices = stats::setNames(
+                            c("all", "last", "none"),
+                            c(
+                              tr("all_yrs_record", language$language),
+                              tr("last_yr_only", language$language),
+                              tr("none_fm", language$language)
+                            )
+                          ),
+                          selected = "all"
+                        ),
+                        style = "display: flex; align-items: center;",
+                        span(
+                          id = ns("log_info_hist_range"),
+                          `data-bs-toggle` = "tooltip",
+                          `data-placement` = "right",
+                          `data-trigger` = "click hover",
+                          title = tr(
+                            "plot_hist_range_select_tooltip",
+                            language$language
+                          ),
+                          icon(
+                            "info-circle",
+                            style = "font-size: 100%; margin-left: 5px;"
+                          )
+                        )
+                      ),
+                      uiOutput(ns("historic_range_note")),
+                      checkboxInput(
+                        ns("show_unusable"),
+                        tr("plot_show_unusable", language$language),
+                        value = FALSE
+                      )
+                    ),
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries'",
+                      ns = ns,
+                      checkboxInput(
+                        ns("show_grades"),
+                        tr("plot_show_grades", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_approvals"),
+                        tr("plot_show_approvals", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_qualifiers"),
+                        tr("plot_show_qualifiers", language$language),
+                        value = FALSE
+                      )
+                    ),
+                    conditionalPanel(
+                      condition = "input.plot_type == 'histogram'",
+                      ns = ns,
+                      selectizeInput(
+                        ns("hist_transformation"),
+                        label = "Transformation",
+                        choices = c(
+                          "sum",
+                          "min",
+                          "max",
+                          "mean",
+                          "median",
+                          "integral"
+                        ),
+                        selected = "sum"
+                      ),
+                      selectizeInput(
+                        ns("hist_bin_units"),
+                        label = "Bin units",
+                        choices = c(
+                          "day",
+                          "week",
+                          "month",
+                          "year"
+                        ),
+                        selected = "month"
+                      ),
+                      numericInput(
+                        ns("hist_bin_width"),
+                        label = "Bin width",
+                        value = 1,
+                        min = 1
+                      ),
+                      numericInput(
+                        ns("hist_threshold"),
+                        label = "Min % of records to show bin (0-100)",
+                        value = 90,
+                        min = 1,
+                        max = 100
+                      ),
+                      checkboxInput(
+                        ns("hist_completeness_labels"),
+                        label = "Show completeness % above bins",
+                        value = TRUE
+                      )
+                    ) # End histogram conditionalPanel
+                  ) # End right column
+                ),
+                tags$div(style = "height: 10px;"),
+                input_task_button(
+                  ns("make_plot"),
+                  label = tr("create_plot", language$language),
+                  label_busy = tr("processing", language$language),
+                  class = "btn btn-primary"
                 )
+              )
             )
           ) # End plot_options_panel
         ), # End accordion 1
