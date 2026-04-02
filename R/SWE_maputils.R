@@ -355,7 +355,7 @@ get_dynamic_style_elements <- function(
         no_data, # "No data"
         no_snow, # "No snow present where historical median is zero"
         some_snow, # "Snow present where historical median is zero"
-        paste("<50%"),
+        paste("< 50%"),
         paste("50", to, "70%"),
         paste("70", to, "90%"),
         paste("90", to, "110%"),
@@ -366,7 +366,7 @@ get_dynamic_style_elements <- function(
 
     anomalies_labels <- c(
         no_data, # "No data"
-        paste("<-5.0"),
+        paste("< -5.0"),
         paste("-5.0", to, "-2.0"),
         paste("-2.0", to, "-0.4"),
         paste("-0.4", to, "+0.5"),
@@ -400,6 +400,31 @@ get_dynamic_style_elements <- function(
         paste("80", to, "90"),
         paste("90", to, "100")
     )
+
+    # Apply string formatting to labels based on language
+    if (language == "Fran\u00e7ais") {
+        relative_labels <- lapply(relative_labels, function(x) {
+            x <- gsub("\\.", ",", x)
+            gsub("%", " %", x)
+        })
+        anomalies_labels <- lapply(anomalies_labels, function(x) {
+            x <- gsub("\\.", ",", x)
+            gsub("%", " %", x)
+        })
+        absolute_labels <- lapply(absolute_labels, function(x) {
+            x <- gsub("\\.", ",", x)
+            gsub("%", " %", x)
+        })
+        percentile_labels <- lapply(percentile_labels, function(x) {
+            x <- gsub("\\.", ",", x)
+            gsub("%", " %", x)
+        })
+
+        relative_labels <- unlist(relative_labels)
+        anomalies_labels <- unlist(anomalies_labels)
+        absolute_labels <- unlist(absolute_labels)
+        percentile_labels <- unlist(percentile_labels)
+    }
 
     style_choices = list(
         relative_to_med = list(
@@ -4482,13 +4507,26 @@ get_display_data <- function(
         dataset_state$annotation_fr,
         "<br>(",
         round(dataset_state[[statistic]], 0),
-        "%)"
+        " %)"
     )
+
     dataset_state$annotation_en <- paste0(
         dataset_state$annotation_en,
         "<br>(",
         round(dataset_state[[statistic]], 0),
         "%)"
+    )
+
+    dataset_state$annotation_en <- gsub(
+        "\\(NA %\\)",
+        "(N/A)",
+        dataset_state$annotation_en
+    )
+
+    dataset_state$annotation_fr <- gsub(
+        "\\(NA %\\)",
+        "(s. o.)",
+        dataset_state$annotation_fr
     )
 
     dataset_state$preposition <- vapply(
@@ -4750,6 +4788,7 @@ make_leaflet_map <- function(
             "anomalies" = tr("snowbull_anomalies", language),
             ""
         ),
+        "<br>",
         tr(month_str, language),
         " ",
         year
@@ -5487,12 +5526,21 @@ make_ggplot_map <- function(
     }
 
     if (param_name == "snow water equivalent") {
-        snowbull_date <- paste(
-            tr(snowbull_months(month, short = TRUE), language),
-            "1,",
-            year,
-            sep = " "
-        )
+        if (lang_short == "en") {
+            snowbull_date <- paste(
+                tr(snowbull_months(month, short = TRUE), language),
+                "1,",
+                year,
+                sep = " "
+            )
+        } else {
+            snowbull_date <- paste(
+                "1ᵉʳ",
+                tr(snowbull_months(month, short = TRUE), language),
+                year,
+                sep = " "
+            )
+        }
     } else {
         snowbull_date <- paste(
             tr("oct", language),
@@ -5764,7 +5812,7 @@ make_snowbull_map <- function(
     dynamic_style_elements <- get_dynamic_style_elements(
         statistic = statistic,
         param_name = param_name,
-        language = "English"
+        language = language
     )
 
     # static_style_elements <- get_static_style_elements()

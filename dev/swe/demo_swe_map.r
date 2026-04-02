@@ -24,12 +24,12 @@ make_snowbull_map(
     year = 2026,
     month = 3,
     statistic = "relative_to_med",
-    language = "English",
-    format = "leaflet",
+    language = "Fran\u00e7ais",
+    format = "ggplot",
     param_name = "snow water equivalent",
     snowbull_timeseries = dat,
     con = con,
-    filename = "map.html",
+    filename = "map.png",
     start_year_historical = 1991,
     end_year_historical = 2020
 )
