@@ -58,7 +58,7 @@ start_year_historical <- params$start_year_historical
 end_year_historical <- params$end_year_historical
 
 ref_period_start_datetime <- paste(start_year_historical - 1, "-10-01", sep = "")
-ref_period_end_datetime <- paste(end_year_historical, "-10-01", sep = "")
+ref_period_end_datetime <- paste(end_year_historical, "-09-01", sep = "")
 
 
 preprocess_timeseries_data <- function(timeseries, bulletin_month, bulletin_year, start_year_historical, end_year_historical, october_start = TRUE) {
@@ -247,7 +247,6 @@ titles <- titles[[params$language]]
 
 
 ```{r Functions, echo=FALSE}
-
 fmt_tr_key <- function(key) {
   gsub("[ .]", "_", tolower(key))
 }
@@ -2835,7 +2834,7 @@ tryCatch(
       # A.R. to not surveyed cells (empty 'sample_date' or 'swe_prevyear')
       tabl$sample_date[is.na(tabl$sample_date)] <- "A.R."
       tabl$swe_prevyear[is.na(tabl$swe_prevyear)] <- "A.R."
-      
+
       # Subset to columns of interest
       tabl <- tabl[, c("location_name_fr", "location", "elevation", "sample_date", "depth", "swe", "relative_to_med", "swe_prevyear", "swe_med", "years", "sub_basin")]
       # Rename columns

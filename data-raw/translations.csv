@@ -451,15 +451,15 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
-snowbull_percent_of_normal,,Percent of normal,pourcentage de la normale
+snowbull_percent_of_normal,,Percent of normal,Pourcentage de la normale
 snowbull_historical_median,,Historical median,Médiane historique
 snowbull_anomalies,,Anomalies,Anomalies
-snowbull_deviation,,Deviation from normal, écart par rapport à la normale
+snowbull_deviation,,Deviation from normal,Écart par rapport à la normale
 snowbull_values,,Values,Valeurs
-snowbull_swe,,Snow Water Equivalent,Équivalent en eau de neige
+snowbull_swe,,Snow Water Equivalent,Équivalent en eau de la neige
 snowbull_swe_abbrev,,SWE,ÉEN
 snowbull_temperature,,Temperature,Température
-snowbull_precipitation,,Precipitation,Précipitation
+snowbull_precipitation,,Precipitation,Précipitations
 snowbull_percentile,,Percentile,Percentile
 snowbull_details,,Map details,Détails de la carte
 app_version,,Current application version:,Version actuelle de l'application :
