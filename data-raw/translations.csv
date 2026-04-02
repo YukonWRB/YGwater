@@ -173,7 +173,7 @@ plot_extra_options,,Extra options,Options supplémentaires
 plot_apply_vert_datum,,Apply vertical datum,Appliquer le référentiel vertical
 plot_filter,,Filter extreme values,Filtrer les valeurs extrêmes
 plot_show_unusable,,Show unusable data,Afficher les données inutilisables
-plot_show_grades,,Show grades,Afficher les cotes de qualité
+plot_show_grades,,Show grades,Afficher les classe de qualité
 plot_show_approvals,,Show approval levels,Afficher les niveaux d'approbation
 plot_show_qualifiers,,Show qualifiers,Afficher les qualificatifs
 plot_last_30,,Last 30 days,30 derniers jours
