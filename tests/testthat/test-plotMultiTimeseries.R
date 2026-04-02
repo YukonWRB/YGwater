@@ -68,6 +68,7 @@ test_that("plotMultiTimeseries accepts hourly resolution", {
 })
 
 test_that("plotMultiTimeseries can show data in the past", {
+  skip_on_ci() # Because the CI instance would not have the necessary historical data
   con <- AquaConnect(silent = TRUE)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 

@@ -430,6 +430,7 @@ test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", 
 })
 
 test_that("plotTimeseries can show data in the past", {
+  skip_on_ci() # Because the CI instance would not have the necessary historical data
   skip_on_cran()
 
   if (
