@@ -51,6 +51,10 @@
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
 #' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
 #' @param snowbulletin If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.
+#' @param as_of Optional point-in-time timestamp at which measurement values and
+#'   stored daily summaries should be reconstructed. Character, Date, and
+#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
+#'   of that day in `tzone`. When `NULL` (default), current data are used.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @export
@@ -118,7 +122,8 @@ ggplotOverlap <- function(
   con = NULL,
   continuous_data = NULL,
   snowbulletin = FALSE,
-  lang = "en"
+  lang = "en",
+  as_of = NULL
 ) {
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
@@ -140,6 +145,8 @@ ggplotOverlap <- function(
       "Your entry for the parameter 'lang' is invalid. Please review the function documentation and try again."
     )
   }
+
+  as_of <- normalize_as_of_input(as_of, tzone)
 
   if (!is.null(record_rate)) {
     if (!lubridate::is.period(lubridate::period(record_rate))) {
@@ -212,6 +219,7 @@ ggplotOverlap <- function(
 
   #### ------------------ Dealing with start/end dates and traceEnd ---------------------- ####
   # Sort out startDay and endDay into actual dates if needed
+  historical_daily_start <- as.Date("1800-01-01")
   last_year <- max(years)
 
   leap_list <- (seq(1800, 2100, by = 4)) # Create list of all leap years
@@ -501,16 +509,33 @@ ggplotOverlap <- function(
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60 * 60 * 24
       }
-      daily <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND date <= '",
-          daily_end,
-          "' ORDER by date ASC;"
+      if (is.null(as_of)) {
+        daily <- dbGetQueryDT(
+          con,
+          paste0(
+            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            tsid,
+            " AND date <= '",
+            daily_end,
+            "' ORDER by date ASC;"
+          )
         )
-      )
+      } else {
+        daily <- dbGetQueryDT(
+          con,
+          paste(
+            "SELECT date, value, max, min, q75, q25",
+            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "  $1,",
+            "  ARRAY[$2]::INTEGER[],",
+            "  $3::DATE,",
+            "  $4::DATE",
+            ")",
+            "ORDER by date ASC;"
+          ),
+          params = list(as_of, tsid, historical_daily_start, daily_end)
+        )
+      }
     } else if (historic_range == "last") {
       if (overlaps) {
         lubridate::year(daily_end) <- last_year + 1
@@ -521,16 +546,33 @@ ggplotOverlap <- function(
       if (lubridate::month(daily_end) == 2 & lubridate::day(daily_end) == 29) {
         daily_end <- daily_end + 60 * 60 * 24
       }
-      daily <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND date <= '",
-          daily_end,
-          "' ORDER by date ASC;"
+      if (is.null(as_of)) {
+        daily <- dbGetQueryDT(
+          con,
+          paste0(
+            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            tsid,
+            " AND date <= '",
+            daily_end,
+            "' ORDER by date ASC;"
+          )
         )
-      )
+      } else {
+        daily <- dbGetQueryDT(
+          con,
+          paste(
+            "SELECT date, value, max, min, q75, q25",
+            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "  $1,",
+            "  ARRAY[$2]::INTEGER[],",
+            "  $3::DATE,",
+            "  $4::DATE",
+            ")",
+            "ORDER by date ASC;"
+          ),
+          params = list(as_of, tsid, historical_daily_start, daily_end)
+        )
+      }
     }
 
     #Fill in any missing days in daily with NAs
@@ -573,18 +615,35 @@ ggplotOverlap <- function(
         # 90 days at 5 minute data points is 25920 rows.
         if (nrow(realtime) < 20000) {
           # if plotting 70-90 days of 5 minute data will only have the greatest year with 5 minute points
-          new_realtime <- dbGetQueryDT(
-            con,
-            paste0(
-              "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
-              tsid,
-              " AND datetime BETWEEN '",
-              as.character(start_UTC),
-              "' AND '",
-              as.character(end_UTC),
-              "' AND value IS NOT NULL"
+          if (is.null(as_of)) {
+            new_realtime <- dbGetQueryDT(
+              con,
+              paste0(
+                "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
+                tsid,
+                " AND datetime BETWEEN '",
+                as.character(start_UTC),
+                "' AND '",
+                as.character(end_UTC),
+                "' AND value_corrected IS NOT NULL"
+              )
             )
-          ) #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
+          } else {
+            new_realtime <- dbGetQueryDT(
+              con,
+              paste(
+                "SELECT datetime, value_corrected AS value",
+                "FROM continuous.measurements_continuous_corrected_at(",
+                "  $1,",
+                "  ARRAY[$2]::INTEGER[],",
+                "  $3,",
+                "  $4",
+                ")",
+                "WHERE value_corrected IS NOT NULL"
+              ),
+              params = list(as_of, tsid, start_UTC, end_UTC)
+            )
+          } #SQL BETWEEN is inclusive. null values are later filled with NAs for plotting purposes.
           if (nrow(new_realtime) > 20000) {
             new_realtime <- new_realtime[order(new_realtime$datetime), ]
             new_realtime <- utils::tail(new_realtime, 20000) #Retain only max 20000 data points for plotting performance
@@ -635,7 +694,7 @@ ggplotOverlap <- function(
     ribbon_yr <- lubridate::year(min(
       (max(daily$datetime) - 24 * 60 * 60),
       (daily_end - 24 * 60 * 60)
-    )) #Daily was queried as one day longer than the day sequence earlier... this reverses that one day extra, but also finds out if the actual data extracted doesn't go that far back
+    )) # Daily was queried as one day longer than the day sequence earlier... this reverses that one day extra, but also finds out if the actual data extracted doesn't go that far back
     if (overlaps) {
       if (historic_range == "all") {
         ribbon_seq <- seq.POSIXt(
@@ -744,25 +803,25 @@ ggplotOverlap <- function(
       realtime$atl <- NA
     }
 
-    realtime$year <- lubridate::year(realtime$datetime) #year, month columns used for removing Feb 29 later
+    realtime$year <- lubridate::year(realtime$datetime) # year, month columns used for removing Feb 29 later
     realtime$month <- lubridate::month(realtime$datetime)
     realtime$day <- lubridate::day(realtime$datetime)
-    realtime <- realtime[!(realtime$month == 2 & realtime$day == 29), ] #Remove Feb 29
+    realtime <- realtime[!(realtime$month == 2 & realtime$day == 29), ] # Remove Feb 29
     daily$year <- lubridate::year(daily$datetime)
     daily$month <- lubridate::month(daily$datetime)
     daily$day <- lubridate::day(daily$datetime)
-    daily <- daily[!(daily$month == 2 & daily$day == 29), ] #Remove Feb 29
+    daily <- daily[!(daily$month == 2 & daily$day == 29), ] # Remove Feb 29
 
     if (overlaps) {
       # This section sorts out the overlap years, builds the plotting column
       temp <- data.frame(date = day_seq)
       temp$year = lubridate::year(temp$date)
-      temp <- temp[!(temp$year == max(temp$year)), ] #Remove the rows for days after the new year
+      temp <- temp[!(temp$year == max(temp$year)), ] # Remove the rows for days after the new year
       temp$month = lubridate::month(temp$date)
       temp$day = lubridate::day(temp$date)
       temp$day <- stringr::str_pad(temp$day, 2, side = "left", pad = "0")
 
-      #Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
+      # Column md is built in both temp and realtime dfs to be able to differentiate the previous year from the next and assign proper plot years (i.e. 2022-2023) and fake datetimes (since every year needs the same "fake year" to plot together)
       temp$md <- paste0(temp$month, temp$day)
       temp$md <- as.numeric(temp$md)
       md_sequence <- seq(min(temp$md), max(temp$md))
@@ -779,7 +838,7 @@ ggplotOverlap <- function(
       realtime$fake_datetime <- as.POSIXct(rep(NA, nrow(realtime)))
       realtime$plot_year <- NA
       for (i in 1:nrow(realtime)) {
-        #!!!This desperately needs to be vectorized in some way. Super slow!
+        # !!!This desperately needs to be vectorized in some way. Super slow!
         fake_datetime <- gsub(
           "[0-9]{4}",
           if (realtime$md[i] %in% md_sequence) last_year else last_year + 1,
@@ -798,7 +857,7 @@ ggplotOverlap <- function(
         }
       }
     } else {
-      #Does not overlap the new year
+      # Does not overlap the new year
       realtime$plot_year <- as.character(realtime$year)
       realtime$fake_datetime <- gsub("[0-9]{4}", last_year, realtime$datetime)
       realtime$fake_datetime <- data.table::fifelse(
@@ -813,54 +872,41 @@ ggplotOverlap <- function(
       ) # Make fake datetimes to permit plotting years together as separate lines. This DOESN'T work if Feb 29 isn't removed first!
     }
 
-    # ES: get unique years used to calculate historic stats (just used for annotation on  plot)
     historic_years <- ribbon_start_end
-    # HEY FLAG
 
     # apply datum correction where necessary
     if (datum$conversion_m > 0) {
-      daily[, c(
-        "value",
-        "max",
-        "min",
-        "q75",
-        "q25",
-        "ath",
-        "atl"
-      )] <- apply(
-        daily[, c(
-          "value",
-          "max",
-          "min",
-          "q75",
-          "q25",
-          "ath",
-          "atl"
-        )],
-        2,
-        function(x) x + datum$conversion_m
-      )
-      realtime[, c(
-        "value",
-        "max",
-        "min",
-        "q75",
-        "q25",
-        "ath",
-        "atl"
-      )] <- apply(
-        realtime[, c(
-          "value",
-          "max",
-          "min",
-          "q75",
-          "q25",
-          "ath",
-          "atl"
-        )],
-        2,
-        function(x) x + datum$conversion_m
-      )
+      datum_cols <- c("value", "max", "min", "q75", "q25", "ath", "atl")
+      daily_cols <- intersect(datum_cols, names(daily))
+      realtime_cols <- intersect(datum_cols, names(realtime))
+
+      if (length(daily_cols) > 0) {
+        if (data.table::is.data.table(daily)) {
+          daily[, (daily_cols) := lapply(
+            .SD,
+            function(x) x + datum$conversion_m
+          ), .SDcols = daily_cols]
+        } else {
+          daily[daily_cols] <- lapply(
+            daily[daily_cols],
+            function(x) x + datum$conversion_m
+          )
+        }
+      }
+
+      if (length(realtime_cols) > 0) {
+        if (data.table::is.data.table(realtime)) {
+          realtime[, (realtime_cols) := lapply(
+            .SD,
+            function(x) x + datum$conversion_m
+          ), .SDcols = realtime_cols]
+        } else {
+          realtime[realtime_cols] <- lapply(
+            realtime[realtime_cols],
+            function(x) x + datum$conversion_m
+          )
+        }
+      }
     }
   }
 
@@ -1497,7 +1543,7 @@ ggplotOverlap <- function(
         loc_returns <- data[[returns_table]][
           data[[returns_table]]$ID == location,
         ]
-        loc_returns[, c(
+        return_cols <- c(
           "twoyear",
           "fiveyear",
           "tenyear",
@@ -1510,24 +1556,19 @@ ggplotOverlap <- function(
           "twothousandyear",
           "LSL",
           "FSL"
-        )] <- apply(
-          loc_returns[, c(
-            "twoyear",
-            "fiveyear",
-            "tenyear",
-            "twentyyear",
-            "fiftyyear",
-            "onehundredyear",
-            "twohundredyear",
-            "fivehundredyear",
-            "thousandyear",
-            "twothousandyear",
-            "LSL",
-            "FSL"
-          )],
-          2,
-          function(x) x + datum$conversion_m
         )
+        return_cols <- intersect(return_cols, names(loc_returns))
+        if (data.table::is.data.table(loc_returns)) {
+          loc_returns[, (return_cols) := lapply(
+            .SD,
+            function(x) x + datum$conversion_m
+          ), .SDcols = return_cols]
+        } else {
+          loc_returns[return_cols] <- lapply(
+            loc_returns[return_cols],
+            function(x) x + datum$conversion_m
+          )
+        }
         loc_returns[is.na(loc_returns)] <- -10 #This prevents a ggplot error when it tries to plot a logical along with numerics, but keeps the values out of the plot.
 
         plot <- plot +
@@ -1908,6 +1949,7 @@ ggplotOverlap <- function(
   }
 
   # Wrap things up and return() -----------------------
+  as_of_title <- format_as_of_title(as_of, tzone, lang)
   if (title) {
     if (is.null(custom_title)) {
       location_id <- lookup_location_id(con, location)
@@ -1942,22 +1984,33 @@ ggplotOverlap <- function(
       stn_name <- titleCase(stn_name, lang)
 
       plot <- plot +
-        ggplot2::labs(title = stn_name) +
+        ggplot2::labs(title = stn_name, subtitle = as_of_title) +
         ggplot2::theme(
           plot.title = ggplot2::element_text(
             hjust = 0.05,
             size = 12 * axis_scale,
             face = "bold"
+          ),
+          plot.subtitle = ggplot2::element_text(
+            hjust = 0.05,
+            size = 10 * axis_scale
           )
         )
     } else if (!is.null(custom_title)) {
       plot <- plot +
-        ggplot2::labs(title = as.character(custom_title)) +
+        ggplot2::labs(
+          title = as.character(custom_title),
+          subtitle = as_of_title
+        ) +
         ggplot2::theme(
           plot.title = ggplot2::element_text(
             hjust = 0.05,
             size = 12 * axis_scale,
             face = "bold"
+          ),
+          plot.subtitle = ggplot2::element_text(
+            hjust = 0.05,
+            size = 10 * axis_scale
           )
         )
     }

@@ -73,11 +73,20 @@ discData <- function(id, language, inputs) {
       })
     }
 
-    parameter_unit_sql <- function(output_alias = "unit", alias = "p") {
+    parameter_unit_sql <- function(
+      output_alias = "unit",
+      alias = "p",
+      matrix_state_alias = NULL,
+      media_alias = NULL,
+      media_column = "media_id"
+    ) {
       ac_parameter_unit_select_sql(
         session$userData$AquaCache,
         alias,
-        output_alias
+        output_alias,
+        matrix_state_alias = matrix_state_alias,
+        media_alias = media_alias,
+        media_column = media_column
       )
     }
 
@@ -1833,9 +1842,14 @@ discData <- function(id, language, inputs) {
       # Single query using a window function to limit to 3 rows/results per sample_id
       query <- paste0(
         "SELECT * FROM (SELECT r.sample_id, r.result, p.param_name AS parameter, ",
-        parameter_unit_sql("units"),
+        parameter_unit_sql(
+          "units",
+          matrix_state_alias = "r",
+          media_alias = "s"
+        ),
         ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY sample_id ORDER BY result_id) AS rn 
         FROM results r
+        JOIN samples s ON r.sample_id = s.sample_id
         JOIN parameters p ON r.parameter_id = p.parameter_id
         JOIN result_types rt ON r.result_type = rt.result_type_id
         LEFT JOIN sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
@@ -2081,7 +2095,11 @@ discData <- function(id, language, inputs) {
           session$userData$AquaCache,
           paste0(
             "SELECT s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, ",
-            parameter_unit_sql("units"),
+            parameter_unit_sql(
+              "units",
+              matrix_state_alias = "r",
+              media_alias = "s"
+            ),
             ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
         FROM results r
         JOIN samples s ON r.sample_id = s.sample_id

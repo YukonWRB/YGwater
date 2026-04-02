@@ -184,9 +184,16 @@ snowInfo <- function(
     con,
     paste0(
       "SELECT r.sample_id, r.result, p.param_name, ",
-      ac_parameter_unit_select_sql(con, "p", "unit_default"),
+      ac_parameter_unit_select_sql(
+        con,
+        "p",
+        "unit_default",
+        matrix_state_alias = "r",
+        media_alias = "s"
+      ),
       ", rvt.result_value_type AS flag
       FROM results AS r 
+      JOIN samples AS s ON s.sample_id = r.sample_id
       JOIN parameters AS p ON p.parameter_id = r.parameter_id 
       JOIN result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type
       WHERE r.sample_id IN ('",

@@ -111,6 +111,16 @@ manageInstrumentsUI <- function(id) {
           ns("takes_measurements"),
           "Takes measurements",
           value = FALSE
+        ),
+        checkboxInput(
+          ns("can_be_logger"),
+          "Can be logger",
+          value = FALSE
+        ),
+        checkboxInput(
+          ns("can_be_telemetry_component"),
+          "Can be telemetry component",
+          value = FALSE
         )
       ),
       tags$hr(),
@@ -299,6 +309,10 @@ manageInstruments <- function(id, language) {
       value %in% as.character(df[[id_col]])
     }
 
+    lookup_id_from_label <- function(value, df, id_col, label_col) {
+      match_lookup_id_by_label(value, df[[id_col]], df[[label_col]])
+    }
+
     build_record_choices <- function(df) {
       if (is.null(df) || nrow(df) == 0) {
         return(character())
@@ -461,7 +475,8 @@ manageInstruments <- function(id, language) {
           "i.supplier_id, s.supplier_name, i.purchase_price,",
           "due.maintenance_event_id, due.date_maintenance_due, due.maintenance_due_note,",
           "i.takes_measurements, i.cable_length_m, i.firmware_version,",
-          "i.voltage, i.power_active_ma, i.power_quiescent_ma",
+          "i.voltage, i.power_active_ma, i.power_quiescent_ma,",
+          "i.can_be_logger, i.can_be_telemetry_component",
           "FROM instruments.instruments AS i",
           "LEFT JOIN instruments.observers AS o ON i.observer = o.observer_id",
           "LEFT JOIN instruments.instrument_make AS mk ON i.make = mk.make_id",
@@ -572,6 +587,12 @@ manageInstruments <- function(id, language) {
       updateNumericInput(session, "power_quiescent_ma", value = NA_real_)
       updateCheckboxInput(session, "holds_replaceable_sensors", value = FALSE)
       updateCheckboxInput(session, "takes_measurements", value = FALSE)
+      updateCheckboxInput(session, "can_be_logger", value = FALSE)
+      updateCheckboxInput(
+        session,
+        "can_be_telemetry_component",
+        value = FALSE
+      )
     }
 
     populate_form <- function(record_id) {
@@ -684,6 +705,16 @@ manageInstruments <- function(id, language) {
         "takes_measurements",
         value = isTRUE(record$takes_measurements)
       )
+      updateCheckboxInput(
+        session,
+        "can_be_logger",
+        value = isTRUE(record$can_be_logger)
+      )
+      updateCheckboxInput(
+        session,
+        "can_be_telemetry_component",
+        value = isTRUE(record$can_be_telemetry_component)
+      )
       invisible(NULL)
     }
 
@@ -721,6 +752,8 @@ manageInstruments <- function(id, language) {
         "purchase_price",
         "holds_replaceable_sensors",
         "takes_measurements",
+        "can_be_logger",
+        "can_be_telemetry_component",
         "cable_length_m",
         "firmware_version",
         "voltage",
@@ -759,6 +792,8 @@ manageInstruments <- function(id, language) {
         "Purchase price dollars",
         "Replaceable sensors",
         "Takes measurements",
+        "Can be logger",
+        "Can be telemetry component",
         "Cable length (m)",
         "Firmware",
         "Input voltage",
@@ -891,6 +926,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$observers,
+          "observer_id",
+          "observer_label"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "observer", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "observer", selected = character(0))
         showModal(modalDialog(
           title = "Add new observer",
@@ -919,6 +964,28 @@ manageInstruments <- function(id, language) {
             "Observer first name, last name, and organization are required.",
             type = "error"
           )
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          sprintf(
+            "%s %s (%s)",
+            trimws(input$new_observer_first),
+            trimws(input$new_observer_last),
+            trimws(input$new_observer_org)
+          ),
+          instrument_data$observers,
+          "observer_id",
+          "observer_label"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(observer = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing observer selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -959,6 +1026,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$makes,
+          "make_id",
+          "make"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "make", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "make", selected = character(0))
         showModal(modalDialog(
           title = "Add new make",
@@ -979,6 +1056,23 @@ manageInstruments <- function(id, language) {
       {
         if (!nzchar(trimws(input$new_make))) {
           showNotification("Make is required.", type = "error")
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_make,
+          instrument_data$makes,
+          "make_id",
+          "make"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(make = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing make selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1018,6 +1112,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$models,
+          "model_id",
+          "model"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "model", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "model", selected = character(0))
         showModal(modalDialog(
           title = "Add new model",
@@ -1038,6 +1142,23 @@ manageInstruments <- function(id, language) {
       {
         if (!nzchar(trimws(input$new_model))) {
           showNotification("Model is required.", type = "error")
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_model,
+          instrument_data$models,
+          "model_id",
+          "model"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(model = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing model selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1077,6 +1198,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$types,
+          "type_id",
+          "type"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "type", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "type", selected = character(0))
         showModal(modalDialog(
           title = "Add new type",
@@ -1103,6 +1234,23 @@ manageInstruments <- function(id, language) {
             "Type and description are required.",
             type = "error"
           )
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_type,
+          instrument_data$types,
+          "type_id",
+          "type"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(type = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing type selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1146,6 +1294,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$owners,
+          "organization_id",
+          "name"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "owner", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "owner", selected = character(0))
         showModal(modalDialog(
           title = "Add new organization",
@@ -1176,6 +1334,23 @@ manageInstruments <- function(id, language) {
             "Organization name and French name are required.",
             type = "error"
           )
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_org_name,
+          instrument_data$owners,
+          "organization_id",
+          "name"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(owner = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing organization selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1223,6 +1398,16 @@ manageInstruments <- function(id, language) {
         ) {
           return()
         }
+        existing_id <- lookup_id_from_label(
+          created_value,
+          instrument_data$suppliers,
+          "supplier_id",
+          "supplier_name"
+        )
+        if (length(existing_id)) {
+          updateSelectizeInput(session, "supplier_id", selected = existing_id[[1]])
+          return()
+        }
         updateSelectizeInput(session, "supplier_id", selected = character(0))
         showModal(modalDialog(
           title = "Add new supplier",
@@ -1250,6 +1435,23 @@ manageInstruments <- function(id, language) {
       {
         if (!nzchar(trimws(input$new_supplier_name))) {
           showNotification("Supplier name is required.", type = "error")
+          return()
+        }
+        existing_id <- lookup_id_from_label(
+          input$new_supplier_name,
+          instrument_data$suppliers,
+          "supplier_id",
+          "supplier_name"
+        )
+        if (length(existing_id)) {
+          refresh_lookups(
+            modifyList(
+              current_lookup_selection(),
+              list(supplier_id = existing_id[[1]])
+            )
+          )
+          removeModal()
+          showNotification("Existing supplier selected.", type = "message")
           return()
         }
         new_id <- with_db_feedback(
@@ -1379,6 +1581,8 @@ manageInstruments <- function(id, language) {
           int_or_na(input$supplier_id),
           num_or_na(input$purchase_price),
           isTRUE(input$takes_measurements),
+          isTRUE(input$can_be_logger),
+          isTRUE(input$can_be_telemetry_component),
           num_or_na(input$cable_length_m),
           blank_to_na(input$firmware_version),
           num_or_na(input$voltage),
@@ -1391,8 +1595,8 @@ manageInstruments <- function(id, language) {
             DBI::dbGetQuery(
               con,
               "INSERT INTO instruments.instruments 
-                  (obs_datetime, observer, make, model, type, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+                  (obs_datetime, observer, make, model, type, holds_replaceable_sensors, serial_no, asset_tag, date_in_service, date_purchased, retired_by, date_retired, owner, date_end_of_life, supplier_id, purchase_price, takes_measurements, can_be_logger, can_be_telemetry_component, cable_length_m, firmware_version, voltage, power_active_ma, power_quiescent_ma)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
                 RETURNING instrument_id",
               params = params
             )$instrument_id[[1]],
@@ -1421,12 +1625,14 @@ manageInstruments <- function(id, language) {
                   supplier_id = $15, 
                   purchase_price = $16,
                   takes_measurements = $17, 
-                  cable_length_m = $18,
-                  firmware_version = $19, 
-                  voltage = $20, 
-                  power_active_ma = $21,
-                  power_quiescent_ma = $22
-                WHERE instrument_id = $23",
+                  can_be_logger = $18,
+                  can_be_telemetry_component = $19,
+                  cable_length_m = $20,
+                  firmware_version = $21,
+                  voltage = $22,
+                  power_active_ma = $23,
+                  power_quiescent_ma = $24
+                WHERE instrument_id = $25",
               params = c(params, current_id)
             ),
             success = "Instrument record updated."

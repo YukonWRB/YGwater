@@ -1,6 +1,6 @@
 Package: YGwater
 Title: R functions and applications for the Yukon Water Science and Stewardship Branch
-Version: 1.8.10
+Version: 1.9.0
 Authors@R: c(
     person("Ghislain", "de Laplante", email = "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -82,6 +82,7 @@ Suggests:
     purrr,
     ragg,
     readxl,
+    reqres,
     reticulate,
     rpostgis,
     RSQLite,
@@ -98,6 +99,7 @@ Suggests:
     weathercan,
     withr,
     zip,
+    plumber2
 Remotes:
     github::ropensci/weathercan,
     github::YukonWRB/AquaCache,

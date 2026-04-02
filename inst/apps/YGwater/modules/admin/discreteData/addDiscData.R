@@ -252,72 +252,129 @@ addDiscData <- function(id, language) {
       "SELECT sub_location_id, sub_location_name FROM public.sub_locations ORDER BY sub_location_name"
     )
 
-    updateSelectizeInput(
-      session,
-      "location",
-      choices = stats::setNames(locations$location_id, locations$name)
-    )
-    updateSelectizeInput(
-      session,
-      "sublocation",
-      choices = stats::setNames(
-        sub_locations$sub_location_id,
-        sub_locations$sub_location_name
+    pending_location_selection <- reactiveVal(character(0))
+    pending_location_new <- reactiveVal(NULL)
+    pending_sublocation_selection <- reactiveVal(character(0))
+    pending_sublocation_new <- reactiveVal(NULL)
+
+    update_location_selectize <- function(selected = NULL) {
+      args <- list(
+        session = session,
+        inputId = "location",
+        choices = stats::setNames(locations$location_id, locations$name)
       )
-    )
+      if (!is.null(selected)) {
+        args$selected <- normalize_selectize_values(selected)
+      }
+      do.call(updateSelectizeInput, args)
+    }
+
+    update_sublocation_selectize <- function(selected = NULL) {
+      args <- list(
+        session = session,
+        inputId = "sublocation",
+        choices = stats::setNames(
+          sub_locations$sub_location_id,
+          sub_locations$sub_location_name
+        )
+      )
+      if (!is.null(selected)) {
+        args$selected <- normalize_selectize_values(selected)
+      }
+      do.call(updateSelectizeInput, args)
+    }
+
+    update_location_selectize()
+    update_sublocation_selectize()
 
     observeEvent(
       input$location,
       {
-        if (
-          input$location %in%
-            locations$location_id ||
-            nchar(input$location) == 0
-        ) {
+        resolved <- resolve_selectize_lookup_values(
+          input$location,
+          locations$location_id,
+          locations$name
+        )
+        pending_location_selection(resolved$existing_selection)
+
+        if (!length(resolved$new_values)) {
+          pending_location_new(NULL)
+          if (resolved$used_label_match) {
+            update_location_selectize(resolved$existing_selection)
+          }
           return()
         }
+        pending_location_new(resolved$last_new_value)
         showModal(modalDialog(
-          sprintf("Add location '%s'?", input$location),
+          sprintf("Add location '%s'?", pending_location_new()),
           footer = tagList(
-            modalButton("No"),
+            actionButton(ns("cancel_add_location_prompt"), "No"),
             actionButton(ns("goto_add_loc"), "Yes")
-          )
+          ),
+          easyClose = FALSE
         ))
       },
       ignoreInit = TRUE
     )
 
+    observeEvent(input$cancel_add_location_prompt, {
+      update_location_selectize(pending_location_selection())
+      pending_location_new(NULL)
+      removeModal()
+    })
+
     observeEvent(input$goto_add_loc, {
+      new_location <- pending_location_new()
+      update_location_selectize(pending_location_selection())
+      pending_location_new(NULL)
       removeModal()
       outputs$change_tab <- "addLocation"
-      outputs$location <- input$location
+      outputs$location <- new_location
     })
 
     observeEvent(
       input$sublocation,
       {
-        if (
-          input$sublocation %in%
-            sub_locations$sub_location_id ||
-            nchar(input$sublocation) == 0
-        ) {
+        resolved <- resolve_selectize_lookup_values(
+          input$sublocation,
+          sub_locations$sub_location_id,
+          sub_locations$sub_location_name
+        )
+        pending_sublocation_selection(resolved$existing_selection)
+
+        if (!length(resolved$new_values)) {
+          pending_sublocation_new(NULL)
+          if (resolved$used_label_match) {
+            update_sublocation_selectize(resolved$existing_selection)
+          }
           return()
         }
+        pending_sublocation_new(resolved$last_new_value)
         showModal(modalDialog(
-          sprintf("Add sub-location '%s'?", input$sublocation),
+          sprintf("Add sub-location '%s'?", pending_sublocation_new()),
           footer = tagList(
-            modalButton("No"),
+            actionButton(ns("cancel_add_sublocation_prompt"), "No"),
             actionButton(ns("goto_add_subloc"), "Yes")
-          )
+          ),
+          easyClose = FALSE
         ))
       },
       ignoreInit = TRUE
     )
 
+    observeEvent(input$cancel_add_sublocation_prompt, {
+      update_sublocation_selectize(pending_sublocation_selection())
+      pending_sublocation_new(NULL)
+      removeModal()
+    })
+
     observeEvent(input$goto_add_subloc, {
+      new_sublocation <- pending_sublocation_new()
+      update_sublocation_selectize(pending_sublocation_selection())
+      pending_sublocation_new(NULL)
       removeModal()
       outputs$change_tab <- "addSubLocation"
-      output$sub_location <- input$sublocation
+      outputs$sub_location <- new_sublocation
     })
 
     file_data <- reactiveVal(NULL)

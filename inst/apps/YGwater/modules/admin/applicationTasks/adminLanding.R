@@ -5,7 +5,7 @@ adminLandingUI <- function(id) {
     tags$div(
       tags$h2("Admin overview"),
       tags$p(
-        "Welcome to the admin side of YGwater. Use the tabs in the Admin menu to manage data-entry workflows, users, and system content. Some tools are restricted based on your permissions. If you do not see a tab described below, you do not currently have access."
+        "Welcome to the admin side of YGwater. Use the admin-side menus to manage data-entry workflows, reference data, users, and system content. Some tools are restricted based on your permissions. If you do not see a tab described below, you do not currently have access."
       ),
       tags$h3("What you can do here"),
       tags$ul(
@@ -28,6 +28,10 @@ adminLandingUI <- function(id) {
         tags$li(
           tags$strong("Add and manage images or documents"),
           " — add new documents or images, linking them spatially to existing locations if needed."
+        ),
+        tags$li(
+          tags$strong("Manage reference data"),
+          " — update organizations, networks, projects, and shared lookup tables used across the app."
         ),
         tags$li(
           tags$strong("Manage users"),

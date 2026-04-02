@@ -21,6 +21,12 @@ app_server <- function(input, output, session) {
     silent = TRUE
   )
 
+  # Reset the application_name to 'YGwater_shiny'
+  DBI::dbExecute(
+    session$userData$AquaCache,
+    "set application_name TO 'YGwater_shiny'"
+  )
+
   # Logging to usage tracking tables ###########################################
 
   safe_disconnect <- function(con) {
@@ -71,6 +77,7 @@ app_server <- function(input, output, session) {
     "equipTasks",
     "wellTasks",
     "metadataTasks",
+    "acquisitionTelemetryTasks",
     "adminTasks"
   )
 
@@ -103,6 +110,26 @@ app_server <- function(input, output, session) {
     "visit",
     "changePwd",
     "manageUsers",
+    "manageOrganizations",
+    "manageNetworks",
+    "manageProjects",
+    "manageNetworkProjectTypes",
+    "manageLocationTypes",
+    "manageMediaTypes",
+    "manageMatrixStates",
+    "manageParameterGroups",
+    "manageParameterSubGroups",
+    "manageParameters",
+    "manageCommunicationProtocolFamilies",
+    "manageCommunicationProtocols",
+    "manageTransmissionMethodFamilies",
+    "manageTransmissionMethods",
+    "manageTransmissionComponentRoles",
+    "manageInstrumentConnections",
+    "manageInstrumentConnectionSignals",
+    "manageTransmissionSetups",
+    "manageTransmissionRoutes",
+    "manageTransmissionComponents",
     "simplerIndex",
     "editBoreholesWells",
     "manageBoreholeDocuments"
@@ -662,6 +689,11 @@ app_server <- function(input, output, session) {
             password = config$dbPass,
             silent = TRUE
           )
+          # Reset the application_name to 'YGwater_shiny'
+          DBI::dbExecute(
+            retry_con,
+            "set application_name TO 'YGwater_shiny'"
+          )
           on.exit(safe_disconnect(retry_con), add = TRUE)
           close_result <- run_close(retry_con)
           close_error <<- close_result$error
@@ -918,6 +950,214 @@ app_server <- function(input, output, session) {
         nav_hide(id = "navbar", target = "wellTasks")
       }
 
+      # Reference data ------------------------------------------------------
+      if (
+        any(
+          session$userData$admin_privs$manageOrganizations,
+          session$userData$admin_privs$manageNetworks,
+          session$userData$admin_privs$manageProjects,
+          session$userData$admin_privs$manageNetworkProjectTypes,
+          session$userData$admin_privs$manageLocationTypes,
+          session$userData$admin_privs$manageMediaTypes,
+          session$userData$admin_privs$manageMatrixStates,
+          session$userData$admin_privs$manageParameterGroups,
+          session$userData$admin_privs$manageParameterSubGroups,
+          session$userData$admin_privs$manageParameters,
+          session$userData$admin_privs$manageCommunicationProtocolFamilies,
+          session$userData$admin_privs$manageCommunicationProtocols,
+          session$userData$admin_privs$manageTransmissionMethodFamilies,
+          session$userData$admin_privs$manageTransmissionMethods,
+          session$userData$admin_privs$manageTransmissionComponentRoles
+        )
+      ) {
+        nav_show(id = "navbar", target = "metadataTasks")
+        if (isTRUE(session$userData$admin_privs$manageOrganizations)) {
+          nav_show(id = "navbar", target = "manageOrganizations")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageOrganizations)) {
+          nav_hide(id = "navbar", target = "manageOrganizations")
+        }
+        if (isTRUE(session$userData$admin_privs$manageNetworks)) {
+          nav_show(id = "navbar", target = "manageNetworks")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageNetworks)) {
+          nav_hide(id = "navbar", target = "manageNetworks")
+        }
+        if (isTRUE(session$userData$admin_privs$manageProjects)) {
+          nav_show(id = "navbar", target = "manageProjects")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageProjects)) {
+          nav_hide(id = "navbar", target = "manageProjects")
+        }
+        if (isTRUE(session$userData$admin_privs$manageNetworkProjectTypes)) {
+          nav_show(id = "navbar", target = "manageNetworkProjectTypes")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageNetworkProjectTypes)) {
+          nav_hide(id = "navbar", target = "manageNetworkProjectTypes")
+        }
+        if (isTRUE(session$userData$admin_privs$manageLocationTypes)) {
+          nav_show(id = "navbar", target = "manageLocationTypes")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageLocationTypes)) {
+          nav_hide(id = "navbar", target = "manageLocationTypes")
+        }
+        if (isTRUE(session$userData$admin_privs$manageMediaTypes)) {
+          nav_show(id = "navbar", target = "manageMediaTypes")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageMediaTypes)) {
+          nav_hide(id = "navbar", target = "manageMediaTypes")
+        }
+        if (isTRUE(session$userData$admin_privs$manageMatrixStates)) {
+          nav_show(id = "navbar", target = "manageMatrixStates")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageMatrixStates)) {
+          nav_hide(id = "navbar", target = "manageMatrixStates")
+        }
+        if (isTRUE(session$userData$admin_privs$manageParameterGroups)) {
+          nav_show(id = "navbar", target = "manageParameterGroups")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageParameterGroups)) {
+          nav_hide(id = "navbar", target = "manageParameterGroups")
+        }
+        if (isTRUE(session$userData$admin_privs$manageParameterSubGroups)) {
+          nav_show(id = "navbar", target = "manageParameterSubGroups")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageParameterSubGroups)) {
+          nav_hide(id = "navbar", target = "manageParameterSubGroups")
+        }
+        if (isTRUE(session$userData$admin_privs$manageParameters)) {
+          nav_show(id = "navbar", target = "manageParameters")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageParameters)) {
+          nav_hide(id = "navbar", target = "manageParameters")
+        }
+        if (
+          isTRUE(
+            session$userData$admin_privs$manageCommunicationProtocolFamilies
+          )
+        ) {
+          nav_show(
+            id = "navbar",
+            target = "manageCommunicationProtocolFamilies"
+          )
+        }
+        if (
+          !isTRUE(
+            session$userData$admin_privs$manageCommunicationProtocolFamilies
+          )
+        ) {
+          nav_hide(
+            id = "navbar",
+            target = "manageCommunicationProtocolFamilies"
+          )
+        }
+        if (isTRUE(session$userData$admin_privs$manageCommunicationProtocols)) {
+          nav_show(id = "navbar", target = "manageCommunicationProtocols")
+        }
+        if (
+          !isTRUE(session$userData$admin_privs$manageCommunicationProtocols)
+        ) {
+          nav_hide(id = "navbar", target = "manageCommunicationProtocols")
+        }
+        if (
+          isTRUE(
+            session$userData$admin_privs$manageTransmissionMethodFamilies
+          )
+        ) {
+          nav_show(id = "navbar", target = "manageTransmissionMethodFamilies")
+        }
+        if (
+          !isTRUE(
+            session$userData$admin_privs$manageTransmissionMethodFamilies
+          )
+        ) {
+          nav_hide(id = "navbar", target = "manageTransmissionMethodFamilies")
+        }
+        if (isTRUE(session$userData$admin_privs$manageTransmissionMethods)) {
+          nav_show(id = "navbar", target = "manageTransmissionMethods")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageTransmissionMethods)) {
+          nav_hide(id = "navbar", target = "manageTransmissionMethods")
+        }
+        if (
+          isTRUE(
+            session$userData$admin_privs$manageTransmissionComponentRoles
+          )
+        ) {
+          nav_show(id = "navbar", target = "manageTransmissionComponentRoles")
+        }
+        if (
+          !isTRUE(
+            session$userData$admin_privs$manageTransmissionComponentRoles
+          )
+        ) {
+          nav_hide(id = "navbar", target = "manageTransmissionComponentRoles")
+        }
+      } else {
+        nav_hide(id = "navbar", target = "metadataTasks")
+      }
+
+      # Acquisition / telemetry --------------------------------------------
+      if (
+        any(
+          session$userData$admin_privs$manageInstrumentConnections,
+          session$userData$admin_privs$manageInstrumentConnectionSignals,
+          session$userData$admin_privs$manageTransmissionSetups,
+          session$userData$admin_privs$manageTransmissionRoutes,
+          session$userData$admin_privs$manageTransmissionComponents
+        )
+      ) {
+        nav_show(id = "navbar", target = "acquisitionTelemetryTasks")
+        if (isTRUE(session$userData$admin_privs$manageInstrumentConnections)) {
+          nav_show(id = "navbar", target = "manageInstrumentConnections")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageInstrumentConnections)) {
+          nav_hide(id = "navbar", target = "manageInstrumentConnections")
+        }
+        if (
+          isTRUE(
+            session$userData$admin_privs$manageInstrumentConnectionSignals
+          )
+        ) {
+          nav_show(
+            id = "navbar",
+            target = "manageInstrumentConnectionSignals"
+          )
+        }
+        if (
+          !isTRUE(
+            session$userData$admin_privs$manageInstrumentConnectionSignals
+          )
+        ) {
+          nav_hide(
+            id = "navbar",
+            target = "manageInstrumentConnectionSignals"
+          )
+        }
+        if (isTRUE(session$userData$admin_privs$manageTransmissionSetups)) {
+          nav_show(id = "navbar", target = "manageTransmissionSetups")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageTransmissionSetups)) {
+          nav_hide(id = "navbar", target = "manageTransmissionSetups")
+        }
+        if (isTRUE(session$userData$admin_privs$manageTransmissionRoutes)) {
+          nav_show(id = "navbar", target = "manageTransmissionRoutes")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageTransmissionRoutes)) {
+          nav_hide(id = "navbar", target = "manageTransmissionRoutes")
+        }
+        if (isTRUE(session$userData$admin_privs$manageTransmissionComponents)) {
+          nav_show(id = "navbar", target = "manageTransmissionComponents")
+        }
+        if (
+          !isTRUE(session$userData$admin_privs$manageTransmissionComponents)
+        ) {
+          nav_hide(id = "navbar", target = "manageTransmissionComponents")
+        }
+      } else {
+        nav_hide(id = "navbar", target = "acquisitionTelemetryTasks")
+      }
+
       # Admin menu ----------------------------------------------------------
       # Admin menu is always shown because every logged in user can change their own password
       nav_show(id = "navbar", target = "adminTasks")
@@ -949,6 +1189,7 @@ app_server <- function(input, output, session) {
         "deploy_recover",
         "adminTasks",
         "metadataTasks",
+        "acquisitionTelemetryTasks",
         "wellTasks"
       )) {
         nav_hide(id = "navbar", target = id)
@@ -1229,7 +1470,6 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
-    ui_loaded$contPlotOld <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -1280,6 +1520,27 @@ app_server <- function(input, output, session) {
     ui_loaded$editBoreholesWells <- FALSE
     ui_loaded$manageBoreholeDocuments <- FALSE
 
+    ui_loaded$manageOrganizations <- FALSE
+    ui_loaded$manageNetworks <- FALSE
+    ui_loaded$manageProjects <- FALSE
+    ui_loaded$manageNetworkProjectTypes <- FALSE
+    ui_loaded$manageLocationTypes <- FALSE
+    ui_loaded$manageMediaTypes <- FALSE
+    ui_loaded$manageMatrixStates <- FALSE
+    ui_loaded$manageParameterGroups <- FALSE
+    ui_loaded$manageParameterSubGroups <- FALSE
+    ui_loaded$manageParameters <- FALSE
+    ui_loaded$manageCommunicationProtocolFamilies <- FALSE
+    ui_loaded$manageCommunicationProtocols <- FALSE
+    ui_loaded$manageTransmissionMethodFamilies <- FALSE
+    ui_loaded$manageTransmissionMethods <- FALSE
+    ui_loaded$manageTransmissionComponentRoles <- FALSE
+    ui_loaded$manageInstrumentConnections <- FALSE
+    ui_loaded$manageInstrumentConnectionSignals <- FALSE
+    ui_loaded$manageTransmissionSetups <- FALSE
+    ui_loaded$manageTransmissionRoutes <- FALSE
+    ui_loaded$manageTransmissionComponents <- FALSE
+
     ui_loaded$changePwd <- FALSE
     ui_loaded$manageUsers <- FALSE
     ui_loaded$manageNotifications <- FALSE
@@ -1298,7 +1559,6 @@ app_server <- function(input, output, session) {
     "home",
     "discPlot",
     "contPlot",
-    "contPlotOld",
     "mapLocs",
     "mapParams",
     "mapRaster",
@@ -1341,6 +1601,26 @@ app_server <- function(input, output, session) {
     "simplerIndex",
     "editBoreholesWells",
     "manageBoreholeDocuments",
+    "manageOrganizations",
+    "manageNetworks",
+    "manageProjects",
+    "manageNetworkProjectTypes",
+    "manageLocationTypes",
+    "manageMediaTypes",
+    "manageMatrixStates",
+    "manageParameterGroups",
+    "manageParameterSubGroups",
+    "manageParameters",
+    "manageCommunicationProtocolFamilies",
+    "manageCommunicationProtocols",
+    "manageTransmissionMethodFamilies",
+    "manageTransmissionMethods",
+    "manageTransmissionComponentRoles",
+    "manageInstrumentConnections",
+    "manageInstrumentConnectionSignals",
+    "manageTransmissionSetups",
+    "manageTransmissionRoutes",
+    "manageTransmissionComponents",
     "adminHome",
     "changePwd",
     "manageUsers",
@@ -1481,9 +1761,6 @@ app_server <- function(input, output, session) {
         ),
         tr("tooltip_continuous", languageSelection$language)
       )
-    })
-    output$plotsNavContOldTitle <- renderUI({
-      tr("plots_continuous_old", languageSelection$language)
     })
 
     output$reportsNavMenuTitle <- renderUI({
@@ -1866,6 +2143,11 @@ app_server <- function(input, output, session) {
       password = config$dbPass,
       silent = TRUE
     )
+    # Reset the application_name to 'YGwater_shiny'
+    DBI::dbExecute(
+      session$userData$AquaCache,
+      "set application_name TO 'YGwater_shiny'"
+    )
 
     # Reset the session userData with the default credentials
     session$userData$config$dbUser <- config$dbUser
@@ -1994,8 +2276,8 @@ app_server <- function(input, output, session) {
           password = input$password,
           silent = TRUE
         )
-        test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
         # Test the connection
+        test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
         if (nrow(test) > 0) {
           # Means the connection was successful
 
@@ -2007,6 +2289,12 @@ app_server <- function(input, output, session) {
           # Update the session with the new user's credentials
           session$userData$config$dbUser <- input$username
           session$userData$config$dbPass <- input$password
+
+          # Reset the application_name to 'YGwater_shiny'
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "set application_name TO 'YGwater_shiny'"
+          )
 
           # Check if the user has more than SELECT privileges on relevant tables, used to determine if the 'admin' tab should be shown
 
@@ -2052,6 +2340,91 @@ app_server <- function(input, output, session) {
               !session$userData$table_privs$qual_name == "application.feedback",
             ]
           }
+
+          lookup_table_privs <- c(
+            network_project_types = has_priv(
+              tbl = session$userData$table_privs,
+              "public.network_project_types",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            location_types = has_priv(
+              tbl = session$userData$table_privs,
+              "public.location_types",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            media_types = has_priv(
+              tbl = session$userData$table_privs,
+              "public.media_types",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            matrix_states = has_priv(
+              tbl = session$userData$table_privs,
+              "public.matrix_states",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            parameter_groups = has_priv(
+              tbl = session$userData$table_privs,
+              "public.parameter_groups",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            parameter_sub_groups = has_priv(
+              tbl = session$userData$table_privs,
+              "public.parameter_sub_groups",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            parameters = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "public.parameters",
+                "public.parameter_relationships",
+                "public.parameter_groups",
+                "public.parameter_sub_groups"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT", "DELETE"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
+            communication_protocol_families = has_priv(
+              tbl = session$userData$table_privs,
+              "instruments.communication_protocol_families",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            communication_protocols = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.communication_protocols",
+                "instruments.communication_protocol_families"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT")
+              )
+            ),
+            transmission_method_families = has_priv(
+              tbl = session$userData$table_privs,
+              "instruments.transmission_method_families",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            transmission_methods = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.transmission_methods",
+                "instruments.transmission_method_families"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT")
+              )
+            ),
+            transmission_component_roles = has_priv(
+              tbl = session$userData$table_privs,
+              "instruments.transmission_component_roles",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            )
+          )
 
           session$userData$admin_privs <- list(
             addLocation = has_priv(
@@ -2395,6 +2768,165 @@ app_server <- function(input, output, session) {
               )
               # Insert, update, delete by default
             ),
+            manageOrganizations = has_priv(
+              tbl = session$userData$table_privs,
+              "public.organizations",
+              list(c("SELECT", "INSERT", "UPDATE"))
+            ),
+            manageNetworks = has_priv(
+              tbl = session$userData$table_privs,
+              c("public.networks", "public.network_project_types"),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT")
+              )
+            ),
+            manageProjects = has_priv(
+              tbl = session$userData$table_privs,
+              c("public.projects", "public.network_project_types"),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT")
+              )
+            ),
+            lookup_tables = lookup_table_privs,
+            manageNetworkProjectTypes = lookup_table_privs[[
+              "network_project_types"
+            ]],
+            manageLocationTypes = lookup_table_privs[["location_types"]],
+            manageMediaTypes = lookup_table_privs[["media_types"]],
+            manageMatrixStates = lookup_table_privs[["matrix_states"]],
+            manageParameterGroups = lookup_table_privs[["parameter_groups"]],
+            manageParameterSubGroups = lookup_table_privs[[
+              "parameter_sub_groups"
+            ]],
+            manageParameters = lookup_table_privs[["parameters"]],
+            manageCommunicationProtocolFamilies = lookup_table_privs[[
+              "communication_protocol_families"
+            ]],
+            manageCommunicationProtocols = lookup_table_privs[[
+              "communication_protocols"
+            ]],
+            manageTransmissionMethodFamilies = lookup_table_privs[[
+              "transmission_method_families"
+            ]],
+            manageTransmissionMethods = lookup_table_privs[[
+              "transmission_methods"
+            ]],
+            manageTransmissionComponentRoles = lookup_table_privs[[
+              "transmission_component_roles"
+            ]],
+            manageInstrumentConnections = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "public.locations_metadata_instrument_connections",
+                "public.locations_metadata_instruments",
+                "public.locations",
+                "instruments.instruments",
+                "instruments.instrument_make",
+                "instruments.instrument_model",
+                "instruments.instrument_type",
+                "instruments.communication_protocols"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
+            manageInstrumentConnectionSignals = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "public.locations_metadata_instrument_connection_signals",
+                "public.locations_metadata_instrument_connections",
+                "public.locations_metadata_instruments",
+                "instruments.instruments",
+                "instruments.communication_protocols",
+                "public.parameters",
+                "continuous.timeseries",
+                "public.locations",
+                "public.media_types",
+                "public.matrix_states",
+                "public.units"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
+            manageTransmissionSetups = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "public.locations_metadata_transmission_setups",
+                "public.locations_metadata_instruments",
+                "instruments.instruments",
+                "instruments.transmission_methods"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
+            manageTransmissionRoutes = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "public.locations_metadata_transmission_routes",
+                "public.locations_metadata_transmission_setups",
+                "public.locations_metadata_instruments",
+                "instruments.instruments",
+                "instruments.transmission_methods"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
+            manageTransmissionComponents = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "public.locations_metadata_transmission_components",
+                "public.locations_metadata_transmission_setups",
+                "public.locations_metadata_instruments",
+                "public.locations",
+                "instruments.instruments",
+                "instruments.instrument_make",
+                "instruments.instrument_model",
+                "instruments.instrument_type",
+                "instruments.transmission_methods",
+                "instruments.transmission_component_roles"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
             visit = has_priv(
               tbl = session$userData$table_privs,
               c(
@@ -2630,7 +3162,6 @@ app_server <- function(input, output, session) {
           "home",
           "discPlot",
           "contPlot",
-          "contPlotOld",
           "mix",
           "map",
           "FOD",
@@ -2737,24 +3268,6 @@ app_server <- function(input, output, session) {
           # inputs temporarily disabled because of issues with narrowing the datatable using inputs.
           # inputs = moduleOutputs$mapLocs
           inputs = NULL
-        )
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
-      }
-    }
-    if (input$navbar == "contPlotOld") {
-      if (!ui_loaded$contPlotOld) {
-        output$plotContinuousOld_ui <- renderUI(contPlotOldUI(
-          "contPlotOld"
-        ))
-        ui_loaded$contPlotOld <- TRUE
-        contPlotOld(
-          "contPlotOld",
-          language = languageSelection,
-          windowDims = windowDims,
-          inputs = moduleOutputs$mapLocs
         )
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
@@ -3199,6 +3712,254 @@ app_server <- function(input, output, session) {
         ui_loaded$manageBoreholeDocuments <- TRUE
         manageBoreholeDocuments(
           "manageBoreholeDocuments",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageOrganizations") {
+      if (!ui_loaded$manageOrganizations) {
+        output$manageOrganizations_ui <- renderUI(manageOrganizationsUI(
+          "manageOrganizations"
+        ))
+        ui_loaded$manageOrganizations <- TRUE
+        manageOrganizations(
+          "manageOrganizations",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageNetworks") {
+      if (!ui_loaded$manageNetworks) {
+        output$manageNetworks_ui <- renderUI(manageNetworksUI(
+          "manageNetworks"
+        ))
+        ui_loaded$manageNetworks <- TRUE
+        manageNetworks(
+          "manageNetworks",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageProjects") {
+      if (!ui_loaded$manageProjects) {
+        output$manageProjects_ui <- renderUI(manageProjectsUI(
+          "manageProjects"
+        ))
+        ui_loaded$manageProjects <- TRUE
+        manageProjects(
+          "manageProjects",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageNetworkProjectTypes") {
+      if (!ui_loaded$manageNetworkProjectTypes) {
+        output$manageNetworkProjectTypes_ui <- renderUI(
+          manageNetworkProjectTypesUI("manageNetworkProjectTypes")
+        )
+        ui_loaded$manageNetworkProjectTypes <- TRUE
+        manageNetworkProjectTypes(
+          "manageNetworkProjectTypes",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageLocationTypes") {
+      if (!ui_loaded$manageLocationTypes) {
+        output$manageLocationTypes_ui <- renderUI(manageLocationTypesUI(
+          "manageLocationTypes"
+        ))
+        ui_loaded$manageLocationTypes <- TRUE
+        manageLocationTypes(
+          "manageLocationTypes",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageMediaTypes") {
+      if (!ui_loaded$manageMediaTypes) {
+        output$manageMediaTypes_ui <- renderUI(manageMediaTypesUI(
+          "manageMediaTypes"
+        ))
+        ui_loaded$manageMediaTypes <- TRUE
+        manageMediaTypes(
+          "manageMediaTypes",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageMatrixStates") {
+      if (!ui_loaded$manageMatrixStates) {
+        output$manageMatrixStates_ui <- renderUI(manageMatrixStatesUI(
+          "manageMatrixStates"
+        ))
+        ui_loaded$manageMatrixStates <- TRUE
+        manageMatrixStates(
+          "manageMatrixStates",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageParameterGroups") {
+      if (!ui_loaded$manageParameterGroups) {
+        output$manageParameterGroups_ui <- renderUI(manageParameterGroupsUI(
+          "manageParameterGroups"
+        ))
+        ui_loaded$manageParameterGroups <- TRUE
+        manageParameterGroups(
+          "manageParameterGroups",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageParameterSubGroups") {
+      if (!ui_loaded$manageParameterSubGroups) {
+        output$manageParameterSubGroups_ui <- renderUI(
+          manageParameterSubGroupsUI("manageParameterSubGroups")
+        )
+        ui_loaded$manageParameterSubGroups <- TRUE
+        manageParameterSubGroups(
+          "manageParameterSubGroups",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageParameters") {
+      if (!ui_loaded$manageParameters) {
+        output$manageParameters_ui <- renderUI(manageParametersUI(
+          "manageParameters"
+        ))
+        ui_loaded$manageParameters <- TRUE
+        manageParameters(
+          "manageParameters",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageCommunicationProtocolFamilies") {
+      if (!ui_loaded$manageCommunicationProtocolFamilies) {
+        output$manageCommunicationProtocolFamilies_ui <- renderUI(
+          manageCommunicationProtocolFamiliesUI(
+            "manageCommunicationProtocolFamilies"
+          )
+        )
+        ui_loaded$manageCommunicationProtocolFamilies <- TRUE
+        manageCommunicationProtocolFamilies(
+          "manageCommunicationProtocolFamilies",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageCommunicationProtocols") {
+      if (!ui_loaded$manageCommunicationProtocols) {
+        output$manageCommunicationProtocols_ui <- renderUI(
+          manageCommunicationProtocolsUI("manageCommunicationProtocols")
+        )
+        ui_loaded$manageCommunicationProtocols <- TRUE
+        manageCommunicationProtocols(
+          "manageCommunicationProtocols",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageTransmissionMethodFamilies") {
+      if (!ui_loaded$manageTransmissionMethodFamilies) {
+        output$manageTransmissionMethodFamilies_ui <- renderUI(
+          manageTransmissionMethodFamiliesUI(
+            "manageTransmissionMethodFamilies"
+          )
+        )
+        ui_loaded$manageTransmissionMethodFamilies <- TRUE
+        manageTransmissionMethodFamilies(
+          "manageTransmissionMethodFamilies",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageTransmissionMethods") {
+      if (!ui_loaded$manageTransmissionMethods) {
+        output$manageTransmissionMethods_ui <- renderUI(
+          manageTransmissionMethodsUI("manageTransmissionMethods")
+        )
+        ui_loaded$manageTransmissionMethods <- TRUE
+        manageTransmissionMethods(
+          "manageTransmissionMethods",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageTransmissionComponentRoles") {
+      if (!ui_loaded$manageTransmissionComponentRoles) {
+        output$manageTransmissionComponentRoles_ui <- renderUI(
+          manageTransmissionComponentRolesUI(
+            "manageTransmissionComponentRoles"
+          )
+        )
+        ui_loaded$manageTransmissionComponentRoles <- TRUE
+        manageTransmissionComponentRoles(
+          "manageTransmissionComponentRoles",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageInstrumentConnections") {
+      if (!ui_loaded$manageInstrumentConnections) {
+        output$manageInstrumentConnections_ui <- renderUI(
+          manageInstrumentConnectionsUI("manageInstrumentConnections")
+        )
+        ui_loaded$manageInstrumentConnections <- TRUE
+        manageInstrumentConnections(
+          "manageInstrumentConnections",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageInstrumentConnectionSignals") {
+      if (!ui_loaded$manageInstrumentConnectionSignals) {
+        output$manageInstrumentConnectionSignals_ui <- renderUI(
+          manageInstrumentConnectionSignalsUI(
+            "manageInstrumentConnectionSignals"
+          )
+        )
+        ui_loaded$manageInstrumentConnectionSignals <- TRUE
+        manageInstrumentConnectionSignals(
+          "manageInstrumentConnectionSignals",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageTransmissionSetups") {
+      if (!ui_loaded$manageTransmissionSetups) {
+        output$manageTransmissionSetups_ui <- renderUI(
+          manageTransmissionSetupsUI("manageTransmissionSetups")
+        )
+        ui_loaded$manageTransmissionSetups <- TRUE
+        manageTransmissionSetups(
+          "manageTransmissionSetups",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageTransmissionRoutes") {
+      if (!ui_loaded$manageTransmissionRoutes) {
+        output$manageTransmissionRoutes_ui <- renderUI(
+          manageTransmissionRoutesUI("manageTransmissionRoutes")
+        )
+        ui_loaded$manageTransmissionRoutes <- TRUE
+        manageTransmissionRoutes(
+          "manageTransmissionRoutes",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "manageTransmissionComponents") {
+      if (!ui_loaded$manageTransmissionComponents) {
+        output$manageTransmissionComponents_ui <- renderUI(
+          manageTransmissionComponentsUI("manageTransmissionComponents")
+        )
+        ui_loaded$manageTransmissionComponents <- TRUE
+        manageTransmissionComponents(
+          "manageTransmissionComponents",
           language = languageSelection
         )
       }

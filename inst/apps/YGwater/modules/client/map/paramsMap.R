@@ -562,7 +562,7 @@ mapParams <- function(id, language) {
         moduleData$timeseries[
           moduleData$timeseries$timeseries_id %in%
             closest_measurements1$timeseries_id,
-          c("timeseries_id", "location_id")
+          c("timeseries_id", "location_id", "units", "matrix_state")
         ],
         by = "location_id"
       )
@@ -571,10 +571,7 @@ mapParams <- function(id, language) {
         moduleData$parameters$parameter_id == map_params$param1,
         get(tr("param_name_col", language$language))
       ]
-      locs_tsids1$param_unit <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$param1,
-        "unit_default"
-      ]
+      locs_tsids1$param_unit <- locs_tsids1$units
 
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
@@ -697,7 +694,7 @@ mapParams <- function(id, language) {
           moduleData$timeseries[
             moduleData$timeseries$timeseries_id %in%
               closest_measurements2$timeseries_id,
-            c("timeseries_id", "location_id")
+            c("timeseries_id", "location_id", "units", "matrix_state")
           ],
           by = "location_id"
         )
@@ -706,10 +703,7 @@ mapParams <- function(id, language) {
           moduleData$parameters$parameter_id == map_params$param2,
           get(tr("param_name_col", language$language))
         ]
-        locs_tsids2$param_unit <- moduleData$parameters[
-          moduleData$parameters$parameter_id == map_params$param2,
-          "unit_default"
-        ]
+        locs_tsids2$param_unit <- locs_tsids2$units
 
         # Merge the two sets of locations and timeseries IDs
         locs_tsids <- rbind(locs_tsids1, locs_tsids2)
@@ -783,18 +777,18 @@ mapParams <- function(id, language) {
             return(2)
           }
         }
+        legend_units <- unique(na.omit(mapping_data$param_unit))
+        legend_units <- legend_units[nzchar(legend_units)]
         lab_format <- leaflet::labelFormat(digits = legend_digits(actual_vals))
-        legend_title <- sprintf(
-          "%s (%s)",
-          moduleData$parameters[
-            moduleData$parameters$parameter_id == map_params$param1,
-            get(tr("param_name_col", language$language))
-          ],
-          moduleData$parameters[
-            moduleData$parameters$parameter_id == map_params$param1,
-            "unit_default"
-          ]
-        )
+        legend_param <- moduleData$parameters[
+          moduleData$parameters$parameter_id == map_params$param1,
+          get(tr("param_name_col", language$language))
+        ]
+        legend_title <- if (length(legend_units)) {
+          sprintf("%s (%s)", legend_param, paste(legend_units, collapse = ", "))
+        } else {
+          legend_param
+        }
       } else {
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
@@ -841,6 +835,11 @@ mapParams <- function(id, language) {
             "</strong><br/>",
             param_name,
             "<br>",
+            ifelse(
+              is.na(matrix_state) | !nzchar(matrix_state),
+              "",
+              paste0("Matrix state: ", matrix_state, "<br>")
+            ),
             tr("map_actual_date", language$language),
             ": ",
             if (map_params$latest) {

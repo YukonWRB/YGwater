@@ -9,7 +9,8 @@ ac_parameter_unit_select_sql(
   con,
   parameter_alias = NULL,
   output_alias = "unit_default",
-  prefer = c("default_or_solid", "default", "solid", "solid_or_default")
+  prefer = c("default_or_solid", "default", "solid", "solid_or_default"),
+  ...
 )
 }
 \arguments{
@@ -20,6 +21,8 @@ ac_parameter_unit_select_sql(
 \item{output_alias}{A string representing the desired alias for the output column in the SQL query. Defaults to "unit_default".}
 
 \item{prefer}{A string indicating the preference for which unit to return if multiple are available. Options are "default_or_solid" (default), "default", "solid", and "solid_or_default".}
+
+\item{...}{Additional arguments for specifying aliases and column names for matrix state and media, which may be used in certain database schemas to resolve the appropriate unit based on the context of the parameter.}
 }
 \value{
 A string containing the SQL expression to select the parameter unit with appropriate fallback logic based on the database schema.
