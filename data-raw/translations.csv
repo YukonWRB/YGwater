@@ -173,7 +173,7 @@ plot_extra_options,,Extra options,Options supplémentaires
 plot_apply_vert_datum,,Apply vertical datum,Appliquer le référentiel vertical
 plot_filter,,Filter extreme values,Filtrer les valeurs extrêmes
 plot_show_unusable,,Show unusable data,Afficher les données inutilisables
-plot_show_grades,,Show grades,Afficher les cotes de qualité
+plot_show_grades,,Show grades,Afficher les classe de qualité
 plot_show_approvals,,Show approval levels,Afficher les niveaux d'approbation
 plot_show_qualifiers,,Show qualifiers,Afficher les qualificatifs
 plot_last_30,,Last 30 days,30 derniers jours
@@ -336,7 +336,7 @@ about_fun_fact_wells,content,"The Water Well Registry includes %s water wells.",
 about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strengths in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Le site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour le traitement et la visualisation des données. Le progiciel qui contient le code de l’application regroupe de nombreuses autres fonctions utiles, au-delà de celles présentées ici. Il est accessible publiquement au "
 about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre progiciel R, disponible au "
 about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time."," Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
-about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3, so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux progiciels R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
+about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3 so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux progiciels R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
 about_url_ygwater,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
 about_url_aquacache,url,https://github.com/YukonWRB/AquaCache,https://github.com/YukonWRB/AquaCache
 current_software,,Current software and database status:,Version du logiciel et de la base de données
@@ -348,9 +348,9 @@ data_format,direct translation,Data Format,Format des données
 unknown,,Unknown,Inconnu
 cluster_points_label,,Cluster points,Regrouper les points
 location_type_legend,,Location type,Type d’emplacement
-loc,direct translation,Location,Emplacement
-locs,,Locations,Point de surveillance
-loc(s),,Location(s),Points de surveillance
+loc,direct translation,Location,Point de surveillance
+locs,,Locations,Points de surveillance
+loc(s),,Location(s),Point(s) de surveillance
 select_locs,,Select locations,Sélectionnez des points de surveillance
 pl_select_loc,,Please select a location.,SVP sélectionner un point de surveillance
 pl_select_param,,Please select a parameter,SVP sélectionner un paramètre

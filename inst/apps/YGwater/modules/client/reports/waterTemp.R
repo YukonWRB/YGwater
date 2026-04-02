@@ -770,14 +770,22 @@ waterTempMod <- function(id, language, inputs) {
           searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
-            "function(settings, json) {
-             $(this.api().table().header()).css({
-              'font-size': '90%'
-             });
-             $(this.api().table().body()).css({
-              'font-size': '80%'
-             });
-            }"
+            # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
+            sprintf(
+              "function(settings, json) {
+               var api = this.api();
+  
+               $(api.table().header()).css({'font-size': '90%%'});
+               $(api.table().body()).css({'font-size': '80%%'});
+  
+               setTimeout(function() {
+                 $(api.table().container())
+                   .find('thead input[type=\"search\"]')
+                   .attr('placeholder', '%s');
+               }, 0);
+             }",
+              tr("all_m", language$language)
+            )
           ),
           language = list(
             info = tr("tbl_info", language$language),

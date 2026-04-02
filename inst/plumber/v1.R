@@ -544,7 +544,13 @@ snowbull_leaflet_mem <- memoise::memoise(
   omit_args = c("con")
 )
 
-get_snowbull_stamp <- function(con, year = NULL, month = NULL) {
+get_snowbull_stamp <- function(
+  con,
+  year = NULL,
+  month = NULL,
+  continuous = FALSE,
+  discrete = TRUE
+) {
   param_id <- DBI::dbGetQuery(
     con,
     "SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent'"
@@ -554,34 +560,42 @@ get_snowbull_stamp <- function(con, year = NULL, month = NULL) {
     return("none")
   }
 
-  continuous_stamp <- DBI::dbGetQuery(
-    con,
-    sprintf(
-      "
+  if (continuous) {
+    continuous_stamp <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "
       SELECT MAX(COALESCE(m.created, m.modified)::date) AS stamp
       FROM continuous.measurements_calculated_daily_corrected m
       JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
       WHERE t.parameter_id = %s AND DATE(m.date) <= CAST('%s' AS date) AND DATE(m.date) >= CAST('1990-10-01' AS date)
       ",
-      as.integer(param_id),
-      as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
-    )
-  )[1, 1]
+        as.integer(param_id),
+        as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
+      )
+    )[1, 1]
+  } else {
+    continuous_stamp <- NA
+  }
 
-  discrete_stamp <- DBI::dbGetQuery(
-    con,
-    sprintf(
-      "
+  if (discrete) {
+    discrete_stamp <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "
       SELECT MAX(COALESCE(s.created, s.modified)::date) AS stamp
       FROM discrete.samples s
       JOIN discrete.results r ON s.sample_id = r.sample_id
       WHERE r.parameter_id = %s
         AND r.result IS NOT NULL AND DATE(s.target_datetime) < DATE('%s') AND DATE(s.target_datetime) >= DATE('1990-10-01')
       ",
-      as.integer(param_id),
-      as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
-    )
-  )[1, 1]
+        as.integer(param_id),
+        as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
+      )
+    )[1, 1]
+  } else {
+    discrete_stamp <- NA
+  }
 
   stamp_parts <- c(
     if (!is.na(continuous_stamp)) as.character(continuous_stamp) else "none",
@@ -596,6 +610,8 @@ get_snowbull_stamp <- function(con, year = NULL, month = NULL) {
 #* @param month Bulletin month (optional; defaults to latest available).
 #* @param statistic Statistic to display. One of "data", "relative_to_med", "percentile", "anomalies" (default "relative_to_med").
 #* @param language Language for labels: 'French' or 'English' (default "English").
+#* @param continuous If year and/or month are not provided, whether to consider continuous data for determining the latest available bulletin (default FALSE).
+#* @param discrete If year and/or month are not provided, whether to consider discrete data for determining the latest available bulletin (default TRUE).
 #* @get /snow-bulletin/leaflet
 #* @serializer contentType list(type = "text/html")
 function(
@@ -604,7 +620,9 @@ function(
   year = NA,
   month = NA,
   statistic = "relative_to_med",
-  language = "English"
+  language = "English",
+  continuous = FALSE,
+  discrete = TRUE
 ) {
   con <- try(
     YGwater::AquaConnect(
@@ -638,7 +656,38 @@ function(
       return("<p>Invalid 'year' parameter.</p>")
     }
   } else {
-    year <- NULL
+    # Find the most recent year for which there is data available
+    if (discrete) {
+      year_disc <- DBI::dbGetQuery(
+        con,
+        "
+      SELECT MAX(EXTRACT(YEAR FROM s.target_datetime)) AS latest_year
+      FROM discrete.samples s
+      JOIN discrete.results r ON s.sample_id = r.sample_id
+      WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+        AND r.result IS NOT NULL AND DATE(s.target_datetime) >= DATE('1990-10-01')"
+      )[1, 1]
+    } else {
+      year_disc <- NA
+    }
+    if (continuous) {
+      year_cont <- DBI::dbGetQuery(
+        con,
+        "
+      SELECT MAX(EXTRACT(YEAR FROM m.date)) AS latest_year
+      FROM continuous.measurements_calculated_daily_corrected m
+      JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+      WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+        AND DATE(m.date) >= DATE('1990-10-01')"
+      )[1, 1]
+    } else {
+      year_cont <- NA
+    }
+    if (all(is.na(c(year_disc, year_cont)))) {
+      year <- NULL
+    } else {
+      year <- max(c(year_disc, year_cont), na.rm = TRUE)
+    }
   }
 
   if (!is.na(month)) {
@@ -648,10 +697,49 @@ function(
       return("<p>Invalid 'month' parameter. Use 1-12.</p>")
     }
   } else {
-    month <- NULL
+    if (!is.null(year)) {
+      # Need the year to determine the latest month, otherwise leave as NULL to get the latest overall regardless of month
+      if (discrete) {
+        month_disc <- DBI::dbGetQuery(
+          con,
+          "
+      SELECT MAX(EXTRACT(MONTH FROM s.target_datetime)) AS latest_month
+      FROM discrete.samples s
+      JOIN discrete.results r ON s.sample_id = r.sample_id
+      WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+        AND r.result IS NOT NULL AND DATE(s.target_datetime) >= DATE('1990-10-01')
+        AND EXTRACT(YEAR FROM s.target_datetime) = $1",
+          params = list(year)
+        )[1, 1]
+      } else {
+        month_disc <- NA
+      }
+      if (continuous) {
+        month_cont <- DBI::dbGetQuery(
+          con,
+          "SELECT MAX(EXTRACT(MONTH FROM date)) AS latest_month
+        FROM continuous.measurements_calculated_daily_corrected m
+        JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+        WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+          AND DATE(date) >= DATE('1990-10-01')
+          AND EXTRACT(YEAR FROM date) = $1",
+          params = list(year)
+        )[1, 1]
+      } else {
+        month_cont <- NA
+      }
+      if (all(is.na(c(month_disc, month_cont)))) {
+        month <- NULL
+      } else {
+        month <- max(c(month_disc, month_cont), na.rm = TRUE)
+      }
+    } else {
+      month <- NULL
+    }
   }
 
   latest_stamp <- get_snowbull_stamp(con, year, month)
+  message("Year =", year, " Month=", month, " Stamp=", latest_stamp)
   if (request_cache_allowed(req)) {
     map_payload <- snowbull_leaflet_mem(
       stamp = latest_stamp,
