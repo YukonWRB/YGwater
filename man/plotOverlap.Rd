@@ -36,7 +36,8 @@ plotOverlap(
   webgl = TRUE,
   lang = "en",
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 )
 }
 \arguments{
@@ -104,6 +105,11 @@ to FALSE to force standard scatter traces.}
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 
 \item{con}{A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values and
+stored daily summaries should be reconstructed. Character, Date, and
+POSIXct inputs are supported. Date-like inputs are interpreted as the end
+of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 An html plot.

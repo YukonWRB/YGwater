@@ -170,6 +170,8 @@ docTableView <- function(id, language) {
 
     output$documents_table <- DT::renderDataTable({
       tbl <- table_data()[, -"contributor"]
+      # Make authors a factor for filtering
+      tbl[, authors := factor(authors)]
 
       col_labels <- c(
         document_id = "document_id",
@@ -239,14 +241,22 @@ docTableView <- function(id, language) {
           ),
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
-            "function(settings, json) {",
-            "$(this.api().table().header()).css({",
-            "  'font-size': '90%',",
-            "});",
-            "$(this.api().table().body()).css({",
-            "  'font-size': '80%',",
-            "});",
-            "}"
+            # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
+            sprintf(
+              "function(settings, json) {
+                 var api = this.api();
+    
+                 $(api.table().header()).css({'font-size': '90%%'});
+                 $(api.table().body()).css({'font-size': '80%%'});
+    
+                 setTimeout(function() {
+                   $(api.table().container())
+                     .find('thead input[type=\"search\"]')
+                     .attr('placeholder', '%s');
+                 }, 0);
+               }",
+              tr("all_m", language$language)
+            )
           )
         ),
         colnames = col_names,

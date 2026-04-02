@@ -213,15 +213,36 @@ calibrateUI <- function(id) {
               conditionalPanel(
                 ns = ns,
                 condition = "input.selection == 'Conductivity calibration'",
+                radioButtons(
+                  ns("spc_points"),
+                  label = "Calibration points",
+                  choices = c("1 point" = 1, "2 point" = 2, "3 point" = 3),
+                  selected = 2,
+                  inline = TRUE
+                ),
+                uiOutput(ns("spc_schema_notice")),
                 numericInput(
                   ns("spc1_std"),
                   label = "SpC Low-Range Standard",
                   value = 0
                 ),
-                numericInput(
-                  ns("spc2_std"),
-                  label = "SpC High-Range Standard",
-                  value = 1413
+                conditionalPanel(
+                  ns = ns,
+                  condition = "parseInt(input.spc_points || '2', 10) >= 2",
+                  numericInput(
+                    ns("spc2_std"),
+                    label = "SpC High-Range Standard",
+                    value = 1413
+                  )
+                ),
+                conditionalPanel(
+                  ns = ns,
+                  condition = "parseInt(input.spc_points || '2', 10) >= 3",
+                  numericInput(
+                    ns("spc3_std"),
+                    label = "SpC High-Range Standard",
+                    value = 12880
+                  )
                 ),
                 checkboxInput(
                   ns("spc_or_not"),
@@ -233,10 +254,23 @@ calibrateUI <- function(id) {
                   label = "SpC Low-Range Pre-Cal Value",
                   value = NA
                 ),
-                numericInput(
-                  ns("spc2_pre"),
-                  label = "SpC High-Range Pre-Cal Value",
-                  value = NA
+                conditionalPanel(
+                  ns = ns,
+                  condition = "parseInt(input.spc_points || '2', 10) >= 2",
+                  numericInput(
+                    ns("spc2_pre"),
+                    label = "SpC High-Range Pre-Cal Value",
+                    value = NA
+                  )
+                ),
+                conditionalPanel(
+                  ns = ns,
+                  condition = "parseInt(input.spc_points || '2', 10) >= 3",
+                  numericInput(
+                    ns("spc3_pre"),
+                    label = "SpC High-Range Pre-Cal Value",
+                    value = NA
+                  )
                 ),
                 actionButton(ns("show_post_spc"), "Show post-cal fields"),
                 numericInput(
@@ -244,10 +278,23 @@ calibrateUI <- function(id) {
                   label = "SpC Low-Range Post-Cal Value",
                   value = 0
                 ),
-                numericInput(
-                  ns("spc2_post"),
-                  label = "SpC High-Range Post-Cal Value",
-                  value = 1413
+                conditionalPanel(
+                  ns = ns,
+                  condition = "parseInt(input.spc_points || '2', 10) >= 2",
+                  numericInput(
+                    ns("spc2_post"),
+                    label = "SpC High-Range Post-Cal Value",
+                    value = 1413
+                  )
+                ),
+                conditionalPanel(
+                  ns = ns,
+                  condition = "parseInt(input.spc_points || '2', 10) >= 3",
+                  numericInput(
+                    ns("spc3_post"),
+                    label = "SpC High-Range Post-Cal Value",
+                    value = 12880
+                  )
                 ),
                 actionButton(ns("save_cal_spc"), "Save this sheet"),
                 actionButton(ns("delete_spc"), "Delete this sheet")
@@ -756,6 +803,14 @@ table.on("click", "tr", function() {
         params = list(schema, table)
       )$column_name
     }
+    spc_table_fields <- db_table_fields(
+      "instruments",
+      "calibrate_specific_conductance"
+    )
+    spc_supports_extended_schema <- all(
+      c("calibration_points", "spc3_std", "spc3_pre", "spc3_post") %in%
+        spc_table_fields
+    )
     empty_string_to_na <- function(value) {
       if (is.null(value) || !length(value) || all(is.na(value))) {
         return(NA_character_)
@@ -1073,6 +1128,15 @@ table.on("click", "tr", function() {
     shinyjs::hide("turb2_post")
     shinyjs::hide("spc1_post")
     shinyjs::hide("spc2_post")
+    shinyjs::hide("spc3_post")
+
+    output$spc_schema_notice <- renderUI({
+      if (!spc_supports_extended_schema) {
+        helpText(
+          "Database currently supports only 2-point conductivity calibrations. Apply the schema patch to enable 1- and 3-point saves."
+        )
+      }
+    })
 
     # Get the data from the database, make initial tables, populate UI elements ########################################
     instruments_sheet <- refresh_instruments_sheet()
@@ -1947,23 +2011,22 @@ table.on("click", "tr", function() {
     observeEvent(
       input$show_post_spc,
       {
-        if ((input$show_post_spc %% 2) == 0) {
-          shinyjs::hide("spc1_post")
-          shinyjs::hide("spc2_post")
-          updateActionButton(
-            session,
-            "show_post_spc",
-            label = "Show post-cal fields"
-          )
-        } else {
-          shinyjs::show("spc1_post")
-          shinyjs::show("spc2_post")
-          updateActionButton(
-            session,
-            "show_post_spc",
-            label = "Hide post-cal fields"
-          )
-        }
+        sync_spc_post_visibility(
+          point_count = current_spc_point_count(),
+          show_posts = (input$show_post_spc %% 2) == 1
+        )
+      },
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      input$spc_points,
+      {
+        sync_spc_labels()
+        sync_spc_post_visibility(
+          point_count = current_spc_point_count(),
+          show_posts = !is.null(input$show_post_spc) &&
+            (input$show_post_spc %% 2) == 1
+        )
       },
       ignoreInit = TRUE
     )
@@ -2006,6 +2069,81 @@ table.on("click", "tr", function() {
       }
       input$temp_reference
     }
+    current_spc_point_count <- function() {
+      point_value <- input$spc_points
+      point_count <- suppressWarnings(as.integer(point_value[[1]]))
+      if (!length(point_count) || is.na(point_count) || !(point_count %in% 1:3)) {
+        point_count <- 2L
+      }
+      if (!spc_supports_extended_schema) {
+        point_count <- 2L
+      }
+      point_count
+    }
+    spc_point_role <- function(point_index, point_count = current_spc_point_count()) {
+      point_roles <- switch(
+        as.character(point_count),
+        "1" = c("Standard"),
+        "2" = c("Low-Range", "High-Range"),
+        "3" = c("Low-Range", "Mid-Range", "High-Range")
+      )
+      if (length(point_roles) < point_index) {
+        return(paste("Point", point_index))
+      }
+      point_roles[[point_index]]
+    }
+    spc_standard_label <- function(point_index, point_count = current_spc_point_count()) {
+      point_role <- spc_point_role(point_index, point_count)
+      if (identical(point_role, "Standard")) {
+        return("SpC Standard")
+      }
+      paste("SpC", point_role, "Standard")
+    }
+    spc_measurement_label <- function(point_index,
+                                      suffix,
+                                      point_count = current_spc_point_count(),
+                                      non_specific = isTRUE(input$spc_or_not)) {
+      point_role <- spc_point_role(point_index, point_count)
+      prefix <- if (non_specific) {
+        "Conductivity"
+      } else {
+        "SpC"
+      }
+      if (identical(point_role, "Standard")) {
+        return(paste(prefix, suffix))
+      }
+      paste(prefix, point_role, suffix)
+    }
+    sync_spc_labels <- function(point_count = current_spc_point_count(),
+                                non_specific = isTRUE(input$spc_or_not)) {
+      for (i in 1:3) {
+        updateNumericInput(
+          session,
+          paste0("spc", i, "_std"),
+          label = spc_standard_label(i, point_count)
+        )
+        updateNumericInput(
+          session,
+          paste0("spc", i, "_pre"),
+          label = spc_measurement_label(
+            i,
+            "Pre-Cal Value",
+            point_count = point_count,
+            non_specific = non_specific
+          )
+        )
+        updateNumericInput(
+          session,
+          paste0("spc", i, "_post"),
+          label = spc_measurement_label(
+            i,
+            "Post-Cal Value",
+            point_count = point_count,
+            non_specific = non_specific
+          )
+        )
+      }
+    }
     convert_to_spc <- function(value) {
       temp_reference <- current_temp_reference()
       if (length(temp_reference) == 0 || is.na(temp_reference)) {
@@ -2014,6 +2152,96 @@ table.on("click", "tr", function() {
         )
       }
       value / (1 + 0.02 * (temp_reference - 25))
+    }
+    default_spc_post_value <- function(value) {
+      if (isTRUE(input$spc_or_not)) {
+        return(round(convert_to_spc(value), 0))
+      }
+      value
+    }
+    current_spc_post_input <- function(point_index) {
+      value <- input[[paste0("spc", point_index, "_post")]]
+      if (!length(value) || all(is.na(value))) {
+        return(default_spc_post_value(input[[paste0("spc", point_index, "_std")]]))
+      }
+      value
+    }
+    sync_spc_post_visibility <- function(point_count = 2L,
+                                         show_posts = FALSE) {
+      for (id in c("spc1_post", "spc2_post", "spc3_post")) {
+        shinyjs::hide(id)
+      }
+      if (show_posts) {
+        for (id in paste0("spc", seq_len(point_count), "_post")) {
+          shinyjs::show(id)
+        }
+        updateActionButton(
+          session,
+          "show_post_spc",
+          label = "Hide post-cal fields"
+        )
+      } else {
+        updateActionButton(
+          session,
+          "show_post_spc",
+          label = "Show post-cal fields"
+        )
+      }
+    }
+    saved_spc_measurement <- function(point_index, measurement) {
+      input_name <- paste0("spc", point_index, "_", measurement)
+      value <- if (identical(measurement, "post")) {
+        current_spc_post_input(point_index)
+      } else {
+        input[[input_name]]
+      }
+      if (isTRUE(input$spc_or_not)) {
+        return(convert_to_spc(value))
+      }
+      value
+    }
+    build_spc_record <- function() {
+      point_count <- current_spc_point_count()
+      if (spc_supports_extended_schema) {
+        return(data.frame(
+          calibration_id = calibration_data$next_id,
+          calibration_points = point_count,
+          spc1_std = input$spc1_std,
+          spc2_std = if (point_count >= 2) input$spc2_std else NA_real_,
+          spc1_pre = saved_spc_measurement(1, "pre"),
+          spc2_pre = if (point_count >= 2) {
+            saved_spc_measurement(2, "pre")
+          } else {
+            NA_real_
+          },
+          spc1_post = saved_spc_measurement(1, "post"),
+          spc2_post = if (point_count >= 2) {
+            saved_spc_measurement(2, "post")
+          } else {
+            NA_real_
+          },
+          spc3_std = if (point_count >= 3) input$spc3_std else NA_real_,
+          spc3_pre = if (point_count >= 3) {
+            saved_spc_measurement(3, "pre")
+          } else {
+            NA_real_
+          },
+          spc3_post = if (point_count >= 3) {
+            saved_spc_measurement(3, "post")
+          } else {
+            NA_real_
+          }
+        ))
+      }
+      data.frame(
+        calibration_id = calibration_data$next_id,
+        spc1_std = input$spc1_std,
+        spc1_pre = saved_spc_measurement(1, "pre"),
+        spc1_post = saved_spc_measurement(1, "post"),
+        spc2_std = input$spc2_std,
+        spc2_pre = saved_spc_measurement(2, "pre"),
+        spc2_post = saved_spc_measurement(2, "post")
+      )
     }
     sql_string_or_null <- function(value) {
       if (length(value) == 0 || all(is.na(value))) {
@@ -2026,6 +2254,18 @@ table.on("click", "tr", function() {
         )
       )
     }
+    session$onFlushed(function() {
+      if (!spc_supports_extended_schema) {
+        updateRadioButtons(
+          session,
+          "spc_points",
+          choices = c("2 point" = 2),
+          selected = 2
+        )
+      }
+      sync_spc_labels(point_count = 2L, non_specific = FALSE)
+      sync_spc_post_visibility(point_count = 2L)
+    }, once = TRUE)
 
     # Render messages and notes, show/hide messages based on selection ################################################
     # Initiate data.frame to populate with saved calibrations later
@@ -2258,6 +2498,7 @@ table.on("click", "tr", function() {
     }
     reset_spc <- function() {
       updateCheckboxInput(session, "spc_or_not", value = FALSE)
+      updateRadioButtons(session, "spc_points", selected = 2)
       updateNumericInput(
         session,
         "spc1_std",
@@ -2294,6 +2535,26 @@ table.on("click", "tr", function() {
         label = "SpC High-Range Post-Cal Value",
         value = "1413"
       )
+      updateNumericInput(
+        session,
+        "spc3_std",
+        label = "SpC High-Range Standard",
+        value = "12880"
+      )
+      updateNumericInput(
+        session,
+        "spc3_pre",
+        label = "SpC High-Range Pre-Cal Value",
+        value = NA
+      )
+      updateNumericInput(
+        session,
+        "spc3_post",
+        label = "SpC High-Range Post-Cal Value",
+        value = "12880"
+      )
+      sync_spc_labels(point_count = 2L, non_specific = FALSE)
+      sync_spc_post_visibility(point_count = 2L)
       shinyjs::hide("delete_spc")
     }
     reset_turb <- function() {
@@ -2889,14 +3150,33 @@ table.on("click", "tr", function() {
     observeEvent(
       input$spc1_std,
       {
-        updateNumericInput(session, "spc1_post", value = input$spc1_std)
+        updateNumericInput(
+          session,
+          "spc1_post",
+          value = default_spc_post_value(input$spc1_std)
+        )
       },
       ignoreInit = TRUE
     )
     observeEvent(
       input$spc2_std,
       {
-        updateNumericInput(session, "spc2_post", value = input$spc2_std)
+        updateNumericInput(
+          session,
+          "spc2_post",
+          value = default_spc_post_value(input$spc2_std)
+        )
+      },
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      input$spc3_std,
+      {
+        updateNumericInput(
+          session,
+          "spc3_post",
+          value = default_spc_post_value(input$spc3_std)
+        )
       },
       ignoreInit = TRUE
     )
@@ -4636,6 +4916,24 @@ table.on("click", "tr", function() {
               } else if (i == "calibrate_specific_conductance") {
                 output_name <- "Conductivity calibration"
                 complete$spc <- TRUE
+                spc_point_count <- if (
+                  "calibration_points" %in% colnames(sheet) &&
+                    !is.na(sheet$calibration_points[1])
+                ) {
+                  as.integer(sheet$calibration_points[1])
+                } else if (
+                  "spc3_std" %in% colnames(sheet) &&
+                    !is.na(sheet$spc3_std[1])
+                ) {
+                  3L
+                } else {
+                  2L
+                }
+                updateRadioButtons(
+                  session,
+                  "spc_points",
+                  selected = spc_point_count
+                )
                 updateNumericInput(session, "spc1_std", value = sheet$spc1_std)
                 updateNumericInput(session, "spc1_pre", value = sheet$spc1_pre)
                 updateNumericInput(
@@ -4649,6 +4947,38 @@ table.on("click", "tr", function() {
                   session,
                   "spc2_post",
                   value = sheet$spc2_post
+                )
+                updateNumericInput(
+                  session,
+                  "spc3_std",
+                  value = if ("spc3_std" %in% colnames(sheet)) {
+                    sheet$spc3_std
+                  } else {
+                    NA_real_
+                  }
+                )
+                updateNumericInput(
+                  session,
+                  "spc3_pre",
+                  value = if ("spc3_pre" %in% colnames(sheet)) {
+                    sheet$spc3_pre
+                  } else {
+                    NA_real_
+                  }
+                )
+                updateNumericInput(
+                  session,
+                  "spc3_post",
+                  value = if ("spc3_post" %in% colnames(sheet)) {
+                    sheet$spc3_post
+                  } else {
+                    NA_real_
+                  }
+                )
+                sync_spc_labels(point_count = spc_point_count, non_specific = FALSE)
+                sync_spc_post_visibility(
+                  point_count = spc_point_count,
+                  show_posts = FALSE
                 )
                 shinyjs::show("delete_spc")
               } else if (i == "calibrate_ph") {
@@ -5048,49 +5378,15 @@ table.on("click", "tr", function() {
             updateCheckboxInput(session, "spc_or_not", value = FALSE)
             return()
           }
-          post_condy_val <- convert_to_spc(input$spc2_std)
-          updateNumericInput(
-            session,
-            "spc1_pre",
-            label = "Conductivity Low-Range Pre-Cal Value"
-          )
-          updateNumericInput(
-            session,
-            "spc1_post",
-            label = "Conductivity Low-Range Post-Cal Value"
-          )
-          updateNumericInput(
-            session,
-            "spc2_pre",
-            label = "Conductivity High-Range Pre-Cal Value"
-          )
-          updateNumericInput(
-            session,
-            "spc2_post",
-            label = "Conductivity High-Range Post-Cal Value",
-            value = round(post_condy_val, 0)
-          )
         } else {
+          # Labels and post defaults are restored below.
+        }
+        sync_spc_labels(non_specific = isTRUE(input$spc_or_not))
+        for (i in seq_len(current_spc_point_count())) {
           updateNumericInput(
             session,
-            "spc1_pre",
-            label = "SpC Low-Range Pre-Cal Value"
-          )
-          updateNumericInput(
-            session,
-            "spc1_post",
-            label = "SpC Low-Range Post-Cal Value"
-          )
-          updateNumericInput(
-            session,
-            "spc2_pre",
-            label = "SpC High-Range Pre-Cal Value"
-          )
-          updateNumericInput(
-            session,
-            "spc2_post",
-            label = "SpC High-Range Post-Cal Value",
-            value = input$spc2_std
+            paste0("spc", i, "_post"),
+            value = default_spc_post_value(input[[paste0("spc", i, "_std")]])
           )
         }
       },
@@ -6032,6 +6328,7 @@ table.on("click", "tr", function() {
       input$save_cal_spc,
       {
         validation_check$spc <- FALSE
+        point_count <- current_spc_point_count()
         if (isTRUE(input$spc_or_not) && !isTRUE(complete$temperature)) {
           alert(
             "Calibrate temperature first!",
@@ -6045,166 +6342,141 @@ table.on("click", "tr", function() {
             selected = "Temperature calibration"
           )
           return()
+        }
+        if (!spc_supports_extended_schema && point_count != 2L) {
+          alert(
+            "Apply the conductivity schema patch first.",
+            "This database currently supports only 2-point conductivity calibrations.",
+            type = "error",
+            timer = 4000
+          )
+          updateRadioButtons(session, "spc_points", selected = 2)
+          return()
+        }
+        temp_reference <- if (isTRUE(input$spc_or_not)) {
+          current_temp_reference()
         } else {
-          temp_reference <- if (isTRUE(input$spc_or_not)) {
-            current_temp_reference()
-          } else {
-            NA_real_
-          }
-          if (
-            isTRUE(input$spc_or_not) &&
-              (length(temp_reference) == 0 || is.na(temp_reference))
-          ) {
-            alert(
-              "Calibrate temperature first!",
-              "Temperature calibration data is missing. Re-save temperature calibration before entering non-specific conductivity.",
-              type = "error",
-              timer = 3000
-            )
-            updateSelectizeInput(
+          NA_real_
+        }
+        if (
+          isTRUE(input$spc_or_not) &&
+            (length(temp_reference) == 0 || is.na(temp_reference))
+        ) {
+          alert(
+            "Calibrate temperature first!",
+            "Temperature calibration data is missing. Re-save temperature calibration before entering non-specific conductivity.",
+            type = "error",
+            timer = 3000
+          )
+          updateSelectizeInput(
+            session,
+            "selection",
+            selected = "Temperature calibration"
+          )
+          return()
+        }
+        for (i in seq_len(point_count)) {
+          if (is.na(input[[paste0("spc", i, "_post")]])) {
+            updateNumericInput(
               session,
-              "selection",
-              selected = "Temperature calibration"
+              paste0("spc", i, "_post"),
+              value = default_spc_post_value(input[[paste0("spc", i, "_std")]])
             )
-            return()
           }
-          if (is.na(input$spc1_post)) {
-            updateNumericInput(session, "spc1_post", value = input$spc1_std)
-          }
-          if (is.na(input$spc2_post)) {
-            updateNumericInput(session, "spc2_post", value = input$spc2_std)
-          }
-          if (is.na(input$spc1_pre)) {
-            alert(
-              "You must enter a pre-calibration value for the low-range conductivity/conductance",
-              type = "error",
-              timer = 3000
-            )
-            return()
-          }
-          if (is.na(input$spc2_pre)) {
-            alert(
-              "You must enter a pre-calibration value for the high-range conductivity/conductance",
-              type = "error",
-              timer = 3000
-            )
-            return()
-          }
-
-          tryCatch(
-            {
-              spc1_ref <- input$spc1_std
-              spc2_ref <- input$spc2_std
-              spc1_post <- if (input$spc_or_not) {
-                convert_to_spc(input$spc1_post)
-              } else {
-                input$spc1_post
-              }
-              spc2_post <- if (input$spc_or_not) {
-                convert_to_spc(input$spc2_post)
-              } else {
-                input$spc2_post
-              }
-              spc1_diff <- abs(spc1_ref - spc1_post)
-              spc2_diff <- abs(spc2_ref - spc2_post)
-              message1 <- character(0)
-              message2 <- character(0)
-              if (spc1_diff > 10) {
-                shinyjs::js$backgroundCol("spc1_std", "red")
-                shinyjs::js$backgroundCol("spc1_post", "red")
-                if (input$spc_or_not) {
-                  message1 <- paste0(
-                    "Double check your values: your low-range input converts to an SpC of ",
-                    round(spc1_post, 0),
-                    " versus the expected ",
-                    spc1_ref
-                  )
-                } else {
-                  message1 <- "Warning: double check your low-range values"
-                }
-              } else if (spc1_diff > 5) {
-                shinyjs::js$backgroundCol("spc1_std", "lemonchiffon")
-                shinyjs::js$backgroundCol("spc1_post", "lemonchiffon")
-                if (input$spc_or_not) {
-                  message1 <- paste0(
-                    "Double check your values: your low-range input converts to an SpC of ",
-                    round(spc1_post, 0),
-                    " versus the expected ",
-                    spc1_ref
-                  )
-                } else {
-                  message1 <- "Warning: double check your values"
-                }
-              } else {
-                shinyjs::js$backgroundCol("spc1_std", "white")
-                shinyjs::js$backgroundCol("spc1_post", "white")
-              }
-              if (spc2_diff > 10) {
-                shinyjs::js$backgroundCol("spc2_std", "red")
-                shinyjs::js$backgroundCol("spc2_post", "red")
-                if (input$spc_or_not) {
-                  message1 <- paste0(
-                    "Double check your values: your high-range input converts to an SpC of ",
-                    round(spc2_post, 0),
-                    " versus the expected ",
-                    spc2_ref
-                  )
-                } else {
-                  message1 <- "Warning: double check your high-range values"
-                }
-              } else if (spc2_diff > 5) {
-                shinyjs::js$backgroundCol("spc2_std", "lemonchiffon")
-                shinyjs::js$backgroundCol("spc2_post", "lemonchiffon")
-                alert(
-                  title = "Warning: double check your values",
-                  type = "warning",
-                  timer = 2000
-                )
-                if (input$spc_or_not) {
-                  message1 <- paste0(
-                    "Double check your values: your high-range input converts to an SpC of ",
-                    round(spc2_post, 0),
-                    " versus the expected ",
-                    spc2_ref
-                  )
-                } else {
-                  message1 <- "Warning: double check your high-range values"
-                }
-              } else {
-                shinyjs::js$backgroundCol("spc2_std", "white")
-                shinyjs::js$backgroundCol("spc2_post", "white")
-              }
-              if (spc1_diff > 5 | spc2_diff > 5) {
-                # Show a modal to the user to confirm that they are sure about their entries
-                message <- paste0(
-                  if (length(message1) > 0) {
-                    paste0(message1, "<br><br>")
-                  } else {
-                    ""
-                  },
-                  message2
-                )
-                showModal(modalDialog(
-                  title = "Are you sure?",
-                  message,
-                  footer = tagList(
-                    modal_action_button("ok_check_spc", "Yes, I'm sure"),
-                    modalButton("Cancel")
-                  )
-                ))
-              } else {
-                validation_check$spc <- TRUE
-              }
-            },
-            error = function(e) {
-              alert(
-                title = "You have unfilled mandatory entries",
-                type = "error",
-                timer = 2000
+          if (is.na(input[[paste0("spc", i, "_pre")]])) {
+            point_text <- if (point_count == 1L) {
+              "the conductivity/conductance standard"
+            } else {
+              paste(
+                "the",
+                tolower(spc_point_role(i, point_count)),
+                "conductivity/conductance point"
               )
             }
-          )
+            alert(
+              paste("You must enter a pre-calibration value for", point_text),
+              type = "error",
+              timer = 3000
+            )
+            return()
+          }
         }
+
+        tryCatch(
+          {
+            confirmation_messages <- character(0)
+            for (i in 1:3) {
+              std_id <- paste0("spc", i, "_std")
+              post_id <- paste0("spc", i, "_post")
+              if (i > point_count) {
+                shinyjs::js$backgroundCol(std_id, "white")
+                shinyjs::js$backgroundCol(post_id, "white")
+                next
+              }
+              spc_ref <- input[[std_id]]
+              spc_post <- saved_spc_measurement(i, "post")
+              spc_diff <- abs(spc_ref - spc_post)
+              point_name <- if (point_count == 1L) {
+                "single-point"
+              } else {
+                tolower(spc_point_role(i, point_count))
+              }
+              if (spc_diff > 10) {
+                shinyjs::js$backgroundCol(std_id, "red")
+                shinyjs::js$backgroundCol(post_id, "red")
+              } else if (spc_diff > 5) {
+                shinyjs::js$backgroundCol(std_id, "lemonchiffon")
+                shinyjs::js$backgroundCol(post_id, "lemonchiffon")
+              } else {
+                shinyjs::js$backgroundCol(std_id, "white")
+                shinyjs::js$backgroundCol(post_id, "white")
+              }
+              if (spc_diff > 5) {
+                if (input$spc_or_not) {
+                  confirmation_messages <- c(
+                    confirmation_messages,
+                    paste0(
+                      "Double check your values: your ",
+                      point_name,
+                      " input converts to an SpC of ",
+                      round(spc_post, 0),
+                      " versus the expected ",
+                      spc_ref
+                    )
+                  )
+                } else {
+                  confirmation_messages <- c(
+                    confirmation_messages,
+                    paste(
+                      "Warning: double check your",
+                      point_name,
+                      "calibration values."
+                    )
+                  )
+                }
+              }
+            }
+            if (length(confirmation_messages) > 0) {
+              showModal(modalDialog(
+                title = "Are you sure?",
+                HTML(paste(confirmation_messages, collapse = "<br><br>")),
+                footer = tagList(
+                  modal_action_button("ok_check_spc", "Yes, I'm sure"),
+                  modalButton("Cancel")
+                )
+              ))
+            } else {
+              validation_check$spc <- TRUE
+            }
+          },
+          error = function(e) {
+            alert(
+              title = "You have unfilled mandatory entries",
+              type = "error",
+              timer = 2000
+            )
+          }
+        )
       },
       ignoreInit = TRUE
     )
@@ -6223,31 +6495,7 @@ table.on("click", "tr", function() {
         if (!validation_check$spc) {
           return()
         } else {
-          calibration_data$spc <- data.frame(
-            calibration_id = calibration_data$next_id,
-            spc1_std = input$spc1_std,
-            spc1_pre = if (input$spc_or_not) {
-              convert_to_spc(input$spc1_pre)
-            } else {
-              input$spc1_pre
-            },
-            spc1_post = if (input$spc_or_not) {
-              convert_to_spc(input$spc1_post)
-            } else {
-              input$spc1_post
-            },
-            spc2_std = input$spc2_std,
-            spc2_pre = if (input$spc_or_not) {
-              convert_to_spc(input$spc2_pre)
-            } else {
-              input$spc2_pre
-            },
-            spc2_post = if (input$spc_or_not) {
-              convert_to_spc(input$spc2_post)
-            } else {
-              input$spc2_post
-            }
-          )
+          calibration_data$spc <- build_spc_record()
 
           if (!complete$spc) {
             tryCatch(
@@ -6305,41 +6553,61 @@ table.on("click", "tr", function() {
           } else {
             tryCatch(
               {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  paste0(
-                    "UPDATE calibrate_specific_conductance SET spc1_std = ",
-                    input$spc1_std,
-                    ", spc1_pre = ",
-                    if (input$spc_or_not) {
-                      convert_to_spc(input$spc1_pre)
-                    } else {
-                      input$spc1_pre
-                    },
-                    ", spc1_post = ",
-                    if (input$spc_or_not) {
-                      convert_to_spc(input$spc1_post)
-                    } else {
-                      input$spc1_post
-                    },
-                    ", spc2_std = ",
-                    input$spc2_std,
-                    ", spc2_pre = ",
-                    if (input$spc_or_not) {
-                      convert_to_spc(input$spc2_pre)
-                    } else {
-                      input$spc2_pre
-                    },
-                    ", spc2_post = ",
-                    if (input$spc_or_not) {
-                      convert_to_spc(input$spc2_post)
-                    } else {
-                      input$spc2_post
-                    },
-                    " WHERE calibration_id = ",
-                    calibration_data$next_id
+                if (spc_supports_extended_schema) {
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    paste(
+                      "UPDATE calibrate_specific_conductance",
+                      "SET calibration_points = $1,",
+                      "    spc1_std = $2,",
+                      "    spc2_std = $3,",
+                      "    spc1_pre = $4,",
+                      "    spc2_pre = $5,",
+                      "    spc1_post = $6,",
+                      "    spc2_post = $7,",
+                      "    spc3_std = $8,",
+                      "    spc3_pre = $9,",
+                      "    spc3_post = $10",
+                      "WHERE calibration_id = $11"
+                    ),
+                    params = unname(as.list(c(
+                      calibration_data$spc$calibration_points[1],
+                      calibration_data$spc$spc1_std[1],
+                      calibration_data$spc$spc2_std[1],
+                      calibration_data$spc$spc1_pre[1],
+                      calibration_data$spc$spc2_pre[1],
+                      calibration_data$spc$spc1_post[1],
+                      calibration_data$spc$spc2_post[1],
+                      calibration_data$spc$spc3_std[1],
+                      calibration_data$spc$spc3_pre[1],
+                      calibration_data$spc$spc3_post[1],
+                      calibration_data$next_id
+                    )))
                   )
-                )
+                } else {
+                  DBI::dbExecute(
+                    session$userData$AquaCache,
+                    paste(
+                      "UPDATE calibrate_specific_conductance",
+                      "SET spc1_std = $1,",
+                      "    spc1_pre = $2,",
+                      "    spc1_post = $3,",
+                      "    spc2_std = $4,",
+                      "    spc2_pre = $5,",
+                      "    spc2_post = $6",
+                      "WHERE calibration_id = $7"
+                    ),
+                    params = unname(as.list(c(
+                      calibration_data$spc$spc1_std[1],
+                      calibration_data$spc$spc1_pre[1],
+                      calibration_data$spc$spc1_post[1],
+                      calibration_data$spc$spc2_std[1],
+                      calibration_data$spc$spc2_pre[1],
+                      calibration_data$spc$spc2_post[1],
+                      calibration_data$next_id
+                    )))
+                  )
+                }
 
                 if (
                   "Conductivity calibration" %in%

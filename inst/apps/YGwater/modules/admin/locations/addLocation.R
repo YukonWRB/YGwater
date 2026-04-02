@@ -189,6 +189,30 @@ addLocation <- function(id, inputs, language) {
 
     getModuleData() # Initial data load
 
+    update_network_selectize <- function(selected = character(0)) {
+      updateSelectizeInput(
+        session,
+        "network",
+        choices = stats::setNames(
+          moduleData$networks$network_id,
+          moduleData$networks$name
+        ),
+        selected = ensure_character(selected)
+      )
+    }
+
+    update_project_selectize <- function(selected = character(0)) {
+      updateSelectizeInput(
+        session,
+        "project",
+        choices = stats::setNames(
+          moduleData$projects$project_id,
+          moduleData$projects$name
+        ),
+        selected = ensure_character(selected)
+      )
+    }
+
     output$ui <- renderUI({
       networks <- isolate(moduleData$networks)
       projects <- isolate(moduleData$projects)
@@ -1493,19 +1517,22 @@ addLocation <- function(id, inputs, language) {
     observeEvent(
       input$network,
       {
-        vals <- ensure_character(input$network)
-        pending_network_selection(vals)
+        resolved <- resolve_selectize_lookup_values(
+          input$network,
+          moduleData$networks$network_id,
+          moduleData$networks$name
+        )
+        pending_network_selection(resolved$existing_selection)
 
-        existing_ids <- ensure_character(moduleData$networks$network_id)
-        new_vals <- setdiff(vals, existing_ids)
-        new_vals <- new_vals[nzchar(new_vals)]
-
-        if (!length(new_vals)) {
+        if (!length(resolved$new_values)) {
           pending_network_new(NULL)
+          if (resolved$used_label_match) {
+            update_network_selectize(resolved$existing_selection)
+          }
           return()
         }
 
-        new_val <- new_vals[length(new_vals)]
+        new_val <- resolved$last_new_value
         pending_network_new(new_val)
 
         net_types <- DBI::dbGetQuery(
@@ -1531,10 +1558,21 @@ addLocation <- function(id, inputs, language) {
             multiple = FALSE
           ),
           footer = tagList(
-            actionButton(ns("close"), "Cancel"),
+            actionButton(ns("cancel_add_network"), "Cancel"),
             actionButton(ns("add_network"), "Add network")
-          )
+          ),
+          easyClose = FALSE
         ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$cancel_add_network,
+      {
+        update_network_selectize(pending_network_selection())
+        pending_network_new(NULL)
+        removeModal()
       },
       ignoreInit = TRUE,
       ignoreNULL = TRUE
@@ -1552,17 +1590,33 @@ addLocation <- function(id, inputs, language) {
           shinyjs::js$backgroundCol(ns("network_description"), "#fdd")
           return()
         }
+        network_name <- trimws(input$network_name)
+        existing_id <- match_lookup_id_by_label(
+          network_name,
+          moduleData$networks$network_id,
+          moduleData$networks$name
+        )
+        prior_selection <- ensure_character(pending_network_selection())
+        if (length(existing_id)) {
+          selected_values <- unique(c(prior_selection, existing_id[[1]]))
+          update_network_selectize(selected_values)
+          pending_network_selection(selected_values)
+          pending_network_new(NULL)
+          removeModal()
+          showNotification("Existing network selected.", type = "message")
+          return()
+        }
         # Add the network to the database
         df <- data.frame(
-          name = input$network_name,
+          name = network_name,
           name_fr = if (isTruthy(input$network_name_fr)) {
-            input$network_name_fr
+            trimws(input$network_name_fr)
           } else {
             NA
           },
-          description = input$network_description,
+          description = trimws(input$network_description),
           description_fr = if (isTruthy(input$network_description_fr)) {
-            input$network_description_fr
+            trimws(input$network_description_fr)
           } else {
             NA
           },
@@ -1586,23 +1640,16 @@ addLocation <- function(id, inputs, language) {
           "SELECT network_id, name FROM networks"
         )
         # Update the selectizeInput to the new value
-        new_id <- moduleData$networks$network_id[
-          moduleData$networks$name == df$name
-        ]
-        prior_selection <- ensure_character(pending_network_selection())
+        new_id <- match_lookup_id_by_label(
+          df$name,
+          moduleData$networks$network_id,
+          moduleData$networks$name
+        )
         new_value <- pending_network_new()
         retained <- prior_selection[prior_selection != new_value]
         retained <- retained[nzchar(retained)]
         selected_values <- unique(c(retained, ensure_character(new_id)))
-        updateSelectizeInput(
-          session,
-          "network",
-          choices = stats::setNames(
-            moduleData$networks$network_id,
-            moduleData$networks$name
-          ),
-          selected = selected_values
-        )
+        update_network_selectize(selected_values)
         pending_network_selection(selected_values)
         pending_network_new(NULL)
         removeModal()
@@ -1622,19 +1669,22 @@ addLocation <- function(id, inputs, language) {
     observeEvent(
       input$project,
       {
-        vals <- ensure_character(input$project)
-        pending_project_selection(vals)
+        resolved <- resolve_selectize_lookup_values(
+          input$project,
+          moduleData$projects$project_id,
+          moduleData$projects$name
+        )
+        pending_project_selection(resolved$existing_selection)
 
-        existing_ids <- ensure_character(moduleData$projects$project_id)
-        new_vals <- setdiff(vals, existing_ids)
-        new_vals <- new_vals[nzchar(new_vals)]
-
-        if (!length(new_vals)) {
+        if (!length(resolved$new_values)) {
           pending_project_new(NULL)
+          if (resolved$used_label_match) {
+            update_project_selectize(resolved$existing_selection)
+          }
           return()
         }
 
-        new_val <- new_vals[length(new_vals)]
+        new_val <- resolved$last_new_value
         pending_project_new(new_val)
 
         proj_types <- DBI::dbGetQuery(
@@ -1661,10 +1711,21 @@ addLocation <- function(id, inputs, language) {
             multiple = FALSE
           ),
           footer = tagList(
-            actionButton(ns("close"), "Cancel"),
+            actionButton(ns("cancel_add_project"), "Cancel"),
             actionButton(ns("add_project"), "Add project")
-          )
+          ),
+          easyClose = FALSE
         ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+    observeEvent(
+      input$cancel_add_project,
+      {
+        update_project_selectize(pending_project_selection())
+        pending_project_new(NULL)
+        removeModal()
       },
       ignoreInit = TRUE,
       ignoreNULL = TRUE
@@ -1681,17 +1742,33 @@ addLocation <- function(id, inputs, language) {
           shinyjs::js$backgroundCol(ns("project_description"), "#fdd")
           return()
         }
+        project_name <- trimws(input$project_name)
+        existing_id <- match_lookup_id_by_label(
+          project_name,
+          moduleData$projects$project_id,
+          moduleData$projects$name
+        )
+        prior_selection <- ensure_character(pending_project_selection())
+        if (length(existing_id)) {
+          selected_values <- unique(c(prior_selection, existing_id[[1]]))
+          update_project_selectize(selected_values)
+          pending_project_selection(selected_values)
+          pending_project_new(NULL)
+          removeModal()
+          showNotification("Existing project selected.", type = "message")
+          return()
+        }
         # Add the project to the database
         df <- data.frame(
-          name = input$project_name,
+          name = project_name,
           name_fr = if (isTruthy(input$project_name_fr)) {
-            input$project_name_fr
+            trimws(input$project_name_fr)
           } else {
             NA
           },
-          description = input$project_description,
+          description = trimws(input$project_description),
           description_fr = if (isTruthy(input$project_description_fr)) {
-            input$project_description_fr
+            trimws(input$project_description_fr)
           } else {
             NA
           },
@@ -1715,23 +1792,16 @@ addLocation <- function(id, inputs, language) {
           "SELECT project_id, name FROM projects"
         )
         # Update the selectizeInput to the new value
-        new_id <- moduleData$projects$project_id[
-          moduleData$projects$name == df$name
-        ]
-        prior_selection <- ensure_character(pending_project_selection())
+        new_id <- match_lookup_id_by_label(
+          df$name,
+          moduleData$projects$project_id,
+          moduleData$projects$name
+        )
         new_value <- pending_project_new()
         retained <- prior_selection[prior_selection != new_value]
         retained <- retained[nzchar(retained)]
         selected_values <- unique(c(retained, ensure_character(new_id)))
-        updateSelectizeInput(
-          session,
-          "project",
-          choices = stats::setNames(
-            moduleData$projects$project_id,
-            moduleData$projects$name
-          ),
-          selected = selected_values
-        )
+        update_project_selectize(selected_values)
         pending_project_selection(selected_values)
         pending_project_new(NULL)
         removeModal()

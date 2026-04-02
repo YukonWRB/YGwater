@@ -18,7 +18,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         con,
         paste(
           "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-          YGwater:::ac_parameter_unit_select_sql(con, "p", "unit"),
+          ac_parameter_unit_select_sql(con, "p", "unit"),
           "FROM parameters p",
           "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries)",
           "ORDER BY p.param_name ASC;"
@@ -188,7 +188,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
         con,
         paste(
           "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-          YGwater:::ac_parameter_unit_select_sql(con, "p", "unit"),
+          ac_parameter_unit_select_sql(con, "p", "unit"),
           "FROM parameters p",
           "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM results)",
           "ORDER BY p.param_name ASC;"
@@ -343,28 +343,39 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
         ),
         timeseries = dbGetQueryDT(
           con,
-          "SELECT ts.timeseries_id, 
-          ts.location_id, 
-          p.param_name, 
-          p.param_name_fr, 
-          m.media_type, 
-          ts.media_id, 
-          ts.parameter_id, 
-          ts.aggregation_type_id,
-          ts.start_datetime, 
-          ts.end_datetime, 
-          lz.z_meters AS z
-          FROM continuous.timeseries AS ts 
-          LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id 
-          LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
-          LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
-"
+          paste(
+            "SELECT ts.timeseries_id,",
+            "ts.location_id,",
+            "p.param_name,",
+            "p.param_name_fr,",
+            ac_parameter_unit_select_sql(
+              con,
+              "p",
+              "units",
+              matrix_state_alias = "ts",
+              media_alias = "ts"
+            ),
+            ", ms.matrix_state_name AS matrix_state,",
+            "m.media_type,",
+            "ts.media_id,",
+            "ts.parameter_id,",
+            "ts.aggregation_type_id,",
+            "ts.start_datetime,",
+            "ts.end_datetime,",
+            "lz.z_meters AS z",
+            "FROM continuous.timeseries AS ts",
+            "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
+            "LEFT JOIN public.matrix_states AS ms",
+            "ON ts.matrix_state_id = ms.matrix_state_id",
+            "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
+            "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+          )
         ),
         parameters = dbGetQueryDT(
           con,
           paste(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-            YGwater:::ac_parameter_unit_select_sql(con, "p", "unit_default"),
+            ac_parameter_unit_select_sql(con, "p", "unit_default"),
             ", pr.group_id, pr.sub_group_id",
             "FROM public.parameters AS p",
             "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
@@ -391,19 +402,50 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
         ),
         timeseries = dbGetQueryDT(
           con,
-          "SELECT ts.timeseries_id, ts.location_id, p.param_name, p.param_name_fr, m.media_type, ts.media_id, ts.parameter_id, ts.aggregation_type_id, ts.start_datetime, ts.end_datetime, lz.z_meters AS z, 'continuous' AS data_type
-             FROM continuous.timeseries AS ts
-             LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id
-             LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id
-             LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
-           UNION ALL
-           SELECT MIN(r.result_id) AS timeseries_id, s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id, NULL AS aggregation_type_id,
-                  MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime, MIN(s.z) AS z, 'discrete' AS data_type
-             FROM discrete.results r
-             JOIN discrete.samples s ON r.sample_id = s.sample_id
-             LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
-             LEFT JOIN public.media_types m ON s.media_id = m.media_id
-            GROUP BY s.location_id, p.param_name, p.param_name_fr, m.media_type, s.media_id, r.parameter_id"
+          paste(
+            "SELECT ts.timeseries_id, ts.location_id, p.param_name,",
+            "p.param_name_fr,",
+            ac_parameter_unit_select_sql(
+              con,
+              "p",
+              "units",
+              matrix_state_alias = "ts",
+              media_alias = "ts"
+            ),
+            ", ms.matrix_state_name AS matrix_state, m.media_type,",
+            "ts.media_id, ts.parameter_id, ts.aggregation_type_id,",
+            "ts.start_datetime, ts.end_datetime, lz.z_meters AS z,",
+            "'continuous' AS data_type",
+            "FROM continuous.timeseries AS ts",
+            "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
+            "LEFT JOIN public.matrix_states AS ms",
+            "ON ts.matrix_state_id = ms.matrix_state_id",
+            "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
+            "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id",
+            "UNION ALL",
+            "SELECT MIN(r.result_id) AS timeseries_id, s.location_id,",
+            "p.param_name, p.param_name_fr,",
+            ac_parameter_unit_select_sql(
+              con,
+              "p",
+              "units",
+              matrix_state_alias = "r",
+              media_alias = "s"
+            ),
+            ", ms.matrix_state_name AS matrix_state, m.media_type,",
+            "s.media_id, r.parameter_id, NULL AS aggregation_type_id,",
+            "MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime,",
+            "MIN(s.z) AS z, 'discrete' AS data_type",
+            "FROM discrete.results r",
+            "JOIN discrete.samples s ON r.sample_id = s.sample_id",
+            "LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id",
+            "LEFT JOIN public.matrix_states ms",
+            "ON r.matrix_state_id = ms.matrix_state_id",
+            "LEFT JOIN public.media_types m ON s.media_id = m.media_id",
+            "GROUP BY s.location_id, p.parameter_id, p.param_name,",
+            "p.param_name_fr, r.matrix_state_id, ms.matrix_state_name,",
+            "m.media_type, s.media_id, r.parameter_id"
+          )
         ),
         projects = dbGetQueryDT(
           con,
@@ -432,7 +474,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
           con,
           paste(
             "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr,",
-            YGwater:::ac_parameter_unit_select_sql(con, "p", "unit_default"),
+            ac_parameter_unit_select_sql(con, "p", "unit_default"),
             ", pr.group_id, pr.sub_group_id",
             "FROM public.parameters AS p",
             "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id",
