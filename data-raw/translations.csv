@@ -490,4 +490,4 @@ coordinates,,Coordinates,Coordonnées
 isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (ÉEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche ÉEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
-snowbull_to,, to,à
+snowbull_to,,to,à

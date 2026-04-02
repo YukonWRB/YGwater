@@ -121,7 +121,8 @@ surveys_table <- get_display_data(
   year = bulletin_year,
   month = bulletin_month,
   statistic = "relative_to_med",
-  language = language$language
+  language = language$language,
+  october_start = dat$metadata$october_start
 )
 
 pillows_table <- get_display_data(
@@ -129,7 +130,8 @@ pillows_table <- get_display_data(
   year = bulletin_year,
   month = bulletin_month,
   statistic = "relative_to_med",
-  language = language$language
+  language = language$language,
+  october_start = dat$metadata$october_start
 )
 
 basins_table <- get_display_data(
@@ -137,7 +139,8 @@ basins_table <- get_display_data(
   year = bulletin_year,
   month = bulletin_month,
   statistic = "relative_to_med",
-  language = language$language
+  language = language$language,
+  october_start = dat$metadata$october_start
 )
 
 precip_table <- get_display_data(
@@ -145,7 +148,8 @@ precip_table <- get_display_data(
   year = bulletin_year,
   month = bulletin_month,
   statistic = "relative_to_med",
-  language = language$language
+  language = language$language,
+  october_start = dat$metadata$october_start
 )
 
 fdd_table <- get_display_data(
@@ -153,7 +157,8 @@ fdd_table <- get_display_data(
   year = bulletin_year,
   month = bulletin_month,
   statistic = "relative_to_med",
-  language = language$language
+  language = language$language,
+  october_start = dat$metadata$october_start
 )
 
 level_table <- get_display_data(
@@ -161,7 +166,8 @@ level_table <- get_display_data(
   year = bulletin_year,
   month = bulletin_month,
   statistic = "relative_to_med",
-  language = language$language
+  language = language$language,
+  october_start = dat$metadata$october_start
 )
 
 flow_table <- get_display_data(
@@ -169,7 +175,8 @@ flow_table <- get_display_data(
   year = bulletin_year,
   month = bulletin_month,
   statistic = "relative_to_med",
-  language = language$language
+  language = language$language,
+  october_start = dat$metadata$october_start
 )
 
 # after calclating the norms, we apply the datum to water level - so that we can plot M.A.S.L
@@ -429,7 +436,7 @@ snowbullSWE <- function(
 
   custom_title <- sprintf(
     trb("plot_snowcourse_title"),
-    trimws(paste("B", subplot)),
+    trimws(paste0("B", subplot)),
     loc_name
   )
 
@@ -713,7 +720,7 @@ snowbullWater <- function(timeseries, loc_name, parameter, subplot = "", thresho
           continuous_data = timeseries,
           parameter = parameter,
           startDay = paste0(bulletin_year - 1, "-10-01"),
-          endDay = paste0(bulletin_year, "-08-30"),
+          endDay = paste0(bulletin_year, "-09-30"),
           traceEnd = paste0(bulletin_year, "-", bulletin_month, "-01"),
           years = c(bulletin_year - 1),
           returns = "none",
@@ -1069,7 +1076,7 @@ paste0("
 
 **Bulletin changes**
 
-- A climate normal reference period is now calculated for all parameters. The normal is the median of the current reference period, fall 1990 to spring 2020. The reference period uses “water years” as opposed to calendar years. This is important as snowpack begins accumulating in the fall and influences the following summer water levels and flows. The normal range is represented by the grey shaded areas within plots. Historical maximum and minimum bounds are also included.
+- A climate normal reference period is now calculated for all parameters. The normal is the median of the current reference period, October 1990 to September 2020. The reference period uses “water years” as opposed to calendar years. This is important as snowpack begins accumulating in the fall and influences the following summer water levels and flows. The normal range is represented by the grey shaded areas within plots. Historical maximum and minimum bounds are also included.
 - A new section, *How to Read This Bulletin*, is included with annotated figures to help readers interpret the information presented in each figure. 
 ",if(bulletin_month == 4){paste0("\n- Previously, the April 1 and May 1 temperature and precipitation maps displayed anomalies for the previous month while the March 1 maps displayed the October through February anomalies. The April 1 and May 1 temperature and precipitation maps will now also show cumulative anomalies from October through the preceding month to better summarize the winter to date.
 ")}
@@ -1109,9 +1116,9 @@ paste0("
 
 
 `r if (language$abbrev == "en") {
-  paste0("Weather conditions for the winter to date are presented in two maps, one showing temperature anomalies (deviation from normal), and another showing precipitation anomalies (percent of normal). Territory-wide snowpack data are presented in a third map showing Snow Water Equivalent (SWE) as a percent of normal for each station, as well as the basin-averaged estimated SWE for 11 watersheds (or river basins). Where available, complementary meteorological and hydrological data are presented for each basin through a series of plots, detailed below. Not all basins contain the instrumentation to support all five figure types. Normals are the calculated median of a fixed reference period from fall 1990 to spring 2020. The gray shaded areas represent data within the reference period: top light gray band (above average range), dark gray band (average range), lower gray band (below average range).")
+  paste0("Weather conditions for the winter to date are presented in two maps, one showing temperature anomalies (deviation from normal), and another showing precipitation anomalies (percent of normal). Territory-wide snowpack data are presented in a third map showing Snow Water Equivalent (SWE) as a percent of normal for each station, as well as the basin-averaged estimated SWE for 11 watersheds (or river basins). Where available, complementary meteorological and hydrological data are presented for each basin through a series of plots, detailed below. Not all basins contain the instrumentation to support all five figure types. Normals are the calculated median of a fixed reference period from October 1990 to September 2020. The gray shaded areas represent data within the reference period: top light gray band (above average range), dark gray band (average range), lower gray band (below average range).")
 } else {
-  paste0("Les conditions météorologiques du Yukon sont présentées sur deux cartes, une illustrant les anomalies de températures (écarts par rapport aux normales climatiques), et l'autre, les anomalies de précipitations (en pourcentage de la normale). L'accumulation de neige sur l'ensemble du territoire est présentée sur une troisième carte montrant l'équivalent en eau de la neige (ÉEN) exprimé en pourcentage de la normale pour chaque station, de même que l'ÉEN estimé moyen du bassin pour 11 bassins hydrographiques. Lorsque disponibles, des données météorologiques et hydrologiques complémentaires sont communiquées pour chaque bassin au moyen d'une série de graphiques détaillés ci-après. Les bassins ne sont pas tous équipés des instruments permettant de relever des données pour les cinq types de figures. Les normales climatiques sont calculées à partir de la médiane d'une période de référence fixe allant de l'automne 1990 au printemps 2020. Les zones ombrées en gris représentent les données de la période de référence : bande grise pâle supérieure (gamme au-dessus de la moyenne), bande grise foncée (gamme moyenne), bande grise inférieure (gamme sous la moyenne).")
+  paste0("Les conditions météorologiques du Yukon sont présentées sur deux cartes, une illustrant les anomalies de températures (écarts par rapport aux normales climatiques), et l'autre, les anomalies de précipitations (en pourcentage de la normale). L'accumulation de neige sur l'ensemble du territoire est présentée sur une troisième carte montrant l'équivalent en eau de la neige (ÉEN) exprimé en pourcentage de la normale pour chaque station, de même que l'ÉEN estimé moyen du bassin pour 11 bassins hydrographiques. Lorsque disponibles, des données météorologiques et hydrologiques complémentaires sont communiquées pour chaque bassin au moyen d'une série de graphiques détaillés ci-après. Les bassins ne sont pas tous équipés des instruments permettant de relever des données pour les cinq types de figures. Les normales climatiques sont calculées à partir de la médiane d'une période de référence fixe allant d'octobre 1990 à septembre 2020. Les zones ombrées en gris représentent les données de la période de référence : bande grise pâle supérieure (gamme au-dessus de la moyenne), bande grise foncée (gamme moyenne), bande grise inférieure (gamme sous la moyenne).")
 }`
 
 `r if (language$abbrev == "en") {
@@ -1119,7 +1126,7 @@ paste0("
 "-   **Figure A:** Daily SWE data starting in September at one specific location in the watershed, showing the current winter snowpack evolution (black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record.")
 } else {
   paste0(
-  "-   **Figure A:** Données quotidiennes de l'ÉEN commençant en septembre à un endroit spécifique du bassin versant, montrant l'évolution du couvert de neige hivernal actuel (ligne noire) comparée aux données historiques de la période de référence d'automne 1990 à printemps 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (respectivement lignes bleue et brune) sur l'ensemble de la période d'observation.")
+  "-   **Figure A:** Données quotidiennes de l'ÉEN commençant en septembre à un endroit spécifique du bassin versant, montrant l'évolution du couvert de neige hivernal actuel (ligne noire) comparée aux données historiques de la période de référence d'octobre 1990 à septembre 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (respectivement lignes bleue et brune) sur l'ensemble de la période d'observation.")
 }
 `
 
@@ -1129,10 +1136,10 @@ knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater
 ```
 `r if (language$abbrev == "en") {
 paste0("
--   **Figure B:** Current, basin-averaged estimated SWE from snow survey data (black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, serving as an indicator of potential runoff volumes in the spring (acknowledging that snow sublimation, evapotranspiration, rain and glacier melt also significantly affect runoff).")
+-   **Figure B:** Current, basin-averaged estimated SWE from snow survey data (black line) compared with historical data from October 1990 to September 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, serving as an indicator of potential runoff volumes in the spring (acknowledging that snow sublimation, evapotranspiration, rain and glacier melt also significantly affect runoff).")
 } else {
 paste0("
--   **Figure B:** Estimation de l'ÉEN moyen actuel du bassin à partir des relevés nivométriques, comparée avec les données historiques de la période de référence 1991-2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, servant d'indicateur des volumes de ruissellement potentiels au printemps (en reconnaissant que la sublimation de la neige, l'évapotranspiration, la pluie et la fonte des glaciers influent également considérablement sur le ruissellement).")
+-   **Figure B:** Estimation de l'ÉEN moyen actuel du bassin à partir des relevés nivométriques, comparée avec les données historiques de la période de référence d'octobre 1990 à septembre 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, servant d'indicateur des volumes de ruissellement potentiels au printemps (en reconnaissant que la sublimation de la neige, l'évapotranspiration, la pluie et la fonte des glaciers influent également considérablement sur le ruissellement).")
 }
 `
 
@@ -1143,10 +1150,10 @@ knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater
 
 `r if (language$abbrev == "en") {
 paste0("
--   **Figure C:** Monthly winter precipitation (rain and/or snow; black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, complementing the information presented in Figure B.")
+-   **Figure C:** Monthly winter precipitation (rain and/or snow; black line) compared with historical data from October 1990 to September 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, complementing the information presented in Figure B.")
 } else {
 paste0("
--   **Figure C:** Précipitations hivernales mensuelles (pluie et/ou neige) comparées aux données historiques de la période de référence 1991-2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, complétant l'information présentée à la figure", knitr::asis_output("\U00A0"), "B.")
+-   **Figure C:** Précipitations hivernales mensuelles (pluie et/ou neige) comparées aux données historiques de la période de référence d'octobre 1990 à septembre 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, complétant l'information présentée à la figure", knitr::asis_output("\U00A0"), "B.")
 }
 `
 
@@ -1157,10 +1164,10 @@ knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater
 
 `r if (language$abbrev == "en") {
 paste0("
--   **Figure D:** Cumulative degree-days of freezing (CDDF, sum of negative daily temperatures; black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, functioning as an indicator of winter coldness and overall river ice thickness; variables that influence river ice breakup scenarios in the spring. ")
+-   **Figure D:** Cumulative degree-days of freezing (CDDF, sum of negative daily temperatures; black line) compared with historical data from October 1990 to September 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, functioning as an indicator of winter coldness and overall river ice thickness; variables that influence river ice breakup scenarios in the spring. ")
 } else {
 paste0("
--   **Figure D:** Degrés-jours de gel cumulés (DJGC, somme des températures quotidiennes négatives) comparés avec les données historiques de la période de référence d'automne 1990 à printemps 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, servant d'indicateur de la rigueur de l'hiver et de l'épaisseur générale de la glace fluviale; variables qui influencent les scénarios de débâcle printanière.")
+-   **Figure D:** Degrés-jours de gel cumulés (DJGC, somme des températures quotidiennes négatives) comparés avec les données historiques de la période de référence d'octobre 1990 à septembre 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, servant d'indicateur de la rigueur de l'hiver et de l'épaisseur générale de la glace fluviale; variables qui influencent les scénarios de débâcle printanière.")
 }
 `
 
@@ -1171,10 +1178,10 @@ knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater
 
 `r if (language$abbrev == "en") {
 paste0("
--   **Figure E:** Current, estimated daily discharge or measured water level (black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, representing an overview of the watershed hydrological conditions. The flood level refers to the lowest elevation at which flood impacts are estimated to occur.")
+-   **Figure E:** Current, estimated daily discharge or measured water level (black line) compared with historical data from October 1990 to September 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record, representing an overview of the watershed hydrological conditions. The flood level refers to the lowest elevation at which flood impacts are estimated to occur.")
 } else {
 paste0("
--   **Figure E:** Estimation du débit quotidien actuel ou du niveau d'eau mesuré, comparés avec les données historiques de la période de référence 1991-2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, offrant un aperçu des conditions hydrologiques du bassin hydrographique. Le niveau d'inondation correspond à l'élévation la plus basse à laquelle une inondation risque de survenir.")
+-   **Figure E:** Estimation du débit quotidien actuel ou du niveau d'eau mesuré, comparés avec les données historiques de la période de référence d'octobre 1990 à septembre 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (lignes bleue et brune, respectivement) sur l'ensemble de la période d'observation, offrant un aperçu des conditions hydrologiques du bassin hydrographique. Le niveau d'inondation correspond à l'élévation la plus basse à laquelle une inondation risque de survenir.")
 }
 `
 
@@ -1247,7 +1254,7 @@ En février, les températures sont restées normales au Yukon, Mayo signalant d
 
 **Accumulation de neige**
 
-Les données d'accumulation de neige du territoire sont présentées à la Carte 3 ci-dessous, montrant l'équivalent en eau de la neige (ÉEN) en pourcentage de la normale pour chaque station, ainsi que l'ÉEN moyen estimé du bassin pour 11 bassins versants (ou fleuves). Nouveau pour 2026, les résultats des relevés nivométriques sont comparés aux données historiques d'une période de référence normale (appelée la période de référence 1991-2020). La normale est la médiane de la période de référence d'automne 1990 à printemps 2020, notant que la période de référence utilise des « années hydrologiques » par opposition aux années civiles. Ceci est important car l'accumulation de neige commence à s'accumuler à l'automne et influence les niveaux d'eau et les débits de l'été suivant.
+Les données d'accumulation de neige du territoire sont présentées à la Carte 3 ci-dessous, montrant l'équivalent en eau de la neige (ÉEN) en pourcentage de la normale pour chaque station, ainsi que l'ÉEN moyen estimé du bassin pour 11 bassins versants (ou fleuves). Nouveau pour 2026, les résultats des relevés nivométriques sont comparés aux données historiques d'une période de référence normale (appelée la période de référence 1991-2020). La normale est la médiane de la période de référence d'octobre 1990 à septembre 2020, notant que la période de référence utilise des « années hydrologiques » par opposition aux années civiles. Ceci est important car l'accumulation de neige commence à s'accumuler à l'automne et influence les niveaux d'eau et les débits de l'été suivant.
 
 Le relevé nivométrique du 1er mars a révélé que l'accumulation de neige varie de près de la normale dans le bassin de la rivière Stewart à bien au-dessus de la normale dans le bassin de la rivière Teslin/Big Salmon.
 
@@ -2786,7 +2793,6 @@ tryCatch(
 tryCatch(
   {
     tabl <- create_survey_summary(con = con, year = bulletin_year, month = bulletin_month)
-
     # Round values
     tabl$elevation <- round(as.numeric(tabl$elevation), 0)
     tabl$depth <- round(tabl$depth, 0)
@@ -2871,6 +2877,8 @@ tryCatch(
     #### Set up basin names ####
     # Order rows
     target <- c("Upper_Yukon", "Teslin_Big_Salmon", "Central_Yukon", "Pelly", "Stewart", "White", "Lower_Yukon", "Porcupine", "Peel", "Liard", "Alsek", "Alaska")
+
+
     tabl <- tabl %>% dplyr::arrange(factor(sub_basin, levels = target), factor(if (language$abbrev == "fr") Code else Identifier))
 
     ## Change basin names
@@ -2961,7 +2969,7 @@ paste0("
 **SWE notes:**
 
 **E** - Estimated results from snow depth readings and average snow densities observed in location historical records.\n
-**R** - New record.
+**R** - New record (historical maximum or minimum).
 <p>&nbsp;</p>
 **Median historical SWE and Years of record notes: **
 
@@ -2973,7 +2981,9 @@ paste0("
 
 - **Mayo Airport** (09DC-SC01) consists of a union of two five-point courses. Current results consist of a simple average of both courses. Historical median is composed of the following results: 1968-1986 records come solely from 09DC-SC01A (Mayo Airport A); 1987-2025 records come from the average of 09DC-SC01A and 09DC-SC01B (Mayo Airport B). 
 
-- **Hyland River** (10AD-SC01) combines records from the old Hyland River snow course located near the Hyland River air strip with new measurements taken 6 kilometers to the north of the old station since 2018. Five years of overlapping records (2018‑2022) were used to adjust the historical SWE transferred from the old location into the new one (a correction factor of 1.092 applies to the 1976‑2017 SWE results). 
+- **Hyland River** (10AD-SC01) combines records from the old Hyland River snow course located near the Hyland River air strip with new measurements taken 6 kilometers to the north of the old station since 2018. Five years of overlapping records (2018‑2022) were used to adjust the historical SWE transferred from the old location into the new one (a correction factor of 1.092 applies to the 1976‑2017 SWE results).
+
+- **Median SWE** The median SWE used to calculate the perecent of median SWE in Table 1 is based on the entire historical record of each station, including any adjustments for composite stations. Consequently, the percent of SWE values in Table 1 may differ from the percent of median SWE values shown in Map 3.
 ")
 } else {
 paste0("
@@ -2986,7 +2996,7 @@ paste0("
 **Notes au sujet de l'ÉEN :**
 
 **E** - Estimation des résultats à partir de la profondeur de neige et des densités moyennes de neige observées dans les relevés historiques de l’emplacement.\n
-**R** - Nouveau record.
+**R** - Nouveau record (maximum ou minimum historique).
 <p>&nbsp;</p>
 **Notes au sujet de la normale de l'ÉEN et du nombre d'années avec données :**
 
@@ -2999,6 +3009,8 @@ paste0("
 - **Aéroport de Mayo** (09DC-SC01) comprend l'union de deux cours à cinq stations. Les résultats actuels consistent en une simple moyenne des deux cours. La normale historique est composée des résultats suivants : les relevés de 1968-1986 proviennent uniquement de 09DC-SC01A (Aéroport de Mayo A); les relevés de 1987-2025 proviennent de la moyenne de 09DC-SC01A et 09DC-SC01B (Aéroport de Mayo B).
 
 - **Rivière Hyland** (10AD-SC01) combine les relevés de l'ancienne station nivométrique de la rivière Hyland située près de la piste d'atterrissage de la rivière Hyland avec les nouveaux relevés pris à 6 kilomètres au nord de l'ancienne station depuis 2018. Cinq années de relevés concomitants (2018‑2022) ont été utilisées pour ajuster les données historiques d'ÉEN copiées de l'ancienne station à la nouvelle (un facteur de correction de 1.092 s'applique aux résultats d'ÉEN de 1976‑2017).
+
+- **ÉEN médian** La normale de l'ÉEN utilisée pour calculer le pourcentage de la normale de l'ÉEN dans le tableau 1 est basée sur l'ensemble des données historiques de chaque station, y compris les ajustements pour les stations composites. Par conséquent, les valeurs du pourcentage de la normale de l'ÉEN dans le tableau 1 peuvent différer des valeurs du pourcentage de la normale de l'ÉEN affichées dans la carte 3.
 ")
 }
 `
