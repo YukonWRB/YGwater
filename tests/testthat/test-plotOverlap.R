@@ -249,6 +249,7 @@ test_that("plotOverlap accepts hourly resolution", {
 })
 
 test_that("plotOverlap can show data in the past", {
+  skip_on_ci() # Because the CI instance would not have the necessary historical data
   if (
     !isTRUE(DBI::dbGetQuery(
       con,

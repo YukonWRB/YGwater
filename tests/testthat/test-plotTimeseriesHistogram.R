@@ -223,6 +223,7 @@ test_that("threshold and completeness fields are coherent", {
 })
 
 test_that("plotTimeseriesHistogram can show data in the past", {
+  skip_on_ci() # Because the CI instance would not have the necessary historical data
   skip_on_cran()
 
   if (
