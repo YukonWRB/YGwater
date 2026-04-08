@@ -5611,7 +5611,7 @@ make_ggplot_map <- function(
             )
         } else {
             snowbull_date <- paste(
-                "1ᵉʳ",
+                "1\u1D49\u02B3",
                 tr(snowbull_months(month, short = TRUE), language),
                 year,
                 sep = " "
