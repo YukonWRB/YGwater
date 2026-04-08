@@ -2154,6 +2154,7 @@ app_server <- function(input, output, session) {
     session$userData$config$dbPass <- config$dbPass
 
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
+    showViz(show = TRUE) # Restore public/viz tabs immediately without relying on the removed admin button
 
     # Clear the app_cache environment
     session$userData$app_cache <- new.env(parent = emptyenv())
@@ -2162,9 +2163,8 @@ app_server <- function(input, output, session) {
     # Send the user back to the 'home' tab if they were elsewhere
     updateTabsetPanel(session, "navbar", selected = "home")
 
-    # Reset admin_vis_flag to 'viz', and trigger an observeEvent to switch to the 'viz' mode which will return them to the last viz tab they were on. This will reload the module since the tab was previously set to 'home'.
-    admin_vis_flag("viz")
-    shinyjs::click("admin")
+    # Logout returns the shell to visualize mode, so keep the toggle state consistent for the next login.
+    admin_vis_flag("admin")
 
     # logout button is disabled on click to prevent multiple rapid clicks; re-enable after logout performed (it's hidden at this point but needs to be enabled for later use)
     shinyjs::runjs("$('#logoutBtn').prop('disabled', false);")
