@@ -1873,7 +1873,8 @@ app_server <- function(input, output, session) {
               fill = "#244C5A"
             ),
             class = "btn btn-link",
-            width = "50px"
+            width = "50px",
+            style = "border: none; border-color: transparent; box-shadow: none; outline: none; background: transparent; -webkit-appearance: none; appearance: none;"
           ),
           actionButton(
             "thumbs_down",
@@ -1883,7 +1884,8 @@ app_server <- function(input, output, session) {
               fill = "#244C5A"
             ),
             class = "btn btn-link",
-            width = "50px"
+            width = "50px",
+            style = "border: none; border-color: transparent; box-shadow: none; outline: none; background: transparent; -webkit-appearance: none; appearance: none;"
           )
         ),
         # Set background color of div

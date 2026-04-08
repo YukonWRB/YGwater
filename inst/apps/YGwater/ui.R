@@ -677,7 +677,8 @@ app_ui <- function(request) {
         nav_item(actionButton(
           "language_button",
           NULL,
-          class = "language-button"
+          class = "language-button",
+          style = "border: none; border-color: transparent; box-shadow: none; outline: none; background: transparent; -webkit-appearance: none; appearance: none;"
         )),
       ), # End page_navbar
 
