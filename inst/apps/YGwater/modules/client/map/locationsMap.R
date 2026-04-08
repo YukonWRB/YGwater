@@ -90,7 +90,15 @@ mapLocsUI <- function(id) {
     ),
     # All UI elements rendered in server function to allow multi-language functionality
     uiOutput(ns("banner")),
-    uiOutput(ns("sidebar_page"))
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar_controls"))
+      ),
+      leaflet::leafletOutput(ns("map"), height = '80vh')
+    )
   )
 }
 
@@ -217,14 +225,9 @@ mapLocs <- function(id, language) {
       )
     })
 
-    output$sidebar_page <- renderUI({
+    output$sidebar_controls <- renderUI({
       req(moduleData, language)
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          bg = config$sidebar_bg, # Set in globals file'
-          open = list(mobile = "always-above"),
-          tagList(
+      tagList(
             checkboxInput(
               ns("cluster_points"),
               label = tr("cluster_points_label", language$language),
@@ -352,9 +355,6 @@ mapLocs <- function(id, language) {
               tr("reset", language$language),
               class = "btn btn-primary"
             )
-          ) # End sidebar tagList
-        ),
-        leaflet::leafletOutput(ns("map"), height = '80vh'),
       )
     }) |>
       bindEvent(moduleData, language$language)
@@ -680,8 +680,7 @@ mapLocs <- function(id, language) {
           L.control.zoom({position:'bottomright'}).addTo(this);
         }"
         )
-    }) |>
-      bindEvent(language$language)
+    })
 
     # Filter the map data based on user's selection and add points to map ############################
 
