@@ -18,6 +18,7 @@ make_snowbull_map(
   start_year_historical = 1991,
   end_year_historical = 2020,
   language = "English",
+  october_start = NULL,
   con = NULL,
   format = "ggplot"
 )
