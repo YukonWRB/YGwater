@@ -751,18 +751,6 @@ table.on("click", "tr", function() {
       turbidity = db_table_fields("instruments", "calibrate_turbidity"),
       do = db_table_fields("instruments", "calibrate_dissolved_oxygen")
     )
-    check_only_supported <- lapply(
-      calibration_table_fields,
-      function(fields) "check_only" %in% fields
-    )
-    entry_mode_notice <- function(parameter_label) {
-      paste(
-        "Run dev/instrument_check_schema_patch.R to enable clean",
-        "check-only saves for",
-        parameter_label,
-        "records."
-      )
-    }
     normalized_entry_mode <- function(value, default = "check") {
       if (
         is.null(value) ||
@@ -775,9 +763,6 @@ table.on("click", "tr", function() {
       value[[1]]
     }
     parameter_entry_mode <- function(parameter_key, isolate_input = FALSE) {
-      if (!isTRUE(check_only_supported[[parameter_key]])) {
-        return("calibration")
-      }
       input_id <- if (parameter_key %in% names(entry_mode_input_ids)) {
         entry_mode_input_ids[[parameter_key]]
       } else {
@@ -1209,69 +1194,49 @@ table.on("click", "tr", function() {
       }
     })
     output$ph_entry_mode_ui <- renderUI({
-      if (!isTRUE(check_only_supported$ph)) {
-        helpText(entry_mode_notice("pH"))
-      } else {
-        radioButtons(
-          ns("ph_entry_mode"),
-          label = "Entry type",
-          choices = entry_mode_choices,
-          selected = "check",
-          inline = TRUE
-        )
-      }
+      radioButtons(
+        ns("ph_entry_mode"),
+        label = "Entry type",
+        choices = entry_mode_choices,
+        selected = "check",
+        inline = TRUE
+      )
     })
     output$spc_entry_mode_ui <- renderUI({
-      if (!isTRUE(check_only_supported$spc)) {
-        helpText(entry_mode_notice("conductivity"))
-      } else {
-        radioButtons(
-          ns("spc_entry_mode"),
-          label = "Entry type",
-          choices = entry_mode_choices,
-          selected = "check",
-          inline = TRUE
-        )
-      }
+      radioButtons(
+        ns("spc_entry_mode"),
+        label = "Entry type",
+        choices = entry_mode_choices,
+        selected = "check",
+        inline = TRUE
+      )
     })
     output$orp_entry_mode_ui <- renderUI({
-      if (!isTRUE(check_only_supported$orp)) {
-        helpText(entry_mode_notice("ORP"))
-      } else {
-        radioButtons(
-          ns("orp_entry_mode"),
-          label = "Entry type",
-          choices = entry_mode_choices,
-          selected = "check",
-          inline = TRUE
-        )
-      }
+      radioButtons(
+        ns("orp_entry_mode"),
+        label = "Entry type",
+        choices = entry_mode_choices,
+        selected = "check",
+        inline = TRUE
+      )
     })
     output$turb_entry_mode_ui <- renderUI({
-      if (!isTRUE(check_only_supported$turbidity)) {
-        helpText(entry_mode_notice("turbidity"))
-      } else {
-        radioButtons(
-          ns("turb_entry_mode"),
-          label = "Entry type",
-          choices = entry_mode_choices,
-          selected = "check",
-          inline = TRUE
-        )
-      }
+      radioButtons(
+        ns("turb_entry_mode"),
+        label = "Entry type",
+        choices = entry_mode_choices,
+        selected = "check",
+        inline = TRUE
+      )
     })
     output$do_entry_mode_ui <- renderUI({
-      if (!isTRUE(check_only_supported$do)) {
-        helpText(entry_mode_notice("dissolved oxygen"))
-      } else {
-        radioButtons(
-          ns("do_entry_mode"),
-          label = "Entry type",
-          choices = entry_mode_choices,
-          selected = "check",
-          inline = TRUE
-        )
-      }
+      radioButtons(
+        ns("do_entry_mode"),
+        label = "Entry type",
+        choices = entry_mode_choices,
+        selected = "check",
+        inline = TRUE
+      )
     })
 
     # Get the data from the database, make initial tables, populate UI elements ########################################
@@ -1955,9 +1920,8 @@ table.on("click", "tr", function() {
             NA_real_
           }
         )
-        if (isTRUE(check_only_supported$spc)) {
-          record$check_only <- spc_check_only
-        }
+        record$check_only <- spc_check_only
+
         return(record)
       }
       data.frame(
@@ -2283,9 +2247,8 @@ table.on("click", "tr", function() {
       })
     }
     reset_ph <- function() {
-      if (isTRUE(check_only_supported$ph)) {
-        updateRadioButtons(session, "ph_entry_mode", selected = "check")
-      }
+      updateRadioButtons(session, "ph_entry_mode", selected = "check")
+
       updateNumericInput(
         session,
         "ph1_std",
@@ -2369,9 +2332,8 @@ table.on("click", "tr", function() {
       shinyjs::hide("delete_temp")
     }
     reset_orp <- function() {
-      if (isTRUE(check_only_supported$orp)) {
-        updateRadioButtons(session, "orp_entry_mode", selected = "check")
-      }
+      updateRadioButtons(session, "orp_entry_mode", selected = "check")
+
       updateNumericInput(
         session,
         "orp_std",
@@ -2396,9 +2358,8 @@ table.on("click", "tr", function() {
     reset_spc <- function() {
       updateCheckboxInput(session, "spc_or_not", value = FALSE)
       updateRadioButtons(session, "spc_points", selected = 2)
-      if (isTRUE(check_only_supported$spc)) {
-        updateRadioButtons(session, "spc_entry_mode", selected = "check")
-      }
+      updateRadioButtons(session, "spc_entry_mode", selected = "check")
+
       updateNumericInput(
         session,
         "spc1_std",
@@ -2458,9 +2419,8 @@ table.on("click", "tr", function() {
       shinyjs::hide("delete_spc")
     }
     reset_turb <- function() {
-      if (isTRUE(check_only_supported$turbidity)) {
-        updateRadioButtons(session, "turb_entry_mode", selected = "check")
-      }
+      updateRadioButtons(session, "turb_entry_mode", selected = "check")
+
       updateNumericInput(
         session,
         "turb1_std",
@@ -2502,9 +2462,8 @@ table.on("click", "tr", function() {
       shinyjs::hide("delete_turb")
     }
     reset_do <- function() {
-      if (isTRUE(check_only_supported$do)) {
-        updateRadioButtons(session, "do_entry_mode", selected = "check")
-      }
+      updateRadioButtons(session, "do_entry_mode", selected = "check")
+
       updateNumericInput(
         session,
         "baro_press_pre",
@@ -2565,7 +2524,10 @@ table.on("click", "tr", function() {
       selected_rows <- selected_rows[selected_rows != 0]
 
       if (length(selected_rows) > 2) {
-        proxy <- DT::dataTableProxy("calibration_instruments_table", session = session)
+        proxy <- DT::dataTableProxy(
+          "calibration_instruments_table",
+          session = session
+        )
         DT::selectRows(proxy, NULL)
         alert(
           "Choose at most two instruments.",
@@ -4178,17 +4140,16 @@ table.on("click", "tr", function() {
               } else if (i == "calibrate_specific_conductance") {
                 output_name <- entry_display_labels$spc
                 complete$spc <- TRUE
-                if (isTRUE(check_only_supported$spc)) {
-                  updateRadioButtons(
-                    session,
-                    "spc_entry_mode",
-                    selected = if (sheet_check_only(sheet)) {
-                      "check"
-                    } else {
-                      "calibration"
-                    }
-                  )
-                }
+                updateRadioButtons(
+                  session,
+                  "spc_entry_mode",
+                  selected = if (sheet_check_only(sheet)) {
+                    "check"
+                  } else {
+                    "calibration"
+                  }
+                )
+
                 spc_point_count <- if (
                   "calibration_points" %in%
                     colnames(sheet) &&
@@ -4260,17 +4221,16 @@ table.on("click", "tr", function() {
               } else if (i == "calibrate_ph") {
                 output_name <- entry_display_labels$ph
                 complete$ph <- TRUE
-                if (isTRUE(check_only_supported$ph)) {
-                  updateRadioButtons(
-                    session,
-                    "ph_entry_mode",
-                    selected = if (sheet_check_only(sheet)) {
-                      "check"
-                    } else {
-                      "calibration"
-                    }
-                  )
-                }
+                updateRadioButtons(
+                  session,
+                  "ph_entry_mode",
+                  selected = if (sheet_check_only(sheet)) {
+                    "check"
+                  } else {
+                    "calibration"
+                  }
+                )
+
                 updateNumericInput(session, "ph1_std", value = sheet$ph1_std)
                 updateNumericInput(session, "ph2_std", value = sheet$ph2_std)
                 updateNumericInput(session, "ph3_std", value = sheet$ph3_std)
@@ -4333,17 +4293,16 @@ table.on("click", "tr", function() {
               } else if (i == "calibrate_orp") {
                 output_name <- entry_display_labels$orp
                 complete$orp <- TRUE
-                if (isTRUE(check_only_supported$orp)) {
-                  updateRadioButtons(
-                    session,
-                    "orp_entry_mode",
-                    selected = if (sheet_check_only(sheet)) {
-                      "check"
-                    } else {
-                      "calibration"
-                    }
-                  )
-                }
+                updateRadioButtons(
+                  session,
+                  "orp_entry_mode",
+                  selected = if (sheet_check_only(sheet)) {
+                    "check"
+                  } else {
+                    "calibration"
+                  }
+                )
+
                 updateNumericInput(session, "orp_std", value = sheet$orp_std)
                 updateNumericInput(
                   session,
@@ -4360,17 +4319,16 @@ table.on("click", "tr", function() {
               } else if (i == "calibrate_turbidity") {
                 output_name <- entry_display_labels$turbidity
                 complete$turbidity <- TRUE
-                if (isTRUE(check_only_supported$turbidity)) {
-                  updateRadioButtons(
-                    session,
-                    "turb_entry_mode",
-                    selected = if (sheet_check_only(sheet)) {
-                      "check"
-                    } else {
-                      "calibration"
-                    }
-                  )
-                }
+                updateRadioButtons(
+                  session,
+                  "turb_entry_mode",
+                  selected = if (sheet_check_only(sheet)) {
+                    "check"
+                  } else {
+                    "calibration"
+                  }
+                )
+
                 updateNumericInput(
                   session,
                   "turb1_std",
@@ -4406,17 +4364,16 @@ table.on("click", "tr", function() {
               } else if (i == "calibrate_dissolved_oxygen") {
                 output_name <- entry_display_labels$do
                 complete$do <- TRUE
-                if (isTRUE(check_only_supported$do)) {
-                  updateRadioButtons(
-                    session,
-                    "do_entry_mode",
-                    selected = if (sheet_check_only(sheet)) {
-                      "check"
-                    } else {
-                      "calibration"
-                    }
-                  )
-                }
+                updateRadioButtons(
+                  session,
+                  "do_entry_mode",
+                  selected = if (sheet_check_only(sheet)) {
+                    "check"
+                  } else {
+                    "calibration"
+                  }
+                )
+
                 updateNumericInput(
                   session,
                   "baro_press_pre",
@@ -5223,9 +5180,8 @@ table.on("click", "tr", function() {
             ph2_post_val = if (ph_check_only) NA_real_ else input$ph2_post_val,
             ph3_post_val = if (ph_check_only) NA_real_ else input$ph3_post_val
           )
-          if (isTRUE(check_only_supported$ph)) {
-            calibration_data$ph$check_only <- ph_check_only
-          }
+          calibration_data$ph$check_only <- ph_check_only
+
           if (!complete$ph) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
@@ -5263,14 +5219,10 @@ table.on("click", "tr", function() {
                 sql_numeric_or_null(calibration_data$ph$ph2_post_val),
                 ", ph3_post_val = ",
                 sql_numeric_or_null(calibration_data$ph$ph3_post_val),
-                if (isTRUE(check_only_supported$ph)) {
-                  paste0(
-                    ", check_only = ",
-                    sql_boolean_literal(ph_check_only)
-                  )
-                } else {
-                  ""
-                },
+                paste0(
+                  ", check_only = ",
+                  sql_boolean_literal(ph_check_only)
+                ),
                 " WHERE calibration_id = ",
                 calibration_data$next_id
               )
@@ -5611,9 +5563,8 @@ table.on("click", "tr", function() {
             orp_pre_mv = input$orp_pre_mv,
             orp_post_mv = if (orp_check_only) NA_real_ else input$orp_post_mv
           )
-          if (isTRUE(check_only_supported$orp)) {
-            calibration_data$orp$check_only <- orp_check_only
-          }
+          calibration_data$orp$check_only <- orp_check_only
+
           if (!complete$orp) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
@@ -5632,14 +5583,10 @@ table.on("click", "tr", function() {
                 input$orp_pre_mv,
                 ", orp_post_mv = ",
                 sql_numeric_or_null(calibration_data$orp$orp_post_mv),
-                if (isTRUE(check_only_supported$orp)) {
-                  paste0(
-                    ", check_only = ",
-                    sql_boolean_literal(orp_check_only)
-                  )
-                } else {
-                  ""
-                },
+                paste0(
+                  ", check_only = ",
+                  sql_boolean_literal(orp_check_only)
+                ),
                 " WHERE calibration_id = ",
                 calibration_data$next_id
               )
@@ -5991,14 +5938,9 @@ table.on("click", "tr", function() {
                       "    spc3_std = $8,",
                       "    spc3_pre = $9,",
                       "    spc3_post = $10",
-                      if (isTRUE(check_only_supported$spc)) {
-                        "    , check_only = $11"
-                      } else {
-                        ""
-                      },
+                      "    , check_only = $11",
                       paste0(
-                        "WHERE calibration_id = $",
-                        if (isTRUE(check_only_supported$spc)) 12 else 11
+                        "WHERE calibration_id = $12"
                       )
                     ),
                     params = unname(as.list(c(
@@ -6012,9 +5954,7 @@ table.on("click", "tr", function() {
                       calibration_data$spc$spc3_std[1],
                       calibration_data$spc$spc3_pre[1],
                       calibration_data$spc$spc3_post[1],
-                      if (isTRUE(check_only_supported$spc)) {
-                        calibration_data$spc$check_only[1]
-                      },
+                      calibration_data$spc$check_only[1],
                       calibration_data$next_id
                     )))
                   )
@@ -6231,9 +6171,8 @@ table.on("click", "tr", function() {
             turb2_pre = input$turb2_pre,
             turb2_post = if (turb_check_only) NA_real_ else input$turb2_post
           )
-          if (isTRUE(check_only_supported$turbidity)) {
-            calibration_data$turb$check_only <- turb_check_only
-          }
+          calibration_data$turb$check_only <- turb_check_only
+
           if (!complete$turbidity) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
@@ -6258,14 +6197,10 @@ table.on("click", "tr", function() {
                 input$turb2_pre,
                 ", turb2_post = ",
                 sql_numeric_or_null(calibration_data$turb$turb2_post),
-                if (isTRUE(check_only_supported$turbidity)) {
-                  paste0(
-                    ", check_only = ",
-                    sql_boolean_literal(turb_check_only)
-                  )
-                } else {
-                  ""
-                },
+                paste0(
+                  ", check_only = ",
+                  sql_boolean_literal(turb_check_only)
+                ),
                 " WHERE calibration_id = ",
                 calibration_data$next_id
               )
@@ -6450,9 +6385,8 @@ table.on("click", "tr", function() {
             do_pre_mgl = input$do_pre,
             do_post_mgl = if (do_check_only) NA_real_ else input$do_post
           )
-          if (isTRUE(check_only_supported$do)) {
-            calibration_data$do$check_only <- do_check_only
-          }
+          calibration_data$do$check_only <- do_check_only
+
           if (!complete$do) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
@@ -6474,14 +6408,10 @@ table.on("click", "tr", function() {
                 input$do_pre,
                 ", do_post_mgl = ",
                 sql_numeric_or_null(calibration_data$do$do_post_mgl),
-                if (isTRUE(check_only_supported$do)) {
-                  paste0(
-                    ", check_only = ",
-                    sql_boolean_literal(do_check_only)
-                  )
-                } else {
-                  ""
-                },
+                paste0(
+                  ", check_only = ",
+                  sql_boolean_literal(do_check_only)
+                ),
                 " WHERE calibration_id = ",
                 calibration_data$next_id
               )
