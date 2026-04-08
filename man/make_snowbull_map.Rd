@@ -52,6 +52,8 @@ make_snowbull_map(
 
 \item{language}{Character string indicating the language for labels and legends. 'French' or 'English'; default is "English".}
 
+\item{october_start}{Logical, whether to use October 1st as the start of the water year for calculating historical norms (default: FALSE)}
+
 \item{con}{Optional database connection, if not provided a default connection will be used}
 
 \item{format}{Character string indicating the output format: "ggplot", "leaflet", or "shiny",}

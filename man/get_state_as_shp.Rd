@@ -12,6 +12,8 @@ get_state_as_shp(data, year, month, october_start)
 \item{year}{Integer target year for data extraction}
 
 \item{month}{Integer target month for data extraction}
+
+\item{october_start}{Logical indicating whether to use October start for norm calculation (default FALSE)}
 }
 \value{
 data.frame subset of metadata with additional SWE value columns:
