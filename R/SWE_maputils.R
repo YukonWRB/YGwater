@@ -468,6 +468,7 @@ get_dynamic_style_elements <- function(
 #' Creates a color mapping for SWE values based on predefined bins and colors.
 #'
 #' @param values Numeric vector of SWE values
+#' @param style_elements List of style elements from \code{get_dynamic_style_elements}, or a function that returns such a list
 #' @return Character vector of color hex codes
 #' @noRd
 
@@ -533,6 +534,11 @@ get_most_recent_date <- function(ts) {
     return(latest_time)
 }
 
+#' Get the latest datetime with any non-NA data across all station columns
+#'
+#' @param ts data.frame with a 'datetime' column and one or more station value columns
+#' @return POSIXct datetime of the most recent row with at least one non-NA value, or \code{NA} if none found
+#' @noRd
 get_latest_timeseries_datetime <- function(ts) {
     if (is.null(ts) || !is.data.frame(ts) || !"datetime" %in% names(ts)) {
         return(as.POSIXct(NA))
@@ -556,6 +562,13 @@ get_latest_timeseries_datetime <- function(ts) {
     latest_date
 }
 
+#' Determine the most recent year and month with data in a bulletin timeseries
+#'
+#' @param snowbull_timeseries Named list returned by \code{load_bulletin_timeseries}
+#' @param param_name Character string parameter name; one of "snow water equivalent",
+#'   "precipitation, total", or "temperature, air"
+#' @return Named list with integer elements \code{year} and \code{month}, or \code{NA} if no data found
+#' @noRd
 get_latest_bulletin_month_year <- function(
     snowbull_timeseries,
     param_name = "snow water equivalent"
@@ -603,6 +616,11 @@ get_latest_bulletin_month_year <- function(
     )
 }
 
+#' Render a leaflet widget to a self-contained HTML string
+#'
+#' @param widget A leaflet widget object
+#' @return Character string containing the full self-contained HTML of the widget
+#' @noRd
 render_leaflet_widget_html <- function(widget) {
     requireNamespace("pandoc")
 
@@ -631,6 +649,23 @@ render_leaflet_widget_html <- function(widget) {
     paste(readLines(tmp_file, warn = FALSE), collapse = "\n")
 }
 
+#' Create a self-contained HTML string for the snow bulletin leaflet map
+#'
+#' @param year Integer bulletin year. If NULL, determined from the data.
+#' @param month Integer bulletin month (1-12). If NULL, determined from the data.
+#' @param param_name Character string parameter name (default "snow water equivalent")
+#' @param statistic Character string statistic type (default "relative_to_med")
+#' @param language Character string display language (default "English")
+#' @param con DBI database connection. If NULL, a connection is opened and closed automatically.
+#' @param snowbull_shapefiles Optional pre-loaded shapefiles list
+#' @param snowbull_timeseries Optional pre-loaded timeseries list from \code{load_bulletin_timeseries}
+#' @return Named list with elements:
+#' \describe{
+#'   \item{html}{Character string of self-contained HTML for the leaflet map}
+#'   \item{year}{Integer bulletin year used}
+#'   \item{month}{Integer bulletin month used}
+#' }
+#' @noRd
 create_snowbull_leaflet_html <- function(
     year = NULL,
     month = NULL,
@@ -1862,7 +1897,11 @@ load_snowcourse_factors <- function(
 # DATA PROCESSING FUNCTIONS
 # =============================================================================
 
-# Helper: get aggregation function by parameter
+#' Get aggregation function for a given parameter
+#'
+#' @param param_name Character string parameter name
+#' @return A function (e.g., \code{sum} or \code{mean}) appropriate for aggregating the parameter
+#' @noRd
 get_aggr_fun <- function(param_name) {
     switch(
         param_name,
@@ -1874,7 +1913,11 @@ get_aggr_fun <- function(param_name) {
     )
 }
 
-# Helper: get station names from ts
+#' Get station column names from a wide-format timeseries data.frame
+#'
+#' @param ts data.frame with a 'datetime' column and station value columns
+#' @return Character vector of column names excluding 'datetime'
+#' @noRd
 get_station_names <- function(ts) {
     setdiff(colnames(ts), "datetime")
 }
@@ -1907,10 +1950,19 @@ get_period_dates <- function(year, month, october_start = FALSE) {
     list(start_date = start_date, end_date = end_date)
 }
 
-# Helper: get indices for a given parameter and period
-# e.g., for SWE or FDD, just grab the SWE measurement on the period end_date
-# for precipitation/temperature, grab all dates in the range
-# precip gets summed over the period, temp gets averaged
+#' Get row indices for a given parameter and date range
+#'
+#' @description
+#' For instantaneous parameters (SWE, FDD, water level, water flow) returns the index
+#' matching \code{end_date} exactly. For cumulative parameters (precipitation, temperature)
+#' returns all indices within \code{[start_date, end_date)}.
+#'
+#' @param param_name Character string parameter name
+#' @param ts data.frame with a 'datetime' column
+#' @param start_date Date or POSIXct start of the period (inclusive)
+#' @param end_date Date or POSIXct end of the period (exclusive for ranges, exact match for instantaneous)
+#' @return Integer vector of matching row indices
+#' @noRd
 get_indices <- function(param_name, ts, start_date, end_date) {
     switch(
         param_name,
@@ -2091,6 +2143,25 @@ get_bulletin_value <- function(
 }
 
 
+#' Calculate normalized bulletin statistics for all stations
+#'
+#' @param bulletin_month Integer bulletin month (1-12)
+#' @param bulletin_year Integer bulletin year
+#' @param ts Wide-format data.frame with 'datetime' column and station columns
+#' @param norms List returned by \code{get_norms} containing \code{station_norms} and \code{historical_distr}
+#' @param param_name Character string parameter name
+#' @param october_start Logical; if TRUE the aggregation period starts in October of the previous year
+#' @param as_table Logical; currently unused, reserved for future tabular output format
+#' @return Named list with elements:
+#' \describe{
+#'   \item{current}{Named numeric vector of current bulletin values per station}
+#'   \item{relative_to_norm}{Named numeric vector of values as \% of historical median}
+#'   \item{norm}{Named numeric vector of historical median values per station}
+#'   \item{percentiles}{Named numeric vector of percentile ranks (0-100) per station}
+#'   \item{anomalies}{Named numeric vector of absolute deviations from the norm per station}
+#'   \item{last_year}{Named numeric vector of values from the previous year per station}
+#' }
+#' @noRd
 get_normalized_bulletin_values <- function(
     bulletin_month,
     bulletin_year,
@@ -2833,7 +2904,12 @@ get_km_to_crs_correction <- function(epsg) {
 
 
 #### --------------- D: Functions to create CDDF plots -------------------- ####
-# Function for calculating CDDF
+#' Calculate Cumulative Degree Days of Freezing (CDDF) for temperature stations
+#'
+#' @param temps Wide-format data.frame with 'datetime' column and station temperature columns (degrees Celsius)
+#' @param year Integer target year used to determine which station-years have sufficient data
+#' @return Wide-format data.frame with 'datetime' column and one CDDF column per station
+#' @noRd
 getCDDF <- function(temps, year) {
     # Function for calculating cddf of dataframe (with all dates of interest)
     calcCDDF <- function(temps) {
@@ -3307,6 +3383,18 @@ load_bulletin_timeseries <- function(
             " ",
             as.character(snowbull_timeseries$swe$basins$metadata$annotation_en)
         )
+
+        snowbull_timeseries$swe$basins$metadata$annotation_fr <- gsub(
+            "/",
+            " ",
+            as.character(snowbull_timeseries$swe$basins$metadata$annotation_fr)
+        )
+
+        snowbull_timeseries$swe$basins$metadata$annotation_en <- gsub(
+            "_",
+            " ",
+            as.character(snowbull_timeseries$swe$basins$metadata$annotation_en)
+        )
         snowbull_timeseries$swe$basins$metadata$annotation_fr <- gsub(
             "_",
             " ",
@@ -3398,7 +3486,7 @@ load_bulletin_timeseries <- function(
         precip_data <- download_continuous_ts(
             con,
             param_name = "precipitation, total",
-            start_date = "1980-01-01",
+            start_date = "1900-01-01",
             epsg = epsg
         )
 
@@ -3418,7 +3506,7 @@ load_bulletin_timeseries <- function(
         temp_data <- download_continuous_ts(
             con,
             param_name = "temperature, air",
-            start_date = "1980-01-01",
+            start_date = "1900-01-01",
             epsg = epsg
         )
 
@@ -3471,7 +3559,7 @@ load_bulletin_timeseries <- function(
         water_level <- download_continuous_ts(
             con,
             param_name = "water level",
-            start_date = "1990-01-01",
+            start_date = "1900-01-01",
             epsg = epsg
         )
 
@@ -3562,7 +3650,7 @@ load_bulletin_timeseries <- function(
         water_flow <- download_continuous_ts(
             con,
             param_name = "water flow",
-            start_date = "1990-01-01",
+            start_date = "1900-01-01",
             epsg = epsg
         )
 
@@ -3617,8 +3705,6 @@ load_bulletin_timeseries <- function(
 #' @param con DBI database connection object
 #' @param year Integer year for which to load survey data (default 2025)
 #' @param month Integer month for which to load survey data (default 3)
-#' @param epsg Integer EPSG code for coordinate reference system (default 4326)
-#'
 #' @param epsg Integer EPSG code for coordinate reference system (default 4326)
 #'
 #' @return a table containing summary of snow survey stations with their associated basins
@@ -4228,18 +4314,21 @@ load_bulletin_shapefiles <- function(con, epsg = 4326) {
         }
     }
 
-    waterbodies <- download_spatial_layer(
-        con = con,
-        layer_name = "Waterbodies",
-        epsg = epsg
-    )
+    # only load if ggplot projection
+    if (epsg != 4326) {
+        waterbodies <- download_spatial_layer(
+            con = con,
+            layer_name = "Waterbodies",
+            epsg = epsg
+        )
 
-    waterbodies <- suppressWarnings(sf::st_intersection(
-        waterbodies,
-        snowbull_shapefiles$yukon
-    ))
+        waterbodies <- suppressWarnings(sf::st_intersection(
+            waterbodies,
+            snowbull_shapefiles$yukon
+        ))
 
-    snowbull_shapefiles$waterbodies <- waterbodies
+        snowbull_shapefiles$waterbodies <- waterbodies
+    }
 
     return(snowbull_shapefiles)
 }
@@ -5465,16 +5554,49 @@ make_ggplot_map <- function(
 
         # Annotate points with statistic values for precipitation and temperature
         if (param_name %in% c("precipitation, total", "temperature, air")) {
+            annotation_units <- switch(
+                param_name,
+                "precipitation, total" = "%",
+                "temperature, air" = "\u00B0C",
+                ""
+            )
+
+            labels <- as.character(round(point_data[[statistic]], 1))
+
+            if (lang_short == "en") {
+                labels <- paste0(
+                    labels,
+                    annotation_units
+                )
+                labels <- gsub(
+                    paste0("NA", annotation_units),
+                    "NA",
+                    labels
+                )
+            } else {
+                if (lang_short == "fr") {
+                    labels <- gsub("\\.", ",", labels)
+                }
+
+                labels <- paste0(
+                    labels,
+                    " ",
+                    annotation_units
+                )
+                labels <- gsub(
+                    paste0("NA", " ", annotation_units),
+                    "S. O.",
+                    labels
+                )
+            }
+
             p <- p +
                 shadowtext::geom_shadowtext(
                     data = point_data,
                     ggplot2::aes(
                         x = .data$x,
                         y = .data$y,
-                        label = paste0(
-                            as.character(round(.data[[statistic]], 1)),
-                            "%"
-                        )
+                        label = labels
                     ),
                     size = 3.5,
                     color = "black",
@@ -5482,8 +5604,8 @@ make_ggplot_map <- function(
                     bg.r = 0.15,
                     vjust = 0.5,
                     hjust = 1,
-                    nudge_x = -12000,
-                    nudge_y = -5000
+                    nudge_x = -13500,
+                    nudge_y = -6000
                 )
         }
     }

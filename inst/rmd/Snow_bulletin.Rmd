@@ -24,7 +24,7 @@ date: "`r if (params$language == 'english') paste0(month.name[params$month],' 1,
 ---
 
 ```{r loading_timeseries, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 400)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, dpi = 200)
 # TODO: Deal with commented out code
 # TODO: assignement of parameters passed on from snowBulletin function to parameters like language, etc is not necessary. Can be used directly.
 fig.height_half <- 2.9
@@ -328,9 +328,9 @@ snowbullpillow <- function(timeseries, loc_name, location_id, subplot = "") {
     gridy = FALSE,
     datum = FALSE,
     ref_period_start_datetime = ref_period_start_datetime,
-    ref_period_end_datetime = ref_period_end_datetime
+    ref_period_end_datetime = ref_period_end_datetime,
+    legend = FALSE
   )
-  plot <- plot + ggplot2::theme(legend.position = "none")
 
   plot <- plot + ggplot2::labs(y = paste(trb("rmd_swe_abbrev"), " (mm)"))
 
@@ -530,6 +530,9 @@ snowBullPrecip <- function(
 
   ts_monthly$units <- "mm"
 
+
+  write.csv(ts_monthly, paste0("C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe\\precip_monthly_", loc_name, ".csv"), row.names = FALSE)
+
   # Remove data for the current bulletin year/month
   ts_monthly <- ts_monthly[!(ts_monthly$year == bulletin_year & ts_monthly$month == sprintf("%02d", bulletin_month)), ]
 
@@ -541,6 +544,7 @@ snowBullPrecip <- function(
 
   if (grepl("old crow", loc_name_lower)) {
     ts_monthly <- ts_monthly[ts_monthly$year != 2011, ]
+    ts_monthly <- ts_monthly[ts_monthly$year != 1974, ]
   } else if (grepl("teslin", loc_name_lower)) {
     ts_monthly[ts_monthly$year == 2013 & ts_monthly$month == 12, "value"] <-
       ts_monthly[ts_monthly$year == 2013 & ts_monthly$month == 12, "value"] + 63
@@ -548,8 +552,12 @@ snowBullPrecip <- function(
       ts_monthly[ts_monthly$year == 2011 & ts_monthly$month == 1, "value"] - 83
   } else if (grepl("dawson", loc_name_lower)) {
     ts_monthly <- ts_monthly[!(ts_monthly$year == 2008 & ts_monthly$month == 2), ]
+    ts_monthly <- ts_monthly[!(ts_monthly$year == 1907 & ts_monthly$month == 10), ]
+    ts_monthly <- ts_monthly[!(ts_monthly$year == 1919 & ts_monthly$month == 11), ]
   } else if (grepl("watson", loc_name_lower)) {
     ts_monthly <- ts_monthly[ts_monthly$year != 2009, ]
+  } else if (grepl("mayo", loc_name_lower)) {
+    ts_monthly <- ts_monthly[ts_monthly$year != 1949, ]
   }
 
   plot <- hydrometDiscrete(
@@ -570,6 +578,7 @@ snowBullPrecip <- function(
     ref_period_end_datetime = ref_period_end_datetime
   )
   plot <- plot + ggplot2::theme(legend.position = "none")
+
 
   # Define a custom date labeling function
   custom_date_labels <- function(x) {
@@ -950,7 +959,7 @@ paste0(
 "[Yukon.ca/snow-survey](https://yukon.ca/snow-survey)\n\n",
 "ISSN 1705-883X\n\n",
 "Reference to this report should be made in the following form:  \n",
-"Yukon Snow Survey Bulletin and Water Supply Forecast, ", month_names[bulletin_month], " 1 ", bulletin_year, "\n\n",
+"Yukon Snow Survey Bulletin and Water Supply Forecast, ", month_names[bulletin_month], " 1, ", bulletin_year, "\n\n",
 "\u00A9 ", month_names[bulletin_month], " ", bulletin_year, "  \n",
 "Water Science and Stewardship  \n",
 "Department of Environment  \n",
@@ -1019,7 +1028,7 @@ Agencies cooperating with the Department of Environment in the Snow Survey Progr
 -   *Parks Canada, Kluane National Park and Reserve*
 -   *Yukon Department of Highways and Public Works*
 -   *Yukon Department of Energy Mines and Resources, Compliance Monitoring and Inspections Branch*
--   *Yukon Department of Environment, Client, Business and Technology Solutions*
+-   *Yukon Department of Environment, Client and Technology Services*
 -   *Vuntut Gwitchin First Nation*
 -   *Yukon Energy Corporation, Plant Operations*
 ")
@@ -1043,7 +1052,7 @@ Organismes collaborant avec le ministère de l’Environnement du Yukon au Progr
 -   *Parcs Canada, parc national et réserve de parc national Kluane*
 -   *Ministère de la Voirie et des Travaux publics du Yukon*
 -   *Ministère de l’Énergie, des Mines et des Ressources du Yukon, Direction de la conformité, de la surveillance et des inspections*
--   *Ministère de l’Environnement du Yukon, Direction des solutions technologiques et des services aux particuliers et aux entreprises*
+-   *Ministère de l’Environnement du Yukon, Services aux particuliers*
 -   *Première Nation des Gwitchin Vuntut*
 ")
 }`
@@ -1078,7 +1087,7 @@ paste0("
 
 - A climate normal reference period is now calculated for all parameters. The normal is the median of the current reference period, October 1990 to September 2020. The reference period uses “water years” as opposed to calendar years. This is important as snowpack begins accumulating in the fall and influences the following summer water levels and flows. The normal range is represented by the grey shaded areas within plots. Historical maximum and minimum bounds are also included.
 - A new section, *How to Read This Bulletin*, is included with annotated figures to help readers interpret the information presented in each figure. 
-",if(bulletin_month == 4){paste0("\n- Previously, the April 1 and May 1 temperature and precipitation maps displayed anomalies for the previous month while the March 1 maps displayed the October through February anomalies. The April 1 and May 1 temperature and precipitation maps will now also show cumulative anomalies from October through the preceding month to better summarize the winter to date.
+",if(bulletin_month == 4){paste0("\n- Previously, the April 1 and May 1 bulletin temperature and precipitation maps displayed anomalies for the previous month while the March 1 bulletin maps displayed the October through February anomalies. The April 1 and May 1 bulletin temperature and precipitation maps will now also show cumulative anomalies from October through the preceding month to better summarize the winter to date.
 ")}
 )
 } else {
@@ -1123,14 +1132,14 @@ paste0("
 
 `r if (language$abbrev == "en") {
   paste0(
-"-   **Figure A:** Daily SWE data starting in September at one specific location in the watershed, showing the current winter snowpack evolution (black line) compared with historical data from the fall 1990 to spring 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record.")
+"-   **Figure A:** Daily SWE data starting in September at one specific location in the watershed, showing the current winter snowpack evolution (black line) compared with historical data from the October 1990 to September 2020 reference period (grey shaded areas) augmented with historical maximum and minimum bounds (blue and brown lines, respectively) over the entire period of record.")
 } else {
   paste0(
   "-   **Figure A:** Données quotidiennes de l'ÉEN commençant en septembre à un endroit spécifique du bassin versant, montrant l'évolution du couvert de neige hivernal actuel (ligne noire) comparée aux données historiques de la période de référence d'octobre 1990 à septembre 2020 (zones ombrées en gris) augmentées des limites historiques maximales et minimales (respectivement lignes bleue et brune) sur l'ensemble de la période d'observation.")
 }
 `
 
-```{r EXAMPLE_PLOT_A, echo=FALSE, eval=TRUE, fig.show='hold', out.width="50%", fig.height=fig.height_half}
+```{r EXAMPLE_PLOT_A, echo=FALSE, eval=TRUE, fig.show='hold', out.width="3.75196in"}
 fig_name <- ifelse(language$abbrev == "en", "plot_a.png", "plot_a_fr.png")
 knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater"))
 ```
@@ -1143,7 +1152,7 @@ paste0("
 }
 `
 
-```{r EXAMPLE_PLOT_B, echo=FALSE, eval=TRUE, fig.show='hold', out.width="50%", fig.height=fig.height_half}
+```{r EXAMPLE_PLOT_B, echo=FALSE, eval=TRUE, fig.show='hold', out.width="3.75196in"}
 fig_name <- ifelse(language$abbrev == "en", "plot_b.png", "plot_b_fr.png")
 knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater"))
 ```
@@ -1157,7 +1166,7 @@ paste0("
 }
 `
 
-```{r EXAMPLE_PLOT_C, echo=FALSE, eval=TRUE, fig.show='hold', out.width="50%", fig.height=fig.height_half}
+```{r EXAMPLE_PLOT_C, echo=FALSE, eval=TRUE, fig.show='hold', out.width="3.75196in"}
 fig_name <- ifelse(language$abbrev == "en", "plot_c.png", "plot_c_fr.png")
 knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater"))
 ```
@@ -1171,7 +1180,7 @@ paste0("
 }
 `
 
-```{r EXAMPLE_PLOT_D, echo=FALSE, eval=TRUE, fig.show='hold', out.width="50%", fig.height=fig.height_half}
+```{r EXAMPLE_PLOT_D, echo=FALSE, eval=TRUE, fig.show='hold', out.width="3.75196in"}
 fig_name <- ifelse(language$abbrev == "en", "plot_d.png", "plot_d_fr.png")
 knitr::include_graphics(system.file(paste0("rmd/", fig_name), package = "YGwater"))
 ```
@@ -1498,7 +1507,7 @@ fdd <- fdd_table[fdd_table$name == met_name, ]
 ```
 
 `r if (language$abbrev == "en") "Whitehorse precipitation has been " else "Les précipitations à Whitehorse ont été "`
-`r officer::ftext(precip$description, get_text_fmt(precip$text_colour))`. 
+`r officer::ftext(precip$description, get_text_fmt(precip$text_colour))`
 `r if (language$abbrev == "en") {
 paste0("from October through ", month_names[bulletin_month-1], " (Figure", knitr::asis_output("\U00A0"), "C). Cumulative winter precipitation was **", precip$relative_to_med, "%** of normal on ", month_names[bulletin_month], " 1. Cumulative degree-days of freezing (CDDF) are **", fdd$relative_to_med, "%** of normal, with **", fdd$value, "\u00B0C-Days** on ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "D), which suggests ", iceThickness(fdd$relative_to_med), " on rivers and lakes of the region.")
 } else  {
@@ -2386,22 +2395,22 @@ future <- get_future_flow_conditions(hydrometric = flow$relative_to_med, swe = b
 
 
 
-`r if (is.na(basin_swe$display_value)) {
+<!-- `r if (is.na(basin_swe$display_value)) {
   if (language$abbrev == "en") {
     paste0("The Porcupine River Basin snowpack cannot be estimated for March 1 due to a lack of data (Figure B). Avalanches on the Dempster Highway prevented access to key basin snow courses. However, the Old Crow snow survey returned a snowpack of 102% of normal and climate modelling suggests close to normal snowpack for the basin. ")
   } else {
     paste0("L'accumulation de neige dans le bassin de la rivière Porcupine ne peut être estimée au 1^er^ mars en raison d'une insuffisance de données (figure B). Des avalanches sur l'autoroute Dempster ont rendu l'accès aux principaux relevés nivométriques du bassin impossible. Cependant, le relevé nivométrique d'Old Crow a montré une accumulation de neige de 102% de la normale, et la modélisation climatique laisse supposer une accumulation de neige près de la normale pour le bassin.")
   }
 }
-`
+` -->
 
-<!-- `r if (language$abbrev == "en") "The Porcupine River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Porcupine est"`
+`r if (language$abbrev == "en") "The Porcupine River Basin snowpack is" else "L’accumulation de neige dans le bassin de la rivière Porcupine est"`
 `r officer::ftext(basin_swe$description, get_text_fmt(basin_swe$text_colour))`.
 `r if (language$abbrev == "en") {
 paste0("The basin-averaged Snow Water Equivalent (SWE) is estimated to be **", basin_swe$relative_to_med, "%** of normal, with **", basin_swe$value, " mm** as of ", month_names[bulletin_month], " 1 (Figure", knitr::asis_output("\U00A0"), "B).")
 } else {
 paste0("Au 1^er^ ", month_names[bulletin_month], ", l'ÉEN moyen du bassin est estimé à **", basin_swe$relative_to_med, knitr::asis_output("\U00A0"), "%** de la normale, soit **", basin_swe$value, " mm** (figure", knitr::asis_output("\U00A0"), "B).")
-}` -->
+}`
 
 ```{r Porcupine_basin, echo=FALSE, eval=include, fig.show='hold', out.width="50%", fig.height=fig.height_half}
 # B
@@ -2963,12 +2972,12 @@ paste0("
 <p>&nbsp;</p>
 **Date notes:**
 
-**N.S.** - No survey\n
-**B** - Survey date is outside of valid sampling range 
+**N.S.** - No survey.\n
+**B** - Survey date is outside of valid sampling range. 
 <p>&nbsp;</p>
 **SWE notes:**
 
-**E** - Estimated results from snow depth readings and average snow densities observed in location historical records.\n
+**E** - Estimated results from snow depth readings and average snow densities observed in location historical record.\n
 **R** - New record (historical maximum or minimum).
 <p>&nbsp;</p>
 **Median historical SWE and Years of record notes: **
