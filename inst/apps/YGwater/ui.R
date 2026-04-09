@@ -81,12 +81,18 @@ app_ui <- function(request) {
         type = "text/css",
         href = "css/top-bar.css"
       ), # Top bar size, position, etc.
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
+      # Old YG_bs5  CSS file is huge. Commented out, YG_bs5_compact.css only targets the necesasry pieces.
+      # tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
       tags$link(
         rel = "stylesheet",
         type = "text/css",
         href = "css/buttons.css"
       ), # styling for hover effects on buttons with YG colors
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/YG_bs5_compact.css"
+      ), # minimal replacements for legacy YG_bs5.css button and DT stripe styles
       # Allow datatable filters to overflow the table, helpful when table is filtered to only a few rows.
       tags$style(
         HTML(
@@ -188,7 +194,7 @@ app_ui <- function(request) {
         ), # Just above any leaflet possibilities which only go up to 1000. Otherwise the map overlays the open nav menus.
         fluid = TRUE,
         lang = "en",
-        theme = NULL, # Theme is set earlier by css file reference
+        theme = NULL, # Theme is set earlier by css file references
         gap = "10px",
         nav_panel(
           title = uiOutput("homeNavTitle"),
@@ -671,7 +677,8 @@ app_ui <- function(request) {
         nav_item(actionButton(
           "language_button",
           NULL,
-          class = "language-button"
+          class = "language-button",
+          style = "border: none; border-color: transparent; box-shadow: none; outline: none; background: transparent; -webkit-appearance: none; appearance: none;"
         )),
       ), # End page_navbar
 

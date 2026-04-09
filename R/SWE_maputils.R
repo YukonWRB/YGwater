@@ -2565,6 +2565,7 @@ split_communities <- function(communities) {
 #' @param data List containing timeseries and metadata from download functions
 #' @param year Integer target year for data extraction
 #' @param month Integer target month for data extraction
+#' @param october_start Logical indicating whether to use October start for norm calculation (default FALSE)
 #' @return data.frame subset of metadata with additional SWE value columns:
 #' \describe{
 #'   \item{swe}{Absolute SWE value in mm}
@@ -5733,7 +5734,7 @@ make_ggplot_map <- function(
             )
         } else {
             snowbull_date <- paste(
-                "1ᵉʳ",
+                "1\u1D49\u02B3",
                 tr(snowbull_months(month, short = TRUE), language),
                 year,
                 sep = " "
@@ -5921,6 +5922,7 @@ make_ggplot_map <- function(
 #' @param dpi Numeric resolution in dots per inch (default: 300)
 #' @param param_name Character, parameter to plot (default: "swe")
 #' @param statistic Character, "absolute", "relative_to_med" (relative to median) or "percentile" (default: "relative_to_med")
+#' @param october_start Logical, whether to use October 1st as the start of the water year for calculating historical norms (default: FALSE)
 #' @param language Character string indicating the language for labels and legends. 'French' or 'English'; default is "English".
 #' @param con Optional database connection, if not provided a default connection will be used
 #' @param format Character string indicating the output format: "ggplot", "leaflet", or "shiny",

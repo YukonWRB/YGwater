@@ -21,7 +21,15 @@ mapParamsUI <- function(id) {
     # All UI elements rendered in server function to allow multi-language functionality
     uiOutput(ns("banner")),
     uiOutput(ns("top")),
-    uiOutput(ns("main"))
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar_controls"))
+      ),
+      leaflet::leafletOutput(ns("map"), height = '80vh')
+    )
   )
 } # End of mapParamsUI
 
@@ -72,15 +80,9 @@ mapParams <- function(id, language) {
     }) |> # End of renderUI for instructions
       bindEvent(language$language)
 
-    output$main <- renderUI({
+    output$sidebar_controls <- renderUI({
       req(moduleData, language)
-      mapCreated(FALSE)
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          bg = config$sidebar_bg, # Set in globals file
-          open = list(mobile = "always-above"),
-          tagList(
+      tagList(
             selectizeInput(
               ns("mapType"),
               label = tr("map_mapType", language$language),
@@ -145,10 +147,6 @@ mapParams <- function(id, language) {
                 class = "btn btn-primary"
               )
             }
-          )
-        ),
-        # Main panel (left)
-        leaflet::leafletOutput(ns("map"), height = '80vh')
       )
     }) |>
       bindEvent(language$language)
@@ -412,6 +410,8 @@ mapParams <- function(id, language) {
 
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
+      map_type <- req(input$mapType)
+
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
         return()
@@ -724,7 +724,7 @@ mapParams <- function(id, language) {
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
 
-      if (input$mapType == "actual") {
+      if (map_type == "actual") {
         actual_vals <- mapping_data$value
 
         if (length(actual_vals) == 0) {
@@ -811,14 +811,14 @@ mapParams <- function(id, language) {
           lng = ~longitude,
           lat = ~latitude,
           fillColor = ~ value_palette(
-            if (input$mapType == "actual") {
+            if (map_type == "actual") {
               value
             } else {
               percent_historic_range_capped
             }
           ),
           color = ~ value_palette(
-            if (input$mapType == "actual") {
+            if (map_type == "actual") {
               value
             } else {
               percent_historic_range_capped
@@ -914,11 +914,9 @@ mapParams <- function(id, language) {
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
-
       mapCreated(TRUE)
       map
-    }) |>
-      bindEvent(language$language) # Re-render the map if the language changes
+    })
 
     # Auto-update for latest measurements every 15 minutes
     autoUpdateTimer <- reactiveTimer(15 * 60 * 1000) # 15 minutes in milliseconds

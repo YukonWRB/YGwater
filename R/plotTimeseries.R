@@ -732,7 +732,7 @@ plotTimeseries <- function(
   as_of_title <- NULL
   if (!is.null(as_of)) {
     as_of_title <- if (lang == "fr") {
-      paste0("Données au ", format(as_of, tz = tzone, usetz = TRUE))
+      paste0("Donn\u00e9es au ", format(as_of, tz = tzone, usetz = TRUE))
     } else {
       paste0("As of ", format(as_of, tz = tzone, usetz = TRUE))
     }

@@ -20,7 +20,6 @@ manageInstrumentsUI <- function(id) {
       ),
       div(
         class = "d-flex gap-2 flex-wrap mb-3",
-        actionButton(ns("save"), "Save instrument", class = "btn-primary"),
         actionButton(ns("clear"), "New record"),
         actionButton(ns("reload"), "Reload")
       ),
@@ -187,7 +186,13 @@ manageInstrumentsUI <- function(id) {
           "Quiescent power (mA)",
           value = NA_real_,
           step = 0.01
-        )
+        ),
+        actionButton(
+          ns("save"),
+          "Save instrument",
+          class = "btn-primary",
+          width = "100%"
+        ),
       )
     ),
     uiOutput(ns("banner")),
@@ -1405,7 +1410,11 @@ manageInstruments <- function(id, language) {
           "supplier_name"
         )
         if (length(existing_id)) {
-          updateSelectizeInput(session, "supplier_id", selected = existing_id[[1]])
+          updateSelectizeInput(
+            session,
+            "supplier_id",
+            selected = existing_id[[1]]
+          )
           return()
         }
         updateSelectizeInput(session, "supplier_id", selected = character(0))
