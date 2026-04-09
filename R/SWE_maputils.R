@@ -239,7 +239,7 @@ get_static_style_elements <- function() {
 #' the selected statistic type and language.
 #'
 #' @param statistic Character string indicating the type of statistic to style.
-#'   Options are "relative_to_med", "data", "percentile", or "anomalies".
+#'   Options are "relative_to_med", "value", "percentile", or "anomalies".
 #'   Defaults to "relative_to_med".
 #' @param param_name Character string for parameter name (e.g., "snow water equivalent", "precipitation, total").
 #' @param language Character string for language. Defaults to "English".
@@ -330,7 +330,7 @@ get_dynamic_style_elements <- function(
     )
 
     # Percentile bins and colors (Spectral palette, 0-100)
-    percentile_bins <- c(-Inf, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, Inf)
+    percentile_bins <- c(-Inf, 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 101)
     percentile_colors <- c(
         "gray", # Gray (NA/NaN values)
         "#9e0142", # Very low (0-10)
@@ -432,7 +432,7 @@ get_dynamic_style_elements <- function(
             colors = relative_colors,
             labels = relative_labels
         ),
-        data = list(
+        value = list(
             bins = absolute_bins,
             colors = absolute_colors,
             labels = absolute_labels
@@ -4912,7 +4912,7 @@ make_leaflet_map <- function(
         switch(
             statistic,
             "relative_to_med" = tr("snowbull_relative_median", language),
-            "data" = tr("snowbull_swe", language),
+            "value" = tr("snowbull_swe", language),
             "percentile" = tr("snowbull_percentile", language),
             "anomalies" = tr("snowbull_anomalies", language),
             ""
@@ -5770,7 +5770,7 @@ make_ggplot_map <- function(
     subtitle_statistic <- switch(
         statistic,
         "relative_to_med" = tr("snowbull_percent_of_normal", language),
-        "data" = tr("snowbull_swe", language),
+        "value" = tr("snowbull_swe", language),
         "percentile" = tr("snowbull_percentile", language),
         "anomalies" = paste(
             tr("snowbull_deviation", language),
@@ -5977,7 +5977,7 @@ make_snowbull_map <- function(
 
     # param_name <- standardize_param_name(param_name)
 
-    STATISTICS <- c("data", "relative_to_med", "percentile", "anomalies")
+    STATISTICS <- c("value", "relative_to_med", "percentile", "anomalies")
     statistic <- match.arg(
         statistic,
         choices = STATISTICS

@@ -8,11 +8,6 @@ con <- YGwater::AquaConnect(
     password = Sys.getenv("aquacacheAdminPass"),
 )
 
-write.csv(
-    dat$swe$basins$norms$historical_distr[, 3, ],
-    "C:\\Users\\esniede\\Documents\\github\\YGwater\\swe_norms.csv"
-)
-
 
 # load_all()
 dat <- load_bulletin_timeseries(
@@ -30,7 +25,7 @@ dat <- load_bulletin_timeseries(
 make_snowbull_map(
     year = 2026,
     month = 4,
-    statistic = "relative_to_med",
+    statistic = "value",
     language = "English",
     format = "leaflet",
     param_name = "snow water equivalent",
