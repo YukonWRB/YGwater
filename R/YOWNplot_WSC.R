@@ -38,16 +38,16 @@ YOWNplot_WSC <- function(
     "YOWN-2205"
   )
   WSCindex = c("09AB004")
-  # saveTo = "desktop"
-  # title = "YOWN wells vs. WSC Sites"
-  # chartXInterval = "1 month"
-  # login = Sys.getenv(c("AQUSER", "AQPASS"))
-  # server = "https://yukon.aquaticinformatics.net/AQUARIUS"
+  saveTo = "desktop"
+  title = "YOWN wells vs. WSC Sites"
+  chartXInterval = "1 month"
+  login = Sys.getenv(c("AQUSER", "AQPASS"))
+  server = "https://yukon.aquaticinformatics.net/AQUARIUS"
 
   # Sort out save location
   saveTo <- tolower(saveTo)
   if (saveTo %in% c("Choose", "choose")) {
-    print("Select the folder where you want this graph saved.")
+    message("Select the folder where you want this graph saved.")
     saveTo <- as.character(utils::choose.dir(caption = "Select Save Folder"))
   } else if (saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
@@ -60,8 +60,6 @@ YOWNplot_WSC <- function(
   # Download all YOWN data
   YOWNlist <- list()
   for (i in YOWNindex) {
-    #TODO confirm that this print is needed
-    print(i)
 
     # Download data from Aquarius
     datalist <- suppressMessages(aq_download(
@@ -138,7 +136,7 @@ YOWNplot_WSC <- function(
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
+      dplyr::select('ID', 'timestamp_MST', 'value')
     YOWNlist[[i]] <- df
   }
 
@@ -149,7 +147,6 @@ YOWNplot_WSC <- function(
   # Download all WSC data
   WSClist <- list()
   for (i in WSCindex) {
-    print(i)
 
     # Download data from Aquarius
     datalist <- suppressMessages(aq_download(
@@ -177,7 +174,7 @@ YOWNplot_WSC <- function(
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
+      dplyr::select('ID', 'timestamp_MST', 'value')
     WSClist[[i]] <- df
   }
 
@@ -231,62 +228,37 @@ YOWNplot_WSC <- function(
       )
     ) +
     cowplot::theme_cowplot() +
-    ggplot2::theme(
-      plot.margin = ggplot2::unit(c(4.2, 1.6, 3.1, 1.2), "cm"),
-      panel.border = ggplot2::element_rect(
-        color = "grey",
-        fill = NULL,
-        linewidth = 0.5
-      ),
-      axis.text.x = ggplot2::element_text(
-        angle = 45,
-        hjust = 1,
-        vjust = 1,
-        size = 10
-      ),
-      axis.line.x.bottom = ggplot2::element_blank(),
-      axis.text.y = ggplot2::element_text(hjust = 1, size = 10),
-      axis.title.y = ggplot2::element_text(
-        vjust = 2,
-        size = 12,
-        colour = "#464646"
-      ),
-      axis.line.y.left = ggplot2::element_blank(),
-      panel.grid.major = ggplot2::element_line(
-        colour = "lightgrey",
-        linewidth = 0.5,
-        linetype = 1
-      ),
-      legend.title = ggplot2::element_blank(),
-      legend.position = "bottom",
-      legend.justification = "left",
-      legend.margin = ggplot2::margin(0, 0, 0, 0),
-      legend.box.margin = ggplot2::margin(-18, 0, 0, -10),
-      legend.text = ggplot2::element_text(size = 9)
-    ) +
-    ggplot2::scale_x_datetime(
-      name = "",
-      limits = c(
-        min(plotdf_YOWN$timestamp_MST),
-        max(plotdf_YOWN$timestamp_MST)
-      ),
-      date_breaks = chartXInterval,
-      date_labels = "%m-%Y",
-      expand = c(0, 0)
-    ) +
-    ggplot2::scale_y_continuous(
-      name = "Water Level (m above sea level)",
-      limits = c(
-        round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor),
-        round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)
-      ),
-      breaks = seq(
-        round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor),
-        round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling),
-        by = 0.5
-      ),
-      expand = c(0, 0)
-    )
+    ggplot2::theme(plot.margin = ggplot2::unit(c(4.2, 1.6, 3.1, 1.2), "cm"),
+          panel.border = ggplot2::element_rect(color = "grey",
+                                      fill = NULL,
+                                      linewidth = 0.5),
+          axis.text.x = ggplot2::element_text(angle = 45,
+                                              hjust  = 1,
+                                              vjust = 1,
+                                              size = 10),
+          axis.line.x.bottom = ggplot2::element_blank(),
+          axis.text.y = ggplot2::element_text(hjust = 1,
+                                     size = 10),
+          axis.title.y = ggplot2::element_text(vjust = 2,
+                                      size = 12,
+                                      colour = "#464646"),
+          axis.line.y.left = ggplot2::element_blank(),
+          panel.grid.major = ggplot2::element_line(colour = "lightgrey", linewidth = 0.5, linetype = 1),
+          legend.title = ggplot2::element_blank(),
+          legend.position = "bottom",
+          legend.justification = "left",
+          legend.margin = ggplot2::margin(0,0,0,0),
+          legend.box.margin = ggplot2::margin(-18, 0, 0, -10),
+          legend.text = ggplot2::element_text(size = 9)) +
+    ggplot2::scale_x_datetime(name = "",
+                     limits = c(min(plotdf_YOWN$timestamp_MST), max(plotdf_YOWN$timestamp_MST)),
+                     date_breaks = chartXInterval,
+                     date_labels = "%m-%Y",
+                     expand = c(0, 0)) +
+    ggplot2::scale_y_continuous(name = "Water Level (m above sea level)",
+                       limits = c(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)),
+                       breaks = seq(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling), by = 0.5),
+                       expand = c(0, 0))
 
   title <- ggplot2::ggplot() +
     ggplot2::geom_blank() +
@@ -368,18 +340,11 @@ YOWNplot_WSC <- function(
 
   # Add final aesthetic tweaks, print plot onto template
   final_plot <- cowplot::ggdraw() +
-    cowplot::draw_image(
-      "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\template_nogrades.jpg"
-    ) +
+    cowplot::draw_image(system.file("YOWNplot", "Template_grades.jpg", package = "YGwater")) +
     cowplot::draw_plot(final)
 
-  ggplot2::ggsave(
-    plot = final_plot,
-    filename = paste0(saveTo, "/", "YOWN_WSC_compare", ".pdf"),
-    height = 8.5,
-    width = 11,
-    units = "in"
-  )
+  ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "YOWN_WSC_compare", ".pdf"),  height = 8.5, width = 11, units = "in")
 
-  print("Plot Generated")
+  message("Plot Generated")
+
 }

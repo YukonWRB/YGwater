@@ -775,197 +775,98 @@ YOWNplot <- function(
       timeSeriesID == "Wlevel_btoc.Calculated"
   ) {
     if (stats != FALSE) {
-      plot <- plot +
-        ggplot2::scale_y_reverse(
-          name = ytitle,
-          limits = c(
-            round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
-            round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor)
-          ),
-          breaks = seq(
-            round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
-            round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor),
-            by = -0.25
-          ),
-          expand = c(0, 0)
-        )
-
+      plot <- plot + ggplot2::scale_y_reverse(name = ytitle,
+                                              limits = c(plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
+                                                         plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor)),
+                                              breaks = seq(plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling),
+                                                           plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.5, f = floor), by = -0.25),
+                                              expand = c(0, 0))
+      
       if (tolower(stats) == "ribbon") {
         plot <- plot +
           ggnewscale::new_scale_colour() +
-          ggplot2::geom_path(
-            data = plotdf,
-            ggplot2::aes(
-              x = .data$timestamp_MST,
-              y = round_any(
-                max(stats::na.omit(.data$daymax)),
-                0.5,
-                f = ceiling
-              ),
-              colour = factor(.data$grade_description),
-              group = 1
-            ),
-            linewidth = 2.5,
-            show.legend = FALSE
-          ) +
-          ggplot2::scale_colour_manual(
-            name = "Grades",
-            values = c(
-              "A" = "#7A9A01",
-              "B" = "#0097A9",
-              "C" = "#F2A900",
-              "D" = "#DC4405",
-              "REDACTED" = "red",
-              "MISSING DATA" = "black"
-            )
-          )
+          ggplot2::geom_path(data = plotdf,
+                             ggplot2::aes(x = .data$timestamp_MST,
+                                          y = plyr::round_any(max(stats::na.omit(.data$daymax)), 0.5, f = ceiling),
+                                          colour = factor(.data$grade_description), group = 1),
+                             linewidth = 2.5,
+                             show.legend = FALSE) +
+          ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
+                                                                   "B" = "#0097A9",
+                                                                   "C" = "#F2A900",
+                                                                   "D" = "#DC4405",
+                                                                   "REDACTED" = "red",
+                                                                   "MISSING DATA" = "black"))
+
       } else if (tolower(stats) == "line") {
         plot <- plot +
           ggnewscale::new_scale_colour() +
-          ggplot2::geom_path(
-            data = plotdf_current,
-            ggplot2::aes(
-              x = .data$monthday,
-              y = round_any(
-                max(stats::na.omit(plotdf$datemax)),
-                0.5,
-                f = ceiling
-              ),
-              colour = factor(.data$grade_description),
-              group = 1
-            ),
-            linewidth = 2.5,
-            show.legend = FALSE
-          ) +
-          ggplot2::scale_colour_manual(
-            name = "Grades",
-            values = c(
-              "A" = "#7A9A01",
-              "B" = "#0097A9",
-              "C" = "#F2A900",
-              "D" = "#DC4405",
-              "REDACTED" = "red",
-              "MISSING DATA" = "black"
-            )
-          )
+          ggplot2::geom_path(data = plotdf_current,
+                             ggplot2::aes(x = .data$monthday,
+                                          y = plyr::round_any(max(stats::na.omit(plotdf$datemax)), 0.5, f = ceiling),
+                                          colour = factor(.data$grade_description), group = 1),
+                             linewidth = 2.5,
+                             show.legend = FALSE) +
+          ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
+                                                                   "B" = "#0097A9",
+                                                                   "C" = "#F2A900",
+                                                                   "D" = "#DC4405",
+                                                                   "REDACTED" = "red",
+                                                                   "MISSING DATA" = "black"))
       }
     } else if (!stats) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
-        ggplot2::geom_path(
-          data = plotdf,
-          ggplot2::aes(
-            x = .data$timestamp_MST,
-            y = round_any(max(stats::na.omit(.data$value)), 0.5, f = ceiling),
-            colour = factor(.data$grade_description),
-            group = 1
-          ),
-          linewidth = 2.5,
-          show.legend = FALSE
-        ) +
-        ggplot2::scale_colour_manual(
-          name = "Grades",
-          values = c(
-            "A" = "#7A9A01",
-            "B" = "#0097A9",
-            "C" = "#F2A900",
-            "D" = "#DC4405",
-            "REDACTED" = "red",
-            "MISSING DATA" = "black"
-          )
-        ) +
-        ggplot2::scale_y_reverse(
-          name = ytitle,
-          limits = c(
-            round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
-            round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor)
-          ),
-          breaks = seq(
-            round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
-            round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor),
-            by = -0.25
-          ),
-          expand = c(0, 0)
-        )
+        ggplot2::geom_path(data = plotdf,
+                           ggplot2::aes(x = .data$timestamp_MST,
+                                        y = plyr::round_any(max(stats::na.omit(.data$value)), 0.5, f = ceiling),
+                                        colour = factor(.data$grade_description), group = 1),
+                           linewidth = 2.5,
+                           show.legend = FALSE) +
+        ggplot2::scale_colour_manual(name = "Grades",
+                                     values = c("A" = "#7A9A01",
+                                                "B" = "#0097A9",
+                                                "C" = "#F2A900",
+                                                "D" = "#DC4405",
+                                                "REDACTED" = "red",
+                                                "MISSING DATA" = "black")) +
+        ggplot2::scale_y_reverse(name = ytitle,
+                                 limits = c(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
+                                            plyr::round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor)),
+                                 breaks = seq(plyr::round_any(max(stats::na.omit(plotdf$value)), 0.5, f = ceiling),
+                                              plyr::round_any(min(stats::na.omit(plotdf$value)), 0.25, f = floor), by = -0.25),
+                                 expand = c(0, 0))
     }
   } else if (timeSeriesID == "Wlevel_masl.Calculated") {
     # If time series is masl, check for stats and place grade colour line accordingly
     if (stats != FALSE) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
-        ggplot2::geom_path(
-          data = plotdf_current,
-          ggplot2::aes(
-            x = .data$timestamp_MST,
-            y = round_any(min(stats::na.omit(.data$daymin)), 0.25, f = floor),
-            colour = factor(.data$grade_description),
-            group = 1
-          ),
-          linewidth = 2.5,
-          show.legend = FALSE
-        ) +
-        ggplot2::scale_colour_manual(
-          name = "Grades",
-          values = c(
-            "A" = "#7A9A01",
-            "B" = "#0097A9",
-            "C" = "#F2A900",
-            "D" = "#DC4405",
-            "REDACTED" = "red",
-            "MISSING DATA" = "black"
-          )
-        ) +
-        ggplot2::scale_y_continuous(
-          name = ytitle,
-          limits = c(
-            round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor),
-            round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)
-          ),
-          breaks = seq(
-            floor(min(stats::na.omit(plotdf$daymin))),
-            ceiling(max(stats::na.omit(plotdf$daymax))),
-            by = 0.25
-          ),
-          expand = c(0, 0)
-        )
+        ggplot2::geom_path(data = plotdf_current, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymin)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
+        ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
+                                                                 "B" = "#0097A9",
+                                                                 "C" = "#F2A900",
+                                                                 "D" = "#DC4405",
+                                                                 "REDACTED" = "red",
+                                                                 "MISSING DATA" = "black")) +
+        ggplot2::scale_y_continuous(name = ytitle,
+                                    limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymin)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymax)), 0.5, f = ceiling)),
+                                    breaks = seq(floor(min(stats::na.omit(plotdf$daymin))), ceiling(max(stats::na.omit(plotdf$daymax))), by = 0.25),
+                                    expand = c(0, 0))
     } else if (!stats) {
       plot <- plot +
         ggnewscale::new_scale_colour() +
-        ggplot2::geom_path(
-          data = plotdf,
-          ggplot2::aes(
-            x = .data$timestamp_MST,
-            y = round_any(min(stats::na.omit(.data$daymean)), 0.25, f = floor),
-            colour = factor(.data$grade_description),
-            group = 1
-          ),
-          linewidth = 2.5,
-          show.legend = FALSE
-        ) +
-        ggplot2::scale_colour_manual(
-          name = "Grades",
-          values = c(
-            "A" = "#7A9A01",
-            "B" = "#0097A9",
-            "C" = "#F2A900",
-            "D" = "#DC4405",
-            "REDACTED" = "red",
-            "MISSING DATA" = "black"
-          )
-        ) +
-        ggplot2::scale_y_continuous(
-          name = ytitle,
-          limits = c(
-            round_any(min(stats::na.omit(plotdf$daymean)), 0.25, f = floor),
-            round_any(max(stats::na.omit(plotdf$daymean)), 0.5, f = ceiling)
-          ),
-          breaks = seq(
-            floor(min(stats::na.omit(plotdf$daymean))),
-            ceiling(max(stats::na.omit(plotdf$daymean))),
-            by = 0.25
-          ),
-          expand = c(0, 0)
-        )
+        ggplot2::geom_path(data = plotdf, ggplot2::aes(x = .data$timestamp_MST, y = plyr::round_any(min(stats::na.omit(.data$daymean)), 0.25, f = floor), colour = factor(.data$grade_description), group = 1), linewidth = 2.5, show.legend = FALSE) +
+        ggplot2::scale_colour_manual(name = "Grades", values = c("A" = "#7A9A01",
+                                                                 "B" = "#0097A9",
+                                                                 "C" = "#F2A900",
+                                                                 "D" = "#DC4405",
+                                                                 "REDACTED" = "red",
+                                                                 "MISSING DATA" = "black")) +
+        ggplot2::scale_y_continuous(name = ytitle,
+                                    limits = c(plyr::round_any(min(stats::na.omit(plotdf$daymean)), 0.25, f = floor), plyr::round_any(max(stats::na.omit(plotdf$daymean)), 0.5, f = ceiling)),
+                                    breaks = seq(floor(min(stats::na.omit(plotdf$daymean))), ceiling(max(stats::na.omit(plotdf$daymean))), by = 0.25),
+                                    expand = c(0, 0))
     }
   }
   # Set stats to numeric value of false for saving plot title
@@ -987,10 +888,7 @@ YOWNplot <- function(
 
   # Draw arranged plots on background template file
   final_plot <- cowplot::ggdraw() +
-    cowplot::draw_image(system.file(
-      "YOWNplot/Template_grades.jpg",
-      package = "YGwater"
-    )) +
+    cowplot::draw_image("G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER_LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\Template_grades.jpg") +
     cowplot::draw_plot(final)
 
   # Save plot to specified directory
