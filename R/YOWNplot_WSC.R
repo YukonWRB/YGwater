@@ -29,25 +29,10 @@ YOWNplot_WSC <- function(
   login = Sys.getenv(c("AQUSER", "AQPASS")),
   server = "https://yukon.aquaticinformatics.net/AQUARIUS"
 ) {
-  YOWNindex = c(
-    "YOWN-2201S",
-    "YOWN-2201D",
-    "YOWN-2202",
-    "YOWN-2203",
-    "YOWN-2204",
-    "YOWN-2205"
-  )
-  WSCindex = c("09AB004")
-  saveTo = "desktop"
-  title = "YOWN wells vs. WSC Sites"
-  chartXInterval = "1 month"
-  login = Sys.getenv(c("AQUSER", "AQPASS"))
-  server = "https://yukon.aquaticinformatics.net/AQUARIUS"
-
   # Sort out save location
   saveTo <- tolower(saveTo)
   if (saveTo %in% c("Choose", "choose")) {
-    message("Select the folder where you want this graph saved.")
+    print("Select the folder where you want this graph saved.")
     saveTo <- as.character(utils::choose.dir(caption = "Select Save Folder"))
   } else if (saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
@@ -135,7 +120,7 @@ YOWNplot_WSC <- function(
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select('ID', 'timestamp_MST', 'value')
+      dplyr::select("ID", "timestamp_MST", "value")
     YOWNlist[[i]] <- df
   }
 
@@ -147,7 +132,7 @@ YOWNplot_WSC <- function(
   WSClist <- list()
   for (i in WSCindex) {
     # Download data from Aquarius
-    datalist <- suppressMessages(aq_download(
+    datalist <- suppressMessages(YGwater::aq_download(
       loc_id = i,
       ts_name = "Stage.Preliminary",
       login = login,
@@ -172,7 +157,7 @@ YOWNplot_WSC <- function(
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select('ID', 'timestamp_MST', 'value')
+      dplyr::select("ID", "timestamp_MST", "value")
     WSClist[[i]] <- df
   }
 
@@ -272,12 +257,12 @@ YOWNplot_WSC <- function(
     ggplot2::scale_y_continuous(
       name = "Water Level (m above sea level)",
       limits = c(
-        plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor),
-        plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)
+        round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor),
+        round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)
       ),
       breaks = seq(
-        plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor),
-        plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling),
+        round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor),
+        round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling),
         by = 0.5
       ),
       expand = c(0, 0)
