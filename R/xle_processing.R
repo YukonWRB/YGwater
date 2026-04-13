@@ -13,13 +13,14 @@
 #' @return Moves YOWN xle file to backups folder and appropriate YOWN Active Wells folder. Uploads data to Aquarius after performing unit checks and conversions if aq_upload is TRUE, else returns a data.frame.
 #' @export
 
-xle_processing <- function(file,
-                           aq_upload = TRUE,
-                           master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
-                           logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
-                           dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
-                           repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS") {
-  
+xle_processing <- function(
+  file,
+  aq_upload = TRUE,
+  master_file = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/1_YOWN_MASTER_TABLE/YOWN_MASTER.xlsx",
+  logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx",
+  dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX",
+  repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
+) {
   # Debug Params
   # file = "G:/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX/1077366_YOWN-0101 Wolf Creek_2025_04_15_120631.xle"
   # aq_upload = TRUE
@@ -27,12 +28,11 @@ xle_processing <- function(file,
   # logger_tracking = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/2_SPREADSHEETS/3_OTHER/YOWN_Logger_Tracking.xlsx"
   # dropbox = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/9_LOGGER_FILE_DROPBOX"
   # repo = "//env-fs/env-data/corp/water/Groundwater/2_YUKON_OBSERVATION_WELL_NETWORK/1_YOWN_SITES/1_ACTIVE_WELLS"
-  # 
-  
-  
+  #
+
   # Make sure tibble is installed as it's in suggests
   rlang::check_installed("tibble", reason = "necessary for function to run")
-  
+
   if (!file.exists(master_file)) {
     stop("Master file not found, check file location")
   } else {
@@ -65,12 +65,20 @@ xle_processing <- function(file,
   if (!file.exists(logger_tracking)) {
     stop("Logger tracking sheet not found, check file location")
   } else {
-    tryCatch({
-      log_track_sheet <- openxlsx::read.xlsx(logger_tracking, sheet = "Sheet 1")
-    }, error = function(e) {
-      stop("Logger tracking Excel file found but not not the sheet named 'Sheet 1', check the file and try again.")
-    })
-    
+    tryCatch(
+      {
+        log_track_sheet <- openxlsx::read.xlsx(
+          logger_tracking,
+          sheet = "Sheet 1"
+        )
+      },
+      error = function(e) {
+        stop(
+          "Logger tracking Excel file found but not not the sheet named 'Sheet 1', check the file and try again."
+        )
+      }
+    )
+
     # Make sure the table has the required columns
 
     # ... please fill this in...
@@ -90,7 +98,7 @@ xle_processing <- function(file,
       # ... please fill this in with logic to ensure the folder structure is correct... If it's not, throw error that explains the proper structure to the user so that it can be fixed if ever needed.
     }
   }
-  
+
   # Ensure the 'file' has extension .xle (last part of the string)
   if (!file.exists(file)) {
     stop("Logger file not found, check file location")
@@ -103,7 +111,7 @@ xle_processing <- function(file,
       # Check if the file has the right structure, unless this is done later on in the script
     }
   }
-  
+
   #### Define helper functions ####
   # Define pressure conversion function
   convert_level <- function(column, level_unit) {
@@ -218,15 +226,20 @@ xle_processing <- function(file,
 
   # Extract Channel Data Headers (Ch1, Ch2, Ch3)
   channel_data_header <- xml_file %>%
-    xml2::xml_find_all("//Ch1_data_header|//Ch2_data_header|//Ch3_data_header") %>%
-    purrr::map_dfr(~{
-      tibble::tibble(
-        Channel = xml2::xml_name(.x),
-        Identification = xml2::xml_find_first(.x, "Identification") %>% xml2::xml_text(),
-        Unit = xml2::xml_find_first(.x, "Unit") %>% xml2::xml_text()
-      )
-    })
-  
+    xml2::xml_find_all(
+      "//Ch1_data_header|//Ch2_data_header|//Ch3_data_header"
+    ) %>%
+    purrr::map_dfr(
+      ~ {
+        tibble::tibble(
+          Channel = xml2::xml_name(.x),
+          Identification = xml2::xml_find_first(.x, "Identification") %>%
+            xml2::xml_text(),
+          Unit = xml2::xml_find_first(.x, "Unit") %>% xml2::xml_text()
+        )
+      }
+    )
+
   LTC <- FALSE # Tracks if there are three channels in the XML file or two
 
   if (nrow(channel_data_header) == 3) {
@@ -293,14 +306,16 @@ xle_processing <- function(file,
   # Extract Logs into a Data Frame
   data <- xml_file %>%
     xml2::xml_find_all("//Data/Log") %>%
-    purrr::map_df(~{
-      xml2::xml_children(.x) %>% 
-        purrr::set_names(xml2::xml_name(.)) %>% 
-        purrr::map(xml2::xml_text) %>%
-        tibble::as_tibble() %>%
-        dplyr::mutate(id = xml2::xml_attr(.x, "id"))
-    })
-  
+    purrr::map_df(
+      ~ {
+        xml2::xml_children(.x) %>%
+          purrr::set_names(xml2::xml_name(.)) %>%
+          purrr::map(xml2::xml_text) %>%
+          tibble::as_tibble() %>%
+          dplyr::mutate(id = xml2::xml_attr(.x, "id"))
+      }
+    )
+
   # Convert columns to appropriate types
   if (LTC) {
     final_data <- data %>%
@@ -312,10 +327,12 @@ xle_processing <- function(file,
       ) %>%
       lubridate::with_tz("Time", tzone = "UTC") %>%
       dplyr::select(-c("id", "ms", "Date")) %>%
-      stats::setNames(c("Time", 
-                        channel_data_header$Identification[1], 
-                        channel_data_header$Identification[2], 
-                        channel_data_header$Identification[3]))
+      stats::setNames(c(
+        "Time",
+        channel_data_header$Identification[1],
+        channel_data_header$Identification[2],
+        channel_data_header$Identification[3]
+      ))
   } else {
     final_data <- data %>%
       dplyr::mutate(
@@ -325,11 +342,13 @@ xle_processing <- function(file,
       ) %>%
       lubridate::with_tz("Time", tzone = "UTC") %>%
       dplyr::select(-c("id", "ms", "Date")) %>%
-      stats::setNames(c("Time", 
-                        channel_data_header$Identification[1], 
-                        channel_data_header$Identification[2]))
+      stats::setNames(c(
+        "Time",
+        channel_data_header$Identification[1],
+        channel_data_header$Identification[2]
+      ))
   }
-  
+
   if ("LEVEL" %in% colnames(final_data)) {
     final_data$LEVEL <- convert_level(column = final_data$LEVEL, level_unit)
     level_unit <- "m"
@@ -360,55 +379,143 @@ xle_processing <- function(file,
 
   # Upload data to Aquarius
   if (aq_upload) {
-    for (i in c("Wlevel_Hgt.level_RAW", "Water Temp.TEMPERATURE", "Conductivity Field.Econdy-F")) {
-      if (i == "Wlevel_Hgt.level_RAW") { # Upload level data
-        temp <- data.frame(Time = final_data$Time, Value = final_data$`Level (m)`)
-        tryCatch({
-          start <- Sys.time()
-          result <- YGwater::aq_upload(well_loc, i, temp)
-          end <- Sys.time() - start
-          write(paste0("Level append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-        }, error = function(e) {
-          write(paste0("Level append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-          stop("Level upload failed with error:", e$message)
-        })
+    for (i in c(
+      "Wlevel_Hgt.level_RAW",
+      "Water Temp.TEMPERATURE",
+      "Conductivity Field.Econdy-F"
+    )) {
+      if (i == "Wlevel_Hgt.level_RAW") {
+        # Upload level data
+        temp <- data.frame(
+          Time = final_data$Time,
+          Value = final_data$`Level (m)`
+        )
+        tryCatch(
+          {
+            start <- Sys.time()
+            result <- YGwater::aq_upload(well_loc, i, temp)
+            end <- Sys.time() - start
+            write(
+              paste0(
+                "Level append successful with ",
+                result$appended,
+                " points appended out of ",
+                result$input,
+                ". Elapsed time ",
+                round(end[[1]], 2),
+                " ",
+                attr(end, "units")
+              ),
+              file = paste0(dropbox, "/LOGBOOK.txt"),
+              append = TRUE,
+              sep = "\n"
+            )
+          },
+          error = function(e) {
+            write(
+              paste0("Level append FAILED: ", e$message),
+              file = paste0(dropbox, "/LOGBOOK.txt"),
+              append = TRUE,
+              sep = "\n"
+            )
+            stop("Level upload failed with error:", e$message)
+          }
+        )
       } else if (i == "Water Temp.TEMPERATURE") {
-        temp <- data.frame(Time = final_data$Time, Value = final_data$'Temperature (\u00B0C)')
-        tryCatch({
-          start <- Sys.time()
-          result <- YGwater::aq_upload(well_loc, i, temp)
-          end <- Sys.time() - start
-          write(paste0("Temperature append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-        }, error = function(e) {
-          write(paste0("Temperature append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-          stop("Temperature upload failed with error:", e$message)
-        })
+        temp <- data.frame(
+          Time = final_data$Time,
+          Value = final_data$'Temperature (\u00B0C)'
+        )
+        tryCatch(
+          {
+            start <- Sys.time()
+            result <- YGwater::aq_upload(well_loc, i, temp)
+            end <- Sys.time() - start
+            write(
+              paste0(
+                "Temperature append successful with ",
+                result$appended,
+                " points appended out of ",
+                result$input,
+                ". Elapsed time ",
+                round(end[[1]], 2),
+                " ",
+                attr(end, "units")
+              ),
+              file = paste0(dropbox, "/LOGBOOK.txt"),
+              append = TRUE,
+              sep = "\n"
+            )
+          },
+          error = function(e) {
+            write(
+              paste0("Temperature append FAILED: ", e$message),
+              file = paste0(dropbox, "/LOGBOOK.txt"),
+              append = TRUE,
+              sep = "\n"
+            )
+            stop("Temperature upload failed with error:", e$message)
+          }
+        )
       } else if (i == "Conductivity Field.Econdy-F") {
-        tryCatch({
-          temp <- data.frame(Time = final_data$Time, Value = final_data$'Conductivity (\u00B5S/cm)')
-          start <- Sys.time()
-          result <- YGwater::aq_upload(well_loc, i, temp)
-          end <- Sys.time() - start
-          write(paste0("Conductivity append successful with ", result$appended, " points appended out of ", result$input, ". Elapsed time ", round(end[[1]], 2), " ", attr(end, "units")), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-        }, error = function(e) {
-          write(paste0("Conductivity append FAILED: ", e$message), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-          stop("Conductivity upload failed with error:", e$message)
-        })
+        tryCatch(
+          {
+            temp <- data.frame(
+              Time = final_data$Time,
+              Value = final_data$'Conductivity (\u00B5S/cm)'
+            )
+            start <- Sys.time()
+            result <- YGwater::aq_upload(well_loc, i, temp)
+            end <- Sys.time() - start
+            write(
+              paste0(
+                "Conductivity append successful with ",
+                result$appended,
+                " points appended out of ",
+                result$input,
+                ". Elapsed time ",
+                round(end[[1]], 2),
+                " ",
+                attr(end, "units")
+              ),
+              file = paste0(dropbox, "/LOGBOOK.txt"),
+              append = TRUE,
+              sep = "\n"
+            )
+          },
+          error = function(e) {
+            write(
+              paste0("Conductivity append FAILED: ", e$message),
+              file = paste0(dropbox, "/LOGBOOK.txt"),
+              append = TRUE,
+              sep = "\n"
+            )
+            stop("Conductivity upload failed with error:", e$message)
+          }
+        )
       }
     }
   }
-  
+
   #### Track metadata ####
 
   # Format data to be added
-  new_data <- data.frame(YOWN_ID = well_loc,
-                         Logger_Make = "Solinst",
-                         Logger_Type = instrument_properties$Value[instrument_properties$Property == "Instrument_type"],
-                         Logger_Model = instrument_properties$Value[instrument_properties$Property == "Model_number"],
-                         Logger_Serial = instrument_properties$Value[instrument_properties$Property == "Serial_number"],
-                         Deploy_Date = as.character(min(final_data$Time)),
-                         Retrieve_Date = as.character(max(final_data$Time)))
-  
+  new_data <- data.frame(
+    YOWN_ID = well_loc,
+    Logger_Make = "Solinst",
+    Logger_Type = instrument_properties$Value[
+      instrument_properties$Property == "Instrument_type"
+    ],
+    Logger_Model = instrument_properties$Value[
+      instrument_properties$Property == "Model_number"
+    ],
+    Logger_Serial = instrument_properties$Value[
+      instrument_properties$Property == "Serial_number"
+    ],
+    Deploy_Date = as.character(min(final_data$Time)),
+    Retrieve_Date = as.character(max(final_data$Time))
+  )
+
   # Append the new data
   updated_data <- rbind(log_track_sheet, new_data) %>%
     dplyr::distinct()
@@ -506,8 +613,7 @@ xle_processing <- function(file,
       }
     )
   }
-  
-  
+
   if (!aq_upload) {
     return(final_data)
   }
