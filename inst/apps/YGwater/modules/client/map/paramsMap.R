@@ -1,9 +1,35 @@
 mapParamsUI <- function(id) {
   ns <- NS(id)
 
-  # All UI elements rendered in server function to allow multi-language functionality
-  page_fluid(
-    uiOutput(ns("sidebar_page"))
+  tagList(
+    tags$style(
+      HTML(sprintf(
+        "
+     /* Add colors to the accordion. Using ns() makes it specific to each accordion */
+      #%s.accordion {
+        /* body background */
+        --bs-accordion-bg:          #E5F4F6;
+        /* collapsed header */
+        --bs-accordion-btn-bg:      #0097A9;
+        /* expanded header */
+        --bs-accordion-active-bg:   #0097A9;
+      }
+    ",
+        ns("accordion")
+      ))
+    ),
+    # All UI elements rendered in server function to allow multi-language functionality
+    uiOutput(ns("banner")),
+    uiOutput(ns("top")),
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar_controls"))
+      ),
+      leaflet::leafletOutput(ns("map"), height = '80vh')
+    )
   )
 } # End of mapParamsUI
 
@@ -28,23 +54,43 @@ mapParams <- function(id, language) {
 
     mapCreated <- reactiveVal(FALSE) # Track whether the map has been initialized on the client
 
-    output$sidebar_page <- renderUI({
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "mapParams"
+      )
+    })
+    output$top <- renderUI({
+      tagList(
+        accordion(
+          id = ns("accordion"),
+          open = TRUE,
+          accordion_panel(
+            title = tr("instructions", language$language),
+            tags$p(HTML(tr(
+              "params_map_module_instructions",
+              language$language
+            ))),
+            tags$div(style = "height: 10px;")
+          )
+        )
+      )
+    }) |> # End of renderUI for instructions
+      bindEvent(language$language)
+
+    output$sidebar_controls <- renderUI({
       req(moduleData, language)
-      mapCreated(FALSE)
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          bg = config$sidebar_bg, # Set in globals file
-          open = list(mobile = "always-above"),
-          tagList(
+      tagList(
             selectizeInput(
               ns("mapType"),
               label = tr("map_mapType", language$language),
               choices = stats::setNames(
-                c("range", "abs"),
+                c("range", "actual"),
                 c(
                   tr("map_relative", language$language),
-                  tr("map_absolute1", language$language)
+                  tr("map_actual_values", language$language)
                 )
               ),
               selected = "range",
@@ -62,6 +108,15 @@ mapParams <- function(id, language) {
               ns("latest"),
               tr("map_latest_measurements", language$language),
               value = FALSE
+            ),
+            conditionalPanel(
+              condition = "input.latest == true",
+              ns = ns,
+              checkboxInput(
+                ns("auto_update_latest"),
+                tr("map_latest_auto_update", language$language),
+                value = FALSE
+              )
             ),
             htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
             actionButton(
@@ -92,10 +147,6 @@ mapParams <- function(id, language) {
                 class = "btn btn-primary"
               )
             }
-          )
-        ),
-        # Main panel (left)
-        leaflet::leafletOutput(ns("map"), height = '80vh')
       )
     }) |>
       bindEvent(language$language)
@@ -105,18 +156,17 @@ mapParams <- function(id, language) {
       tagList(
         h4(
           if (config$public) {
-            tr("map_primary_param_solo", language$language)
+            tr("parameter", language$language)
           } else {
             tr("map_primary_param", language$language)
           }
         ), # Text for primary parameter
-        p(titleCase(
+        p(
           moduleData$parameters[
             moduleData$parameters$parameter_id == map_params$param1,
             get(tr("param_name_col", language$language))
-          ],
-          language$abbrev
-        )), # Name of primary parameter
+          ]
+        ), # Name of primary parameter
         p(
           tr("map_min_yrs_selected1", language$language),
           " ",
@@ -138,13 +188,12 @@ mapParams <- function(id, language) {
       } else {
         tagList(
           h4(tr("map_second_param", language$language)), # Text for secondary parameter
-          p(titleCase(
+          p(
             moduleData$parameters[
               moduleData$parameters$parameter_id == map_params$param2,
               get(tr("param_name_col", language$language))
-            ],
-            language$abbrev
-          )), # Name of secondary parameter
+            ]
+          ), # Name of secondary parameter
           p(
             tr("map_min_yrs_selected1", language$language),
             " ",
@@ -196,6 +245,7 @@ mapParams <- function(id, language) {
         map_params$latest <- TRUE
         map_params$target <- Sys.Date()
       } else {
+        updateCheckboxInput(session, "auto_update_latest", value = FALSE)
         map_params$latest <- FALSE
         map_params$target <- input$target
       }
@@ -215,17 +265,20 @@ mapParams <- function(id, language) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             tmp$parameter_id,
-            titleCase(
-              tmp[[tr("param_name_col", language$language)]],
-              language$abbrev
-            )
+            tmp[[tr("param_name_col", language$language)]]
           ),
           selected = map_params$param1,
           multiple = FALSE
         ),
         numericInput(
           ns("yrs"),
-          label = tr("map_min_yrs", language$language),
+          label = tooltip(
+            trigger = list(
+              tr("map_min_yrs", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("tooltip_params_map_min_yrs", language$language),
+          ),
           value = map_params$yrs1,
           min = 3,
           max = 100,
@@ -233,7 +286,13 @@ mapParams <- function(id, language) {
         ),
         numericInput(
           ns("days"),
-          label = tr("map_date_within", language$language),
+          label = tooltip(
+            trigger = list(
+              tr("map_date_within", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("tooltip_params_map_date_within", language$language),
+          ),
           value = map_params$days1,
           min = 0,
           max = 365,
@@ -265,10 +324,7 @@ mapParams <- function(id, language) {
           label = tr("parameter", language$language),
           choices = stats::setNames(
             tmp$parameter_id,
-            titleCase(
-              tmp[[tr("param_name_col", language$language)]],
-              language$abbrev
-            )
+            tmp[[tr("param_name_col", language$language)]]
           ),
           selected = map_params$param2,
           multiple = FALSE
@@ -337,7 +393,7 @@ mapParams <- function(id, language) {
     observeEvent(
       input$mapType,
       {
-        if (input$mapType == "abs" || config$public) {
+        if (input$mapType == "actual" || config$public) {
           shinyjs::hide("secondary_param")
           shinyjs::hide("edit_secondary_param")
         } else {
@@ -354,6 +410,8 @@ mapParams <- function(id, language) {
 
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
+      map_type <- req(input$mapType)
+
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
         return()
@@ -377,13 +435,10 @@ mapParams <- function(id, language) {
       }
 
       # Deal with parameter 1
-      tsids1 <- dbGetQueryDT(
-        session$userData$AquaCache,
-        sprintf(
-          "SELECT timeseries_id FROM timeseries WHERE parameter_id = %s;",
-          map_params$param1
-        )
-      )$timeseries_id
+      tsids1 <- moduleData$timeseries[
+        moduleData$timeseries$parameter_id == map_params$param1,
+        "timeseries_id"
+      ][[1]]
       if (length(tsids1) == 0) {
         return()
       }
@@ -419,6 +474,14 @@ mapParams <- function(id, language) {
                     row_num = 1;"
           )
         )
+
+        # IF there are no closest measurements, stop and show a notification
+        if (nrow(closest_measurements1) == 0) {
+          leaflet::leafletProxy("map", session) %>%
+            leaflet::clearMarkers() %>%
+            leaflet::clearControls()
+          return()
+        }
 
         # For timeseries where there was a measurement above, get historical range data and add
         range1 <- dbGetQueryDT(
@@ -499,7 +562,7 @@ mapParams <- function(id, language) {
         moduleData$timeseries[
           moduleData$timeseries$timeseries_id %in%
             closest_measurements1$timeseries_id,
-          c("timeseries_id", "location_id")
+          c("timeseries_id", "location_id", "units", "matrix_state")
         ],
         by = "location_id"
       )
@@ -508,23 +571,15 @@ mapParams <- function(id, language) {
         moduleData$parameters$parameter_id == map_params$param1,
         get(tr("param_name_col", language$language))
       ]
-      locs_tsids1$param_unit <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$param1,
-        "unit_default"
-      ]
+      locs_tsids1$param_unit <- locs_tsids1$units
 
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
-        tsids2 <- dbGetQueryDT(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT timeseries_id FROM timeseries WHERE parameter_id = ",
-            map_params$param2,
-            " AND location_id NOT IN (",
-            paste(locs_tsids1$location_id, collapse = ", "),
-            ");"
-          )
-        )$timeseries_id
+        tsids2 <- moduleData$timeseries[
+          moduleData$timeseries$parameter_id == map_params$param2 &
+            !moduleData$timeseries$location_id %in% locs_tsids1$location_id,
+          "timeseries_id"
+        ][[1]]
         if (length(tsids2) == 0) {
           return()
         }
@@ -639,7 +694,7 @@ mapParams <- function(id, language) {
           moduleData$timeseries[
             moduleData$timeseries$timeseries_id %in%
               closest_measurements2$timeseries_id,
-            c("timeseries_id", "location_id")
+            c("timeseries_id", "location_id", "units", "matrix_state")
           ],
           by = "location_id"
         )
@@ -648,10 +703,7 @@ mapParams <- function(id, language) {
           moduleData$parameters$parameter_id == map_params$param2,
           get(tr("param_name_col", language$language))
         ]
-        locs_tsids2$param_unit <- moduleData$parameters[
-          moduleData$parameters$parameter_id == map_params$param2,
-          "unit_default"
-        ]
+        locs_tsids2$param_unit <- locs_tsids2$units
 
         # Merge the two sets of locations and timeseries IDs
         locs_tsids <- rbind(locs_tsids1, locs_tsids2)
@@ -672,31 +724,46 @@ mapParams <- function(id, language) {
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
 
-      if (input$mapType == "abs") {
-        abs_vals <- abs(mapping_data$value)
+      if (map_type == "actual") {
+        actual_vals <- mapping_data$value
 
-        if (length(abs_vals) == 0) {
+        if (length(actual_vals) == 0) {
           leaflet::leafletProxy("map", session) %>%
             leaflet::clearMarkers() %>%
             leaflet::clearControls()
           return()
         }
 
-        abs_range <- range(abs_vals, na.rm = TRUE)
-        abs_bins <- seq(
-          abs_range[1],
-          abs_range[2],
-          length.out = length(map_params$colors) + 1
-        )
+        abs_range <- range(actual_vals, na.rm = TRUE)
+
+        # Handle case where all values are identical or range is zero
+        if (
+          abs_range[1] == abs_range[2] ||
+            !is.finite(abs_range[1]) ||
+            !is.finite(abs_range[2])
+        ) {
+          # Create a small range around the single value for binning
+          if (abs_range[1] == 0) {
+            abs_bins <- c(-0.1, 0.1)
+          } else {
+            abs_bins <- c(abs_range[1] * 0.99, abs_range[1] * 1.01)
+          }
+        } else {
+          abs_bins <- seq(
+            abs_range[1],
+            abs_range[2],
+            length.out = length(map_params$colors) + 1
+          )
+        }
 
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
-          domain = abs_vals,
+          domain = actual_vals,
           bins = abs_bins,
           pretty = FALSE,
           na.color = "#808080"
         )
-        map_values <- abs_vals
+        map_values <- actual_vals
         legend_digits <- function(vals) {
           if (length(vals) == 0 || all(!is.finite(vals))) {
             return(0)
@@ -710,21 +777,18 @@ mapParams <- function(id, language) {
             return(2)
           }
         }
-        lab_format <- leaflet::labelFormat(digits = legend_digits(abs_vals))
-        legend_title <- sprintf(
-          "%s (%s)",
-          titleCase(
-            moduleData$parameters[
-              moduleData$parameters$parameter_id == map_params$param1,
-              get(tr("param_name_col", language$language))
-            ],
-            language$abbrev
-          ),
-          moduleData$parameters[
-            moduleData$parameters$parameter_id == map_params$param1,
-            "unit_default"
-          ]
-        )
+        legend_units <- unique(na.omit(mapping_data$param_unit))
+        legend_units <- legend_units[nzchar(legend_units)]
+        lab_format <- leaflet::labelFormat(digits = legend_digits(actual_vals))
+        legend_param <- moduleData$parameters[
+          moduleData$parameters$parameter_id == map_params$param1,
+          get(tr("param_name_col", language$language))
+        ]
+        legend_title <- if (length(legend_units)) {
+          sprintf("%s (%s)", legend_param, paste(legend_units, collapse = ", "))
+        } else {
+          legend_param
+        }
       } else {
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
@@ -747,15 +811,15 @@ mapParams <- function(id, language) {
           lng = ~longitude,
           lat = ~latitude,
           fillColor = ~ value_palette(
-            if (input$mapType == "abs") {
-              abs(value)
+            if (map_type == "actual") {
+              value
             } else {
               percent_historic_range_capped
             }
           ),
           color = ~ value_palette(
-            if (input$mapType == "abs") {
-              abs(value)
+            if (map_type == "actual") {
+              value
             } else {
               percent_historic_range_capped
             }
@@ -769,8 +833,13 @@ mapParams <- function(id, language) {
             "<strong>",
             get(tr("generic_name_col", language$language)),
             "</strong><br/>",
-            titleCase(param_name, language$abbrev),
+            param_name,
             "<br>",
+            ifelse(
+              is.na(matrix_state) | !nzchar(matrix_state),
+              "",
+              paste0("Matrix state: ", matrix_state, "<br>")
+            ),
             tr("map_actual_date", language$language),
             ": ",
             if (map_params$latest) {
@@ -783,7 +852,7 @@ mapParams <- function(id, language) {
             ": ",
             round(percent_historic_range, 2),
             "% <br/>",
-            tr("map_absolute2", language$language),
+            tr("value", language$language),
             ": ",
             round(value, 2),
             " ",
@@ -817,7 +886,12 @@ mapParams <- function(id, language) {
     # Create the basic map
     output$map <- leaflet::renderLeaflet({
       map <- leaflet::leaflet(
-        options = leaflet::leafletOptions(maxZoom = 15)
+        options = leaflet::leafletOptions(
+          maxZoom = 15,
+          zoomSnap = 0.5,
+          zoomDelta = 0.5,
+          zoomPxPerZoomLevel = 120
+        )
       ) %>%
         leaflet::addMapPane("basemap", zIndex = 1) %>%
         leaflet::addMapPane("overlay", zIndex = 420) %>%
@@ -840,11 +914,27 @@ mapParams <- function(id, language) {
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
-
       mapCreated(TRUE)
       map
-    }) |>
-      bindEvent(language$language) # Re-render the map if the language changes
+    })
+
+    # Auto-update for latest measurements every 15 minutes
+    autoUpdateTimer <- reactiveTimer(15 * 60 * 1000) # 15 minutes in milliseconds
+
+    observeEvent(autoUpdateTimer(), {
+      req(mapCreated())
+      if (!map_params$latest || !isTRUE(input$auto_update_latest)) {
+        return()
+      }
+      updateDateInput(session, "target", value = Sys.Date())
+      map_params$target <- Sys.Date()
+      updateMap()
+      showNotification(
+        tr("map_auto_update_notification", language$language),
+        type = "message",
+        duration = 5
+      )
+    })
 
     # Observe the map being created and update it when the parameters change
     observe({

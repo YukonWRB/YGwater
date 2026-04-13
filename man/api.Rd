@@ -12,11 +12,15 @@ api(
   dbName = Sys.getenv("aquacacheName"),
   dbHost = Sys.getenv("aquacacheHost"),
   dbPort = Sys.getenv("aquacachePort"),
+  dbUser = Sys.getenv("aquacacheUser"),
+  dbPass = Sys.getenv("aquacachePass"),
   run = TRUE
 )
 }
 \arguments{
-\item{version}{The API version to use. Default is NULL, which uses the latest version.}
+\item{version}{The API version to use. Accepts \code{NULL}, a positive integer,
+or a \code{"v"}-prefixed version string such as \code{"v2"}. Default is \code{NULL},
+which uses the latest complete file-based API version.}
 
 \item{host}{The host address to bind the server to. Default is the local host.}
 
@@ -24,11 +28,15 @@ api(
 
 \item{server}{The server path for the API. Default is '/water-data/api'.}
 
-\item{dbName}{The name of the PostgreSQL database. Default is 'aquacache'.}
+\item{dbName}{The name of the PostgreSQL database. Default is taken from the environment variable 'aquacacheName'.}
 
-\item{dbHost}{The host address of the PostgreSQL database. Default is 'localhost'.}
+\item{dbHost}{The host address of the PostgreSQL database. Default is taken from the environment variable 'aquacacheHost'.}
 
-\item{dbPort}{The port number of the PostgreSQL database. Default is 5432.}
+\item{dbPort}{The port number of the PostgreSQL database. Default is taken from the environment variable 'aquacachePort'.}
+
+\item{dbUser}{The username for the PostgreSQL database. Default is taken from the environment variable 'aquacacheUser'.}
+
+\item{dbPass}{The password for the PostgreSQL database. Default is taken from the environment variable 'aquacachePass'.}
 
 \item{run}{Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.}
 }
@@ -36,7 +44,10 @@ api(
 Runs the API server.
 }
 \description{
-Launches the YGwater API using the plumber package.
+Launches the YGwater API using the installed router implementation for the
+requested version. The current default remains the latest complete
+file-based API in \code{inst/plumber} so in-progress versions can be added
+without replacing the existing surface unintentionally.
 }
 \examples{
 \dontrun{

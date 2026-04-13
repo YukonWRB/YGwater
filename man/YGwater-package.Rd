@@ -7,7 +7,7 @@
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-Stores various functions for use across the Water Science and Stweardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots. Also includes several Shiny applications and an API for accessing the AquaCache database.
+Stores various functions for use across the Water Science and Stewardship Branch disciplines, including for generating reports, gathering and processing data, and creating plots. Also includes several Shiny applications and an API for accessing the AquaCache database.
 }
 \seealso{
 Useful links:

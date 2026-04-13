@@ -16,6 +16,7 @@
 visitUI <- function(id) {
   ns <- NS(id)
   page_fluid(
+    uiOutput(ns("banner")),
     title = "Field Visits",
     p(
       "Field visit module is under development. Anything you see here may not work as expected."
@@ -24,9 +25,19 @@ visitUI <- function(id) {
   ) # End of page_fluid
 }
 
-visit <- function(id) {
+visit <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$banner <- renderUI({
+      req(language$language)
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "visit"
+      )
+    })
 
     moduleData <- reactiveValues()
     visitData <- reactiveValues(
@@ -35,41 +46,27 @@ visit <- function(id) {
       field_measurements = NULL,
       samples = NULL
     )
-
     # Functions for reuse within the module
-    format_share_with <- function(groups) {
-      if (is.null(groups) || length(groups) == 0) {
-        groups <- "public_reader"
+    shift_datetime_input_timezone <- function(input_id, tz_name) {
+      current_value <- coerce_utc_datetime(input[[input_id]])
+      if (
+        is.null(current_value) ||
+          !length(current_value) ||
+          all(is.na(current_value))
+      ) {
+        return(invisible(NULL))
       }
-      groups <- gsub('"', '\\"', groups, fixed = TRUE)
-      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
-    }
-
-    parse_share_with <- function(value) {
-      if (is.null(value) || !length(value) || all(is.na(value))) {
-        return(character())
-      }
-      value <- gsub("[{}\"]", "", value)
-      out <- trimws(unlist(strsplit(value, ",")))
-      out[nzchar(out)]
-    }
-
-    convert_to_utc <- function(datetime_value, tz_offset) {
-      if (is.null(datetime_value) || all(is.na(datetime_value))) {
-        return(NA)
-      }
-      tz_offset <- as.numeric(tz_offset)
-      if (!length(tz_offset) || is.na(tz_offset)) {
-        tz_offset <- 0
-      }
-      converted <- datetime_value - tz_offset * 60 * 60
-      attr(converted, "tzone") <- "UTC"
-      converted
+      shinyWidgets::updateAirDateInput(
+        session,
+        inputId = input_id,
+        value = current_value,
+        tz = tz_name
+      )
     }
 
     collect_visit_inputs <- function() {
-      start_utc <- convert_to_utc(input$visit_datetime_start, input$timezone)
-      end_utc <- convert_to_utc(input$visit_datetime_end, input$timezone)
+      start_utc <- scalar_utc_datetime(input$visit_datetime_start)
+      end_utc <- scalar_utc_datetime(input$visit_datetime_end)
       location_id <- as.integer(input$location)
       sub_location_id <- as.integer(input$sub_location)
       purpose <- if (isTruthy(input$visit_purpose)) {
@@ -109,27 +106,23 @@ visit <- function(id) {
         air_temp = as.numeric(input$air_temp),
         wind = input$weather_wind,
         note = note,
-        share_with = format_share_with(input$share_with)
+        share_with = share_with_to_array(input$share_with)
       )
     }
 
     reset_visit_form <- function() {
-      tz_offset <- as.numeric(input$timezone)
-      if (!length(tz_offset) || is.na(tz_offset)) {
-        tz_offset <- 0
-      }
       now_utc <- .POSIXct(Sys.time(), tz = "UTC")
-      display_time <- now_utc
-      display_time <- display_time + tz_offset * 3600
       shinyWidgets::updateAirDateInput(
         session,
         "visit_datetime_start",
-        value = display_time
+        value = now_utc,
+        tz = air_datetime_widget_timezone(input$timezone)
       )
       shinyWidgets::updateAirDateInput(
         session,
         "visit_datetime_end",
-        value = display_time
+        value = now_utc,
+        tz = air_datetime_widget_timezone(input$timezone)
       )
       updateSelectizeInput(session, "location", selected = character(0))
       updateSelectizeInput(session, "sub_location", selected = character(0))
@@ -151,7 +144,7 @@ visit <- function(id) {
     getModuleData <- function() {
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id"
+        "SELECT l.location_id, l.location_code AS location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id"
       )
       moduleData$sub_locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -214,28 +207,28 @@ visit <- function(id) {
         h3("Basic field visit information"),
         fluidRow(
           column(
-            2,
+            3,
             selectizeInput(
               ns("timezone"),
-              "Timezone",
-              choices = c(-12:12),
-              selected = -7,
+              "Input timezone",
+              choices = input_timezone_choices(),
+              selected = default_input_timezone(),
               multiple = FALSE,
             )
           ),
           column(
-            5,
+            4,
             shinyWidgets::airDatepickerInput(
               ns("visit_datetime_start"),
               label = "Visit start",
-              value = .POSIXct(Sys.time(), tz = "UTC") - 7 * 3600, # Default to current time UTC-7
+              value = .POSIXct(Sys.time(), tz = "UTC"),
               range = FALSE,
               multiple = FALSE,
               timepicker = TRUE,
               maxDate = Sys.Date() + 1,
               startView = Sys.Date(),
               update_on = "change",
-              tz = "UTC",
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -247,14 +240,14 @@ visit <- function(id) {
             shinyWidgets::airDatepickerInput(
               ns("visit_datetime_end"),
               label = "Visit end (optional)",
-              value = .POSIXct(Sys.time(), tz = "UTC") - 7 * 3600, # Default to current time UTC-7
+              value = .POSIXct(Sys.time(), tz = "UTC"),
               range = FALSE,
               multiple = FALSE,
               timepicker = TRUE,
               maxDate = Sys.Date() + 1,
               startView = Sys.Date(),
               update_on = "change",
-              tz = "UTC",
+              tz = air_datetime_widget_timezone(default_input_timezone()),
               timepickerOpts = shinyWidgets::timepickerOptions(
                 minutesStep = 15,
                 timeFormat = "HH:mm"
@@ -483,15 +476,25 @@ visit <- function(id) {
     selected_visit <- reactiveVal(NULL)
 
     observeEvent(
+      input$timezone,
+      {
+        new_timezone <- normalize_input_timezone(input$timezone)
+        shift_datetime_input_timezone("visit_datetime_start", new_timezone)
+        shift_datetime_input_timezone("visit_datetime_end", new_timezone)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
       input$mode,
       {
         if (identical(input$mode, "add")) {
           selected_visit(NULL)
           reset_visit_form()
-          DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+          DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
         } else if (identical(input$mode, "modify")) {
           selected_visit(NULL)
-          DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+          DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
         }
       },
       ignoreNULL = TRUE
@@ -503,7 +506,7 @@ visit <- function(id) {
         getModuleData()
         selected_visit(NULL)
         # Clear table row selection
-        DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+        DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
         reset_visit_form()
         updateSelectizeInput(
           session,
@@ -629,27 +632,19 @@ visit <- function(id) {
             selected = visit_data$sub_location_id
           )
 
-          tz_offset <- as.numeric(input$timezone)
-          if (!length(tz_offset) || is.na(tz_offset)) {
-            tz_offset <- 0
-          }
-          start_value <- .POSIXct(visit_data$start_datetime, tz = "UTC")
-          if (!all(is.na(start_value))) {
-            start_value <- start_value + tz_offset * 3600
-          }
+          start_value <- coerce_utc_datetime(visit_data$start_datetime)
           shinyWidgets::updateAirDateInput(
             session,
             "visit_datetime_start",
-            value = start_value
+            value = start_value,
+            tz = air_datetime_widget_timezone(input$timezone)
           )
-          end_value <- .POSIXct(visit_data$end_datetime, tz = "UTC")
-          if (!all(is.na(end_value))) {
-            end_value <- end_value + tz_offset * 3600
-          }
+          end_value <- coerce_utc_datetime(visit_data$end_datetime)
           shinyWidgets::updateAirDateInput(
             session,
             "visit_datetime_end",
-            value = end_value
+            value = end_value,
+            tz = air_datetime_widget_timezone(input$timezone)
           )
 
           updateTextInput(
@@ -692,7 +687,7 @@ visit <- function(id) {
             "visit_notes",
             value = visit_data$note
           )
-          share_groups <- parse_share_with(visit_data$share_with)
+          share_groups <- array_to_text(visit_data$share_with)
           if (!length(share_groups)) {
             share_groups <- "public_reader"
           }
@@ -884,7 +879,7 @@ visit <- function(id) {
             getModuleData()
             selected_visit(NULL)
             reset_visit_form()
-            DT::dataTableProxy(ns("visit_table")) |> DT::selectRows(NULL)
+            DT::dataTableProxy("visit_table") |> DT::selectRows(NULL)
           },
           error = function(e) {
             showNotification(
@@ -1005,7 +1000,7 @@ visit <- function(id) {
                 moduleData$visit_display$field_visit_id == visit_id
               )
               if (length(row_index) == 1) {
-                DT::dataTableProxy(ns("visit_table")) |>
+                DT::dataTableProxy("visit_table") |>
                   DT::selectRows(row_index)
               }
             }

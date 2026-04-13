@@ -4,7 +4,7 @@
 #'
 #' @param start The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime.
 #' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime. Default is the current date.
-#' @param locations A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
+#' @param locations A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location_code', 'alias', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
 #' @param sub_locations A vector of sub-location names or codes, only used if dbSource == 'AC' and table 'sub_locations'. Default is NULL; if there are sub-locations applicable, these will all be fetched and displayed as distinct traces. Must match the length of 'locations', use NA for locations without sub-locations.
 #' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
@@ -475,20 +475,26 @@ plotDiscrete <- function(
     # Now add the result_condition and result_condition_value columns
     # Sometimes the "." is a "," in the result, so we need to replace it
     data$result <- gsub(",", ".", data$result)
-    #result_condition should get < DL, > DL, or NA depending on if '<' or '>' show up in columns 'result'
-    data$result_condition <- ifelse(
-      grepl("<", data$result),
-      "< DL",
-      ifelse(grepl(">", data$result), "> DL", NA)
+    # result_condition should get < DL, > DL, or NA depending on if '<' or '>' show up in columns 'result'
+    suppressWarnings(
+      # Warning suppression to avoid warnings about NAs introduced by coercion
+      data$result_condition <- data.table::fifelse(
+        grepl("<", data$result),
+        "< DL",
+        data.table::fifelse(grepl(">", data$result), "> DL", NA)
+      )
     )
-    #result_condition_value should get the numeric portion of the string in 'result' only if '<' or '>' show up in columns 'result'
-    data$result_condition_value <- ifelse(
-      grepl("<", data$result),
-      as.numeric(gsub("<", "", data$result)),
-      ifelse(
-        grepl(">", data$result),
-        as.numeric(gsub(">", "", data$result)),
-        NA
+    # result_condition_value should get the numeric portion of the string in 'result' only if '<' or '>' show up in columns 'result'
+    # Suppress warnings about NAs introduced by coercion, which will happen for rows where there is no '<' or '>' in the result and is ok
+    data$result_condition_value <- suppressWarnings(
+      data.table::fifelse(
+        grepl("<", data$result),
+        as.numeric(gsub("<", "", data$result)),
+        data.table::fifelse(
+          grepl(">", data$result),
+          as.numeric(gsub(">", "", data$result)),
+          NA
+        )
       )
     )
     # turn column 'result' to a numeric, which will remove the '<' and '>' characters
@@ -683,8 +689,10 @@ plotDiscrete <- function(
     if (!is.null(locations)) {
       if (inherits(locations, "character")) {
         query <- paste0(
-          "SELECT location_id, location, name, name_fr FROM locations WHERE ",
-          "LOWER(location) IN (LOWER('",
+          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE LOWER(location_code) IN (LOWER('",
+          paste0(locations, collapse = "'), LOWER('"),
+          "')) ",
+          "OR LOWER(alias) IN (LOWER('",
           paste0(locations, collapse = "'), LOWER('"),
           "')) ",
           "OR LOWER(name) IN (LOWER('",
@@ -696,7 +704,7 @@ plotDiscrete <- function(
         )
       } else {
         query <- paste0(
-          "SELECT location_id, location, name, name_fr FROM locations WHERE location_id IN (",
+          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE location_id IN (",
           paste0(locations, collapse = ", "),
           ");"
         )
@@ -715,6 +723,7 @@ plotDiscrete <- function(
         combined_locIds <- unique(c(
           locIds$location_id,
           locIds$location,
+          locIds$alias,
           locIds$name,
           locIds$name_fr
         ))
@@ -730,7 +739,7 @@ plotDiscrete <- function(
 
         if (inherits(locations, "character")) {
           warning(
-            "The following locations were not found in the aquacache despite searching the 'location', 'name', and 'name_fr' columns of table 'locations': ",
+            "The following locations were not found in the aquacache despite searching the 'location_code', 'alias', 'name', and 'name_fr' columns of table 'locations': ",
             paste0(missing, collapse = ", "),
             ". Moving on without that location (and sub-location if applicable)."
           )
@@ -791,18 +800,24 @@ plotDiscrete <- function(
 
     if (!is.null(parameters)) {
       if (inherits(parameters, "character")) {
+        unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
         query <- paste0(
-          "SELECT parameter_id, param_name, param_name_fr, unit_default AS units FROM parameters WHERE ",
-          "LOWER(param_name) IN (LOWER('",
+          "SELECT p.parameter_id, p.param_name, p.param_name_fr, ",
+          unit_sql,
+          " FROM parameters p WHERE ",
+          "LOWER(p.param_name) IN (LOWER('",
           paste0(parameters, collapse = "'), LOWER('"),
           "')) ",
-          "OR LOWER(param_name_fr) IN (LOWER('",
+          "OR LOWER(p.param_name_fr) IN (LOWER('",
           paste0(parameters, collapse = "'), LOWER('"),
           "'))"
         )
       } else {
+        unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
         query <- paste0(
-          "SELECT parameter_id, param_name, param_name_fr, unit_default AS units FROM parameters WHERE parameter_id IN (",
+          "SELECT p.parameter_id, p.param_name, p.param_name_fr, ",
+          unit_sql,
+          " FROM parameters p WHERE p.parameter_id IN (",
           paste0(parameters, collapse = ", "),
           ");"
         )
@@ -930,7 +945,7 @@ WHERE
           "(",
           locIds$location_id,
           ", ",
-          ifelse(
+          data.table::fifelse(
             is.na(subLocIds$sub_location_id),
             -1,
             subLocIds$sub_location_id
@@ -963,13 +978,13 @@ AND s.datetime > '",
 
     # Merge columns for location name and sub_location name (where not null)
     if (lang == "en") {
-      samples$name <- ifelse(
+      samples$name <- data.table::fifelse(
         is.na(samples$sub_location_name),
         samples$name,
         paste0(samples$name, " - ", samples$sub_location_name)
       )
     } else {
-      samples$name <- ifelse(
+      samples$name <- data.table::fifelse(
         is.na(samples$sub_location_name_fr),
         samples$name_fr,
         paste0(samples$name_fr, " - ", samples$sub_location_name_fr)
@@ -1029,10 +1044,10 @@ AND s.datetime > '",
 
     # Now make result_condition column understandable
     #result_condition should get < DL, > DL, or NA depending on if 1 or 2 show up in column 'result_condition'
-    data$result_condition <- ifelse(
+    data$result_condition <- data.table::fifelse(
       grepl("1", data$result_condition),
       "< DL",
-      ifelse(grepl("2", data$result_condition), "> DL", NA)
+      data.table::fifelse(grepl("2", data$result_condition), "> DL", NA)
     )
 
     # Retain columns depending on if 'fr' or 'en', rename cols to match EQWin output
@@ -1281,7 +1296,7 @@ AND s.datetime > '",
         legendgroup = ~ get(color_by),
         showlegend = (i == 1),
         marker = list(
-          opacity = ifelse(all(df$result == -Inf), 0, 1),
+          opacity = data.table::fifelse(all(df$result == -Inf), 0, 1),
           symbol = "circle",
           size = point_scale * 7,
           line = list(width = 0.2, color = grDevices::rgb(0, 0, 0))

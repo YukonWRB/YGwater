@@ -32,10 +32,11 @@
     }
     .nunito-sans-italic {
       font-family: 'Nunito Sans', sans-serif;
+      font-style: italic;
     }
     .nunito-sans {
       font-family: 'Nunito Sans', sans-serif;
-      font-style: italic;
+      font-style: normal;
     }
     
     /* Set Nunito Sans as the default font for body text */

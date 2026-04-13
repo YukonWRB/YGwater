@@ -5,9 +5,10 @@
 \title{Plot a continous timeseries from the aquacache}
 \usage{
 plotTimeseries(
-  location,
+  timeseries_id = NULL,
+  location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -16,7 +17,7 @@ plotTimeseries(
   end_date = Sys.Date(),
   invert = NULL,
   slider = TRUE,
-  datum = TRUE,
+  datum = FALSE,
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
@@ -34,13 +35,18 @@ plotTimeseries(
   gridx = FALSE,
   gridy = FALSE,
   webgl = TRUE,
-  rate = NULL,
+  resolution = NULL,
   tzone = "auto",
+  raw = FALSE,
+  imputed = FALSE,
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 )
 }
 \arguments{
+\item{timeseries_id}{The timeseries ID to plot, if known (else leave NULL).}
+
 \item{location}{The location for which you want a plot.}
 
 \item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}
@@ -63,7 +69,7 @@ plotTimeseries(
 
 \item{slider}{Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.}
 
-\item{datum}{Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.}
+\item{datum}{Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is FALSE.}
 
 \item{title}{Should a title be included?}
 
@@ -99,13 +105,22 @@ plotTimeseries(
 
 \item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.}
 
-\item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
+\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
-\item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
+\item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).}
+
+\item{raw}{Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.}
+
+\item{imputed}{Should imputed data be displayed differently? Default is FALSE.}
 
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values and
+stored daily summaries should be reconstructed. Character, Date, and
+POSIXct inputs are supported. Date-like inputs are interpreted as the end
+of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 A plotly object and a data frame with the data used to create the plot (if \code{data} is TRUE).

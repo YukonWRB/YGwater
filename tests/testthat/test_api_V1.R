@@ -6,8 +6,8 @@
 
 test_that("tests for API V1", {
   # Set some environment variables for the API to use. These are normally set when the API is launched using api() but are set here in the local environment.
-  Sys.setenv(APIaquacacheAnonUser = Sys.getenv("aquacacheUser", "runner"))
-  Sys.setenv(APIaquacacheAnonPass = Sys.getenv("aquacachePass", "runner"))
+  Sys.setenv(APIaquacacheUser = Sys.getenv("aquacacheUser", "runner"))
+  Sys.setenv(APIaquacachePass = Sys.getenv("aquacachePass", "runner"))
   Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheName", "testdb"))
   Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheHost", "localhost"))
   Sys.setenv(APIaquacachePort = Sys.getenv("aquacachePort", "5432"))
@@ -47,14 +47,17 @@ test_that("tests for API V1", {
     200
   )
 
-  out <- readr::read_csv(
-    httr::content(
+  # get the content of the response as a data frame with base R if possible
+  out <- read.csv(
+    text = httr::content(
       get_ts,
       type = "text",
       encoding = "UTF-8"
-    ),
-    show_col_types = FALSE
+    )
   )
+
+  out$end_datetime <- as.POSIXct(out$end_datetime, tz = "UTC")
+  out$start_datetime <- as.POSIXct(out$start_datetime, tz = "UTC")
 
   ## Test to confirm the output of the API is correct
   expect_named(
@@ -63,12 +66,19 @@ test_that("tests for API V1", {
       "timeseries_id",
       "location_id",
       "location_name",
+      "alias_name",
       "depth_height_m",
+      "latitude",
+      "longitude",
+      "location_elevation",
+      "projects",
+      "networks",
       "media_type",
       "parameter_name",
       "units",
       "aggregation_type",
       "recording_rate",
+      "sensor_priority",
       "start_datetime",
       "end_datetime",
       "note"
@@ -91,6 +101,11 @@ test_that("tests for API V1", {
     )
   }
 
+  # Pick another timeseries same or greater end datetime to test the /timeseries/{timeseries_id} endpoint later on
+  test_timeseries_id_2 <- out$timeseries_id[
+    out$end_datetime >= test_timeseries_end
+  ][1]
+
   # Tests for /locations endpoint
   expect_s3_class(
     # ---------------- Make API call --------------------
@@ -106,13 +121,12 @@ test_that("tests for API V1", {
     get_locs$status_code,
     200
   )
-  out <- readr::read_csv(
-    httr::content(
+  out <- read.csv(
+    text = httr::content(
       get_locs,
       type = "text",
       encoding = "UTF-8"
-    ),
-    show_col_types = FALSE
+    )
   )
   # ---------- Run tests against response ---------------
   expect_gt(
@@ -123,20 +137,23 @@ test_that("tests for API V1", {
     out,
     c(
       "location_id",
-      "location_code",
       "name",
+      "alias",
+      "location_code",
       "latitude",
       "longitude",
       "elevation",
       "datum",
       "note",
       "projects",
-      "networks"
+      "networks",
+      "fn_names"
     )
   )
 
   ## Tests for /timeseries/{timeseries_id} endpoint
   skip_on_ci()
+  # Single timeseries
   expect_s3_class(
     # ---------------- Make API call --------------------
     get_ts_id <- callthat::call_that_api_get(
@@ -151,18 +168,32 @@ test_that("tests for API V1", {
     ),
     "response"
   )
+  # Two timeseries
+  expect_s3_class(
+    # ---------------- Make API call --------------------
+    get_ts_id <- callthat::call_that_api_get(
+      api_session,
+      endpoint = "timeseries/measurements",
+      query = list(
+        start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
+        end = test_timeseries_end,
+        limit = 100,
+        id = paste(test_timeseries_id, test_timeseries_id_2, sep = ",")
+      )
+    ),
+    "response"
+  )
   # Test to confirm that the response was a success
   expect_equal(
     get_ts_id$status_code,
     200
   )
-  out <- readr::read_csv(
-    httr::content(
+  out <- read.csv(
+    text = httr::content(
       get_ts_id,
       type = "text",
       encoding = "UTF-8"
-    ),
-    show_col_types = FALSE
+    )
   )
   # ---------- Run tests against response ---------------
   expect_gt(
@@ -177,7 +208,9 @@ test_that("tests for API V1", {
       "value_raw",
       "value_corrected",
       "period",
-      "imputed"
+      "imputed",
+      "created",
+      "modified"
     )
   )
 })

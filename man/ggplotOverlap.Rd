@@ -7,6 +7,7 @@
 ggplotOverlap(
   location,
   parameter,
+  units = "",
   record_rate = NULL,
   startDay = 1,
   endDay = 365,
@@ -17,7 +18,9 @@ ggplotOverlap(
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
-  historic_range = "all",
+  historic_range = NULL,
+  ref_period_start_datetime = NULL,
+  ref_period_end_datetime = NULL,
   returns = "auto",
   return_type = "max",
   return_months = c(5:9),
@@ -33,13 +36,16 @@ ggplotOverlap(
   con = NULL,
   continuous_data = NULL,
   snowbulletin = FALSE,
-  lang = "en"
+  lang = "en",
+  as_of = NULL
 )
 }
 \arguments{
-\item{location}{The location for which you want a plot.}
+\item{location}{The location for which you want a plot. You can pass in the location_id, location_code, English or French location name.}
 
 \item{parameter}{The parameter name (text) or code (numeric) you wish to plot. The location:parameter combo must be in the local database.}
+
+\item{units}{The units to display on the y-axis. Default is "" and the function will attempt to find the appropriate units from the database.}
 
 \item{record_rate}{The recording rate for the parameter and location to plot. In most cases there are not multiple recording rates for a location and parameter combo and you can leave this NULL. Otherwise NULL will default to the most frequent record rate.}
 
@@ -57,11 +63,15 @@ ggplotOverlap(
 
 \item{title}{Should a title be included?}
 
-\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
+\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.}
 
 \item{filter}{Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.}
 
 \item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
+
+\item{ref_period_start_datetime}{The first year to consider when calculating ribbons for a reference period. Default is NULL and will use the first year of data available.}
+
+\item{ref_period_end_datetime}{The last year to consider when calculating ribbons for a reference period. Default is NULL and will use the last year of data available or the last year specified in \code{years} if \code{historic_range} is set to "last".}
 
 \item{returns}{Should returns be plotted? You have the option of using pre-determined level returns only (option "table"), auto-calculated values(option "calculate"), "auto" (priority to "table", fallback to "calculate"), or "none". Defaults to "auto".}
 
@@ -94,6 +104,11 @@ ggplotOverlap(
 \item{snowbulletin}{If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.}
 
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values and
+stored daily summaries should be reconstructed. Character, Date, and
+POSIXct inputs are supported. Date-like inputs are interpreted as the end
+of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.

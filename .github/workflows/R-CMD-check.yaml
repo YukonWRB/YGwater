@@ -42,13 +42,25 @@ jobs:
           extra-packages: any::rcmdcheck, any::R.utils
           needs: check
 
-      - name: Set up PostgreSQL 17
-        uses: ikalnytskyi/action-setup-postgres@v7
+      - name: Set up PostgreSQL 18
+        uses: ikalnytskyi/action-setup-postgres@v8
         with:
-          postgres-version: '17'
+          postgres-version: '18'
           username: runner
           password: runner
           database: testdb
+
+      - name: Install PostGIS (incl. raster extension)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgis postgresql-18-postgis-3 postgresql-18-postgis-3-scripts
+
+      - name: Enable PostGIS extensions in testdb
+        env:
+          PGPASSWORD: runner
+        run: |
+          psql -h 127.0.0.1 -U runner -d testdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+          psql -h 127.0.0.1 -U runner -d testdb -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS postgis_raster;"
           
       - name: Decompress CI seed database (Uses R for cross-platform functionality)
         run: |

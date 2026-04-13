@@ -1,5 +1,10 @@
-floodAtlas_ts_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass) {
-  
+floodAtlas_ts_globals <- function(
+  dbName,
+  dbHost,
+  dbPort = dbPort,
+  dbUser = dbUser,
+  dbPass = dbPass
+) {
   library(shiny)
   library(shinyjs)
 
@@ -8,7 +13,6 @@ floodAtlas_ts_globals <- function(dbName, dbHost, dbPort = dbPort, dbUser = dbUs
     dbHost = dbHost,
     dbPort = dbPort,
     dbUser = dbUser,
-    dbPass = dbPass)
-
+    dbPass = dbPass
+  )
 }
-

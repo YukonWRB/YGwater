@@ -3,6 +3,7 @@
 #' @description
 #' This function plots continuous timeseries from the aquacache. The plot is zoomable and hovering over the historical ranges or the measured values brings up additional information. If corrections are applied to the data within AquaCache, the corrected values will be used.
 #'
+#' @param timeseries_id The timeseries ID to plot, if known (else leave NULL).
 #' @param location The location for which you want a plot.
 #' @param sub_location Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).
 #' @param parameter The parameter name (text) or code (numeric) that you wish to plot. The location:sublocation:parameter combo must be in the local database.
@@ -14,7 +15,7 @@
 #' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
-#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is TRUE.
+#' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is FALSE.
 #' @param title Should a title be included?
 #' @param custom_title Custom title to be given to the plot. Default is NULL, which will set the title as the location name as entered in the database.
 #' @param filter Should an attempt be made to filter out spurious data? Will calculate the rolling IQR and filter out clearly spurious values. Set this parameter to an integer, which specifies the rolling IQR 'window'. The greater the window, the more effective the filter but at the risk of filtering out real data. Negative values are always filtered from parameters "water level" ("niveau d'eau"), "flow" ("débit"), "snow depth" ("profondeur de la neige"), "snow water equivalent" ("équivalent en eau de la neige"), "distance", and any "precip" related parameter. Otherwise all values below -100 are removed.
@@ -32,8 +33,14 @@
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
 #' @param webgl Use WebGL ("scattergl") for faster rendering when possible. Set to FALSE to force standard scatter traces.
-#' @param rate The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
-#' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
+#' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
+#' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
+#' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
+#' @param as_of Optional point-in-time timestamp at which measurement values and
+#'   stored daily summaries should be reconstructed. Character, Date, and
+#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
+#'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
@@ -42,9 +49,10 @@
 #' @export
 
 plotTimeseries <- function(
-  location,
+  timeseries_id = NULL,
+  location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -53,7 +61,7 @@ plotTimeseries <- function(
   end_date = Sys.Date(),
   invert = NULL,
   slider = TRUE,
-  datum = TRUE,
+  datum = FALSE,
   title = TRUE,
   custom_title = NULL,
   filter = NULL,
@@ -71,15 +79,19 @@ plotTimeseries <- function(
   gridx = FALSE,
   gridy = FALSE,
   webgl = TRUE,
-  rate = NULL,
+  resolution = NULL,
   tzone = "auto",
+  raw = FALSE,
+  imputed = FALSE,
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 ) {
-  # location <- "29AB009"
+  # timeseries_id = 1222
+  # location <- NULL
   # sub_location <- NULL
-  # parameter = 1165
-  # start_date <- "2024-08-12"
+  # parameter = NULL
+  # start_date <- "2022-08-12"
   # end_date <- "2025-08-13"
   # record_rate = NULL
   # aggregation_type = NULL
@@ -101,9 +113,12 @@ plotTimeseries <- function(
   # axis_scale = 1
   # legend_scale = 1
   # legend_position = "v"
-  # rate = "max"
+  # resolution = "max"
   # tzone = "auto"
+  # raw = FALSE
+  # imputed = FALSE
   # con = NULL
+  # as_of = NULL
   # gridx = FALSE
   # gridy = FALSE
   # hover = TRUE
@@ -112,7 +127,16 @@ plotTimeseries <- function(
   # Checks and initial work ##########################################
 
   # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- NULL
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- NULL
+
+  if (!is.null(resolution)) {
+    if (resolution == "day" && raw) {
+      warning(
+        "You have requested raw data at a daily rate. Daily data is only available as corrected data, so raw was reset to FALSE."
+      )
+      raw <- FALSE
+    }
+  }
 
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
@@ -123,6 +147,64 @@ plotTimeseries <- function(
     tzone <- Sys.timezone()
   }
 
+  if (is.character(tzone)) {
+    numeric_tzone <- suppressWarnings(as.numeric(tzone))
+    if (!is.na(numeric_tzone) && grepl("^[-+]?\\d+$", trimws(tzone))) {
+      tzone <- numeric_tzone
+    }
+  }
+
+  if (is.numeric(tzone)) {
+    if (length(tzone) != 1 || is.na(tzone) || tzone %% 1 != 0) {
+      stop("Numeric timezone offsets must be a single whole hour value.")
+    }
+    if (tzone == 0) {
+      tzone <- "UTC"
+    } else {
+      tzone <- sprintf("Etc/GMT%+d", -as.integer(tzone))
+    }
+  }
+
+  if (!is.null(as_of)) {
+    if (length(as_of) != 1) {
+      stop("`as_of` must be NULL or a single date/datetime value.")
+    }
+
+    if (inherits(as_of, "character")) {
+      as_of_text <- trimws(as.character(as_of[[1]]))
+      has_time_component <- grepl("[ T]\\d{1,2}:\\d{2}", as_of_text) ||
+        grepl("(Z|[+-]\\d{2}:?\\d{2})$", as_of_text)
+
+      if (has_time_component) {
+        as_of <- suppressWarnings(as.POSIXct(as_of_text, tz = tzone))
+      } else {
+        as_of <- suppressWarnings(as.POSIXct(as.Date(as_of_text), tz = tzone))
+        as_of <- as_of + 24 * 60 * 60
+      }
+    } else if (inherits(as_of, "Date") && !inherits(as_of, "POSIXt")) {
+      as_of <- as.POSIXct(as_of, tz = tzone)
+      as_of <- as_of + 24 * 60 * 60
+    } else if (inherits(as_of, "POSIXt")) {
+      as_of <- as.POSIXct(as_of, tz = tzone)
+    }
+
+    if (!inherits(as_of, "POSIXt") || is.na(as_of)) {
+      stop(
+        "`as_of` must be NULL or a single character, Date, or POSIXct value."
+      )
+    }
+
+    attr(as_of, "tzone") <- "UTC"
+  }
+
+  if (!is.null(parameter)) {
+    if (inherits(parameter, "character")) {
+      parameter <- tolower(parameter)
+    }
+  } else if (is.null(timeseries_id)) {
+    stop("Parameter is required when timeseries_id is NULL.")
+  }
+
   if (!is.null(invert)) {
     if (!inherits(invert, "logical")) {
       stop(
@@ -131,11 +213,11 @@ plotTimeseries <- function(
     }
   }
 
-  if (!is.null(rate)) {
-    rate <- tolower(rate)
-    if (!(rate %in% c("max", "hour", "day"))) {
+  if (!is.null(resolution)) {
+    resolution <- tolower(resolution)
+    if (!(resolution %in% c("max", "hour", "day"))) {
       stop(
-        "Your entry for the parameter 'rate' is invalid. Please review the function documentation and try again."
+        "Your entry for the parameter 'resolution' is invalid. Please review the function documentation and try again."
       )
     }
   }
@@ -180,57 +262,6 @@ plotTimeseries <- function(
     )
   }
 
-  if (!is.null(record_rate)) {
-    record_rate <- lubridate::period(record_rate)
-    if (!lubridate::is.period(record_rate)) {
-      warning(
-        "Your entry for parameter record_rate is invalid. It's been reset to the default NULL."
-      )
-      record_rate <- NULL
-    }
-  }
-
-  if (!is.null(aggregation_type)) {
-    if (inherits(aggregation_type, "character")) {
-      aggregation_type <- tolower(aggregation_type)
-      if (
-        !(aggregation_type %in%
-          c('instantaneous', 'sum', 'min', 'max', '(min+max)/2'))
-      ) {
-        warning(
-          "Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL."
-        )
-        aggregation_type <- NULL
-      } else {
-        aggregation_type <- DBI::dbGetQuery(
-          con,
-          glue::glue_sql(
-            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = {aggregation_type};",
-            .con = con
-          )
-        )[1, 1]
-      }
-    } else {
-      if (inherits(aggregation_type, "numeric")) {
-        aggregation_type <- DBI::dbGetQuery(
-          con,
-          glue::glue_sql(
-            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};",
-            .con = con
-          )
-        )[1, 1]
-        if (is.na(aggregation_type)) {
-          warning(
-            "Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL."
-          )
-          aggregation_type <- NULL
-        }
-      }
-    }
-  }
-
-  aggregation_type_id <- aggregation_type
-
   if (!inherits(historic_range, "logical")) {
     warning(
       "Parameter `historic_range` must be TRUE or FALSE. Resetting it to FALSE."
@@ -239,356 +270,370 @@ plotTimeseries <- function(
   }
 
   # Determine the timeseries and adjust the date range #################
-  location_txt <- as.character(location)
-  location_id <- DBI::dbGetQuery(
-    con,
-    glue::glue_sql(
-      "SELECT location_id FROM locations WHERE location = {location_txt} OR name = {location_txt} OR name_fr = {location_txt} OR location_id::text = {location_txt} LIMIT 1;",
-      .con = con
-    )
-  )[1, 1]
-  if (is.na(location_id)) {
-    stop("The location you entered does not exist in the database.")
-  }
-
-  # Confirm parameter and location exist in the database and that there is only one entry
-  parameter_txt <- tolower(as.character(parameter))
-  parameter_tbl <- DBI::dbGetQuery(
-    con,
-    glue::glue_sql(
-      "SELECT parameter_id, param_name, param_name_fr, plot_default_y_orientation, unit_default FROM parameters WHERE LOWER(param_name) = {parameter_txt} OR LOWER(param_name_fr) = {parameter_txt} OR parameter_id::text = {parameter_txt} LIMIT 1;",
-      .con = con
-    )
-  )
-  parameter_code <- parameter_tbl$parameter_id[1]
-  if (is.na(parameter_code)) {
-    stop("The parameter you entered does not exist in the database.")
-  }
-
-  # Where column param_name_fr is not filled in, use the English name
-  parameter_tbl$param_name_fr[is.na(
-    parameter_tbl$param_name_fr
-  )] <- parameter_tbl$param_name[is.na(parameter_tbl$param_name_fr)]
-
-  if (lang == "fr") {
-    parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
-  } else if (lang == "en" || is.na(parameter_name)) {
-    parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
-  }
-
-  if (is.null(sub_location)) {
-    # Check if there are multiple sub_locations for this parameter_code, location regardless of sub_location. If so, throw a stop
-    sub_loc_check <- DBI::dbGetQuery(
-      con,
-      paste0(
-        "SELECT sub_location_id FROM timeseries WHERE location_id = ",
-        location_id,
-        " AND parameter_id = ",
-        parameter_code,
-        " AND sub_location_id IS NOT NULL;"
-      )
-    )
-    if (nrow(sub_loc_check) > 1) {
-      stop(
-        "There are multiple sub-locations for this location and parameter. Please specify a sub-location."
-      )
-    }
-
-    if (is.null(record_rate)) {
-      # aggregation_type_id may or may not be NULL
-      if (is.null(aggregation_type_id)) {
-        #both record_rate and aggregation_type_id are NULL
-        exist_check <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-            location_id,
-            " AND ts.parameter_id = ",
-            parameter_code,
-            ";"
-          )
+  if (is.null(timeseries_id)) {
+    if (!is.null(record_rate)) {
+      record_rate <- lubridate::period(record_rate)
+      if (!lubridate::is.period(record_rate)) {
+        warning(
+          "Your entry for parameter record_rate is invalid. It's been reset to the default NULL."
         )
-      } else {
-        #aggregation_type_id is not NULL but record_rate is
-        exist_check <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-            location_id,
-            " AND ts.parameter_id = ",
-            parameter_code,
-            " AND ts.aggregation_type_id = ",
-            aggregation_type_id,
-            ";"
-          )
-        )
+        record_rate <- NULL
       }
-    } else if (is.null(aggregation_type_id)) {
-      #record_rate is not NULL but aggregation_type_id is
-      exist_check <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime 
-          FROM timeseries ts 
-          LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-          location_id,
-          " AND ts.parameter_id = ",
-          parameter_code,
-          " AND ts.record_rate = '",
-          record_rate,
-          "';"
-        )
-      )
-    } else {
-      # both record_rate and aggregation_type_id are not NULL
-      exist_check <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime 
-          FROM timeseries ts 
-          LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-          location_id,
-          " AND ts.parameter_id = ",
-          parameter_code,
-          " AND ts.record_rate = '",
-          record_rate,
-          "' AND ts.aggregation_type_id = ",
-          aggregation_type_id,
-          ";"
-        )
-      )
     }
-  } else {
-    #sub location was specified
-    # Find the sub location_id
-    sub_loc_txt <- as.character(sub_location)
-    sub_location_id <- DBI::dbGetQuery(
-      con,
-      glue::glue_sql(
-        "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;",
-        .con = con
-      )
-    )[1, 1]
-    if (is.na(sub_location_id)) {
-      stop("The sub-location you entered does not exist in the database.")
-    }
-    if (is.null(record_rate)) {
-      # aggregation_type_id may or may not be NULL
-      if (is.null(aggregation_type_id)) {
-        #both record_rate and aggregation_type_id are NULL
-        exist_check <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-            location_id,
-            " AND ts.sub_location_id = ",
-            sub_location_id,
-            " AND ts.parameter_id = ",
-            parameter_code,
-            ";"
-          )
-        )
-      } else {
-        #aggregation_type_id is not NULL but record_rate is
-        exist_check <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-            location_id,
-            " AND ts.sub_location_id = ",
-            sub_location_id,
-            " AND ts.parameter_id = ",
-            parameter_code,
-            " AND ts.aggregation_type_id = ",
-            aggregation_type_id,
-            ";"
-          )
-        )
-      }
-    } else if (is.null(aggregation_type_id)) {
-      #record_rate is not NULL but aggregation_type_id is
-      exist_check <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-          location_id,
-          " AND ts.sub_location_id = ",
-          sub_location_id,
-          " AND ts.parameter_id = ",
-          parameter_code,
-          " AND ts.record_rate = '",
-          record_rate,
-          "';"
-        )
-      )
-    } else {
-      #both record_rate and aggregation_type_id are not NULL
-      exist_check <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
-          location_id,
-          " AND ts.sub_location_id = ",
-          sub_location_id,
-          " AND ts.parameter_id = ",
-          parameter_code,
-          " AND ts.record_rate = '",
-          record_rate,
-          "' AND ts.aggregation_type_id = ",
-          aggregation_type_id,
-          ";"
-        )
-      )
-    }
-  }
 
-  # Narrow down by z if necessary
-  if (!is.null(z)) {
-    if (is.null(z_approx)) {
-      exist_check <- exist_check[exist_check$z == z, ]
-    } else {
-      exist_check <- exist_check[abs(exist_check$z - z) < z_approx, ]
-    }
-  }
-
-  if (nrow(exist_check) == 0) {
-    if (is.null(record_rate) & is.null(aggregation_type_id) & is.null(z)) {
-      stop(
-        "There doesn't appear to be a match in the database for location ",
-        location,
-        ", parameter ",
-        parameter,
-        ", and continuous category data."
-      )
-    } else {
-      stop(
-        "There doesn't appear to be a match in the database for location ",
-        location,
-        ", parameter ",
-        parameter,
-        ", record rate ",
-        if (is.null(record_rate)) "(not specified)" else record_rate,
-        ", aggregation type ",
-        if (is.null(aggregation_type_id)) {
-          "(not specified)"
+    if (!is.null(aggregation_type)) {
+      if (inherits(aggregation_type, "character")) {
+        aggregation_type <- tolower(aggregation_type)
+        if (
+          !(aggregation_type %in%
+            c('instantaneous', 'sum', 'min', 'max', '(min+max)/2'))
+        ) {
+          warning(
+            "Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL."
+          )
+          aggregation_type <- NULL
         } else {
-          aggregation_type_id
-        },
-        ", z of ",
-        if (is.null(z)) "(not specified)" else z,
-        " and continuous category data. You could try leaving the record rate and/or aggregation_type to the default 'NULL', or explore different z or z_approx values."
-      )
+          aggregation_type <- DBI::dbGetQuery(
+            con,
+            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = $1;",
+            params = list(aggregation_type)
+          )[1, 1]
+        }
+      } else {
+        if (inherits(aggregation_type, "numeric")) {
+          aggregation_type <- DBI::dbGetQuery(
+            con,
+            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = $1;",
+            params = list(aggregation_type)
+          )[1, 1]
+          if (is.na(aggregation_type)) {
+            warning(
+              "Your entry for parameter aggregation_type is invalid. It's been reset to the default NULL."
+            )
+            aggregation_type <- NULL
+          }
+        }
+      }
     }
-  } else if (nrow(exist_check) > 1) {
-    if (is.null(record_rate)) {
-      warning(
-        "There is more than one entry in the database for location ",
-        location,
-        ", parameter ",
-        parameter,
-        ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate."
-      )
-      exist_check <- exist_check[order(exist_check$record_rate), ]
-      temp <- exist_check[1, ]
+
+    aggregation_type_id <- aggregation_type
+
+    location_txt <- as.character(location)
+    location_id <- lookup_location_id(con, location_txt)
+    if (is.na(location_id)) {
+      stop("The location you entered does not exist in the database.")
     }
-    if (nrow(temp) > 1) {
-      exist_check <- temp
-      if (is.null(aggregation_type_id)) {
+
+    # Confirm parameter and location exist in the database and that there is only one entry
+    parameter_txt <- tolower(as.character(parameter))
+    parameter_tbl <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
+        "p.plot_default_y_orientation,",
+        ac_parameter_unit_select_sql(con, "p", "unit_default"),
+        "FROM parameters p",
+        "WHERE LOWER(p.param_name) = $1",
+        "OR LOWER(p.param_name_fr) = $1",
+        "OR p.parameter_id::text = $1",
+        "LIMIT 1;"
+      ),
+      params = list(parameter_txt)
+    )
+    parameter_code <- parameter_tbl$parameter_id[1]
+    if (is.na(parameter_code)) {
+      stop("The parameter you entered does not exist in the database.")
+    }
+
+    if (is.null(sub_location)) {
+      # Check if there are multiple sub_locations for this parameter_code, location regardless of sub_location. If so, throw a stop
+      sub_loc_check <- DBI::dbGetQuery(
+        con,
+        "SELECT sub_location_id FROM timeseries WHERE location_id = $1 AND parameter_id = $2 AND sub_location_id IS NOT NULL;",
+        params = list(location_id, parameter_code)
+      )
+      if (nrow(sub_loc_check) > 1) {
+        stop(
+          "There are multiple sub-locations for this location and parameter. Please specify a sub-location."
+        )
+      }
+
+      if (is.null(record_rate)) {
+        # aggregation_type_id may or may not be NULL
+        if (is.null(aggregation_type_id)) {
+          #both record_rate and aggregation_type_id are NULL
+          exist_check <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              location_id,
+              " AND ts.parameter_id = ",
+              parameter_code,
+              ";"
+            )
+          )
+        } else {
+          #aggregation_type_id is not NULL but record_rate is
+          exist_check <- DBI::dbGetQuery(
+            con,
+            paste0(
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              location_id,
+              " AND ts.parameter_id = ",
+              parameter_code,
+              " AND ts.aggregation_type_id = ",
+              aggregation_type_id,
+              ";"
+            )
+          )
+        }
+      } else if (is.null(aggregation_type_id)) {
+        #record_rate is not NULL but aggregation_type_id is
+        exist_check <- DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime 
+          FROM timeseries ts 
+          LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            location_id,
+            " AND ts.parameter_id = ",
+            parameter_code,
+            " AND ts.record_rate = '",
+            record_rate,
+            "';"
+          )
+        )
+      } else {
+        # both record_rate and aggregation_type_id are not NULL
+        exist_check <- DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime 
+          FROM timeseries ts 
+          LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            location_id,
+            " AND ts.parameter_id = ",
+            parameter_code,
+            " AND ts.record_rate = '",
+            record_rate,
+            "' AND ts.aggregation_type_id = ",
+            aggregation_type_id,
+            ";"
+          )
+        )
+      }
+    } else {
+      #sub location was specified
+      # Find the sub location_id
+      sub_loc_txt <- as.character(sub_location)
+      sub_location_id <- DBI::dbGetQuery(
+        con,
+        "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = $1 OR sub_location_name_fr = $1 OR sub_location_id::text = $1 LIMIT 1;",
+        params = list(sub_loc_txt)
+      )[1, 1]
+      if (is.na(sub_location_id)) {
+        stop("The sub-location you entered does not exist in the database.")
+      }
+      if (is.null(record_rate)) {
+        # aggregation_type_id may or may not be NULL
+        if (is.null(aggregation_type_id)) {
+          #both record_rate and aggregation_type_id are NULL
+          exist_check <- DBI::dbGetQuery(
+            con,
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id = $2 AND ts.parameter_id = $3;",
+            params = list(location_id, sub_location_id, parameter_code)
+          )
+        } else {
+          #aggregation_type_id is not NULL but record_rate is
+          exist_check <- DBI::dbGetQuery(
+            con,
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id =$2 AND ts.parameter_id = $3 AND ts.aggregation_type_id = $4;",
+            params = list(
+              location_id,
+              sub_location_id,
+              parameter_code,
+              aggregation_type_id
+            )
+          )
+        }
+      } else if (is.null(aggregation_type_id)) {
+        #record_rate is not NULL but aggregation_type_id is
+        exist_check <- DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            location_id,
+            " AND ts.sub_location_id = ",
+            sub_location_id,
+            " AND ts.parameter_id = ",
+            parameter_code,
+            " AND ts.record_rate = '",
+            record_rate,
+            "';"
+          )
+        )
+      } else {
+        #both record_rate and aggregation_type_id are not NULL
+        exist_check <- DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            location_id,
+            " AND ts.sub_location_id = ",
+            sub_location_id,
+            " AND ts.parameter_id = ",
+            parameter_code,
+            " AND ts.record_rate = '",
+            record_rate,
+            "' AND ts.aggregation_type_id = ",
+            aggregation_type_id,
+            ";"
+          )
+        )
+      }
+    }
+
+    # Narrow down by z if necessary
+    if (!is.null(z)) {
+      if (is.null(z_approx)) {
+        exist_check <- exist_check[exist_check$z == z, ]
+      } else {
+        exist_check <- exist_check[abs(exist_check$z - z) < z_approx, ]
+      }
+    }
+
+    if (nrow(exist_check) == 0) {
+      if (is.null(record_rate) & is.null(aggregation_type_id) & is.null(z)) {
+        stop(
+          "There doesn't appear to be a match in the database for location ",
+          location,
+          ", parameter ",
+          parameter,
+          ", and continuous category data."
+        )
+      } else {
+        stop(
+          "There doesn't appear to be a match in the database for location ",
+          location,
+          ", parameter ",
+          parameter,
+          ", record rate ",
+          if (is.null(record_rate)) "(not specified)" else record_rate,
+          ", aggregation type ",
+          if (is.null(aggregation_type_id)) {
+            "(not specified)"
+          } else {
+            aggregation_type_id
+          },
+          ", z of ",
+          if (is.null(z)) "(not specified)" else z,
+          " and continuous category data. You could try leaving the record rate and/or aggregation_type to the default 'NULL', or explore different z or z_approx values."
+        )
+      }
+    } else if (nrow(exist_check) > 1) {
+      if (is.null(record_rate)) {
         warning(
           "There is more than one entry in the database for location ",
           location,
           ", parameter ",
           parameter,
-          ", and continuous category data. Since you left the aggregation_type as NULL, selecting the one(s) with the most frequent aggregation type."
+          ", and continuous category data. Since you left the record_rate as NULL, selecting the one(s) with the most frequent recording rate."
         )
-        agg_types <- DBI::dbGetQuery(
-          con,
-          "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;"
-        )
-
-        exist_check <- exist_check[
-          exist_check$aggregation_type_id ==
-            agg_types[
-              agg_types$aggregation_type == "instantaneous",
-              "aggregation_type_id"
-            ],
-        ]
-        if (nrow(exist_check) == 0) {
-          exist_check <- exist_check[
-            exist_check$aggregation_type_id ==
-              agg_types[
-                agg_types$aggregation_type == "mean",
-                "aggregation_type_id"
-              ],
-          ]
-        }
-        if (nrow(exist_check) == 0) {
-          exist_check <- exist_check[
-            exist_check$aggregation_type_id ==
-              agg_types[
-                agg_types$aggregation_type == "(min+max)/2",
-                "aggregation_type_id"
-              ],
-          ]
-        }
-        if (nrow(exist_check) == 0) {
-          exist_check <- exist_check[
-            exist_check$aggregation_type_id ==
-              agg_types[
-                agg_types$aggregation_type == "minimum",
-                "aggregation_type_id"
-              ],
-          ]
-        }
-        if (nrow(exist_check) == 0) {
-          exist_check <- exist_check[
-            exist_check$aggregation_type_id ==
-              agg_types[
-                agg_types$aggregation_type == "maximum",
-                "aggregation_type_id"
-              ],
-          ]
-        }
+        exist_check <- exist_check[order(exist_check$record_rate), ]
+        temp <- exist_check[1, ]
       }
-    } else if (nrow(temp) == 1) {
-      exist_check <- temp
-    }
-  }
-
-  # If there are multiple z values after all that, select the one closest to ground
-  if (nrow(exist_check) > 1) {
-    exist_check <- exist_check[which.min(abs(exist_check$z)), ]
-  }
-
-  if (title) {
-    if (is.null(custom_title)) {
-      if (lang == "fr") {
-        stn_name <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT name_fr FROM locations where location_id = '",
-            location_id,
-            "'"
+      if (nrow(temp) > 1) {
+        exist_check <- temp
+        if (is.null(aggregation_type_id)) {
+          warning(
+            "There is more than one entry in the database for location ",
+            location,
+            ", parameter ",
+            parameter,
+            ", and continuous category data. Since you left the aggregation_type as NULL, selecting the one(s) with the most frequent aggregation type."
           )
-        )[1, 1]
-      }
-      if (lang == "en" || is.na(stn_name)) {
-        stn_name <- DBI::dbGetQuery(
-          con,
-          paste0(
-            "SELECT name FROM locations where location_id = '",
-            location_id,
-            "'"
+          agg_types <- DBI::dbGetQuery(
+            con,
+            "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;"
           )
-        )[1, 1]
+
+          exist_check <- exist_check[
+            exist_check$aggregation_type_id ==
+              agg_types[
+                agg_types$aggregation_type == "instantaneous",
+                "aggregation_type_id"
+              ],
+          ]
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[
+              exist_check$aggregation_type_id ==
+                agg_types[
+                  agg_types$aggregation_type == "mean",
+                  "aggregation_type_id"
+                ],
+            ]
+          }
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[
+              exist_check$aggregation_type_id ==
+                agg_types[
+                  agg_types$aggregation_type == "(min+max)/2",
+                  "aggregation_type_id"
+                ],
+            ]
+          }
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[
+              exist_check$aggregation_type_id ==
+                agg_types[
+                  agg_types$aggregation_type == "minimum",
+                  "aggregation_type_id"
+                ],
+            ]
+          }
+          if (nrow(exist_check) == 0) {
+            exist_check <- exist_check[
+              exist_check$aggregation_type_id ==
+                agg_types[
+                  agg_types$aggregation_type == "maximum",
+                  "aggregation_type_id"
+                ],
+            ]
+          }
+        }
+      } else if (nrow(temp) == 1) {
+        exist_check <- temp
       }
-      stn_name <- titleCase(stn_name, lang)
-    } else {
-      stn_name <- custom_title
     }
+
+    # If there are multiple z values after all that, select the one closest to ground
+    if (nrow(exist_check) > 1) {
+      exist_check <- exist_check[which.min(abs(exist_check$z)), ]
+    }
+
+    tsid <- exist_check$timeseries_id
+  } else {
+    # timeseries_id was provided
+    tsid <- timeseries_id
+    # need to fetch pieces to get location_id and parameter_id
+    exist_check <- DBI::dbGetQuery(
+      con,
+      "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ts.start_datetime, ts.end_datetime, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
+      params = list(tsid)
+    )
+    location_id <- exist_check$location_id[1]
+    parameter_tbl <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT p.param_name, p.param_name_fr, p.plot_default_y_orientation,",
+        ac_parameter_unit_select_sql(con, "p", "unit_default"),
+        "FROM parameters p WHERE p.parameter_id = $1;"
+      ),
+      params = list(exist_check$parameter_id[1])
+    )
   }
 
-  #adjust start and end datetimes
+  # adjust start and end datetimes
   if (start_date < exist_check$start_datetime) {
     start_date <- exist_check$start_datetime
   }
@@ -602,8 +647,19 @@ plotTimeseries <- function(
     )
   }
 
-  # Find the ts units
-  units <- parameter_tbl$unit_default[1]
+  # Where column param_name_fr is not filled in, use the English name
+  parameter_tbl$param_name_fr[is.na(
+    parameter_tbl$param_name_fr
+  )] <- parameter_tbl$param_name[is.na(parameter_tbl$param_name_fr)]
+
+  if (lang == "fr") {
+    parameter_name <- titleCase(parameter_tbl$param_name_fr[1], "fr")
+  } else if (lang == "en" || is.na(parameter_name)) {
+    parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
+  }
+
+  # Find the resolved timeseries units, which can now depend on matrix state.
+  units <- ac_get_timeseries_unit(con, tsid)
 
   # Find the necessary datum (latest datum)
   if (datum) {
@@ -616,11 +672,8 @@ plotTimeseries <- function(
     } else {
       datum_m <- DBI::dbGetQuery(
         con,
-        paste0(
-          "SELECT conversion_m FROM datum_conversions WHERE location_id = ",
-          location_id,
-          " AND current = TRUE"
-        )
+        "SELECT conversion_m FROM datum_conversions WHERE location_id = $1 AND current = TRUE;",
+        params = list(location_id)
       )[1, 1]
       if (is.na(datum_m)) {
         warning(
@@ -633,41 +686,55 @@ plotTimeseries <- function(
   }
 
   range <- seq.POSIXt(start_date, end_date, by = "day")
-  if (is.null(rate)) {
-    if (length(range) > 3000) {
-      rate <- "day"
-    } else if (length(range) > 1000) {
-      rate <- "hour"
+  if (is.null(resolution)) {
+    if (length(range) > 1000) {
+      resolution <- "day"
     } else {
-      rate <- "max"
+      resolution <- "max"
     }
   }
 
-  # Get the data ####################################
-
-  tsid <- exist_check$timeseries_id
-
-  # Check if we should spend the extra time to get corrected measurements
-  if (!DBI::dbExistsTable(con, "measurements_continuous")) {
-    # IF this table can't be found it means the user doesn't have direct access to it and needs to use the views
-    corrections_apply <- TRUE
-  } else {
-    corrections_apply <- DBI::dbGetQuery(
-      con,
-      paste0(
-        "SELECT correction_id FROM corrections WHERE timeseries_id = ",
-        tsid,
-        " AND start_dt <= '",
-        end_date,
-        "' AND end_dt >= '",
-        start_date,
-        "' LIMIT 1;"
+  if (historic_range) {
+    historic_range_meta <- fetch_historic_range_timeseries_metadata(con, tsid)
+    if (
+      historic_range_is_meaningless(
+        aggregation_types = historic_range_meta$aggregation_type,
+        resolution = resolution,
+        record_rate_seconds = historic_range_meta$record_rate_seconds
       )
-    )
-    if (nrow(corrections_apply) == 1) {
-      corrections_apply <- TRUE
+    ) {
+      historic_range <- FALSE
+    }
+  }
+
+  if (title) {
+    if (is.null(custom_title)) {
+      if (lang == "fr") {
+        stn_name <- DBI::dbGetQuery(
+          con,
+          "SELECT name_fr FROM locations where location_id = $1;",
+          params = list(location_id)
+        )[1, 1]
+      }
+      if (lang == "en" || is.na(stn_name)) {
+        stn_name <- DBI::dbGetQuery(
+          con,
+          "SELECT name FROM locations where location_id = $1;",
+          params = list(location_id)
+        )[1, 1]
+      }
+      stn_name <- titleCase(stn_name, lang)
     } else {
-      corrections_apply <- FALSE
+      stn_name <- custom_title
+    }
+  }
+
+  as_of_title <- NULL
+  if (!is.null(as_of)) {
+    as_of_title <- if (lang == "fr") {
+      paste0("Donn\u00e9es au ", format(as_of, tz = tzone, usetz = TRUE))
+    } else {
+      paste0("As of ", format(as_of, tz = tzone, usetz = TRUE))
     }
   }
 
@@ -773,102 +840,115 @@ plotTimeseries <- function(
     qualifiers_dt[, "run" := NULL]
   }
 
-  ## trace and range data ###################
-  if (historic_range) {
-    # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous (corrected view or not). Where there isn't any data in the table fill in with the value from the daily table.
-    range_end <- end_date + 1 * 24 * 60 * 60
-    range_start <- start_date - 1 * 24 * 60 * 60
-    range_data <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-        tsid,
-        " AND date BETWEEN '",
-        range_start,
-        "' AND '",
-        range_end,
-        "' ORDER BY date ASC;"
+  ## fetch trace and range data ###################
+  # Trace data first
+  if (resolution == "day") {
+    if (is.null(as_of)) {
+      trace_data <- dbGetQueryDT(
+        con,
+        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        params = list(tsid, start_date, end_date)
       )
+    } else {
+      trace_data <- dbGetQueryDT(
+        con,
+        paste(
+          "SELECT date AS datetime, value, imputed",
+          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER BY date DESC;"
+        ),
+        params = list(as_of, tsid, start_date, end_date)
+      )
+    }
+    trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
+  } else if (resolution == "hour") {
+    trace_data <- fetch_hourly_trace_data(
+      con = con,
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      raw = raw,
+      as_of = as_of,
+      use_corrected_source = if (raw) {
+        TRUE
+      } else if (!is.null(as_of)) {
+        TRUE
+      } else {
+        continuous_trace_uses_corrected_source(
+          con = con,
+          timeseries_id = tsid,
+          start_date = start_date,
+          end_date = end_date
+        )
+      }
     )
-    range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
-    attr(range_data$datetime, "tzone") <- tzone
-    if (rate == "day") {
-      trace_data <- dbGetQueryDT(
-        con,
+  } else if (resolution == "max") {
+    trace_data <- dbGetQueryDT(
+      con,
+      if (is.null(as_of)) {
         paste0(
-          "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND date BETWEEN '",
-          start_date,
-          "' AND '",
-          end_date,
-          "' ORDER BY date DESC;"
-        )
-      )
-      trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
-    } else if (rate == "hour") {
-      trace_data <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND datetime BETWEEN '",
-          start_date,
-          "' AND '",
-          end_date,
-          "' ORDER BY datetime DESC;"
-        )
-      )
-    } else if (rate == "max") {
-      if (corrections_apply) {
-        trace_data <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
-            tsid,
-            " AND datetime BETWEEN '",
-            start_date,
-            "' AND '",
-            end_date,
-            "' ORDER BY datetime DESC LIMIT 200000;"
-          )
+          "SELECT datetime, value_corrected AS value, imputed",
+          if (raw) ", value_raw",
+          " FROM measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC LIMIT 200000;"
         )
       } else {
-        trace_data <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ",
-            tsid,
-            " AND datetime BETWEEN '",
-            start_date,
-            "' AND '",
-            end_date,
-            "' ORDER BY datetime DESC LIMIT 200000;"
-          )
+        paste0(
+          "SELECT datetime, value_corrected AS value, imputed",
+          if (raw) ", value_raw",
+          " FROM continuous.measurements_continuous_corrected_at(",
+          "$1, ARRAY[$2]::INTEGER[], $3, $4",
+          ") ORDER BY datetime DESC LIMIT 200000;"
         )
+      },
+      params = if (is.null(as_of)) {
+        list(tsid, start_date, end_date)
+      } else {
+        list(as_of, tsid, start_date, end_date)
       }
-      if (nrow(trace_data) > 0) {
-        if (min(trace_data$datetime) > start_date) {
-          infill <- dbGetQueryDT(
-            con,
-            paste0(
-              "SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ",
-              tsid,
-              " AND datetime BETWEEN '",
-              start_date,
-              "' AND '",
-              min(trace_data$datetime) - 1,
-              "' ORDER BY datetime DESC;"
-            )
-          )
-          trace_data <- rbind(infill, trace_data)
-        }
-      }
+    )
+  }
+  attr(trace_data$datetime, "tzone") <- tzone
+
+  # Range data
+  if (historic_range) {
+    # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous_corrected view. Where there isn't any data in the table fill in with the value from the daily table.
+    range_end <- end_date + 1 * 24 * 60 * 60
+    range_start <- start_date - 1 * 24 * 60 * 60
+    if (is.null(as_of)) {
+      range_data <- dbGetQueryDT(
+        con,
+        "SELECT date AS datetime, min, max, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
+        params = list(tsid, range_start, range_end)
+      )
+    } else {
+      range_data <- dbGetQueryDT(
+        con,
+        paste(
+          "SELECT date AS datetime, min, max, q75, q25",
+          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER BY date ASC;"
+        ),
+        params = list(as_of, tsid, range_start, range_end)
+      )
     }
-    attr(trace_data$datetime, "tzone") <- tzone
+    range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
+    attr(range_data$datetime, "tzone") <- tzone
 
     # Check if the range data extends to the end of trace data. Because range is taken from calculated daily means, it's possible that there's no data yet for the current day. In this case we'll just use the values from the last available range_data$datetime, incrementing it by a day
-    if (max(range_data$datetime) < max(trace_data$datetime)) {
+    if (
+      max(range_data$datetime, na.rm = TRUE) <
+        max(trace_data$datetime, na.rm = TRUE)
+    ) {
       last <- range_data[nrow(range_data), ]
       range_data <- rbind(
         range_data,
@@ -881,82 +961,24 @@ plotTimeseries <- function(
         )
       )
     }
-  } else {
-    #No historic range requested
-    if (rate == "day") {
-      trace_data <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND date BETWEEN '",
-          start_date,
-          "' AND '",
-          end_date,
-          "' ORDER BY date DESC;"
-        )
+
+    # Find gaps in range data and add NAs
+    full_range <- data.table::data.table(
+      datetime = seq.POSIXt(
+        from = min(range_data$datetime, na.rm = TRUE),
+        to = max(range_data$datetime, na.rm = TRUE),
+        by = "day"
       )
-      trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
-    } else if (rate == "hour") {
-      trace_data <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND datetime BETWEEN '",
-          start_date,
-          "' AND '",
-          end_date,
-          "' ORDER BY datetime DESC;"
-        )
-      )
-    } else if (rate == "max") {
-      if (corrections_apply) {
-        trace_data <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
-            tsid,
-            " AND datetime BETWEEN '",
-            start_date,
-            "' AND '",
-            end_date,
-            "' ORDER BY datetime DESC LIMIT 200000;"
-          )
-        )
-      } else {
-        trace_data <- dbGetQueryDT(
-          con,
-          paste0(
-            "SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ",
-            tsid,
-            " AND datetime BETWEEN '",
-            start_date,
-            "' AND '",
-            end_date,
-            "' ORDER BY datetime DESC LIMIT 200000;"
-          )
-        )
-      }
-      if (nrow(trace_data) > 0) {
-        if (min(trace_data$datetime) > start_date) {
-          infill <- dbGetQueryDT(
-            con,
-            paste0(
-              "SELECT datetime, value_corrected AS value FROM measurements_hourly_corrected WHERE timeseries_id = ",
-              tsid,
-              " AND datetime BETWEEN '",
-              start_date,
-              "' AND '",
-              min(trace_data$datetime) - 1,
-              "' ORDER BY datetime DESC;"
-            )
-          )
-          trace_data <- rbind(infill, trace_data)
-        }
-      }
-    }
-    attr(trace_data$datetime, "tzone") <- tzone
+    )
+    range_data <- merge(
+      full_range,
+      range_data,
+      by = "datetime",
+      all.x = TRUE
+    )
+
+    # order by datetime
+    data.table::setorder(range_data, datetime)
   }
 
   if (!unusable) {
@@ -976,71 +998,128 @@ plotTimeseries <- function(
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
   if (!is.infinite(min_trace)) {
-    trace_data <- suppressWarnings(calculate_period(
-      trace_data,
-      timeseries_id = tsid,
-      con = con
-    ))
-    # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
-    if ("period" %in% colnames(trace_data)) {
-      trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
-      # Shift datetime and add period_secs to compute the 'expected' next datetime
-      trace_data[,
-        "expected" := data.table::shift(datetime, type = "lead") - period_secs
-      ]
-      # Create 'gap_exists' column to identify where gaps are
-      trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
-      # Find indices where gaps exist
-      gap_indices <- which(trace_data$gap_exists)
-      # Create a data.table of NA rows to be inserted
-      na_rows <- data.table::data.table(
-        datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
-        value = NA
-      )
-      # Combine with NA rows
-      trace_data <- data.table::rbindlist(
-        list(trace_data[, c("datetime", "value")], na_rows),
-        use.names = TRUE
-      )
-      # order by datetime
-      data.table::setorder(trace_data, datetime)
+    if (resolution == "hour") {
+      trace_data <- add_gap_markers(trace_data, period_seconds = 3600)
+    } else if (resolution == "max") {
+      trace_data <- suppressWarnings(calculate_period(
+        trace_data,
+        timeseries_id = tsid,
+        con = con,
+        as_of = as_of
+      ))
+      # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
+      if ("period" %in% colnames(trace_data)) {
+        trace_data[, "period_secs" := as.numeric(lubridate::period(period))]
+        # Shift datetime and add period_secs to compute the 'expected' next datetime
+        trace_data[,
+          "expected" := data.table::shift(datetime, type = "lead") - period_secs
+        ]
+        # Create 'gap_exists' column to identify where gaps are
+        trace_data[, "gap_exists" := datetime < expected & !is.na(expected)]
+        # Find indices where gaps exist
+        gap_indices <- which(trace_data$gap_exists)
+        # Create a data.table of NA rows to be inserted
+        na_rows <- data.table::data.table(
+          datetime = trace_data[gap_indices, "datetime"][[1]] + 1, # Add 1 second to place it at the start of the gap
+          value = NA,
+          imputed = FALSE
+        )
+        if (raw) {
+          na_rows[, "value_raw" := NA]
+          # Combine with NA rows
+          trace_data <- data.table::rbindlist(
+            list(
+              trace_data[, c("datetime", "value", "value_raw", "imputed")],
+              na_rows
+            ),
+            use.names = TRUE
+          )
+        } else {
+          # Combine with NA rows
+          trace_data <- data.table::rbindlist(
+            list(trace_data[, c("datetime", "value", "imputed")], na_rows),
+            use.names = TRUE
+          )
+        }
+        # order by datetime
+        data.table::setorder(trace_data, datetime)
+      }
+    } else if (resolution == "day") {
+      trace_data <- add_gap_markers(trace_data, period_seconds = 24 * 3600)
     }
 
     # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
     if (min_trace > start_date) {
-      extra <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-          tsid,
-          " AND date < '",
-          min(trace_data$datetime),
-          "' AND date >= '",
-          start_date,
-          "';"
+      if (is.null(as_of)) {
+        extra <- dbGetQueryDT(
+          con,
+          "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
+          params = list(
+            tsid,
+            min(trace_data$datetime),
+            start_date
+          )
         )
-      )
+      } else {
+        extra <- dbGetQueryDT(
+          con,
+          paste(
+            "SELECT date AS datetime, value, imputed",
+            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "  $1,",
+            "  ARRAY[$2]::INTEGER[],",
+            "  $3::DATE,",
+            "  $4::DATE",
+            ")",
+            "WHERE date < $5",
+            "  AND date >= $6;"
+          ),
+          params = list(
+            as_of,
+            tsid,
+            start_date,
+            min(trace_data$datetime),
+            min(trace_data$datetime),
+            start_date
+          )
+        )
+      }
       extra$datetime <- as.POSIXct(extra$datetime, tz = "UTC")
       attr(extra$datetime, "tzone") <- tzone
+      if (raw) {
+        extra[, "value_raw" := NA]
+      }
       trace_data <- rbind(trace_data, extra)
     }
   } else {
-    #this means that no trace data could be had because there are no measurements in measurements_continuous or the hourly views table
-    trace_data <- dbGetQueryDT(
-      con,
-      paste0(
-        "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
-        tsid,
-        " AND date >= '",
-        start_date,
-        "' AND date <= '",
-        end_date,
-        "';"
+    # this means that no trace data could be had because there are no measurements in the continuous view table
+    if (is.null(as_of)) {
+      trace_data <- dbGetQueryDT(
+        con,
+        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        params = list(tsid, start_date, end_date)
       )
-    )
+    } else {
+      trace_data <- dbGetQueryDT(
+        con,
+        paste(
+          "SELECT date AS datetime, value, imputed",
+          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER BY date DESC;"
+        ),
+        params = list(as_of, tsid, start_date, end_date)
+      )
+    }
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     attr(trace_data$datetime, "tzone") <- tzone
-    trace_data <- rbind(trace_data, trace_data)
+    if (raw) {
+      trace_data[, "value_raw" := NA]
+    }
   }
 
   if (nrow(trace_data) == 0) {
@@ -1049,6 +1128,9 @@ plotTimeseries <- function(
 
   if (datum) {
     trace_data$value <- trace_data$value + datum_m
+    if (raw) {
+      trace_data$value_raw <- trace_data$value_raw + datum_m
+    }
     if (historic_range) {
       range_data$min <- range_data$min + datum_m
       range_data$max <- range_data$max + datum_m
@@ -1080,13 +1162,13 @@ plotTimeseries <- function(
           ) |
           grepl("precipitation", parameter_name, ignore.case = TRUE)
       ) {
-        #remove all values less than 0
+        # remove all values less than 0
         trace_data[
           trace_data$value < 0 & !is.na(trace_data$value),
           "value"
         ] <- NA
       } else {
-        #remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
+        # remove all values less than -100 (in case of negative temperatures or -DL values in lab results)
         trace_data[
           trace_data$value < -100 & !is.na(trace_data$value),
           "value"
@@ -1114,6 +1196,27 @@ plotTimeseries <- function(
     }
   }
 
+  # Fix the range data
+  # Identify rows where stats exist
+  if (historic_range) {
+    range_data[,
+      has_stats := !is.na(q25) & !is.na(q75) & !is.na(min) & !is.na(max)
+    ]
+
+    # Create a run id that increments each time has_stats changes
+    range_data[, run := data.table::rleid(has_stats)]
+
+    # Keep only runs with data
+    range_runs <- split(
+      range_data[has_stats == TRUE],
+      by = "run",
+      keep.by = FALSE
+    )
+    if (length(range_runs) == 0) {
+      historic_range <- FALSE
+    }
+  }
+
   # Make the plot ###################################
   if (is.null(invert)) {
     if (parameter_tbl$plot_default_y_orientation[1] == "inverted") {
@@ -1123,79 +1226,252 @@ plotTimeseries <- function(
     }
   }
 
+  # if a datum is applied, add ASL to y-axis label
+  if (datum) {
+    datum_label <- " ASL"
+  } else {
+    datum_label <- ""
+  }
+
   y_title <- paste0(
     parameter_name,
     if (!is.na(exist_check$z)) paste0(" ", exist_check$z, " meters") else "",
     " (",
     units,
+    datum_label,
     ")"
   )
 
   plot <- plotly::plot_ly()
   if (historic_range) {
-    plot <- plot %>%
+    # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
+    # plot <- plot |>
+    #   plotly::add_ribbons(
+    #     data = range_data,
+    #     x = ~datetime,
+    #     ymin = ~q25,
+    #     ymax = ~q75,
+    #     # name = if (lang == "en") "IQR" else "EIQ",
+    #     name = if (lang == "en") "Typical" else "Typique",
+    #     color = I("#5f9da6"),
+    #     line = list(width = 0.2),
+    #     hoverinfo = if (hover) "text" else "none",
+    #     text = ~ paste0(
+    #       "Q25: ",
+    #       round(q25, 2),
+    #       ", Q75: ",
+    #       round(q75, 2),
+    #       " (",
+    #       as.Date(datetime),
+    #       ")"
+    #     )
+    #   ) |>
+    #   plotly::add_ribbons(
+    #     data = range_data,
+    #     x = ~datetime,
+    #     ymin = ~min,
+    #     ymax = ~max,
+    #     # name = "Min-Max",
+    #     name = if (lang == "en") "Historic" else "Historique",
+    #     color = I("#D4ECEF"),
+    #     line = list(width = 0.2),
+    #     hoverinfo = if (hover) "text" else "none",
+    #     text = ~ paste0(
+    #       "Min: ",
+    #       round(.data$min, 2),
+    #       ", Max: ",
+    #       round(.data$max, 2),
+    #       " (",
+    #       as.Date(.data$datetime),
+    #       ")"
+    #     )
+    #   )
+    for (rd in range_runs) {
+      plot <- plot |>
+        plotly::add_ribbons(
+          data = rd,
+          x = ~datetime,
+          ymin = ~q25,
+          ymax = ~q75,
+          name = if (lang == "en") "Typical" else "Typique",
+          color = I("#5f9da6"),
+          line = list(width = 0.2),
+          hoverinfo = if (hover) "text" else "none",
+          text = ~ paste0(
+            "Q25: ",
+            round(q25, 2),
+            ", Q75: ",
+            round(q75, 2),
+            " (",
+            as.Date(datetime),
+            ")"
+          ),
+          showlegend = FALSE
+        ) |>
+        plotly::add_ribbons(
+          data = rd,
+          x = ~datetime,
+          ymin = ~min,
+          ymax = ~max,
+          name = if (lang == "en") "Historic" else "Historique",
+          color = I("#D4ECEF"),
+          line = list(width = 0.2),
+          hoverinfo = if (hover) "text" else "none",
+          text = ~ paste0(
+            "Min: ",
+            round(min, 2),
+            ", Max: ",
+            round(max, 2),
+            " (",
+            as.Date(datetime),
+            ")"
+          ),
+          showlegend = FALSE
+        )
+    }
+    # Add *visible* dummy legend keys (one point is enough)
+    key_rd <- range_runs[[1]][1]
+
+    plot <- plot |>
       plotly::add_ribbons(
-        data = range_data[!is.na(range_data$q25) & !is.na(range_data$q75), ],
+        data = key_rd,
         x = ~datetime,
         ymin = ~q25,
         ymax = ~q75,
-        # name = if (lang == "en") "IQR" else "EIQ",
         name = if (lang == "en") "Typical" else "Typique",
         color = I("#5f9da6"),
         line = list(width = 0.2),
-        hoverinfo = if (hover) "text" else "none",
-        text = ~ paste0(
-          "Q25: ",
-          round(q25, 2),
-          ", Q75: ",
-          round(q75, 2),
-          " (",
-          as.Date(datetime),
-          ")"
-        )
-      ) %>%
+        hoverinfo = "none",
+        showlegend = TRUE
+      ) |>
       plotly::add_ribbons(
-        data = range_data[!is.na(range_data$min) & !is.na(range_data$max), ],
+        data = key_rd,
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,
-        # name = "Min-Max",
         name = if (lang == "en") "Historic" else "Historique",
         color = I("#D4ECEF"),
         line = list(width = 0.2),
+        hoverinfo = "none",
+        showlegend = TRUE
+      )
+  }
+
+  corrected_name <- parameter_name
+  if (raw) {
+    corrected_name <- if (lang == "fr") {
+      paste(parameter_name, "(corrig\u00E9)")
+    } else {
+      paste(parameter_name, "(corrected)")
+    }
+  }
+
+  if (
+    raw &&
+      "value_raw" %in% names(trace_data) &&
+      any(!is.na(trace_data$value_raw))
+  ) {
+    raw_label <- if (lang == "fr") {
+      paste(parameter_name, "(brut)")
+    } else {
+      paste(parameter_name, "(raw)")
+    }
+
+    # Add the raw data first so it's below the corrected data
+    plot <- plot |>
+      plotly::add_trace(
+        data = trace_data,
+        x = ~datetime,
+        y = ~value_raw,
+        type = if (webgl) "scattergl" else "scatter",
+        mode = "lines",
+        line = list(width = 2.5 * line_scale),
+        name = raw_label,
+        color = I("#d95f02"),
         hoverinfo = if (hover) "text" else "none",
         text = ~ paste0(
-          "Min: ",
-          round(.data$min, 2),
-          ", Max: ",
-          round(.data$max, 2),
+          raw_label,
+          ": ",
+          round(.data$value_raw, 4),
           " (",
-          as.Date(.data$datetime),
+          .data$datetime,
           ")"
         )
       )
   }
 
-  plot <- plot %>%
-    plotly::add_trace(
-      data = trace_data,
-      x = ~datetime,
-      y = ~value,
-      type = if (webgl) "scattergl" else "scatter",
-      mode = "lines",
-      line = list(width = 2.5 * line_scale),
-      name = parameter_name,
-      color = I("#00454e"),
-      hoverinfo = if (hover) "text" else "none",
-      text = ~ paste0(
-        parameter_name,
-        ": ",
-        round(.data$value, 4),
-        " (",
-        .data$datetime,
-        ")"
+  # Add the corrected data trace
+  if (imputed) {
+    plot <- plot |>
+      plotly::add_trace(
+        data = trace_data[trace_data$imputed == FALSE, ],
+        x = ~datetime,
+        y = ~value,
+        type = if (webgl) "scattergl" else "scatter",
+        mode = "lines",
+        line = list(width = 2.5 * line_scale),
+        name = corrected_name,
+        color = I("#00454e"),
+        hoverinfo = if (hover) "text" else "none",
+        text = ~ paste0(
+          parameter_name,
+          ": ",
+          round(.data$value, 4),
+          " (",
+          .data$datetime,
+          ")"
+        )
       )
-    )
+    plot <- plot |>
+      plotly::add_trace(
+        data = trace_data[trace_data$imputed == TRUE, ],
+        x = ~datetime,
+        y = ~value,
+        type = if (webgl) "scattergl" else "scatter",
+        mode = "markers",
+        marker = list(
+          symbol = "circle",
+          size = 6 * line_scale,
+          color = "#e600b4ff",
+          line = list(width = 1 * line_scale, color = "#e600b4ff")
+        ),
+        name = if (lang == "en") {
+          paste0(corrected_name, " (imputed)")
+        } else {
+          paste0(corrected_name, " (imput\u00E9)")
+        },
+        hoverinfo = if (hover) "text" else "none",
+        text = ~ paste0(
+          parameter_name,
+          ": ",
+          round(.data$value, 4),
+          " (",
+          .data$datetime,
+          ")"
+        )
+      )
+  } else {
+    plot <- plot |>
+      plotly::add_trace(
+        data = trace_data,
+        x = ~datetime,
+        y = ~value,
+        type = if (webgl) "scattergl" else "scatter",
+        mode = "lines",
+        line = list(width = 2.5 * line_scale),
+        name = corrected_name,
+        color = I("#00454e"),
+        hoverinfo = if (hover) "text" else "none",
+        text = ~ paste0(
+          parameter_name,
+          ": ",
+          round(.data$value, 4),
+          " (",
+          .data$datetime,
+          ")"
+        )
+      )
+  }
 
   # Add the grades, approvals, qualifiers as ribbons below the plotting area
   if (any(grades, approvals, qualifiers)) {
@@ -1302,7 +1578,7 @@ plotTimeseries <- function(
 
     if (length(poly_list) > 0) {
       polygons_df <- data.table::rbindlist(poly_list, use.names = TRUE)
-      bands_subplot <- bands_subplot %>%
+      bands_subplot <- bands_subplot |>
         plotly::add_polygons(
           data = polygons_df,
           x = ~datetime,
@@ -1373,7 +1649,7 @@ plotTimeseries <- function(
       )
     }
 
-    bands_subplot <- bands_subplot %>%
+    bands_subplot <- bands_subplot |>
       plotly::layout(
         yaxis = list(
           showticklabels = FALSE,
@@ -1401,14 +1677,22 @@ plotTimeseries <- function(
     )
   }
 
-  plot <- plot %>%
+  plot <- plot |>
     plotly::layout(
       title = if (title) {
         list(
-          text = stn_name,
+          text = if (is.null(as_of_title)) {
+            stn_name
+          } else {
+            paste0(stn_name, "<br><sup>", as_of_title, "</sup>")
+          },
           x = 0.05,
           xref = "container",
-          font = list(size = axis_scale * 18)
+          font = list(
+            size = axis_scale * 18,
+            family = "Nunito Sans",
+            color = "#000000"
+          )
         )
       } else {
         NULL
@@ -1450,14 +1734,18 @@ plotTimeseries <- function(
         orientation = legend_position
       ),
       font = list(family = "Nunito Sans")
-    ) %>%
+    ) |>
     plotly::config(locale = lang)
 
   # Return the plot and data if requested ##########################
   if (data) {
     datalist <- list(
       trace_data = trace_data,
-      range_data = if (historic_range) range_data else data.frame()
+      range_data = if (historic_range) {
+        range_data[, c("datetime", "min", "max", "q75", "q25")]
+      } else {
+        data.frame()
+      }
     )
     return(list(plot = plot, data = datalist))
   } else {

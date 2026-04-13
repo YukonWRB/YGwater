@@ -7,15 +7,18 @@
 YGwater(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
-  dbName = "aquacache",
+  dbName = Sys.getenv("aquacachenName", "aquacache"),
   dbHost = Sys.getenv("aquacacheHost"),
-  dbPort = Sys.getenv("aquacachePort"),
+  dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
   accessPath1 =
     "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
   accessPath2 = "//carver/infosys/EQWin",
+  network_check = FALSE,
+  logout_timer_min = 10,
   server = FALSE,
+  analytics = FALSE,
   public = TRUE
 )
 }
@@ -38,7 +41,13 @@ YGwater(
 
 \item{accessPath2}{Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.}
 
+\item{network_check}{Optional: a path to a network location to check if the app is run internally or externally. If the app can see the path, some additional functionality is enabled, such as log in by admin roles. Default is FALSE, which means no check is performed and the app assumes it's running internally with access to all features.}
+
+\item{logout_timer_min}{Auto logout timer, in minutes.}
+
 \item{server}{Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.}
+
+\item{analytics}{FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as \code{system.file("apps/YGwater/www/html/matomo.html", package = "YGwater")}. This file will be called within the main UI as \code{tags$head(includeHTML(file))}. Default is FALSE.}
 
 \item{public}{TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.}
 }

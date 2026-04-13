@@ -13,11 +13,12 @@ snowInfo(
   plots = TRUE,
   plot_type = "combined",
   quiet = FALSE,
+  headers = "file",
   con = NULL
 )
 }
 \arguments{
-\item{locations}{The list of location codes requested from column 'location' of table 'locations', as a character vector of length n. Default "all" fetches all stations.}
+\item{locations}{The list of locations requested, as either a vector of location IDs (preferable) or entries from one of columns 'name', 'location_code', or 'alias' from table 'locations'. Default "all" fetches all stations in the Yukon Snow Survey Network.}
 
 \item{inactive}{Boolean specifying whether to include inactive stations. In this case, a station with no measurements for 5 or more years is considered inactive. Default is FALSE, i.e. no inactive stations.}
 
@@ -32,6 +33,8 @@ snowInfo(
 \item{plot_type}{Set to "separate" for 3 plots per location, or "combined" for a single compound plot per location.}
 
 \item{quiet}{Suppresses most messages and warnings.}
+
+\item{headers}{Choose from 'file', 'object', 'both', or 'none'. Specifies whether to include headers (metadata about the data pull) in the saved files, the returned R objects (as a separate list), or both. Default is 'file' (i.e., only in the saved file).}
 
 \item{con}{A connection to the aquacache. Leave as NULL to use \code{\link[=AquaConnect]{AquaConnect()}} to establish a connection, which will be closed when finished. If you pass your own connection remember to close it when done.}
 }

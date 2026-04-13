@@ -8,7 +8,8 @@ calculate_period(
   data,
   datetime_col = "datetime",
   timeseries_id = NULL,
-  con = AquaConnect(silent = TRUE)
+  con = NULL,
+  as_of = NULL
 )
 }
 \arguments{
@@ -18,7 +19,12 @@ calculate_period(
 
 \item{timeseries_id}{The ID of the timeseries for which to calculate periodicity. Used to fetch any data points lacking a period, as well as to search for additional data points if there are too few to calculate a period in the provided \code{data}. Leave NULL if there is no database entry for this.}
 
-\item{con}{A connection to the database, created with \code{\link[DBI:dbConnect]{DBI::dbConnect()}} or using the utility function \code{\link[=AquaConnect]{AquaConnect()}}. Not used if timeseries_id is left NULL.}
+\item{con}{A connection to the database, usually created with \code{\link[DBI:dbConnect]{DBI::dbConnect()}} or using the utility function \code{\link[=AquaConnect]{AquaConnect()}}. Not used if timeseries_id is left NULL.}
+
+\item{as_of}{Optional point-in-time timestamp at which supplemental
+measurement rows should be reconstructed when additional data must be
+fetched to infer periodicity. Character, Date, and POSIXct inputs are
+supported. When \code{NULL} (default), current data are used.}
 }
 \value{
 A data.frame or data.table with calculated periods as ISO8601 formatted strings in a column named 'period'.

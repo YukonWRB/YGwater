@@ -1,5 +1,8 @@
+# !IMPORTANT! Some helper functions are located at the bottom of this file.
+
 #' @apiTitle AquaCache API version 1
-#' @apiDescription API for programmatic access to the aquacache database. Should usually be launched using function api(), in the R directory
+#' @apiDescription API for programmatic access to the aquacache database.
+#' @apiVersion 1.0.1
 
 # Basic authentication filter. TLS is terminated by upstream NGINX.
 #* @filter auth
@@ -11,24 +14,27 @@ function(req, res) {
     "^/parameters$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
-    "^/__docs__/", # UI shell & assets
+    "^/snow-bulletin/leaflet$",
+    "^/__docs__/", # Swagger UI shell & assets
     "^/openapi.json$", # <-- needed for the UI to load without auth
     "^/openapi.yaml$", # <-- sometimes used
     "^/timeseries/measurements$",
-    "^/samples/results$/"
+    "^/samples/results$/",
+    "^/csw-layer$"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
     any(grepl(paste(public_paths, collapse = "|"), req$PATH_INFO))
 
   hdr <- req$HTTP_AUTHORIZATION %||% ""
+  req$is_authenticated <- nzchar(hdr)
   if (hdr == "") {
     if (!is_public_ok) {
       res$status <- 401
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    req$user <- Sys.getenv("APIaquacacheAnonUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
-    req$password <- Sys.getenv("APIaquacacheAnonPass", "aquacache")
+    req$user <- Sys.getenv("APIaquacacheUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
+    req$password <- Sys.getenv("APIaquacachePass", "aquacache")
     return(plumber::forward())
   }
 
@@ -43,6 +49,10 @@ function(req, res) {
   req$user <- substr(cred, 1, i - 1)
   req$password <- substr(cred, i + 1, nchar(cred))
   plumber::forward()
+}
+
+request_cache_allowed <- function(req) {
+  !isTRUE(req$is_authenticated)
 }
 
 #' List available locations
@@ -154,9 +164,9 @@ function(req, res, lang = "en") {
 
 
 #' Return measurements for a timeseries
-#* @param id Timeseries ID (required).
-#* @param start Start date/time (required, ISO 8601).
-#* @param end End date/time (optional; defaults to now, ISO 8601).
+#* @param id Timeseries IDs to target, separated by commas (required).
+#* @param start Start date/time, inclusive (required, ISO 8601 i.e. 2025-01-01 00:00).
+#* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @get /timeseries/measurements
 #* @serializer csv
@@ -229,17 +239,38 @@ function(req, res, id, start, end = NA, limit = 100000) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT * FROM continuous.measurements_continuous_corrected 
-  WHERE timeseries_id = $1 
-  AND datetime >= $2 
-  AND datetime <= $3 
-  ORDER BY datetime DESC
-  LIMIT $4"
-  out <- DBI::dbGetQuery(
-    con,
-    sql,
-    params = list(as.integer(id), start, end, lim)
-  )
+  # Break id apart by comma and convert to integer vector
+  id <- unlist(strsplit(id, ","))
+  id <- as.integer(id)
+  if (length(id) == 1) {
+    out <- DBI::dbGetQuery(
+      con,
+      "SELECT * FROM continuous.measurements_continuous_corrected 
+      WHERE timeseries_id = $1 
+      AND datetime >= $2 
+      AND datetime <= $3 
+      ORDER BY datetime DESC
+      LIMIT $4",
+      params = list(as.integer(id), start, end, lim)
+    )
+  } else {
+    # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
+    ids <- paste(id, collapse = ",")
+    ids <- ids[!is.na(ids)]
+    out <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "SELECT * FROM continuous.measurements_continuous_corrected 
+          WHERE timeseries_id IN (%s) 
+          AND datetime >= $1 
+          AND datetime <= $2 
+          ORDER BY datetime DESC
+          LIMIT $3",
+        ids
+      ),
+      params = list(start, end, lim)
+    )
+  }
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"
@@ -278,7 +309,12 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT parameter_id, param_name, param_name_fr, description, description_fr, unit_default AS units FROM public.parameters ORDER BY parameter_id"
+  sql <- paste(
+    "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
+    "p.description, p.description_fr,",
+    ac_parameter_unit_select_sql(con, "p", "units"),
+    "FROM public.parameters p ORDER BY p.parameter_id"
+  )
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
@@ -483,10 +519,300 @@ function(req, res, sample_ids, parameters = NA) {
 }
 
 
+# Functions and endpoints for snow bulletin map ########################
+# Memoised version of snow bulletin leaflet HTML to improve performance.
+snowbull_leaflet_mem <- memoise::memoise(
+  function(
+    stamp,
+    year = NULL,
+    month = NULL,
+    statistic = "relative_to_med",
+    language = "English",
+    param_name = "snow water equivalent",
+    con = NULL
+  ) {
+    YGwater:::create_snowbull_leaflet_html(
+      year = year,
+      month = month,
+      param_name = param_name,
+      statistic = statistic,
+      language = language,
+      con = con
+    )
+  },
+  cache = cachem::cache_mem(),
+  omit_args = c("con")
+)
+
+get_snowbull_stamp <- function(
+  con,
+  year = NULL,
+  month = NULL,
+  continuous = FALSE,
+  discrete = TRUE
+) {
+  param_id <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent'"
+  )[1, 1]
+
+  if (is.na(param_id) | is.null(year) | is.null(month)) {
+    return("none")
+  }
+
+  if (continuous) {
+    continuous_stamp <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "
+      SELECT MAX(COALESCE(m.created, m.modified)::date) AS stamp
+      FROM continuous.measurements_calculated_daily_corrected m
+      JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+      WHERE t.parameter_id = %s AND DATE(m.date) <= CAST('%s' AS date) AND DATE(m.date) >= CAST('1990-10-01' AS date)
+      ",
+        as.integer(param_id),
+        as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
+      )
+    )[1, 1]
+  } else {
+    continuous_stamp <- NA
+  }
+
+  if (discrete) {
+    discrete_stamp <- DBI::dbGetQuery(
+      con,
+      sprintf(
+        "
+      SELECT MAX(COALESCE(s.created, s.modified)::date) AS stamp
+      FROM discrete.samples s
+      JOIN discrete.results r ON s.sample_id = r.sample_id
+      WHERE r.parameter_id = %s
+        AND r.result IS NOT NULL AND DATE(s.target_datetime) < DATE('%s') AND DATE(s.target_datetime) >= DATE('1990-10-01')
+      ",
+        as.integer(param_id),
+        as.character(as.Date(sprintf("%04d-%02d-%02d", year, month, 1)))
+      )
+    )[1, 1]
+  } else {
+    discrete_stamp <- NA
+  }
+
+  stamp_parts <- c(
+    if (!is.na(continuous_stamp)) as.character(continuous_stamp) else "none",
+    if (!is.na(discrete_stamp)) as.character(discrete_stamp) else "none"
+  )
+
+  paste(stamp_parts, collapse = "|")
+}
+
+#' Return SWE snow bulletin leaflet map HTML
+#* @param year Bulletin year (optional; defaults to latest available).
+#* @param month Bulletin month (optional; defaults to latest available).
+#* @param statistic Statistic to display. One of "data", "relative_to_med", "percentile", "anomalies" (default "relative_to_med").
+#* @param language Language for labels: 'French' or 'English' (default "English").
+#* @param continuous If year and/or month are not provided, whether to consider continuous data for determining the latest available bulletin (default FALSE).
+#* @param discrete If year and/or month are not provided, whether to consider discrete data for determining the latest available bulletin (default TRUE).
+#* @get /snow-bulletin/leaflet
+#* @serializer contentType list(type = "text/html")
+function(
+  req,
+  res,
+  year = NA,
+  month = NA,
+  statistic = "relative_to_med",
+  language = "English",
+  continuous = FALSE,
+  discrete = TRUE
+) {
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return("<p>Database connection failed, check your credentials.</p>")
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (xor(is.na(year), is.na(month))) {
+    res$status <- 400
+    return(
+      "<p>Both 'year' and 'month' must be provided together or not at all.</p>"
+    )
+  }
+
+  if (!is.na(year)) {
+    year <- as.integer(year)
+    if (is.na(year)) {
+      res$status <- 400
+      return("<p>Invalid 'year' parameter.</p>")
+    }
+  } else {
+    # Find the most recent year for which there is data available
+    if (discrete) {
+      year_disc <- DBI::dbGetQuery(
+        con,
+        "
+      SELECT MAX(EXTRACT(YEAR FROM s.target_datetime)) AS latest_year
+      FROM discrete.samples s
+      JOIN discrete.results r ON s.sample_id = r.sample_id
+      WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+        AND r.result IS NOT NULL AND DATE(s.target_datetime) >= DATE('1990-10-01')"
+      )[1, 1]
+    } else {
+      year_disc <- NA
+    }
+    if (continuous) {
+      year_cont <- DBI::dbGetQuery(
+        con,
+        "
+      SELECT MAX(EXTRACT(YEAR FROM m.date)) AS latest_year
+      FROM continuous.measurements_calculated_daily_corrected m
+      JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+      WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+        AND DATE(m.date) >= DATE('1990-10-01')"
+      )[1, 1]
+    } else {
+      year_cont <- NA
+    }
+    if (all(is.na(c(year_disc, year_cont)))) {
+      year <- NULL
+    } else {
+      year <- max(c(year_disc, year_cont), na.rm = TRUE)
+    }
+  }
+
+  if (!is.na(month)) {
+    month <- as.integer(month)
+    if (is.na(month) || month < 1 || month > 12) {
+      res$status <- 400
+      return("<p>Invalid 'month' parameter. Use 1-12.</p>")
+    }
+  } else {
+    if (!is.null(year)) {
+      # Need the year to determine the latest month, otherwise leave as NULL to get the latest overall regardless of month
+      if (discrete) {
+        month_disc <- DBI::dbGetQuery(
+          con,
+          "
+      SELECT MAX(EXTRACT(MONTH FROM s.target_datetime)) AS latest_month
+      FROM discrete.samples s
+      JOIN discrete.results r ON s.sample_id = r.sample_id
+      WHERE r.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+        AND r.result IS NOT NULL AND DATE(s.target_datetime) >= DATE('1990-10-01')
+        AND EXTRACT(YEAR FROM s.target_datetime) = $1",
+          params = list(year)
+        )[1, 1]
+      } else {
+        month_disc <- NA
+      }
+      if (continuous) {
+        month_cont <- DBI::dbGetQuery(
+          con,
+          "SELECT MAX(EXTRACT(MONTH FROM date)) AS latest_month
+        FROM continuous.measurements_calculated_daily_corrected m
+        JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+        WHERE t.parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent')
+          AND DATE(date) >= DATE('1990-10-01')
+          AND EXTRACT(YEAR FROM date) = $1",
+          params = list(year)
+        )[1, 1]
+      } else {
+        month_cont <- NA
+      }
+      if (all(is.na(c(month_disc, month_cont)))) {
+        month <- NULL
+      } else {
+        month <- max(c(month_disc, month_cont), na.rm = TRUE)
+      }
+    } else {
+      month <- NULL
+    }
+  }
+
+  latest_stamp <- get_snowbull_stamp(con, year, month)
+  message("Year =", year, " Month=", month, " Stamp=", latest_stamp)
+  if (request_cache_allowed(req)) {
+    map_payload <- snowbull_leaflet_mem(
+      stamp = latest_stamp,
+      year = year,
+      month = month,
+      statistic = statistic,
+      language = language,
+      param_name = "snow water equivalent",
+      con = con
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    map_payload <- YGwater:::create_snowbull_leaflet_html(
+      year = year,
+      month = month,
+      param_name = "snow water equivalent",
+      statistic = statistic,
+      language = language,
+      con = con
+    )
+  }
+
+  res$headers[["X-Map-Year"]] <- as.character(map_payload$year)
+  res$headers[["X-Map-Month"]] <- as.character(map_payload$month)
+
+  map_payload$html
+}
+
+# Functions and endpoints for snow survey data ########################
+# Memoised version of snowInfo to improve performance. Re-used for multiple endpoints.
+snowInfo_mem <- memoise::memoise(
+  # Stamp argument to force cache invalidation only when needed, using a cheap DB check for more recent samples than last cache time.
+  function(stamp, ...) {
+    YGwater::snowInfo(...)
+  },
+  cache = cachem::cache_mem(), # no time limit, only invalidates when stamp changes
+  omit_args = c("con") # Omit the connection as can changes each time yet is irrelevant
+)
+
+# Function to check for latest snow sample/result timestamp for cache invalidation
+get_snow_stamp <- function(con) {
+  rows <- DBI::dbGetQuery(
+    con,
+    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourse'"
+  )[1, 1]
+
+  stamp <- DBI::dbGetQuery(
+    con,
+    "
+  SELECT GREATEST(
+    (SELECT MAX(COALESCE(s.modified, s.created))
+       FROM discrete.samples s
+      WHERE s.import_source = 'downloadSnowCourse'),
+
+    (SELECT MAX(COALESCE(r.modified, r.created))
+       FROM discrete.results r
+       JOIN discrete.samples s ON s.sample_id = r.sample_id
+      WHERE s.import_source = 'downloadSnowCourse'
+        AND r.parameter_id IN (21, 1220))
+  ) AS stamp
+"
+  )[1, 1]
+
+  if (is.na(stamp) | is.na(rows)) {
+    "none"
+  } else {
+    as.character(paste0(stamp, " ", rows))
+  } # stabilize type for hashing
+}
+
 #' Return basic snow survey data
 #* @get /snow-survey/data
-#* @serializer csv
-
+#* @serializer contentType list(type = "text/csv")
 function(req, res) {
   con <- try(
     YGwater::AquaConnect(
@@ -510,20 +836,44 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
-    con = con,
-    complete_yrs = FALSE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = FALSE,
-    save_path = NULL
-  )$measurements
-  return(res)
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
+
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
+
+  csv_with_header(
+    out$measurements,
+    header_lines = out$headers$measurements[[1]]
+  )
 }
 
 #' Return basic snow survey metadata
 #* @get /snow-survey/metadata
-#* @serializer csv
+#* @serializer contentType list(type = "text/csv")
 
 function(req, res) {
   con <- try(
@@ -548,20 +898,44 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
-    con = con,
-    complete_yrs = FALSE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = FALSE,
-    save_path = NULL
-  )$locations
-  return(res)
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
+
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = FALSE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = FALSE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
+
+  csv_with_header(
+    out$locations,
+    header_lines = out$headers$locations[[1]]
+  )
 }
 
 #' Return snow survey statistics
 #* @get /snow-survey/stats
-#* @serializer csv
+#* @serializer contentType list(type = "text/csv")
 
 function(req, res) {
   con <- try(
@@ -586,20 +960,44 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
-    con = con,
-    complete_yrs = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = TRUE,
-    save_path = NULL
-  )$stats
-  return(res)
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
+
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
+
+  csv_with_header(
+    out$stats,
+    header_lines = out$headers$stats[[1]]
+  )
 }
 
 #' Return basic snow survey trends
 #* @get /snow-survey/trends
-#* @serializer csv
+#* @serializer contentType list(type = "text/csv")
 
 function(req, res) {
   con <- try(
@@ -624,14 +1022,96 @@ function(req, res) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  res <- YGwater::snowInfo(
-    con = con,
-    complete_yrs = TRUE,
-    plots = FALSE,
-    quiet = TRUE,
-    stats = TRUE,
-    save_path = NULL
-  )$trends
+  # Find the latest snow sample datetime to use for cache invalidation
+  latest <- get_snow_stamp(con)
 
-  return(res)
+  if (request_cache_allowed(req)) {
+    out <- snowInfo_mem(
+      stamp = latest,
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  } else {
+    res$setHeader("Cache-Control", "no-store")
+    out <- YGwater::snowInfo(
+      con = con,
+      complete_yrs = TRUE,
+      inactive = TRUE,
+      plots = FALSE,
+      quiet = TRUE,
+      stats = TRUE,
+      save_path = NULL,
+      headers = "object"
+    )
+  }
+
+  csv_with_header(
+    out$trends,
+    header_lines = out$headers$trends[[1]]
+  )
+}
+
+# End point to pass postgres function get_csw_layer() output directly as CSV, as it comes out of the DB.
+#' Return CSW layer data
+#* @get /csw-layer
+#* @serializer csv
+function(req, res) {
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  out <- DBI::dbGetQuery(con, "SELECT * FROM public.get_csw_layer()")
+
+  if (nrow(out) == 0) {
+    res$headers[["X-Status"]] <- "info"
+    return(data.frame(
+      status = "info",
+      message = "No CSW layer data found in the database.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  return(out)
+}
+
+
+# Helper function to serialize data.frame to CSV with optional header lines
+csv_with_header <- function(df, header_lines = NULL) {
+  csv_lines <- capture.output(utils::write.csv(df, row.names = FALSE, na = ""))
+
+  if (is.null(header_lines) || length(header_lines) == 0) {
+    return(paste(csv_lines, collapse = "\n"))
+  }
+
+  header_lines <- paste0("# ", header_lines)
+  # Add a blank line between header and CSV
+  header_lines <- c(header_lines, "")
+
+  # Enclose all lines in quotes to prevent commas from separating text into columns
+  header_lines <- paste0('"', header_lines, '"')
+
+  paste(c(header_lines, csv_lines), collapse = "\n")
 }

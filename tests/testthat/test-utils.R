@@ -13,3 +13,139 @@ test_that("iso_period converts numeric hours to ISO 8601 durations", {
     c("P0DT1H30M0S", "P2DT2H45M0S")
   )
 })
+
+test_that("translations work correctly", {
+  # Ensure package data exists
+  check <- data$translations
+  expect_true(!is.null(check))
+  expect_true(length(check) > 0)
+  expect_true(is.list(check))
+
+  expect_equal(tr("home", "English"), "Home")
+  expect_equal(tr("home", "Français"), "Accueil")
+})
+
+test_that("parameter unit SQL supports legacy text unit columns", {
+  fake_con <- structure(list(), class = "mock_connection")
+
+  expr <- testthat::with_mocked_bindings(
+    ac_parameter_unit_select_sql(fake_con, "p", "unit"),
+    ac_db_column_info = function(...) {
+      data.frame(
+        column_name = c("unit_default", "unit_solid"),
+        data_type = c("text", "text")
+      )
+    },
+    ac_db_table_exists = function(...) {
+      FALSE
+    },
+    .package = "YGwater"
+  )
+
+  expect_equal(
+    expr,
+    "COALESCE(NULLIF(BTRIM(p.unit_default), ''), NULLIF(BTRIM(p.unit_solid), '')) AS unit"
+  )
+})
+
+test_that("parameter unit SQL supports normalized unit id columns", {
+  fake_con <- structure(list(), class = "mock_connection")
+
+  expr <- testthat::with_mocked_bindings(
+    ac_parameter_unit_select_sql(fake_con, "p", "unit"),
+    ac_db_column_info = function(...) {
+      data.frame(
+        column_name = c("unit_default", "unit_solid"),
+        data_type = c("integer", "integer")
+      )
+    },
+    ac_db_table_exists = function(...) {
+      TRUE
+    },
+    .package = "YGwater"
+  )
+
+  expect_equal(
+    expr,
+    paste0(
+      "COALESCE(",
+      "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = p.unit_default), ",
+      "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = p.unit_solid)",
+      ") AS unit"
+    )
+  )
+})
+
+test_that("parameter unit SQL supports matrix-state-aware unit functions", {
+  fake_con <- structure(list(), class = "mock_connection")
+
+  expr <- testthat::with_mocked_bindings(
+    ac_parameter_unit_select_sql(
+      fake_con,
+      "p",
+      "unit",
+      matrix_state_alias = "ts",
+      media_alias = "ts"
+    ),
+    ac_db_column_info = function(...) {
+      data.frame(
+        column_name = c("units_liquid", "units_solid", "units_gas"),
+        data_type = c("integer", "integer", "integer")
+      )
+    },
+    ac_db_table_exists = function(...) {
+      TRUE
+    },
+    ac_db_function_exists = function(
+      con,
+      schema,
+      function_name,
+      arg_count = NULL
+    ) {
+      function_name %in% c("get_parameter_unit_name", "resolve_matrix_state_id")
+    },
+    .package = "YGwater"
+  )
+
+  expect_equal(
+    expr,
+    paste0(
+      "public.get_parameter_unit_name(",
+      "p.parameter_id, ",
+      "public.resolve_matrix_state_id(ts.media_id, p.parameter_id, ts.matrix_state_id)",
+      ") AS unit"
+    )
+  )
+})
+
+test_that("parameter unit SQL supports normalized liquid solid gas columns", {
+  fake_con <- structure(list(), class = "mock_connection")
+
+  expr <- testthat::with_mocked_bindings(
+    ac_parameter_unit_select_sql(fake_con, "p", "unit"),
+    ac_db_column_info = function(...) {
+      data.frame(
+        column_name = c("units_liquid", "units_solid", "units_gas"),
+        data_type = c("integer", "integer", "integer")
+      )
+    },
+    ac_db_table_exists = function(...) {
+      TRUE
+    },
+    ac_db_function_exists = function(...) {
+      FALSE
+    },
+    .package = "YGwater"
+  )
+
+  expect_equal(
+    expr,
+    paste0(
+      "COALESCE(",
+      "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = p.units_liquid), ",
+      "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = p.units_solid), ",
+      "(SELECT u.unit_name FROM public.units u WHERE u.unit_id = p.units_gas)",
+      ") AS unit"
+    )
+  )
+})

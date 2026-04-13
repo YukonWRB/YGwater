@@ -40,7 +40,7 @@ plotDiscrete(
 
 \item{end}{The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime. Default is the current date.}
 
-\item{locations}{A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
+\item{locations}{A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location_code', 'alias', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
 
 \item{locGrp}{Only used if \code{dbSource} is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{locations} instead.}
 

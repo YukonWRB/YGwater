@@ -6,8 +6,11 @@ YGwater_globals <- function(
   dbPass,
   RLS_user,
   RLS_pass,
+  network_check,
   accessPath1,
   accessPath2,
+  logout_timer_min,
+  analytics,
   public
 ) {
   library(shiny)
@@ -31,6 +34,23 @@ YGwater_globals <- function(
   ))
 
   g_drive <- FALSE
+  if (!isFALSE(network_check)) {
+    network_check <- dir.exists(network_check)
+    # YG specific code here
+    if (!public) {
+      # confirm G drive access for FOD reports
+      g_drive <- dir.exists(
+        "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
+      )
+    }
+    if (g_drive) {
+      # FOD module (only visible internally)
+      source(system.file(
+        "apps/YGwater/modules/client/FOD/FOD_main.R",
+        package = "YGwater"
+      ))
+    }
+  }
 
   if (!public) {
     # 'Admin' side modules #####
@@ -47,10 +67,18 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/locations/addSubLocation.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/admin/metadata/manageReferenceTables.R",
+      package = "YGwater"
+    ))
 
     # equipment sub-modules
     source(system.file(
-      "apps/YGwater/modules/admin/equipment/calibrate.R",
+      "apps/YGwater/modules/admin/instruments/calibrate.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/instruments/manageInstruments.R",
       package = "YGwater"
     ))
 
@@ -90,7 +118,15 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
+      "apps/YGwater/modules/admin/discreteData/addSamples.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/discreteData/editDiscData.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/discreteData/addSampleSeries.R",
       package = "YGwater"
     ))
     source(system.file(
@@ -105,6 +141,14 @@ YGwater_globals <- function(
     # Borehole/well modules
     source(system.file(
       "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/editBoreholesWells.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/manageBoreholeDocuments.R",
       package = "YGwater"
     ))
 
@@ -133,7 +177,15 @@ YGwater_globals <- function(
     ))
 
     source(system.file(
+      "apps/YGwater/modules/admin/applicationTasks/adminLanding.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/applicationTasks/manageNewsContent.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/applicationTasks/manageNotifications.R",
       package = "YGwater"
     ))
     source(system.file(
@@ -149,21 +201,680 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
 
-    # confirm G drive access for FOD reports
-    g_drive <- dir.exists(
-      "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/"
+    # Set up a temporary directory for storing R documentation files during app runtime
+    .rd_dir <<- file.path(tempdir(), "rdocs")
+    dir.create(.rd_dir, showWarnings = FALSE, recursive = TRUE)
+    shiny::addResourcePath("rdocs", .rd_dir)
+
+    # define some functions for later use
+    array_to_text <<- function(value) {
+      if (is.null(value) || !length(value) || all(is.na(value))) {
+        return(character())
+      }
+      if (is.list(value)) {
+        value <- value[[1]]
+      }
+      value <- gsub("[{}\"]", "", value)
+      out <- trimws(unlist(strsplit(value, ",")))
+      out[nzchar(out)]
+    }
+
+    share_with_to_array <<- function(groups) {
+      if (is.null(groups) || !length(groups) || all(!nzchar(groups))) {
+        groups <- "public_reader"
+      }
+      groups <- gsub('"', '\\"', groups, fixed = TRUE)
+      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
+    }
+
+    selections_to_array <<- function(groups) {
+      if (is.null(groups) || !length(groups) || all(!nzchar(groups))) {
+        return(NULL)
+      }
+      groups <- gsub('"', '\\"', groups, fixed = TRUE)
+      paste0("{", paste(sprintf('"%s"', groups), collapse = ","), "}")
+    }
+
+    normalize_lookup_key <<- function(value) {
+      if (is.null(value)) {
+        return(character(0))
+      }
+      out <- as.character(value)
+      out[is.na(out)] <- ""
+      gsub("\\s+", " ", tolower(trimws(out)))
+    }
+
+    normalize_selectize_values <<- function(value) {
+      if (is.null(value)) {
+        return(character(0))
+      }
+      out <- as.character(value)
+      out[is.na(out)] <- ""
+      out <- trimws(out)
+      out[nzchar(out)]
+    }
+
+    match_lookup_id_by_label <<- function(value, ids, labels) {
+      value_key <- normalize_lookup_key(value)
+      if (!length(value_key) || !nzchar(value_key[[1]])) {
+        return(character(0))
+      }
+
+      ids_chr <- as.character(ids)
+      ids_chr[is.na(ids_chr)] <- ""
+      ids_chr <- trimws(ids_chr)
+      label_keys <- normalize_lookup_key(labels)
+      valid <- nzchar(ids_chr) & nzchar(label_keys)
+      if (!any(valid)) {
+        return(character(0))
+      }
+
+      idx <- match(value_key[[1]], label_keys[valid])
+      if (is.na(idx)) {
+        return(character(0))
+      }
+
+      ids_chr[valid][idx]
+    }
+
+    resolve_selectize_lookup_values <<- function(values, ids, labels) {
+      submitted <- normalize_selectize_values(values)
+      ids_chr <- as.character(ids)
+      ids_chr[is.na(ids_chr)] <- ""
+      ids_chr <- trimws(ids_chr)
+
+      existing_selection <- character(0)
+      new_values <- character(0)
+      used_label_match <- FALSE
+
+      if (!length(submitted)) {
+        return(list(
+          submitted_values = character(0),
+          existing_selection = character(0),
+          new_values = character(0),
+          last_new_value = NULL,
+          used_label_match = FALSE
+        ))
+      }
+
+      for (value in submitted) {
+        if (value %in% ids_chr) {
+          existing_selection <- c(existing_selection, value)
+          next
+        }
+
+        matched_id <- match_lookup_id_by_label(value, ids, labels)
+        if (length(matched_id)) {
+          existing_selection <- c(existing_selection, matched_id[[1]])
+          used_label_match <- TRUE
+        } else {
+          new_values <- c(new_values, value)
+        }
+      }
+
+      list(
+        submitted_values = submitted,
+        existing_selection = unique(normalize_selectize_values(
+          existing_selection
+        )),
+        new_values = unique(new_values),
+        last_new_value = if (length(new_values)) {
+          new_values[[length(new_values)]]
+        } else {
+          NULL
+        },
+        used_label_match = used_label_match
+      )
+    }
+
+    format_utc_offset <<- function(offset_minutes) {
+      sign <- if (offset_minutes >= 0) "+" else "-"
+      offset_minutes <- abs(as.integer(offset_minutes))
+      hours <- offset_minutes %/% 60
+      minutes <- offset_minutes %% 60
+      sprintf("UTC%s%02d:%02d", sign, hours, minutes)
+    }
+
+    parse_compact_utc_offset <<- function(offset_text) {
+      offset_text <- as.character(offset_text[[1]])
+      if (!length(offset_text) || is.na(offset_text) || !nzchar(offset_text)) {
+        return(0L)
+      }
+      matched <- regexec("^([+-])(\\d{2})(\\d{2})$", offset_text)
+      parts <- regmatches(offset_text, matched)[[1]]
+      if (length(parts) != 4) {
+        return(0L)
+      }
+      sign <- if (identical(parts[[2]], "-")) -1L else 1L
+      sign * (as.integer(parts[[3]]) * 60L + as.integer(parts[[4]]))
+    }
+
+    normalize_input_timezone_token <<- function(tz_name) {
+      tz_name <- as.character(tz_name[[1]])
+      if (!length(tz_name) || is.na(tz_name) || !nzchar(tz_name)) {
+        return(NA_character_)
+      }
+      tz_name <- trimws(tz_name)
+      sub("^YG", "", tz_name)
+    }
+
+    is_input_timezone_offset <<- function(tz_name) {
+      tz_name <- normalize_input_timezone_token(tz_name)
+      !is.na(tz_name) && grepl("^UTC[+-]\\d{2}:\\d{2}$", tz_name)
+    }
+
+    parse_utc_offset_minutes <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      tz_name <- normalize_input_timezone(tz_name, default = default)
+      matched <- regexec("^UTC([+-])(\\d{2}):(\\d{2})$", tz_name)
+      parts <- regmatches(tz_name, matched)[[1]]
+      if (length(parts) != 4) {
+        return(0L)
+      }
+      sign <- if (identical(parts[[2]], "-")) -1L else 1L
+      sign * (as.integer(parts[[3]]) * 60L + as.integer(parts[[4]]))
+    }
+
+    offset_minutes_to_widget_timezone <<- function(offset_minutes) {
+      offset_minutes <- as.integer(offset_minutes[[1]])
+      if (is.na(offset_minutes)) {
+        return("UTC")
+      }
+      fixed_map <- c(
+        `-570` = "Pacific/Marquesas",
+        `-210` = "America/St_Johns",
+        `210` = "Asia/Tehran",
+        `270` = "Asia/Kabul",
+        `330` = "Asia/Kolkata",
+        `345` = "Asia/Kathmandu",
+        `390` = "Asia/Yangon",
+        `525` = "Australia/Eucla",
+        `570` = "Australia/Darwin",
+        `630` = "Australia/Lord_Howe",
+        `765` = "Pacific/Chatham",
+        `780` = "Pacific/Tongatapu",
+        `840` = "Pacific/Kiritimati"
+      )
+      mapped_tz <- unname(fixed_map[as.character(offset_minutes)])
+      if (
+        length(mapped_tz) && !is.na(mapped_tz[[1]]) && nzchar(mapped_tz[[1]])
+      ) {
+        return(mapped_tz[[1]])
+      }
+      if (offset_minutes == 0L) {
+        return("UTC")
+      }
+      if (offset_minutes %% 60L == 0L) {
+        return(sprintf("Etc/GMT%+d", -offset_minutes %/% 60L))
+      }
+      "UTC"
+    }
+
+    air_datetime_widget_timezone <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      offset_minutes_to_widget_timezone(
+        parse_utc_offset_minutes(tz_name, default = default)
+      )
+    }
+
+    datetime_to_posix_tz <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      air_datetime_widget_timezone(tz_name, default = default)
+    }
+
+    default_input_timezone <<- function() {
+      local_tz <- Sys.timezone()
+      if (is.na(local_tz) || !nzchar(local_tz)) {
+        local_tz <- "UTC"
+      }
+      offset <- format(Sys.time(), tz = local_tz, format = "%z")
+      if (!nzchar(offset)) {
+        return("UTC+00:00")
+      }
+      format_utc_offset(parse_compact_utc_offset(offset))
+    }
+
+    input_timezone_choices <<- function() {
+      # offsets from here: https://en.wikipedia.org/wiki/List_of_UTC_time_offsets
+      offsets <- c(
+        -12:-10,
+        9.5,
+        -9:-4,
+        -3.5,
+        -3:3,
+        3.5,
+        4,
+        4.5,
+        5,
+        5.5,
+        5.75,
+        6,
+        6.5,
+        7,
+        8,
+        8.75,
+        9,
+        9.5,
+        10,
+        10.5,
+        11,
+        12,
+        12.75,
+        13,
+        14
+      ) *
+        60L
+      labels <- vapply(offsets, format_utc_offset, character(1))
+      stats::setNames(labels, labels)
+    }
+
+    normalize_input_timezone <<- function(
+      tz_name,
+      default = default_input_timezone()
+    ) {
+      tz_name <- normalize_input_timezone_token(tz_name)
+      if (
+        !length(tz_name) ||
+          is.na(tz_name) ||
+          !nzchar(tz_name) ||
+          !grepl("^UTC[+-]\\d{2}:\\d{2}$", tz_name)
+      ) {
+        return(default)
+      }
+      tz_name
+    }
+
+    empty_utc_datetime <<- function(n = 1) {
+      structure(rep(NA_real_, n), class = c("POSIXct", "POSIXt"), tzone = "UTC")
+    }
+
+    coerce_utc_datetime <<- function(datetime_value) {
+      if (is.null(datetime_value) || length(datetime_value) == 0) {
+        return(empty_utc_datetime())
+      }
+      out <- suppressWarnings(as.POSIXct(datetime_value, tz = "UTC"))
+      attr(out, "tzone") <- "UTC"
+      out
+    }
+
+    scalar_utc_datetime <<- function(datetime_value) {
+      out <- coerce_utc_datetime(datetime_value)
+      if (!length(out) || is.na(out[1])) {
+        return(empty_utc_datetime())
+      }
+      out[1]
+    }
+
+    shift_air_datetime_input_timezone <<- function(
+      session,
+      input,
+      input_id,
+      tz_name
+    ) {
+      current_value <- coerce_utc_datetime(input[[input_id]])
+      if (!length(current_value) || all(is.na(current_value))) {
+        return(invisible(NULL))
+      }
+      shinyWidgets::updateAirDateInput(
+        session,
+        inputId = input_id,
+        value = current_value,
+        tz = air_datetime_widget_timezone(tz_name)
+      )
+      invisible(NULL)
+    }
+
+    shiny::registerInputHandler(
+      "yg.air.date",
+      function(data, ...) {
+        if (is.null(data) || !is.list(data) || is.null(data$date)) {
+          return(NULL)
+        }
+        res <- try(as.Date(unlist(data$date)), silent = TRUE)
+        if (inherits(res, "try-error")) {
+          warning("Failed to parse dates!")
+          data
+        } else {
+          res
+        }
+      },
+      force = TRUE
     )
 
-    if (g_drive) {
-      # FOD module (only visible internally)
-      source(system.file(
-        "apps/YGwater/modules/client/FOD/FOD_main.R",
-        package = "YGwater"
-      ))
+    shiny::registerInputHandler(
+      "yg.air.datetime",
+      function(data, ...) {
+        if (is.null(data) || !is.list(data) || is.null(data$date)) {
+          return(NULL)
+        }
+        tz_name <- normalize_input_timezone_token(data$tz[[1]])
+        if (!length(tz_name) || is.na(tz_name) || !nzchar(tz_name)) {
+          tz_name <- "UTC"
+        }
+        res <- try(
+          {
+            if (is_input_timezone_offset(tz_name)) {
+              offset_minutes <- parse_utc_offset_minutes(
+                tz_name,
+                default = "UTC+00:00"
+              )
+              parsed <- as.POSIXct(unlist(data$date), tz = "UTC")
+              parsed <- parsed - offset_minutes * 60
+            } else {
+              parsed <- as.POSIXct(unlist(data$date), tz = tz_name)
+            }
+            attr(parsed, "tzone") <- "UTC"
+            parsed
+          },
+          silent = TRUE
+        )
+        if (inherits(res, "try-error")) {
+          warning("Failed to parse dates!")
+          data
+        } else {
+          res
+        }
+      },
+      force = TRUE
+    )
+
+    # Take the JSON string coming from the DB and make it into a readable text string
+    parse_source_args <<- function(value) {
+      if (
+        is.null(value) ||
+          length(value) == 0 ||
+          all(is.na(value)) ||
+          !nzchar(value)
+      ) {
+        return("")
+      }
+      parsed <- tryCatch(jsonlite::fromJSON(value), error = function(e) NULL)
+      if (is.null(parsed)) {
+        return(value)
+      }
+      if (length(parsed) == 0) {
+        return("")
+      }
+      if (is.list(parsed) && !is.data.frame(parsed)) {
+        parsed <- unlist(parsed)
+      }
+      if (is.null(names(parsed))) {
+        return(paste(parsed, collapse = ", "))
+      }
+      entries <- paste(names(parsed), parsed, sep = ": ")
+      paste(entries, collapse = ", ")
+    }
+
+    # Format source function arguments to JSON for input to database
+    format_source_args <<- function(args) {
+      # split into "argument1: value1" etc.
+      args <- strsplit(args, ",\\s*")[[1]]
+
+      # split only on first colon
+      keys <- sub(":.*", "", args)
+      vals <- sub("^[^:]+:\\s*", "", args)
+
+      # build named list
+      args <- stats::setNames(as.list(vals), keys)
+
+      # convert to JSON
+      args <- jsonlite::toJSON(args, auto_unbox = TRUE)
     }
 
     # Increase the maximum upload size to 100 MB, necessary for some admin modules (NOTE that a change to NGINX parameters is also necessary)
     options(shiny.maxRequestSize = 1024 * 1024^2)
+  } # End of if public = FALSE
+
+  application_notifications_ui <<- function(
+    ns,
+    lang,
+    con,
+    module_id, # Set to 'all' to show the notification across all modules
+    banner_key_prefix = "notification",
+    fallback_lang = "English"
+  ) {
+    get_active_notifications <- function(
+      con,
+      module_id,
+      lang,
+      fallback_lang = fallback_lang
+    ) {
+      if (is.null(con) || is.null(module_id) || !nzchar(module_id)) {
+        return(list())
+      }
+      if (
+        !DBI::dbExistsTable(
+          con,
+          DBI::Id(schema = "application", table = "notifications")
+        )
+      ) {
+        return(list())
+      }
+      notifications <- DBI::dbGetQuery(
+        con,
+        "
+        SELECT notification_id, target_module, message
+        FROM application.notifications
+        WHERE active IS TRUE
+          AND ($1 = ANY(target_module) OR 'all' = ANY(target_module))
+        ",
+        params = list(module_id)
+      )
+      if (!nrow(notifications)) {
+        return(list())
+      }
+      results <- list()
+
+      # Helper function to parse the array column of target modules
+      parse_text_array <- function(value) {
+        if (is.null(value) || !length(value) || all(is.na(value))) {
+          return(character())
+        }
+        if (is.list(value)) {
+          value <- value[[1]]
+        }
+        if (length(value) > 1) {
+          return(trimws(value))
+        }
+        value <- gsub("[{}\"]", "", value)
+        if (!nzchar(value)) {
+          return(character())
+        }
+        out <- trimws(unlist(strsplit(value, ",")))
+        out[nzchar(out)]
+      }
+
+      # Helper function to extract and format notification message
+      extract_notification_message <- function(
+        message,
+        lang,
+        fallback_lang = fallback_lang
+      ) {
+        if (is.null(message) || all(is.na(message))) {
+          return(NA_character_)
+        }
+        parsed <- message
+        if (is.character(message)) {
+          parsed <- tryCatch(
+            jsonlite::fromJSON(message),
+            error = function(e) message
+          )
+        }
+        if (is.list(parsed)) {
+          if (!is.null(lang) && lang %in% names(parsed)) {
+            return(parsed[[lang]])
+          }
+          if (fallback_lang %in% names(parsed)) {
+            return(parsed[[fallback_lang]])
+          }
+          if (length(parsed)) {
+            return(unname(parsed[[1]]))
+          }
+        }
+        if (is.character(parsed)) {
+          return(parsed[[1]])
+        }
+        NA_character_
+      }
+
+      for (i in seq_len(nrow(notifications))) {
+        targets <- parse_text_array(notifications$target_module[i])
+
+        if (
+          !length(targets) || !(module_id %in% targets || "all" %in% targets)
+        ) {
+          next
+        }
+        msg <- extract_notification_message(
+          notifications$message[i],
+          lang = lang,
+          fallback_lang = fallback_lang
+        )
+        if (is.na(msg) || !nzchar(msg)) {
+          next
+        }
+        results[[length(results) + 1]] <- list(
+          id = notifications$notification_id[i],
+          message = msg
+        )
+      }
+      return(results)
+    }
+
+    notifications <- get_active_notifications(
+      con = con,
+      module_id = module_id,
+      lang = lang,
+      fallback_lang = fallback_lang
+    )
+
+    if (!length(notifications)) {
+      return(NULL)
+    }
+    tagList(lapply(notifications, function(notification) {
+      dismissible_banner_ui(
+        ns = ns,
+        msg_html = notification$message,
+        banner_id = paste0("notification_", notification$id),
+        banner_key_prefix = paste0(banner_key_prefix, "_", notification$id)
+      )
+    }))
+  }
+
+  dismissible_banner_ui <<- function(
+    ns,
+    msg_html,
+    banner_id = "app_banner",
+    banner_key_prefix = "global_notice",
+    banner_version = utils::packageVersion("YGwater")
+  ) {
+    banner_dom_id <- ns(banner_id)
+    banner_key <- paste0(banner_key_prefix, "_", banner_version)
+
+    dismiss_fn_name <- paste0("dismiss_", banner_dom_id) # may contain "-" so call via window[...]()
+
+    tagList(
+      tags$head(
+        tags$style(HTML(sprintf(
+          "#%s { margin-bottom: 1rem; }",
+          banner_dom_id
+        ))),
+        tags$script(HTML(sprintf(
+          "
+          (function () {
+            const bannerId = '%s';
+            const bannerKey = '%s';
+  
+            function hideIfDismissed() {
+              try {
+                if (localStorage.getItem(bannerKey) === '1') {
+                  const el = document.getElementById(bannerId);
+                  if (el) el.style.display = 'none';
+                }
+              } catch (e) {}
+            }
+  
+            window['%s'] = function () {
+              try { localStorage.setItem(bannerKey, '1'); } catch (e) {}
+              const el = document.getElementById(bannerId);
+              if (el) el.style.display = 'none';
+            };
+  
+            document.addEventListener('DOMContentLoaded', hideIfDismissed);
+          })();
+        ",
+          banner_dom_id,
+          banner_key,
+          dismiss_fn_name
+        )))
+      ),
+
+      bslib::card(
+        id = banner_dom_id,
+        class = "mb-3",
+        bslib::card_header(
+          class = "d-flex align-items-start",
+          style = "gap:12px;",
+          tags$div(style = "flex: 1 1 auto; min-width: 0;", HTML(msg_html)),
+          tags$button(
+            type = "button",
+            class = "btn-close ms-auto",
+            `aria-label` = "Dismiss",
+            onclick = sprintf("window['%s']();", dismiss_fn_name)
+          )
+        )
+      )
+    )
+  }
+
+  # Derive privilege flags for tables
+  # @param tbl A table with at minimum columns called 'extra_privileges' with strings such as "SELECT, UPDATE", and column called 'qual_name' containing schema qualified table names such as 'public.table_name'.
+  # @param qual_names A character vector of qualified table names (schema.table)
+  # @param priv A list of character vectors of privileges to check for each table in 'qual_names'. If length(priv) == 1, the same privileges are checked for all tables.
+  # @return Boolean. TRUE if the specified privileges exist for the listed tables, FALSE any privileges missing on any table.
+
+  has_priv <<- function(
+    tbl,
+    qual_names,
+    priv = list(c(
+      "DELETE",
+      "INSERT",
+      "UPDATE"
+    ))
+  ) {
+    if (length(priv) > 1) {
+      # Ensure length 'priv' is same length as 'qual_names'
+      if (length(priv) != length(qual_names)) {
+        stop(
+          "Length of 'priv' must be 1 or equal to length of 'qual_names'"
+        )
+      }
+    } else {
+      # Replicate 'priv' to match length of 'qual_names'
+      priv <- rep(priv, length(qual_names))
+    }
+    # Ensure the user has ALL of the specified privileges on ALL of the specified tables
+    for (i in seq_along(qual_names)) {
+      qn <- qual_names[i]
+      p <- priv[[i]]
+      user_privs <- tbl$extra_privileges[
+        tbl$qual_name == qn
+      ]
+      if (length(user_privs) == 0) {
+        return(FALSE)
+      }
+      user_privs_vec <- unlist(strsplit(user_privs, ", "))
+      if (!all(p %in% user_privs_vec)) {
+        return(FALSE)
+      }
+    }
+    return(TRUE)
   }
 
   # 'client' side modules #####
@@ -177,25 +888,32 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
-  # Report modules
-  if (g_drive) {
+  # Non-public client-side modules
+  if (!public) {
+    # Report modules
+    if (network_check) {
+      source(system.file(
+        "apps/YGwater/modules/client/reports/WQReport.R",
+        package = "YGwater"
+      ))
+      source(system.file(
+        "apps/YGwater/modules/client/reports/snowBulletin.R",
+        package = "YGwater"
+      ))
+    }
     source(system.file(
-      "apps/YGwater/modules/client/reports/WQReport.R",
+      "apps/YGwater/modules/client/reports/snowInfo.R",
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/client/reports/snowBulletin.R",
+      "apps/YGwater/modules/client/reports/waterInfo.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/waterTemp.R",
       package = "YGwater"
     ))
   }
-  source(system.file(
-    "apps/YGwater/modules/client/reports/snowInfo.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/reports/waterInfo.R",
-    package = "YGwater"
-  ))
 
   # Map modules
   source(system.file(
@@ -214,14 +932,22 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/snowBulletinMap.R",
     package = "YGwater"
   ))
+  source(system.file(
+    "apps/YGwater/modules/client/WWR/registry_front_end.R",
+    package = "YGwater"
+  ))
 
-  # Image modules
+  # Image and document modules
   source(system.file(
     "apps/YGwater/modules/client/images/image_table_view.R",
     package = "YGwater"
   ))
   source(system.file(
     "apps/YGwater/modules/client/images/image_map_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/documents/document_table_view.R",
     package = "YGwater"
   ))
 
@@ -249,81 +975,55 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
-  # Load translations infrastructure to the global environment
-
-  translations <- data.table::fread(system.file(
-    "apps/YGwater/translations.csv",
-    package = "YGwater"
-  ))
-  # Build a list from the data.frame
-  translation_cache <<- lapply(
-    setdiff(names(translations[, -2]), "id"),
-    function(lang) {
-      # Removes the second, "description" column, builds lists for each language
-      setNames(translations[[lang]], translations$id)
-    }
-  )
-  names(translation_cache) <<- setdiff(names(translations)[-2], "id")
-
-  # Make a helper function, send to global environment
-  tr <<- function(key, lang) {
-    # Ensure that 'key' is a value in the 'id' column of the translations data.frame
-    if (!key %in% translations$id) {
-      stop(paste("Translation key", key, "not found in translations data."))
-    }
-    translation_cache[[lang]][[key]] # list 'lang', item 'key'
-  }
-
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
 
   ## Access database connections ###########
   # Look for .mdb files in the AccessPath directories
-  if (!is.null(accessPath1)) {
-    if (dir.exists(accessPath1) & !public) {
-      # List the *.mdb files in the directory
-      mdb_files1 <- list.files(
-        accessPath1,
-        pattern = "*.mdb",
-        full.names = TRUE
-      )
-      if (length(mdb_files1) == 0) {
+  if (network_check) {
+    if (!is.null(accessPath1)) {
+      if (dir.exists(accessPath1) & !public) {
+        # List the *.mdb files in the directory
+        mdb_files1 <- list.files(
+          accessPath1,
+          pattern = "*.mdb",
+          full.names = TRUE
+        )
+        if (length(mdb_files1) == 0) {
+          mdb_files1 <- NULL
+        }
+      } else {
         mdb_files1 <- NULL
       }
     } else {
       mdb_files1 <- NULL
     }
-  } else {
-    mdb_files1 <- NULL
-  }
-  if (!is.null(accessPath2)) {
-    if (dir.exists(accessPath2) & !public) {
-      # List the *.mdb files in the directory
-      mdb_files2 <- list.files(
-        accessPath2,
-        pattern = "*.mdb",
-        full.names = TRUE
-      )
-      if (length(mdb_files2) == 0) {
+    if (!is.null(accessPath2)) {
+      if (dir.exists(accessPath2) & !public) {
+        # List the *.mdb files in the directory
+        mdb_files2 <- list.files(
+          accessPath2,
+          pattern = "*.mdb",
+          full.names = TRUE
+        )
+        if (length(mdb_files2) == 0) {
+          mdb_files2 <- NULL
+        }
+      } else {
         mdb_files2 <- NULL
       }
     } else {
       mdb_files2 <- NULL
     }
+
+    mdb_files <- c(mdb_files1, mdb_files2)
+
+    if (is.null(mdb_files) & !public) {
+      print("No .mdb files found in the accessPath directories.")
+    }
   } else {
-    mdb_files2 <- NULL
+    mdb_files <- NULL
   }
-
-  mdb_files <- c(mdb_files1, mdb_files2)
-
-  if (is.null(mdb_files) & !public) {
-    print("No .mdb files found in the accessPath directories.")
-  }
-
-  # Set up a temporary directory for storing R documentation files during app runtime
-  .rd_dir <<- file.path(tempdir(), "rdocs")
-  dir.create(.rd_dir, showWarnings = FALSE, recursive = TRUE)
-  shiny::addResourcePath("rdocs", .rd_dir)
 
   # Make the configuration list available globally
   # double assignment creates a global variable that can be accessed by all UI and server functions
@@ -335,10 +1035,15 @@ YGwater_globals <- function(
     dbUser = dbUser,
     dbPass = dbPass,
     public = public,
-    g_drive = g_drive,
+    g_drive = g_drive, # YG specific - whether the app has access to the G drive where FOD reports are stored, which allows the FOD report module to be visible and functional
+    network_check = network_check,
     mdb_files = mdb_files,
+    logout_timer_min = logout_timer_min,
+    analytics = analytics,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2" # Default background color for all main panels
   )
+
+  return(config)
 }

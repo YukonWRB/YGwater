@@ -21,7 +21,7 @@ waterInfo(
 \arguments{
 \item{con}{A connection to the database. Default uses function \code{\link[=AquaConnect]{AquaConnect()}} with default settings.}
 
-\item{locations}{The list of locations requested, as either a vector of location IDs/codes from table 'locations'. Default "all" fetches all stations.}
+\item{locations}{The list of locations requested, as either a vector of location IDs (preferable) or entries from one of columns 'name', 'location_code', or 'alias' from table 'locations'. Default "all" fetches all stations.}
 
 \item{level_flow}{Default 'both' will get and calculate level and flow information wherever possible. 'one' will pick flow where it exists, otherwise level. Exception to this is if there is no flow on the end_date requested AND most recent flow is > 1 month older than level ; in this case flow is assumed to be discontinued and level is used.}
 

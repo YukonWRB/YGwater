@@ -6,9 +6,10 @@
 \usage{
 plotMultiTimeseries(
   type = "traces",
-  locations,
+  timeseries_ids = NULL,
+  locations = NULL,
   sub_locations = NULL,
-  parameters,
+  parameters = NULL,
   record_rates = NULL,
   aggregation_types = NULL,
   z = NULL,
@@ -35,14 +36,17 @@ plotMultiTimeseries(
   gridx = FALSE,
   gridy = FALSE,
   webgl = TRUE,
-  rate = NULL,
+  resolution = NULL,
   tzone = "auto",
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 )
 }
 \arguments{
 \item{type}{Are you looking for multiple traces on one plot ('traces') or multiple subplots ('subplots')? Default is 'traces'.}
+
+\item{timeseries_ids}{Vector of timeseries IDs to plot, if known (else leave NULL). When provided, location/parameter inputs are ignored.}
 
 \item{locations}{The location or locations for which you want a plot. If specifying multiple locations matched to the parameters and record_rates 1:1. The location:parameter combos must be in the local database.}
 
@@ -103,13 +107,18 @@ plotMultiTimeseries(
 \item{webgl}{Use WebGL ("scattergl") for faster rendering when possible. Set
 to FALSE to force standard scatter traces.}
 
-\item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
+\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
 \item{tzone}{The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.}
 
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values and
+stored daily summaries should be reconstructed. Character, Date, and
+POSIXct inputs are supported. Date-like inputs are interpreted as the end
+of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 A plotly object and a data frame with the data used to create the plot (if \code{data} is TRUE).

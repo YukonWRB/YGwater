@@ -1,11 +1,31 @@
 /* base “bar” style */
 .btn-bar {
-  background: transparent !important;
-  border: 1 !important;
-  border-radius: 2 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: #fff !important;
+  border: 1px solid #6f6f6f !important;
+  border-radius: 0.25rem !important;
   box-shadow: none !important;
   transition: box-shadow 0.1s ease;
   color: #244C5A !important;
+  font-family: 'Nunito Sans', sans-serif !important;
+  font-style: normal !important;
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  min-height: 46px;
+  padding: 14px 16px !important;
+}
+
+.btn-bar .fa,
+.btn-bar .fas,
+.btn-bar .far,
+.btn-bar .fab,
+.btn-bar .fa-solid,
+.btn-bar .fa-regular {
+  font-size: 0.95em;
 }
 
 /* hover shadow */

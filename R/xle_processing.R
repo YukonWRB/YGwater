@@ -1,6 +1,6 @@
 #' Solinst xle logger file processing
-#' 
-#' @description 
+#'
+#' @description
 #' Parse xle (Solinst) logger files, upload to Aquarius, sort into respective folder, and track logger metadata. Created to work within the Yukon Water Resources Branch's folder structure.
 #'
 #' @param file Full path to the .xle file. This must be an XLE file from a Solinst logger.
@@ -35,22 +35,33 @@ xle_processing <- function(file,
   
   if (!file.exists(master_file)) {
     stop("Master file not found, check file location")
-  } else { # File exists, so if reading fails it must mean the sheet doesn't exist
+  } else {
+    # File exists, so if reading fails it must mean the sheet doesn't exist
     #Read in reference sheets and logger drop folder
-    tryCatch({
-      master <- openxlsx::read.xlsx(master_file, sheet = "YOWN_MASTER")
-      YOWNIDs <- master$YOWN.Code 
-    }, error = function(e) {
-      stop("Master Excel file found but not not the sheet named 'YOWN_MASTER', check the file and try again.")
-    })
+    tryCatch(
+      {
+        master <- openxlsx::read.xlsx(master_file, sheet = "YOWN_MASTER")
+        YOWNIDs <- master$YOWN.Code
+      },
+      error = function(e) {
+        stop(
+          "Master Excel file found but not not the sheet named 'YOWN_MASTER', check the file and try again."
+        )
+      }
+    )
     # Make sure the table has the required columns
-    tryCatch({
-      publish <- master$Publish
-    }, error = function(e) {
-      stop("Master Excel file found but not not the column named 'Publish', check the file and try again.")
-    })
+    tryCatch(
+      {
+        publish <- master$Publish
+      },
+      error = function(e) {
+        stop(
+          "Master Excel file found but not not the column named 'Publish', check the file and try again."
+        )
+      }
+    )
   }
-  
+
   if (!file.exists(logger_tracking)) {
     stop("Logger tracking sheet not found, check file location")
   } else {
@@ -61,29 +72,22 @@ xle_processing <- function(file,
     })
     
     # Make sure the table has the required columns
-    
+
     # ... please fill this in...
-    
   }
-  
+
   if (!dir.exists(dropbox)) {
     stop("Dropbox folder not found, check folder location")
   } else {
-    
     # Please fill this in with logic to ensure the folder structure is correct... If it's not, throw error that explains the proper structure to the user so that it can be fixed if ever needed.
-    
-    
-    
   }
-  
+
   if (!is.null(repo)) {
     if (!dir.exists(repo)) {
       stop("Active Wells folder not found, check folder location")
     } else {
       # Please fill this in with logic to ensure the folder structure is correct...
-      
       # ... please fill this in with logic to ensure the folder structure is correct... If it's not, throw error that explains the proper structure to the user so that it can be fixed if ever needed.
-      
     }
   }
   
@@ -95,20 +99,26 @@ xle_processing <- function(file,
       stop("The logger file must have the extension .xle")
     } else {
       xml_file <- xml2::read_xml(file)
-      
+
       # Check if the file has the right structure, unless this is done later on in the script
-      
-      
     }
   }
   
   #### Define helper functions ####
   # Define pressure conversion function
   convert_level <- function(column, level_unit) {
-    
     # Define conversion factors for pressure units to meters of water column
     level_conversion_factors <- data.frame(
-      unit = c("psi", "kPa", "bar", "mbar", "mm Hg", "in Hg", "cm H2O", "in H2O"),
+      unit = c(
+        "psi",
+        "kPa",
+        "bar",
+        "mbar",
+        "mm Hg",
+        "in Hg",
+        "cm H2O",
+        "in H2O"
+      ),
       to_m_H2O = c(
         0.7030700000, # psi
         0.1019716213, # kPa
@@ -117,35 +127,40 @@ xle_processing <- function(file,
         0.0135950982, # mm Hg
         0.3453187748, # in Hg
         0.0101971621, # cm H2O
-        0.0254000000  # in H2O
+        0.0254000000 # in H2O
       )
     )
-    
+
     # Check if the unit is "m H2O"
     if (level_unit == "m") {
       return(column)
     } else {
       # Find the conversion factor for the specified unit
-      conversion_factor <- level_conversion_factors$to_m_H2O[level_conversion_factors$unit == level_unit]
+      conversion_factor <- level_conversion_factors$to_m_H2O[
+        level_conversion_factors$unit == level_unit
+      ]
       # If the unit is found, apply the conversion; if not, throw an error and stop code
       if (length(conversion_factor) == 1) {
         column <- column * conversion_factor
         return(column)
       } else {
-        stop(paste("Unrecognized unit:", level_unit, "- No conversion applied."))
+        stop(paste(
+          "Unrecognized unit:",
+          level_unit,
+          "- No conversion applied."
+        ))
       }
     }
   }
-  
+
   # Define conductivity conversion function
   convert_conductivity <- function(column, conductivity_unit) {
-    
     # Define conversion factors for pressure units to meters of water column
     conductivity_conversion_factors <- data.frame(
       unit = c("ms/cm"),
       'to_\u00B5S/cm' = c(0.1) # ms/cm
     )
-    
+
     # Check if the unit is "uS/cm" already
     if (conductivity_unit == "\u00B5S/cm") {
       return(column)
@@ -153,24 +168,28 @@ xle_processing <- function(file,
       column <- column * 0.01
       return(column)
     } else {
-      stop(paste("Unrecognized unit:", conductivity_unit, "- No conversion applied."))
+      stop(paste(
+        "Unrecognized unit:",
+        conductivity_unit,
+        "- No conversion applied."
+      ))
     }
   }
-  
-  # Define temperature conversion function 
+
+  # Define temperature conversion function
   convert_temp <- function(column, temperature_unit) {
     if (temperature_unit == "\u00B0C" || temperature_unit == "Deg C") {
       # No conversion needed
       return(column)
     } else if (temperature_unit == "\u00B0F" || temperature_unit == "Deg F") {
       # Convert Fahrenheit to Celsius
-      column <- (column - 32) * 5/9
+      column <- (column - 32) * 5 / 9
       return(column)
     } else {
       stop("Unsupported temperature unit. Please use \u00B0C or \u00B0F.")
     }
   }
-  
+
   # Define header data extraction function
   parse_properties <- function(xml_nodes, node_name) {
     tibble::tibble(
@@ -182,18 +201,21 @@ xle_processing <- function(file,
         xml2::xml_text()
     )
   }
-  
+
   #### xle processing ####
-  
+
   # Extract File Info
   log_properties <- parse_properties(xml_file, "File_info")
-  
+
   # Extract Instrument Info
   instrument_properties <- parse_properties(xml_file, "Instrument_info")
-  
+
   # Extract Instrument Info Data Header
-  instrument_data_header <- parse_properties(xml_file, "Instrument_info_data_header")
-  
+  instrument_data_header <- parse_properties(
+    xml_file,
+    "Instrument_info_data_header"
+  )
+
   # Extract Channel Data Headers (Ch1, Ch2, Ch3)
   channel_data_header <- xml_file %>%
     xml2::xml_find_all("//Ch1_data_header|//Ch2_data_header|//Ch3_data_header") %>%
@@ -206,41 +228,68 @@ xle_processing <- function(file,
     })
   
   LTC <- FALSE # Tracks if there are three channels in the XML file or two
-  
+
   if (nrow(channel_data_header) == 3) {
     LTC <- TRUE
   }
-  
+
   # Extract units for check and correction
   level_unit <- channel_data_header$Unit[1]
   temperature_unit <- channel_data_header$Unit[2]
-  
+
   if (LTC) {
     conductivity_unit <- channel_data_header$Unit[3]
   }
-  
+
   # Initiate log entry
-  write(c("\n", as.character(Sys.time())), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-  write(paste0("File ", file), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-  
+  write(
+    c("\n", as.character(Sys.time())),
+    file = paste0(dropbox, "/LOGBOOK.txt"),
+    append = TRUE,
+    sep = "\n"
+  )
+  write(
+    paste0("File ", file),
+    file = paste0(dropbox, "/LOGBOOK.txt"),
+    append = TRUE,
+    sep = "\n"
+  )
+
   # Check location ID against master sheet, throw error if not found and move file to "FAILED" folder
-  well_loc <- stringr::str_extract(instrument_data_header$Value[instrument_data_header$Property == "Location"], "(?<=YOWN).{4,6}"  ) # Gets the 5 characters after YOWN-
-  well_loc <- sub("_", "", well_loc)
-  well_loc <- sub("-", "", well_loc)
-  well_loc <- sub(" ", "", well_loc)
-  well_loc <- sub("/.", "", well_loc)
-  if (grepl("[0-9]", substr(well_loc, 5, 5))) { # Check if character 5 is a number. Should be one of D or S
+  well_loc <- stringr::str_extract(
+    instrument_data_header$Value[instrument_data_header$Property == "Location"],
+    "(?<=YOWN).{4,6}"
+  ) # Gets the 5 characters after YOWN-
+  well_loc <- gsub("_", "", well_loc)
+  well_loc <- gsub("-", "", well_loc)
+  well_loc <- gsub(" ", "", well_loc)
+  well_loc <- gsub("/.", "", well_loc)
+  if (grepl("[0-9]", substr(well_loc, 5, 5))) {
+    # Check if character 5 is a number. Should be one of D or S
     well_loc <- substr(well_loc, 1, 4)
   }
   well_loc <- paste0("YOWN-", well_loc)
-  if (!well_loc %in% YOWNIDs) { #If YOWN ID is not found in master sheet, move file to "FAILED" folder and stop
-    file.rename(from = paste0(dropbox, "/", file),
-                to = paste0(dropbox, "/FAILED/", file))
-    stop(write(paste0("Please check the YOWN code for errors"), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")) 
+  if (!well_loc %in% YOWNIDs) {
+    #If YOWN ID is not found in master sheet, move file to "FAILED" folder and stop
+    file.rename(
+      from = paste0(dropbox, "/", file),
+      to = paste0(dropbox, "/FAILED/", file)
+    )
+    stop(write(
+      paste0("Please check the YOWN code for errors"),
+      file = paste0(dropbox, "/LOGBOOK.txt"),
+      append = TRUE,
+      sep = "\n"
+    ))
   }
-  
-  write(paste0(well_loc, " detected in file name"), file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-  
+
+  write(
+    paste0(well_loc, " detected in file name"),
+    file = paste0(dropbox, "/LOGBOOK.txt"),
+    append = TRUE,
+    sep = "\n"
+  )
+
   # Extract Logs into a Data Frame
   data <- xml_file %>%
     xml2::xml_find_all("//Data/Log") %>%
@@ -283,24 +332,32 @@ xle_processing <- function(file,
   
   if ("LEVEL" %in% colnames(final_data)) {
     final_data$LEVEL <- convert_level(column = final_data$LEVEL, level_unit)
-    level_unit <- "m"}
-  
+    level_unit <- "m"
+  }
+
   if ("TEMPERATURE" %in% colnames(final_data)) {
-    final_data$TEMPERATURE <- convert_temp(final_data$TEMPERATURE, temperature_unit)
-    temperature_unit <- "\u00B0C"}
-  
+    final_data$TEMPERATURE <- convert_temp(
+      final_data$TEMPERATURE,
+      temperature_unit
+    )
+    temperature_unit <- "\u00B0C"
+  }
+
   if ("CONDUCTIVITY" %in% colnames(final_data)) {
-    final_data$CONDUCTIVITY <- convert_conductivity(final_data$CONDUCTIVITY, conductivity_unit)
-    conductivity_unit <- "\u00B5S/cm"}
-  
+    final_data$CONDUCTIVITY <- convert_conductivity(
+      final_data$CONDUCTIVITY,
+      conductivity_unit
+    )
+    conductivity_unit <- "\u00B5S/cm"
+  }
+
   final_data <- final_data %>%
     dplyr::rename(
       "Level (m)" = "LEVEL",
       "Temperature (\u00B0C)" = "TEMPERATURE",
       "Conductivity (\u00B5S/cm)" = "CONDUCTIVITY"
     )
-  
-  
+
   # Upload data to Aquarius
   if (aq_upload) {
     for (i in c("Wlevel_Hgt.level_RAW", "Water Temp.TEMPERATURE", "Conductivity Field.Econdy-F")) {
@@ -342,7 +399,7 @@ xle_processing <- function(file,
   }
   
   #### Track metadata ####
-  
+
   # Format data to be added
   new_data <- data.frame(YOWN_ID = well_loc,
                          Logger_Make = "Solinst",
@@ -355,52 +412,99 @@ xle_processing <- function(file,
   # Append the new data
   updated_data <- rbind(log_track_sheet, new_data) %>%
     dplyr::distinct()
-  
+
   # Write the updated data back to the Excel file and make an entry in the logger tracker
-  tryCatch({
-    openxlsx::write.xlsx(x = updated_data, file = logger_tracking, rowNames = FALSE)
-    write("Logger tracking successful", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-  }, error = function(e) { 
-    write("Logger tracking FAILED, make sure nobody has the logger tracking sheet open", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-  }, warning = function(w) {
-    write("Logger tracking FAILED, make sure nobody has the logger tracking sheet open. Re-add XLE file to logger dropbox to complete tracking.", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")}
+  tryCatch(
+    {
+      openxlsx::write.xlsx(
+        x = updated_data,
+        file = logger_tracking,
+        rowNames = FALSE
+      )
+      write(
+        "Logger tracking successful",
+        file = paste0(dropbox, "/LOGBOOK.txt"),
+        append = TRUE,
+        sep = "\n"
+      )
+    },
+    error = function(e) {
+      write(
+        "Logger tracking FAILED, make sure nobody has the logger tracking sheet open",
+        file = paste0(dropbox, "/LOGBOOK.txt"),
+        append = TRUE,
+        sep = "\n"
+      )
+    },
+    warning = function(w) {
+      write(
+        "Logger tracking FAILED, make sure nobody has the logger tracking sheet open. Re-add XLE file to logger dropbox to complete tracking.",
+        file = paste0(dropbox, "/LOGBOOK.txt"),
+        append = TRUE,
+        sep = "\n"
+      )
+    }
   )
-  
+
   #### Move file to final resting place ####
-  
+
   if (!is.null(repo)) {
     # Move the xle, making two copies
     year <- substr(max(final_data$Time), 1, 4) #Last year on record in the file
     dirs <- list.dirs(repo, full.names = FALSE, recursive = FALSE)
     dir <- dirs[grepl(well_loc, dirs)] # Name of the well, so that files can go in the right place
-    
+
     if (length(dir) == 0) {
       dir <- well_loc
     }
-    
+
     # Check if the backups folder exists, if not create it
     if (!dir.exists(paste0(dropbox, "/backups"))) {
       dir.create(paste0(dropbox, "/backups"))
     }
-    
+
     # Copy file to backups folder
-    file.copy(from = file,
-              to = paste0(dropbox, "/backups/", basename(file)))
-    
+    file.copy(from = file, to = paste0(dropbox, "/backups/", basename(file)))
+
     # Move the XLE file to its final resting place in the correct YOWN folder
     # Make a new folder for the year if it does not yet exist
     if (!dir.exists(paste0(repo, "/", dir, "/Logger files and notes/", year))) {
-      dir.create(paste0(repo, "/", dir, "/Logger files and notes/", year), recursive = TRUE)
-    }
-    
-    tryCatch({
-      file.rename(from = file, 
-                  to = paste0(repo, "/", dir, "/Logger files and notes/", year, "/", basename(file))
+      dir.create(
+        paste0(repo, "/", dir, "/Logger files and notes/", year),
+        recursive = TRUE
       )
-      write("The xle file was successfully moved to its final resting places", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-    }, error = function(e) { 
-      write("Moving the file to its final resting place FAILED", file = paste0(dropbox, "/LOGBOOK.txt"), append = TRUE, sep = "\n")
-    })
+    }
+
+    tryCatch(
+      {
+        file.rename(
+          from = file,
+          to = paste0(
+            repo,
+            "/",
+            dir,
+            "/Logger files and notes/",
+            year,
+            "/",
+            basename(file)
+          )
+        )
+        write(
+          "The xle file was successfully moved to its final resting places",
+          file = paste0(dropbox, "/LOGBOOK.txt"),
+          append = TRUE,
+          sep = "\n"
+        )
+      },
+      error = function(e) {
+        write(
+          "Moving the file to its final resting place FAILED",
+          file = paste0(dropbox, "/LOGBOOK.txt"),
+          append = TRUE,
+          sep = "\n"
+        )
+      }
+    )
   }
   
   
@@ -408,4 +512,3 @@ xle_processing <- function(file,
     return(final_data)
   }
 }
-

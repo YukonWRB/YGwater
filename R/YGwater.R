@@ -10,9 +10,12 @@
 #' @param dbPort Port number of the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbUser Username for the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
+#' @param network_check Optional: a path to a network location to check if the app is run internally or externally. If the app can see the path, some additional functionality is enabled, such as log in by admin roles. Default is FALSE, which means no check is performed and the app assumes it's running internally with access to all features.
 #' @param accessPath1 to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
 #' @param accessPath2 Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.
+#' @param logout_timer_min Auto logout timer, in minutes.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
+#' @param analytics FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as `system.file("apps/YGwater/www/html/matomo.html", package = "YGwater")`. This file will be called within the main UI as `tags$head(includeHTML(file))`. Default is FALSE.
 #' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.
 #'
 #' @return Opens a Shiny application.
@@ -21,14 +24,17 @@
 YGwater <- function(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
-  dbName = "aquacache",
+  dbName = Sys.getenv("aquacachenName", "aquacache"),
   dbHost = Sys.getenv("aquacacheHost"),
-  dbPort = Sys.getenv("aquacachePort"),
+  dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
   accessPath1 = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB",
   accessPath2 = "//carver/infosys/EQWin",
+  network_check = FALSE,
+  logout_timer_min = 10,
   server = FALSE,
+  analytics = FALSE,
   public = TRUE
 ) {
   rlang::check_installed("shiny", reason = "required to use YGwater app")
@@ -41,6 +47,10 @@ YGwater <- function(
     reason = "required to enable asynchronous operations in YGwater apps"
   )
   rlang::check_installed(
+    "promises",
+    reason = "required to enable asynchronous operations in YGwater apps"
+  )
+  rlang::check_installed(
     "bslib",
     reason = "required to enable bootstrap 5 themes and elements in YGwater apps"
   )
@@ -50,6 +60,10 @@ YGwater <- function(
   rlang::check_installed("zip", reason = "required to use YGwater app")
   rlang::check_installed("htmlwidgets", reason = "required to use YGwater app")
   rlang::check_installed("jsonlite", reason = "required to use YGwater app")
+  rlang::check_installed(
+    "base64enc",
+    reason = "to create base64-encoded plot images"
+  )
 
   if (!rlang::is_installed("AquaCache")) {
     rlang::check_installed(
@@ -84,12 +98,42 @@ YGwater <- function(
       "magick",
       reason = "required to use Simpler Index in the app"
     )
+    rlang::check_installed(
+      "readxl",
+      reason = "required to use YGwater app with public = FALSE"
+    )
+  }
+
+  # Make sure 'network_check' is either FALSE or character
+  if (!is.logical(network_check) && !is.character(network_check)) {
+    stop(
+      "The 'network_check' argument must be either FALSE or a character string representing a path to check."
+    )
   }
 
   appDir <- system.file("apps/YGwater", package = "YGwater")
 
   if (appDir == "") {
     stop("YGwater app not found.")
+  }
+
+  # Make sure the analytics file can be found if specified
+  # do not change to !analytics because analytics can be a character string with the file path
+  if (analytics != FALSE) {
+    if (!file.exists(analytics)) {
+      warning(
+        "The analytics file specified in the 'analytics' argument cannot be found."
+      )
+      analytics <- FALSE
+    } else {
+      # Ensure that it's an HTML file
+      if (tools::file_ext(analytics) != "html") {
+        warning(
+          "The analytics file specified in the 'analytics' argument is not an HTML file. Analytics will be disabled."
+        )
+        analytics <- FALSE
+      }
+    }
   }
 
   # Load the global variables, library calls, and possibly in future a connection to the DB.
@@ -102,7 +146,10 @@ YGwater <- function(
     dbPass = dbPass,
     accessPath1 = accessPath1,
     accessPath2 = accessPath2,
-    public = public
+    network_check = network_check,
+    public = public,
+    logout_timer_min = logout_timer_min,
+    analytics = analytics
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
@@ -116,41 +163,56 @@ YGwater <- function(
   )
 
   # Check that the DB has the 'application' schema
-  if (!DBI::dbExistsTable(con, "page_content", schema = "application")) {
+  if (
+    !DBI::dbExistsTable(con, "page_content", schema = "application") ||
+      !DBI::dbExistsTable(con, "notifications", schema = "application")
+  ) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
-      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' table. Refer to the script 'application_tables.R' in this application's folder to create this table. You'll find this script at ",
-      appDir,
-      "."
+      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' or 'notifications' tables. You'll need to bring the AquaCache database up to revision 31 at minimum."
     )
   }
 
   # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_calculated', 'samples', 'results'
   if (!DBI::dbExistsTable(con, "timeseries")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'timeseries'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "locations")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'locations'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "parameters")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'parameters'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "measurements_continuous_corrected")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the view table 'measurements_continuous_corrected'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "samples")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'samples'. This table is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "results")) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'results'. This table is required for the app to function."
     )
@@ -162,11 +224,13 @@ YGwater <- function(
     con,
     "SELECT version FROM information.version_info WHERE item = 'Last patch number';"
   )[1, 1])
-  if (ver < 27) {
+  if (ver < 39) {
+    # Disconnect from the database
+    DBI::dbDisconnect(con)
     stop(
-      "The aquacache database version is too old. Please update to at least version 27. Current version is ",
+      "The aquacache database version is too old. Please update to at least version 39. Current version is ",
       ver,
-      ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache documentation for more details."
+      ". DB updates are done by updating the AquaCache R package and creating a new connection as admin or postgres user. Refer to the AquaCache::AquaConnect documentation for more details."
     )
   }
 
@@ -182,6 +246,7 @@ YGwater <- function(
   } else {
     future::plan("multicore")
   }
+
   if (server) {
     shiny::shinyAppDir(appDir)
   } else {

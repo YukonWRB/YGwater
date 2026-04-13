@@ -64,11 +64,11 @@ Exceedances are noted using conditional formatting, with a note added to explain
 \examples{
 \dontrun{
 
-# These examples require access to the G drive to work and must write to a file. They are 
+# These examples require access to the G drive to work and must write to a file. They are
 # provided for demonstration purposes only and can't be run using the 'Run examples' button above.
 # Copy/paste them into your R console to run them if needed.
 
-# Generate a report for July 25, 2024 using a station group, parameter group, 
+# Generate a report for July 25, 2024 using a station group, parameter group,
 # both CCME standards, and look for data within +- 1 day of July 1
 EQWinReport("2024-07-25", stnGrp = "QZ Eagle Gold HLF", paramGrp = "EG-HLF-failure",
 stds = c("CCME_ST", "CCME_LT"), date_approx = 1)

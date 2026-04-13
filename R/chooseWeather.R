@@ -4,7 +4,7 @@
 #' Provides information on the coverage of chosen climate variables for chosen climate stations in proximity. Outputs station descriptions and plots to help you choose the most appropriate climate station(s) to use.
 #'
 #' chooses station based on given name, coordinates, and period of interest, and displays in a plot the availability of the months of interest for the variables of interest.
-#' 
+#'
 #' @seealso [getWeather()] to download climate data from ECCC (called by this function); [combineWeather()] to combine data from multiple stations.
 #'
 #'
@@ -32,7 +32,17 @@
 # Map of station locations
 
 chooseWeather <-
-  function(location=NULL, coords=NULL, dist, interval, start, end, variable, months=NULL, return_data = FALSE) {
+  function(
+    location = NULL,
+    coords = NULL,
+    dist,
+    interval,
+    start,
+    end,
+    variable,
+    months = NULL,
+    return_data = FALSE
+  ) {
     # For testing
     # location=NULL
     # coords=c(64.0639, -139.4333) #c(60.1660, -132.7247) # Dawson c(64.0639, -139.4333) Whitehorse: c(60.7197, -135.0523)
@@ -43,27 +53,48 @@ chooseWeather <-
     # variable=c("mean_temp")
     # months=c('01', '02', '03', '04', '05', '06', '07', '08', '09', 10, 11, 12)
     # return_data = TRUE
-    
+
     #initial checks
-    rlang::check_installed("remotes", reason = "to update dependencies for this function.")
-    if (!rlang::is_installed("weathercan")) { #This is here because getWeather is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
+    rlang::check_installed(
+      "remotes",
+      reason = "to update dependencies for this function."
+    )
+    if (!rlang::is_installed("weathercan")) {
+      #This is here because getWeather is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
       message("Installing dependency 'weathercan'...")
       remotes::install_github("ropensci/weathercan")
       if (rlang::is_installed("weathercan")) {
         message("Package weathercan successfully installed.")
       } else {
-        stop("Failed to install package weathercan. You could troubleshoot by running 'remotes::install_github('ropensci/weathercan')' by itself.")
+        stop(
+          "Failed to install package weathercan. You could troubleshoot by running 'remotes::install_github('ropensci/weathercan')' by itself."
+        )
       }
     }
 
     if (is.null(months)) {
-      months <- c('01', '02', '03', '04', '05', '06', '07', '08', '09', 10, 11, 12)
+      months <- c(
+        '01',
+        '02',
+        '03',
+        '04',
+        '05',
+        '06',
+        '07',
+        '08',
+        '09',
+        10,
+        11,
+        12
+      )
     }
 
     # If end is current year, get sys.date
     if (end == format(Sys.Date(), "%Y")) {
       end_date <- Sys.Date()
-    } else {end_date <- paste0(end, "-01-01")}
+    } else {
+      end_date <- paste0(end, "-01-01")
+    }
 
     # Get station list and metadata
     stns <- weathercan::stations_search(
@@ -92,35 +123,39 @@ chooseWeather <-
       stn.data <- append(stn.data, list(table))
     }
 
-
-
     # Select only columns and months of interest
-    if (interval=="month"){
-      cols <- c('station_name',
-                'station_id',
-                'lat',
-                'lon',
-                'elev',
-                'climate_id',
-                'date',
-                'year',
-                'month',
-                paste0(variable),
-                paste0(variable, "_flag"))
-    } else if (interval=="day") {
-      cols <- c('station_name',
-                'station_id',
-                'lat',
-                'lon',
-                'elev',
-                'climate_id',
-                'date',
-                'year',
-                'month',
-                'day',
-                paste0(variable),
-                paste0(variable, "_flag"))
-    } else {stop("Chosen interval not available. Must be 'day', 'month' or 'hour'")}
+    if (interval == "month") {
+      cols <- c(
+        'station_name',
+        'station_id',
+        'lat',
+        'lon',
+        'elev',
+        'climate_id',
+        'date',
+        'year',
+        'month',
+        paste0(variable),
+        paste0(variable, "_flag")
+      )
+    } else if (interval == "day") {
+      cols <- c(
+        'station_name',
+        'station_id',
+        'lat',
+        'lon',
+        'elev',
+        'climate_id',
+        'date',
+        'year',
+        'month',
+        'day',
+        paste0(variable),
+        paste0(variable, "_flag")
+      )
+    } else {
+      stop("Chosen interval not available. Must be 'day', 'month' or 'hour'")
+    }
 
     # Run for loop over each station table
     for (s in 1:length(stn.data)) {
@@ -136,7 +171,9 @@ chooseWeather <-
       tab$climate_id <- as.character(tab$climate_id)
       # Check for logical flags and change to character
       logical_cols <- sapply(tab, is.logical)
-      tab[logical_cols] <- lapply(tab[logical_cols], function(x) as.character(x))
+      tab[logical_cols] <- lapply(tab[logical_cols], function(x) {
+        as.character(x)
+      })
       # Set variables to double
       for (v in variable) {
         # If variable exists
@@ -144,26 +181,35 @@ chooseWeather <-
           tab[, v] <- tab[, v]
         } else {
           # IF VARIABLE DOES NOT EXIST!
-          warning(paste0("Variable ", v, " does not exist for station '", unique(tab$station_name), "' at the '", interval, "' interval"))
+          warning(paste0(
+            "Variable ",
+            v,
+            " does not exist for station '",
+            unique(tab$station_name),
+            "' at the '",
+            interval,
+            "' interval"
+          ))
           tab[v] <- rep(NA, length(tab$station_name))
           tab[paste0(v, "_flag")] <- rep("M", length(tab$station_name))
         }
-
       }
       # Add table for station to stn.data
       stn.data[[s]] <- tab
     }
 
     # Print out table about stations
-    stn_cols <- c('station_name',
-                  'station_id',
-                  'climate_id',
-                  'lat',
-                  'lon',
-                  'elev',
-                  'tz',
-                  'start',
-                  'end')
+    stn_cols <- c(
+      'station_name',
+      'station_id',
+      'climate_id',
+      'lat',
+      'lon',
+      'elev',
+      'tz',
+      'start',
+      'end'
+    )
     stns <- stns[, stn_cols[stn_cols %in% names(stns)], drop = FALSE]
     print("------------ Station descriptions ----------")
     print(as.data.frame(stns))
@@ -200,27 +246,28 @@ chooseWeather <-
     sdata <- sdata[, !names(sdata) %in% paste0(variable, "_flag"), drop = FALSE]
     sdata$date <- as.Date(sdata$date)
 
-    plot <- ggplot2::ggplot(sdata, ggplot2::aes(x = date,
-                                                y = as.factor(.data$station))) +
-      ggplot2::geom_point(ggplot2::aes(colour = missing))  +
-      ggplot2::scale_color_manual(values = c("TRUE" = "#DC4405", "FALSE" = "#7A9A01")) +
+    plot <- ggplot2::ggplot(
+      sdata,
+      ggplot2::aes(x = date, y = as.factor(.data$station))
+    ) +
+      ggplot2::geom_point(ggplot2::aes(colour = missing)) +
+      ggplot2::scale_color_manual(
+        values = c("TRUE" = "#DC4405", "FALSE" = "#7A9A01")
+      ) +
       ggplot2::facet_grid(rows = ggplot2::vars(variable)) +
       ggplot2::scale_y_discrete(limits = rev) +
       ggplot2::ylab("Station")
 
     if (interval == "month") {
       plot <- plot +
-        ggplot2::scale_x_date(date_breaks = "2 month",
-                              date_labels = "%b %Y")
+        ggplot2::scale_x_date(date_breaks = "2 month", date_labels = "%b %Y")
     }
     if (interval == "day") {
       plot <- plot +
-        ggplot2::scale_x_date(date_breaks = "2 year",
-                              date_labels = "%Y")
+        ggplot2::scale_x_date(date_breaks = "2 year", date_labels = "%Y")
     }
 
     print(plot)
 
     return(stn.data)
-
   }

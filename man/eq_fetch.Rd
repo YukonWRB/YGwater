@@ -5,7 +5,7 @@
 \title{Data retrieval from EQWin}
 \usage{
 eq_fetch(
-  EQcode,
+  EQcode = NULL,
   stationIDs = "all",
   paramIDs = "all",
   dates = "all",
@@ -15,9 +15,9 @@ eq_fetch(
 )
 }
 \arguments{
-\item{EQcode}{Site code as it appears in EQWin eg. "LOB" or "KNO". Function only works for stations with  designated project code in brackets}
+\item{EQcode}{Project code as it appears in EQWin without brackets eg. "LOB" or "KNO". Leave NULL if not applicable.}
 
-\item{stationIDs}{"all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02)}
+\item{stationIDs}{"all" for all stations (default) OR character vector of selected stations as they appear in the EQWin database WITHOUT the EQcode c("MW-01", "MW-02). Specifying \code{EQcode} will still filter by project code.}
 
 \item{paramIDs}{"all" for all parameters (default) OR vector of selected parameters exactly as they appear in the EQWin database}
 

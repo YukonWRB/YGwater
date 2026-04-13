@@ -38,70 +38,124 @@
 #TODO: add some error catching if the inputs do not match what is expected. ELSE statement? tryCatch?
 
 floodReport <-
-  function(report_name = NULL,
-           custom_report_stations = NULL,
-           extra_years = NULL,
-           preset_extra_years = FALSE,
-           report_type = "Both",
-           plot_titles = FALSE,
-           level_zoom = TRUE,
-           flow_zoom = NULL,
-           zoom_days = 30,
-           MESH = TRUE,
-           CLEVER = TRUE,
-           flow_returns = "auto",
-           level_returns = "auto",
-           rate = TRUE,
-           meteogram = TRUE,
-           image_path = NULL,
-           save_path = "choose") {
-    
+  function(
+    report_name = NULL,
+    custom_report_stations = NULL,
+    extra_years = NULL,
+    preset_extra_years = FALSE,
+    report_type = "Both",
+    plot_titles = FALSE,
+    level_zoom = TRUE,
+    flow_zoom = NULL,
+    zoom_days = 30,
+    MESH = TRUE,
+    CLEVER = TRUE,
+    flow_returns = "auto",
+    level_returns = "auto",
+    rate = TRUE,
+    meteogram = TRUE,
+    image_path = NULL,
+    save_path = "choose"
+  ) {
     #initial checks
-    rlang::check_installed("imager", reason = "necessary for this function to download precip rasters.")
-    
+    rlang::check_installed(
+      "imager",
+      reason = "necessary for this function to download precip rasters."
+    )
+
     rlang::check_installed("purrr", reason = "necessary for the report to run.")
     rlang::check_installed("httr", reason = "necessary for the report to run.")
-    rlang::check_installed("knitr", reason = "necessary to create a report using Rmarkdown.")
-    
+    rlang::check_installed(
+      "knitr",
+      reason = "necessary to create a report using Rmarkdown."
+    )
+
     #####Selection of image path and save path#####
     if (!is.null(image_path)) {
       if (image_path == "choose") {
         message("Select the path to the folder containing your images.")
-        image_path <- utils::choose.dir( caption="Select Image Folder")
+        image_path <- utils::choose.dir(caption = "Select Image Folder")
       }
     }
     if (save_path == "choose") {
       message("Select the path to the folder where you want this report saved.")
-      save_path <- as.character(utils::choose.dir(caption="Select Save Folder"))
+      save_path <- as.character(utils::choose.dir(
+        caption = "Select Save Folder"
+      ))
     }
-    
+
     #####Set flow_zoom#####
-    if (is.null(flow_zoom)){
-      flow_zoom=level_zoom
+    if (is.null(flow_zoom)) {
+      flow_zoom = level_zoom
     }
-    
+
     #####Generate reports#####
     if (!is.null(report_name) & !is.null(custom_report_stations)) {
       #deals with mistakes
-      message("You specified custom report stations while the preset report was also set. I've set the preset to Custom Hydrometric Report so you get a custom report instead.")
+      message(
+        "You specified custom report stations while the preset report was also set. I've set the preset to Custom Hydrometric Report so you get a custom report instead."
+      )
       report_name <- "Custom Hydrometric Report"
     }
-    
+
     if (!is.null(report_name) & is.null(custom_report_stations)) {
-      
       ### Generate a report for the whole territory###
-      if (report_name %in% c("Territory", "territory", "Communities", "communities", "Yukon", "Yukon Wide", "Yukon wide", "yukon wide")) {
-        stations <- c("09AH001", "09AH004", "09EA003", "09EB001", "09DC006", "09FD003", "09BC001", "09BC002", "09AE002", "10AA001", "09AB001", "09AB004", "09AB010", "09AA004", "09AA017")
-        preset_extras <- c("09EA003:2013,1972","09EB001:2013,1964", "09AH001:2021,1992","09AH004:2021","09AE002:1962,1992,2022", "09BC002:2013,1992,1972", "09FD003:2007,2015", "10AA001:2007,2012,2013", "09DC006:1992,1983,2013", "09AB004:2007,2021", "09AB010:2007,2021")
-        
-        if (preset_extra_years ){
+      if (
+        report_name %in%
+          c(
+            "Territory",
+            "territory",
+            "Communities",
+            "communities",
+            "Yukon",
+            "Yukon Wide",
+            "Yukon wide",
+            "yukon wide"
+          )
+      ) {
+        stations <- c(
+          "09AH001",
+          "09AH004",
+          "09EA003",
+          "09EB001",
+          "09DC006",
+          "09FD003",
+          "09BC001",
+          "09BC002",
+          "09AE002",
+          "10AA001",
+          "09AB001",
+          "09AB004",
+          "09AB010",
+          "09AA004",
+          "09AA017"
+        )
+        preset_extras <- c(
+          "09EA003:2013,1972",
+          "09EB001:2013,1964",
+          "09AH001:2021,1992",
+          "09AH004:2021",
+          "09AE002:1962,1992,2022",
+          "09BC002:2013,1992,1972",
+          "09FD003:2007,2015",
+          "10AA001:2007,2012,2013",
+          "09DC006:1992,1983,2013",
+          "09AB004:2007,2021",
+          "09AB010:2007,2021"
+        )
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Yukon Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -119,23 +173,41 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of territory report
-      
+
       ### Generate a report for Dawson###
-      if (report_name %in% c("Dawson", "dawson", "Dawson City", "Dawson city")) {
-        stations <- c("09EA003", "09EA006", "09EA004", "09EA005", "09EB001", "09EB003", "09EB004", "09DD003", "09CD001", "09CB001")
-        preset_extras <- c("09EA003:2013,1972","09EB001:2013,1964")
-        
-        if (preset_extra_years){
+      if (
+        report_name %in% c("Dawson", "dawson", "Dawson City", "Dawson city")
+      ) {
+        stations <- c(
+          "09EA003",
+          "09EA006",
+          "09EA004",
+          "09EA005",
+          "09EB001",
+          "09EB003",
+          "09EB004",
+          "09DD003",
+          "09CD001",
+          "09CB001"
+        )
+        preset_extras <- c("09EA003:2013,1972", "09EB001:2013,1964")
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Dawson Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -153,23 +225,36 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Dawson report
-      
+
       ### Generate a report for Carmacks###
       if (report_name %in% c("Carmacks", "carmacks")) {
-        stations <-c ("09AH001", "09AH004", "09AG001", "09AH005", "09AB010", "09AC001", "09AE002")
-        preset_extras <- c("09AH001:2021,1992","09AH004:2021")
-        
-        if (preset_extra_years){
+        stations <- c(
+          "09AH001",
+          "09AH004",
+          "09AG001",
+          "09AH005",
+          "09AB010",
+          "09AC001",
+          "09AE002"
+        )
+        preset_extras <- c("09AH001:2021,1992", "09AH004:2021")
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Carmacks Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -187,23 +272,28 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Carmacks report
-      
+
       ### Generate a report for Teslin###
       if (report_name %in% c("Teslin", "teslin")) {
-        stations <-c ("09AE002", "09AE006", "09AE003", "09AD002", "10AC005")
+        stations <- c("09AE002", "09AE006", "09AE003", "09AD002", "10AC005")
         preset_extras <- "09EA002:1962,1992,2021"
-        
-        if (preset_extra_years){
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Teslin Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -221,23 +311,48 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Carmacks report
-      
+
       ### Generate a report for Pelly/Ross###
-      if (report_name %in% c("Pelly", "pelly", "Pelly Crossing", "Pelly crossing", "Ross", "ross", "Ross River", "ross river", "Ross river", "Ross/Pelly", "Pelly/Ross", "Pelly River/Ross River", "Pelly/Ross River", "Ross/Pelly River", "Pelly/Ross Rivers", "Ross/Pelly Rivers")) {
+      if (
+        report_name %in%
+          c(
+            "Pelly",
+            "pelly",
+            "Pelly Crossing",
+            "Pelly crossing",
+            "Ross",
+            "ross",
+            "Ross River",
+            "ross river",
+            "Ross river",
+            "Ross/Pelly",
+            "Pelly/Ross",
+            "Pelly River/Ross River",
+            "Pelly/Ross River",
+            "Ross/Pelly River",
+            "Pelly/Ross Rivers",
+            "Ross/Pelly Rivers"
+          )
+      ) {
         stations <- c("09BB001", "09BA001", "09BC002", "09BC004", "09BC001")
         preset_extras <- "09BC002:2013,1992,1972"
-        
-        if (preset_extra_years){
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Pelly.Ross Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -255,23 +370,35 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Pelly report
-      
+
       ### Generate a report for Old Crow###
       if (report_name %in% c("Old Crow", "Old crow", "old crow")) {
-        stations <-c ("09FD002", "09FD003", "09FC001", "09FA001", "09FB003", "09FB002")
+        stations <- c(
+          "09FD002",
+          "09FD003",
+          "09FC001",
+          "09FA001",
+          "09FB003",
+          "09FB002"
+        )
         preset_extras <- "09FD003:2007,2015"
-        
-        if (preset_extra_years){
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Old Crow Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -289,23 +416,51 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Old Crow report
-      
+
       ### Generate a report for Liard/Watson###
-      if (report_name %in% c("Liard", "Watson", "Watson Lake", "Watson lake", "watson lake", "Liard River", "Liard river", "liard river", "Liard/Watson", "Watson/Liard", "Watson Lake/Liard River", "Liard River/Watson Lake")) {
-        stations <-c ("10AA001", "10AA006", "10AA004", "10AA005", "10AB001", "10AD002")
+      if (
+        report_name %in%
+          c(
+            "Liard",
+            "Watson",
+            "Watson Lake",
+            "Watson lake",
+            "watson lake",
+            "Liard River",
+            "Liard river",
+            "liard river",
+            "Liard/Watson",
+            "Watson/Liard",
+            "Watson Lake/Liard River",
+            "Liard River/Watson Lake"
+          )
+      ) {
+        stations <- c(
+          "10AA001",
+          "10AA006",
+          "10AA004",
+          "10AA005",
+          "10AB001",
+          "10AD002"
+        )
         preset_extras <- "10AA001:2007,2012,2013"
-        
-        if (preset_extra_years){
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Liard.Watson Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -323,23 +478,44 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Liard/Watson report
-      
+
       ### Generate a report for Mayo/Stewart###
-      if (report_name %in% c("Mayo", "mayo", "Stewart", "stewart", "Stewart River", "Stewart river", "stewart river", "Stewart Crossing", "Stewart crossing", "stewart crossing", "Mayo/Stewart", "stewart/Mayo")) {
-        stations <-c ("09DC006", "09DC005", "09DA001", "09DB001", "09DD004")
+      if (
+        report_name %in%
+          c(
+            "Mayo",
+            "mayo",
+            "Stewart",
+            "stewart",
+            "Stewart River",
+            "Stewart river",
+            "stewart river",
+            "Stewart Crossing",
+            "Stewart crossing",
+            "stewart crossing",
+            "Mayo/Stewart",
+            "stewart/Mayo"
+          )
+      ) {
+        stations <- c("09DC006", "09DC005", "09DA001", "09DB001", "09DD004")
         preset_extras <- "09DC006:1992,1983,2013"
-        
-        if (preset_extra_years){
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Mayo.Stewart Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -357,23 +533,48 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Mayo/Stewart report
-      
+
       ### Generate a report for Southern Lakes###
-      if (report_name %in% c("Southern Lakes", "Southern lakes", "southern lakes")) {
-        stations <-c ("09AA001", "09AA004", "09AA017", "09AB004", "09AB001", "09AB010", "09AA012", "09AA013", "09AC001", "09AC007")
-        preset_extras <- c("09AA004:2007,2021", "09AA001:2007,2021", "09AA017:2007,2021", "09AB004:2007,2021", "09AB001:2007,2021", "09AB010:2007,2021")
-        
-        if (preset_extra_years){
+      if (
+        report_name %in% c("Southern Lakes", "Southern lakes", "southern lakes")
+      ) {
+        stations <- c(
+          "09AA001",
+          "09AA004",
+          "09AA017",
+          "09AB004",
+          "09AB001",
+          "09AB010",
+          "09AA012",
+          "09AA013",
+          "09AC001",
+          "09AC007"
+        )
+        preset_extras <- c(
+          "09AA004:2007,2021",
+          "09AA001:2007,2021",
+          "09AA017:2007,2021",
+          "09AB004:2007,2021",
+          "09AB001:2007,2021",
+          "09AB010:2007,2021"
+        )
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Southern Lakes Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -389,25 +590,45 @@ floodReport <-
             CLEVER = CLEVER,
             flow_returns = flow_returns,
             level_returns = level_returns,
-            rate=rate,
+            rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Southern Lakes report
-      
+
       ### Generate a report for Aishihik###
-      if (report_name %in% c("Champagne", "Aishihik", "aishihik", "champagne")) {
-        stations <-c ("08AA007", "08AA008", "08AA009", "08AA012", "08AA005", "08AA010", "08AA011")
-        preset_extras <- c("08AA007:2020", "08AA008:2020", "08AA005:2020", "08AA010:2020")
-        
-        if (preset_extra_years){
+      if (
+        report_name %in% c("Champagne", "Aishihik", "aishihik", "champagne")
+      ) {
+        stations <- c(
+          "08AA007",
+          "08AA008",
+          "08AA009",
+          "08AA012",
+          "08AA005",
+          "08AA010",
+          "08AA011"
+        )
+        preset_extras <- c(
+          "08AA007:2020",
+          "08AA008:2020",
+          "08AA005:2020",
+          "08AA010:2020"
+        )
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Aishihik Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -425,23 +646,28 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Aishihik report
-      
+
       ### Generate a report for Alsek###
       if (report_name %in% c("Alsek", "alsek")) {
         stations <- c("08AC002", "08AC001", "08AB001", "08AA003")
         preset_extras <- NULL
-        
-        if (preset_extra_years){
+
+        if (preset_extra_years) {
           extra_years <- c(preset_extras, extra_years)
         } else {
           extra_years <- extra_years
         }
-        
+
         rmarkdown::render(
-          input = system.file("rmd", "Condition_report.Rmd", package="YGwater"),
+          input = system.file(
+            "rmd",
+            "Condition_report.Rmd",
+            package = "YGwater"
+          ),
           output_file = paste0("Alsek Condition Report ", Sys.Date()),
           output_dir = save_path,
           params = list(
@@ -459,33 +685,43 @@ floodReport <-
             level_returns = level_returns,
             rate = rate,
             meteogram = meteogram,
-            plot_titles = plot_titles)
+            plot_titles = plot_titles
+          )
         )
       } #End of Alsek report
-      
     }
-    
+
     ### Generate a custom report ###
     if (!is.null(custom_report_stations)) {
       if (inherits(custom_report_stations, "character")) {
         #Check for existence of all stations in hydat
         stop_go <- "go"
         for (i in custom_report_stations) {
-          if (!(i %in% tidyhydat::allstations$STATION_NUMBER)){
+          if (!(i %in% tidyhydat::allstations$STATION_NUMBER)) {
             stop_go <- "stop"
-            warning(paste0("Station ", i, " is not a station listed in the tidyhydat database. Please correct this discrepancy or omit the station before proceeding."))
+            warning(paste0(
+              "Station ",
+              i,
+              " is not a station listed in the tidyhydat database. Please correct this discrepancy or omit the station before proceeding."
+            ))
           }
         }
-        
+
         if (stop_go == "go") {
           stations <- custom_report_stations
-          
+
           if (!is.null(extra_years)) {
             extra_years <- extra_years
-          } else { extra_years <- NULL}
-          
+          } else {
+            extra_years <- NULL
+          }
+
           rmarkdown::render(
-            input = system.file("rmd", "Condition_report.Rmd", package = "YGwater"),
+            input = system.file(
+              "rmd",
+              "Condition_report.Rmd",
+              package = "YGwater"
+            ),
             output_file = paste0("Custom Condition Report ", Sys.Date()),
             output_dir = save_path,
             params = list(
@@ -503,14 +739,20 @@ floodReport <-
               level_returns = level_returns,
               rate = rate,
               meteogram = meteogram,
-              plot_titles = plot_titles)
+              plot_titles = plot_titles
+            )
           )
-        } else {stop("Please correct your station inputs by referencing the message above.")}
+        } else {
+          stop(
+            "Please correct your station inputs by referencing the message above."
+          )
+        }
       } #End of custom report
     }
-    
+
     if (is.null(report_name) & is.null(custom_report_stations)) {
-      stop("You must specify either a report_name or provide a character vector for custom_report_station.")   #to catch an error where no parameter was entered in both of these
+      stop(
+        "You must specify either a report_name or provide a character vector for custom_report_station."
+      ) #to catch an error where no parameter was entered in both of these
     }
-    
   } #End of function.

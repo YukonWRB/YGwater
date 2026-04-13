@@ -1,5 +1,5 @@
 #' Shiny application for internal WRB use
-#' 
+#'
 #' @description
 #' This application is designed for use by WRB or other YG staff, and is designed to allow greater flexibility and tune ability of plots and outputs than the public facing app (Streamline). In addition, certain portions of the application interface with databases other than aquacache such as EQWin or the snow database, and may allow for edit privileges to these databases. This app is also used to roll out new, experimental features before they are added to Streamline.
 #'
@@ -12,24 +12,43 @@
 #' @param dbUser Username for the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
-#' 
+#'
 #' @return Opens a Shiny application.
 #' @export
 
-floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = getOption("shiny.port"), dbPort = Sys.getenv("aquacachePort"), dbName = "aquacache", dbHost = Sys.getenv("aquacacheHost"), dbUser = Sys.getenv("aquacacheUser"), dbPass = Sys.getenv("aquacachePass"), server = FALSE) {
-  
+floodAtlas <- function(
+  app,
+  host = getOption("shiny.host", "127.0.0.1"),
+  port = getOption("shiny.port"),
+  dbPort = Sys.getenv("aquacachePort"),
+  dbName = "aquacache",
+  dbHost = Sys.getenv("aquacacheHost"),
+  dbUser = Sys.getenv("aquacacheUser"),
+  dbPass = Sys.getenv("aquacachePass"),
+  server = FALSE
+) {
   rlang::check_installed("shiny", reason = "required to use floodAtlas app")
   rlang::check_installed("shinyjs", reason = "required to use floodAtlas app")
-  rlang::check_installed("future", reason = "required to enable asynchronous operations in floodAtlas apps")
-  rlang::check_installed("bslib", reason = "required to enable bootstrap 5 themes and elements in floodAtlas apps")
-  
+  rlang::check_installed(
+    "future",
+    reason = "required to enable asynchronous operations in floodAtlas apps"
+  )
+  rlang::check_installed(
+    "bslib",
+    reason = "required to enable bootstrap 5 themes and elements in floodAtlas apps"
+  )
+  rlang::check_installed(
+    "shinycssloaders",
+    reason = "required to use floodAtlas app"
+  )
+
   # If on Windows OR running interactively, use multisession, else use multicore
   if (Sys.info()["sysname"] == "Windows" | interactive()) {
     future::plan("multisession")
   } else {
     future::plan("multicore")
   }
-  
+
   if (app == "overlap") {
     appDir <- system.file("apps/floodAtlas_over", package = "YGwater")
   } else if (app == "timeseries") {
@@ -37,23 +56,40 @@ floodAtlas <- function(app, host = getOption("shiny.host", "127.0.0.1"), port = 
   } else {
     stop("Invalid app name. Choose either 'overlap' or 'timeseries'.")
   }
-  
+
   if (appDir == "") {
     stop("target floodAtlas app not found.")
   }
-  
+
   # Load the global variables, library calls, and possibly in future a connection to the DB.
   if (app == "overlap") {
-    source(system.file("apps/floodAtlas_over/floodAtlas_over_globals.R", package = "YGwater"))
-    floodAtlas_over_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
+    source(system.file(
+      "apps/floodAtlas_over/floodAtlas_over_globals.R",
+      package = "YGwater"
+    ))
+    floodAtlas_over_globals(
+      dbName = dbName,
+      dbHost = dbHost,
+      dbPort = dbPort,
+      dbUser = dbUser,
+      dbPass = dbPass
+    )
   } else if (app == "timeseries") {
-    source(system.file("apps/floodAtlas_ts/floodAtlas_ts_globals.R", package = "YGwater"))
-    floodAtlas_ts_globals(dbName = dbName, dbHost = dbHost, dbPort = dbPort, dbUser = dbUser, dbPass = dbPass)
+    source(system.file(
+      "apps/floodAtlas_ts/floodAtlas_ts_globals.R",
+      package = "YGwater"
+    ))
+    floodAtlas_ts_globals(
+      dbName = dbName,
+      dbHost = dbHost,
+      dbPort = dbPort,
+      dbUser = dbUser,
+      dbPass = dbPass
+    )
   }
 
-  
   shiny::enableBookmarking("url")
-  
+
   if (server) {
     shiny::shinyAppDir(appDir)
   } else {

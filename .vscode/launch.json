@@ -5,6 +5,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "R-Debugger",
+            "name": "Debug R-File",
+            "request": "launch",
+            "debugMode": "file",
+            "workingDirectory": "",
+            "file": ""
+        },
+        {
             "type": "node-terminal",
             "name": "JavaScript Debug Terminal",
             "request": "launch",

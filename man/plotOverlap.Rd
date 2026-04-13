@@ -5,9 +5,10 @@
 \title{Plot of overlapping years or portions thereof}
 \usage{
 plotOverlap(
-  location,
+  timeseries_id = NULL,
+  location = NULL,
   sub_location = NULL,
-  parameter,
+  parameter = NULL,
   record_rate = NULL,
   aggregation_type = NULL,
   z = NULL,
@@ -24,7 +25,7 @@ plotOverlap(
   filter = NULL,
   unusable = FALSE,
   historic_range = "last",
-  rate = "day",
+  resolution = "day",
   line_scale = 1,
   axis_scale = 1,
   legend_scale = 1,
@@ -35,10 +36,13 @@ plotOverlap(
   webgl = TRUE,
   lang = "en",
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 )
 }
 \arguments{
+\item{timeseries_id}{The timeseries ID to plot, if known (else leave NULL).}
+
 \item{location}{The location for which you want a plot.}
 
 \item{sub_location}{Your desired sub-location, if applicable. Default is NULL as most locations do not have sub-locations. Specify as the exact name of the sub-location (character) or the sub-location ID (numeric).}
@@ -75,9 +79,9 @@ plotOverlap(
 
 \item{unusable}{Should unusable data be displayed? Default is FALSE. Note that unusable data is not used in the calculation of historic ranges.}
 
-\item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all" or "last".}
+\item{historic_range}{Should the historic range parameters be calculated using all available data (i.e. from start to end of records) or only up to the last year specified in "years"? Choose one of "all", "last", or "none".}
 
-\item{rate}{The rate at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
+\item{resolution}{The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".}
 
 \item{line_scale}{A scale factor to apply to the size (width) of the lines. Default is 1.}
 
@@ -101,6 +105,11 @@ to FALSE to force standard scatter traces.}
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 
 \item{con}{A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values and
+stored daily summaries should be reconstructed. Character, Date, and
+POSIXct inputs are supported. Date-like inputs are interpreted as the end
+of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 An html plot.

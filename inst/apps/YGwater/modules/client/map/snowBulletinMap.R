@@ -1,31 +1,321 @@
+# =============================================================================
+# Snow Water Equivalent (SWE) Basin Visualization - Shiny App
+# =============================================================================
+# This Shiny app creates an interactive leaflet map showing:
+# - SWE basins colored by weighted SWE values from discrete stations
+# - Continuous SWE monitoring stations colored by relative change
+# - Discrete SWE monitoring stations colored by relative change
+# - Communities, roads, and geographic boundaries
+#
+# The map displays snow water equivalent data as a percentage of historic normal
+# for a specific date (year and day-of-year). Basin values are calculated using
+# weighted averages from discrete snow course stations.
+#
+# Data Sources:
+# - SWE basins: Local shapefile (swe_basins_ExportFeatures.shp)
+# - Stations/Communities/Roads: PostgreSQL spatial database (AquaCache)
+# - Timeseries data: Continuous and discrete measurements database
+# - Snowcourse factors: CSV file with basin weighting factors
+# =============================================================================
+# DATA LOADING AND PROCESSING
+# =============================================================================
+
+# Load all base data once at startup
+
+# =============================================================================
+# SHINY APP UI
+# =============================================================================
+
 mapSnowbullUI <- function(id) {
   ns <- NS(id)
-
-  tagList(
-    # All UI elements rendered in server function to allow multi-language functionality
-    page_fluid(
-      uiOutput(ns("sidebar_page"))
-    )
-  ) # End of tagList
+  fluidPage(
+    # Sidebar + main contentexpandLimits
+    uiOutput(ns("banner")),
+    sidebarLayout(
+      sidebarPanel(
+        uiOutput(ns('sidebar_page')),
+        width = 2
+      ),
+      mainPanel(
+        leaflet::leafletOutput(ns("map"), height = "100vh"),
+        width = 9
+      )
+    ),
+    # JavaScript for plot generation
+    tags$script(HTML(sprintf(
+      "function generatePlot(type, stationId, stationName) {
+        console.log('DEBUG: generatePlot called with:', type, stationId, stationName);
+        var popup = document.querySelector('.leaflet-popup-content');
+        if (popup) {
+          // Show loading and widen only this popup immediately on button press
+          popup.innerHTML = '<div style=\"text-align: center; padding: 20px;\"><b>' +
+            stationName + '</b><br><br>Loading plot...<br>' +
+            '<div style=\"margin-top: 10px;\">⏳</div></div>';
+          var wrapper = popup.closest('.leaflet-popup-content-wrapper');
+          if (wrapper) wrapper.style.maxWidth = '720px';
+          popup.style.width = '660px';
+        }
+        // Use Shiny.setInputValue with a random value to force event even if args are the same
+        Shiny.setInputValue('%s', {
+          type: type,
+          station_id: stationId,
+          station_name: stationName,
+          nonce: Math.random().toString(36).substring(2)
+        });
+      }",
+      ns("generate_plot")
+    ))),
+    # Remove global wide popup CSS (keep popups narrow by default)
+    # tags$head(tags$style(HTML(
+    #   "
+    #   .leaflet-popup-content-wrapper { max-width: 720px !important; }
+    #   .leaflet-popup-content { width: 660px !important; }
+    # "
+    # ))),
+    # Receive plot HTML from server; widen only the current popup
+    tags$script(HTML(
+      "Shiny.addCustomMessageHandler('updatePopup', function(message) {
+         console.log('DEBUG: updatePopup handler called');
+         var popup = document.querySelector('.leaflet-popup-content');
+         if (popup && message && message.html) {
+           popup.innerHTML = message.html;
+           var wrapper = popup.closest('.leaflet-popup-content-wrapper');
+           if (wrapper) wrapper.style.maxWidth = '720px';
+           popup.style.width = '660px';
+         }
+       });"
+    ))
+  )
 }
 
 mapSnowbull <- function(id, language) {
   moduleServer(id, function(input, output, session) {
-    # Server setup ####
-
     ns <- session$ns
 
-    # Render UI elements ####
-    # (placeholder for now)
-    output$sidebar_page <- renderUI({
-      tagList(
-        h3("Snow Bulletin Map Module"),
-        p("This is a placeholder for the snow bulletin map module UI.")
+    months <- YGwater:::snowbull_months(short = TRUE)
+
+    snowbull_shapefiles <- YGwater:::load_bulletin_shapefiles(
+      session$userData$AquaCache
+    )
+    snowbull_timeseries <- YGwater:::load_bulletin_timeseries(
+      session$userData$AquaCache
+    )
+
+    static_style_elements <- YGwater:::get_static_style_elements()
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "mapSnowbull"
       )
     })
 
-    # Refer to 'locationsMap.R' for example of:
-    # - using cached data
-    # - passing parameters out of the module back to the main app server
-  }) # End of moduleServer
-} # End of mapLocs function
+    current_year <- lubridate::year(lubridate::now())
+    # --- Server-side sidebar UI ---
+    output$sidebar_page <- renderUI({
+      div(
+        id = ns("controls_panel"),
+        div(
+          style = "margin-bottom: 15px;",
+          tags$label(
+            tr("gen_snowBul_year", language$language),
+            style = "display: block; margin-bottom: 5px;"
+          ),
+          selectInput(
+            ns("year"),
+            label = NULL,
+            choices = as.character(current_year:2000),
+            selected = "2026",
+            width = "100%"
+          )
+        ),
+        div(
+          style = "margin-bottom: 15px;",
+          tags$label(
+            tr("month", language$language),
+            style = "display: block; margin-bottom: 5px;"
+          ),
+          selectInput(
+            ns("month"),
+            label = NULL,
+            choices = stats::setNames(
+              as.character(c(2, 3, 4, 5)),
+              c(
+                tr("feb", language$language),
+                tr("mar", language$language),
+                tr("apr", language$language),
+                tr("may", language$language)
+              )
+            ),
+            selected = "3",
+            width = "100%"
+          )
+        ),
+        div(
+          style = "margin-bottom: 10px;",
+          tags$label(
+            tr("snowbull_values", language$language),
+            style = "display: block; margin-bottom: 5px;"
+          ),
+          radioButtons(
+            ns("statistic"),
+            label = NULL,
+            choices = stats::setNames(
+              c("relative_to_med", "value", "percentile"),
+              c(
+                paste(
+                  tr("snowbull_relative_median", language$language),
+                  " (%)",
+                  sep = ""
+                ),
+                paste(tr("snowbull_swe", language$language), " (mm)", sep = ""),
+                paste(
+                  tr("snowbull_percentile", language$language),
+                  " (%)",
+                  sep = ""
+                )
+              )
+            ),
+            selected = "relative_to_med",
+            inline = FALSE
+          )
+        ),
+        tags$details(
+          tags$summary(tr("snowbull_details", language$language)),
+          uiOutput(ns("map_details"))
+        )
+      )
+    })
+
+    # --- Reactive for processed data and map output ---
+    map_output <- reactive({
+      req(input$year, input$month)
+
+      # get the 'current' data for the specified date, and create the popup data
+      # returns list of sf objects with data columns
+      map_data <- list(
+        point_data = NULL,
+        point_data_secondary = NULL,
+        poly_data = NULL
+      )
+
+      timeseries_data <- list(
+        poly_data = snowbull_timeseries$swe$basins,
+        point_data = snowbull_timeseries$swe$surveys,
+        point_data_secondary = snowbull_timeseries$swe$pillows
+      )
+
+      dynamic_style_elements <- YGwater:::get_dynamic_style_elements(
+        statistic = input$statistic,
+        language = language$language
+      )
+
+      for (data_type in names(map_data)) {
+        if (!is.null(timeseries_data[[data_type]])) {
+          map_data[[data_type]] <- YGwater:::get_display_data(
+            year = as.integer(input$year),
+            month = as.integer(input$month),
+            dataset = timeseries_data[[data_type]],
+            statistic = input$statistic,
+            language = language$language,
+            october_start = TRUE
+          )
+
+          map_data[[
+            data_type
+          ]]$fill_colour <- YGwater:::get_state_style_elements(
+            map_data[[data_type]]$display_value,
+            style_elements = dynamic_style_elements
+          )
+        }
+      }
+
+      YGwater:::make_leaflet_map(
+        point_data = map_data$point_data,
+        poly_data = map_data$poly_data,
+        point_data_secondary = map_data$point_data_secondary,
+        statistic = input$statistic,
+        param_name = "snow water equivalent",
+        language = language$language,
+        snowbull_shapefiles = snowbull_shapefiles,
+        month = as.integer(input$month),
+        year = as.integer(input$year)
+      )
+    })
+
+    # --- Render map using reactive output ---
+    output$map <- leaflet::renderLeaflet({
+      map_output()
+    })
+
+    # --- Observer: plot generation requests ---
+    observeEvent(
+      input$generate_plot,
+      {
+        req(
+          input$generate_plot$type,
+          input$generate_plot$station_id,
+          input$generate_plot$station_name
+        )
+
+        # --- DEBUGGING CODE: Just show a message, no plot ---
+        debug_message <- sprintf(
+          "<div style='text-align: center; padding: 40px; font-size: 18px; color: #2a5d9f;'>
+          <b>generate_plot event received!</b><br>
+          <br>
+          <b>Type:</b> %s<br>
+          <b>Station ID:</b> %s<br>
+          <b>Station Name:</b> %s<br>
+          <b>Year:</b> %s<br>
+          <b>Month:</b> %s<br>
+          <br>
+          <span style='color: #888;'>If you see this, the button and observer are working.</span>
+        </div>",
+          htmltools::htmlEscape(input$generate_plot$type),
+          htmltools::htmlEscape(input$generate_plot$station_id),
+          htmltools::htmlEscape(input$generate_plot$station_name),
+          htmltools::htmlEscape(isolate(input$year)),
+          htmltools::htmlEscape(isolate(input$month))
+        )
+
+        session$sendCustomMessage("updatePopup", list(html = debug_message))
+      },
+      ignoreInit = TRUE
+    )
+
+    # --- Render selected date text with details ---
+    output$map_details <- renderText({
+      req(input$year, input$month)
+      date_obj <- YGwater:::get_datetime(input$year, input$month)
+      HTML(paste0(
+        "<b>",
+        tr("snowbull_date", language$language),
+        ":</b> ",
+        format(date_obj, "%B %d, %Y"),
+        "<br>",
+        "<b>",
+        tr("snowbull_historical_period", language$language),
+        ":</b> 1991–2020<br>",
+        "<b>",
+        tr("snowbull_data_credits", language$language),
+        "</b><br>",
+        "<b>",
+        tr("snowbull_map_credits", language$language),
+        "</b><br>",
+        tr("snowbull_disclaimer", language$language),
+        "<br>",
+        "<b>",
+        tr("snowbull_gen_on", language$language),
+        ":</b> ",
+        format(Sys.time(), "%B %d, %Y at %H:%M %Z"),
+        "<br>",
+        "<b>",
+        tr("app_version", language$language),
+        "</b> ",
+        as.character(utils::packageVersion("YGwater"))
+      ))
+    })
+  })
+}

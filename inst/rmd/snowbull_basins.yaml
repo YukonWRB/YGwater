@@ -1,0 +1,131 @@
+Upper_Yukon:
+  met:
+    - name: "Tagish Meteorological"
+      params:
+        - "snow water equivalent"
+    - name: "Wolf Creek Buckbrush Taiga Meteorological"
+      params:
+        - "snow water equivalent"
+    - name: "Log Cabin Meteorological"
+      params:
+        - "snow water equivalent"
+    - name: "Whitehorse ECCC Met"
+      params:
+        - "precipitation, total"
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Marsh Lake water surface elevation"
+      params:
+        - "water level"
+    - name: "Lake Laberge water surface elevation"
+      params:
+        - "water level"
+
+Teslin_Big_Salmon:
+  met:
+    - name: "Teslin meteorological station"
+      params:
+        - "precipitation, total"
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Teslin Lake water surface elevation"
+      params:
+        - "water level"
+
+Central_Yukon:
+  met:
+    - name: "Carmacks meteorological station"
+      params:
+        - "precipitation, total"
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Nordenskiold River below Rowlinson Creek"
+      params:
+        - "flow"
+
+Pelly:
+  met:
+    - name: "Twin Creeks snow pillow"
+      params:
+        - "snow water equivalent"
+    - name: "Faro CDDF site"
+      params:
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Pelly River at Pelly Crossing"
+      params:
+        - "flow"
+
+Stewart:
+  met:
+    - name: "Withers Lake snow pillow"
+      params:
+        - "snow water equivalent"
+    - name: "Mayo meteorological station"
+      params:
+        - "precipitation, total"
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Stewart River outlet gauge"
+      params:
+        - "flow"
+
+White:
+  met: []
+  flow:
+    - name: "White River at Alaska Highway"
+      params:
+        - "flow"
+
+Lower_Yukon:
+  met:
+    - name: "Dawson Airport meteorological station"
+      params:
+        - "precipitation, total"
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Yukon River above White River"
+      params:
+        - "flow"
+    - name: "Klondike River above Bonanza Creek"
+      params:
+        - "flow"
+
+Porcupine:
+  met:
+    - name: "Old Crow Airport meteorological station"
+      params:
+        - "precipitation, total"
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Porcupine River at border"
+      params:
+        - "flow"
+
+Peel:
+  met: []
+  flow:
+    - name: "Peel River gauge"
+      params:
+        - "flow"
+
+Liard:
+  met:
+    - name: "Hyland snow pillow"
+      params:
+        - "snow water equivalent"
+    - name: "Watson Lake Airport meteorological station"
+      params:
+        - "precipitation, total"
+        - "cumulative degree-days of freezing"
+  flow:
+    - name: "Liard River at Upper Liard"
+      params:
+        - "flow"
+
+Alsek:
+  met: []
+  flow:
+    - name: "Alsek River above Bates"
+      params:
+        - "flow"

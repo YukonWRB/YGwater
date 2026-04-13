@@ -387,7 +387,7 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
           lwd = 2
         )
       }
-      dev.off()
+      grDevices::dev.off()
     }
     magick::image_write(img, path = temp_file_path, format = "pdf")
   } else {
@@ -420,7 +420,7 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
             lwd = 2
           )
         }
-        dev.off()
+        grDevices::dev.off()
       }
       img_list[[i]] <- img
     }
@@ -455,10 +455,14 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
 
 # Other helper function #############
 # Helper functions to safely get metadata values ##
+is_meta_empty <- function(val) {
+  is.null(val) || length(val) == 0 || all(is.na(val))
+}
+
 # Text or selectizeInput multiple = FALSE
 get_meta_value <- function(field, metadata, default = "") {
   val <- metadata[[field]]
-  if (is.null(val) || is.na(val)) {
+  if (is_meta_empty(val)) {
     return(default)
   }
   return(val)
@@ -466,7 +470,7 @@ get_meta_value <- function(field, metadata, default = "") {
 # For selectize that can return vector length > 1 (like share_with)
 get_meta_value_multiple <- function(field, metadata, default = "") {
   val <- metadata[[field]]
-  if (is.null(val) || all(is.na(val))) {
+  if (is_meta_empty(val)) {
     return(default)
   }
   return(val)
@@ -474,23 +478,23 @@ get_meta_value_multiple <- function(field, metadata, default = "") {
 # Numeric inputs
 get_meta_numeric <- function(field, metadata) {
   val <- metadata[[field]]
-  if (is.null(val) || is.na(val)) {
-    return(NULL)
+  if (is_meta_empty(val)) {
+    return(NA_real_)
   }
   return(val)
 }
 # Date inputs
 get_meta_date <- function(field, metadata) {
   val <- metadata[[field]]
-  if (is.null(val) || is.na(val)) {
-    return(NULL)
+  if (is_meta_empty(val)) {
+    return(NA)
   }
   return(val)
 }
 # boolean inputs
 get_meta_boolean <- function(field, metadata, default = FALSE) {
   val <- metadata[[field]]
-  if (is.null(val) || is.na(val)) {
+  if (is_meta_empty(val)) {
     return(default)
   }
   return(as.logical(val))

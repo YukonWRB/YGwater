@@ -29,8 +29,15 @@ app_ui <- function(request) {
     ),
 
     tags$head(
+      # do not change to !analytics because analytics can be a character string with the file path
+      if (config$analytics != FALSE) {
+        includeHTML(config$analytics) # Include analytics html code
+      },
       tags$script(src = "js/fullscreen.js"), # JS to handle full screen button
       tags$script(src = "js/window_resize.js"), # Include the JavaScript file to report screen dimensions, used for plot rendering and resizing
+      tags$script(src = "js/idle_timer.js"), # JS to report user activity for inactivity logout
+      tags$script(src = "js/usage_tracking.js"), # JS telemetry for usage analytics events
+      tags$script(src = "js/air_datepicker_manual_fix.js"), # Fix manual text entry for shinyWidgets::airDatepickerInput
       # JS below is for updating the title of the page from the server, when the user changes language
       tags$script(HTML(
         "
@@ -44,6 +51,21 @@ app_ui <- function(request) {
       Shiny.addCustomMessageHandler('updateLang', function(message) {
         $('html').attr('lang', message.lang);
       });"
+      )),
+      # Disable the login/logout button after it's clicked to prevent multiple clicks while waiting for response
+      # Since re-enabling happens in an observer but the 'disable' is right in the browser, it's possible to click the button and have it disable before the server is ready - and until it's ready it won't accept the click anyways. The JS hook below ensures that it's only disabled once the server is ready to handle it, which prevents the button from getting stuck in a disabled state if clicked too early.
+      tags$script(HTML(
+        "
+      $(document).on('shiny:connected', function() {
+        $('#loginBtn').prop('disabled', false);
+        $('#logoutBtn').prop('disabled', false);
+      });
+
+      $(document).on('shiny:disconnected', function() {
+        $('#loginBtn').prop('disabled', true);
+        $('#logoutBtn').prop('disabled', true);
+      });
+      "
       )),
       tags$script(
         "Shiny.addCustomMessageHandler(
@@ -59,26 +81,45 @@ app_ui <- function(request) {
         type = "text/css",
         href = "css/top-bar.css"
       ), # Top bar size, position, etc.
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
+      # Old YG_bs5  CSS file is huge. Commented out, YG_bs5_compact.css only targets the necesasry pieces.
+      # tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
       tags$link(
         rel = "stylesheet",
         type = "text/css",
         href = "css/buttons.css"
       ), # styling for hover effects on buttons with YG colors
-
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/YG_bs5_compact.css"
+      ), # minimal replacements for legacy YG_bs5.css button and DT stripe styles
+      # Allow datatable filters to overflow the table, helpful when table is filtered to only a few rows.
+      tags$style(
+        HTML(
+          "
+            /* Allow filter dropdowns to overflow the DT scroll containers */
+            div.dataTables_scroll,
+            div.dataTables_scrollHead,
+            div.dataTables_scrollHeadInner,
+            div.dataTables_scrollBody {
+              overflow: visible !important;
+            }
+          "
+        )
+      ),
       # Below css prevents the little triangle (caret) for nav_menus from showing up on a new line when nav_menu text is rendered in the server
-      tags$style(HTML(
-        "
+      tags$style(
+        HTML(
+          "
         a.dropdown-toggle > .shiny-html-output {
         display: inline;
         }
       "
-      )),
+        )
+      ),
       tags$style(
         HTML(
-          "
-    .alert { white-space: normal !important; }
-  "
+          ".alert { white-space: normal !important; }"
         )
       )
     ),
@@ -118,8 +159,15 @@ app_ui <- function(request) {
                 # 'public' is a global variable established in the globals file
                 div(
                   class = "login-btn-container",
-                  actionButton("loginBtn", "Login"),
-                  actionButton("logoutBtn", "Logout", style = "display: none;")
+                  actionButton(
+                    "loginBtn",
+                    "Login"
+                  ),
+                  actionButton(
+                    "logoutBtn",
+                    "Logout",
+                    style = "display: none;"
+                  )
                 ) # Initially hidden
               }
             ),
@@ -146,7 +194,7 @@ app_ui <- function(request) {
         ), # Just above any leaflet possibilities which only go up to 1000. Otherwise the map overlays the open nav menus.
         fluid = TRUE,
         lang = "en",
-        theme = NULL, # Theme is set earlier by css file reference
+        theme = NULL, # Theme is set earlier by css file references
         gap = "10px",
         nav_panel(
           title = uiOutput("homeNavTitle"),
@@ -195,7 +243,7 @@ app_ui <- function(request) {
             uiOutput("plotContinuous_ui")
           )
         ),
-        if (config$g_drive) {
+        if (!config$public) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
             value = "reports",
@@ -209,22 +257,29 @@ app_ui <- function(request) {
               value = "waterInfo",
               uiOutput("waterInfo_ui")
             ),
-            if (config$g_drive) {
+            # WQ report depends on EQWin database access, so only show if on YG internal network
+            if (config$network_check) {
               nav_panel(
                 title = uiOutput("reportsNavWQTitle"),
                 value = "WQReport",
                 uiOutput("WQReport_ui")
               )
             },
-            if (config$g_drive) {
+            # Don't show the snow bulletin menu if not deployed on YG internal network
+            if (config$network_check) {
               nav_panel(
                 title = uiOutput("reportsNavSnowbullTitle"),
                 value = "snowBulletin",
                 uiOutput("snowBulletin_ui")
               )
-            }
+            },
+            nav_panel(
+              title = uiOutput("reportsNavWaterTempTitle"),
+              value = "waterTemp",
+              uiOutput("waterTemp_ui")
+            )
           ) # End reports nav_menu
-        }, # End if config$g_drive
+        }, # End if !config$public for reports nav_menu
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",
@@ -239,6 +294,7 @@ app_ui <- function(request) {
             uiOutput("imgMapView_ui")
           )
         ),
+
         nav_menu(
           title = uiOutput("dataNavMenuTitle"),
           value = "data",
@@ -253,28 +309,44 @@ app_ui <- function(request) {
             uiOutput("contData_ui")
           )
         ), # End data nav_menu
+
+        # Forecaster on Duty (FOD) reports are only possible with access to the G Drive
         if (!config$public & config$g_drive) {
-          # if public or if g drive access is not possible, don't show the tab
+          # if public or if g drive access is not possible, don't show the tab for FOD reports
           nav_panel(
             title = uiOutput("FODNavTitle"),
             value = "FOD",
             uiOutput("fod_ui")
           )
         },
+
+        nav_panel(
+          title = uiOutput("WWRNavTitle"),
+          value = "WWR",
+          uiOutput("WWR_ui")
+        ),
+
+        nav_panel(
+          title = uiOutput("documentsNavMenuTitle"),
+          value = "docTableView",
+          uiOutput("docTableView_ui")
+        ),
+
         nav_menu(
           title = uiOutput("infoNavMenuTitle"),
           value = "info",
           nav_panel(
-            title = uiOutput("infoNavNewsTitle"),
-            value = "news",
-            uiOutput("news_ui")
-          ),
-          nav_panel(
             title = uiOutput("infoNavAboutTitle"),
             value = "about",
             uiOutput("about_ui")
+          ),
+          nav_panel(
+            title = uiOutput("infoNavNewsTitle"),
+            value = "news",
+            uiOutput("news_ui")
           )
         ),
+
         if (!config$public) {
           nav_menu(
             title = "Continuous data",
@@ -316,6 +388,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Discrete data",
@@ -324,6 +397,11 @@ app_ui <- function(request) {
               title = "Add discrete data",
               value = "addDiscData",
               uiOutput("addDiscData_ui")
+            ),
+            nav_panel(
+              title = "Add/edit samples",
+              value = "addSamples",
+              uiOutput("addSamples_ui")
             ),
             nav_panel(
               title = "Edit/delete discrete data",
@@ -336,12 +414,18 @@ app_ui <- function(request) {
               uiOutput("addGuidelines_ui")
             ),
             nav_panel(
+              title = "Add/edit sample series",
+              value = "addSampleSeries",
+              uiOutput("addSampleSeries_ui")
+            ),
+            nav_panel(
               title = "Sync sample series",
               value = "syncDisc",
               uiOutput("syncDisc_ui")
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Locations",
@@ -358,6 +442,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Files/Docs",
@@ -379,6 +464,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Field",
@@ -395,6 +481,7 @@ app_ui <- function(request) {
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Equipment",
@@ -403,9 +490,15 @@ app_ui <- function(request) {
               title = "Checks + calibrations",
               value = "calibrate",
               uiOutput("calibrate_ui")
+            ),
+            nav_panel(
+              title = "Create / modify instruments",
+              value = "manageInstruments",
+              uiOutput("manageInstruments_ui")
             )
           )
         },
+
         if (!config$public) {
           nav_menu(
             title = "Boreholes/wells",
@@ -414,17 +507,143 @@ app_ui <- function(request) {
               title = "Simpler Index",
               value = "simplerIndex",
               uiOutput("simplerIndex_ui")
+            ),
+            nav_panel(
+              title = "Edit borehole/well records",
+              value = "editBoreholesWells",
+              uiOutput("editBoreholesWells_ui")
+            ),
+            nav_panel(
+              title = "Manage borehole documents",
+              value = "manageBoreholeDocuments",
+              uiOutput("manageBoreholeDocuments_ui")
             )
           )
         },
+
         if (!config$public) {
-          nav_menu(title = "Metadata", value = "metadataTasks")
+          nav_menu(
+            title = "Reference data",
+            value = "metadataTasks",
+            nav_panel(
+              title = "Organizations",
+              value = "manageOrganizations",
+              uiOutput("manageOrganizations_ui")
+            ),
+            nav_panel(
+              title = "Networks",
+              value = "manageNetworks",
+              uiOutput("manageNetworks_ui")
+            ),
+            nav_panel(
+              title = "Projects",
+              value = "manageProjects",
+              uiOutput("manageProjects_ui")
+            ),
+            nav_panel(
+              title = "Network / Project Types",
+              value = "manageNetworkProjectTypes",
+              uiOutput("manageNetworkProjectTypes_ui")
+            ),
+            nav_panel(
+              title = "Location Types",
+              value = "manageLocationTypes",
+              uiOutput("manageLocationTypes_ui")
+            ),
+            nav_panel(
+              title = "Media Types",
+              value = "manageMediaTypes",
+              uiOutput("manageMediaTypes_ui")
+            ),
+            nav_panel(
+              title = "Matrix States",
+              value = "manageMatrixStates",
+              uiOutput("manageMatrixStates_ui")
+            ),
+            nav_panel(
+              title = "Parameter Groups",
+              value = "manageParameterGroups",
+              uiOutput("manageParameterGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameter Sub-Groups",
+              value = "manageParameterSubGroups",
+              uiOutput("manageParameterSubGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameters",
+              value = "manageParameters",
+              uiOutput("manageParameters_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocol Families",
+              value = "manageCommunicationProtocolFamilies",
+              uiOutput("manageCommunicationProtocolFamilies_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocols",
+              value = "manageCommunicationProtocols",
+              uiOutput("manageCommunicationProtocols_ui")
+            ),
+            nav_panel(
+              title = "Transmission Method Families",
+              value = "manageTransmissionMethodFamilies",
+              uiOutput("manageTransmissionMethodFamilies_ui")
+            ),
+            nav_panel(
+              title = "Transmission Methods",
+              value = "manageTransmissionMethods",
+              uiOutput("manageTransmissionMethods_ui")
+            ),
+            nav_panel(
+              title = "Transmission Component Roles",
+              value = "manageTransmissionComponentRoles",
+              uiOutput("manageTransmissionComponentRoles_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Acquisition / telemetry",
+            value = "acquisitionTelemetryTasks",
+            nav_panel(
+              title = "Instrument / logger connections",
+              value = "manageInstrumentConnections",
+              uiOutput("manageInstrumentConnections_ui")
+            ),
+            nav_panel(
+              title = "Connection signals",
+              value = "manageInstrumentConnectionSignals",
+              uiOutput("manageInstrumentConnectionSignals_ui")
+            ),
+            nav_panel(
+              title = "Transmission setups",
+              value = "manageTransmissionSetups",
+              uiOutput("manageTransmissionSetups_ui")
+            ),
+            nav_panel(
+              title = "Transmission routes",
+              value = "manageTransmissionRoutes",
+              uiOutput("manageTransmissionRoutes_ui")
+            ),
+            nav_panel(
+              title = "Transmission components",
+              value = "manageTransmissionComponents",
+              uiOutput("manageTransmissionComponents_ui")
+            )
+          )
         },
 
         if (!config$public) {
           nav_menu(
             title = "Admin",
             value = "adminTasks",
+            nav_panel(
+              title = "Admin overview",
+              value = "adminHome",
+              uiOutput("adminHome_ui")
+            ),
             nav_panel(
               title = uiOutput("changePwdNavTitle"),
               value = "changePwd",
@@ -434,6 +653,11 @@ app_ui <- function(request) {
               title = "Manage users",
               value = "manageUsers",
               uiOutput("manageUsers_ui")
+            ),
+            nav_panel(
+              title = "Manage notifications",
+              value = "manageNotifications",
+              uiOutput("manageNotifications_ui")
             ),
             nav_panel(
               title = "Update news page content",
@@ -447,13 +671,14 @@ app_ui <- function(request) {
             )
           )
         },
-        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language. If the app gets more than one language, comment this and related elements out and uncomment the code in the HTML script at the bottom of this file that adds a drop-down menu instead.
+        # The nav_spacer() and nav_item below are used to have an actionButton to toggle language on the right side of the navbar
         nav_spacer(),
         # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
         nav_item(actionButton(
           "language_button",
           NULL,
-          class = "language-button"
+          class = "language-button",
+          style = "border: none; border-color: transparent; box-shadow: none; outline: none; background: transparent; -webkit-appearance: none; appearance: none;"
         )),
       ), # End page_navbar
 

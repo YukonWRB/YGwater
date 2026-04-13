@@ -19,6 +19,8 @@ hydrometDiscrete(
   save_path = NULL,
   con = NULL,
   discrete_data = NULL,
+  ref_period_start_datetime = NULL,
+  ref_period_end_datetime = NULL,
   lang = "en"
 )
 }
@@ -39,7 +41,7 @@ hydrometDiscrete(
 
 \item{title}{Should a title be included?}
 
-\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as Location <\if{html}{\out{<location id>}}>: <\if{html}{\out{<location name>}}>. Ex: Location 09AB004: Marsh Lake Near Whitehorse.}
+\item{custom_title}{Custom title to be given to the plot. Default is NULL, which will set the title as such: Location 09AB004: Marsh Lake Near Whitehorse.}
 
 \item{plot_type}{Choose from "violin" , "boxplot" or "linedbox".}
 
@@ -49,7 +51,11 @@ hydrometDiscrete(
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
-\item{discrete_data}{A data.frame with the data to be plotted. Must contain the following columns: year, month, value and units.}
+\item{discrete_data}{A data.frame with the data to be plotted. Must contain the following columns: datetime, year, month, value and units.}
+
+\item{ref_period_start_datetime}{The first year to consider when calculating ribbons for a reference period. Default is NULL and will use the first year of data available.}
+
+\item{ref_period_end_datetime}{The last year to consider when calculating ribbons for a reference period. Default is NULL and will use the last year of data available or the last}
 
 \item{lang}{The desired language for the plot.}
 }
