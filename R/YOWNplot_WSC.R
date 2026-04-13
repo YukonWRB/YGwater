@@ -31,16 +31,16 @@ YOWNplot_WSC <- function(YOWNindex,
 
   YOWNindex = c("YOWN-2201S", "YOWN-2201D", "YOWN-2202", "YOWN-2203", "YOWN-2204", "YOWN-2205")
   WSCindex = c("09AB004")
-  # saveTo = "desktop"
-  # title = "YOWN wells vs. WSC Sites"
-  # chartXInterval = "1 month"
-  # login = Sys.getenv(c("AQUSER", "AQPASS"))
-  # server = "https://yukon.aquaticinformatics.net/AQUARIUS"
+  saveTo = "desktop"
+  title = "YOWN wells vs. WSC Sites"
+  chartXInterval = "1 month"
+  login = Sys.getenv(c("AQUSER", "AQPASS"))
+  server = "https://yukon.aquaticinformatics.net/AQUARIUS"
 
   # Sort out save location
   saveTo <- tolower(saveTo)
   if (saveTo %in% c("Choose", "choose")) {
-    print("Select the folder where you want this graph saved.")
+    message("Select the folder where you want this graph saved.")
     saveTo <- as.character(utils::choose.dir(caption = "Select Save Folder"))
   } else if (saveTo == "desktop") {
     saveTo <- paste0("C:/Users/", Sys.getenv("USERNAME"), "/Desktop/")
@@ -51,9 +51,6 @@ YOWNplot_WSC <- function(YOWNindex,
   # Download all YOWN data
   YOWNlist <- list()
   for (i in YOWNindex) {
-
-    #TODO confirm that this print is needed
-    print(i)
 
     # Download data from Aquarius
     datalist <- suppressMessages(YGwater::aq_download(loc_id = i,
@@ -101,7 +98,7 @@ YOWNplot_WSC <- function(YOWNindex,
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
+      dplyr::select('ID', 'timestamp_MST', 'value')
     YOWNlist[[i]] <- df
   }
 
@@ -112,8 +109,6 @@ YOWNplot_WSC <- function(YOWNindex,
   # Download all WSC data
   WSClist <- list()
   for (i in WSCindex) {
-
-    print(i)
 
     # Download data from Aquarius
     datalist <- suppressMessages(YGwater::aq_download(loc_id = i,
@@ -139,7 +134,7 @@ YOWNplot_WSC <- function(YOWNindex,
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
+      dplyr::select('ID', 'timestamp_MST', 'value')
     WSClist[[i]] <- df
   }
 
@@ -196,8 +191,8 @@ YOWNplot_WSC <- function(YOWNindex,
                      date_labels = "%m-%Y",
                      expand = c(0, 0)) +
     ggplot2::scale_y_continuous(name = "Water Level (m above sea level)",
-                       limits = c(round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)),
-                       breaks = seq(round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling), by = 0.5),
+                       limits = c(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling)),
+                       breaks = seq(plyr::round_any(min(stats::na.omit(fulldf$value)), 0.5, f = floor), plyr::round_any(max(stats::na.omit(fulldf$value)), 0.5, f = ceiling), by = 0.5),
                        expand = c(0, 0))
 
   title <- ggplot2::ggplot() +
@@ -236,12 +231,12 @@ YOWNplot_WSC <- function(YOWNindex,
 
   # Add final aesthetic tweaks, print plot onto template
   final_plot <- cowplot::ggdraw() +
-    cowplot::draw_image("G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\template_nogrades.jpg") +
+    cowplot::draw_image(system.file("YOWNplot", "Template_grades.jpg", package = "YGwater")) +
     cowplot::draw_plot(final)
 
-  ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "/", "YOWN_WSC_compare", ".pdf"),  height = 8.5, width = 11, units = "in")
+  ggplot2::ggsave(plot = final_plot, filename = paste0(saveTo, "YOWN_WSC_compare", ".pdf"),  height = 8.5, width = 11, units = "in")
 
-  print("Plot Generated")
+  message("Plot Generated")
 
 }
 
