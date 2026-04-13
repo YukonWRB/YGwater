@@ -33,15 +33,15 @@ document_select_prompt,documentsModuleSelectPrompt,Select a document to view det
 tags,,Tags,Étiquettes
 document_no_preview,documentsModuleNoPreview,Preview not available for this file type.,Aucun aperçu disponible pour ce type de fichier.
 document_type_col,,document_type_en,document_type_fr
-info,infoNavMenuTitle,Info,Info
+info,infoNavMenuTitle,Info,Information
 info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,Updates and changes,Mises à jour
 fod_comments,FODNavTitle,Forecaster comments,Commentaires du prévisionniste
 wwr_title,Well Registry title,Water Well Registry,Registre des puits d'eau
 homeTitle,Home page welcome message heading,Welcome to the Yukon Water Data Explorer,Bienvenue sur l'explorateur de données sur l'eau du Yukon
 homeText,Home page welcome message,"This application hosts real-time and historic water and climate data for the Yukon and surrounding regions gathered by the Government of Yukon and partners. You'll find data related to water quality (temperature, chemistry) and quantity (level/flow) along with snowpack measurements, precipitation, temperature data - and more.","Cette application donne accès à des données hydrologiques et climatiques passées et en temps réel pour le Yukon et les régions environnantes. Ces données sont recueillies par le gouvernement du Yukon et ses partenaires. Elle réunit des données sur la qualité de l’eau (température, composition chimique) et la quantité d’eau (niveaux, débits), ainsi que sur l’enneigement, les précipitations et la température, entre autres mesures."
-home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organisation de nos données
-home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:<ul><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li></ul><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g. snow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g. hourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.<br><br>","Les données sont classées en deux catégories : <b>discrètes</b> ou <b>continues</b>. Leur classement dépend de plusieurs facteurs :<ul><li>la fréquence des mesures;</li><li>la méthode des mesure;</li><li>d'autres métadonnées pertinentes.</li></ul><br><b>Que sont les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (ex. profondeur de neige) ou par analyse en laboratoire. Elles doivent être accompagnées d’une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Que sont les données continues?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (ex. fréquence horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument utilisé et les conditions d’enregistrement.<br><br>"
+home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organisation des données
+home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:<ul><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li></ul><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g.&nbspsnow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g.&nbsphourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.<br><br>","Les données sont classées en deux catégories : <b>discrètes</b> ou <b>continues</b>. Leur classement dépend de plusieurs facteurs :<ul><li>la fréquence des mesures;</li><li>la méthode de mesure;</li><li>d'autres métadonnées pertinentes.</li></ul><br><b>Que sont les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (ex.&nbspprofondeur de neige) ou par analyse en laboratoire. Elles doivent être accompagnées d’une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Que sont les données continues?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (ex.&nbspfréquence horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument utilisé et les conditions d’enregistrement.<br><br>"
 home_map_locs_btn,button text,See a map of monitoring locations,Consulter la carte des points de surveillance
 home_map_params_btn,button text,See a map of current or past conditions,Consulter la carte des conditions passées et actuelles
 feedback_text,thumbs up down button text,Was this page helpful?,Avez-vous trouvé cette page utile?
@@ -99,7 +99,7 @@ no_ts_medias,notification of automatic reset,"This selection results in 0 corres
 no_ts_agg,notification of automatic reset,"This selection results in 0 corresponding timeseries, aggregation type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type d'agrégation a été réinitialisé à sa valeur précédente."
 no_ts_rate,notification of automatic reset,"This selection results in 0 corresponding timeseries, recording rate selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de la fréquence d'enregistrement nominale a été réinitialisé à sa valeur précédente."
 continuous_subset_msg,,Subset of daily mean data (first and last result per timeseries),Sous-ensemble des moyennes journalières (premier et dernier résultat par série temporelle)
-dl_additional_data,,"Tables for grades, approvals, and qualifiers will also be included as part of your download.","Des tableaux pour les qualificatifs, cotes de qualité, et niveaux d'approbations feront parti de votre téléchargement."
+dl_additional_data,,"Tables for grades, approvals, and qualifiers will also be included as part of your download.","Des tableaux pour les qualificatifs, cotes de qualité, et niveaux d'approbation feront parti de votre téléchargement."
 filter,,Filter,Filtrer
 apply,,Apply,Appliquer
 param_modal,button text for modal,Filter by group/sub-group,Filtrer par groupe/sous-groupe
@@ -168,17 +168,18 @@ none_m,,None,Aucun
 plot_hist_range,,Plot historic range,Tracer la plage historique
 plot_hist_range_select,,Historic range calculated with,Plage historique calculée avec
 plot_hist_range_select_tooltip,,Choose whether the historic range should include all available years of record or only up to the last year shown on the plot.,Choisissez si la plage historique doit inclure toutes les années de données disponibles ou seulement jusqu’à la dernière année affichée sur le graphique.
+plot_hist_range_meaningless,,"Historic ranges are based on daily values. They are disabled for sub-daily cumulative series such as precipitation, because a daily ribbon would be misleading on hourly or maximum-resolution plots.","Les plages historiques sont basées sur des valeurs quotidiennes. Elles sont desactivées pour les séries cumulatives à pas de temps sous-quotidien, comme les précipitations, parce qu'un ruban quotidien serait trompeur sur un tracé horaire ou à resolution maximale."
 plot_extra_options,,Extra options,Options supplémentaires
 plot_apply_vert_datum,,Apply vertical datum,Appliquer le référentiel vertical
 plot_filter,,Filter extreme values,Filtrer les valeurs extrêmes
 plot_show_unusable,,Show unusable data,Afficher les données inutilisables
-plot_show_grades,,Show grades,Afficher les cotes de qualité
-plot_show_approvals,,Show approval levels,Afficher les niveaux d'approbations
+plot_show_grades,,Show grades,Afficher les classe de qualité
+plot_show_approvals,,Show approval levels,Afficher les niveaux d'approbation
 plot_show_qualifiers,,Show qualifiers,Afficher les qualificatifs
 plot_last_30,,Last 30 days,30 derniers jours
 plot_all_record,,Entire record,Période entière
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.
-cont_table_heading,,Available timeseries,Séries chronologiques disponibles
+cont_table_heading,,Available timeseries,Séries temporelles disponibles
 cont_table_tooltip1,Tooltip for the table header,"Instantaneous: conditions at the moment of recording. Mean, max, etc. summarize conditions over the interval between points. (min + max)/2 is the historical meteorological mean, based on daily extremes.","Instantané : conditions au moment de l’enregistrement. Moyenne, maximum, etc. : résumé des conditions sur l’intervalle entre les points. (min + max)/2 : moyenne météorologique historique, basée sur les extrêmes quotidiens."
 cont_table_tooltip2,Tooltip for the table header,"Approximate recording rate for recent data. Some time series also include older data recorded at coarser intervals.","Fréquence d’enregistrement approximative pour les données récentes ; certaines séries contiennent aussi des données plus anciennes à des intervalles plus grossiers."
 cont_table_plot_heading,,Plot options,Options du graphique
@@ -265,7 +266,7 @@ map_add_second_param,,Add secondary parameter,Ajouter paramètre secondaire
 map_edit_second_param,,Edit secondary parameter,Modifier paramètre secondaire
 map_rm_second_param,,Remove secondary parameter,Enlever paramètre secondaire
 map_edit_aes,,Edit map aesthetics,Modifier l'esthétique de la carte
-gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes. In particular, note that very little of the data underlying the trends calculated has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives. En particulier, il convient de souligner que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
+gen_waterInfo_info,,"This function is intended to facilitate the reporting of hydrology data by compiling basic statistics (years of record, months of operation, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of level (for lakes) or flow for all requested locations.<br><br>Please note that this is not a polished output, and is to be used strictly for informational purposes.<br>In particular, note that very little of the data underlying the trends calculated has been cleaned or certified as correct by a human.","Cette fonction est conçue pour faciliter le rapport des données hydrologiques en compilant des statistiques de base (années de relevés, mois d’exploitation, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples du niveau (pour les lacs) ou du débit pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives.<br>En particulier, veuillez noter que très peu des données sous-jacentes aux tendances calculées ont été nettoyées ou certifiées comme correctes par un humain."
 gen_waterInfo_param_select,,One parameter or both,Un ou deux paramètres
 gen_waterInfo_param_select_one,,"One (flow where exists, else level)","Un (débit si existe, autrement niveau)"
 gen_waterInfo_param_select_both,,Both (flow and level where both exist),Deux (débit et niveau lorsque existent)
@@ -279,7 +280,7 @@ gen_generate_plots,,Generate plots,Générer les graphiques
 gen_waterInfo_ptype,,Min/max on single plot or separate,Min/max sur le même graphique ou séparé
 gen_waterInfo_ptype_combine,,Single,même
 separate,,Separate,séparés
-gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations. Please note that this isn't exactly a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (ÉEN) et de la densité pour tous les emplacements demandés. Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
+gen_snowInfo_info,,"This function is intended to facilitate the reporting of snowpack data by compiling basic statistics (years of record, months of sampling, min, max, etc.), trend information (Mann-Kendall direction and p-value, Sen's slope), and creating simple plots of snow depth, snow water equivalent (SWE), and density for all requested locations.<br><br>Please note that this is not a polished output, and is to be used strictly for informational purposes.","Cette fonction est conçue pour faciliter le rapport des données sur le manteau neigeux en compilant des statistiques de base (années de relevés, mois d’échantillonnage, minimum, maximum, etc.), des informations sur les tendances (direction de Mann-Kendall et valeur-p, pente de Sen) et en générant des graphiques simples de la profondeur de neige, de l’équivalent en eau de neige (ÉEN) et de la densité pour tous les emplacements demandés.<br><br>Veuillez noter qu’il ne s’agit pas d’un résultat finalisé, mais d’un outil strictement destiné à des fins informatives."
 gen_snowInfo_inactive,,Include inactive locations,Inclure les emplacements inactifs
 gen_snowInfo_complete,,Complete years only,Années complètes seulement
 gen_snowInfo_ptype,,Combined or separate plots,Graphiques séparés ou combinés
@@ -288,6 +289,7 @@ gen_snowBul_info,,"This function allows you to create Excel workbooks with the s
 gen_snowBul_toggle_stats,,Statistics,Statistiques
 gen_snowBul_toggle_bulletin,,Bulletin,Bulletin
 gen_snowBul_year,,Year,Année
+gen_waterTemp_info,,"Use this module to build water temperature plots and a report bundle consisting of plots in PNG format, an HTML report, and R data files for further work-up.<br><br>To get started, select a timeseries, select your desired plotting options, and click 'Create Report Figures'.<br>Once the plots are made you can generate and download the report bundle.<br><br><b>Note</b>: This module was created on behalf of and with funding by the Council of Yukon First Nations.","Utilisez ce module pour créer des graphiques de température de l'eau et un ensemble de fichiers comprenant des graphiques au format PNG, un rapport HTML et des fichiers de données R pour travail ultérieur.<br><br>Pour commencer, sélectionnez une série chronologique, les options de tracé souhaitées, puis cliquez sur « Créer les figures du rapport ».<br>Une fois les graphiques créés, vous pouvez générer et télécharger l'ensemble du rapport.<br><br><b>Remarque</b> : Ce module a été créé pour le Conseil des Premières Nations du Yukon et avec son financement."
 month,,Month,Mois
 gen_snowBul_basins,,Basins,Basins versants
 gen_snowBul_lang,,Bulletin language,Langue du bulletin
@@ -322,22 +324,22 @@ include_missing_well_depth_to_bedrock,,Include wells with missing depth to bedro
 borehole_unnamed,,Unnamed well,Puits sans nom
 borehole_well_purpose_col,,purpose_name,purpose_name_fr
 licence_title,,Using data from this application,Utilisation des données de l'application
-licence1,,"The data, reports, and plots generated from this application are licenced under the Government of Yukon's ","Les données, rapports et graphiques générés par cette application sont régis par la "
+licence1,,"The data, reports, and plots generated from this application are licenced under the Government of Yukon's ","Les données, rapports et graphiques générés à l'aide de cette application sont régis par la "
 licence2,,Open Government Licence,licence ouverte du gouvernement du Yukon
 licence_url,,https://yukon.ca/en/your-government/open-government/open-government-licence-yukon,https://yukon.ca/fr/votre-gouvernement/gouvernement-ouvert/gouvernement-ouvert-licence-du-yukon
 licence3,,"Please note that some datasets provided through this application are sourced from external organizations (e.g., the Water Survey of Canada). Such data may be subject to their own licensing terms, which apply in addition to the Government of Yukon licence. Users are responsible for reviewing and complying with any applicable third-party licences.","Veuillez noter que certains jeux de données consultables à partir de l’application proviennent de sources externes (ex. Relevés hydrologiques du Canada). Par conséquent, ces données peuvent être assujetties à d’autres conditions, qui s’appliquent en plus de celles prévues par la licence du gouvernement du Yukon. Il incombe à l’utilisateur de prendre connaissance des licences de tiers applicables et de s’y conformer."
 about_title2,title,About this application,À propos de l'application
 about_fun_facts_title,title,Fun facts,Quelques faits amusants
-about_fun_fact_timeseries,content,"We host %s timeseries with about %s measurements.","Nous hébergeons %s séries temporelles avec environ %s mesures."
-about_fun_fact_samples,content,"We have %s samples with about %s associated results.","Nous avons %s échantillons avec environ %s résultats associés."
-about_fun_fact_wells,content,"The Water Well Registry includes %s water wells.","Le registre des puits d'eau comprend %s puits d'eau."
+about_fun_fact_timeseries,content,"We host %s timeseries with about %s measurements.","Notre base de données héberge %s séries temporelles qui illustrent environ %s mesures."
+about_fun_fact_samples,content,"We have %s samples with about %s associated results.","Notre base de données recense %s échantillons dont découlent environ %s résultats."
+about_fun_fact_wells,content,"The Water Well Registry includes %s water wells.","Le registre des puits d'eau compte %s puits d'eau."
 about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strengths in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Le site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour le traitement et la visualisation des données. Le progiciel qui contient le code de l’application regroupe de nombreuses autres fonctions utiles, au-delà de celles présentées ici. Il est accessible publiquement au "
 about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre progiciel R, disponible au "
-about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time.","Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
-about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3, so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux progiciels R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
+about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time."," Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
+about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3 so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux progiciels R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
 about_url_ygwater,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
 about_url_aquacache,url,https://github.com/YukonWRB/AquaCache,https://github.com/YukonWRB/AquaCache
-current_software,,Current software and database status:,État actuel du logiciel et de la base de données
+current_software,,Current software and database status:,Version du logiciel et de la base de données
 app_version1,,Application version,Application version
 app_version2,,connected to AquaCache database revision ,connectée à la base de données AquaCache révision
 app_version3,,revision,révision
@@ -346,9 +348,9 @@ data_format,direct translation,Data Format,Format des données
 unknown,,Unknown,Inconnu
 cluster_points_label,,Cluster points,Regrouper les points
 location_type_legend,,Location type,Type d’emplacement
-loc,direct translation,Location,Emplacement
-locs,,Locations,Point de surveillance
-loc(s),,Location(s),Points de surveillance
+loc,direct translation,Location,Point de surveillance
+locs,,Locations,Points de surveillance
+loc(s),,Location(s),Point(s) de surveillance
 select_locs,,Select locations,Sélectionnez des points de surveillance
 pl_select_loc,,Please select a location.,SVP sélectionner un point de surveillance
 pl_select_param,,Please select a parameter,SVP sélectionner un paramètre
@@ -387,7 +389,6 @@ measurement_type,,Measurement type (frequency),Type de mesure (fréquence)
 reset,direct translation,Reset,Réinitialiser
 reset_view,,Reset view,Réinitialiser la vue
 refresh_images,,Refresh images,Rafraîchir les images
-all,direct translation,All,Toutes
 all_f,,All,Toutes
 all_m,,All,Tous
 all_locs,,All locations,Tous les endroits
@@ -424,13 +425,13 @@ dec,,December,décembre
 generating_working,,Working…,Travail en cours…
 english,,English,Anglais
 francais,,French,Français
-tbl_info,DT internationalization, _TOTAL_ records total,_TOTAL_ éléments au total
+tbl_info,DT internationalization, _TOTAL_ records,_TOTAL_ résultats
 tbl_info_empty,DT internationalization,No records to show!,Rien à voir ici!
 tbl_prev,DT internationalization,Previous,Précédent
 tbl_next,DT internationalization,Next,Prochain
-tbl_search,DT internationalization,Search:,Recherche
-tbl_length,DT internationalization,Show _MENU_ records,Montrer _MENU_ éléments
-tbl_filtered,DT internationalization,(filtered from _MAX_ records),(filtrées de _MAX_ éléments)
+tbl_search,DT internationalization,Search:,Rechercher
+tbl_length,DT internationalization,Show _MENU_ records,Afficher _MENU_ résultats
+tbl_filtered,DT internationalization,(filtered from _MAX_ records),(filtrées de _MAX_ résultats)
 tbl_zero,DT internationalization,No matching records found,Aucunes données existantes
 param_name_col,DB column selection ,param_name,param_name_fr
 media_type_col,DB column selection ,media_type,media_type_fr
@@ -450,15 +451,15 @@ pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
 snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
-snowbull_percent_of_normal,,Percent of normal,pourcentage de la normale
+snowbull_percent_of_normal,,Percent of normal,Pourcentage de la normale
 snowbull_historical_median,,Historical median,Médiane historique
 snowbull_anomalies,,Anomalies,Anomalies
-snowbull_deviation,,Deviation from normal, écart par rapport à la normale
+snowbull_deviation,,Deviation from normal,Écart par rapport à la normale
 snowbull_values,,Values,Valeurs
-snowbull_swe,,Snow Water Equivalent,Équivalent en eau de neige
+snowbull_swe,,Snow Water Equivalent,Équivalent en eau de la neige
 snowbull_swe_abbrev,,SWE,ÉEN
-snowbull_temperature,,Temperature,Température
-snowbull_precipitation,,Precipitation,Précipitation
+snowbull_temperature,,Temperature,Températures
+snowbull_precipitation,,Precipitation,Précipitations
 snowbull_percentile,,Percentile,Percentile
 snowbull_details,,Map details,Détails de la carte
 app_version,,Current application version:,Version actuelle de l'application :
@@ -489,4 +490,4 @@ coordinates,,Coordinates,Coordonnées
 isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (ÉEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche ÉEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
-snowbull_to,, to,à
+snowbull_to,,to,à

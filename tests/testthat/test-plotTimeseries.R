@@ -428,3 +428,66 @@ test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", 
   expect_equal(out$value, expected$value, tolerance = 1e-8)
   expect_equal(out$imputed, expected$imputed)
 })
+
+test_that("plotTimeseries can show data in the past", {
+  skip_on_ci() # Because the CI instance would not have the necessary historical data
+  skip_on_cran()
+
+  if (
+    !isTRUE(DBI::dbGetQuery(
+      con,
+      "SELECT has_schema_privilege(current_user, 'audit', 'USAGE') AS ok;"
+    )$ok[[1]])
+  ) {
+    skip("Historical queries require USAGE on schema audit.")
+  }
+
+  wl <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
+  )[1, 1]
+  loc_id <- DBI::dbGetQuery(
+    con,
+    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
+  )[1, 1]
+  tsid <- DBI::dbGetQuery(
+    con,
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2 LIMIT 1;",
+    params = list(wl, loc_id)
+  )[1, 1]
+
+  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC") # Has to be after implementation of patch_38, otherwise the old AquaCache logic was deleting rows and replacing, resulting in recent created_on timestamps - this made it appear as if there was nothing in the past.
+  start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
+  end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
+
+  out_max <- plotTimeseries(
+    timeseries_id = tsid,
+    start_date = start_dt,
+    end_date = end_dt,
+    as_of = as_of,
+    resolution = "max",
+    tzone = "UTC",
+    slider = FALSE,
+    historic_range = FALSE,
+    raw = TRUE,
+    data = TRUE,
+    con = con
+  )$data$trace_data
+
+  expect_gt(nrow(out_max), 570)
+
+  out_day <- plotTimeseries(
+    timeseries_id = tsid,
+    start_date = start_dt,
+    end_date = end_dt,
+    as_of = as_of,
+    resolution = "day",
+    tzone = "UTC",
+    slider = FALSE,
+    historic_range = TRUE,
+    data = TRUE,
+    con = con
+  )$data
+
+  expect_gt(nrow(out_day), 1)
+})

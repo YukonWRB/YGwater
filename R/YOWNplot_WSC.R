@@ -29,21 +29,6 @@ YOWNplot_WSC <- function(
   login = Sys.getenv(c("AQUSER", "AQPASS")),
   server = "https://yukon.aquaticinformatics.net/AQUARIUS"
 ) {
-  YOWNindex = c(
-    "YOWN-2201S",
-    "YOWN-2201D",
-    "YOWN-2202",
-    "YOWN-2203",
-    "YOWN-2204",
-    "YOWN-2205"
-  )
-  WSCindex = c("09AB004")
-  # saveTo = "desktop"
-  # title = "YOWN wells vs. WSC Sites"
-  # chartXInterval = "1 month"
-  # login = Sys.getenv(c("AQUSER", "AQPASS"))
-  # server = "https://yukon.aquaticinformatics.net/AQUARIUS"
-
   # Sort out save location
   saveTo <- tolower(saveTo)
   if (saveTo %in% c("Choose", "choose")) {
@@ -60,9 +45,6 @@ YOWNplot_WSC <- function(
   # Download all YOWN data
   YOWNlist <- list()
   for (i in YOWNindex) {
-    #TODO confirm that this print is needed
-    print(i)
-
     # Download data from Aquarius
     datalist <- suppressMessages(aq_download(
       loc_id = i,
@@ -138,7 +120,7 @@ YOWNplot_WSC <- function(
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
+      dplyr::select("ID", "timestamp_MST", "value")
     YOWNlist[[i]] <- df
   }
 
@@ -149,10 +131,8 @@ YOWNplot_WSC <- function(
   # Download all WSC data
   WSClist <- list()
   for (i in WSCindex) {
-    print(i)
-
     # Download data from Aquarius
-    datalist <- suppressMessages(aq_download(
+    datalist <- suppressMessages(YGwater::aq_download(
       loc_id = i,
       ts_name = "Stage.Preliminary",
       login = login,
@@ -177,7 +157,7 @@ YOWNplot_WSC <- function(
     # Reorder columns, add df to list
     df$ID <- as.character(i)
     df <- df %>%
-      dplyr::select(.data$ID, .data$timestamp_MST, .data$value)
+      dplyr::select("ID", "timestamp_MST", "value")
     WSClist[[i]] <- df
   }
 
@@ -368,18 +348,20 @@ YOWNplot_WSC <- function(
 
   # Add final aesthetic tweaks, print plot onto template
   final_plot <- cowplot::ggdraw() +
-    cowplot::draw_image(
-      "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\4_YOWN_DATA_ANALYSIS\\1_WATER LEVEL\\00_AUTOMATED_REPORTING\\01_MARKUP_IMAGES\\template_nogrades.jpg"
-    ) +
+    cowplot::draw_image(system.file(
+      "YOWNplot",
+      "Template_grades.jpg",
+      package = "YGwater"
+    )) +
     cowplot::draw_plot(final)
 
   ggplot2::ggsave(
     plot = final_plot,
-    filename = paste0(saveTo, "/", "YOWN_WSC_compare", ".pdf"),
+    filename = paste0(saveTo, "YOWN_WSC_compare", ".pdf"),
     height = 8.5,
     width = 11,
     units = "in"
   )
 
-  print("Plot Generated")
+  message("Plot Generated")
 }

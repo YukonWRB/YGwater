@@ -24,7 +24,23 @@ imgMapViewUI <- function(id) {
       # Top row with filters (collapsible using bslib accordion)
       uiOutput(ns("accordion")),
       # Map and selected image in a side-by-side layout, with collapsible map.
-      uiOutput(ns("sidebar_page"))
+      page_sidebar(
+        sidebar = sidebar(
+          title = NULL,
+          width = 600,
+          leaflet::leafletOutput(ns("map"), width = "100%", height = "300px"),
+          div(
+            style = "margin-top: 10px;",
+            verbatimTextOutput(ns("img_info"))
+          )
+        ),
+        div(
+          style = "display: flex; justify-content: stretch; align-items: left; margin-bottom: 10px; gap: 10px; width: 100%;",
+          uiOutput(ns("image_nav_controls")),
+          plotOutput(ns("img_graph"), height = "40px", width = "100%")
+        ),
+        imageOutput(ns("img"), fill = TRUE)
+      )
     )
   )
 }
@@ -198,26 +214,13 @@ imgMapView <- function(id, language) {
     }) |>
       bindEvent(language$language)
 
-    output$sidebar_page <- renderUI({
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          width = 600,
-          leaflet::leafletOutput(ns("map"), width = "100%", height = "300px"),
-          div(
-            style = "margin-top: 10px;",
-            verbatimTextOutput(ns("img_info"))
-          )
-        ),
-        div(
-          style = "display: flex; justify-content: stretch; align-items: left; margin-bottom: 10px; gap: 10px; width: 100%;",
-          actionButton(ns("prev_img"), tr("tbl_prev", language$language)),
-          actionButton(ns("next_img"), tr("tbl_next", language$language)),
-          plotOutput(ns("img_graph"), height = "40px", width = "100%")
-        ),
-        imageOutput(ns("img"), fill = TRUE)
+    output$image_nav_controls <- renderUI({
+      tagList(
+        actionButton(ns("prev_img"), tr("tbl_prev", language$language)),
+        actionButton(ns("next_img"), tr("tbl_next", language$language))
       )
-    })
+    }) |>
+      bindEvent(language$language)
 
     output$map <- leaflet::renderLeaflet({
       leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 13)) %>%

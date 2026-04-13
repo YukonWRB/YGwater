@@ -247,3 +247,51 @@ test_that("plotOverlap accepts hourly resolution", {
   expect_gt(nrow(plot$trace_data), 10)
   expect_true(any(lubridate::hour(plot$trace_data$datetime) != 0))
 })
+
+test_that("plotOverlap can show data in the past", {
+  skip_on_ci() # Because the CI instance would not have the necessary historical data
+  if (
+    !isTRUE(DBI::dbGetQuery(
+      con,
+      "SELECT has_schema_privilege(current_user, 'audit', 'USAGE') AS ok;"
+    )$ok[[1]])
+  ) {
+    skip("Historical queries require USAGE on schema audit.")
+  }
+
+  wl <- DBI::dbGetQuery(
+    con,
+    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
+  )[1, 1]
+  loc_id <- DBI::dbGetQuery(
+    con,
+    "SELECT location_id FROM locations WHERE location_code = '09AB004';"
+  )[1, 1]
+  tsid <- DBI::dbGetQuery(
+    con,
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2 LIMIT 1;",
+    params = list(wl, loc_id)
+  )[1, 1]
+
+  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+  start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
+  end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
+
+  out <- plotOverlap(
+    timeseries_id = tsid,
+    startDay = "2022-06-01",
+    endDay = "2022-06-02",
+    tzone = "UTC",
+    years = 2022,
+    datum = FALSE,
+    hover = FALSE,
+    slider = FALSE,
+    unusable = TRUE,
+    historic_range = "none",
+    resolution = "hour",
+    data = TRUE,
+    con = con,
+    as_of = as_of
+  )
+  expect_match(plotly::plotly_build(out$plot)$x$layout$title$text, "As of")
+})

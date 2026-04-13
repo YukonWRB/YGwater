@@ -81,12 +81,18 @@ app_ui <- function(request) {
         type = "text/css",
         href = "css/top-bar.css"
       ), # Top bar size, position, etc.
-      tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
+      # Old YG_bs5  CSS file is huge. Commented out, YG_bs5_compact.css only targets the necesasry pieces.
+      # tags$link(rel = "stylesheet", type = "text/css", href = "css/YG_bs5.css"), # CSS style sheet
       tags$link(
         rel = "stylesheet",
         type = "text/css",
         href = "css/buttons.css"
       ), # styling for hover effects on buttons with YG colors
+      tags$link(
+        rel = "stylesheet",
+        type = "text/css",
+        href = "css/YG_bs5_compact.css"
+      ), # minimal replacements for legacy YG_bs5.css button and DT stripe styles
       # Allow datatable filters to overflow the table, helpful when table is filtered to only a few rows.
       tags$style(
         HTML(
@@ -188,7 +194,7 @@ app_ui <- function(request) {
         ), # Just above any leaflet possibilities which only go up to 1000. Otherwise the map overlays the open nav menus.
         fluid = TRUE,
         lang = "en",
-        theme = NULL, # Theme is set earlier by css file reference
+        theme = NULL, # Theme is set earlier by css file references
         gap = "10px",
         nav_panel(
           title = uiOutput("homeNavTitle"),
@@ -235,14 +241,7 @@ app_ui <- function(request) {
             title = uiOutput("plotsNavContTitle"),
             value = "contPlot",
             uiOutput("plotContinuous_ui")
-          ),
-          if (!config$public) {
-            nav_panel(
-              title = uiOutput("plotsNavContOldTitle"),
-              value = "contPlotOld",
-              uiOutput("plotContinuousOld_ui")
-            )
-          }
+          )
         ),
         if (!config$public) {
           nav_menu(
@@ -523,7 +522,117 @@ app_ui <- function(request) {
         },
 
         if (!config$public) {
-          nav_menu(title = "Metadata", value = "metadataTasks")
+          nav_menu(
+            title = "Reference data",
+            value = "metadataTasks",
+            nav_panel(
+              title = "Organizations",
+              value = "manageOrganizations",
+              uiOutput("manageOrganizations_ui")
+            ),
+            nav_panel(
+              title = "Networks",
+              value = "manageNetworks",
+              uiOutput("manageNetworks_ui")
+            ),
+            nav_panel(
+              title = "Projects",
+              value = "manageProjects",
+              uiOutput("manageProjects_ui")
+            ),
+            nav_panel(
+              title = "Network / Project Types",
+              value = "manageNetworkProjectTypes",
+              uiOutput("manageNetworkProjectTypes_ui")
+            ),
+            nav_panel(
+              title = "Location Types",
+              value = "manageLocationTypes",
+              uiOutput("manageLocationTypes_ui")
+            ),
+            nav_panel(
+              title = "Media Types",
+              value = "manageMediaTypes",
+              uiOutput("manageMediaTypes_ui")
+            ),
+            nav_panel(
+              title = "Matrix States",
+              value = "manageMatrixStates",
+              uiOutput("manageMatrixStates_ui")
+            ),
+            nav_panel(
+              title = "Parameter Groups",
+              value = "manageParameterGroups",
+              uiOutput("manageParameterGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameter Sub-Groups",
+              value = "manageParameterSubGroups",
+              uiOutput("manageParameterSubGroups_ui")
+            ),
+            nav_panel(
+              title = "Parameters",
+              value = "manageParameters",
+              uiOutput("manageParameters_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocol Families",
+              value = "manageCommunicationProtocolFamilies",
+              uiOutput("manageCommunicationProtocolFamilies_ui")
+            ),
+            nav_panel(
+              title = "Communication Protocols",
+              value = "manageCommunicationProtocols",
+              uiOutput("manageCommunicationProtocols_ui")
+            ),
+            nav_panel(
+              title = "Transmission Method Families",
+              value = "manageTransmissionMethodFamilies",
+              uiOutput("manageTransmissionMethodFamilies_ui")
+            ),
+            nav_panel(
+              title = "Transmission Methods",
+              value = "manageTransmissionMethods",
+              uiOutput("manageTransmissionMethods_ui")
+            ),
+            nav_panel(
+              title = "Transmission Component Roles",
+              value = "manageTransmissionComponentRoles",
+              uiOutput("manageTransmissionComponentRoles_ui")
+            )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Acquisition / telemetry",
+            value = "acquisitionTelemetryTasks",
+            nav_panel(
+              title = "Instrument / logger connections",
+              value = "manageInstrumentConnections",
+              uiOutput("manageInstrumentConnections_ui")
+            ),
+            nav_panel(
+              title = "Connection signals",
+              value = "manageInstrumentConnectionSignals",
+              uiOutput("manageInstrumentConnectionSignals_ui")
+            ),
+            nav_panel(
+              title = "Transmission setups",
+              value = "manageTransmissionSetups",
+              uiOutput("manageTransmissionSetups_ui")
+            ),
+            nav_panel(
+              title = "Transmission routes",
+              value = "manageTransmissionRoutes",
+              uiOutput("manageTransmissionRoutes_ui")
+            ),
+            nav_panel(
+              title = "Transmission components",
+              value = "manageTransmissionComponents",
+              uiOutput("manageTransmissionComponents_ui")
+            )
+          )
         },
 
         if (!config$public) {
@@ -568,7 +677,8 @@ app_ui <- function(request) {
         nav_item(actionButton(
           "language_button",
           NULL,
-          class = "language-button"
+          class = "language-button",
+          style = "border: none; border-color: transparent; box-shadow: none; outline: none; background: transparent; -webkit-appearance: none; appearance: none;"
         )),
       ), # End page_navbar
 

@@ -18,6 +18,7 @@ make_snowbull_map(
   start_year_historical = 1991,
   end_year_historical = 2020,
   language = "English",
+  october_start = NULL,
   con = NULL,
   format = "ggplot"
 )
@@ -50,6 +51,8 @@ make_snowbull_map(
 (default: "English")}
 
 \item{language}{Character string indicating the language for labels and legends. 'French' or 'English'; default is "English".}
+
+\item{october_start}{Logical, whether to use October 1st as the start of the water year for calculating historical norms (default: FALSE)}
 
 \item{con}{Optional database connection, if not provided a default connection will be used}
 

@@ -36,6 +36,10 @@
 #' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
+#' @param as_of Optional point-in-time timestamp at which measurement values and
+#'   stored daily summaries should be reconstructed. Character, Date, and
+#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
+#'   of that day in `tzone`. When `NULL` (default), current data are used.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
@@ -80,7 +84,8 @@ plotTimeseries <- function(
   raw = FALSE,
   imputed = FALSE,
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 ) {
   # timeseries_id = 1222
   # location <- NULL
@@ -113,6 +118,7 @@ plotTimeseries <- function(
   # raw = FALSE
   # imputed = FALSE
   # con = NULL
+  # as_of = NULL
   # gridx = FALSE
   # gridy = FALSE
   # hover = TRUE
@@ -157,6 +163,38 @@ plotTimeseries <- function(
     } else {
       tzone <- sprintf("Etc/GMT%+d", -as.integer(tzone))
     }
+  }
+
+  if (!is.null(as_of)) {
+    if (length(as_of) != 1) {
+      stop("`as_of` must be NULL or a single date/datetime value.")
+    }
+
+    if (inherits(as_of, "character")) {
+      as_of_text <- trimws(as.character(as_of[[1]]))
+      has_time_component <- grepl("[ T]\\d{1,2}:\\d{2}", as_of_text) ||
+        grepl("(Z|[+-]\\d{2}:?\\d{2})$", as_of_text)
+
+      if (has_time_component) {
+        as_of <- suppressWarnings(as.POSIXct(as_of_text, tz = tzone))
+      } else {
+        as_of <- suppressWarnings(as.POSIXct(as.Date(as_of_text), tz = tzone))
+        as_of <- as_of + 24 * 60 * 60
+      }
+    } else if (inherits(as_of, "Date") && !inherits(as_of, "POSIXt")) {
+      as_of <- as.POSIXct(as_of, tz = tzone)
+      as_of <- as_of + 24 * 60 * 60
+    } else if (inherits(as_of, "POSIXt")) {
+      as_of <- as.POSIXct(as_of, tz = tzone)
+    }
+
+    if (!inherits(as_of, "POSIXt") || is.na(as_of)) {
+      stop(
+        "`as_of` must be NULL or a single character, Date, or POSIXct value."
+      )
+    }
+
+    attr(as_of, "tzone") <- "UTC"
   }
 
   if (!is.null(parameter)) {
@@ -620,8 +658,8 @@ plotTimeseries <- function(
     parameter_name <- titleCase(parameter_tbl$param_name[1], "en")
   }
 
-  # Find the ts units
-  units <- parameter_tbl$unit_default[1]
+  # Find the resolved timeseries units, which can now depend on matrix state.
+  units <- ac_get_timeseries_unit(con, tsid)
 
   # Find the necessary datum (latest datum)
   if (datum) {
@@ -658,11 +696,13 @@ plotTimeseries <- function(
 
   if (historic_range) {
     historic_range_meta <- fetch_historic_range_timeseries_metadata(con, tsid)
-    if (historic_range_is_meaningless(
-      aggregation_types = historic_range_meta$aggregation_type,
-      resolution = resolution,
-      record_rate_seconds = historic_range_meta$record_rate_seconds
-    )) {
+    if (
+      historic_range_is_meaningless(
+        aggregation_types = historic_range_meta$aggregation_type,
+        resolution = resolution,
+        record_rate_seconds = historic_range_meta$record_rate_seconds
+      )
+    ) {
       historic_range <- FALSE
     }
   }
@@ -686,6 +726,15 @@ plotTimeseries <- function(
       stn_name <- titleCase(stn_name, lang)
     } else {
       stn_name <- custom_title
+    }
+  }
+
+  as_of_title <- NULL
+  if (!is.null(as_of)) {
+    as_of_title <- if (lang == "fr") {
+      paste0("Donn\u00e9es au ", format(as_of, tz = tzone, usetz = TRUE))
+    } else {
+      paste0("As of ", format(as_of, tz = tzone, usetz = TRUE))
     }
   }
 
@@ -794,11 +843,28 @@ plotTimeseries <- function(
   ## fetch trace and range data ###################
   # Trace data first
   if (resolution == "day") {
-    trace_data <- dbGetQueryDT(
-      con,
-      "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
-      params = list(tsid, start_date, end_date)
-    )
+    if (is.null(as_of)) {
+      trace_data <- dbGetQueryDT(
+        con,
+        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        params = list(tsid, start_date, end_date)
+      )
+    } else {
+      trace_data <- dbGetQueryDT(
+        con,
+        paste(
+          "SELECT date AS datetime, value, imputed",
+          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER BY date DESC;"
+        ),
+        params = list(as_of, tsid, start_date, end_date)
+      )
+    }
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
   } else if (resolution == "hour") {
     trace_data <- fetch_hourly_trace_data(
@@ -807,7 +873,10 @@ plotTimeseries <- function(
       start_date = start_date,
       end_date = end_date,
       raw = raw,
+      as_of = as_of,
       use_corrected_source = if (raw) {
+        TRUE
+      } else if (!is.null(as_of)) {
         TRUE
       } else {
         continuous_trace_uses_corrected_source(
@@ -821,12 +890,26 @@ plotTimeseries <- function(
   } else if (resolution == "max") {
     trace_data <- dbGetQueryDT(
       con,
-      paste0(
-        "SELECT datetime, value_corrected AS value, imputed",
-        if (raw) ", value_raw",
-        " FROM measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC LIMIT 200000;"
-      ),
-      params = list(tsid, start_date, end_date)
+      if (is.null(as_of)) {
+        paste0(
+          "SELECT datetime, value_corrected AS value, imputed",
+          if (raw) ", value_raw",
+          " FROM measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC LIMIT 200000;"
+        )
+      } else {
+        paste0(
+          "SELECT datetime, value_corrected AS value, imputed",
+          if (raw) ", value_raw",
+          " FROM continuous.measurements_continuous_corrected_at(",
+          "$1, ARRAY[$2]::INTEGER[], $3, $4",
+          ") ORDER BY datetime DESC LIMIT 200000;"
+        )
+      },
+      params = if (is.null(as_of)) {
+        list(tsid, start_date, end_date)
+      } else {
+        list(as_of, tsid, start_date, end_date)
+      }
     )
   }
   attr(trace_data$datetime, "tzone") <- tzone
@@ -836,11 +919,28 @@ plotTimeseries <- function(
     # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous_corrected view. Where there isn't any data in the table fill in with the value from the daily table.
     range_end <- end_date + 1 * 24 * 60 * 60
     range_start <- start_date - 1 * 24 * 60 * 60
-    range_data <- dbGetQueryDT(
-      con,
-      "SELECT date AS datetime, min, max, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
-      params = list(tsid, range_start, range_end)
-    )
+    if (is.null(as_of)) {
+      range_data <- dbGetQueryDT(
+        con,
+        "SELECT date AS datetime, min, max, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
+        params = list(tsid, range_start, range_end)
+      )
+    } else {
+      range_data <- dbGetQueryDT(
+        con,
+        paste(
+          "SELECT date AS datetime, min, max, q75, q25",
+          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER BY date ASC;"
+        ),
+        params = list(as_of, tsid, range_start, range_end)
+      )
+    }
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
     attr(range_data$datetime, "tzone") <- tzone
 
@@ -865,8 +965,8 @@ plotTimeseries <- function(
     # Find gaps in range data and add NAs
     full_range <- data.table::data.table(
       datetime = seq.POSIXt(
-        from = min(range_data$datetime),
-        to = max(range_data$datetime),
+        from = min(range_data$datetime, na.rm = TRUE),
+        to = max(range_data$datetime, na.rm = TRUE),
         by = "day"
       )
     )
@@ -900,11 +1000,12 @@ plotTimeseries <- function(
   if (!is.infinite(min_trace)) {
     if (resolution == "hour") {
       trace_data <- add_gap_markers(trace_data, period_seconds = 3600)
-    } else {
+    } else if (resolution == "max") {
       trace_data <- suppressWarnings(calculate_period(
         trace_data,
         timeseries_id = tsid,
-        con = con
+        con = con,
+        as_of = as_of
       ))
       # if calculate_period didn't return a column for trace_data, it couldn't be done. No need to continue
       if ("period" %in% colnames(trace_data)) {
@@ -943,19 +1044,46 @@ plotTimeseries <- function(
         # order by datetime
         data.table::setorder(trace_data, datetime)
       }
+    } else if (resolution == "day") {
+      trace_data <- add_gap_markers(trace_data, period_seconds = 24 * 3600)
     }
 
     # Find out where trace_data values need to be filled in with daily means (this usually only deals with HYDAT daily mean data)
     if (min_trace > start_date) {
-      extra <- dbGetQueryDT(
-        con,
-        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
-        params = list(
-          tsid,
-          min(trace_data$datetime),
-          start_date
+      if (is.null(as_of)) {
+        extra <- dbGetQueryDT(
+          con,
+          "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
+          params = list(
+            tsid,
+            min(trace_data$datetime),
+            start_date
+          )
         )
-      )
+      } else {
+        extra <- dbGetQueryDT(
+          con,
+          paste(
+            "SELECT date AS datetime, value, imputed",
+            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "  $1,",
+            "  ARRAY[$2]::INTEGER[],",
+            "  $3::DATE,",
+            "  $4::DATE",
+            ")",
+            "WHERE date < $5",
+            "  AND date >= $6;"
+          ),
+          params = list(
+            as_of,
+            tsid,
+            start_date,
+            min(trace_data$datetime),
+            min(trace_data$datetime),
+            start_date
+          )
+        )
+      }
       extra$datetime <- as.POSIXct(extra$datetime, tz = "UTC")
       attr(extra$datetime, "tzone") <- tzone
       if (raw) {
@@ -965,11 +1093,28 @@ plotTimeseries <- function(
     }
   } else {
     # this means that no trace data could be had because there are no measurements in the continuous view table
-    trace_data <- dbGetQueryDT(
-      con,
-      "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
-      params = list(tsid, start_date, end_date)
-    )
+    if (is.null(as_of)) {
+      trace_data <- dbGetQueryDT(
+        con,
+        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        params = list(tsid, start_date, end_date)
+      )
+    } else {
+      trace_data <- dbGetQueryDT(
+        con,
+        paste(
+          "SELECT date AS datetime, value, imputed",
+          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER BY date DESC;"
+        ),
+        params = list(as_of, tsid, start_date, end_date)
+      )
+    }
     trace_data$datetime <- as.POSIXct(trace_data$datetime, tz = "UTC")
     attr(trace_data$datetime, "tzone") <- tzone
     if (raw) {
@@ -1536,7 +1681,11 @@ plotTimeseries <- function(
     plotly::layout(
       title = if (title) {
         list(
-          text = stn_name,
+          text = if (is.null(as_of_title)) {
+            stn_name
+          } else {
+            paste0(stn_name, "<br><sup>", as_of_title, "</sup>")
+          },
           x = 0.05,
           xref = "container",
           font = list(

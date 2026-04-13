@@ -25,7 +25,8 @@ plotTimeseriesHistogram(
   gridy = FALSE,
   tzone = "auto",
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 )
 }
 \arguments{
@@ -74,6 +75,11 @@ current year.}
 
 \item{con}{A connection to the AquaCache database. \code{NULL} uses
 \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values
+should be reconstructed. Character, Date, and POSIXct inputs are
+supported. Date-like inputs are interpreted as the end of that day in
+\code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 A plotly object, or a list with \code{plot} and \code{data} when \code{data = TRUE}.

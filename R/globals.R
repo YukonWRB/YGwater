@@ -8,7 +8,6 @@ utils::globalVariables(c(
   "YGwater_globals"
 ))
 
-
 #globals related to use of data.table (anywhere in the package)
 utils::globalVariables(c("."))
 

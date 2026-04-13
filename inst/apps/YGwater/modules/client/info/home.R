@@ -1,23 +1,6 @@
 homeUI <- function(id) {
   ns <- NS(id)
-  verticalLayout(
-    uiOutput(ns("banner")),
-    tags$div(style = "height: 20px;"), # break between navbar and content
-    htmlOutput(ns("title")), # Title
-    tags$div(style = "height: 10px;"),
-    htmlOutput(ns("main_text")), # Main descriptive text
-    tags$div(style = "height: 30px;"),
-    uiOutput(ns("map_buttons")), # Map view buttons
-    tags$div(style = "height: 20px;"),
-    uiOutput(ns("plot_buttons")), # Plot view buttons
-    tags$div(style = "height: 20px;"),
-    uiOutput(ns("data_buttons")), # Data download buttons
-    tags$div(style = "height: 20px;"),
-    htmlOutput(ns("discrete_continuous_title")), # Title for discrete vs continuous data
-    tags$div(style = "height: 10px;"),
-    htmlOutput(ns("discrete_continuous")), # Explanatory text about discrete vs continuous data
-    tags$div(style = "height: 10px;"),
-  )
+  uiOutput(ns("content"))
 }
 
 home <- function(id, language) {
@@ -26,34 +9,29 @@ home <- function(id, language) {
 
     outputs <- reactiveValues()
 
-    observe({
+    output$content <- renderUI({
       req(language$language)
 
-      output$banner <- renderUI({
+      verticalLayout(
         application_notifications_ui(
           ns = ns,
           lang = language$language,
           con = session$userData$AquaCache,
           module_id = "home"
-        )
-      })
-
-      output$title <- renderUI({
+        ),
+        tags$div(style = "height: 20px;"),
         HTML(paste0(
           '<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',
           tr("homeTitle", language$language),
           '</div>'
-        ))
-      })
-      output$main_text <- renderUI({
+        )),
+        tags$div(style = "height: 10px;"),
         HTML(paste0(
           '<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
           tr("homeText", language$language),
           '</div>'
-        ))
-      })
-
-      output$map_buttons <- renderUI({
+        )),
+        tags$div(style = "height: 30px;"),
         fluidRow(
           column(
             6,
@@ -75,9 +53,8 @@ home <- function(id, language) {
               icon = icon("map-location")
             )
           )
-        )
-      })
-      output$plot_buttons <- renderUI({
+        ),
+        tags$div(style = "height: 20px;"),
         fluidRow(
           column(
             6,
@@ -99,9 +76,8 @@ home <- function(id, language) {
               icon = icon("chart-simple")
             )
           )
-        )
-      })
-      output$data_buttons <- renderUI({
+        ),
+        tags$div(style = "height: 20px;"),
         fluidRow(
           column(
             6,
@@ -123,23 +99,21 @@ home <- function(id, language) {
               icon = icon("table")
             )
           )
-        )
-      })
-    })
-
-    output$discrete_continuous_title <- renderUI({
-      HTML(paste0(
-        '<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
-        tr("home_discrete_continuous_title", language$language),
-        '</div>'
-      ))
-    })
-    output$discrete_continuous <- renderUI({
-      HTML(paste0(
-        '<div class="montserrat" style="font-size: 16px; font-weight: 500; font-style: normal">',
-        tr("home_discrete_continuous", language$language),
-        '</div>'
-      ))
+        ),
+        tags$div(style = "height: 20px;"),
+        HTML(paste0(
+          '<div class="montserrat" style="font-size: 20px; font-weight: 600; font-style: normal">',
+          tr("home_discrete_continuous_title", language$language),
+          '</div>'
+        )),
+        tags$div(style = "height: 10px;"),
+        HTML(paste0(
+          '<div class="montserrat" style="font-size: 16px; font-weight: 500; font-style: normal">',
+          tr("home_discrete_continuous", language$language),
+          '</div>'
+        )),
+        tags$div(style = "height: 10px;")
+      )
     })
 
     observeEvent(input$plot_disc, {

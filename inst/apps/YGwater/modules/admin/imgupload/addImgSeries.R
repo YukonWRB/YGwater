@@ -468,7 +468,7 @@ addImgSeries <- function(id, language) {
               )[1, 1]
 
               # fetch images
-              AquaCache::getNewImages(image_meta_ids = new_id, con = con)
+              AquaCache::getNewImages(image_series_ids = new_id, con = con)
 
               # Find the actual earliest found image and update image_series$first_img with that datetime
               earliest <- DBI::dbGetQuery(

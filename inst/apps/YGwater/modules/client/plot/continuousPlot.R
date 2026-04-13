@@ -35,6 +35,7 @@ contPlotUI <- function(id) {
       --bs-accordion-btn-bg:    #FBE5B2;
       --bs-accordion-active-bg: #FBE5B2;
     }
+
     ",
       ns("accordion1"),
       ns("accordion1"),
@@ -143,6 +144,21 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
     )
 
+    values <- reactiveValues(
+      water_level = moduleData$params$parameter_id[
+        moduleData$params$param_name == "water level"
+      ],
+      water_flow = moduleData$params$parameter_id[
+        moduleData$params$param_name == "water flow"
+      ],
+      swe = moduleData$params$parameter_id[
+        moduleData$params$param_name == "snow water equivalent"
+      ],
+      snow_depth = moduleData$params$parameter_id[
+        moduleData$params$param_name == "snow depth"
+      ]
+    )
+
     initial_timeseries_ids <- if (!is.null(inputs$timeseries_id)) {
       utils::head(unique(as.numeric(inputs$timeseries_id)), 4)
     } else {
@@ -187,6 +203,20 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
       as.numeric(slots[[idx]])
     })
+
+    output$has_multiple_timeseries <- renderText({
+      ids <- selected_timeseries_ids()
+      if (!is.null(ids) && length(ids) > 1) {
+        "true"
+      } else {
+        "false"
+      }
+    })
+    outputOptions(
+      output,
+      "has_multiple_timeseries",
+      suspendWhenHidden = FALSE
+    )
 
     location_network_filter <- reactive({
       loc_ids <- moduleData$locs$location_id
@@ -422,101 +452,70 @@ contPlot <- function(id, language, windowDims, inputs) {
       req(moduleData, language$language)
       network_col <- tr("generic_name_col", language$language)
       project_col <- tr("generic_name_col", language$language)
-      param_grp_col <- tr("param_group_col", language$language)
-      # network_choices <- if (
-      #   nrow(moduleData$networks) > 0 &&
-      #     network_col %in% names(moduleData$networks)
-      # ) {
-      #   stats::setNames(
-      #     moduleData$networks$network_id[order(moduleData$networks[[
-      #       network_col
-      #     ]])],
-      #     moduleData$networks[[network_col]][order(moduleData$networks[[
-      #       network_col
-      #     ]])]
-      #   )
-      # } else {
-      #   NULL
-      # }
-      # project_choices <- if (
-      #   nrow(moduleData$projects) > 0 &&
-      #     project_col %in% names(moduleData$projects)
-      # ) {
-      #   stats::setNames(
-      #     moduleData$projects$project_id[order(moduleData$projects[[
-      #       project_col
-      #     ]])],
-      #     moduleData$projects[[project_col]][order(moduleData$projects[[
-      #       project_col
-      #     ]])]
-      #   )
-      # } else {
-      #   NULL
-      # }
-      # param_grp_choices <- if (
-      #   nrow(moduleData$param_groups) > 0 &&
-      #     param_grp_col %in% names(moduleData$param_groups)
-      # ) {
-      #   stats::setNames(
-      #     moduleData$param_groups$group_id[order(moduleData$param_groups[[
-      #       param_grp_col
-      #     ]])],
-      #     moduleData$param_groups[[
-      #       param_grp_col
-      #     ]][order(moduleData$param_groups[[
-      #       param_grp_col
-      #     ]])]
-      #   )
-      # } else {
-      #   NULL
-      # }
+      network_choices <- if (
+        nrow(moduleData$networks) > 0 &&
+          network_col %in% names(moduleData$networks)
+      ) {
+        stats::setNames(
+          moduleData$networks$network_id[order(moduleData$networks[[
+            network_col
+          ]])],
+          moduleData$networks[[network_col]][order(moduleData$networks[[
+            network_col
+          ]])]
+        )
+      } else {
+        NULL
+      }
+      project_choices <- if (
+        nrow(moduleData$projects) > 0 &&
+          project_col %in% names(moduleData$projects)
+      ) {
+        stats::setNames(
+          moduleData$projects$project_id[order(moduleData$projects[[
+            project_col
+          ]])],
+          moduleData$projects[[project_col]][order(moduleData$projects[[
+            project_col
+          ]])]
+        )
+      } else {
+        NULL
+      }
       tags <- tagList(
         bslib::accordion(
           id = ns("accordion1"),
           open = c(ns("table_panel"), ns("plot_options_panel")),
-          # Filters are not visible now, may be necessary when there is more data to show.
-          # bslib::accordion_panel(
-          #   title = tr("filters", language$language),
-          #   value = ns("filters_panel"),
-          #   fluidRow(
-          #     column(
-          #       width = 4,
-          #       selectizeInput(
-          #         ns("network_filter"),
-          #         label = tr("networks", language$language),
-          #         choices = network_choices,
-          #         multiple = TRUE,
-          #         options = list(
-          #           placeholder = tr("select_network", language$language)
-          #         )
-          #       )
-          #     ),
-          #     column(
-          #       width = 4,
-          #       selectizeInput(
-          #         ns("project_filter"),
-          #         label = tr("projects", language$language),
-          #         choices = project_choices,
-          #         multiple = TRUE,
-          #         options = list(
-          #           placeholder = tr("select_project", language$language)
-          #         )
-          #       )
-          #     ),
-          #     column(
-          #       width = 4,
-          #       selectizeInput(
-          #         ns("param_grp_filter"),
-          #         label = tr("param_groups", language$language),
-          #         choices = param_grp_choices,
-          #         multiple = TRUE,
-          #         options = list(
-          #           placeholder = tr("select_param_group", language$language)
-          #         )
-          #       )
-          #     )
-          #   )
-          # ), # End filters_panel
+          bslib::accordion_panel(
+            title = tr("filters", language$language),
+            value = ns("filters_panel"),
+            fluidRow(
+              column(
+                width = 6,
+                selectizeInput(
+                  ns("network_filter"),
+                  label = tr("networks", language$language),
+                  choices = network_choices,
+                  multiple = TRUE,
+                  options = list(
+                    placeholder = tr("select_network", language$language)
+                  )
+                )
+              ),
+              column(
+                width = 6,
+                selectizeInput(
+                  ns("project_filter"),
+                  label = tr("projects", language$language),
+                  choices = project_choices,
+                  multiple = TRUE,
+                  options = list(
+                    placeholder = tr("select_project", language$language)
+                  )
+                )
+              )
+            )
+          ), # End filters_panel
           bslib::accordion_panel(
             title = tr("cont_table_heading", language$language),
             value = ns("table_panel"),
@@ -545,226 +544,324 @@ contPlot <- function(id, language, windowDims, inputs) {
                 )
               )
             ),
-            fluidRow(
-              column(
-                width = 6,
-                # Show date range and shortcut selection buttons if NOT overlapping years or histogram
-                conditionalPanel(
-                  condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all'",
-                  ns = ns,
-                  dateRangeInput(
-                    ns("date_range"),
-                    tr("date_range_lab", language$language),
-                    start = Sys.Date() - 365,
-                    end = Sys.Date(),
-                    format = "yyyy-mm-dd",
-                    startview = "month",
-                    language = language$abbrev,
-                    separator = tr("date_sep", language$language)
-                  ),
-                  actionButton(
-                    ns("last_30"),
-                    tr("plot_last_30", language$language)
-                  ),
-                  actionButton(
-                    ns("entire_record"),
-                    tr("plot_all_record", language$language)
-                  )
-                ),
-                # Show years to plot ONLY for overlapping years and histograms
-                conditionalPanel(
-                  condition = "input.plot_type == 'overlap_yrs' || input.plot_type == 'histogram'",
-                  ns = ns,
-                  dateRangeInput(
-                    ns("doy_range"),
-                    tr("date_range_select_doy", language$language),
-                    start = Sys.Date() - 365,
-                    end = Sys.Date(),
-                    format = "yyyy-mm-dd",
-                    language = language$abbrev,
-                    separator = tr("date_sep", language$language)
-                  ),
-                  div(
-                    selectizeInput(
-                      ns("plot_years"),
-                      label = tr("plot_select_years", language$language),
-                      choices = NULL,
-                      multiple = TRUE
-                    ), # Choices are populated based on the location and parameter
-                    style = "display: flex; align-items: center;",
-                    span(
-                      id = ns("log_info_years"),
-                      `data-bs-toggle` = "tooltip",
-                      `data-placement` = "right",
-                      `data-trigger` = "click hover",
-                      title = tr("plot_select_yrs", language$language),
-                      icon(
-                        "info-circle",
-                        style = "font-size: 100%; margin-left: 5px;"
-                      )
+            bslib::layout_sidebar(
+              sidebar = bslib::sidebar(
+                title = tr("plot_extra_options", language$language),
+                position = "right",
+                open = FALSE,
+                width = 360,
+                radioButtons(
+                  ns("plot_lang"),
+                  label = tr("language", language$language),
+                  choices = stats::setNames(
+                    c("en", "fr"),
+                    c(
+                      tr("english", language$language),
+                      tr("francais", language$language)
                     )
-                  )
+                  ),
+                  selected = language$abbrev,
+                  inline = TRUE
                 ),
-                # Timezone is applicable to all types
-                selectizeInput(
-                  ns("plot_timezone"),
-                  label = tr("plot_timezone_offset", language$language),
-                  choices = -12:14,
-                  selected = -7,
-                  multiple = FALSE,
-                  options = list(
-                    placeholder = tr(
-                      "plot_timezone_offset_placeholder",
-                      language$language
-                    )
-                  )
+                checkboxInput(
+                  ns("plot_filter"),
+                  tr("plot_filter", language$language),
+                  value = FALSE
                 ),
-                # Don't show the resolution if it's a histogram type plot
+                checkboxInput(
+                  ns("showgridx"),
+                  tr("show_x_grid", language$language),
+                  value = FALSE
+                ),
+                checkboxInput(
+                  ns("showgridy"),
+                  tr("show_y_grid", language$language),
+                  value = FALSE
+                ),
                 conditionalPanel(
-                  condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
+                  condition = "output.has_multiple_timeseries == 'true'",
                   ns = ns,
-                  selectInput(
-                    ns("plot_resolution"),
-                    label = tr("plot_resolution_lab", language$language),
-                    choices = stats::setNames(
-                      c("max", "hour", "day"),
-                      c(
-                        tr("plot_resolution_max", language$language),
-                        tr("plot_resolution_hourly", language$language),
-                        tr("plot_resolution_daily", language$language)
-                      )
-                    ),
-                    selected = "day"
-                  ) |>
-                    tooltip(
-                      id = ns("plot_resolution_tooltip"),
-                      div(
-                        class = "text-warning",
-                        shiny::icon("triangle-exclamation"),
-                        tr("plot_long_time_to_plot", language$language)
+                  checkboxInput(
+                    ns("shareX"),
+                    label = tooltip(
+                      trigger = list(
+                        tr("share_x_axis", language$language),
+                        bsicons::bs_icon("info-circle-fill")
                       ),
-                      placement = "right"
-                    )
+                      tr("share_x_axis_tooltip", language$language)
+                    ),
+                    value = TRUE
+                  ),
+                  checkboxInput(
+                    ns("shareY"),
+                    label = tooltip(
+                      trigger = list(
+                        tr("share_y_axis", language$language),
+                        bsicons::bs_icon("info-circle-fill")
+                      ),
+                      tr("share_y_axis_tooltip", language$language)
+                    ),
+                    value = FALSE
+                  )
+                ),
+                sliderInput(
+                  ns("line_scale"),
+                  tr("line_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                ),
+                sliderInput(
+                  ns("axis_scale"),
+                  tr("axis_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                ),
+                sliderInput(
+                  ns("legend_scale"),
+                  tr("legend_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
                 )
               ),
-              column(
-                width = 6,
-                conditionalPanel(
-                  condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
-                  ns = ns,
-                  checkboxInput(
-                    ns("show_hist"),
-                    tr("plot_hist_range", language$language),
-                    value = TRUE
-                  ),
-                  div(
-                    selectizeInput(
-                      ns("historic_range_overlap"),
-                      label = tr("plot_hist_range_select", language$language),
-                      choices = stats::setNames(
-                        c("all", "last", "none"),
-                        c(
-                          tr("all_yrs_record", language$language),
-                          tr("last_yr_only", language$language),
-                          tr("none_fm", language$language)
-                        )
+              div(
+                fluidRow(
+                  class = "align-items-start",
+                  column(
+                    width = 6,
+                    # Show date range and shortcut selection buttons if NOT overlapping years or histogram
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all'",
+                      ns = ns,
+                      dateRangeInput(
+                        ns("date_range"),
+                        tr("date_range_lab", language$language),
+                        start = Sys.Date() - 365,
+                        end = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        startview = "month",
+                        language = language$abbrev,
+                        separator = tr("date_sep", language$language)
                       ),
-                      selected = "all"
-                    ),
-                    style = "display: flex; align-items: center;",
-                    span(
-                      id = ns("log_info_hist_range"),
-                      `data-bs-toggle` = "tooltip",
-                      `data-placement` = "right",
-                      `data-trigger` = "click hover",
-                      title = tr(
-                        "plot_hist_range_select_tooltip",
-                        language$language
+                      actionButton(
+                        ns("last_30"),
+                        tr("plot_last_30", language$language)
                       ),
-                      icon(
-                        "info-circle",
-                        style = "font-size: 100%; margin-left: 5px;"
+                      actionButton(
+                        ns("entire_record"),
+                        tr("plot_all_record", language$language)
                       )
+                    ),
+                    # Show years to plot ONLY for overlapping years and histograms
+                    conditionalPanel(
+                      condition = "input.plot_type == 'overlap_yrs' || input.plot_type == 'histogram'",
+                      ns = ns,
+                      dateRangeInput(
+                        ns("doy_range"),
+                        tr("date_range_select_doy", language$language),
+                        start = Sys.Date() - 365,
+                        end = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        language = language$abbrev,
+                        separator = tr("date_sep", language$language)
+                      ),
+                      div(
+                        selectizeInput(
+                          ns("plot_years"),
+                          label = tr("plot_select_years", language$language),
+                          choices = NULL,
+                          multiple = TRUE
+                        ), # Choices are populated based on the location and parameter
+                        style = "display: flex; align-items: center;",
+                        span(
+                          id = ns("log_info_years"),
+                          `data-bs-toggle` = "tooltip",
+                          `data-placement` = "right",
+                          `data-trigger` = "click hover",
+                          title = tr("plot_select_yrs", language$language),
+                          icon(
+                            "info-circle",
+                            style = "font-size: 100%; margin-left: 5px;"
+                          )
+                        )
+                      )
+                    ),
+                    # Timezone is applicable to all types
+                    selectizeInput(
+                      ns("plot_timezone"),
+                      label = tr("plot_timezone_offset", language$language),
+                      choices = -12:14,
+                      selected = -7,
+                      multiple = FALSE,
+                      options = list(
+                        placeholder = tr(
+                          "plot_timezone_offset_placeholder",
+                          language$language
+                        )
+                      )
+                    ),
+                    # Don't show the resolution if it's a histogram type plot
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
+                      ns = ns,
+                      selectInput(
+                        ns("plot_resolution"),
+                        label = tr("plot_resolution_lab", language$language),
+                        choices = stats::setNames(
+                          c("max", "hour", "day"),
+                          c(
+                            tr("plot_resolution_max", language$language),
+                            tr("plot_resolution_hourly", language$language),
+                            tr("plot_resolution_daily", language$language)
+                          )
+                        ),
+                        selected = "day"
+                      ) |>
+                        tooltip(
+                          id = ns("plot_resolution_tooltip"),
+                          div(
+                            class = "text-warning",
+                            shiny::icon("triangle-exclamation"),
+                            tr("plot_long_time_to_plot", language$language)
+                          ),
+                          placement = "right"
+                        )
                     )
                   ),
-                  uiOutput(ns("historic_range_note")),
-                  checkboxInput(
-                    ns("show_unusable"),
-                    tr("plot_show_unusable", language$language),
-                    value = FALSE
-                  )
-                ),
-                conditionalPanel(
-                  condition = "input.plot_type == 'timeseries'",
-                  ns = ns,
-                  checkboxInput(
-                    ns("show_grades"),
-                    tr("plot_show_grades", language$language),
-                    value = FALSE
-                  ),
-                  checkboxInput(
-                    ns("show_approvals"),
-                    tr("plot_show_approvals", language$language),
-                    value = FALSE
-                  ),
-                  checkboxInput(
-                    ns("show_qualifiers"),
-                    tr("plot_show_qualifiers", language$language),
-                    value = FALSE
-                  )
-                ),
-                conditionalPanel(
-                  condition = "input.plot_type == 'histogram'",
-                  ns = ns,
-                  selectizeInput(
-                    ns("hist_transformation"),
-                    label = "Transformation",
-                    choices = c(
-                      "sum",
-                      "min",
-                      "max",
-                      "mean",
-                      "median",
-                      "integral"
+                  column(
+                    width = 6,
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
+                      ns = ns,
+                      checkboxInput(
+                        ns("apply_datum"),
+                        tr("plot_apply_vert_datum", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_hist"),
+                        tr("plot_hist_range", language$language),
+                        value = TRUE
+                      ),
+                      div(
+                        selectizeInput(
+                          ns("historic_range_overlap"),
+                          label = tr(
+                            "plot_hist_range_select",
+                            language$language
+                          ),
+                          choices = stats::setNames(
+                            c("all", "last", "none"),
+                            c(
+                              tr("all_yrs_record", language$language),
+                              tr("last_yr_only", language$language),
+                              tr("none_fm", language$language)
+                            )
+                          ),
+                          selected = "all"
+                        ),
+                        style = "display: flex; align-items: center;",
+                        span(
+                          id = ns("log_info_hist_range"),
+                          `data-bs-toggle` = "tooltip",
+                          `data-placement` = "right",
+                          `data-trigger` = "click hover",
+                          title = tr(
+                            "plot_hist_range_select_tooltip",
+                            language$language
+                          ),
+                          icon(
+                            "info-circle",
+                            style = "font-size: 100%; margin-left: 5px;"
+                          )
+                        )
+                      ),
+                      uiOutput(ns("historic_range_note")),
+                      checkboxInput(
+                        ns("show_unusable"),
+                        tr("plot_show_unusable", language$language),
+                        value = FALSE
+                      )
                     ),
-                    selected = "sum"
-                  ),
-                  selectizeInput(
-                    ns("hist_bin_units"),
-                    label = "Bin units",
-                    choices = c(
-                      "day",
-                      "week",
-                      "month",
-                      "year"
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries'",
+                      ns = ns,
+                      checkboxInput(
+                        ns("show_grades"),
+                        tr("plot_show_grades", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_approvals"),
+                        tr("plot_show_approvals", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_qualifiers"),
+                        tr("plot_show_qualifiers", language$language),
+                        value = FALSE
+                      )
                     ),
-                    selected = "month"
-                  ),
-                  numericInput(
-                    ns("hist_bin_width"),
-                    label = "Bin width",
-                    value = 1,
-                    min = 1
-                  ),
-                  numericInput(
-                    ns("hist_threshold"),
-                    label = "Min % of records to show bin (0-100)",
-                    value = 90,
-                    min = 1,
-                    max = 100
-                  ),
-                  checkboxInput(
-                    ns("hist_completeness_labels"),
-                    label = "Show completeness % above bins",
-                    value = TRUE
-                  )
-                ) # End histogram conditionalPanel
-              ), # End right column
-              input_task_button(
-                ns("make_plot"),
-                label = tr("create_plot", language$language),
-                label_busy = tr("processing", language$language),
-                class = "btn btn-primary"
+                    conditionalPanel(
+                      condition = "input.plot_type == 'histogram'",
+                      ns = ns,
+                      selectizeInput(
+                        ns("hist_transformation"),
+                        label = "Transformation",
+                        choices = c(
+                          "sum",
+                          "min",
+                          "max",
+                          "mean",
+                          "median",
+                          "integral"
+                        ),
+                        selected = "sum"
+                      ),
+                      selectizeInput(
+                        ns("hist_bin_units"),
+                        label = "Bin units",
+                        choices = c(
+                          "day",
+                          "week",
+                          "month",
+                          "year"
+                        ),
+                        selected = "month"
+                      ),
+                      numericInput(
+                        ns("hist_bin_width"),
+                        label = "Bin width",
+                        value = 1,
+                        min = 1
+                      ),
+                      numericInput(
+                        ns("hist_threshold"),
+                        label = "Min % of records to show bin (0-100)",
+                        value = 90,
+                        min = 1,
+                        max = 100
+                      ),
+                      checkboxInput(
+                        ns("hist_completeness_labels"),
+                        label = "Show completeness % above bins",
+                        value = TRUE
+                      )
+                    ) # End histogram conditionalPanel
+                  ) # End right column
+                ),
+                tags$div(style = "height: 10px;"),
+                input_task_button(
+                  ns("make_plot"),
+                  label = tr("create_plot", language$language),
+                  label_busy = tr("processing", language$language),
+                  class = "btn btn-primary"
+                )
               )
             )
           ) # End plot_options_panel
@@ -909,7 +1006,38 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     current_plot_resolution <- reactive({
-      normalize_plot_resolution(input$plot_resolution)
+      if (
+        is.null(input$plot_resolution) ||
+          length(input$plot_resolution) == 0 ||
+          is.na(input$plot_resolution[[1]])
+      ) {
+        return("day")
+      }
+
+      resolution <- tolower(as.character(input$plot_resolution[[1]]))
+      if (!(resolution %in% c("max", "hour", "day"))) {
+        return("day")
+      }
+
+      resolution
+    })
+
+    current_legend_position <- reactive({
+      dims <- windowDims()
+      if (
+        is.null(dims) ||
+          is.null(dims$width) ||
+          is.null(dims$height) ||
+          any(is.na(c(dims$width, dims$height)))
+      ) {
+        return("v")
+      }
+
+      if (dims$width > dims$height) {
+        "v"
+      } else {
+        "h"
+      }
     })
 
     selected_historic_range_metadata <- reactive({
@@ -967,6 +1095,24 @@ contPlot <- function(id, language, windowDims, inputs) {
         record_rate = record_rate
       )
     })
+
+    historic_range_meaningless_note <- function(
+      aggregation_types,
+      resolution,
+      record_rate_seconds = NULL,
+      lang = "en"
+    ) {
+      if (
+        !historic_range_is_meaningless(
+          aggregation_types = aggregation_types,
+          resolution = resolution,
+          record_rate_seconds = record_rate_seconds
+        )
+      ) {
+        return(NULL)
+      }
+      return(tr("plot_hist_range_meaningless", lang))
+    }
 
     historic_range_ui_state <- reactive({
       plot_type <- current_plot_type()
@@ -1296,14 +1442,22 @@ contPlot <- function(id, language, windowDims, inputs) {
           searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
-            "function(settings, json) {
-             $(this.api().table().header()).css({
-              'font-size': '90%'
-             });
-             $(this.api().table().body()).css({
-              'font-size': '80%'
-             });
-            }"
+            # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
+            sprintf(
+              "function(settings, json) {
+                 var api = this.api();
+    
+                 $(api.table().header()).css({'font-size': '90%%'});
+                 $(api.table().body()).css({'font-size': '80%%'});
+    
+                 setTimeout(function() {
+                   $(api.table().container())
+                     .find('thead input[type=\"search\"]')
+                     .attr('placeholder', '%s');
+                 }, 0);
+               }",
+              tr("all_m", language$language)
+            )
           ),
           language = list(
             info = tr("tbl_info", language$language),
@@ -1727,9 +1881,52 @@ contPlot <- function(id, language, windowDims, inputs) {
           as.numeric(input$hist_threshold) / 100
         },
         hist_completeness_labels = isTRUE(input$hist_completeness_labels),
-        lang = language$abbrev,
+        lang = if (
+          !is.null(input$plot_lang) &&
+            length(input$plot_lang) > 0 &&
+            input$plot_lang[[1]] %in% c("en", "fr")
+        ) {
+          input$plot_lang[[1]]
+        } else {
+          language$abbrev
+        },
         plot_resolution = plot_resolution,
-        plot_timezone = timezone_name
+        plot_timezone = timezone_name,
+        datum = isTRUE(input$apply_datum),
+        filter = if (isTRUE(input$plot_filter)) {
+          20
+        } else {
+          NULL
+        },
+        line_scale = if (
+          is.null(input$line_scale) ||
+            is.na(input$line_scale)
+        ) {
+          1
+        } else {
+          as.numeric(input$line_scale)
+        },
+        axis_scale = if (
+          is.null(input$axis_scale) ||
+            is.na(input$axis_scale)
+        ) {
+          1
+        } else {
+          as.numeric(input$axis_scale)
+        },
+        legend_scale = if (
+          is.null(input$legend_scale) ||
+            is.na(input$legend_scale)
+        ) {
+          1
+        } else {
+          as.numeric(input$legend_scale)
+        },
+        legend_position = current_legend_position(),
+        gridx = isTRUE(input$showgridx),
+        gridy = isTRUE(input$showgridy),
+        shareX = isTRUE(input$shareX),
+        shareY = isTRUE(input$shareY)
       )
     })
 
@@ -2166,7 +2363,12 @@ contPlot <- function(id, language, windowDims, inputs) {
             plot_obj
           }
 
-          combine_plot_results <- function(results, ids) {
+          combine_plot_results <- function(
+            results,
+            ids,
+            shareX = FALSE,
+            shareY = FALSE
+          ) {
             if (length(results) == 1) {
               return(results[[1]])
             }
@@ -2178,8 +2380,8 @@ contPlot <- function(id, language, windowDims, inputs) {
                 plot_list,
                 list(
                   nrows = length(plot_list),
-                  shareX = FALSE,
-                  shareY = FALSE,
+                  shareX = shareX,
+                  shareY = shareY,
                   titleY = TRUE,
                   margin = 0.05
                 )
@@ -2203,6 +2405,8 @@ contPlot <- function(id, language, windowDims, inputs) {
                 start_date = req$start_date,
                 end_date = req$end_date,
                 historic_range = req$historic_range,
+                datum = req$datum,
+                filter = req$filter,
                 unusable = req$unusable,
                 lang = req$lang,
                 webgl = session$userData$use_webgl,
@@ -2210,8 +2414,14 @@ contPlot <- function(id, language, windowDims, inputs) {
                 data = TRUE,
                 tzone = plot_timezone,
                 resolution = plot_resolution,
-                gridx = FALSE,
-                gridy = FALSE
+                line_scale = req$line_scale,
+                axis_scale = req$axis_scale,
+                legend_scale = req$legend_scale,
+                legend_position = req$legend_position,
+                gridx = req$gridx,
+                gridy = req$gridy,
+                shareX = req$shareX,
+                shareY = req$shareY
               )
             } else {
               plot <- plotTimeseries(
@@ -2219,6 +2429,8 @@ contPlot <- function(id, language, windowDims, inputs) {
                 start_date = req$start_date,
                 end_date = req$end_date,
                 historic_range = req$historic_range,
+                datum = req$datum,
+                filter = req$filter,
                 unusable = req$unusable,
                 grades = req$grades,
                 approvals = req$approvals,
@@ -2227,8 +2439,12 @@ contPlot <- function(id, language, windowDims, inputs) {
                 webgl = session$userData$use_webgl,
                 con = con,
                 data = TRUE,
-                gridx = FALSE,
-                gridy = FALSE,
+                line_scale = req$line_scale,
+                axis_scale = req$axis_scale,
+                legend_scale = req$legend_scale,
+                legend_position = req$legend_position,
+                gridx = req$gridx,
+                gridy = req$gridy,
                 slider = FALSE,
                 tzone = plot_timezone,
                 resolution = plot_resolution
@@ -2244,13 +2460,21 @@ contPlot <- function(id, language, windowDims, inputs) {
               start_date = req$start_date,
               end_date = req$end_date,
               historic_range = req$historic_range,
+              datum = req$datum,
+              filter = req$filter,
               unusable = req$unusable,
               lang = req$lang,
               webgl = session$userData$use_webgl,
               con = con,
               data = TRUE,
-              gridx = FALSE,
-              gridy = FALSE,
+              line_scale = req$line_scale,
+              axis_scale = req$axis_scale,
+              legend_scale = req$legend_scale,
+              legend_position = req$legend_position,
+              gridx = req$gridx,
+              gridy = req$gridy,
+              shareX = req$shareX,
+              shareY = req$shareY,
               tzone = plot_timezone,
               resolution = plot_resolution
             )
@@ -2267,12 +2491,18 @@ contPlot <- function(id, language, windowDims, inputs) {
                     endDay = req$end_day,
                     years = req$years,
                     historic_range = req$historic_range_overlap,
+                    datum = req$datum,
+                    filter = req$filter,
                     unusable = req$unusable,
                     lang = req$lang,
                     webgl = session$userData$use_webgl,
                     slider = FALSE,
-                    gridx = FALSE,
-                    gridy = FALSE,
+                    line_scale = req$line_scale,
+                    axis_scale = req$axis_scale,
+                    legend_scale = req$legend_scale,
+                    legend_position = req$legend_position,
+                    gridx = req$gridx,
+                    gridy = req$gridy,
                     con = con,
                     data = TRUE,
                     tzone = plot_timezone,
@@ -2291,7 +2521,12 @@ contPlot <- function(id, language, windowDims, inputs) {
                 }
               )
             })
-            return(combine_plot_results(overlap_plots, timeseries_ids))
+            return(combine_plot_results(
+              overlap_plots,
+              timeseries_ids,
+              shareX = req$shareX,
+              shareY = req$shareY
+            ))
           }
 
           if (plot_type == "histogram") {
@@ -2312,8 +2547,12 @@ contPlot <- function(id, language, windowDims, inputs) {
                     tzone = plot_timezone,
                     con = con,
                     data = TRUE,
-                    gridx = FALSE,
-                    gridy = FALSE
+                    line_scale = req$line_scale,
+                    axis_scale = req$axis_scale,
+                    legend_scale = req$legend_scale,
+                    legend_position = req$legend_position,
+                    gridx = req$gridx,
+                    gridy = req$gridy
                   )
                 ),
                 error = function(e) {
@@ -2330,7 +2569,9 @@ contPlot <- function(id, language, windowDims, inputs) {
             })
             return(combine_plot_results(
               histogram_plots,
-              timeseries_ids
+              timeseries_ids,
+              shareX = req$shareX,
+              shareY = req$shareY
             ))
           }
 
@@ -2602,127 +2843,230 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
       },
       content = function(file) {
+        req <- isolate(plot_request())
         out <- long_ts_plot$result()$data
 
         wb <- openxlsx::createWorkbook()
 
-        # Create metadata
-        timeseries <- plot_request()$timeseries_id
-        loc_id <- moduleData$timeseries[
-          timeseries_id == timeseries,
-          location_id
-        ]
-        location <- moduleData$locs[
-          location_id == loc_id,
-          get(tr("generic_name_col", language$language))
-        ]
-        sloc_id <- moduleData$timeseries[
-          timeseries_id == timeseries,
-          sub_location_id
-        ]
-        if (!is.na(sloc_id)) {
-          sub_location <- moduleData$sub_locs[
-            sub_location_id == sloc_id,
-            get(tr("sub_location_col", language$language))
-          ]
-        } else {
-          sub_location <- NA
-        }
-        pid <- moduleData$timeseries[
-          timeseries_id == timeseries,
-          parameter_id
-        ]
-        parameter <- moduleData$params[
-          parameter_id == pid,
-          get(tr("param_name_col", language$language))
-        ]
-        units <- moduleData$params[
-          parameter_id == pid,
-          get("unit")
-        ]
-        date_range_start <- format(
-          min(out$trace_data$datetime, na.rm = TRUE),
-          "%Y-%m-%d %H:%M"
-        )
-        date_range_end <- format(
-          max(out$trace_data$datetime, na.rm = TRUE),
-          "%Y-%m-%d %H:%M"
-        )
-        hist_range_start <- as.character(moduleData$timeseries[
-          timeseries_id == timeseries,
-          start_datetime
-        ])
+        existing_sheets <- character(0)
+        unique_sheet_name <- function(name) {
+          clean_name <- gsub("[\\\\/?*\\[\\]:]", "_", name)
+          clean_name <- gsub("^'+|'+$", "", clean_name)
+          clean_name <- trimws(clean_name)
+          if (!nzchar(clean_name)) {
+            clean_name <- "sheet"
+          }
+          clean_name <- substr(clean_name, 1, 31)
 
-        hist_range_end <- as.character(moduleData$timeseries[
-          timeseries_id == timeseries,
-          end_datetime
-        ])
-        metadata <- data.frame(
-          "Attribute" = c(
+          candidate <- clean_name
+          suffix <- 1L
+          while (candidate %in% existing_sheets) {
+            suffix_text <- paste0("_", suffix)
+            candidate <- paste0(
+              substr(clean_name, 1, max(1, 31 - nchar(suffix_text))),
+              suffix_text
+            )
+            suffix <- suffix + 1L
+          }
+
+          existing_sheets <<- c(existing_sheets, candidate)
+          candidate
+        }
+
+        write_data_recursive <- function(x, prefix = "data") {
+          if (is.null(x)) {
+            return(invisible(NULL))
+          }
+
+          if (is.data.frame(x)) {
+            sheet_name <- unique_sheet_name(prefix)
+            openxlsx::addWorksheet(wb, sheetName = sheet_name)
+            openxlsx::writeData(
+              wb,
+              sheet = sheet_name,
+              x = x,
+              colNames = TRUE
+            )
+            return(invisible(NULL))
+          }
+
+          if (is.list(x)) {
+            nm <- names(x)
+            if (is.null(nm) || any(!nzchar(nm))) {
+              nm <- paste0("item", seq_along(x))
+            }
+
+            for (i in seq_along(x)) {
+              write_data_recursive(
+                x[[i]],
+                prefix = paste(prefix, nm[[i]], sep = "_")
+              )
+            }
+          }
+        }
+
+        base_metadata <- data.frame(
+          Attribute = c(
             "Generated on:",
-            "Location:",
-            "Sub-location:",
-            "Parameter:",
-            "Units:",
-            "Start of exported data:",
-            "End of exported data:",
-            "Start historic record for stats calculations:",
-            "End historic record for stats calculations:"
+            "Plot type:",
+            "Timeseries IDs:",
+            "Plot language:",
+            "Plot timezone:",
+            "Plot resolution:"
           ),
-          "Value" = c(
+          Value = c(
             paste0(
               substr(.POSIXct(Sys.time(), tz = "UTC"), 1, 16),
               " UTC"
             ),
-            location,
-            sub_location,
-            parameter,
-            units,
-            date_range_start,
-            date_range_end,
-            hist_range_start,
-            hist_range_end
+            req$plot_type,
+            paste(req$timeseries_ids, collapse = ", "),
+            req$lang,
+            req$plot_timezone,
+            if (!is.null(req$plot_resolution)) {
+              req$plot_resolution
+            } else {
+              NA_character_
+            }
           ),
           stringsAsFactors = FALSE,
           check.names = FALSE
         )
 
-        # Add metadata sheet
-        openxlsx::addWorksheet(wb, sheetName = "metadata")
-        # Write metadata to sheet
-        openxlsx::writeData(
-          wb,
-          sheet = "metadata",
-          x = metadata,
-          colNames = TRUE
-        )
-        trace_data <- out$trace_data
-        names(trace_data)[1:2] <- c(
-          "datetime_UTC",
-          paste0(parameter, "_", units)
-        )
-        openxlsx::addWorksheet(wb, sheetName = "trace_data")
-        openxlsx::writeData(
-          wb,
-          sheet = "trace_data",
-          x = trace_data,
-          colNames = TRUE
-        )
-        range_data <- out$range_data
-        names(range_data)[1:5] <- c(
-          "datetime_UTC",
-          paste0("historic_min_", units),
-          paste0("historic_max_", units),
-          paste0("historic_Q75_", units),
-          paste0("historic_Q25_", units)
-        )
-        openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
-        openxlsx::writeData(
-          wb,
-          sheet = "historic_range_data",
-          x = range_data,
-          colNames = TRUE
-        )
+        if (
+          length(req$timeseries_ids) == 1 &&
+            is.list(out) &&
+            is.data.frame(out$trace_data) &&
+            is.data.frame(out$range_data)
+        ) {
+          timeseries <- req$timeseries_id
+          loc_id <- moduleData$timeseries[
+            timeseries_id == timeseries,
+            location_id
+          ]
+          location <- moduleData$locs[
+            location_id == loc_id,
+            get(tr("generic_name_col", language$language))
+          ]
+          sloc_id <- moduleData$timeseries[
+            timeseries_id == timeseries,
+            sub_location_id
+          ]
+          if (!is.na(sloc_id)) {
+            sub_location <- moduleData$sub_locs[
+              sub_location_id == sloc_id,
+              get(tr("sub_location_col", language$language))
+            ]
+          } else {
+            sub_location <- NA
+          }
+          pid <- moduleData$timeseries[
+            timeseries_id == timeseries,
+            parameter_id
+          ]
+          parameter <- moduleData$params[
+            parameter_id == pid,
+            get(tr("param_name_col", language$language))
+          ]
+          units <- moduleData$params[
+            parameter_id == pid,
+            get("unit")
+          ]
+          date_range_start <- format(
+            min(out$trace_data$datetime, na.rm = TRUE),
+            "%Y-%m-%d %H:%M"
+          )
+          date_range_end <- format(
+            max(out$trace_data$datetime, na.rm = TRUE),
+            "%Y-%m-%d %H:%M"
+          )
+          hist_range_start <- as.character(moduleData$timeseries[
+            timeseries_id == timeseries,
+            start_datetime
+          ])
+          hist_range_end <- as.character(moduleData$timeseries[
+            timeseries_id == timeseries,
+            end_datetime
+          ])
+
+          metadata <- rbind(
+            base_metadata,
+            data.frame(
+              Attribute = c(
+                "Location:",
+                "Sub-location:",
+                "Parameter:",
+                "Units:",
+                "Start of exported data:",
+                "End of exported data:",
+                "Start historic record for stats calculations:",
+                "End historic record for stats calculations:"
+              ),
+              Value = c(
+                location,
+                sub_location,
+                parameter,
+                units,
+                date_range_start,
+                date_range_end,
+                hist_range_start,
+                hist_range_end
+              ),
+              stringsAsFactors = FALSE,
+              check.names = FALSE
+            )
+          )
+
+          openxlsx::addWorksheet(wb, sheetName = "metadata")
+          existing_sheets <- c(existing_sheets, "metadata")
+          openxlsx::writeData(
+            wb,
+            sheet = "metadata",
+            x = metadata,
+            colNames = TRUE
+          )
+
+          trace_data <- out$trace_data
+          names(trace_data)[1:2] <- c(
+            "datetime_UTC",
+            paste0(parameter, "_", units)
+          )
+          openxlsx::addWorksheet(wb, sheetName = "trace_data")
+          existing_sheets <- c(existing_sheets, "trace_data")
+          openxlsx::writeData(
+            wb,
+            sheet = "trace_data",
+            x = trace_data,
+            colNames = TRUE
+          )
+
+          range_data <- out$range_data
+          names(range_data)[1:5] <- c(
+            "datetime_UTC",
+            paste0("historic_min_", units),
+            paste0("historic_max_", units),
+            paste0("historic_Q75_", units),
+            paste0("historic_Q25_", units)
+          )
+          openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
+          existing_sheets <- c(existing_sheets, "historic_range_data")
+          openxlsx::writeData(
+            wb,
+            sheet = "historic_range_data",
+            x = range_data,
+            colNames = TRUE
+          )
+        } else {
+          openxlsx::addWorksheet(wb, sheetName = "metadata")
+          existing_sheets <- c(existing_sheets, "metadata")
+          openxlsx::writeData(
+            wb,
+            sheet = "metadata",
+            x = base_metadata,
+            colNames = TRUE
+          )
+          write_data_recursive(out)
+        }
 
         openxlsx::saveWorkbook(
           wb,

@@ -35,7 +35,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       session$userData$AquaCache,
       paste(
         "SELECT DISTINCT p.parameter_id, p.param_name,",
-        YGwater:::ac_parameter_unit_select_sql(
+        ac_parameter_unit_select_sql(
           session$userData$AquaCache,
           "p",
           "unit"

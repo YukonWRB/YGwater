@@ -141,6 +141,20 @@ syncCont <- function(id, language) {
         if (isTRUE(input$all_ts)) {
           ids <- "all"
         } else {
+          # Ensure that at least one row is selected
+          if (
+            is.null(input$ts_table_rows_selected) ||
+              length(input$ts_table_rows_selected) == 0
+          ) {
+            showModal(modalDialog(
+              title = "No Timeseries Selected",
+              "Please select at least one timeseries to synchronize, or check the 'All timeseries' box above the data table.",
+              easyClose = TRUE,
+              footer = modalButton("Close")
+            ))
+            return()
+          }
+
           ids <- ts_meta()[input$ts_table_rows_selected, "timeseries_id"][[1]]
           if (length(ids) == 0) {
             showModal(modalDialog(

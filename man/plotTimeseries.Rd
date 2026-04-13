@@ -40,7 +40,8 @@ plotTimeseries(
   raw = FALSE,
   imputed = FALSE,
   data = FALSE,
-  con = NULL
+  con = NULL,
+  as_of = NULL
 )
 }
 \arguments{
@@ -115,6 +116,11 @@ plotTimeseries(
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values and
+stored daily summaries should be reconstructed. Character, Date, and
+POSIXct inputs are supported. Date-like inputs are interpreted as the end
+of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 A plotly object and a data frame with the data used to create the plot (if \code{data} is TRUE).

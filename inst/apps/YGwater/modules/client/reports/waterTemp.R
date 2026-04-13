@@ -234,11 +234,16 @@ waterTempMod <- function(id, language, inputs) {
 
       ts <- moduleData$timeseries
       loc_filter_ids <- location_network_filter()
-      ts <- ts[location_id %in% loc_filter_ids]
-
       locs <- unique(moduleData$locs, by = "location_id")
       sub_locs <- unique(moduleData$sub_locs, by = "sub_location_id")
       params <- unique(moduleData$params, by = "parameter_id")
+      temp_parameter_ids <- unique(params[
+        trimws(tolower(param_name)) == "temperature, water",
+        parameter_id
+      ])
+      ts <- ts[
+        location_id %in% loc_filter_ids & parameter_id %in% temp_parameter_ids
+      ]
       media <- unique(moduleData$media, by = "media_id")
       aggregation_types <- unique(
         moduleData$aggregation_types,
@@ -340,8 +345,6 @@ waterTempMod <- function(id, language, inputs) {
       ts <- merge(ts, networks, by = "location_id", all.x = TRUE)
       ts <- merge(ts, projects, by = "location_id", all.x = TRUE)
 
-      ts <- ts[ts$parameter == "temperature, water"]
-
       ts[, `:=`(
         start_date = as.Date(start_datetime),
         end_date = as.Date(end_datetime),
@@ -390,15 +393,20 @@ waterTempMod <- function(id, language, inputs) {
         }
       }
 
-      empty_cols <- setdiff(
-        names(ts)[vapply(ts, is_empty_col, logical(1))],
-        "timeseries_id"
-      )
-      if (length(empty_cols) > 0) {
-        ts[, (empty_cols) := NULL]
+      if (nrow(ts) > 0) {
+        empty_cols <- setdiff(
+          names(ts)[vapply(ts, is_empty_col, logical(1))],
+          "timeseries_id"
+        )
+        if (length(empty_cols) > 0) {
+          ts[, (empty_cols) := NULL]
+        }
       }
 
-      data.table::setorder(ts, location, parameter)
+      sort_cols <- intersect(c("location", "parameter"), names(ts))
+      if (length(sort_cols) > 0) {
+        data.table::setorderv(ts, sort_cols)
+      }
       ts
     })
 
@@ -417,15 +425,7 @@ waterTempMod <- function(id, language, inputs) {
       project_col <- tr("generic_name_col", language$language)
       param_grp_col <- tr("param_group_col", language$language)
       intro_text <- HTML(
-        "Use this module to build water temperature plots and a report bundle consisting of plots in PNG format, an HTML report, and R data files for further work-up.
-        <br>
-        <br>
-        To get started, select a water temperature timeseries, select your desired plotting options, and click 'Create Report Figures'.
-        <br>
-        Once the plots are made you can generate and download the report bundle.
-        <br>
-        <br>
-        <b>Note</b>: This module was created on behalf of and with funding by the Council of Yukon First Nations."
+        tr("gen_waterTemp_info", language$language)
       )
       tags <- tagList(
         div(
@@ -770,14 +770,22 @@ waterTempMod <- function(id, language, inputs) {
           searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
-            "function(settings, json) {
-             $(this.api().table().header()).css({
-              'font-size': '90%'
-             });
-             $(this.api().table().body()).css({
-              'font-size': '80%'
-             });
-            }"
+            # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
+            sprintf(
+              "function(settings, json) {
+               var api = this.api();
+  
+               $(api.table().header()).css({'font-size': '90%%'});
+               $(api.table().body()).css({'font-size': '80%%'});
+  
+               setTimeout(function() {
+                 $(api.table().container())
+                   .find('thead input[type=\"search\"]')
+                   .attr('placeholder', '%s');
+               }, 0);
+             }",
+              tr("all_m", language$language)
+            )
           ),
           language = list(
             info = tr("tbl_info", language$language),
@@ -1748,6 +1756,18 @@ waterTempMod <- function(id, language, inputs) {
             bundle_dir <- file.path(work_dir, "bundle")
             dir.create(bundle_dir, recursive = TRUE)
             zip_path <- file.path(work_dir, "report.zip")
+            render_template <- file.path(work_dir, basename(report_template))
+
+            copied_template <- file.copy(
+              report_template,
+              render_template,
+              overwrite = TRUE
+            )
+            if (!isTRUE(copied_template)) {
+              stop(
+                "Unable to stage the water temperature report template in the temporary workspace."
+              )
+            }
 
             ggplot2::ggsave(
               filename = file.path(bundle_dir, "daily_mean_plot.png"),
@@ -1797,8 +1817,11 @@ waterTempMod <- function(id, language, inputs) {
             )
 
             rmarkdown::render(
-              report_template,
-              output_file = file.path(bundle_dir, "report.html"),
+              input = render_template,
+              output_file = "report.html",
+              output_dir = bundle_dir,
+              intermediates_dir = work_dir,
+              knit_root_dir = work_dir,
               params = params,
               envir = new.env(parent = globalenv()),
               quiet = TRUE

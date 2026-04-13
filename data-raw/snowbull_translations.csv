@@ -43,13 +43,13 @@ basin_pelly,,Pelly Basin,Bassin Pelly
 snowcourse_tagish,,Tagish Basin,Bassin Tagish
 snowcourse_wolfcreek,,Wolf Creek Subalpine,ruisseau Wolf
 snowcourse_pelly,,Pelly Basin,bassin Pelly
-plot_pillow_title,,%s: %s Snow Water Equivalent,%s : Équivalent en eau de la neige - %s
-plot_cddf_title,,%s: Cumulative Degree-Days of Freezing in %s,%s : Degrés-jours de gel cumulés à %s
-plot_precip_title,,%s: %s Monthly Precipitation,%s : Précipitations mensuelles à %s
-plot_snowcourse_title,,%s: %s Snow Course Data,%s : Relevés nivométriques - %s
-plot_basin_title,,%s: %s Basin Snow Water Equivalent,%s : Équivalent en eau de la neige du bassin - %s
-plot_level_title,,%s: %s Water Surface Elevation,%s : Niveau d'eau du %s
-plot_flow_title,,%s: %s,%s : %s
+plot_pillow_title,,%s: %s Snow Water Equivalent,%s: Équivalent en eau de la neige - %s
+plot_cddf_title,,%s: Cumulative Degree-Days of Freezing in %s,%s: Degrés-jours de gel cumulés à %s
+plot_precip_title,,%s: %s Monthly Precipitation,%s: Précipitations mensuelles à %s
+plot_snowcourse_title,,%s: %s Snow Course Data,%s: Relevés nivométriques - %s
+plot_basin_title,,%s: %s Basin Snow Water Equivalent,%s: Équivalent en eau de la neige du bassin - %s
+plot_level_title,,%s: %s Water Surface Elevation,%s: Niveau d'eau du %s
+plot_flow_title,,%s: %s,%s: %s
 met_whitehorse_eccc_met,,Whitehorse,Whitehorse
 met_log_cabin_meteorological,,Log Cabin (B.C.),Log Cabin (C.-B.)
 met_wolf_creek_buckbrush_taiga_meteorological,,Wolf Creek,ruisseau Wolf

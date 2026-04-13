@@ -18,7 +18,9 @@ api(
 )
 }
 \arguments{
-\item{version}{The API version to use. Default is NULL, which uses the latest version.}
+\item{version}{The API version to use. Accepts \code{NULL}, a positive integer,
+or a \code{"v"}-prefixed version string such as \code{"v2"}. Default is \code{NULL},
+which uses the latest complete file-based API version.}
 
 \item{host}{The host address to bind the server to. Default is the local host.}
 
@@ -42,7 +44,10 @@ api(
 Runs the API server.
 }
 \description{
-Launches the YGwater API using the plumber package.
+Launches the YGwater API using the installed router implementation for the
+requested version. The current default remains the latest complete
+file-based API in \code{inst/plumber} so in-progress versions can be added
+without replacing the existing surface unintentionally.
 }
 \examples{
 \dontrun{

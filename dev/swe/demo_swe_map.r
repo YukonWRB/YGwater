@@ -8,38 +8,36 @@ con <- YGwater::AquaConnect(
     password = Sys.getenv("aquacacheAdminPass"),
 )
 
-load_all()
+
+# load_all()
 dat <- load_bulletin_timeseries(
     con = con,
-    load_swe = FALSE,
+    load_swe = TRUE,
     load_temp = FALSE,
     load_precip = TRUE,
     load_streamflow = FALSE,
     start_year_historical = 1991,
     end_year_historical = 2020,
     october_start = TRUE,
-    epsg = 3579
+    epsg = 4326
 )
 
 make_snowbull_map(
     year = 2026,
-    month = 3,
-    statistic = "relative_to_med",
+    month = 4,
+    statistic = "value",
     language = "English",
-    format = "ggplot",
-    param_name = "precipitation, total",
+    format = "leaflet",
+    param_name = "snow water equivalent",
     snowbull_timeseries = dat,
     con = con,
-    filename = "map.png",
-    start_year_historical = 1991,
-    end_year_historical = 2020
+    filename = "map.html"
 )
-
 
 load_all()
 snowBulletin(
     year = 2026,
-    month = 3,
+    month = 4,
     save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
     con = con,
     language = "french",
@@ -54,7 +52,7 @@ snowBulletin(
 #     end_year_historical = 2020
 # )
 
-bulletin_month <- 3
+bulletin_month <- 4
 bulletin_year <- 2026
 bulletin_scale <- 1
 language <- list(language = "English", abbrev = "en")

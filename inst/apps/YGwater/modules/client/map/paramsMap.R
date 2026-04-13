@@ -21,7 +21,15 @@ mapParamsUI <- function(id) {
     # All UI elements rendered in server function to allow multi-language functionality
     uiOutput(ns("banner")),
     uiOutput(ns("top")),
-    uiOutput(ns("main"))
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar_controls"))
+      ),
+      leaflet::leafletOutput(ns("map"), height = '80vh')
+    )
   )
 } # End of mapParamsUI
 
@@ -72,15 +80,9 @@ mapParams <- function(id, language) {
     }) |> # End of renderUI for instructions
       bindEvent(language$language)
 
-    output$main <- renderUI({
+    output$sidebar_controls <- renderUI({
       req(moduleData, language)
-      mapCreated(FALSE)
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          bg = config$sidebar_bg, # Set in globals file
-          open = list(mobile = "always-above"),
-          tagList(
+      tagList(
             selectizeInput(
               ns("mapType"),
               label = tr("map_mapType", language$language),
@@ -145,10 +147,6 @@ mapParams <- function(id, language) {
                 class = "btn btn-primary"
               )
             }
-          )
-        ),
-        # Main panel (left)
-        leaflet::leafletOutput(ns("map"), height = '80vh')
       )
     }) |>
       bindEvent(language$language)
@@ -412,6 +410,8 @@ mapParams <- function(id, language) {
 
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
+      map_type <- req(input$mapType)
+
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
         return()
@@ -562,7 +562,7 @@ mapParams <- function(id, language) {
         moduleData$timeseries[
           moduleData$timeseries$timeseries_id %in%
             closest_measurements1$timeseries_id,
-          c("timeseries_id", "location_id")
+          c("timeseries_id", "location_id", "units", "matrix_state")
         ],
         by = "location_id"
       )
@@ -571,10 +571,7 @@ mapParams <- function(id, language) {
         moduleData$parameters$parameter_id == map_params$param1,
         get(tr("param_name_col", language$language))
       ]
-      locs_tsids1$param_unit <- moduleData$parameters[
-        moduleData$parameters$parameter_id == map_params$param1,
-        "unit_default"
-      ]
+      locs_tsids1$param_unit <- locs_tsids1$units
 
       # Now if the user has selected two parameters, repeat the process for the second parameter BUT only for the locations that did not have a match for the first parameter
       if (map_params$params == 2) {
@@ -697,7 +694,7 @@ mapParams <- function(id, language) {
           moduleData$timeseries[
             moduleData$timeseries$timeseries_id %in%
               closest_measurements2$timeseries_id,
-            c("timeseries_id", "location_id")
+            c("timeseries_id", "location_id", "units", "matrix_state")
           ],
           by = "location_id"
         )
@@ -706,10 +703,7 @@ mapParams <- function(id, language) {
           moduleData$parameters$parameter_id == map_params$param2,
           get(tr("param_name_col", language$language))
         ]
-        locs_tsids2$param_unit <- moduleData$parameters[
-          moduleData$parameters$parameter_id == map_params$param2,
-          "unit_default"
-        ]
+        locs_tsids2$param_unit <- locs_tsids2$units
 
         # Merge the two sets of locations and timeseries IDs
         locs_tsids <- rbind(locs_tsids1, locs_tsids2)
@@ -730,7 +724,7 @@ mapParams <- function(id, language) {
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
 
-      if (input$mapType == "actual") {
+      if (map_type == "actual") {
         actual_vals <- mapping_data$value
 
         if (length(actual_vals) == 0) {
@@ -783,18 +777,18 @@ mapParams <- function(id, language) {
             return(2)
           }
         }
+        legend_units <- unique(na.omit(mapping_data$param_unit))
+        legend_units <- legend_units[nzchar(legend_units)]
         lab_format <- leaflet::labelFormat(digits = legend_digits(actual_vals))
-        legend_title <- sprintf(
-          "%s (%s)",
-          moduleData$parameters[
-            moduleData$parameters$parameter_id == map_params$param1,
-            get(tr("param_name_col", language$language))
-          ],
-          moduleData$parameters[
-            moduleData$parameters$parameter_id == map_params$param1,
-            "unit_default"
-          ]
-        )
+        legend_param <- moduleData$parameters[
+          moduleData$parameters$parameter_id == map_params$param1,
+          get(tr("param_name_col", language$language))
+        ]
+        legend_title <- if (length(legend_units)) {
+          sprintf("%s (%s)", legend_param, paste(legend_units, collapse = ", "))
+        } else {
+          legend_param
+        }
       } else {
         value_palette <- leaflet::colorBin(
           palette = map_params$colors,
@@ -817,14 +811,14 @@ mapParams <- function(id, language) {
           lng = ~longitude,
           lat = ~latitude,
           fillColor = ~ value_palette(
-            if (input$mapType == "actual") {
+            if (map_type == "actual") {
               value
             } else {
               percent_historic_range_capped
             }
           ),
           color = ~ value_palette(
-            if (input$mapType == "actual") {
+            if (map_type == "actual") {
               value
             } else {
               percent_historic_range_capped
@@ -841,6 +835,11 @@ mapParams <- function(id, language) {
             "</strong><br/>",
             param_name,
             "<br>",
+            ifelse(
+              is.na(matrix_state) | !nzchar(matrix_state),
+              "",
+              paste0("Matrix state: ", matrix_state, "<br>")
+            ),
             tr("map_actual_date", language$language),
             ": ",
             if (map_params$latest) {
@@ -915,11 +914,9 @@ mapParams <- function(id, language) {
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
-
       mapCreated(TRUE)
       map
-    }) |>
-      bindEvent(language$language) # Re-render the map if the language changes
+    })
 
     # Auto-update for latest measurements every 15 minutes
     autoUpdateTimer <- reactiveTimer(15 * 60 * 1000) # 15 minutes in milliseconds
