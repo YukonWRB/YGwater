@@ -127,6 +127,10 @@ addImgSeries <- function(id, language) {
                 placeholder = 'Select source function (optional)'
               ),
               width = "100%"
+            ),
+            actionButton(
+              ns("source_fx_doc"),
+              "Open function documentation"
             )
           ),
           verticalLayout(
@@ -141,6 +145,10 @@ addImgSeries <- function(id, language) {
               value = "",
               placeholder = "arg1: value1, arg2: value2",
               width = "100%"
+            ),
+            actionButton(
+              ns("args_example"),
+              "Show example arguments"
             )
           )
         ),
@@ -259,7 +267,7 @@ addImgSeries <- function(id, language) {
         updateTextInput(
           session,
           "source_fx_args",
-          value = details$source_fx_args
+          value = parse_source_args(details$source_fx_args)
         )
         updateCheckboxInput(
           session,
@@ -391,6 +399,82 @@ addImgSeries <- function(id, language) {
       ignoreNULL = TRUE
     )
 
+    observeEvent(input$args_example, {
+      if (is.null(input$source_fx) || input$source_fx == "") {
+        showModal(modalDialog(
+          "Select a source function to view example arguments.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      ex_args <- moduleData$image_series[
+        moduleData$image_series$source_fx == input$source_fx,
+        "source_fx_args"
+      ]
+      ex_args <- ex_args[!is.na(ex_args)]
+      ex_args <- ex_args[nzchar(ex_args)]
+      ex_args <- utils::head(ex_args, 10)
+      ex_args <- unique(vapply(ex_args, parse_source_args, character(1)))
+      ex_args <- ex_args[nzchar(ex_args)]
+
+      showModal(modalDialog(
+        title = paste("Example arguments for", input$source_fx),
+        if (length(ex_args) > 0) {
+          tags$pre(paste(ex_args, collapse = "\n"))
+        } else {
+          paste(
+            "No example arguments found in existing image series.",
+            "Please refer to the AquaCache package documentation for",
+            "details on the required arguments."
+          )
+        },
+        easyClose = TRUE
+      ))
+    })
+
+    observeEvent(input$source_fx_doc, {
+      if (is.null(input$source_fx) || input$source_fx == "") {
+        showModal(modalDialog(
+          "Please select a source function to see its documentation.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      package <- tools::Rd_db("AquaCache")
+      file <- paste0(input$source_fx, ".Rd")
+      if (!file %in% names(package)) {
+        showModal(modalDialog(
+          "Documentation not found for the selected function.",
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      out <- file.path(.rd_dir, paste0(input$source_fx, ".html"))
+      tools::Rd2HTML(
+        package[[file]],
+        out,
+        no_links = TRUE,
+        package = "AquaCache"
+      )
+
+      rdoc_url <- function(session, filename) {
+        path <- session$clientData$url_pathname
+        if (is.null(path) || !nzchar(path)) {
+          path <- "/"
+        }
+        if (!grepl("/$", path)) {
+          path <- paste0(path, "/")
+        }
+        paste0(path, "rdocs/", filename)
+      }
+
+      url <- rdoc_url(session, basename(out))
+      shinyjs::runjs(sprintf("window.open('%s','_blank');", url))
+    })
+
     # Add a new image series
     # Create an extendedTask to add new, since the data pull might take a very long time
     addNewSeries <- ExtendedTask$new(
@@ -451,6 +535,7 @@ addImgSeries <- function(id, language) {
                 active = TRUE,
                 last_img = start
               )
+              print(df)
 
               new_id <- DBI::dbGetQuery(
                 con,
@@ -461,7 +546,7 @@ addImgSeries <- function(id, language) {
                   df$description,
                   DBI::SQL(df$share_with),
                   df$source_fx,
-                  if (nzchar(source_fx_args)) df$source_fx_args else NA,
+                  if (nzchar(df$source_fx_args)) df$source_fx_args else NA,
                   df$active,
                   df$last_img
                 )
