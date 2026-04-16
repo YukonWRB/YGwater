@@ -1111,7 +1111,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       ) {
         return(NULL)
       }
-      return(tr("plot_hist_range_meaningless", lang))
+      return(tr("plot_hist_range_meaningless", language$language))
     }
 
     historic_range_ui_state <- reactive({
