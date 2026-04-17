@@ -1,14 +1,19 @@
 /* Custom styling for positioning and z-index of top bar containers */
 .top-bar-container {
-  height: 60px;
+  min-height: 64px;
   margin-bottom: 3px; /* Adjust spacing above navbar */
   position: relative;
   z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 10px;
+  display: block;
+  padding: 4px 10px;
   background-color: white; /* Ensures it's not transparent */
+  width: 100%;
+}
+
+.top-bar-container .row {
+  margin-left: 0;
+  margin-right: 0;
+  width: 100%;
 }
 
 /* Styling for the logo container */
@@ -18,7 +23,7 @@
   flex: 1;
 }
 .logo-container img {
-  height: 60px;
+  height: 50px;
   width: auto; /* Maintain aspect ratio */
   margin-left: 10px; /* Ensure spacing */
 }
@@ -33,6 +38,69 @@
   position: relative;
   z-index: 2; /* Ensures it's above the logo */
   height: 100%;
+}
+
+.app-title-container {
+  position: absolute;
+  left: 20px;
+  right: 200px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 3;
+  overflow: hidden;
+}
+
+.app-title-text {
+  color: #ffffff;
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  white-space: nowrap;
+}
+
+.app-navbar-brand {
+  align-items: center;
+  display: none;
+  gap: 10px;
+  max-width: calc(100vw - 90px);
+  min-width: 0;
+  padding: 0;
+  text-decoration: none;
+}
+
+.app-navbar-brand img {
+  display: block;
+  flex: 0 0 auto;
+  height: 40px;
+  width: auto;
+}
+
+.app-navbar-title {
+  color: #ffffff;
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.15;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.navbar-collapsed-view .top-bar-container {
+  display: none;
+}
+
+body.navbar-collapsed-view .app-navbar-brand {
+  display: flex;
+}
+
+body.navbar-expanded-view .app-navbar-brand {
+  display: none;
 }
 
 /* Styling for the aurora image */
@@ -87,5 +155,30 @@
 .language-button:hover {
   color: #ffffff !important;
   background-color: transparent !important;
+}
+
+@media (max-width: 1199px) {
+  .app-title-container {
+    right: 150px;
+  }
+
+  .app-title-text {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-navbar-brand {
+    gap: 8px;
+    max-width: calc(100vw - 72px);
+  }
+
+  .app-navbar-brand img {
+    height: 34px;
+  }
+
+  .app-navbar-title {
+    font-size: 0.92rem;
+  }
 }
 

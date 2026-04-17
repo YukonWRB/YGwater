@@ -1636,6 +1636,16 @@ app_server <- function(input, output, session) {
   languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
   language_override <- reactiveVal(FALSE)
 
+  app_seo_description <- function(language = NULL) {
+    if (identical(language, "Français")) {
+      return(
+        "Explorez les donnees yukonnaises sur l'eau de surface, les eaux souterraines, l'hydrometrie, la neige et la qualite de l'eau au moyen de cartes, graphiques, tableaux et telechargements interactifs."
+      )
+    }
+
+    "Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads."
+  }
+
   set_language_selection <- function(lang_code) {
     lang_code <- tolower(if (is.null(lang_code)) "en" else lang_code)
     lang_code <- if (grepl("^fr", lang_code)) "fr" else "en"
@@ -1845,6 +1855,13 @@ app_server <- function(input, output, session) {
       "updateTitle",
       tr("title", languageSelection$language)
     ) # Update the browser title of the app based on the selected language
+    session$sendCustomMessage(
+      "updateSeo",
+      list(
+        title = tr("title", languageSelection$language),
+        description = app_seo_description(languageSelection$language)
+      )
+    )
 
     if (!config$public) {
       updateActionButton(
