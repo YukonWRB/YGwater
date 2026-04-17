@@ -219,7 +219,10 @@ app_ui <- function(request) {
           column(
             9,
             div(
-              class = "app-title-container",
+              class = paste(
+                "app-title-container",
+                if (config$public) "app-title-container--public" else ""
+              ),
               tags$span(
                 id = "app-header-title",
                 class = "app-title-text",

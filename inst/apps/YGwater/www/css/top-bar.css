@@ -50,6 +50,10 @@
   overflow: hidden;
 }
 
+.app-title-container--public {
+  top: calc(50% + 15px);
+}
+
 .app-title-text {
   color: #ffffff;
   display: block;
