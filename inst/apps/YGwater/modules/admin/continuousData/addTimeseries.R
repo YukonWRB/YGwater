@@ -105,6 +105,33 @@ addTimeseries <- function(id, language) {
       as.integer(value)
     }
 
+    nullable_numeric <- function(x) {
+      if (is.null(x) || !length(x)) {
+        return(NA_real_)
+      }
+
+      value <- x[[1]]
+      if (is.numeric(value)) {
+        if (is.na(value)) {
+          return(NA_real_)
+        }
+
+        return(as.numeric(value))
+      }
+
+      value <- trimws(as.character(value))
+      if (!nzchar(value) || identical(tolower(value), "na")) {
+        return(NA_real_)
+      }
+
+      value_num <- suppressWarnings(as.numeric(value))
+      if (is.na(value_num)) {
+        return(NA_real_)
+      }
+
+      value_num
+    }
+
     update_default_owner_selectize <- function(selected = character(0)) {
       updateSelectizeInput(
         session,
@@ -325,6 +352,87 @@ addTimeseries <- function(id, language) {
       identical(x, y)
     }
 
+    same_nullable_numeric <- function(x, y, tol = 1e-9) {
+      x <- nullable_numeric(x)
+      y <- nullable_numeric(y)
+
+      if (is.na(x) && is.na(y)) {
+        return(TRUE)
+      }
+      if (is.na(x) || is.na(y)) {
+        return(FALSE)
+      }
+
+      abs(x - y) < tol
+    }
+
+    format_z_value <- function(x) {
+      x <- as.numeric(x)
+      x <- x[!is.na(x)]
+      if (!length(x)) {
+        return(character(0))
+      }
+
+      trimws(format(
+        x,
+        scientific = FALSE,
+        digits = 15,
+        trim = TRUE
+      ))
+    }
+
+    update_z_selectize <- function(
+      selected = input$z,
+      location_id = nullable_integer(input$location),
+      sub_location_id = nullable_integer(input$sub_location)
+    ) {
+      z_values <- numeric(0)
+
+      if (
+        !is.null(moduleData$locations_z) &&
+          nrow(moduleData$locations_z) > 0 &&
+          !is.na(location_id)
+      ) {
+        z_rows <- moduleData$locations_z[
+          moduleData$locations_z$location_id == location_id,
+          ,
+          drop = FALSE
+        ]
+
+        if (is.na(sub_location_id)) {
+          z_rows <- z_rows[is.na(z_rows$sub_location_id), , drop = FALSE]
+        } else {
+          z_rows <- z_rows[
+            z_rows$sub_location_id == sub_location_id,
+            ,
+            drop = FALSE
+          ]
+        }
+
+        if (nrow(z_rows) > 0) {
+          z_values <- sort(unique(as.numeric(z_rows$z_meters)))
+        }
+      }
+
+      selected_numeric <- nullable_numeric(selected)
+      if (!is.na(selected_numeric)) {
+        z_values <- sort(unique(c(z_values, selected_numeric)))
+      }
+
+      choice_labels <- format_z_value(z_values)
+
+      updateSelectizeInput(
+        session,
+        "z",
+        choices = stats::setNames(choice_labels, choice_labels),
+        selected = if (is.na(selected_numeric)) {
+          character(0)
+        } else {
+          format_z_value(selected_numeric)
+        }
+      )
+    }
+
     validate_timeseries_matrix_state <- function(
       parameter_id,
       media_id,
@@ -460,6 +568,46 @@ addTimeseries <- function(id, language) {
       )
     }
 
+    get_or_create_location_z_id <- function(
+      con,
+      location_id,
+      sub_location_id = NA_integer_,
+      z_value
+    ) {
+      location_id <- nullable_integer(location_id)
+      sub_location_id <- nullable_integer(sub_location_id)
+      z_value <- nullable_numeric(z_value)
+
+      if (is.na(z_value)) {
+        return(NA_integer_)
+      }
+      if (is.na(location_id)) {
+        stop("A location is required to resolve elevation/depth.")
+      }
+
+      existing <- DBI::dbGetQuery(
+        con,
+        "
+        SELECT z_id
+        FROM public.locations_z
+        WHERE location_id = $1
+          AND sub_location_id IS NOT DISTINCT FROM $2
+          AND z_meters = $3
+        ",
+        params = list(location_id, sub_location_id, z_value)
+      )
+
+      if (nrow(existing) > 0) {
+        return(as.integer(existing$z_id[[1]]))
+      }
+
+      as.integer(DBI::dbGetQuery(
+        con,
+        "INSERT INTO public.locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
+        params = list(location_id, sub_location_id, z_value)
+      )[1, 1])
+    }
+
     deployment_has_signal_rows <- function(record) {
       !is.null(record) &&
         nrow(record) > 0 &&
@@ -468,11 +616,11 @@ addTimeseries <- function(id, language) {
     }
 
     current_z_value <- reactive({
-      if (!isTRUE(input$z_specify) || is.null(input$z) || is.na(input$z)) {
-        return(NA_real_)
-      }
+      nullable_numeric(input$z)
+    })
 
-      as.numeric(input$z)
+    current_z_has_input <- reactive({
+      length(normalize_selectize_values(input$z)) > 0
     })
 
     current_timeseries_id_for_association <- reactive({
@@ -768,6 +916,14 @@ addTimeseries <- function(id, language) {
         session$userData$AquaCache,
         "SELECT sub_location_id, sub_location_name, location_id FROM sub_locations ORDER BY sub_location_name ASC"
       )
+      moduleData$locations_z <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste(
+          "SELECT z_id, location_id, sub_location_id, z_meters",
+          "FROM public.locations_z",
+          "ORDER BY location_id ASC, sub_location_id ASC NULLS FIRST, z_meters ASC"
+        )
+      )
       moduleData$matrix_states <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste(
@@ -930,6 +1086,7 @@ addTimeseries <- function(id, language) {
         moduleData$organizations,
         moduleData$users,
         moduleData$timeseries,
+        moduleData$locations_z,
         orgs,
         moduleData$agreements
       )
@@ -1011,22 +1168,33 @@ addTimeseries <- function(id, language) {
               "The timezone used for calculating daily statistics. This should usually be the local timezone of the location.  Used to set the UTC times to capture a day. Note that this does not affect the timestamps of the raw data and is applied year-round (no daylight savings time adjustment)."
             )
         ),
-        checkboxInput(
-          ns("z_specify"),
-          "Specify an elevation or depth?",
-          value = FALSE
+        selectizeInput(
+          ns("z"),
+          "Elevation or depth, m (choose existing or type a new value)",
+          choices = character(0),
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = "Optional",
+            create = TRUE,
+            createFilter = htmlwidgets::JS(
+              "function(input) { return /^-?(?:\\d+|\\d*\\.\\d+)$/.test($.trim(input)); }"
+            ),
+            createOnBlur = TRUE,
+            persist = FALSE,
+            plugins = list("clear_button")
+          ),
+          width = "100%"
         ) |>
           tooltip(
-            "If the height/depth at which this timeseries is measured is important to the data interpretation (e.g., wind tower anemometer height), specify it here. Otherwise leave blank."
+            paste(
+              "If the height/depth at which this timeseries is measured is",
+              "important to the data interpretation (e.g., wind tower",
+              "anemometer height), specify it here. Existing values for the",
+              "selected location/sub-location are listed, and you can type a",
+              "new number if needed."
+            )
           ),
-        numericInput(
-          ns("z"),
-          "Elevation or depth, m (signed appropriately)",
-          value = NA,
-          min = -1000,
-          max = 10000,
-          width = "100%"
-        ),
 
         splitLayout(
           cellWidths = c("34%", "33%", "33%"),
@@ -1334,6 +1502,7 @@ addTimeseries <- function(id, language) {
       available <- available_instrument_deployments()
       current_assoc <- current_timeseries_association()
       z_value <- current_z_value()
+      z_has_input <- current_z_has_input()
       current_tsid <- current_timeseries_id_for_association()
 
       tagList(
@@ -1408,13 +1577,10 @@ addTimeseries <- function(id, language) {
             class = "alert alert-warning",
             "Select a location to load eligible deployed instruments."
           )
-        } else if (isTRUE(input$z_specify) && is.na(z_value)) {
+        } else if (z_has_input && is.na(z_value)) {
           div(
             class = "alert alert-warning",
-            paste(
-              "Specify the elevation/depth value to match deployed",
-              "instruments at this z."
-            )
+            "Elevation/depth must be a number."
           )
         } else if (nrow(available) == 0) {
           div(
@@ -1591,13 +1757,12 @@ addTimeseries <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    observeEvent(input$z_specify, {
-      if (input$z_specify) {
-        shinyjs::show("z")
-      } else {
-        shinyjs::hide("z")
+    observeEvent(
+      list(input$location, input$sub_location, moduleData$locations_z),
+      {
+        update_z_selectize()
       }
-    })
+    )
 
     # observe the location and limit the sub-locations based on those already existing
     observeEvent(
@@ -1754,15 +1919,10 @@ addTimeseries <- function(id, language) {
             "tz",
             selected = details$timezone_daily_calc
           )
-          updateCheckboxInput(
-            session,
-            "z_specify",
-            value = if (!is.na(details$z)) TRUE else FALSE
-          )
-          updateNumericInput(
-            session,
-            "z",
-            value = ifelse(is.na(details$z), NA, details$z)
+          update_z_selectize(
+            selected = details$z,
+            location_id = details$location_id,
+            sub_location_id = details$sub_location_id
           )
           updateSelectizeInput(
             session,
@@ -2059,7 +2219,6 @@ addTimeseries <- function(id, language) {
         sub_loc,
         tz,
         z,
-        z_specify,
         parameter,
         media,
         matrix_state,
@@ -2127,32 +2286,13 @@ addTimeseries <- function(id, language) {
                 end_datetime <- NA
               }
 
-              existing_z <- NA
-              if (z_specify) {
-                # Create a new entry in locations_z if needed
-                existing_z <- DBI::dbGetQuery(
-                  con,
-                  paste0(
-                    "SELECT * FROM locations_z WHERE location_id = ",
-                    loc,
-                    " AND sub_location_id ",
-                    ifelse(
-                      is.na(sub_loc),
-                      "IS NULL",
-                      paste0("= ", sub_loc)
-                    ),
-                    " AND z_meters = ",
-                    z
-                  )
-                )[1, 1]
-                if (length(existing_z) == 0) {
-                  existing_z <- DBI::dbGetQuery(
-                    con,
-                    "INSERT INTO public.locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
-                    params = list(loc, sub_loc, z)
-                  )[1, 1]
-                }
-              }
+              z <- nullable_numeric(z)
+              existing_z <- get_or_create_location_z_id(
+                con = con,
+                location_id = loc,
+                sub_location_id = sub_loc,
+                z_value = z
+              )
 
               # Make a new entry to the timeseries table
               new_timeseries_id <- DBI::dbGetQuery(
@@ -2307,6 +2447,15 @@ addTimeseries <- function(id, language) {
         return()
       }
 
+      if (current_z_has_input() && is.na(current_z_value())) {
+        showNotification(
+          "Elevation/depth must be numeric.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
       # if input$source_fx_args is not blank, validate that it is in the correct format.
       # Should have no =, no "" or '', and have : separating key and value
       if (nzchar(input$source_fx_args)) {
@@ -2342,8 +2491,7 @@ addTimeseries <- function(id, language) {
         loc = input$location,
         sub_loc = input$sub_location,
         tz = input$tz,
-        z = input$z,
-        z_specify = input$z_specify,
+        z = current_z_value(),
         parameter = input$parameter,
         media = input$media,
         matrix_state = input$matrix_state,
@@ -2390,8 +2538,7 @@ addTimeseries <- function(id, language) {
         updateSelectizeInput(session, "location", selected = character(0))
         updateSelectizeInput(session, "sub_location", selected = character(0))
         updateSelectizeInput(session, "tz", selected = -7)
-        updateCheckboxInput(session, "z_specify", value = FALSE)
-        updateNumericInput(session, "z", value = NA)
+        updateSelectizeInput(session, "z", selected = character(0))
         updateSelectizeInput(session, "parameter", selected = character(0))
         updateSelectizeInput(session, "media", selected = character(0))
         update_matrix_state_selectize(selected = NA_integer_)
@@ -2471,6 +2618,16 @@ addTimeseries <- function(id, language) {
           )
           return()
         }
+
+        if (current_z_has_input() && is.na(current_z_value())) {
+          showNotification(
+            "Elevation/depth must be numeric.",
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+
         # If we are modifying an existing timeseries, we need to check if it exists
         selected_row <- input$ts_table_rows_selected
         if (is.null(selected_row) || length(selected_row) != 1) {
@@ -2525,6 +2682,7 @@ addTimeseries <- function(id, language) {
             input_source_fx <- nullable_text(input$source_fx)
             input_source_fx_args <- nullable_text(input$source_fx_args)
             input_note <- nullable_text(input$note)
+            input_z_value <- current_z_value()
             input_share_with_values <- if (
               is.null(input$share_with) || !length(input$share_with)
             ) {
@@ -2581,69 +2739,38 @@ addTimeseries <- function(id, language) {
               recalc_stats <- TRUE
             }
 
-            if (input$z_specify) {
-              if (!is.na(selected_timeseries$z_id)) {
-                if (input$z != selected_timeseries$z) {
-                  # Delete the existing entry in locations_z and redo. This takes care of cases where a user changes both the location/sub-location AND z
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    "DELETE FROM locations_z WHERE z_id = $1;",
-                    params = list(selected_timeseries$z_id)
-                  )
-                  # Create a new entry in locations_z
-                  new_z_id <- DBI::dbGetQuery(
-                    session$userData$AquaCache,
-                    "INSERT INTO public.locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
-                    params = list(
-                      input_location_id,
-                      if (is.na(input_sub_location_id)) {
-                        input_sub_location_id
-                      } else {
-                        input_sub_location_id
-                      },
-                      input$z
-                    )
-                  )[1, 1]
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    "UPDATE timeseries SET z_id = $1 WHERE timeseries_id = $2",
-                    params = list(new_z_id, selected_timeseries$timeseries_id)
-                  )
-                }
-              } else {
-                # No existing entry
-                # Create a new entry in locations_z
-                new_z_id <- DBI::dbGetQuery(
-                  session$userData$AquaCache,
-                  "INSERT INTO locations_z (location_id, sub_location_id, z_meters) VALUES ($1, $2, $3) RETURNING z_id;",
-                  params = list(
+            if (!is.na(input_z_value)) {
+              target_z_id <- get_or_create_location_z_id(
+                con = session$userData$AquaCache,
+                location_id = input_location_id,
+                sub_location_id = input_sub_location_id,
+                z_value = input_z_value
+              )
+
+              if (
+                !same_nullable_integer(target_z_id, selected_timeseries$z_id) ||
+                  !same_nullable_integer(
                     input_location_id,
-                    if (is.na(input_sub_location_id)) {
-                      input_sub_location_id
-                    } else {
-                      input_sub_location_id
-                    },
-                    input$z
-                  )
-                )[1, 1]
+                    selected_timeseries$location_id
+                  ) ||
+                  !same_nullable_integer(
+                    input_sub_location_id,
+                    selected_timeseries$sub_location_id
+                  ) ||
+                  !same_nullable_numeric(input_z_value, selected_timeseries$z)
+              ) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   "UPDATE timeseries SET z_id = $1 WHERE timeseries_id = $2",
-                  params = list(new_z_id, selected_timeseries$timeseries_id)
+                  params = list(target_z_id, selected_timeseries$timeseries_id)
                 )
               }
             } else {
-              # Delete the entry in table locations_z if it exists, which will cascade delete the z_id in timeseries
-              exists <- DBI::dbGetQuery(
-                session$userData$AquaCache,
-                "SELECT z_id FROM locations_z WHERE z_id = $1",
-                params = list(selected_timeseries$z_id)
-              )
-              if (nrow(exists)) {
+              if (!is.na(selected_timeseries$z_id)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "DELETE FROM locations_z WHERE z_id = $1",
-                  params = list(selected_timeseries$z_id)
+                  "UPDATE timeseries SET z_id = NULL WHERE timeseries_id = $1",
+                  params = list(selected_timeseries_id)
                 )
               }
             }
