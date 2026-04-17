@@ -20,7 +20,8 @@
 .logo-container {
   display: flex;
   align-items: center;
-  flex: 1;
+  flex: 0 0 160px;
+  max-width: 160px;
 }
 .logo-container img {
   height: 50px;
@@ -31,7 +32,8 @@
 /* Container for the aurora image and login button */
 .aurora-login-container {
   display: flex;
-  flex: 3;
+  flex: 1 1 auto;
+  max-width: none;
   justify-content: flex-end;
   flex-direction: column-reverse;
   align-items: flex-end;
@@ -42,7 +44,7 @@
 
 .app-title-container {
   position: absolute;
-  left: 20px;
+  left: 0px;
   right: 200px;
   top: 50%;
   transform: translateY(-50%);
@@ -185,4 +187,3 @@ body.navbar-expanded-view .app-navbar-brand {
     font-size: 0.92rem;
   }
 }
-

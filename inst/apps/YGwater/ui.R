@@ -10,6 +10,7 @@
 
 app_ui <- function(request) {
   default_app_title <- tr("title", "English")
+  default_app_brand_title <- "Water Data Explorer"
   default_app_description <- "Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads."
 
   tagList(
@@ -44,14 +45,20 @@ app_ui <- function(request) {
       # JS below is for updating the title of the page from the server, when the user changes language
       tags$script(HTML(
         "
-      Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
-        document.title = newTitle;
+      Shiny.addCustomMessageHandler('updateBrandTitle', function(newTitle) {
         ['app-header-title', 'app-mobile-title'].forEach(function(id) {
           var titleElement = document.getElementById(id);
           if (titleElement) {
             titleElement.textContent = newTitle;
           }
         });
+      });
+    "
+      )),
+      tags$script(HTML(
+        "
+      Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
+        document.title = newTitle;
       });
     "
       )),
@@ -226,7 +233,7 @@ app_ui <- function(request) {
               tags$span(
                 id = "app-header-title",
                 class = "app-title-text",
-                default_app_title
+                default_app_brand_title
               )
             ),
             div(
@@ -271,7 +278,7 @@ app_ui <- function(request) {
           tags$span(
             id = "app-mobile-title",
             class = "app-navbar-title",
-            default_app_title
+            default_app_brand_title
           )
         ),
         id = "navbar",
