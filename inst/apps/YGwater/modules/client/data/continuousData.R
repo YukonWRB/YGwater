@@ -2077,8 +2077,10 @@ contData <- function(id, language, inputs) {
 
       # Get the relevant timeseries based on the user's input selections (filteredData might not be narrowed to the user's selections if they used a selector 'upstream' of an earlier selection)
       relevant_ts <- filteredData$timeseries[
-        filteredData$timeseries$start_datetime >= input$date_range[1] &
-          filteredData$timeseries$end_datetime <= input$date_range[2] + 1,
+        filteredData$timeseries$start_datetime <=
+          as.POSIXct(paste0(input$date_range[2], " 23:59:59"), tz = "UTC") &
+          filteredData$timeseries$end_datetime >=
+            as.POSIXct(input$date_range[1], tz = "UTC"),
       ]
       if (input$locations[1] != "all") {
         relevant_ts <- relevant_ts[
@@ -2108,25 +2110,35 @@ contData <- function(id, language, inputs) {
         relevant_ts <- relevant_ts[relevant_ts$record_rate %in% input$rate, ]
       }
 
+      relevant_tsids <- unique(stats::na.omit(relevant_ts$timeseries_id))
+
       if (language$language == "Français") {
         timeseries <- dbGetQueryDT(
           session$userData$AquaCache,
-          paste0(
-            "SELECT * FROM timeseries_metadata_fr
+          if (length(relevant_tsids) == 0) {
+            "SELECT * FROM timeseries_metadata_fr WHERE FALSE;"
+          } else {
+            paste0(
+              "SELECT * FROM timeseries_metadata_fr
                                    WHERE timeseries_id IN (",
-            paste(relevant_ts$timeseries_id, collapse = ", "),
-            ");"
-          )
+              paste(relevant_tsids, collapse = ", "),
+              ");"
+            )
+          }
         )
       } else {
         timeseries <- dbGetQueryDT(
           session$userData$AquaCache,
-          paste0(
-            "SELECT * FROM timeseries_metadata_en
+          if (length(relevant_tsids) == 0) {
+            "SELECT * FROM timeseries_metadata_en WHERE FALSE;"
+          } else {
+            paste0(
+              "SELECT * FROM timeseries_metadata_en
                                    WHERE timeseries_id IN (",
-            paste(relevant_ts$timeseries_id, collapse = ", "),
-            ");"
-          )
+              paste(relevant_tsids, collapse = ", "),
+              ");"
+            )
+          }
         )
       }
       table_data(timeseries)
