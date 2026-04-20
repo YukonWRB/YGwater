@@ -176,6 +176,7 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
 
+    # Admin modules
     source(system.file(
       "apps/YGwater/modules/admin/applicationTasks/adminLanding.R",
       package = "YGwater"
@@ -200,6 +201,8 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/users/changePassword.R",
       package = "YGwater"
     ))
+
+    # Help modules
 
     # Set up a temporary directory for storing R documentation files during app runtime
     .rd_dir <<- file.path(tempdir(), "rdocs")

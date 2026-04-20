@@ -466,7 +466,9 @@ plotMultiTimeseries <- function(
       z = z,
       z_approx = z_approx,
       lead_lag = lead_lag,
-      timeseries_id = NA_integer_
+      timeseries_id = NA_integer_,
+      aggregation_type = NA_character_,
+      data_key = NA_character_
     )
   } else {
     timeseries <- data.frame(
@@ -480,7 +482,9 @@ plotMultiTimeseries <- function(
       z = z,
       z_approx = z_approx,
       lead_lag = lead_lag,
-      timeseries_id = timeseries_ids
+      timeseries_id = timeseries_ids,
+      aggregation_type = NA_character_,
+      data_key = NA_character_
     )
   }
   if (nrow(unique(timeseries)) != nrow(timeseries)) {
@@ -517,9 +521,10 @@ plotMultiTimeseries <- function(
     }
   }
 
-  data <- list()
+  data <- vector("list", nrow(timeseries))
   remove <- numeric()
   for (i in 1:nrow(timeseries)) {
+    data[[i]] <- list(range_data = NULL, trace_data = NULL)
     location <- timeseries$location[i]
     sub_location <- if (is.na(timeseries$sub_location[i])) {
       NULL
@@ -1000,6 +1005,7 @@ plotMultiTimeseries <- function(
       con,
       exist_check$timeseries_id[1]
     )
+    timeseries[i, "data_key"] <- paste0(timeseries$location[i], "_", parameter_code)
 
     # Find the necessary datum (latest datum)
     if (datum) {
@@ -1393,9 +1399,7 @@ plotMultiTimeseries <- function(
       if (lead_lag != 0) {
         range_data$datetime <- range_data$datetime + lead_lag * 60 * 60
       }
-      data[[paste0(location, "_", parameter_code)]][[
-        "range_data"
-      ]] <- range_data
+      data[[i]][["range_data"]] <- range_data
     }
 
     if (nrow(trace_data) == 0) {
@@ -1519,12 +1523,13 @@ plotMultiTimeseries <- function(
         }
       }
     }
-    data[[paste0(location, "_", parameter_code)]][["trace_data"]] <- trace_data
+    data[[i]][["trace_data"]] <- trace_data
   } # End of loop iterating over each location:parameter:record_rate combo
 
   if (length(remove) > 0) {
     timeseries <- timeseries[-remove, ]
     log <- log[-remove]
+    data <- data[-remove]
   }
 
   if (nrow(timeseries) == 0) {
@@ -1536,6 +1541,27 @@ plotMultiTimeseries <- function(
   if (!is.null(timeseries_ids)) {
     locations <- timeseries$location
   }
+
+  aggregation_types_lookup <- DBI::dbGetQuery(
+    con,
+    "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;"
+  )
+  timeseries$aggregation_type <- aggregation_types_lookup$aggregation_type[
+    match(
+      timeseries$aggregation_type_id,
+      aggregation_types_lookup$aggregation_type_id
+    )
+  ]
+
+  data_keys <- timeseries$data_key
+  if (anyNA(data_keys) || any(data_keys == "")) {
+    missing_keys <- is.na(data_keys) | data_keys == ""
+    data_keys[missing_keys] <- paste0(
+      "timeseries_",
+      timeseries$timeseries_id[missing_keys]
+    )
+  }
+  names(data) <- make.unique(data_keys, sep = "_")
 
   if (lang == "fr") {
     for (i in 1:nrow(timeseries)) {
@@ -1590,6 +1616,11 @@ plotMultiTimeseries <- function(
               name
             ),
             # Format title line by line
+            aggregation_label = dplyr::if_else(
+              is.na(.data$aggregation_type),
+              "",
+              paste0(", ", .data$aggregation_type)
+            ),
             lead_lag_text = ifelse(
               lead_lag >= 0,
               paste0(" [+ ", lead_lag, " hours]"),
@@ -1599,6 +1630,7 @@ plotMultiTimeseries <- function(
               name,
               " (",
               .data$parameter_name,
+              .data$aggregation_label,
               ")",
               .data$lead_lag_text
             )
@@ -1615,8 +1647,19 @@ plotMultiTimeseries <- function(
               substr(name, 1, 37) %>% paste0("..."),
               name
             ),
+            aggregation_label = dplyr::if_else(
+              is.na(.data$aggregation_type),
+              "",
+              paste0(", ", .data$aggregation_type)
+            ),
             # Format title line by line
-            title = paste0(name, " (", .data$parameter_name, ")")
+            title = paste0(
+              name,
+              " (",
+              .data$parameter_name,
+              .data$aggregation_label,
+              ")"
+            )
           ) %>%
           # Combine all lines into a single title
           dplyr::summarise(plot_title = paste(title, collapse = "<br>")) %>%
@@ -1671,6 +1714,11 @@ plotMultiTimeseries <- function(
       } else {
         parameter_name <- timeseries[i, "parameter_name"]
       }
+      aggregation_label <- if (is.na(timeseries[i, "aggregation_type"])) {
+        ""
+      } else {
+        paste0(", ", timeseries[i, "aggregation_type"])
+      }
 
       timeseries[i, "trace_title"] <- paste0(
         name,
@@ -1681,6 +1729,7 @@ plotMultiTimeseries <- function(
         },
         " (",
         parameter_name,
+        aggregation_label,
         ", ",
         timeseries[i, "units"],
         ")",
@@ -1703,6 +1752,7 @@ plotMultiTimeseries <- function(
         },
         " (",
         parameter_name,
+        aggregation_label,
         ")",
         ifelse(
           timeseries[i, "lead_lag"] > 0,
@@ -1723,6 +1773,7 @@ plotMultiTimeseries <- function(
         },
         " (",
         parameter_name,
+        aggregation_label,
         ", ",
         timeseries[i, "units"],
         ")",
@@ -1905,6 +1956,23 @@ plotMultiTimeseries <- function(
       } else {
         parameter_name <- timeseries[i, "parameter_name"]
       }
+      aggregation_label <- if (is.na(timeseries[i, "aggregation_type"])) {
+        ""
+      } else {
+        paste0(", ", timeseries[i, "aggregation_type"])
+      }
+      series_label <- paste0(
+        name,
+        if (!is.na(timeseries[i, "z"])) {
+          paste0(" ", timeseries[i, "z"], " meters")
+        } else {
+          ""
+        },
+        " (",
+        parameter_name,
+        aggregation_label,
+        ")"
+      )
 
       subplot <- plotly::plot_ly()
       if (historic_range) {
@@ -1966,7 +2034,7 @@ plotMultiTimeseries <- function(
           type = if (webgl) "scattergl" else "scatter",
           mode = "lines",
           line = list(width = 2.5 * line_scale),
-          name = parameter_name,
+          name = series_label,
           color = I(color),
           hoverinfo = "text",
           text = ~ paste0(
@@ -1989,7 +2057,13 @@ plotMultiTimeseries <- function(
             tickfont = list(size = axis_scale * 12)
           ),
           yaxis = list(
-            title = paste0(parameter_name, " (", timeseries[i, "units"], ")"),
+            title = paste0(
+              parameter_name,
+              aggregation_label,
+              " (",
+              timeseries[i, "units"],
+              ")"
+            ),
             showgrid = gridy,
             showline = TRUE,
             titlefont = list(size = axis_scale * 13),
@@ -2021,7 +2095,7 @@ plotMultiTimeseries <- function(
         yref = "paper",
         xanchor = "center",
         yanchor = "bottom",
-        text = name,
+        text = series_label,
         showarrow = FALSE,
         font = list(size = 16 * axis_scale)
       )
