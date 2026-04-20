@@ -913,6 +913,10 @@ YGwater_globals <- function(
       "apps/YGwater/modules/client/reports/waterTemp.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/floodDashboard.R",
+      package = "YGwater"
+    ))
   }
 
   # Map modules

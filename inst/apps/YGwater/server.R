@@ -66,6 +66,7 @@ app_server <- function(input, output, session) {
     "maps",
     "plot",
     "reports",
+    "dashboards",
     "images",
     "data",
     "info",
@@ -793,6 +794,7 @@ app_server <- function(input, output, session) {
       "plot",
       "maps",
       "reports",
+      "dashboards",
       "images",
       "docTableView",
       "data",
@@ -1219,6 +1221,7 @@ app_server <- function(input, output, session) {
     "FOD",
     "snowInfo",
     "waterInfo",
+    "floodDashboard",
     "waterTemp",
     "WQReport",
     "snowBulletin",
@@ -1480,6 +1483,7 @@ app_server <- function(input, output, session) {
     ui_loaded$docTableView <- FALSE
     ui_loaded$snowInfo <- FALSE
     ui_loaded$waterInfo <- FALSE
+    ui_loaded$floodDashboard <- FALSE
     ui_loaded$waterTemp <- FALSE
     ui_loaded$WQReport <- FALSE
     ui_loaded$snowBulletin <- FALSE
@@ -1565,6 +1569,7 @@ app_server <- function(input, output, session) {
     "mapSnowbull",
     "snowInfo",
     "waterInfo",
+    "floodDashboard",
     "waterTemp",
     "WQReport",
     "snowBulletin",
@@ -1771,6 +1776,12 @@ app_server <- function(input, output, session) {
     })
     output$reportsNavWaterTitle <- renderUI({
       tr("reports_water", languageSelection$language)
+    })
+    output$dashboardsNavMenuTitle <- renderUI({
+      tr("dashboards", languageSelection$language)
+    })
+    output$dashboardsNavFloodTitle <- renderUI({
+      tr("dashboards_flood", languageSelection$language)
     })
     output$reportsNavWaterTempTitle <- renderUI({
       tr("reports_watertemp", languageSelection$language)
@@ -3169,6 +3180,7 @@ app_server <- function(input, output, session) {
           "FOD",
           "snowInfo",
           "waterInfo",
+          "floodDashboard",
           "waterTemp",
           "WQReport",
           "snowBulletin",
@@ -3394,6 +3406,20 @@ app_server <- function(input, output, session) {
         # Call the server
         waterTempMod(
           "waterTemp",
+          language = languageSelection,
+          inputs = NULL
+        )
+      }
+    }
+    if (input$navbar == "floodDashboard") {
+      if (!ui_loaded$floodDashboard) {
+        output$floodDashboard_ui <- renderUI(
+          floodDashboardUIMod("floodDashboard")
+        )
+        ui_loaded$floodDashboard <- TRUE
+        # Call the server
+        floodDashboardMod(
+          "floodDashboard",
           language = languageSelection,
           inputs = NULL
         )

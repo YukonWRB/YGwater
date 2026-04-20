@@ -113,6 +113,7 @@ mapRaster <- function(id, language) {
       session$userData$AquaCache,
       raster_reference_query
     )
+
     raster_reference_list$datetime <- as.POSIXct(raster_reference_list$datetime)
     models <- unique(raster_reference_list$model)
 

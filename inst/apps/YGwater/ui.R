@@ -280,6 +280,17 @@ app_ui <- function(request) {
             )
           ) # End reports nav_menu
         }, # End if !config$public for reports nav_menu
+        if (!config$public) {
+          nav_menu(
+            title = uiOutput("dashboardsNavMenuTitle"),
+            value = "dashboards",
+            nav_panel(
+              title = uiOutput("dashboardsNavFloodTitle"),
+              value = "floodDashboard",
+              uiOutput("floodDashboard_ui")
+            )
+          )
+        },
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",

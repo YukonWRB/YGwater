@@ -44,6 +44,23 @@ communities <- download_spatial_layer(
     layer_name = "Communities"
 )
 
+community_points <- if (!is.null(communities) && nrow(communities) > 0) {
+    community_coords <- sf::st_coordinates(communities)
+    data.frame(
+        sf::st_drop_geometry(communities),
+        lng = community_coords[, 1],
+        lat = community_coords[, 2],
+        stringsAsFactors = FALSE
+    )
+} else {
+    data.frame(
+        feature_name = character(),
+        lng = numeric(),
+        lat = numeric(),
+        stringsAsFactors = FALSE
+    )
+}
+
 era5_query <- "
     SELECT 
         r.reference_id,
@@ -74,51 +91,48 @@ getRasterSWE <- function(con, reference_id) {
     r <- r * 1000 # Convert from meters to mm
     return(r)
 }
-# UI using bslib::page_fluid and dynamic sidebar via uiOutput
-ui <- bslib::page_fluid(
-    uiOutput("sidebar_page")
+
+load_demo_swe_basins <- function() {
+    shp <- sf::st_read(
+        system.file(
+            "snow_survey/swe_basins/swe_basins.shp",
+            package = "YGwater",
+            mustWork = TRUE
+        ),
+        quiet = TRUE
+    )
+    sf::st_transform(shp, crs = 4326)
+}
+
+available_shapefiles <- list(
+    swe_basins = load_demo_swe_basins()
+)
+
+ui <- bslib::page_sidebar(
+    sidebar = bslib::sidebar(
+        dateInput(
+            "date",
+            "Date",
+            value = as.Date("2026-01-01"),
+            min = min(era5_raster_data$datetime),
+            max = max(era5_raster_data$datetime)
+        ),
+        selectInput(
+            "shapefile",
+            "Shapefile",
+            choices = c(
+                "swe_basins" = "swe_basins"
+            ),
+            selected = "swe_basins"
+        )
+    ),
+    leafletOutput("swe_map", height = 800)
 )
 
 server <- function(input, output, session) {
-    # Place this in your server function to generate the sidebar layout dynamically
-    output$sidebar_page <- renderUI({
-        bslib::page_sidebar(
-            sidebar = bslib::sidebar(
-                dateInput(
-                    "date",
-                    "Date",
-                    value = as.Date("2026-01-01"),
-                    min = min(era5_raster_data$datetime),
-                    max = max(era5_raster_data$datetime)
-                ),
-                selectInput(
-                    "shapefile",
-                    "Shapefile",
-                    choices = c(
-                        "swe_basins" = "swe_basins"
-                    ),
-                    selected = "swe_basins"
-                )
-            ),
-
-            leafletOutput("swe_map", height = 800)
-        )
-    })
-
     basins_shp <- reactive({
-        if (input$shapefile == "swe_basins") {
-            shp <- sf::st_read(
-                system.file(
-                    "snow_survey/swe_basins/swe_basins.shp",
-                    package = "YGwater",
-                    mustWork = TRUE
-                ),
-                quiet = TRUE
-            )
-            sf::st_transform(shp, crs = 4326)
-        } else {
-            NULL
-        }
+        req(input$shapefile)
+        available_shapefiles[[input$shapefile]]
     })
 
     # Permanent snow mask
@@ -140,15 +154,31 @@ server <- function(input, output, session) {
         if (is.null(basins)) {
             return(NULL)
         }
+        basins <- basins
         basin_means <- terra::extract(r_db, basins, fun = mean, na.rm = TRUE)
         basins$mean_raster <- basin_means[, 2]
+        basin_palette <- leaflet::colorNumeric(
+            palette = "viridis",
+            domain = basins$mean_raster,
+            na.color = "transparent"
+        )
+        basins$fill_color <- basin_palette(basins$mean_raster)
+        basin_centroids <- suppressWarnings(sf::st_centroid(basins))
+        basin_centroid_coords <- sf::st_coordinates(basin_centroids)
+        basin_labels <- data.frame(
+            sf::st_drop_geometry(basins),
+            lng = basin_centroid_coords[, 1],
+            lat = basin_centroid_coords[, 2],
+            stringsAsFactors = FALSE
+        )
 
         # Contours
         contour_levels <- seq(0, 1000, by = 50)
         contours <- terra::as.contour(r_db, levels = contour_levels)
         contours_sf <- sf::st_as_sf(contours)
 
-        values_r <- values(r_db)
+        values_r <- terra::values(r_db, mat = FALSE)
+        values_r <- values_r[is.finite(values_r)]
         pal <- colorNumeric(
             domain = values_r,
             palette = "viridis",
@@ -159,68 +189,20 @@ server <- function(input, output, session) {
         list(
             r_db = r_db,
             basins = basins,
+            basin_labels = basin_labels,
             contours_sf = contours_sf,
             pal = pal
         )
-    })
+    }) %>%
+        shiny::bindEvent(input$date, input$shapefile, ignoreInit = FALSE)
 
     output$swe_map <- renderLeaflet({
-        map_data <- swe_map_data()
-        req(map_data)
-        r_db <- map_data$r_db
-        basins_shp <- map_data$basins
-        contours_sf <- map_data$contours_sf
-        pal <- map_data$pal
-
         leaflet() %>%
             addTiles() %>%
-            addRasterImage(
-                r_db,
-                colors = pal,
-                opacity = 0.7,
-                project = TRUE,
-                group = "ERA5 Raster"
-            ) %>%
-            addPolylines(
-                data = contours_sf,
-                color = ~col,
-                weight = 3,
-                opacity = 0.85,
-                group = "Isocontours"
-            ) %>%
-            addPolygons(
-                data = basins_shp,
-                fillColor = ~ colorNumeric(
-                    "viridis",
-                    domain = basins_shp$mean_raster
-                )(mean_raster),
-                color = "black",
-                weight = 2,
-                fillOpacity = 0.6,
-                label = ~ paste0("Mean Value: ", round(mean_raster, 2)),
-                group = "Basin averages"
-            ) %>%
-            addLabelOnlyMarkers(
-                data = basins_shp,
-                lng = sf::st_coordinates(sf::st_centroid(basins_shp))[, 1],
-                lat = sf::st_coordinates(sf::st_centroid(basins_shp))[, 2],
-                label = ~ round(mean_raster, 1),
-                labelOptions = labelOptions(
-                    noHide = TRUE,
-                    direction = "center",
-                    textOnly = TRUE,
-                    style = list(
-                        "font-weight" = "bold",
-                        "color" = "black",
-                        "font-size" = "12px"
-                    )
-                ),
-                group = "Basin averages"
-            ) %>%
             addCircleMarkers(
-                data = communities,
-                lng = ~ sf::st_coordinates(geometry)[, 1],
-                lat = ~ sf::st_coordinates(geometry)[, 2],
+                data = community_points,
+                lng = ~lng,
+                lat = ~lat,
                 radius = 2,
                 color = "black",
                 fillColor = "black",
@@ -230,9 +212,9 @@ server <- function(input, output, session) {
                 group = "Communities"
             ) %>%
             addLabelOnlyMarkers(
-                data = communities,
-                lng = ~ sf::st_coordinates(geometry)[, 1],
-                lat = ~ sf::st_coordinates(geometry)[, 2],
+                data = community_points,
+                lng = ~lng,
+                lat = ~lat,
                 label = ~feature_name,
                 labelOptions = labelOptions(
                     noHide = TRUE,
@@ -254,6 +236,56 @@ server <- function(input, output, session) {
                     "Isocontours"
                 ),
                 options = layersControlOptions(collapsed = FALSE)
+            )
+    })
+
+    observe({
+        map_data <- swe_map_data()
+        req(map_data)
+
+        leafletProxy("swe_map", session = session) %>%
+            clearGroup("ERA5 Raster") %>%
+            clearGroup("Isocontours") %>%
+            clearGroup("Basin averages") %>%
+            addRasterImage(
+                map_data$r_db,
+                colors = map_data$pal,
+                opacity = 0.7,
+                project = TRUE,
+                group = "ERA5 Raster"
+            ) %>%
+            addPolylines(
+                data = map_data$contours_sf,
+                color = ~col,
+                weight = 3,
+                opacity = 0.85,
+                group = "Isocontours"
+            ) %>%
+            addPolygons(
+                data = map_data$basins,
+                fillColor = ~fill_color,
+                color = "black",
+                weight = 2,
+                fillOpacity = 0.6,
+                label = ~ paste0("Mean Value: ", round(mean_raster, 2)),
+                group = "Basin averages"
+            ) %>%
+            addLabelOnlyMarkers(
+                data = map_data$basin_labels,
+                lng = ~lng,
+                lat = ~lat,
+                label = ~ round(mean_raster, 1),
+                labelOptions = labelOptions(
+                    noHide = TRUE,
+                    direction = "center",
+                    textOnly = TRUE,
+                    style = list(
+                        "font-weight" = "bold",
+                        "color" = "black",
+                        "font-size" = "12px"
+                    )
+                ),
+                group = "Basin averages"
             )
     })
 }

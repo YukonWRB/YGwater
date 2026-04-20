@@ -12,8 +12,11 @@ plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
 plots_continuous_old,plotsNavContOldTitle,Continuous (old version),Continues (ancienne version)
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
+dashboards,dashboardsNavMenuTitle,Dashboards,Tableaux de bord
+dashboards_flood,dashboardsNavFloodTitle,Flood conditions,Conditions d'inondation
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
 reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
+reports_flood,reportsNavFloodTitle,Flood dashboard,Tableau de bord des inondations
 reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
 reports_waterTemp,reportsNavWaterTempTitle,Water temperature,Température de l'eau
