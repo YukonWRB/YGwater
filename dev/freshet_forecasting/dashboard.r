@@ -156,6 +156,34 @@ gauge_codes <- location_names_to_codes(gauge_names, con)
 
 # Spatial helpers -----------------------------------------------------------
 
+dashboard_recent_cutoff_timestamp_sql <- function(reference_time = NULL) {
+    base_sql <- if (is.null(reference_time)) {
+        "NOW()"
+    } else {
+        paste0(
+            "'",
+            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+            "'::timestamp"
+        )
+    }
+
+    paste0("(", base_sql, " - INTERVAL '14 days')")
+}
+
+dashboard_recent_cutoff_date_sql <- function(reference_time = NULL) {
+    base_sql <- if (is.null(reference_time)) {
+        "CURRENT_DATE"
+    } else {
+        paste0(
+            "'",
+            format(as.POSIXct(reference_time), "%Y-%m-%d"),
+            "'::date"
+        )
+    }
+
+    paste0("(", base_sql, " - INTERVAL '14 days')::date")
+}
+
 #' Retrieve Vector Layer Features As sf
 #'
 #' Pulls spatial features from `spatial.vectors` and returns an `sf` object
@@ -224,12 +252,23 @@ get_monitoring_locations_as_sf <- function(con) {
     location_codes_with_params <- YGwater::dbGetQueryDT(
         paste(
             "WITH location_params AS (",
-            "    SELECT l.location_code, l.name, l.latitude, l.longitude, p.param_name",
+            "    SELECT l.location_code, l.name, l.latitude, l.longitude, p.param_name, 'continuous' AS data_source",
             "    FROM locations l",
             "    JOIN timeseries ts ON l.location_id = ts.location_id",
             "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-            "    UNION",
-            "    SELECT l.location_code, l.name, l.latitude, l.longitude, p.param_name",
+            "    JOIN measurements_continuous mc ON mc.timeseries_id = ts.timeseries_id",
+            "    WHERE mc.value IS NOT NULL",
+            "      AND mc.datetime >= NOW() - INTERVAL '14 days'",
+            "    UNION ALL",
+            "    SELECT l.location_code, l.name, l.latitude, l.longitude, p.param_name, 'continuous' AS data_source",
+            "    FROM locations l",
+            "    JOIN timeseries ts ON l.location_id = ts.location_id",
+            "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+            "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = ts.timeseries_id",
+            "    WHERE mcd.value IS NOT NULL",
+            "      AND mcd.date >= CURRENT_DATE - INTERVAL '14 days'",
+            "    UNION ALL",
+            "    SELECT l.location_code, l.name, l.latitude, l.longitude, p.param_name, 'survey' AS data_source",
             "    FROM locations l",
             "    JOIN samples s ON l.location_id = s.location_id",
             "    JOIN results r ON r.sample_id = s.sample_id",
@@ -240,12 +279,14 @@ get_monitoring_locations_as_sf <- function(con) {
             "    name,",
             "    latitude,",
             "    longitude,",
-            "    BOOL_OR(param_name = 'temperature, air') AS \"temperature, air\",",
-            "    BOOL_OR(param_name = 'precipitation, total') AS \"precipitation, total\",",
-            "    BOOL_OR(param_name = 'water level') AS \"water level\",",
-            "    BOOL_OR(param_name = 'water flow') AS \"water flow\",",
-            "    BOOL_OR(param_name = 'snow water equivalent') AS \"snow water equivalent\",",
-            "    BOOL_OR(param_name = 'snow depth') AS \"snow depth\"",
+            "    BOOL_OR(data_source = 'continuous' AND param_name = 'temperature, air') AS \"temperature, air\",",
+            "    BOOL_OR(data_source = 'continuous' AND param_name = 'precipitation, total') AS \"precipitation, total\",",
+            "    BOOL_OR(data_source = 'continuous' AND param_name = 'water level') AS \"water level\",",
+            "    BOOL_OR(data_source = 'continuous' AND param_name = 'water flow') AS \"water flow\",",
+            "    BOOL_OR(data_source = 'continuous' AND param_name = 'snow water equivalent') AS \"snow water eq (pillow)\",",
+            "    BOOL_OR(data_source = 'continuous' AND param_name = 'snow depth') AS \"snow depth (pillow)\",",
+            "    BOOL_OR(data_source = 'survey' AND param_name = 'snow water equivalent') AS \"snow water eq (survey)\",",
+            "    BOOL_OR(data_source = 'survey' AND param_name = 'snow depth') AS \"snow depth (survey)\"",
             "FROM location_params",
             "WHERE param_name IN ('temperature, air', 'precipitation, total', 'water level', 'water flow', 'snow water equivalent', 'snow depth')",
             "GROUP BY location_code, name, latitude, longitude",
@@ -338,7 +379,11 @@ get_stations_by_basin <- function(location_codes, poly, monitoring_stations) {
         ),
     ]
 
-    stations_by_basin[!duplicated(stations_by_basin[[station_key]]), ]
+    stations_by_basin <- stations_by_basin[
+        !duplicated(stations_by_basin[[station_key]]),
+    ]
+
+    stations_by_basin
 }
 
 
@@ -908,6 +953,7 @@ get_precipitation_timeseries_summary <- function(
     } else {
         paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
     }
+    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
 
     historical_cte_sql <- if (historical_median) {
         paste(
@@ -1123,6 +1169,7 @@ get_precipitation_timeseries_summary <- function(
                 "%s",
                 "%s",
                 "WHERE l.last_date IS NOT NULL",
+                paste0("  AND l.last_date >= ", recent_cutoff_date_sql),
                 "%s",
                 "ORDER BY loc.location_code"
             ),
@@ -1284,11 +1331,30 @@ parameter_axis_title <- function(parameter) {
         "precipitation (1wk)" = "Precipitation (1wk accumulation, mm)",
         "precipitation (24hr)" = "Precipitation (24hr, mm)",
         "FDD" = "Freezing Degree Days (FDD)",
-        "DDT" = "Thawing Degree Days (DDT)"
+        "DDT" = "Thawing Degree Days (DDT)",
+        "snow water eq (pillow)" = "Snow Water Equivalent (Pillow)",
+        "snow depth (pillow)" = "Snow Depth (Pillow)",
+        "snow water eq (survey)" = "Snow Water Equivalent (Survey)",
+        "snow depth (survey)" = "Snow Depth (Survey)"
     )
 
     if (parameter %in% names(axis_titles)) {
         axis_titles[[parameter]]
+    } else {
+        parameter
+    }
+}
+
+parameter_query_name <- function(parameter) {
+    parameter_aliases <- c(
+        "snow water eq (pillow)" = "snow water equivalent",
+        "snow depth (pillow)" = "snow depth",
+        "snow water eq (survey)" = "snow water equivalent",
+        "snow depth (survey)" = "snow depth"
+    )
+
+    if (parameter %in% names(parameter_aliases)) {
+        parameter_aliases[[parameter]]
     } else {
         parameter
     }
@@ -1331,6 +1397,7 @@ get_daily_percentiles <- function(
     con,
     historical_start_year = 2020
 ) {
+    query_parameter <- parameter_query_name(parameter)
     location_codes_str <- paste(sprintf("'%s'", location_codes), collapse = ",")
     historical_start_year <- normalize_historical_start_year(
         historical_start_year
@@ -1766,7 +1833,7 @@ get_daily_percentiles <- function(
                 "ORDER BY lc.location_code, gs.doy"
             ),
             location_codes_str,
-            parameter
+            query_parameter
         ),
         con = con
     )
@@ -1782,6 +1849,7 @@ get_parameter_percentile_limits <- function(
         return(list(p10 = NA_real_, p90 = NA_real_))
     }
 
+    query_parameter <- parameter_query_name(parameter)
     location_sql <- DBI::dbQuoteString(con, location_code)
     historical_start_year <- normalize_historical_start_year(
         historical_start_year
@@ -1987,7 +2055,7 @@ get_parameter_percentile_limits <- function(
                     "  AND mc.value IS NOT NULL"
                 ),
                 location_sql,
-                DBI::dbQuoteString(con, parameter)
+                DBI::dbQuoteString(con, query_parameter)
             ),
             con = con
         )
@@ -2023,6 +2091,7 @@ get_continuous_data <- function(
     end_date = NULL,
     con
 ) {
+    query_parameter <- parameter_query_name(parameter)
     location_codes_str <- paste(sprintf("'%s'", location_codes), collapse = ",")
 
     if (is.null(end_date)) {
@@ -2039,7 +2108,7 @@ get_continuous_data <- function(
                     "AND ts.record_rate::text = '00:05:00'"
                 ),
                 location_codes_str,
-                parameter
+                query_parameter
             ),
             con = con
         )
@@ -2085,7 +2154,7 @@ get_continuous_data <- function(
                 "ORDER BY ts.location_id, ts.timeseries_id, mc.datetime"
             ),
             location_codes_str,
-            parameter,
+            query_parameter,
             start_date_sql,
             end_date_sql
         ),
@@ -2154,7 +2223,11 @@ plot_continuous_with_percentiles_and_return_periods <- function(
             "precipitation (24hr)",
             "temperature, air",
             "FDD",
-            "DDT"
+            "DDT",
+            "snow water equivalent",
+            "snow depth",
+            "snow water eq (pillow)",
+            "snow depth (pillow)"
         )
     historical_start_year <- normalize_historical_start_year(
         historical_start_year
@@ -2724,7 +2797,7 @@ simple_continuous_plotly_widget <- function(
     ))
     series$value <- suppressWarnings(as.numeric(series$value))
     series <- series[
-        stats::complete.cases(series[, required_cols]),
+        stats::complete.cases(series[, ..required_cols]),
         ,
         drop = FALSE
     ]
@@ -2831,9 +2904,25 @@ build_station_plot <- function(
                     historical_start_year = 2020L
                 ),
                 error = function(e) {
-                    # Fall back to the observed series without overlays so
-                    # hydrometric plots still render if percentile or return-
-                    # period decoration fails.
+                    retry_plot <- tryCatch(
+                        plot_continuous_with_percentiles_and_return_periods(
+                            location_code = location_code,
+                            continuous_data = continuous_data,
+                            percentiles = percentiles,
+                            return_periods = data.frame(),
+                            parameter = parameter,
+                            reference_time = as.character(reference_time),
+                            load_entire_record = load_entire_record,
+                            con = con,
+                            historical_start_year = 2020L
+                        ),
+                        error = function(retry_error) NULL
+                    )
+
+                    if (!is.null(retry_plot)) {
+                        return(retry_plot)
+                    }
+
                     simple_continuous_plotly_widget(
                         location_code = location_code,
                         parameter = parameter,
@@ -3037,7 +3126,11 @@ plot_continuous_static_with_percentiles_and_return_periods <- function(
             "precipitation (24hr)",
             "temperature, air",
             "FDD",
-            "DDT"
+            "DDT",
+            "snow water equivalent",
+            "snow depth",
+            "snow water eq (pillow)",
+            "snow depth (pillow)"
         )
     historical_start_year <- normalize_historical_start_year(
         historical_start_year
@@ -3553,7 +3646,7 @@ build_station_static_plot <- function(
         ))
         series$value <- suppressWarnings(as.numeric(series$value))
         series <- series[
-            stats::complete.cases(series[, required_cols]),
+            stats::complete.cases(series[, ..required_cols]),
             ,
             drop = FALSE
         ]
@@ -3629,7 +3722,9 @@ build_station_static_plot <- function(
                         "precipitation (24hr)",
                         "temperature, air",
                         "FDD",
-                        "DDT"
+                        "DDT",
+                        "snow water eq (pillow)",
+                        "snow depth (pillow)"
                     )
             ) {
                 get_daily_percentiles(
@@ -3674,6 +3769,29 @@ build_station_static_plot <- function(
                     static_plot
                 },
                 error = function(e) {
+                    retry_plot <- tryCatch(
+                        {
+                            static_plot <- plot_continuous_static_with_percentiles_and_return_periods(
+                                location_code = location_code,
+                                continuous_data = continuous_data,
+                                percentiles = percentiles,
+                                return_periods = data.frame(),
+                                parameter = parameter,
+                                reference_time = as.character(reference_time),
+                                load_entire_record = load_entire_record,
+                                con = con,
+                                historical_start_year = 2020L
+                            )
+                            ggplot2::ggplot_build(static_plot)
+                            static_plot
+                        },
+                        error = function(retry_error) NULL
+                    )
+
+                    if (!is.null(retry_plot)) {
+                        return(retry_plot)
+                    }
+
                     simple_continuous_static_plot(
                         location_code = location_code,
                         parameter = parameter,
@@ -3744,6 +3862,10 @@ get_latest_parameter_summary <- function(
     } else {
         paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
     }
+    recent_cutoff_ts_sql <- dashboard_recent_cutoff_timestamp_sql(
+        reference_time
+    )
+    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
 
     dat <- YGwater::dbGetQueryDT(
         sprintf(
@@ -3772,6 +3894,7 @@ get_latest_parameter_summary <- function(
                 "    JOIN measurements_continuous mc",
                 "      ON mc.timeseries_id = tt.timeseries_id",
                 "    WHERE mc.value IS NOT NULL",
+                paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
                 paste0("      AND mc.datetime <= ", ref_ts_sql),
                 "    ORDER BY tt.location_id, mc.datetime DESC, tt.timeseries_id",
                 "),",
@@ -3804,6 +3927,7 @@ get_latest_parameter_summary <- function(
                 "    JOIN measurements_calculated_daily mcd",
                 "      ON mcd.timeseries_id = tt.timeseries_id",
                 "    WHERE mcd.value IS NOT NULL",
+                paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
                 paste0("      AND mcd.date <= ", ref_date_sql),
                 "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
                 "),",
@@ -3912,6 +4036,7 @@ get_fdd_summary <- function(
     } else {
         paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
     }
+    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
 
     dat <- YGwater::dbGetQueryDT(
         sprintf(
@@ -4000,6 +4125,7 @@ get_fdd_summary <- function(
                 "FROM latest_by_location l",
                 "JOIN locations loc",
                 "  ON loc.location_id = l.location_id",
+                paste0("WHERE l.date >= ", recent_cutoff_date_sql),
                 "ORDER BY loc.location_code"
             ),
             location_codes_sql
@@ -4054,6 +4180,7 @@ get_ddt_summary <- function(
     } else {
         paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
     }
+    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
 
     dat <- YGwater::dbGetQueryDT(
         sprintf(
@@ -4142,6 +4269,7 @@ get_ddt_summary <- function(
                 "FROM latest_by_location l",
                 "JOIN locations loc",
                 "  ON loc.location_id = l.location_id",
+                paste0("WHERE l.date >= ", recent_cutoff_date_sql),
                 "ORDER BY loc.location_code"
             ),
             location_codes_sql
@@ -4183,7 +4311,7 @@ get_snow_survey_summary <- function(
         DBI::dbQuoteString(con, location_codes),
         collapse = ","
     )
-    parameter_sql <- DBI::dbQuoteString(con, parameter)
+    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
 
     ref_ts <- if (is.null(reference_time)) {
         Sys.time()
@@ -4317,7 +4445,7 @@ get_snow_survey_history <- function(
     }
 
     location_sql <- DBI::dbQuoteString(con, location_code)
-    parameter_sql <- DBI::dbQuoteString(con, parameter)
+    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
 
     ref_ts_sql <- if (is.null(reference_time)) {
         "NOW()"
@@ -4501,7 +4629,7 @@ get_station_timeseries <- function(
     }
 
     location_sql <- DBI::dbQuoteString(con, location_code)
-    parameter_sql <- DBI::dbQuoteString(con, parameter)
+    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
     historical_start_year <- normalize_historical_start_year(
         historical_start_year
     )
@@ -4520,12 +4648,75 @@ get_station_timeseries <- function(
     } else {
         paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
     }
+    recent_cutoff_ts_sql <- dashboard_recent_cutoff_timestamp_sql(
+        reference_time
+    )
+    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
 
     historical_daily_min_date_sql <- paste0(
         "MAKE_DATE(",
         historical_start_year,
         ", 1, 1)"
     )
+
+    recent_parameter_sql <- if (parameter %in% c("FDD", "DDT")) {
+        DBI::dbQuoteString(con, "temperature, air")
+    } else if (
+        parameter %in% c("precipitation (1wk)", "precipitation (24hr)")
+    ) {
+        DBI::dbQuoteString(con, "precipitation, total")
+    } else {
+        parameter_sql
+    }
+
+    has_recent_data <- YGwater::dbGetQueryDT(
+        sprintf(
+            paste(
+                "WITH recent_continuous AS (",
+                "    SELECT 1",
+                "    FROM measurements_continuous mc",
+                "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                "    JOIN locations l ON l.location_id = ts.location_id",
+                "    WHERE l.location_code = %s",
+                "      AND p.param_name = %s",
+                "      AND mc.value IS NOT NULL",
+                paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
+                paste0("      AND mc.datetime <= ", ref_ts_sql),
+                "    LIMIT 1",
+                "),",
+                "recent_daily AS (",
+                "    SELECT 1",
+                "    FROM measurements_calculated_daily mcd",
+                "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                "    JOIN locations l ON l.location_id = ts.location_id",
+                "    WHERE l.location_code = %s",
+                "      AND p.param_name = %s",
+                "      AND mcd.value IS NOT NULL",
+                paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
+                paste0("      AND mcd.date <= ", ref_date_sql),
+                "    LIMIT 1",
+                ")",
+                "SELECT EXISTS(SELECT 1 FROM recent_continuous) OR EXISTS(SELECT 1 FROM recent_daily) AS has_recent_data"
+            ),
+            location_sql,
+            recent_parameter_sql,
+            location_sql,
+            recent_parameter_sql
+        ),
+        con = con
+    )
+
+    if (
+        nrow(has_recent_data) == 0 ||
+            !isTRUE(has_recent_data$has_recent_data[[1]])
+    ) {
+        return(data.frame(
+            datetime = as.POSIXct(character()),
+            value = numeric()
+        ))
+    }
 
     precip_start_filter_sql <- if (isTRUE(load_entire_record)) {
         paste0("  AND mcd.date >= ", historical_daily_min_date_sql)
@@ -5008,6 +5199,371 @@ get_station_timeseries <- function(
     )
 }
 
+normalize_selected_historical_years <- function(
+    years,
+    min_year = 2000L,
+    max_year = as.integer(format(Sys.Date(), "%Y"))
+) {
+    if (is.null(years) || length(years) == 0) {
+        return(integer(0))
+    }
+
+    year_values <- suppressWarnings(as.integer(unlist(
+        years,
+        use.names = FALSE
+    )))
+    year_values <- year_values[!is.na(year_values)]
+
+    if (length(year_values) == 0) {
+        return(integer(0))
+    }
+
+    year_values <- year_values[
+        year_values >= as.integer(min_year) &
+            year_values <= as.integer(max_year)
+    ]
+
+    unique(sort(year_values, decreasing = TRUE))
+}
+
+empty_historical_overlay_data <- function() {
+    data.frame(
+        location_code = character(),
+        datetime = as.POSIXct(character(), tz = "America/Whitehorse"),
+        value = numeric(),
+        overlay_year = integer(),
+        trace_source = character(),
+        trace_label = character(),
+        stringsAsFactors = FALSE
+    )
+}
+
+empty_historical_overlay_traces <- function() {
+    list()
+}
+
+get_historical_overlay_timeseries <- function(
+    location_code,
+    parameter,
+    years,
+    con,
+    reference_time = NULL
+) {
+    if (
+        is.na(location_code) ||
+            length(location_code) == 0 ||
+            !nzchar(location_code)
+    ) {
+        return(empty_historical_overlay_traces())
+    }
+
+    if (parameter %in% c("snow water eq (survey)", "snow depth (survey)")) {
+        return(empty_historical_overlay_traces())
+    }
+
+    plot_timezone <- "America/Whitehorse"
+    target_time <- if (is.null(reference_time)) {
+        as.POSIXct(Sys.time(), tz = plot_timezone)
+    } else {
+        suppressWarnings(as.POSIXct(reference_time, tz = plot_timezone))
+    }
+    if (is.na(target_time)) {
+        target_time <- as.POSIXct(Sys.time(), tz = plot_timezone)
+    }
+
+    target_year <- as.integer(format(target_time, "%Y", tz = plot_timezone))
+    selected_years <- normalize_selected_historical_years(
+        years,
+        min_year = 2000L,
+        max_year = target_year
+    )
+    selected_years <- selected_years[selected_years < target_year]
+
+    if (length(selected_years) == 0) {
+        return(empty_historical_overlay_traces())
+    }
+
+    location_sql <- DBI::dbQuoteString(con, location_code)
+    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
+
+    shift_dates_to_target_year <- function(dat, overlay_year) {
+        if (is.null(dat) || nrow(dat) == 0) {
+            return(empty_historical_overlay_data())
+        }
+
+        dat <- interpret_loaded_times_as_local(
+            dat,
+            time_columns = c("datetime")
+        )
+        dat <- sanitize_loaded_series_values(dat, parameter)
+        source_dates <- as.Date(dat$datetime, tz = plot_timezone)
+        shifted_datetimes <- suppressWarnings(as.POSIXct(
+            sprintf(
+                "%d-%s",
+                target_year,
+                format(source_dates, "%m-%d")
+            ),
+            tz = plot_timezone,
+            format = "%Y-%m-%d"
+        ))
+
+        dat$datetime <- shifted_datetimes
+        dat <- dat[stats::complete.cases(dat[, c("datetime", "value")]), ]
+        if (nrow(dat) == 0) {
+            return(empty_historical_overlay_data())
+        }
+
+        dat$location_code <- location_code
+        dat$overlay_year <- as.integer(overlay_year)
+        dat$trace_source <- "selected_historical_year"
+        dat$trace_label <- sprintf("%d", overlay_year)
+        dat[, c(
+            "location_code",
+            "datetime",
+            "value",
+            "overlay_year",
+            "trace_source",
+            "trace_label"
+        )]
+    }
+
+    overlay_frames <- lapply(selected_years, function(overlay_year) {
+        year_start_sql <- sprintf("MAKE_DATE(%d, 1, 1)", overlay_year)
+        year_end_sql <- sprintf("MAKE_DATE(%d, 12, 31)", overlay_year)
+
+        overlay_data <- if (identical(parameter, "FDD")) {
+            season_start_sql <- sprintf(
+                "MAKE_DATE(%d, 10, 1)",
+                overlay_year - 1L
+            )
+            YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_temp AS (",
+                        "    SELECT",
+                        "        DATE_TRUNC('day', mc.datetime)::date AS date,",
+                        "        AVG(mc.value) AS mean_temp",
+                        "    FROM measurements_continuous mc",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
+                        "    WHERE l.location_code = %s",
+                        "      AND p.param_name = 'temperature, air'",
+                        "      AND mc.value IS NOT NULL",
+                        paste0(
+                            "      AND mc.datetime >= ",
+                            season_start_sql,
+                            "::timestamp"
+                        ),
+                        paste0(
+                            "      AND mc.datetime < (",
+                            year_end_sql,
+                            " + INTERVAL '1 day')::timestamp"
+                        ),
+                        "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
+                        "),",
+                        "daily_fdd AS (",
+                        "    SELECT",
+                        "        dt.date,",
+                        "        GREATEST(-dt.mean_temp, 0) AS fdd_day,",
+                        "        CASE",
+                        "            WHEN EXTRACT(MONTH FROM dt.date) >= 10",
+                        "            THEN EXTRACT(YEAR FROM dt.date)::int",
+                        "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
+                        "        END AS season_start_year",
+                        "    FROM daily_temp dt",
+                        "),",
+                        "seasonal_fdd AS (",
+                        "    SELECT",
+                        "        df.date::timestamp AS datetime,",
+                        "        1 +",
+                        "            SUM(df.fdd_day) OVER (",
+                        "                PARTITION BY df.season_start_year",
+                        "                ORDER BY df.date",
+                        "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                        "            ) -",
+                        "            FIRST_VALUE(df.fdd_day) OVER (",
+                        "                PARTITION BY df.season_start_year",
+                        "                ORDER BY df.date",
+                        "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                        "            ) AS value",
+                        "    FROM daily_fdd df",
+                        ")",
+                        "SELECT datetime, value",
+                        "FROM seasonal_fdd",
+                        paste0("WHERE datetime::date >= ", year_start_sql),
+                        paste0("  AND datetime::date <= ", year_end_sql),
+                        "ORDER BY datetime"
+                    ),
+                    location_sql
+                ),
+                con = con
+            )
+        } else if (identical(parameter, "DDT")) {
+            season_start_sql <- sprintf(
+                "MAKE_DATE(%d, 4, 1)",
+                overlay_year - 1L
+            )
+            YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_temp AS (",
+                        "    SELECT",
+                        "        DATE_TRUNC('day', mc.datetime)::date AS date,",
+                        "        AVG(mc.value) AS mean_temp",
+                        "    FROM measurements_continuous mc",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
+                        "    WHERE l.location_code = %s",
+                        "      AND p.param_name = 'temperature, air'",
+                        "      AND mc.value IS NOT NULL",
+                        paste0(
+                            "      AND mc.datetime >= ",
+                            season_start_sql,
+                            "::timestamp"
+                        ),
+                        paste0(
+                            "      AND mc.datetime < (",
+                            year_end_sql,
+                            " + INTERVAL '1 day')::timestamp"
+                        ),
+                        "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
+                        "),",
+                        "daily_ddt AS (",
+                        "    SELECT",
+                        "        dt.date,",
+                        "        GREATEST(dt.mean_temp, 0) AS ddt_day,",
+                        "        CASE",
+                        "            WHEN EXTRACT(MONTH FROM dt.date) >= 4",
+                        "            THEN EXTRACT(YEAR FROM dt.date)::int",
+                        "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
+                        "        END AS season_start_year",
+                        "    FROM daily_temp dt",
+                        "),",
+                        "seasonal_ddt AS (",
+                        "    SELECT",
+                        "        df.date::timestamp AS datetime,",
+                        "        1 +",
+                        "            SUM(df.ddt_day) OVER (",
+                        "                PARTITION BY df.season_start_year",
+                        "                ORDER BY df.date",
+                        "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                        "            ) -",
+                        "            FIRST_VALUE(df.ddt_day) OVER (",
+                        "                PARTITION BY df.season_start_year",
+                        "                ORDER BY df.date",
+                        "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                        "            ) AS value",
+                        "    FROM daily_ddt df",
+                        ")",
+                        "SELECT datetime, value",
+                        "FROM seasonal_ddt",
+                        paste0("WHERE datetime::date >= ", year_start_sql),
+                        paste0("  AND datetime::date <= ", year_end_sql),
+                        "ORDER BY datetime"
+                    ),
+                    location_sql
+                ),
+                con = con
+            )
+        } else if (identical(parameter, "precipitation (1wk)")) {
+            lookback_start_sql <- sprintf(
+                "MAKE_DATE(%d, 1, 1) - INTERVAL '6 days'",
+                overlay_year
+            )
+            precip_sql <- DBI::dbQuoteString(con, "precipitation, total")
+            YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_values AS (",
+                        "    SELECT",
+                        "        mcd.date,",
+                        "        mcd.value",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
+                        "    WHERE l.location_code = %s",
+                        "      AND p.param_name = %s",
+                        "      AND mcd.value IS NOT NULL",
+                        paste0("      AND mcd.date >= ", lookback_start_sql),
+                        paste0("      AND mcd.date <= ", year_end_sql),
+                        "),",
+                        "rolling_week AS (",
+                        "    SELECT",
+                        "        date::timestamp AS datetime,",
+                        "        SUM(value) OVER (",
+                        "            ORDER BY date",
+                        "            ROWS BETWEEN 6 PRECEDING AND CURRENT ROW",
+                        "        ) AS value",
+                        "    FROM daily_values",
+                        ")",
+                        "SELECT datetime, value",
+                        "FROM rolling_week",
+                        paste0("WHERE datetime::date >= ", year_start_sql),
+                        paste0("  AND datetime::date <= ", year_end_sql),
+                        "ORDER BY datetime"
+                    ),
+                    location_sql,
+                    precip_sql
+                ),
+                con = con
+            )
+        } else {
+            query_parameter_sql <- if (
+                identical(parameter, "precipitation (24hr)")
+            ) {
+                DBI::dbQuoteString(con, "precipitation, total")
+            } else {
+                parameter_sql
+            }
+
+            YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "SELECT",
+                        "    mcd.date::timestamp AS datetime,",
+                        "    mcd.value AS value",
+                        "FROM measurements_calculated_daily mcd",
+                        "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "JOIN locations l ON l.location_id = ts.location_id",
+                        "WHERE l.location_code = %s",
+                        "  AND p.param_name = %s",
+                        "  AND mcd.value IS NOT NULL",
+                        paste0("  AND mcd.date >= ", year_start_sql),
+                        paste0("  AND mcd.date <= ", year_end_sql),
+                        "ORDER BY mcd.date"
+                    ),
+                    location_sql,
+                    query_parameter_sql
+                ),
+                con = con
+            )
+        }
+
+        shift_dates_to_target_year(overlay_data, overlay_year)
+    })
+
+    overlay_frames <- overlay_frames[
+        vapply(overlay_frames, nrow, integer(1)) > 0
+    ]
+    if (length(overlay_frames) == 0) {
+        return(empty_historical_overlay_traces())
+    }
+
+    names(overlay_frames) <- vapply(
+        overlay_frames,
+        function(dat) as.character(dat$overlay_year[[1]]),
+        character(1)
+    )
+
+    lapply(overlay_frames, function(dat) {
+        dat[order(dat$datetime), , drop = FALSE]
+    })
+}
+
 
 # App entrypoint ------------------------------------------------------------
 
@@ -5028,15 +5584,42 @@ launch_freshet_dashboard <- function(con) {
     )
     fva <- yaml::read_yaml(fva_path)
     communities <- names(fva)
+    current_calendar_year <- as.integer(format(Sys.Date(), "%Y"))
+    historical_overlay_year_choices <- if (current_calendar_year > 2000L) {
+        as.character(seq(current_calendar_year - 1L, 2000L))
+    } else {
+        character(0)
+    }
 
     ui <- bslib::page_fillable(
         shiny::tags$style(shiny::HTML(paste(
             "#dashboard-panels { display:grid; gap:1rem; align-items:start; }",
             "#dashboard-panels.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }",
             "#dashboard-panels.comfortable { grid-template-columns: 1fr; }",
+            "#controls .dashboard-controls-wrap { display:flex; flex-direction:column; gap:0.3rem; }",
+            "#controls .dashboard-controls-row { display:grid; gap:0.35rem; align-items:start; justify-items:stretch; }",
+            "#controls .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 7rem 9rem; justify-content:start; }",
+            "#controls .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(6, minmax(0, 1fr)); }",
+            "#controls .dashboard-controls-cell { min-width:0; }",
+            "#controls .dashboard-controls-cell > * { width:100%; }",
+            "#controls .dashboard-controls-row .shiny-input-container { margin-bottom: 0; }",
+            "#controls .dashboard-controls-row .control-label { margin-bottom: 0.05rem; font-size: 0.62rem; line-height: 1; letter-spacing: 0.01em; }",
+            "#controls .dashboard-controls-row .form-control { min-height: calc(1.05rem + 2px); padding: 0.02rem 0.2rem; font-size: 0.68rem; line-height: 1.05; }",
+            "#controls .dashboard-controls-row .selectize-control { margin-bottom: 0; }",
+            "#controls .dashboard-controls-row .selectize-control.single .selectize-input, #controls .dashboard-controls-row .selectize-control.multi .selectize-input { min-height: calc(1.05rem + 2px); padding: 0.02rem 0.2rem; font-size: 0.68rem; line-height: 1.05; }",
+            "#controls .dashboard-controls-row .selectize-input > input { font-size: 0.68rem; line-height: 1.05; }",
+            "#controls .dashboard-controls-row .selectize-dropdown { font-size: 0.68rem; }",
+            "#controls .dashboard-controls-row .btn { padding: 0.08rem 0.28rem; font-size: 0.68rem; line-height: 1.05; }",
+            "#controls .dashboard-controls-row .form-group { margin-bottom: 0; }",
+            ".station-plot-actions { display:flex; align-items:center; gap:0.75rem; margin-left:auto; }",
+            ".station-plot-actions .shiny-input-container { margin-bottom:0; }",
+            ".station-plot-actions .checkbox { margin:0; }",
+            ".station-plot-actions .btn { white-space:nowrap; }",
             ".station-plot-shell { position: relative; }",
             ".station-plot-shell.is-stale .js-plotly-plot { opacity: 0.45; filter: grayscale(1); }",
             ".station-plot-stale-banner { position: absolute; top: 0.75rem; left: 50%; transform: translateX(-50%); z-index: 10; padding: 0.35rem 0.75rem; border: 1px solid #64748b; border-radius: 999px; background: rgba(255,255,255,0.92); color: #334155; font-size: 0.9rem; font-weight: 600; pointer-events: none; }",
+            "@media (max-width: 1100px) { #controls .dashboard-controls-row.dashboard-controls-top, #controls .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(2, minmax(0, 1fr)); } }",
+            "@media (max-width: 700px) { #controls .dashboard-controls-row.dashboard-controls-top, #controls .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: 1fr; } }",
             "@media (max-width: 992px) { #dashboard-panels.compact { grid-template-columns: 1fr; } }",
             sep = "\n"
         ))),
@@ -5053,95 +5636,132 @@ launch_freshet_dashboard <- function(con) {
             open = TRUE,
             bslib::accordion_panel(
                 "", # Remove 'Filters' label by using empty string
-                # Row 1: Community, Time 0, View, Interactive, Export
-                bslib::layout_columns(
-                    col_widths = c(3, 3, 2, 4),
-                    shiny::selectInput(
-                        "community",
-                        "Community",
-                        choices = communities,
-                        selected = communities[[1]]
-                    ),
+                shiny::tags$div(
+                    class = "dashboard-controls-wrap",
                     shiny::tags$div(
-                        class = "form-group shiny-input-container",
-                        style = "margin-bottom:0;",
-                        shiny::tags$label(
-                            `for` = "time0",
-                            "Time 0",
-                            class = "control-label"
+                        class = "dashboard-controls-row dashboard-controls-top",
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectInput(
+                                "community",
+                                "Community",
+                                choices = communities,
+                                selected = communities[[1]]
+                            )
                         ),
-                        shiny::tags$input(
-                            id = "time0",
-                            type = "datetime-local",
-                            class = "form-control",
-                            value = format(Sys.time(), "%Y-%m-%dT%H:%M"),
-                            max = format(Sys.time(), "%Y-%m-%dT%H:%M"),
-                            oninput = "if(this.max && this.value > this.max){ this.value = this.max; } Shiny.setInputValue('time0', this.value, {priority: 'event'});"
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell form-group shiny-input-container",
+                            style = "margin-bottom:0;",
+                            shiny::tags$label(
+                                `for` = "time0",
+                                "Time 0",
+                                class = "control-label"
+                            ),
+                            shiny::tags$input(
+                                id = "time0",
+                                type = "datetime-local",
+                                class = "form-control",
+                                value = format(Sys.time(), "%Y-%m-%dT%H:%M"),
+                                max = format(Sys.time(), "%Y-%m-%dT%H:%M"),
+                                oninput = "if(this.max && this.value > this.max){ this.value = this.max; } Shiny.setInputValue('time0', this.value, {priority: 'event'});"
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectInput(
+                                "view_mode",
+                                "View",
+                                choices = c(
+                                    "Compact" = "compact",
+                                    "Detailed" = "comfortable"
+                                ),
+                                selected = "compact"
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell form-group shiny-input-container",
+                            style = "margin-bottom:0;",
+                            shiny::tags$label(
+                                `for` = "export_html_report",
+                                "Export",
+                                class = "control-label"
+                            ),
+                            shiny::downloadButton(
+                                "export_html_report",
+                                "Export to HTML",
+                                style = "width:100%;"
+                            )
                         )
                     ),
-                    shiny::selectInput(
-                        "view_mode",
-                        "View",
-                        choices = c(
-                            "Compact" = "compact",
-                            "Detailed" = "comfortable"
-                        ),
-                        selected = "compact"
-                    ),
                     shiny::tags$div(
-                        class = "form-group shiny-input-container",
-                        style = "margin-bottom:0;",
-                        shiny::tags$label(
-                            `for` = "export_html_report",
-                            "Export",
-                            class = "control-label"
+                        class = "dashboard-controls-row dashboard-controls-plot",
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
+                                "parameter",
+                                "Primary",
+                                choices = NULL,
+                                selected = NULL,
+                                options = list(placeholder = "Param")
+                            )
                         ),
-                        shiny::downloadButton(
-                            "export_html_report",
-                            "Export to HTML",
-                            style = "width:100%;"
-                        )
-                    )
-                ),
-                # Row 2: Inputs side by side, no bins/cards
-                bslib::layout_columns(
-                    col_widths = c(2.5, 2.5, 2.5, 2.5, 2),
-                    shiny::selectizeInput(
-                        "parameter",
-                        "Primary parameter",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(placeholder = "Choose parameter")
-                    ),
-                    shiny::selectizeInput(
-                        "station",
-                        "Primary station",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(placeholder = "Choose station")
-                    ),
-                    shiny::selectizeInput(
-                        "secondary_parameter",
-                        "Secondary parameter",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(placeholder = "None (optional)")
-                    ),
-                    shiny::selectizeInput(
-                        "secondary_station",
-                        "Secondary station",
-                        choices = NULL,
-                        selected = NULL,
-                        options = list(placeholder = "None (optional)")
-                    ),
-                    shiny::tags$div(
-                        class = "form-group shiny-input-container",
-                        style = "margin-bottom:0; padding-top:1.75rem; display:flex; align-items:center; height:100%;",
-                        shiny::actionButton(
-                            "create_plot",
-                            "Create plot",
-                            class = "btn btn-primary",
-                            style = "width:100%;"
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
+                                "primary_historical_years",
+                                "Hist years",
+                                choices = historical_overlay_year_choices,
+                                selected = character(0),
+                                multiple = TRUE,
+                                options = list(
+                                    placeholder = "Years",
+                                    plugins = list("remove_button")
+                                )
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
+                                "station",
+                                "Station",
+                                choices = NULL,
+                                selected = NULL,
+                                options = list(placeholder = "Station")
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
+                                "secondary_parameter",
+                                "Secondary",
+                                choices = NULL,
+                                selected = NULL,
+                                options = list(placeholder = "Param")
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
+                                "secondary_historical_years",
+                                "Hist years",
+                                choices = historical_overlay_year_choices,
+                                selected = character(0),
+                                multiple = TRUE,
+                                options = list(
+                                    placeholder = "Years",
+                                    plugins = list("remove_button")
+                                )
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
+                                "secondary_station",
+                                "Station",
+                                choices = NULL,
+                                selected = NULL,
+                                options = list(placeholder = "Station")
+                            )
                         )
                     )
                 )
@@ -5151,14 +5771,44 @@ launch_freshet_dashboard <- function(con) {
             id = "dashboard-panels",
             class = "compact",
             bslib::card(
-                bslib::card_header("Summary"),
+                bslib::card_header(
+                    shiny::tags$div(
+                        style = "display:flex; align-items:center; justify-content:space-between; gap:1rem; width:100%;",
+                        shiny::tags$span("Summary"),
+                        shiny::checkboxInput(
+                            "summary_relative",
+                            "Relative changes",
+                            value = FALSE,
+                            width = NULL
+                        )
+                    )
+                ),
                 DT::DTOutput("summary_table")
             ),
             bslib::card(
-                bslib::card_header(shiny::textOutput(
-                    "station_plot_title",
-                    inline = TRUE
-                )),
+                bslib::card_header(
+                    shiny::tags$div(
+                        style = "display:flex; align-items:center; gap:1rem; width:100%;",
+                        shiny::textOutput(
+                            "station_plot_title",
+                            inline = TRUE
+                        ),
+                        shiny::tags$div(
+                            class = "station-plot-actions",
+                            shiny::checkboxInput(
+                                "station_plot_show_legend",
+                                "Show legend",
+                                value = TRUE,
+                                width = NULL
+                            ),
+                            shiny::actionButton(
+                                "create_plot",
+                                "Create plot",
+                                class = "btn btn-primary btn-sm"
+                            )
+                        )
+                    )
+                ),
                 shiny::tags$div(
                     id = "station-plot-shell",
                     class = "station-plot-shell",
@@ -5256,7 +5906,10 @@ launch_freshet_dashboard <- function(con) {
                 DBI::dbQuoteString(con, location_codes),
                 collapse = ","
             )
-            parameter_sql <- DBI::dbQuoteString(con, parameter_name)
+            parameter_sql <- DBI::dbQuoteString(
+                con,
+                parameter_query_name(parameter_name)
+            )
             ref_ts_sql <- if (is.null(reference_time)) {
                 "NOW()"
             } else {
@@ -5407,10 +6060,15 @@ launch_freshet_dashboard <- function(con) {
             "temperature, air",
             "FDD",
             "DDT",
-            "snow water equivalent",
-            "snow depth"
+            "snow water eq (pillow)",
+            "snow depth (pillow)",
+            "snow water eq (survey)",
+            "snow depth (survey)"
         )
-        snow_survey_parameters <- c("snow water equivalent", "snow depth")
+        snow_survey_parameters <- c(
+            "snow water eq (survey)",
+            "snow depth (survey)"
+        )
 
         station_has_parameter <- function(stations, param) {
             if (is.null(stations) || nrow(stations) == 0) {
@@ -6681,7 +7339,7 @@ launch_freshet_dashboard <- function(con) {
 
             dat <- get_latest_parameter_summary(
                 location_codes = codes,
-                parameter = param,
+                parameter = parameter_query_name(param),
                 reference_time = reference_time,
                 con = con
             )
@@ -6732,7 +7390,10 @@ launch_freshet_dashboard <- function(con) {
             out
         }
 
-        prepare_summary_display_data <- function(dat) {
+        prepare_summary_display_data <- function(
+            dat,
+            relative_changes = FALSE
+        ) {
             dat_display <- as.data.frame(dat)
             hidden_cols <- intersect(
                 c(
@@ -6750,6 +7411,41 @@ launch_freshet_dashboard <- function(con) {
                     names(dat_display),
                     hidden_cols
                 )]
+            }
+
+            transformed_change_cols <- character(0)
+            if (isTRUE(relative_changes)) {
+                current_value_col <- intersect(
+                    c("current_value", "current_water_level"),
+                    names(dat_display)
+                )
+
+                if (length(current_value_col) > 0) {
+                    current_value_col <- current_value_col[[1]]
+                    change_cols <- grep(
+                        "^change_",
+                        names(dat_display),
+                        value = TRUE,
+                        ignore.case = TRUE
+                    )
+
+                    if (length(change_cols) > 0) {
+                        for (change_col in change_cols) {
+                            old_value <- dat_display[[current_value_col]] -
+                                dat_display[[change_col]]
+                            valid_old_value <- !is.na(old_value) &
+                                old_value != 0
+
+                            dat_display[[change_col]] <- ifelse(
+                                valid_old_value,
+                                dat_display[[change_col]] / old_value,
+                                NA_real_
+                            )
+                        }
+
+                        transformed_change_cols <- change_cols
+                    }
+                }
             }
 
             if ("latest_time" %in% names(dat_display)) {
@@ -6777,6 +7473,20 @@ launch_freshet_dashboard <- function(con) {
             }
 
             names(dat_display) <- pretty_summary_col_names(names(dat_display))
+
+            if (length(transformed_change_cols) > 0) {
+                display_change_cols <- pretty_summary_col_names(
+                    transformed_change_cols
+                )
+                names(dat_display)[
+                    names(dat_display) %in% display_change_cols
+                ] <- paste0(
+                    names(dat_display)[
+                        names(dat_display) %in% display_change_cols
+                    ],
+                    " (%)"
+                )
+            }
 
             numeric_cols <- vapply(dat_display, is.numeric, logical(1))
             if (any(numeric_cols)) {
@@ -7037,7 +7747,10 @@ launch_freshet_dashboard <- function(con) {
             }
 
             result_table <- DT::datatable(
-                prepare_summary_display_data(dat),
+                prepare_summary_display_data(
+                    dat,
+                    relative_changes = isTRUE(input$summary_relative)
+                ),
                 selection = "single",
                 options = dt_options,
                 rownames = FALSE
@@ -7176,8 +7889,14 @@ launch_freshet_dashboard <- function(con) {
             list(
                 station = request$station %||% "",
                 parameter = request$parameter %||% "",
+                primary_historical_years = normalize_selected_historical_years(
+                    request$primary_historical_years
+                ),
                 secondary_station = request$secondary_station %||% "",
                 secondary_parameter = request$secondary_parameter %||% "",
+                secondary_historical_years = normalize_selected_historical_years(
+                    request$secondary_historical_years
+                ),
                 reference_time = request$reference_time %||% ""
             )
         }
@@ -7186,8 +7905,10 @@ launch_freshet_dashboard <- function(con) {
             normalize_plot_request(list(
                 station = plot_key()$station,
                 parameter = plot_key()$parameter,
+                primary_historical_years = input$primary_historical_years,
                 secondary_station = secondary_plot_key()$station,
                 secondary_parameter = secondary_plot_key()$parameter,
+                secondary_historical_years = input$secondary_historical_years,
                 reference_time = input$time0 %||% ""
             ))
         })
@@ -7237,8 +7958,14 @@ launch_freshet_dashboard <- function(con) {
             request <- list(
                 station = plot_key()$station,
                 parameter = plot_key()$parameter,
+                primary_historical_years = normalize_selected_historical_years(
+                    input$primary_historical_years
+                ),
                 secondary_station = secondary_plot_key()$station,
                 secondary_parameter = secondary_plot_key()$parameter,
+                secondary_historical_years = normalize_selected_historical_years(
+                    input$secondary_historical_years
+                ),
                 reference_time = time_zero(),
                 request_signature = current_station_plot_signature()
             )
@@ -7280,6 +8007,7 @@ launch_freshet_dashboard <- function(con) {
                     continuous = NULL,
                     percentiles = data.frame(),
                     return_periods = data.frame(),
+                    primary_overlays = empty_historical_overlay_traces(),
                     secondary = NULL
                 ))
             }
@@ -7291,6 +8019,7 @@ launch_freshet_dashboard <- function(con) {
                     continuous = NULL,
                     percentiles = data.frame(),
                     return_periods = data.frame(),
+                    primary_overlays = empty_historical_overlay_traces(),
                     secondary = NULL
                 ))
             }
@@ -7314,6 +8043,7 @@ launch_freshet_dashboard <- function(con) {
                     continuous = NULL,
                     percentiles = data.frame(),
                     return_periods = data.frame(),
+                    primary_overlays = empty_historical_overlay_traces(),
                     secondary = NULL
                 ))
             }
@@ -7341,7 +8071,19 @@ launch_freshet_dashboard <- function(con) {
                 data.frame()
             }
 
+            primary_overlays <- tryCatch(
+                get_historical_overlay_timeseries(
+                    location_code = code,
+                    parameter = param,
+                    years = request$primary_historical_years,
+                    reference_time = request$reference_time,
+                    con = con
+                ),
+                error = function(e) empty_historical_overlay_traces()
+            )
+
             secondary <- NULL
+            secondary_overlays <- empty_historical_overlay_traces()
             secondary_limits <- list(p10 = NA_real_, p90 = NA_real_)
             sec_param <- request$secondary_parameter
             sec_station <- request$secondary_station
@@ -7372,6 +8114,17 @@ launch_freshet_dashboard <- function(con) {
                     ),
                     error = function(e) list(p10 = NA_real_, p90 = NA_real_)
                 )
+
+                secondary_overlays <- tryCatch(
+                    get_historical_overlay_timeseries(
+                        location_code = sec_station,
+                        parameter = sec_param,
+                        years = request$secondary_historical_years,
+                        reference_time = request$reference_time,
+                        con = con
+                    ),
+                    error = function(e) empty_historical_overlay_traces()
+                )
             }
 
             list(
@@ -7380,7 +8133,9 @@ launch_freshet_dashboard <- function(con) {
                 continuous = continuous,
                 percentiles = percentiles,
                 return_periods = return_periods,
+                primary_overlays = primary_overlays,
                 secondary = secondary,
+                secondary_overlays = secondary_overlays,
                 secondary_limits = secondary_limits
             )
         })
@@ -7475,6 +8230,45 @@ launch_freshet_dashboard <- function(con) {
 
             req(!is.null(p))
 
+            show_plot_legend <- FALSE
+
+            primary_overlay_traces <- bundle$primary_overlays
+            if (length(primary_overlay_traces) > 0) {
+                overlay_years <- names(primary_overlay_traces)
+                overlay_colors <- grDevices::hcl.colors(
+                    length(overlay_years),
+                    palette = "Dark 3"
+                )
+
+                for (index in seq_along(overlay_years)) {
+                    overlay_year <- overlay_years[[index]]
+                    overlay_series <- primary_overlay_traces[[index]]
+                    if (nrow(overlay_series) == 0) {
+                        next
+                    }
+
+                    p <- p %>%
+                        plotly::add_lines(
+                            data = overlay_series,
+                            x = overlay_series$datetime,
+                            y = overlay_series$value,
+                            name = sprintf("Observed %s", overlay_year),
+                            legendrank = 15 + index,
+                            hovertemplate = paste0(
+                                overlay_year,
+                                ": %{y:.3f}<extra></extra>"
+                            ),
+                            line = list(
+                                color = overlay_colors[[index]],
+                                width = 1.5,
+                                dash = "dot"
+                            )
+                        )
+                }
+
+                show_plot_legend <- TRUE
+            }
+
             # Append secondary trace when both secondary inputs are set.
             sec_param <- request$secondary_parameter
             sec_station <- request$secondary_station
@@ -7485,6 +8279,7 @@ launch_freshet_dashboard <- function(con) {
                     nzchar(sec_station)
             ) {
                 sec_data <- bundle$secondary
+                sec_overlay_traces <- bundle$secondary_overlays
                 sec_label <- station_label_for_code(sec_station)
                 sec_limits <- bundle$secondary_limits
 
@@ -7502,6 +8297,20 @@ launch_freshet_dashboard <- function(con) {
 
                     sec_y_title <- parameter_axis_title(sec_param)
                     sec_range <- NULL
+                    sec_overlay_range <- NULL
+                    if (length(sec_overlay_traces) > 0) {
+                        sec_overlay_values <- unlist(
+                            lapply(sec_overlay_traces, function(dat) dat$value),
+                            use.names = FALSE
+                        )
+                        sec_overlay_range <- range(
+                            sec_overlay_values,
+                            na.rm = TRUE
+                        )
+                        if (any(!is.finite(sec_overlay_range))) {
+                            sec_overlay_range <- NULL
+                        }
+                    }
                     if (
                         !is.null(sec_limits) &&
                             is.finite(sec_limits$p10) &&
@@ -7514,6 +8323,35 @@ launch_freshet_dashboard <- function(con) {
                             sec_limits$p10 - sec_pad,
                             sec_limits$p90 + sec_pad
                         )
+                    }
+                    if (!is.null(sec_overlay_range)) {
+                        if (is.null(sec_range)) {
+                            sec_span <- diff(sec_overlay_range)
+                            if (!is.finite(sec_span) || sec_span <= 0) {
+                                sec_span <- max(
+                                    abs(sec_overlay_range[[1]]) * 0.1,
+                                    1
+                                )
+                            }
+                            sec_pad <- max(sec_span * 0.1, .Machine$double.eps)
+                            sec_range <- c(
+                                sec_overlay_range[[1]] - sec_pad,
+                                sec_overlay_range[[2]] + sec_pad
+                            )
+                        } else {
+                            sec_range <- c(
+                                min(
+                                    sec_range[[1]],
+                                    sec_overlay_range[[1]],
+                                    na.rm = TRUE
+                                ),
+                                max(
+                                    sec_range[[2]],
+                                    sec_overlay_range[[2]],
+                                    na.rm = TRUE
+                                )
+                            )
+                        }
                     }
 
                     if (nrow(sec_hist) > 0) {
@@ -7534,6 +8372,7 @@ launch_freshet_dashboard <- function(con) {
                                 ),
                                 line = list(color = "#93c5fd", width = 1)
                             )
+                        show_plot_legend <- TRUE
                     }
 
                     if (nrow(sec_rt) > 0) {
@@ -7554,6 +8393,7 @@ launch_freshet_dashboard <- function(con) {
                                 ),
                                 line = list(color = "#2563eb", width = 2)
                             )
+                        show_plot_legend <- TRUE
                     } else if (nrow(sec_hist) == 0) {
                         # Single-source data (e.g. FDD/DDT observed only)
                         p <- p %>%
@@ -7573,6 +8413,50 @@ launch_freshet_dashboard <- function(con) {
                                 ),
                                 line = list(color = "#2563eb", width = 2)
                             )
+                        show_plot_legend <- TRUE
+                    }
+
+                    if (length(sec_overlay_traces) > 0) {
+                        overlay_years <- names(sec_overlay_traces)
+                        overlay_colors <- grDevices::hcl.colors(
+                            length(overlay_years),
+                            palette = "BluYl"
+                        )
+
+                        for (index in seq_along(overlay_years)) {
+                            overlay_year <- overlay_years[[index]]
+                            overlay_series <- sec_overlay_traces[[index]]
+                            if (nrow(overlay_series) == 0) {
+                                next
+                            }
+
+                            p <- p %>%
+                                plotly::add_lines(
+                                    data = overlay_series,
+                                    x = overlay_series$datetime,
+                                    y = overlay_series$value,
+                                    yaxis = "y2",
+                                    name = sprintf(
+                                        "%s %s (%s)",
+                                        sec_label,
+                                        overlay_year,
+                                        sec_param
+                                    ),
+                                    hovertemplate = paste0(
+                                        sec_label,
+                                        " ",
+                                        overlay_year,
+                                        ": %{y:.3f}<extra></extra>"
+                                    ),
+                                    line = list(
+                                        color = overlay_colors[[index]],
+                                        width = 1.5,
+                                        dash = "dot"
+                                    )
+                                )
+                        }
+
+                        show_plot_legend <- TRUE
                     }
 
                     p <- p %>%
@@ -7586,6 +8470,17 @@ launch_freshet_dashboard <- function(con) {
                             )
                         )
                 }
+            }
+
+            if (
+                isTRUE(show_plot_legend) &&
+                    isTRUE(input$station_plot_show_legend)
+            ) {
+                p <- p %>%
+                    plotly::layout(showlegend = TRUE)
+            } else {
+                p <- p %>%
+                    plotly::layout(showlegend = FALSE)
             }
 
             p
