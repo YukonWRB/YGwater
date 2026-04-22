@@ -44,22 +44,22 @@
 
 .app-title-container {
   position: absolute;
-  left: 0px;
+  left: 25px;
   right: 200px;
-  top: 50%;
+  top: calc(50% + 15px);
   transform: translateY(-50%);
   z-index: 3;
   overflow: hidden;
 }
 
 .app-title-container--public {
-  top: calc(50% + 15px);
+  top: calc(50% + 31px);
 }
 
 .app-title-text {
   color: #ffffff;
   display: block;
-  font-size: 1.3rem;
+  font-size: 1.45rem;
   font-weight: 600;
   line-height: 1.2;
   overflow: hidden;
@@ -88,7 +88,7 @@
 .app-navbar-title {
   color: #ffffff;
   display: block;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.15;
   min-width: 0;
@@ -107,6 +107,11 @@ body.navbar-collapsed-view .app-navbar-brand {
 
 body.navbar-expanded-view .app-navbar-brand {
   display: none;
+}
+
+body.navbar-collapsed-view .app-navbar-title {
+  position: relative;
+  top: 5px;
 }
 
 /* Styling for the aurora image */
@@ -167,13 +172,27 @@ body.navbar-expanded-view .app-navbar-brand {
   .app-title-container {
     right: 150px;
   }
+}
 
-  .app-title-text {
-    font-size: 1.1rem;
+@media (max-width: 991px) {
+  .app-title-container {
+    top: calc(50% + 25px);
+  }
+
+  .app-title-container--public {
+    top: calc(50% + 40px);
   }
 }
 
 @media (max-width: 767px) {
+  .app-title-container {
+    top: calc(50% + 25px);
+  }
+
+  .app-title-container--public {
+    top: calc(50% + 40px);
+  }
+
   .app-navbar-brand {
     gap: 8px;
     max-width: calc(100vw - 72px);
@@ -184,6 +203,6 @@ body.navbar-expanded-view .app-navbar-brand {
   }
 
   .app-navbar-title {
-    font-size: 0.92rem;
+    font-size: 0.97rem;
   }
 }
