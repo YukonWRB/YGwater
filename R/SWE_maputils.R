@@ -2197,9 +2197,11 @@ get_normalized_bulletin_values <- function(
 
     norms_for_month <- norms_for_month[station_names]
 
-    # Calculate the ratio of current_aggr to station_norms for each station
-    relative_to_norm <- 100 *
-        ((bulletin_values - norms_for_month) / norms_for_month)
+    # # Calculate the ratio of current_aggr to station_norms for each station
+    # relative_to_norm <- 100 *
+    #     ((bulletin_values - norms_for_month) / norms_for_month)
+
+    relative_to_norm <- bulletin_values / norms_for_month * 100
 
     # Handle special cases for SWE
     if (param_name == "snow water equivalent") {
@@ -5757,13 +5759,13 @@ make_ggplot_map <- function(
         param_name,
         "snow water equivalent" = paste0(
             tr("snowbull_swe", language),
-            "\n"
+            " "
         ),
         "precipitation, total" = paste0(
             tr("snowbull_precipitation", language),
-            "\n"
+            " "
         ),
-        "temperature, air" = paste0(tr("snowbull_temperature", language), "\n"),
+        "temperature, air" = paste0(tr("snowbull_temperature", language), " "),
         ""
     )
 
