@@ -6,10 +6,9 @@ maps,mapsNavMenuTitle,Maps,Cartes
 maps_locs,mapsNavLocsTitle,Monitoring locations,Points de surveillance
 maps_params,mapsNavParamsTitle,Current/past conditions,Données passées/actuelles
 maps_raster,mapsNavRastersTitle,Rasters,Rasters
-maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
+maps_snowbull,mapsNavSnowbullTitle,Snow water equivalent,Équivalent en eau de la neige
 plots,plotsNavMenuTitle,Plots,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
-plots_continuous_old,plotsNavContOldTitle,Continuous (old version),Continues (ancienne version)
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
 dashboards,dashboardsNavMenuTitle,Dashboards,Tableaux de bord
