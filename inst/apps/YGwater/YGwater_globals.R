@@ -916,8 +916,16 @@ YGwater_globals <- function(
       "apps/YGwater/modules/client/reports/waterTemp.R",
       package = "YGwater"
     ))
+
+    # Dashboard modules
     source(system.file(
       "apps/YGwater/modules/client/reports/floodDashboard.R",
+      package = "YGwater"
+    ))
+
+    # Map modules
+    source(system.file(
+      "apps/YGwater/modules/client/map/rasterMap.R",
       package = "YGwater"
     ))
   }
@@ -927,10 +935,7 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/paramsMap.R",
     package = "YGwater"
   ))
-  source(system.file(
-    "apps/YGwater/modules/client/map/rasterMap.R",
-    package = "YGwater"
-  ))
+
   source(system.file(
     "apps/YGwater/modules/client/map/locationsMap.R",
     package = "YGwater"
@@ -939,6 +944,7 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/snowBulletinMap.R",
     package = "YGwater"
   ))
+  # Water well registry map
   source(system.file(
     "apps/YGwater/modules/client/WWR/registry_front_end.R",
     package = "YGwater"

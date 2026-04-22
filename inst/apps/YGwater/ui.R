@@ -292,11 +292,15 @@ app_ui <- function(request) {
         lang = "en",
         theme = NULL, # Theme is set earlier by css file references
         gap = "10px",
+
+        # Home is just a nav panel, no nav_menu
         nav_panel(
           title = uiOutput("homeNavTitle"),
           value = "home",
           uiOutput("home_ui")
         ),
+
+        # Maps nav menu
         nav_menu(
           title = uiOutput("mapsNavMenuTitle"),
           value = "maps",
@@ -317,14 +321,14 @@ app_ui <- function(request) {
               uiOutput("mapRaster_ui")
             )
           },
-          if (!config$public) {
-            nav_panel(
-              title = uiOutput("mapsNavSnowbullTitle"),
-              value = "snowBulletinMap",
-              uiOutput("mapSnowbull_ui")
-            )
-          }
-        ),
+          nav_panel(
+            title = uiOutput("mapsNavSnowbullTitle"),
+            value = "snowBulletinMap",
+            uiOutput("mapSnowbull_ui")
+          )
+        ), # End maps nav_menu
+
+        # Plot nav menu
         nav_menu(
           title = uiOutput("plotsNavMenuTitle"),
           value = "plot",
@@ -338,7 +342,9 @@ app_ui <- function(request) {
             value = "contPlot",
             uiOutput("plotContinuous_ui")
           )
-        ),
+        ), # End plot nav_menu
+
+        # Reports nav menu
         if (!config$public) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
@@ -376,6 +382,8 @@ app_ui <- function(request) {
             )
           ) # End reports nav_menu
         }, # End if !config$public for reports nav_menu
+
+        # Dashboards nav menu
         if (!config$public) {
           nav_menu(
             title = uiOutput("dashboardsNavMenuTitle"),
@@ -385,8 +393,10 @@ app_ui <- function(request) {
               value = "floodDashboard",
               uiOutput("floodDashboard_ui")
             )
-          )
-        },
+          ) # End dashboards nav_menu
+        }, # End if !config$public for dashboards nav_menu
+
+        # Images nav menu
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",
@@ -400,8 +410,9 @@ app_ui <- function(request) {
             value = "imgMapView",
             uiOutput("imgMapView_ui")
           )
-        ),
+        ), # End images nav_menu
 
+        # Data nav menu
         nav_menu(
           title = uiOutput("dataNavMenuTitle"),
           value = "data",
@@ -439,6 +450,7 @@ app_ui <- function(request) {
           uiOutput("docTableView_ui")
         ),
 
+        # Info nav menu
         nav_menu(
           title = uiOutput("infoNavMenuTitle"),
           value = "info",
@@ -452,8 +464,9 @@ app_ui <- function(request) {
             value = "news",
             uiOutput("news_ui")
           )
-        ),
+        ), # End info nav_menu
 
+        # Admin side modules, only show, if public = FALSE and logged in.
         if (!config$public) {
           nav_menu(
             title = "Continuous data",
