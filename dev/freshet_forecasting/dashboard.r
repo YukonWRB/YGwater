@@ -3356,6 +3356,8 @@ plot_continuous_static_with_percentiles_and_return_periods <- function(
         series$trace_source <- "observed"
     }
 
+    observed_linewidth <- 0.8
+
     p <- ggplot2::ggplot()
 
     if (nrow(pct_plot) > 0) {
@@ -3394,8 +3396,8 @@ plot_continuous_static_with_percentiles_and_return_periods <- function(
 
     if (isTRUE(load_entire_record)) {
         historical_series <- series[series$trace_source == "historical_daily", ]
-        realtime_series <- series[
-            series$trace_source == "realtime_continuous",
+        observed_series <- series[
+            series$trace_source != "historical_daily",
         ]
 
         if (nrow(historical_series) > 0) {
@@ -3407,22 +3409,22 @@ plot_continuous_static_with_percentiles_and_return_periods <- function(
                     linewidth = 0.35
                 )
         }
-        if (nrow(realtime_series) > 0) {
+        if (nrow(observed_series) > 0) {
             p <- p +
                 ggplot2::geom_line(
-                    data = realtime_series,
+                    data = observed_series,
                     ggplot2::aes(x = datetime, y = value),
                     color = "#000000",
-                    linewidth = 0.5
+                    linewidth = observed_linewidth
                 )
         }
-        if (nrow(historical_series) == 0 && nrow(realtime_series) == 0) {
+        if (nrow(historical_series) == 0 && nrow(observed_series) == 0) {
             p <- p +
                 ggplot2::geom_line(
                     data = series,
                     ggplot2::aes(x = datetime, y = value),
                     color = "#000000",
-                    linewidth = 0.5
+                    linewidth = observed_linewidth
                 )
         }
     } else {
@@ -3431,7 +3433,7 @@ plot_continuous_static_with_percentiles_and_return_periods <- function(
                 data = series,
                 ggplot2::aes(x = datetime, y = value),
                 color = "#000000",
-                linewidth = 0.4
+                linewidth = observed_linewidth
             )
     }
 
@@ -5598,18 +5600,20 @@ launch_freshet_dashboard <- function(con) {
             "#dashboard-panels.comfortable { grid-template-columns: 1fr; }",
             "#controls .dashboard-controls-wrap { display:flex; flex-direction:column; gap:0.3rem; }",
             "#controls .dashboard-controls-row { display:grid; gap:0.35rem; align-items:start; justify-items:stretch; }",
-            "#controls .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 7rem 9rem; justify-content:start; }",
+            "#controls .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 7rem 9rem; justify-content:start; align-items:end; }",
             "#controls .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(6, minmax(0, 1fr)); }",
-            "#controls .dashboard-controls-cell { min-width:0; }",
+            "#controls .dashboard-controls-cell { min-width:0; display:flex; flex-direction:column; justify-content:flex-start; }",
             "#controls .dashboard-controls-cell > * { width:100%; }",
+            "#controls .dashboard-controls-row.dashboard-controls-top .dashboard-controls-cell > .shiny-input-container { display:flex; flex-direction:column; justify-content:flex-start; height:100%; }",
             "#controls .dashboard-controls-row .shiny-input-container { margin-bottom: 0; }",
             "#controls .dashboard-controls-row .control-label { margin-bottom: 0.05rem; font-size: 0.62rem; line-height: 1; letter-spacing: 0.01em; }",
             "#controls .dashboard-controls-row .form-control { min-height: calc(1.05rem + 2px); padding: 0.02rem 0.2rem; font-size: 0.68rem; line-height: 1.05; }",
+            "#controls .dashboard-controls-row input[type='datetime-local'].form-control { height: calc(1.05rem + 2px); }",
             "#controls .dashboard-controls-row .selectize-control { margin-bottom: 0; }",
             "#controls .dashboard-controls-row .selectize-control.single .selectize-input, #controls .dashboard-controls-row .selectize-control.multi .selectize-input { min-height: calc(1.05rem + 2px); padding: 0.02rem 0.2rem; font-size: 0.68rem; line-height: 1.05; }",
             "#controls .dashboard-controls-row .selectize-input > input { font-size: 0.68rem; line-height: 1.05; }",
             "#controls .dashboard-controls-row .selectize-dropdown { font-size: 0.68rem; }",
-            "#controls .dashboard-controls-row .btn { padding: 0.08rem 0.28rem; font-size: 0.68rem; line-height: 1.05; }",
+            "#controls .dashboard-controls-row .btn { min-height: calc(1.05rem + 2px); padding: 0.08rem 0.28rem; font-size: 0.68rem; line-height: 1.05; }",
             "#controls .dashboard-controls-row .form-group { margin-bottom: 0; }",
             ".station-plot-actions { display:flex; align-items:center; gap:0.75rem; margin-left:auto; }",
             ".station-plot-actions .shiny-input-container { margin-bottom:0; }",
@@ -5650,20 +5654,26 @@ launch_freshet_dashboard <- function(con) {
                             )
                         ),
                         shiny::tags$div(
-                            class = "dashboard-controls-cell form-group shiny-input-container",
-                            style = "margin-bottom:0;",
-                            shiny::tags$label(
-                                `for` = "time0",
-                                "Time 0",
-                                class = "control-label"
-                            ),
-                            shiny::tags$input(
-                                id = "time0",
-                                type = "datetime-local",
-                                class = "form-control",
-                                value = format(Sys.time(), "%Y-%m-%dT%H:%M"),
-                                max = format(Sys.time(), "%Y-%m-%dT%H:%M"),
-                                oninput = "if(this.max && this.value > this.max){ this.value = this.max; } Shiny.setInputValue('time0', this.value, {priority: 'event'});"
+                            class = "dashboard-controls-cell",
+                            shiny::tags$div(
+                                class = "form-group shiny-input-container",
+                                style = "margin-bottom:0;",
+                                shiny::tags$label(
+                                    `for` = "time0",
+                                    "Time 0",
+                                    class = "control-label"
+                                ),
+                                shiny::tags$input(
+                                    id = "time0",
+                                    type = "datetime-local",
+                                    class = "form-control",
+                                    value = format(
+                                        Sys.time(),
+                                        "%Y-%m-%dT%H:%M"
+                                    ),
+                                    max = format(Sys.time(), "%Y-%m-%dT%H:%M"),
+                                    oninput = "if(this.max && this.value > this.max){ this.value = this.max; } Shiny.setInputValue('time0', this.value, {priority: 'event'});"
+                                )
                             )
                         ),
                         shiny::tags$div(
@@ -5679,17 +5689,20 @@ launch_freshet_dashboard <- function(con) {
                             )
                         ),
                         shiny::tags$div(
-                            class = "dashboard-controls-cell form-group shiny-input-container",
-                            style = "margin-bottom:0;",
-                            shiny::tags$label(
-                                `for` = "export_html_report",
-                                "Export",
-                                class = "control-label"
-                            ),
-                            shiny::downloadButton(
-                                "export_html_report",
-                                "Export to HTML",
-                                style = "width:100%;"
+                            class = "dashboard-controls-cell",
+                            shiny::tags$div(
+                                class = "form-group shiny-input-container",
+                                style = "margin-bottom:0;",
+                                shiny::tags$label(
+                                    `for` = "export_html_report",
+                                    "Export",
+                                    class = "control-label"
+                                ),
+                                shiny::downloadButton(
+                                    "export_html_report",
+                                    "Export to HTML",
+                                    style = "width:100%;"
+                                )
                             )
                         )
                     ),
@@ -7394,6 +7407,11 @@ launch_freshet_dashboard <- function(con) {
             dat,
             relative_changes = FALSE
         ) {
+            truncate_decimal <- function(x, digits = 1) {
+                factor <- 10^digits
+                trunc(x * factor) / factor
+            }
+
             dat_display <- as.data.frame(dat)
             hidden_cols <- intersect(
                 c(
@@ -7438,7 +7456,7 @@ launch_freshet_dashboard <- function(con) {
 
                             dat_display[[change_col]] <- ifelse(
                                 valid_old_value,
-                                dat_display[[change_col]] / old_value,
+                                (dat_display[[change_col]] / old_value) * 100,
                                 NA_real_
                             )
                         }
@@ -7446,6 +7464,18 @@ launch_freshet_dashboard <- function(con) {
                         transformed_change_cols <- change_cols
                     }
                 }
+            }
+
+            percent_cols <- unique(c(
+                transformed_change_cols,
+                intersect("relative_to_median", names(dat_display))
+            ))
+            if (length(percent_cols) > 0) {
+                dat_display[percent_cols] <- lapply(
+                    dat_display[percent_cols],
+                    truncate_decimal,
+                    digits = 1
+                )
             }
 
             if ("latest_time" %in% names(dat_display)) {
@@ -7490,7 +7520,10 @@ launch_freshet_dashboard <- function(con) {
 
             numeric_cols <- vapply(dat_display, is.numeric, logical(1))
             if (any(numeric_cols)) {
-                cols_to_round <- names(dat_display)[numeric_cols]
+                cols_to_round <- setdiff(
+                    names(dat_display)[numeric_cols],
+                    percent_cols
+                )
                 dat_display[cols_to_round] <- lapply(
                     dat_display[cols_to_round],
                     signif,
@@ -8237,7 +8270,7 @@ launch_freshet_dashboard <- function(con) {
                 overlay_years <- names(primary_overlay_traces)
                 overlay_colors <- grDevices::hcl.colors(
                     length(overlay_years),
-                    palette = "Dark 3"
+                    palette = "Plasma"
                 )
 
                 for (index in seq_along(overlay_years)) {
@@ -8252,9 +8285,14 @@ launch_freshet_dashboard <- function(con) {
                             data = overlay_series,
                             x = overlay_series$datetime,
                             y = overlay_series$value,
-                            name = sprintf("Observed %s", overlay_year),
+                            name = sprintf(
+                                "Primary %s (%s)",
+                                overlay_year,
+                                param
+                            ),
                             legendrank = 15 + index,
                             hovertemplate = paste0(
+                                "Primary ",
                                 overlay_year,
                                 ": %{y:.3f}<extra></extra>"
                             ),
@@ -8420,7 +8458,7 @@ launch_freshet_dashboard <- function(con) {
                         overlay_years <- names(sec_overlay_traces)
                         overlay_colors <- grDevices::hcl.colors(
                             length(overlay_years),
-                            palette = "BluYl"
+                            palette = "Viridis"
                         )
 
                         for (index in seq_along(overlay_years)) {
@@ -8451,7 +8489,7 @@ launch_freshet_dashboard <- function(con) {
                                     line = list(
                                         color = overlay_colors[[index]],
                                         width = 1.5,
-                                        dash = "dot"
+                                        dash = "longdash"
                                     )
                                 )
                         }
