@@ -763,16 +763,177 @@ YGwater_globals <- function(
     tagList(lapply(notifications, function(notification) {
       dismissible_banner_ui(
         ns = ns,
-        msg_html = notification$message,
+        msg_text = notification$message,
         banner_id = paste0("notification_", notification$id),
         banner_key_prefix = paste0(banner_key_prefix, "_", notification$id)
       )
     }))
   }
 
+  sanitize_link_href <- function(value) {
+    if (is.null(value) || !length(value)) {
+      return(NULL)
+    }
+
+    href <- trimws(as.character(value[[1]]))
+    if (!nzchar(href)) {
+      return(NULL)
+    }
+
+    href_lower <- tolower(href)
+    if (
+      startsWith(href_lower, "http://") ||
+        startsWith(href_lower, "https://") ||
+        startsWith(href_lower, "mailto:") ||
+        startsWith(href_lower, "tel:") ||
+        startsWith(href, "/") ||
+        startsWith(href, "#")
+    ) {
+      href
+    } else {
+      NULL
+    }
+  }
+
+  # Render a restricted HTML fragment while stripping executable markup.
+  sanitize_html_fragment <<- function(text) {
+    if (is.null(text) || length(text) == 0 || all(is.na(text))) {
+      return("")
+    }
+
+    text_value <- as.character(text[[1]])
+    if (is.na(text_value) || !nzchar(text_value)) {
+      return("")
+    }
+
+    allowed_tags <- c(
+      "a",
+      "b",
+      "blockquote",
+      "br",
+      "code",
+      "div",
+      "em",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "hr",
+      "i",
+      "li",
+      "ol",
+      "p",
+      "pre",
+      "span",
+      "strong",
+      "sub",
+      "sup",
+      "ul"
+    )
+    drop_tags <- c(
+      "script",
+      "style",
+      "iframe",
+      "object",
+      "embed",
+      "form",
+      "input",
+      "button",
+      "select",
+      "textarea",
+      "svg",
+      "math",
+      "meta",
+      "link",
+      "base"
+    )
+
+    render_node <- function(node) {
+      node_type <- xml2::xml_type(node)
+      if (identical(node_type, "text")) {
+        return(htmltools::htmlEscape(xml2::xml_text(node)))
+      }
+      if (!identical(node_type, "element")) {
+        return("")
+      }
+
+      tag <- tolower(xml2::xml_name(node))
+      if (tag %in% drop_tags) {
+        return("")
+      }
+
+      child_html <- paste(
+        vapply(xml2::xml_contents(node), render_node, character(1)),
+        collapse = ""
+      )
+
+      if (!(tag %in% allowed_tags)) {
+        return(child_html)
+      }
+
+      attr_parts <- character(0)
+      if (tag == "a") {
+        href <- sanitize_link_href(xml2::xml_attr(node, "href"))
+        if (!is.null(href)) {
+          attr_parts <- c(
+            attr_parts,
+            sprintf(
+              "href=\"%s\"",
+              htmltools::htmlEscape(href, attribute = TRUE)
+            )
+          )
+        }
+
+        target <- xml2::xml_attr(node, "target")
+        if (!is.na(target) && target %in% c("_blank", "_self")) {
+          attr_parts <- c(
+            attr_parts,
+            sprintf(
+              "target=\"%s\"",
+              htmltools::htmlEscape(target, attribute = TRUE)
+            )
+          )
+          if (identical(target, "_blank")) {
+            attr_parts <- c(attr_parts, "rel=\"noopener noreferrer\"")
+          }
+        }
+      }
+
+      attr_text <- if (length(attr_parts)) {
+        paste0(" ", paste(attr_parts, collapse = " "))
+      } else {
+        ""
+      }
+
+      if (tag %in% c("br", "hr")) {
+        return(sprintf("<%s%s>", tag, attr_text))
+      }
+
+      sprintf("<%s%s>%s</%s>", tag, attr_text, child_html, tag)
+    }
+
+    doc <- xml2::read_html(
+      paste0("<body>", text_value, "</body>"),
+      options = c("RECOVER", "NOERROR", "NOWARNING")
+    )
+    body <- xml2::xml_find_first(doc, ".//body")
+    paste(vapply(xml2::xml_contents(body), render_node, character(1)), collapse = "")
+  }
+
+  safe_html_fragment_ui <<- function(text, style = NULL, class = NULL) {
+    html_text <- sanitize_html_fragment(text)
+    if (!nzchar(html_text)) {
+      return(NULL)
+    }
+
+    tags$div(class = class, style = style, HTML(html_text))
+  }
+
   dismissible_banner_ui <<- function(
     ns,
-    msg_html,
+    msg_text,
     banner_id = "app_banner",
     banner_key_prefix = "global_notice",
     banner_version = utils::packageVersion("YGwater")
@@ -824,7 +985,10 @@ YGwater_globals <- function(
         bslib::card_header(
           class = "d-flex align-items-start",
           style = "gap:12px;",
-          tags$div(style = "flex: 1 1 auto; min-width: 0;", HTML(msg_html)),
+          safe_html_fragment_ui(
+            msg_text,
+            style = "flex: 1 1 auto; min-width: 0;"
+          ),
           tags$button(
             type = "button",
             class = "btn-close ms-auto",

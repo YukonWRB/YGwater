@@ -60,6 +60,28 @@ manageUsers <- function(id, language) {
         !grepl("\\s", password)
     }
 
+    is_valid_group_name <- function(group_name) {
+      is.character(group_name) &&
+        length(group_name) == 1 &&
+        !is.na(group_name) &&
+        grepl("^[A-Za-z0-9_]+_group$", group_name)
+    }
+
+    quote_identifier_sql <- function(value) {
+      as.character(DBI::dbQuoteIdentifier(session$userData$AquaCache, value))
+    }
+
+    quote_qualified_table_sql <- function(value) {
+      parts <- strsplit(as.character(value), ".", fixed = TRUE)[[1]]
+      if (length(parts) != 2 || any(!nzchar(parts))) {
+        stop("Invalid table name selected.")
+      }
+      as.character(DBI::dbQuoteIdentifier(
+        session$userData$AquaCache,
+        DBI::Id(schema = parts[[1]], table = parts[[2]])
+      ))
+    }
+
     generate_password <- function(length = 12) {
       length <- max(length, 8)
       upper <- sample(LETTERS, 1)
@@ -79,6 +101,19 @@ manageUsers <- function(id, language) {
         module_id = "manageUsers"
       )
     })
+
+    if (
+      !isTRUE(session$userData$user_logged_in) ||
+        !isTRUE(session$userData$can_create_role)
+    ) {
+      showModal(modalDialog(
+        title = "Insufficient Privileges",
+        "You do not have the necessary privileges to manage users.",
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      return()
+    }
 
     observeEvent(input$generate_password, {
       generated_password <- generate_password()
@@ -109,6 +144,8 @@ WHERE schema_name NOT LIKE 'pg_%'
     )
 
     # Reload user and group lists
+    available_table_choices <- reactiveVal(character(0))
+
     load_roles <- function() {
       roles <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -192,6 +229,7 @@ WHERE schema_name NOT LIKE 'pg_%'
         )
       )
       table_choices <- paste0(tables$table_schema, ".", tables$table_name)
+      available_table_choices(table_choices)
       updateSelectizeInput(
         session,
         "table_permission_select",
@@ -225,19 +263,34 @@ WHERE schema_name NOT LIKE 'pg_%'
       shinyjs::disable("create_group")
       on.exit(shinyjs::enable("create_group"), add = TRUE)
 
-      # Ensure that group_name ends with _group
-      if (!grepl("_group$", input$group_name)) {
-        output$status <- renderText("Group names must end with '_group'")
+      if (!is_valid_group_name(input$group_name)) {
+        output$status <- renderText(
+          "Group names may only contain letters, numbers, and underscores, and must end with '_group'."
+        )
         return(NULL)
       }
 
-      if (length(input$schema_permissions) == 0) {
+      selected_schemas <- unique(as.character(input$schema_permissions))
+      if (length(selected_schemas) == 0) {
         output$status <- renderText(
           "Please select at least one schema for the group to have usage on."
         )
         return(NULL)
       }
 
+      if (!all(selected_schemas %in% schemas$schema_name)) {
+        output$status <- renderText(
+          "Please select schema permissions from the available list."
+        )
+        return(NULL)
+      }
+
+      selected_tables <- unique(c(
+        input$table_permission_select,
+        input$table_permission_insert,
+        input$table_permission_update,
+        input$table_permission_delete
+      ))
       if (
         length(input$table_permission_select) == 0 &&
           length(input$table_permission_insert) == 0 &&
@@ -246,6 +299,14 @@ WHERE schema_name NOT LIKE 'pg_%'
       ) {
         output$status <- renderText(
           "Please select at least one table permission for the group."
+        )
+        return(NULL)
+      }
+
+      valid_table_choices <- c("All tables", isolate(available_table_choices()))
+      if (!all(selected_tables %in% valid_table_choices)) {
+        output$status <- renderText(
+          "Please select table permissions from the available list."
         )
         return(NULL)
       }
@@ -268,10 +329,10 @@ WHERE schema_name NOT LIKE 'pg_%'
       tryCatch(
         {
           DBI::dbExecute(session$userData$AquaCache, "BEGIN;")
-          sql <- paste0(
-            "CREATE ROLE ",
-            input$group_name,
-            " NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;"
+          role_ident <- quote_identifier_sql(input$group_name)
+          sql <- sprintf(
+            "CREATE ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;",
+            role_ident
           )
           DBI::dbExecute(session$userData$AquaCache, sql)
 
@@ -280,14 +341,11 @@ WHERE schema_name NOT LIKE 'pg_%'
             !is.null(input$schema_permissions) &&
               length(input$schema_permissions) > 0
           ) {
-            for (schema in input$schema_permissions) {
+            for (schema in selected_schemas) {
               sql <- sprintf(
                 "GRANT USAGE ON SCHEMA %s TO %s",
-                DBI::dbQuoteIdentifier(session$userData$AquaCache, schema),
-                DBI::dbQuoteIdentifier(
-                  session$userData$AquaCache,
-                  input$group_name
-                )
+                quote_identifier_sql(schema),
+                role_ident
               )
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -301,18 +359,12 @@ WHERE schema_name NOT LIKE 'pg_%'
             if (!is.null(tables) && length(tables) > 0) {
               for (table in tables) {
                 if (table == "All tables") {
-                  for (schema in input$schema_permissions) {
+                  for (schema in selected_schemas) {
                     sql <- sprintf(
                       "GRANT %s ON ALL TABLES IN SCHEMA %s TO %s",
                       permission,
-                      DBI::dbQuoteIdentifier(
-                        session$userData$AquaCache,
-                        schema
-                      ),
-                      DBI::dbQuoteIdentifier(
-                        session$userData$AquaCache,
-                        input$group_name
-                      )
+                      quote_identifier_sql(schema),
+                      role_ident
                     )
                     DBI::dbExecute(
                       session$userData$AquaCache,
@@ -323,11 +375,8 @@ WHERE schema_name NOT LIKE 'pg_%'
                   sql <- sprintf(
                     "GRANT %s ON TABLE %s TO %s",
                     permission,
-                    table,
-                    DBI::dbQuoteIdentifier(
-                      session$userData$AquaCache,
-                      input$group_name
-                    )
+                    quote_qualified_table_sql(table),
+                    role_ident
                   )
                   DBI::dbExecute(
                     session$userData$AquaCache,
