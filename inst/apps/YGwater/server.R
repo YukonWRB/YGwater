@@ -136,6 +136,19 @@ app_server <- function(input, output, session) {
     "manageBoreholeDocuments"
   )
 
+  admin_nav_values <- c(
+    "continuousDataTasks",
+    "discreteDataTasks",
+    "dbLocsTasks",
+    "fileTasks",
+    "fieldTasks",
+    "equipTasks",
+    "wellTasks",
+    "metadataTasks",
+    "acquisitionTelemetryTasks",
+    "adminTasks"
+  )
+
   map_page_ids <- c(
     "monitoringLocationsMap",
     "parameterValuesMap",
@@ -190,6 +203,66 @@ app_server <- function(input, output, session) {
       return("admin")
     }
     "public"
+  }
+
+  admin_privilege_key_for_page <- function(page_id) {
+    if (is.null(page_id) || length(page_id) == 0) {
+      return(NULL)
+    }
+
+    page_id <- as.character(page_id)[1]
+    if (!nzchar(page_id) || is.na(page_id)) {
+      return(NULL)
+    }
+
+    if (page_id %in% c("adminHome", "changePwd")) {
+      return(NULL)
+    }
+    if (page_id == "manageUsers") {
+      return("can_create_role")
+    }
+    if (page_id %in% c(
+      "simplerIndex",
+      "editBoreholesWells",
+      "manageBoreholeDocuments"
+    )) {
+      return("boreholes_wells")
+    }
+    page_id
+  }
+
+  can_access_page <- function(page_id) {
+    if (is.null(page_id) || length(page_id) == 0) {
+      return(TRUE)
+    }
+
+    page_id <- as.character(page_id)[1]
+    if (is.na(page_id) || !nzchar(page_id)) {
+      return(TRUE)
+    }
+
+    is_admin_target <- page_id %in% c(admin_nav_values, admin_leaf_pages)
+    if (!is_admin_target) {
+      return(TRUE)
+    }
+
+    if (isTRUE(config$public) || !isTRUE(session$userData$user_logged_in)) {
+      return(FALSE)
+    }
+
+    if (page_id %in% admin_nav_values) {
+      return(TRUE)
+    }
+
+    priv_key <- admin_privilege_key_for_page(page_id)
+    if (is.null(priv_key)) {
+      return(TRUE)
+    }
+    if (identical(priv_key, "can_create_role")) {
+      return(isTRUE(session$userData$can_create_role))
+    }
+
+    isTRUE(session$userData$admin_privs[[priv_key]])
   }
 
   is_plot_trigger_input <- function(input_id) {
@@ -332,6 +405,95 @@ app_server <- function(input, output, session) {
     }
 
     list(type = val_type, length = val_len)
+  }
+
+  is_feedback_file_input <- function(value) {
+    is.data.frame(value) &&
+      all(c("name", "size", "type", "datapath") %in% names(value))
+  }
+
+  should_capture_feedback_input <- function(input_id) {
+    if (is.null(input_id) || length(input_id) == 0) {
+      return(FALSE)
+    }
+
+    input_id <- as.character(input_id)[1]
+    if (is.na(input_id) || !nzchar(input_id)) {
+      return(FALSE)
+    }
+
+    if (
+      input_id %in% c(
+        "feedback_text",
+        "submit_feedback",
+        "thumbs_up",
+        "thumbs_down",
+        "user_last_activity",
+        "userLang",
+        "window_dimensions",
+        "usage_download_click",
+        "usage_input_changed"
+      )
+    ) {
+      return(FALSE)
+    }
+
+    if (
+      grepl(
+        "(^|[._-])(password|pwd|secret|token|credential|api[_-]?key|key)([._-]|$)",
+        input_id,
+        ignore.case = TRUE
+      )
+    ) {
+      return(FALSE)
+    }
+
+    !grepl("^\\.clientdata", input_id)
+  }
+
+  summarize_feedback_input_value <- function(value) {
+    if (is_feedback_file_input(value)) {
+      return(list(
+        type = "fileInput",
+        files = lapply(seq_len(nrow(value)), function(i) {
+          list(
+            name = as.character(value$name[i]),
+            size = suppressWarnings(as.numeric(value$size[i])),
+            mime_type = as.character(value$type[i])
+          )
+        })
+      ))
+    }
+
+    summarize_usage_input_value(value, max_values = 3L)
+  }
+
+  collect_feedback_app_state <- function(input) {
+    input_values <- reactiveValuesToList(input)
+    input_names <- names(input_values)
+
+    if (is.null(input_names) || !length(input_names)) {
+      return(list(inputs = list(), redacted_inputs = character(0)))
+    }
+
+    captured_inputs <- list()
+    redacted_inputs <- character(0)
+
+    for (input_id in input_names) {
+      if (!should_capture_feedback_input(input_id)) {
+        redacted_inputs <- c(redacted_inputs, input_id)
+        next
+      }
+
+      captured_inputs[[input_id]] <- summarize_feedback_input_value(
+        input_values[[input_id]]
+      )
+    }
+
+    list(
+      inputs = captured_inputs,
+      redacted_inputs = unique(redacted_inputs)
+    )
   }
 
   session$userData$usage_id <- NULL
@@ -807,6 +969,10 @@ app_server <- function(input, output, session) {
     if (!config$public & config$g_drive) nav_fun(id = "navbar", target = "FOD")
   }
   showAdmin <- function(show = TRUE, logout = FALSE) {
+    if (show && !isTRUE(session$userData$user_logged_in)) {
+      show <- FALSE
+    }
+
     if (show) {
       # Location tasks -------------------------------------------------------
       if (
@@ -2070,6 +2236,8 @@ app_server <- function(input, output, session) {
 
   # Handle feedback submission
   observeEvent(input$submit_feedback, {
+    feedback_app_state <- collect_feedback_app_state(input)
+
     # Save feedback to the database
     DBI::dbExecute(
       session$userData$AquaCache,
@@ -2079,8 +2247,9 @@ app_server <- function(input, output, session) {
         input$feedback_text,
         input$navbar,
         jsonlite::toJSON(
-          reactiveValuesToList(input),
-          auto_unbox = TRUE
+          feedback_app_state,
+          auto_unbox = TRUE,
+          null = "null"
         )
       )
     )
@@ -3158,6 +3327,11 @@ app_server <- function(input, output, session) {
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
   observeEvent(input$admin, {
+    if (!isTRUE(session$userData$user_logged_in)) {
+      updateTabsetPanel(session, "navbar", selected = "home")
+      return()
+    }
+
     if (admin_vis_flag() == "viz") {
       # Set the flag before changing the tab programmatically
 
@@ -3196,6 +3370,18 @@ app_server <- function(input, output, session) {
       type = "toggleDropdown",
       message = list(msg = "hide dropdown")
     )
+
+    if (!can_access_page(input$navbar)) {
+      if (isTRUE(session$userData$user_logged_in)) {
+        showNotification(
+          "You do not have access to that page.",
+          type = "error",
+          duration = 5
+        )
+      }
+      updateTabsetPanel(session, "navbar", selected = "home")
+      return()
+    }
 
     # When user selects a tab, update the last active tab for the current mode
     if (
