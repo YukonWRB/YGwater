@@ -8,33 +8,128 @@ basins_shp <- sf::st_read(
 )
 
 
-con <- YGwater::AquaConnect(
-    name = "aquacache",
-    host = Sys.getenv("aquacacheHostProd"),
-    port = Sys.getenv("aquacachePortProd"),
-    user = Sys.getenv("aquacacheAdminUser"),
-    password = Sys.getenv("aquacacheAdminPass"),
-)
+if (!exists("con", inherits = FALSE) || is.null(con)) {
+    con <- YGwater::AquaConnect(
+        name = "aquacache",
+        host = Sys.getenv("aquacacheHostProd"),
+        port = Sys.getenv("aquacachePortProd"),
+        user = Sys.getenv("aquacacheAdminUser"),
+        password = Sys.getenv("aquacacheAdminPass"),
+    )
+}
 
 
 fva_path <- file.path(
     "dev",
     "freshet_forecasting",
-    "flood_vulnerable_gauges.yaml"
+    "flood_vulnerable_gauges_encoded.json"
 )
 
-fva <- yaml::read_yaml(fva_path)
+fva <- jsonlite::fromJSON(fva_path, simplifyVector = FALSE)
 
 community <- "Dawson"
 
-gauges_ds <- fva[community]
+gauges_ds <- fva[[community]]
 
 
 # Data access helpers -------------------------------------------------------
 
-gauge_names <- unique(stats::na.omit(unlist(gauges_ds, use.names = FALSE)))
+gauge_names <- names(gauges_ds)
 if (length(gauge_names) == 0) {
     stop(sprintf("No gauge names found for community '%s'", community))
+}
+
+#' Flatten Encoded Gauge Metadata For A Community
+#'
+#' Converts one community block from `flood_vulnerable_gauges_encoded.json`
+#' into a flat table and optionally filters to a subset of encoding values.
+#'
+#' @param community_data Nested list for one community.
+#' @param allowed_encodings Numeric vector of encoding values to keep.
+#'
+#' @return A data.frame with one row per unique location code.
+#' @noRd
+get_encoded_gauge_metadata <- function(
+    community_data,
+    allowed_encodings = c(0, 1, 2)
+) {
+    if (is.null(community_data) || length(community_data) == 0) {
+        return(data.frame(
+            gauge_name = character(),
+            location_code = character(),
+            location_id = integer(),
+            encoding = numeric(),
+            stringsAsFactors = FALSE
+        ))
+    }
+
+    extract_scalar <- function(entry, field, default = NA) {
+        value <- entry[[field]]
+        if (is.null(value) || length(value) == 0) {
+            return(default)
+        }
+        value[[1]]
+    }
+
+    gauge_names <- names(community_data)
+    rows <- lapply(gauge_names, function(gauge_name) {
+        entries <- community_data[[gauge_name]]
+        if (is.null(entries) || length(entries) == 0) {
+            return(NULL)
+        }
+
+        data.frame(
+            gauge_name = rep(gauge_name, length(entries)),
+            location_code = vapply(
+                entries,
+                extract_scalar,
+                field = "location_code",
+                FUN.VALUE = character(1),
+                default = NA_character_
+            ),
+            location_id = vapply(
+                entries,
+                extract_scalar,
+                field = "location_id",
+                FUN.VALUE = integer(1),
+                default = NA_integer_
+            ),
+            encoding = vapply(
+                entries,
+                extract_scalar,
+                field = "encoding",
+                FUN.VALUE = numeric(1),
+                default = NA_real_
+            ),
+            stringsAsFactors = FALSE
+        )
+    })
+
+    rows <- rows[vapply(rows, Negate(is.null), logical(1))]
+    if (length(rows) == 0) {
+        return(data.frame(
+            gauge_name = character(),
+            location_code = character(),
+            location_id = integer(),
+            encoding = numeric(),
+            stringsAsFactors = FALSE
+        ))
+    }
+
+    dat <- do.call(rbind, rows)
+    dat <- dat[
+        !is.na(dat$location_code) &
+            nzchar(dat$location_code) &
+            dat$encoding %in% allowed_encodings,
+        ,
+        drop = FALSE
+    ]
+
+    if (nrow(dat) == 0) {
+        return(dat)
+    }
+
+    dat[!duplicated(dat$location_code), , drop = FALSE]
 }
 
 #' Resolve Location Names To Location Metadata
@@ -787,8 +882,7 @@ get_instantaneous_timeseries_summary <- function(
                 "      ON tl.location_code = loc.location_code",
                 "    JOIN parameters p",
                 "      ON p.parameter_id = ts.parameter_id",
-                "    WHERE ts.record_rate = INTERVAL '5 minutes'",
-                "      AND p.param_name = 'water level'",
+                "    WHERE p.param_name = 'water level'",
                 "),",
                 "filtered AS MATERIALIZED (",
                 "    SELECT t.location_id, t.timeseries_id,",
@@ -3907,6 +4001,8 @@ get_latest_parameter_summary <- function(
                 "        cl.latest_time,",
                 "        cl.current_value,",
                 "        cl.current_value - prev.value AS change_24h,",
+                "        cl.current_value - prev48.value AS change_48h,",
+                "        cl.current_value - prev1w.value AS change_1w,",
                 "        1 AS source_priority",
                 "    FROM continuous_latest cl",
                 "    LEFT JOIN LATERAL (",
@@ -3918,6 +4014,24 @@ get_latest_parameter_summary <- function(
                 "        ORDER BY mc.datetime DESC",
                 "        LIMIT 1",
                 "    ) prev ON TRUE",
+                "    LEFT JOIN LATERAL (",
+                "        SELECT mc.value AS value",
+                "        FROM measurements_continuous mc",
+                "        WHERE mc.timeseries_id = cl.timeseries_id",
+                "          AND mc.value IS NOT NULL",
+                "          AND mc.datetime <= cl.latest_time - INTERVAL '48 hours'",
+                "        ORDER BY mc.datetime DESC",
+                "        LIMIT 1",
+                "    ) prev48 ON TRUE",
+                "    LEFT JOIN LATERAL (",
+                "        SELECT mc.value AS value",
+                "        FROM measurements_continuous mc",
+                "        WHERE mc.timeseries_id = cl.timeseries_id",
+                "          AND mc.value IS NOT NULL",
+                "          AND mc.datetime <= cl.latest_time - INTERVAL '7 days'",
+                "        ORDER BY mc.datetime DESC",
+                "        LIMIT 1",
+                "    ) prev1w ON TRUE",
                 "),",
                 "daily_latest AS (",
                 "    SELECT DISTINCT ON (tt.location_id)",
@@ -3940,6 +4054,8 @@ get_latest_parameter_summary <- function(
                 "        dl.latest_time,",
                 "        dl.current_value,",
                 "        dl.current_value - prev.value AS change_24h,",
+                "        dl.current_value - prev48.value AS change_48h,",
+                "        dl.current_value - prev1w.value AS change_1w,",
                 "        2 AS source_priority",
                 "    FROM daily_latest dl",
                 "    LEFT JOIN LATERAL (",
@@ -3951,11 +4067,29 @@ get_latest_parameter_summary <- function(
                 "        ORDER BY mcd.date DESC",
                 "        LIMIT 1",
                 "    ) prev ON TRUE",
+                "    LEFT JOIN LATERAL (",
+                "        SELECT mcd.value AS value",
+                "        FROM measurements_calculated_daily mcd",
+                "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                "          AND mcd.value IS NOT NULL",
+                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 days'",
+                "        ORDER BY mcd.date DESC",
+                "        LIMIT 1",
+                "    ) prev48 ON TRUE",
+                "    LEFT JOIN LATERAL (",
+                "        SELECT mcd.value AS value",
+                "        FROM measurements_calculated_daily mcd",
+                "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                "          AND mcd.value IS NOT NULL",
+                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 days'",
+                "        ORDER BY mcd.date DESC",
+                "        LIMIT 1",
+                "    ) prev1w ON TRUE",
                 "),",
                 "latest AS (",
-                "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, source_priority FROM continuous_change",
+                "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, change_48h, change_1w, source_priority FROM continuous_change",
                 "    UNION ALL",
-                "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, source_priority FROM daily_change",
+                "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, change_48h, change_1w, source_priority FROM daily_change",
                 "),",
                 "best_latest AS (",
                 "    SELECT",
@@ -3974,6 +4108,8 @@ get_latest_parameter_summary <- function(
                 "    b.latest_time AS latest_time,",
                 "    b.current_value,",
                 "    b.change_24h,",
+                "    b.change_48h,",
+                "    b.change_1w,",
                 paste0(
                     "    EXTRACT(EPOCH FROM (",
                     ref_ts_sql,
@@ -5263,7 +5399,7 @@ get_historical_overlay_timeseries <- function(
         return(empty_historical_overlay_traces())
     }
 
-    plot_timezone <- "America/Whitehorse"
+    plot_timezone <- "Etc/GMT+7"
     target_time <- if (is.null(reference_time)) {
         as.POSIXct(Sys.time(), tz = plot_timezone)
     } else {
@@ -5298,16 +5434,26 @@ get_historical_overlay_timeseries <- function(
             time_columns = c("datetime")
         )
         dat <- sanitize_loaded_series_values(dat, parameter)
+
         source_dates <- as.Date(dat$datetime, tz = plot_timezone)
-        shifted_datetimes <- suppressWarnings(as.POSIXct(
-            sprintf(
-                "%d-%s",
-                target_year,
-                format(source_dates, "%m-%d")
-            ),
-            tz = plot_timezone,
-            format = "%Y-%m-%d"
-        ))
+        source_year <- as.integer(format(source_dates, "%Y"))
+        source_month <- as.integer(format(source_dates, "%m"))
+        source_day <- as.integer(format(source_dates, "%d"))
+        source_doy <- as.integer(format(source_dates, "%j"))
+        source_is_leap <- (source_year %% 4 == 0 & source_year %% 100 != 0) |
+            (source_year %% 400 == 0)
+
+        # Match percentile-envelope indexing: drop Feb 29 and collapse to 1..365.
+        normalized_doy <- ifelse(
+            source_month > 2 & source_is_leap,
+            source_doy - 1L,
+            source_doy
+        )
+        normalized_doy[source_month == 2 & source_day == 29] <- NA_integer_
+
+        target_start_date <- as.Date(sprintf("%d-01-01", target_year))
+        shifted_dates <- target_start_date + (normalized_doy - 1L)
+        shifted_datetimes <- as.POSIXct(shifted_dates, tz = plot_timezone)
 
         dat$datetime <- shifted_datetimes
         dat <- dat[stats::complete.cases(dat[, c("datetime", "value")]), ]
@@ -5582,9 +5728,9 @@ launch_freshet_dashboard <- function(con) {
     fva_path <- file.path(
         "dev",
         "freshet_forecasting",
-        "flood_vulnerable_gauges.yaml"
+        "flood_vulnerable_gauges_encoded.json"
     )
-    fva <- yaml::read_yaml(fva_path)
+    fva <- jsonlite::fromJSON(fva_path, simplifyVector = FALSE)
     communities <- names(fva)
     current_calendar_year <- as.integer(format(Sys.Date(), "%Y"))
     historical_overlay_year_choices <- if (current_calendar_year > 2000L) {
@@ -5858,11 +6004,54 @@ launch_freshet_dashboard <- function(con) {
     )
 
     server <- function(input, output, session) {
-        time_zero <- shiny::reactive({
-            now <- Sys.time()
-            now_input <- format(now, "%Y-%m-%dT%H:%M")
+        time0_pinned <- shiny::reactiveVal(FALSE)
+        time0_last_auto_value <- shiny::reactiveVal("")
 
-            session$sendInputMessage("time0", list(max = now_input))
+        shiny::observeEvent(
+            input$time0,
+            {
+                current_value <- if (is.null(input$time0)) {
+                    ""
+                } else {
+                    as.character(input$time0)
+                }
+
+                if (!nzchar(current_value)) {
+                    return()
+                }
+
+                # Ignore programmatic updates pushed by the auto-follow logic.
+                if (identical(current_value, time0_last_auto_value())) {
+                    return()
+                }
+
+                time0_pinned(TRUE)
+            },
+            ignoreInit = TRUE
+        )
+
+        time_zero <- shiny::reactive({
+            dashboard_tz <- "Etc/GMT+7"
+            shiny::invalidateLater(30000, session)
+
+            now <- as.POSIXct(
+                format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = dashboard_tz),
+                tz = dashboard_tz
+            )
+            now_input <- format(now, "%Y-%m-%dT%H:%M", tz = dashboard_tz)
+
+            if (isTRUE(time0_pinned())) {
+                session$sendInputMessage("time0", list(max = now_input))
+            } else {
+                time0_last_auto_value(now_input)
+                session$sendInputMessage(
+                    "time0",
+                    list(
+                        max = now_input,
+                        value = now_input
+                    )
+                )
+            }
 
             if (is.null(input$time0) || !nzchar(input$time0)) {
                 return(now)
@@ -5871,7 +6060,7 @@ launch_freshet_dashboard <- function(con) {
             selected <- suppressWarnings(as.POSIXct(
                 input$time0,
                 format = "%Y-%m-%dT%H:%M",
-                tz = Sys.timezone()
+                tz = dashboard_tz
             ))
 
             if (is.na(selected)) {
@@ -6256,10 +6445,8 @@ launch_freshet_dashboard <- function(con) {
         community_stations <- shiny::reactive({
             req(input$community)
 
-            gauge_names <- unique(stats::na.omit(unlist(
-                fva[[input$community]],
-                use.names = FALSE
-            )))
+            community_data <- fva[[input$community]]
+            gauge_names <- names(community_data)
             if (length(gauge_names) == 0) {
                 return(list(
                     stations = NULL,
@@ -6287,25 +6474,32 @@ launch_freshet_dashboard <- function(con) {
                 feature_name = gauge_codes$location_code,
                 con = con
             )
-            stations <- get_stations_by_basin(
-                location_codes = gauge_codes$location_code,
-                poly = basins,
-                monitoring_stations = all_monitoring_locations_sf
+
+            upstream_gauges <- get_encoded_gauge_metadata(
+                community_data = community_data,
+                allowed_encodings = c(0, 1, 2)
             )
 
-            has_wl <- if ("water level" %in% names(stations)) {
-                row_aligned_flag(stations[["water level"]], nrow(stations))
-            } else {
-                rep(FALSE, nrow(stations))
+            if (nrow(upstream_gauges) == 0) {
+                return(list(
+                    stations = all_monitoring_locations_sf[0, ],
+                    gauge_codes = gauge_codes,
+                    basins = basins,
+                    upstream_basins = NULL
+                ))
             }
-            has_wf <- if ("water flow" %in% names(stations)) {
-                row_aligned_flag(stations[["water flow"]], nrow(stations))
-            } else {
-                rep(FALSE, nrow(stations))
-            }
-            upstream_codes <- unique(stats::na.omit(stations$location_code[
-                has_wl | has_wf
-            ]))
+
+            station_idx <- match(
+                upstream_gauges$location_code,
+                all_monitoring_locations_sf$location_code
+            )
+            station_idx <- stats::na.omit(station_idx)
+            stations <- all_monitoring_locations_sf[station_idx, ]
+            stations$encoding <- upstream_gauges$encoding[
+                match(stations$location_code, upstream_gauges$location_code)
+            ]
+
+            upstream_codes <- unique(stats::na.omit(stations$location_code))
 
             upstream_basins <- NULL
             if (length(upstream_codes) > 0) {
@@ -7288,6 +7482,53 @@ launch_freshet_dashboard <- function(con) {
             unique(stats::na.omit(stations$location_code[idx]))
         })
 
+        recompute_summary_data_age <- function(dat, reference_time) {
+            if (
+                is.null(dat) ||
+                    nrow(dat) == 0 ||
+                    !("latest_time" %in% names(dat))
+            ) {
+                return(dat)
+            }
+
+            dashboard_tz <- "Etc/GMT+7"
+            ref_ts <- suppressWarnings(as.POSIXct(
+                reference_time,
+                tz = dashboard_tz
+            ))
+            if (length(ref_ts) != 1 || is.na(ref_ts)) {
+                return(dat)
+            }
+
+            latest_ts <- if (
+                inherits(dat$latest_time, c("POSIXct", "POSIXt"))
+            ) {
+                dat$latest_time
+            } else {
+                suppressWarnings(as.POSIXct(dat$latest_time, tz = dashboard_tz))
+            }
+
+            if (all(is.na(latest_ts))) {
+                return(dat)
+            }
+
+            age_hours <- as.numeric(difftime(
+                ref_ts,
+                latest_ts,
+                units = "hours"
+            ))
+
+            # Data age should never be negative. If timezone interpretation
+            # drifts make this negative, keep the elapsed-hour magnitude.
+            dat$last_data_age_hours <- ifelse(
+                is.na(age_hours),
+                NA_real_,
+                ifelse(age_hours < 0, abs(age_hours), age_hours)
+            )
+
+            dat
+        }
+
         build_summary_data_for_parameter <- function(
             param,
             codes,
@@ -7299,13 +7540,18 @@ launch_freshet_dashboard <- function(con) {
             }
 
             if (identical(param, "water level")) {
-                dat <- get_instantaneous_timeseries_summary(
+                dat <- get_latest_parameter_summary(
                     location_codes = codes,
+                    parameter = "water level",
                     con = con,
-                    historical_median = FALSE,
                     reference_time = reference_time
                 )
+                if ("current_value" %in% names(dat)) {
+                    dat$current_water_level <- dat$current_value
+                    dat$current_value <- NULL
+                }
                 dat <- add_image_buffer_flag(dat, codes)
+                dat <- recompute_summary_data_age(dat, reference_time)
                 return(sort_summary_by_drainage_area(dat, stations))
             }
 
@@ -7319,7 +7565,8 @@ launch_freshet_dashboard <- function(con) {
                     historical_median = FALSE,
                     reference_time = reference_time
                 )
-                return(add_image_buffer_flag(dat, codes))
+                dat <- add_image_buffer_flag(dat, codes)
+                return(recompute_summary_data_age(dat, reference_time))
             }
 
             if (param %in% snow_survey_parameters) {
@@ -7329,7 +7576,8 @@ launch_freshet_dashboard <- function(con) {
                     con = con,
                     reference_time = reference_time
                 )
-                return(add_image_buffer_flag(dat, codes))
+                dat <- add_image_buffer_flag(dat, codes)
+                return(recompute_summary_data_age(dat, reference_time))
             }
 
             if (identical(param, "FDD")) {
@@ -7338,7 +7586,8 @@ launch_freshet_dashboard <- function(con) {
                     reference_time = reference_time,
                     con = con
                 )
-                return(add_image_buffer_flag(dat, codes))
+                dat <- add_image_buffer_flag(dat, codes)
+                return(recompute_summary_data_age(dat, reference_time))
             }
 
             if (identical(param, "DDT")) {
@@ -7347,7 +7596,8 @@ launch_freshet_dashboard <- function(con) {
                     reference_time = reference_time,
                     con = con
                 )
-                return(add_image_buffer_flag(dat, codes))
+                dat <- add_image_buffer_flag(dat, codes)
+                return(recompute_summary_data_age(dat, reference_time))
             }
 
             dat <- get_latest_parameter_summary(
@@ -7358,6 +7608,7 @@ launch_freshet_dashboard <- function(con) {
             )
 
             dat <- add_image_buffer_flag(dat, codes)
+            dat <- recompute_summary_data_age(dat, reference_time)
 
             if (identical(param, "water flow")) {
                 return(sort_summary_by_drainage_area(dat, stations))
@@ -7430,6 +7681,35 @@ launch_freshet_dashboard <- function(con) {
                     hidden_cols
                 )]
             }
+
+            preferred_change_order <- c(
+                "change_24h",
+                "change_48h",
+                "change_72h",
+                "change_1w"
+            )
+            ordered_changes <- intersect(
+                preferred_change_order,
+                names(dat_display)
+            )
+            other_changes <- setdiff(
+                grep("^change_", names(dat_display), value = TRUE),
+                ordered_changes
+            )
+            trailing_cols <- intersect(
+                "last_data_age_hours",
+                names(dat_display)
+            )
+            lead_cols <- setdiff(
+                names(dat_display),
+                c(ordered_changes, other_changes, trailing_cols)
+            )
+            dat_display <- dat_display[c(
+                lead_cols,
+                ordered_changes,
+                other_changes,
+                trailing_cols
+            )]
 
             transformed_change_cols <- character(0)
             if (isTRUE(relative_changes)) {
@@ -7758,15 +8038,6 @@ launch_freshet_dashboard <- function(con) {
                 ))
             }
 
-            # Identify change columns before processing
-            original_dat <- as.data.frame(dat)
-            change_col_names <- grep(
-                "change",
-                names(original_dat),
-                value = TRUE,
-                ignore.case = TRUE
-            )
-
             dt_options <- list(
                 pageLength = 8,
                 scrollX = TRUE,
@@ -7779,52 +8050,35 @@ launch_freshet_dashboard <- function(con) {
                 dt_options$order <- list()
             }
 
+            display_dat <- prepare_summary_display_data(
+                dat,
+                relative_changes = isTRUE(input$summary_relative)
+            )
+
             result_table <- DT::datatable(
-                prepare_summary_display_data(
-                    dat,
-                    relative_changes = isTRUE(input$summary_relative)
-                ),
+                display_dat,
                 selection = "single",
                 options = dt_options,
                 rownames = FALSE
             )
 
-            # Apply conditional formatting to change columns
-            if (length(change_col_names) > 0) {
-                # Determine which positions change columns are in the final display
-                final_names <- names({
-                    dat_display <- as.data.frame(dat)
-                    hidden_cols <- intersect(
-                        c(
-                            "location_id",
-                            "timeseries_id",
-                            "nearest_img_series_id",
-                            "image_series_location_id",
-                            "nearest_image_series_distance_m",
-                            "has_image_series_within_10km"
-                        ),
-                        names(dat_display)
-                    )
-                    if (length(hidden_cols) > 0) {
-                        dat_display <- dat_display[setdiff(
-                            names(dat_display),
-                            hidden_cols
-                        )]
-                    }
-                    dat_display
-                })
-                change_positions <- which(final_names %in% change_col_names)
+            # Apply conditional formatting to change columns using the actual
+            # final column names (post-reorder and post-rename).
+            change_positions <- grep(
+                "change",
+                names(display_dat),
+                ignore.case = TRUE
+            )
 
-                if (length(change_positions) > 0) {
-                    result_table <- result_table %>%
-                        DT::formatStyle(
-                            columns = change_positions,
-                            backgroundColor = DT::styleInterval(
-                                c(-0.5, 0.5),
-                                c("#86efac", "#fef08a", "#fca5a5")
-                            )
+            if (length(change_positions) > 0) {
+                result_table <- result_table %>%
+                    DT::formatStyle(
+                        columns = change_positions,
+                        backgroundColor = DT::styleInterval(
+                            c(-0.5, 0.5),
+                            c("#86efac", "#fef08a", "#fca5a5")
                         )
-                }
+                    )
             }
 
             result_table
@@ -8572,15 +8826,9 @@ launch_freshet_dashboard <- function(con) {
 
         output$stations_map <- leaflet::renderLeaflet({
             stations <- community_stations()$stations
-            req(!is.null(stations), nrow(stations) > 0, input$parameter)
+            req(!is.null(stations), nrow(stations) > 0)
             basins <- community_stations()$basins
             upstream_basins <- community_stations()$upstream_basins
-            summary_now <- summary_data()
-
-            selected_code <- tryCatch(
-                selected_station_code(),
-                error = function(e) NA_character_
-            )
 
             station_label <- if ("name" %in% names(stations)) {
                 as.character(stations$name)
@@ -8641,93 +8889,6 @@ launch_freshet_dashboard <- function(con) {
                 ")"
             )
 
-            has_selected_param <- station_has_parameter(
-                stations,
-                input$parameter
-            )
-
-            target_codes <- unique(stats::na.omit(stations$location_code[
-                has_selected_param
-            ]))
-            summary_selected <- as.data.frame(summary_now)
-
-            recent_codes <- character(0)
-            if (
-                nrow(summary_selected) > 0 &&
-                    all(
-                        c("location_code", "last_data_age_hours") %in%
-                            names(summary_selected)
-                    )
-            ) {
-                recent_codes <- unique(stats::na.omit(
-                    summary_selected$location_code[
-                        !is.na(summary_selected$last_data_age_hours) &
-                            summary_selected$last_data_age_hours <= 24
-                    ]
-                ))
-            }
-
-            trend_lookup <- data.frame(
-                location_code = character(),
-                change_24h = numeric()
-            )
-            if (
-                nrow(summary_selected) > 0 &&
-                    all(
-                        c("location_code", "change_24h") %in%
-                            names(summary_selected)
-                    )
-            ) {
-                trend_lookup <- summary_selected[,
-                    c("location_code", "change_24h"),
-                    drop = FALSE
-                ]
-            } else if (
-                length(target_codes) > 0 &&
-                    !identical(input$parameter, "FDD") &&
-                    !identical(input$parameter, "DDT")
-            ) {
-                trend_lookup <- get_parameter_change_24h(
-                    location_codes = target_codes,
-                    parameter_name = input$parameter,
-                    reference_time = time_zero()
-                )
-                if (!"change_24h" %in% names(trend_lookup)) {
-                    trend_lookup$change_24h <- NA_real_
-                }
-            }
-
-            stations$change_24h <- NA_real_
-            if (nrow(trend_lookup) > 0) {
-                idx <- match(stations$location_code, trend_lookup$location_code)
-                stations$change_24h <- trend_lookup$change_24h[idx]
-            }
-
-            is_target <- stations$location_code %in% target_codes
-            is_recent_target <- is_target &
-                (stations$location_code %in% recent_codes)
-            is_stale_target <- is_target & !is_recent_target
-
-            stations_triangle <- stations[which(is_recent_target), ]
-            stations_circle <- stations[which(!is_recent_target), ]
-
-            stations_circle$fill_color <- rep(
-                character(1),
-                nrow(stations_circle)
-            )
-            if (nrow(stations_circle) > 0) {
-                stations_circle$fill_color <- ifelse(
-                    stations_circle$location_code %in%
-                        stations$location_code[is_stale_target],
-                    "#9ca3af",
-                    "#2563eb"
-                )
-            }
-            stations_circle$stroke_color <- stations_circle$fill_color
-            stations_circle$stroke_weight <- rep(1, nrow(stations_circle))
-            stations_circle$radius <- rep(6, nrow(stations_circle))
-            stations_circle$fill_opacity <- rep(0.9, nrow(stations_circle))
-
             map_obj <- leaflet::leaflet() %>%
                 leaflet::addProviderTiles("CartoDB.Positron")
 
@@ -8755,104 +8916,25 @@ launch_freshet_dashboard <- function(con) {
                     )
             }
 
-            if (nrow(stations_circle) > 0) {
+            if (nrow(stations) > 0) {
                 map_obj <- map_obj %>%
                     leaflet::addCircleMarkers(
-                        data = stations_circle,
-                        radius = ~radius,
+                        data = stations,
+                        radius = 6,
                         stroke = TRUE,
-                        weight = ~stroke_weight,
-                        color = ~stroke_color,
-                        fillColor = ~fill_color,
-                        fillOpacity = ~fill_opacity,
+                        weight = 1,
+                        color = "#2563eb",
+                        fillColor = "#2563eb",
+                        fillOpacity = 0.9,
                         label = ~tooltip_text,
                         labelOptions = leaflet::labelOptions(noHide = FALSE),
                         popup = ~popup_html
-                    )
-            }
-
-            if (nrow(stations_triangle) > 0) {
-                triangle_labels <- lapply(
-                    seq_len(nrow(stations_triangle)),
-                    function(i) {
-                        clr <- if (
-                            !is.na(stations_triangle$change_24h[[i]]) &&
-                                stations_triangle$change_24h[[i]] > 0
-                        ) {
-                            "#dc2626"
-                        } else {
-                            "#16a34a"
-                        }
-                        glyph <- if (
-                            !is.na(stations_triangle$change_24h[[i]]) &&
-                                stations_triangle$change_24h[[i]] > 0
-                        ) {
-                            "&#9650;"
-                        } else {
-                            "&#9660;"
-                        }
-                        htmltools::HTML(sprintf(
-                            "<span style='color:%s; font-size:18px; line-height:14px;'>%s</span>",
-                            clr,
-                            glyph
-                        ))
-                    }
-                )
-
-                map_obj <- map_obj %>%
-                    leaflet::addLabelOnlyMarkers(
-                        data = stations_triangle,
-                        lng = ~longitude,
-                        lat = ~latitude,
-                        label = triangle_labels,
-                        labelOptions = leaflet::labelOptions(
-                            noHide = TRUE,
-                            textOnly = TRUE,
-                            direction = "center"
-                        )
-                    )
-
-                map_obj <- map_obj %>%
-                    leaflet::addCircleMarkers(
-                        data = stations_triangle,
-                        lng = ~longitude,
-                        lat = ~latitude,
-                        radius = 10,
-                        stroke = FALSE,
-                        fillOpacity = 0,
-                        opacity = 0,
-                        label = ~tooltip_text,
-                        labelOptions = leaflet::labelOptions(noHide = FALSE),
-                        popup = ~popup_html
-                    )
-            }
-
-            selected_station <- stations[
-                stations$location_code == selected_code,
-            ]
-            if (nrow(selected_station) > 0) {
-                map_obj <- map_obj %>%
-                    leaflet::addCircleMarkers(
-                        data = selected_station,
-                        lng = ~longitude,
-                        lat = ~latitude,
-                        radius = 12,
-                        stroke = TRUE,
-                        weight = 4,
-                        color = "#ec4899",
-                        fillOpacity = 0,
-                        opacity = 1
                     )
             }
 
             # Add image series locations to map as purple circle markers
             image_series_data <- community_image_series()
             if (nrow(image_series_data) > 0) {
-                selected_image_series_id <- tryCatch(
-                    selected_image_series()$img_series_id[[1]],
-                    error = function(e) NA_integer_
-                )
-
                 image_series_tooltip <- paste0(
                     "Image series: ",
                     image_series_data$name,
@@ -8887,24 +8969,6 @@ launch_freshet_dashboard <- function(con) {
                         labelOptions = leaflet::labelOptions(noHide = FALSE),
                         popup = image_series_tooltip
                     )
-
-                selected_image_series_row <- image_series_data[
-                    image_series_data$img_series_id == selected_image_series_id,
-                ]
-                if (nrow(selected_image_series_row) > 0) {
-                    map_obj <- map_obj %>%
-                        leaflet::addCircleMarkers(
-                            data = selected_image_series_row,
-                            lng = ~longitude,
-                            lat = ~latitude,
-                            radius = 12,
-                            stroke = TRUE,
-                            weight = 4,
-                            color = "#06b6d4",
-                            fillOpacity = 0,
-                            opacity = 1
-                        )
-                }
             }
 
             map_obj
@@ -8973,5 +9037,7 @@ launch_freshet_dashboard <- function(con) {
     shiny::shinyApp(ui = ui, server = server)
 }
 
-app <- launch_freshet_dashboard(con = con)
-shiny::runApp(app)
+if (sys.nframe() == 0) {
+    app <- launch_freshet_dashboard(con = con)
+    shiny::runApp(app)
+}

@@ -8,38 +8,67 @@ floodDashboardUIMod <- function(id) {
 
 floodDashboardMod <- function(id, language, inputs = NULL) {
     moduleServer(id, function(input, output, session) {
-        output$content <- renderUI({
-            req(language$language)
+        req(language$language)
 
-            is_french <- identical(language$abbrev, "fr") ||
-                identical(language$language, "Français")
+        con <- session$userData$AquaCache
+        req(con)
 
-            title_text <- if (is_french) {
-                "Tableau de bord des conditions d'inondation"
-            } else {
-                "Flood Conditions Dashboard"
-            }
+        standalone_path <- file.path(
+            getwd(),
+            "dev",
+            "freshet_forecasting",
+            "dashboard.r"
+        )
 
-            body_text <- if (is_french) {
-                "Espace réservé pour le tableau de bord des conditions d'inondation."
-            } else {
-                "Placeholder for the flood conditions dashboard."
-            }
-
-            detail_items <- if (is_french) {
-                "Ce tableau de bord est en cours de développement et sera bientôt disponible. Revenez plus tard pour les mises à jour."
-            } else {
-                "This dashboard is in development and will be coming soon. Check back later for updates."
-            }
-
-            bslib::card(
-                full_screen = FALSE,
-                bslib::card_header(tags$strong(title_text)),
-                bslib::card_body(
-                    tags$p(body_text),
-                    tags$ul(lapply(detail_items, tags$li))
-                )
+        validate(
+            need(
+                file.exists(standalone_path),
+                "Cannot locate dev/freshet_forecasting/dashboard.r from current working directory."
             )
+        )
+
+        standalone_env <- new.env(parent = globalenv())
+        standalone_env$con <- con
+        sys.source(standalone_path, envir = standalone_env)
+
+        validate(
+            need(
+                exists("launch_freshet_dashboard", envir = standalone_env, inherits = FALSE),
+                "launch_freshet_dashboard() was not found in dashboard.r"
+            )
+        )
+
+        app <- standalone_env$launch_freshet_dashboard(con = con)
+
+        output$content <- renderUI({
+            app$ui
         })
+
+        root_session <- session$rootScope()
+        server_fun <- NULL
+
+        if (is.function(app$serverFuncSource)) {
+            server_fun <- app$serverFuncSource()
+        } else if (is.function(app$server)) {
+            server_fun <- app$server
+        }
+
+        validate(
+            need(
+                is.function(server_fun),
+                "Unable to resolve server function for flood dashboard app object."
+            )
+        )
+
+        session$onFlushed(
+            function() {
+                server_fun(
+                    root_session$input,
+                    root_session$output,
+                    root_session
+                )
+            },
+            once = TRUE
+        )
     })
 }

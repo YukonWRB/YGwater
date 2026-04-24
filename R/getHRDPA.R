@@ -192,6 +192,19 @@ getHRDPA <- function(
 
     #Only download if raster doesn't already exist
     if (!(name %in% list.files(save_path))) {
+      old_curl <- Sys.getenv("CURL_CA_BUNDLE")
+      on.exit(
+        Sys.setenv(CURL_CA_BUNDLE = old_curl),
+        add = TRUE
+      )
+
+      Sys.setenv(
+        CURL_CA_BUNDLE = system.file(
+          "data-raw//weather-gc-ca.pem",
+          package = "YGwater"
+        )
+      )
+
       raster <- terra::rast(row$path)
     }
 

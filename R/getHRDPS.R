@@ -168,8 +168,20 @@ getHRDPS <- function(clip = c("YT"), save_path = "choose", param = "APCP_Sfc") {
             name <- paste0(param, "_", issue_timedate, "_", i, ".tiff")
           }
           if (!(TRUE %in% grepl(name, existing))) {
-            #Checks if the file exists already, runs if not.
-            raster <- terra::rast(paste0(
+            old_curl <- Sys.getenv("CURL_CA_BUNDLE")
+            on.exit(
+              Sys.setenv(CURL_CA_BUNDLE = old_curl),
+              add = TRUE
+            )
+
+            Sys.setenv(
+              CURL_CA_BUNDLE = system.file(
+                "data-raw//weather-gc-ca.pem",
+                package = "YGwater"
+              )
+            )
+
+            url <- paste0(
               "https://dd.weather.gc.ca/model_hrdps/continental/2.5km/",
               issue_hour,
               "/0",
@@ -181,7 +193,10 @@ getHRDPS <- function(clip = c("YT"), save_path = "choose", param = "APCP_Sfc") {
               "_RLatLon0.0225_PT0",
               i,
               "H.grib2"
-            ))
+            )
+
+            #Checks if the file exists already, runs if not.
+            raster <- terra::rast(url)
 
             if (!clipped) {
               if (!is.null(clip)) {
