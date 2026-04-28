@@ -103,17 +103,24 @@ snowBulletinStats <- function(
     tab <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT 
-          locations.name AS location_name, 
-          locations.location_code AS location_id, 
-          datetime, 
-          value_corrected AS value
-        FROM measurements_continuous_corrected 
-        INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
-        INNER JOIN locations ON timeseries.location_id = locations.location_id
-        WHERE measurements_continuous_corrected.timeseries_id IN ('",
-        paste0(tsid, collapse = "', '"),
-        "')"
+        "WITH requested_timeseries(timeseries_id) AS (
+          SELECT unnest(ARRAY[",
+        paste0(tsid, collapse = ", "),
+        "]::integer[])
+        )
+        SELECT
+          locations.name AS location_name,
+          locations.location_code AS location_id,
+          m.datetime,
+          m.value_corrected AS value
+        FROM requested_timeseries r
+        INNER JOIN LATERAL continuous.measurements_continuous_corrected(
+          r.timeseries_id,
+          NULL::timestamptz,
+          NULL::timestamptz
+        ) m ON TRUE
+        INNER JOIN timeseries ON m.timeseries_id = timeseries.timeseries_id
+        INNER JOIN locations ON timeseries.location_id = locations.location_id"
       )
     )
     #AND datetime >= '", year_param-40, "-10-01'"))
@@ -455,15 +462,22 @@ snowBulletinStats <- function(
     tabl <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT locations.name AS location_name, 
+        "WITH requested_timeseries(timeseries_id) AS (
+          SELECT unnest(ARRAY[",
+        paste0(tsid, collapse = ", "),
+        "]::integer[])
+        )
+        SELECT locations.name AS location_name,
             locations.location_code AS location_id,
-            datetime, value_corrected AS value
-            FROM measurements_continuous_corrected 
-            INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id
-            INNER JOIN locations ON timeseries.location_id = locations.location_id
-            WHERE measurements_continuous_corrected.timeseries_id IN ('",
-        paste0(tsid, collapse = "', '"),
-        "')"
+            m.datetime, m.value_corrected AS value
+            FROM requested_timeseries r
+            INNER JOIN LATERAL continuous.measurements_continuous_corrected(
+              r.timeseries_id,
+              NULL::timestamptz,
+              NULL::timestamptz
+            ) m ON TRUE
+            INNER JOIN timeseries ON m.timeseries_id = timeseries.timeseries_id
+            INNER JOIN locations ON timeseries.location_id = locations.location_id"
       )
     )
 
@@ -689,7 +703,7 @@ snowBulletinStats <- function(
           m.doy_count AS years,
           m.timeseries_id,
           ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
-        FROM measurements_calculated_daily_corrected m
+        FROM measurements_calculated_daily m
           INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
           INNER JOIN locations l ON t.location_id = l.location_id
           INNER JOIN parameters p ON t.parameter_id = p.parameter_id
@@ -843,7 +857,7 @@ snowBulletinStats <- function(
           m.doy_count AS years,
           m.timeseries_id,
           ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
-        FROM measurements_calculated_daily_corrected m
+        FROM measurements_calculated_daily m
           INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
           INNER JOIN locations l ON t.location_id = l.location_id
           INNER JOIN parameters p ON t.parameter_id = p.parameter_id

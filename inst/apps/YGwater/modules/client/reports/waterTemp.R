@@ -1697,18 +1697,25 @@ waterTempMod <- function(id, language, inputs) {
               con,
               sprintf(
                 paste0(
-                  "SELECT datetime, ",
-                  "measurements_continuous_corrected.value_corrected, ",
-                  "locations.name, locations.name_fr ",
-                  "FROM measurements_continuous_corrected ",
-                  "JOIN continuous.timeseries ",
-                  "ON measurements_continuous_corrected.timeseries_id = ",
-                  "continuous.timeseries.timeseries_id ",
-                  "JOIN locations ",
-                  "ON timeseries.location_id = locations.location_id ",
-                  "WHERE measurements_continuous_corrected.timeseries_id IN (%s) ",
-                  "AND datetime >= $1 AND datetime < $2 ",
-                  "ORDER BY datetime;"
+                  "WITH requested_timeseries(timeseries_id) AS (
+                    SELECT unnest(ARRAY[%s]::integer[])
+                  )
+                  SELECT m.datetime,
+                    m.value_corrected,
+                    locations.name,
+                    locations.name_fr
+                  FROM requested_timeseries r
+                  JOIN LATERAL continuous.measurements_continuous_corrected(
+                    r.timeseries_id,
+                    $1,
+                    $2
+                  ) m ON TRUE
+                  JOIN continuous.timeseries
+                    ON m.timeseries_id = continuous.timeseries.timeseries_id
+                  JOIN locations
+                    ON timeseries.location_id = locations.location_id
+                  WHERE m.datetime >= $1 AND m.datetime < $2
+                  ORDER BY m.datetime;"
                 ),
                 paste(timeseries_ids, collapse = ", ")
               ),

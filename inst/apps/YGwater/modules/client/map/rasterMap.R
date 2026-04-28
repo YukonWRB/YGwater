@@ -34,7 +34,7 @@ mapRaster <- function(id, language) {
 
       ts_query <- sprintf(
         "SELECT DISTINCT ON (timeseries_id) timeseries_id, date, value 
-           FROM continuous.measurements_calculated_daily_corrected
+           FROM continuous.measurements_calculated_daily
            WHERE timeseries_id IN (%s) AND value IS NOT NULL AND date = '%s'
            ORDER BY timeseries_id, date DESC",
         paste(stations_sf$timeseries_id, collapse = ","),

@@ -81,7 +81,11 @@ test_that("tests for API V1", {
       "sensor_priority",
       "start_datetime",
       "end_datetime",
-      "note"
+      "note",
+      'timeseries_type_code',
+      'timeseries_type',
+      'timeseries_type_description',
+      'last_new_data'
     )
   )
   # Expect more than 0 rows returned

@@ -626,7 +626,7 @@ snowBullPrecip <- function(
 
 # Function to create CDDF plots
 snowbullCDDF <- function(timeseries, loc_name, location_id, subplot = "") {
-  # data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", timeseries_id, " AND datetime <= '", year, "-0", month, "-01' "))
+  # data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM continuous.measurements_continuous_corrected(", timeseries_id, ", NULL::timestamptz, '", year, "-0", month, "-01'::timestamptz)"))
 
   # data <- getCDDF(data, year)
 

@@ -77,14 +77,6 @@ calculate_period <- function(
     }
     datetime_values <- data[[datetime_col]]
     if (is.null(as_of)) {
-      # Check if user can access the measurements_continuous table
-      if (!DBI::dbExistsTable(con, "measurements_continuous")) {
-        tbl <- 'measurements_continuous_corrected'
-        # for this table, names == 'value' must be changed to 'value_corrected AS value'
-        names[names == 'value'] <- 'value_corrected AS value'
-      } else {
-        tbl <- 'measurements_continuous'
-      }
       formatted_datetimes <- format(datetime_values, tz = "UTC", usetz = FALSE)
       not_in_clause <- ""
       if (length(formatted_datetimes) > 0) {
@@ -94,17 +86,75 @@ calculate_period <- function(
           "')"
         )
       }
-      query <- paste0(
-        "SELECT ",
-        paste(names, collapse = ', '),
-        " FROM ",
-        tbl,
-        " WHERE timeseries_id = ",
-        timeseries_id,
-        not_in_clause,
-        " ORDER BY datetime DESC LIMIT 10;"
-      )
-      no_period <- dbGetQueryDT(con, query)
+
+      use_corrected_function <- TRUE
+      if (DBI::dbExistsTable(con, "measurements_continuous")) {
+        ts_type <- DBI::dbGetQuery(
+          con,
+          "SELECT timeseries_type FROM continuous.timeseries WHERE timeseries_id = $1",
+          params = list(timeseries_id)
+        )
+        use_corrected_function <- (
+          nrow(ts_type) == 0 ||
+            is.na(ts_type$timeseries_type[1]) ||
+            ts_type$timeseries_type[1] != "basic"
+        )
+      }
+
+      if (use_corrected_function) {
+        function_names <- names
+        function_names[function_names == "value"] <- "value_corrected AS value"
+        select_sql <- paste(function_names, collapse = ", ")
+
+        observed_diffs_secs <- as.numeric(
+          diff(datetime_values),
+          units = "secs"
+        )
+        observed_diffs_secs <- observed_diffs_secs[
+          is.finite(observed_diffs_secs) & observed_diffs_secs > 0
+        ]
+        window_seconds <- if (length(observed_diffs_secs) > 0) {
+          max(30 * 24 * 60 * 60, ceiling(max(observed_diffs_secs) * 20))
+        } else {
+          30 * 24 * 60 * 60
+        }
+        max_window_seconds <- 3650 * 24 * 60 * 60
+        min_dt <- min(datetime_values)
+        max_dt <- max(datetime_values)
+
+        repeat {
+          no_period <- dbGetQueryDT(
+            con,
+            paste0(
+              "SELECT ",
+              select_sql,
+              " FROM continuous.measurements_continuous_corrected($1, $2, $3) ",
+              "WHERE TRUE",
+              not_in_clause,
+              " ORDER BY datetime DESC LIMIT 10;"
+            ),
+            params = list(
+              timeseries_id,
+              min_dt - window_seconds,
+              max_dt + window_seconds
+            )
+          )
+          if (nrow(no_period) >= 10 || window_seconds >= max_window_seconds) {
+            break
+          }
+          window_seconds <- min(window_seconds * 2, max_window_seconds)
+        }
+      } else {
+        query <- paste0(
+          "SELECT ",
+          paste(names, collapse = ', '),
+          " FROM measurements_continuous WHERE timeseries_id = ",
+          timeseries_id,
+          not_in_clause,
+          " ORDER BY datetime DESC LIMIT 10;"
+        )
+        no_period <- dbGetQueryDT(con, query)
+      }
     } else {
       history_names <- names
       history_names[history_names == "value"] <- "value_corrected AS value"
@@ -134,7 +184,7 @@ calculate_period <- function(
             select_sql,
             "FROM continuous.measurements_continuous_corrected_at(",
             "  $1,",
-            "  ARRAY[$2]::INTEGER[],",
+            "  $2,",
             "  $3,",
             "  $4",
             ")",
@@ -158,7 +208,7 @@ calculate_period <- function(
             select_sql,
             "FROM continuous.measurements_continuous_corrected_at(",
             "  $1,",
-            "  ARRAY[$2]::INTEGER[],",
+            "  $2,",
             "  $3,",
             "  $4",
             ")",

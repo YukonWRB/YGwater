@@ -368,8 +368,7 @@ test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", 
     con,
     paste0(
       "SELECT datetime, value_corrected, imputed ",
-      "FROM measurements_continuous_corrected ",
-      "WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ",
+      "FROM continuous.measurements_continuous_corrected($1, $2, $3) ",
       "ORDER BY datetime;"
     ),
     params = list(tsid, start_dt, end_dt)

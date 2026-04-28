@@ -1005,7 +1005,11 @@ plotMultiTimeseries <- function(
       con,
       exist_check$timeseries_id[1]
     )
-    timeseries[i, "data_key"] <- paste0(timeseries$location[i], "_", parameter_code)
+    timeseries[i, "data_key"] <- paste0(
+      timeseries$location[i],
+      "_",
+      parameter_code
+    )
 
     # Find the necessary datum (latest datum)
     if (datum) {
@@ -1038,38 +1042,21 @@ plotMultiTimeseries <- function(
     # Get the data ####################################
     tsid <- exist_check$timeseries_id
 
-    # Check if we should spend the extra time to get corrected measurements
-    if (!DBI::dbExistsTable(con, "measurements_continuous")) {
-      # IF this table can't be found it means the user doesn't have direct access to it and needs to use the views
-      corrections_apply <- TRUE
-    } else {
-      corrections_apply <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT correction_id FROM corrections WHERE timeseries_id = ",
-          tsid,
-          " AND start_dt <= '",
-          end_date,
-          "' AND end_dt >= '",
-          start_date,
-          "' LIMIT 1;"
-        )
-      )
-      if (nrow(corrections_apply) == 1) {
-        corrections_apply <- TRUE
-      } else {
-        corrections_apply <- FALSE
-      }
-    }
+    corrections_apply <- continuous_trace_uses_corrected_source(
+      con = con,
+      timeseries_id = tsid,
+      start_date = sub.start_date,
+      end_date = sub.end_date
+    )
     if (historic_range) {
-      # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous. Where there isn't any data in measurements_continuous fill in with the value from the daily table.
+      # get data from the measurements_calculated_daily table for historic ranges plus values from the corrected continuous measurement function. Where there isn't any data in the function output fill in with the value from the daily table.
       range_end <- sub.end_date + 1 * 24 * 60 * 60
       range_start <- sub.start_date - 1 * 24 * 60 * 60
       if (is.null(as_of)) {
         range_data <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            "SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date BETWEEN '",
             range_start,
@@ -1083,7 +1070,7 @@ plotMultiTimeseries <- function(
           con,
           paste(
             "SELECT date AS datetime, min, max, q75, q25",
-            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "FROM continuous.measurements_calculated_daily_at(",
             "  $1,",
             "  ARRAY[$2]::INTEGER[],",
             "  $3::DATE,",
@@ -1102,7 +1089,7 @@ plotMultiTimeseries <- function(
           trace_data <- dbGetQueryDT(
             con,
             paste0(
-              "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+              "SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ",
               tsid,
               " AND date BETWEEN '",
               sub.start_date,
@@ -1116,7 +1103,7 @@ plotMultiTimeseries <- function(
             con,
             paste(
               "SELECT date AS datetime, value",
-              "FROM continuous.measurements_calculated_daily_corrected_at(",
+              "FROM continuous.measurements_calculated_daily_at(",
               "  $1,",
               "  ARRAY[$2]::INTEGER[],",
               "  $3::DATE,",
@@ -1146,7 +1133,7 @@ plotMultiTimeseries <- function(
               "SELECT datetime, value_corrected AS value",
               "FROM continuous.measurements_continuous_corrected_at(",
               "  $1,",
-              "  ARRAY[$2]::INTEGER[],",
+              "  $2,",
               "  $3,",
               "  $4",
               ")",
@@ -1154,31 +1141,13 @@ plotMultiTimeseries <- function(
             ),
             params = list(as_of, tsid, sub.start_date, sub.end_date)
           )
-        } else if (corrections_apply) {
-          trace_data <- dbGetQueryDT(
-            con,
-            paste0(
-              "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
-              tsid,
-              " AND datetime BETWEEN '",
-              sub.start_date,
-              "' AND '",
-              sub.end_date,
-              "' ORDER BY datetime DESC LIMIT 200000;"
-            )
-          )
         } else {
           trace_data <- dbGetQueryDT(
             con,
-            paste0(
-              "SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ",
-              tsid,
-              " AND datetime BETWEEN '",
-              sub.start_date,
-              "' AND '",
-              sub.end_date,
-              "' ORDER BY datetime DESC LIMIT 200000;"
-            )
+            "SELECT datetime, value_corrected AS value
+             FROM continuous.measurements_continuous_corrected($1, $2, $3)
+             ORDER BY datetime DESC LIMIT 200000;",
+            params = list(tsid, sub.start_date, sub.end_date)
           )
         }
       }
@@ -1190,7 +1159,7 @@ plotMultiTimeseries <- function(
           trace_data <- dbGetQueryDT(
             con,
             paste0(
-              "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+              "SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ",
               tsid,
               " AND date BETWEEN '",
               sub.start_date,
@@ -1204,7 +1173,7 @@ plotMultiTimeseries <- function(
             con,
             paste(
               "SELECT date AS datetime, value",
-              "FROM continuous.measurements_calculated_daily_corrected_at(",
+              "FROM continuous.measurements_calculated_daily_at(",
               "  $1,",
               "  ARRAY[$2]::INTEGER[],",
               "  $3::DATE,",
@@ -1234,7 +1203,7 @@ plotMultiTimeseries <- function(
               "SELECT datetime, value_corrected AS value",
               "FROM continuous.measurements_continuous_corrected_at(",
               "  $1,",
-              "  ARRAY[$2]::INTEGER[],",
+              "  $2,",
               "  $3,",
               "  $4",
               ")",
@@ -1242,31 +1211,13 @@ plotMultiTimeseries <- function(
             ),
             params = list(as_of, tsid, sub.start_date, sub.end_date)
           )
-        } else if (corrections_apply) {
-          trace_data <- dbGetQueryDT(
-            con,
-            paste0(
-              "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
-              tsid,
-              " AND datetime BETWEEN '",
-              sub.start_date,
-              "' AND '",
-              sub.end_date,
-              "' ORDER BY datetime DESC LIMIT 200000;"
-            )
-          )
         } else {
           trace_data <- dbGetQueryDT(
             con,
-            paste0(
-              "SELECT datetime, value FROM measurements_continuous WHERE timeseries_id = ",
-              tsid,
-              " AND datetime BETWEEN '",
-              sub.start_date,
-              "' AND '",
-              sub.end_date,
-              "' ORDER BY datetime DESC LIMIT 200000;"
-            )
+            "SELECT datetime, value_corrected AS value
+             FROM continuous.measurements_continuous_corrected($1, $2, $3)
+             ORDER BY datetime DESC LIMIT 200000;",
+            params = list(tsid, sub.start_date, sub.end_date)
           )
         }
       }
@@ -1324,7 +1275,7 @@ plotMultiTimeseries <- function(
           extra <- dbGetQueryDT(
             con,
             paste0(
-              "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+              "SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ",
               tsid,
               " AND date < '",
               min(trace_data$datetime),
@@ -1338,7 +1289,7 @@ plotMultiTimeseries <- function(
             con,
             paste(
               "SELECT date AS datetime, value",
-              "FROM continuous.measurements_calculated_daily_corrected_at(",
+              "FROM continuous.measurements_calculated_daily_at(",
               "  $1,",
               "  ARRAY[$2]::INTEGER[],",
               "  $3::DATE,",
@@ -1360,7 +1311,7 @@ plotMultiTimeseries <- function(
         trace_data <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date AS datetime, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            "SELECT date AS datetime, value FROM measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date >= '",
             sub.start_date,
@@ -1374,7 +1325,7 @@ plotMultiTimeseries <- function(
           con,
           paste(
             "SELECT date AS datetime, value",
-            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "FROM continuous.measurements_calculated_daily_at(",
             "  $1,",
             "  ARRAY[$2]::INTEGER[],",
             "  $3::DATE,",
@@ -2067,7 +2018,12 @@ plotMultiTimeseries <- function(
             showgrid = gridy,
             showline = TRUE,
             titlefont = list(size = axis_scale * 13),
-            tickfont = list(size = axis_scale * 12)
+            tickfont = list(size = axis_scale * 12),
+            autorange = if (timeseries[i, "axis_orientation"]) {
+              "reversed"
+            } else {
+              TRUE
+            }
           ),
           margin = list(b = 0, t = 40 * axis_scale, l = 50 * axis_scale),
           hovermode = "x unified",

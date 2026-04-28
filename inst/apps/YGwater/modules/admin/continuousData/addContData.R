@@ -1964,7 +1964,7 @@ addContData <- function(id, language) {
 
       extra <- dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT datetime, value_corrected AS value FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime >= $2 AND datetime <= $3",
+        "SELECT datetime, value_corrected AS value FROM continuous.measurements_continuous_corrected($1, $2, $3)",
         params = list(timeseries(), range_start, range_end)
       )
 

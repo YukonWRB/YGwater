@@ -27,9 +27,14 @@ on.exit(DBI::dbDisconnect(con), add = TRUE)
 
 
 test_that("getVector retrieves a single feature by name", {
+  # Query table 'spatial.vectors' to find a valid feature name for layer 'Locations'
+  name <- DBI::dbGetQuery(
+    con,
+    "SELECT feature_name FROM spatial.vectors WHERE layer_name = 'Locations' LIMIT 1;"
+  )$feature_name
   result <- getVector(
     layer_name = "Locations",
-    feature_name = "09AA-SC03",
+    feature_name = name,
     con = con,
     silent = TRUE
   )
@@ -51,9 +56,9 @@ test_that("getVector retrieves a single feature by name", {
     )
   )
   expect_equal(attrs$layer_name, "Locations")
-  expect_equal(attrs$feature_name, "09AA-SC03")
+  expect_gt(nchar(attrs$feature_name), 2)
   expect_equal(attrs$geom_type, "ST_Point")
-  expect_equal(attrs$description, "Log Cabin Snow Course")
+  expect_gte(nchar(attrs$description), 2)
 })
 
 

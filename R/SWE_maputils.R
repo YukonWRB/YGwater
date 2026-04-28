@@ -1391,7 +1391,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
 #' most recent measurement date for each station.
 #'
 #' @details
-#' The function queries the continuous.timeseries and continuous.measurements_calculated_daily_corrected
+#' The function queries the continuous.timeseries and continuous.measurements_calculated_daily
 #' tables to retrieve SWE data. Each station becomes a column in the wide-format
 #' timeseries data.frame, facilitating efficient historical analysis.
 #'
@@ -1441,7 +1441,7 @@ download_continuous_ts <- function(
 
         # Retrieve measurements for this timeseries
         ts_query <- sprintf(
-            "SELECT date, value FROM continuous.measurements_calculated_daily_corrected
+            "SELECT date, value FROM continuous.measurements_calculated_daily
              WHERE timeseries_id = %d AND value IS NOT NULL",
             as.integer(ts_id)
         )
