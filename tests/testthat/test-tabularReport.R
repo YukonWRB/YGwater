@@ -1,3 +1,6 @@
+skip_on_ci()
+skip_on_cran()
+
 test_that("tabular report is created without error on current data", {
   con <- AquaConnect(silent = TRUE)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
