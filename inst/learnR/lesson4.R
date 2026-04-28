@@ -80,9 +80,9 @@ View(DBI::dbGetQuery(con, "SELECT * FROM parameters")) # This line extracts all 
 
 # ...
 
-# Ok, now you have a timeseries_id! Let's get the data for the timeseries. First, you'll have to know which table to look at.... and it's in fact not a table at all: it's a view! Database views are essentially tables created on-demand from existing table data, possibly with calculations or other transformation in the pipeline. In this case we're querying the view and not the table because corrections are applied to the view if necessary, and because the visibility of some rows is restricted at the view level.
+# Ok, now you have a timeseries_id! Let's get the data for the timeseries. In this case we're querying a database function because corrections are applied by the function if necessary, and because the visibility of some rows is restricted at the database level.
 # Here's the SQL to get the data, but you'll need to replace the ??? with the timeseries_id of interest:
-data <- DBI::dbGetQuery(con, paste0("SELECT * FROM measurements_continuous_corrected WHERE timeseries_id = ???"))
+data <- DBI::dbGetQuery(con, "SELECT * FROM continuous.measurements_continuous_corrected(???, NULL::timestamptz, NULL::timestamptz)")
 
 # Now let's get an understanding of the data. I find it most useful to know the number of rows (nrow()) as well as what the first few rows looks like (head()). Run those commands now so we're on the same page.
 

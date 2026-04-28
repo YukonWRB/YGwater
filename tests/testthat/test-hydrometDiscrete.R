@@ -90,7 +90,7 @@ test_that("linedbox plot is as expected when discrete data is given", {
 rm(discrete_data)
 
 test_that("linedbox plot that starts and ends in different years is as expected when discrete data is given", {
-  # Get precipitation data from measurements_continuous_corrected
+  # Get precipitation data from the corrected continuous measurement function
   con <- AquaConnect(silent = TRUE)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -100,8 +100,11 @@ test_that("linedbox plot that starts and ends in different years is as expected 
     SELECT
       date_trunc('month', datetime) AS datetime,
       SUM(value_corrected) AS value
-    FROM measurements_continuous_corrected
-    WHERE timeseries_id = 1823
+    FROM continuous.measurements_continuous_corrected(
+      1823,
+      NULL::timestamptz,
+      NULL::timestamptz
+    )
     GROUP BY date_trunc('month', datetime)
     ORDER BY datetime
     "

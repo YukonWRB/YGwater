@@ -294,11 +294,11 @@ manageNewsContent <- function(id, language) {
 
     observeEvent(input$page_select, {
       req(input$page_select)
-      q <- sprintf(
-        "SELECT * FROM application.page_content WHERE page = '%s' ORDER BY position",
-        input$page_select
+      df <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM application.page_content WHERE page = $1 ORDER BY position",
+        params = list(input$page_select)
       )
-      df <- DBI::dbGetQuery(session$userData$AquaCache, q)
       preview_data(df)
     })
 
@@ -325,26 +325,26 @@ manageNewsContent <- function(id, language) {
       ui_elements <- lapply(seq_len(nrow(df)), function(i) {
         row <- df[i, ]
         if (row$content_type == "text") {
-          text_query <- sprintf(
-            "SELECT * FROM application.text WHERE id = '%s'",
-            row$content_id
+          text_data <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT * FROM application.text WHERE id = $1",
+            params = list(row$content_id)
           )
-          text_data <- DBI::dbGetQuery(session$userData$AquaCache, text_query)
           if (nrow(text_data) > 0) {
             if (input$preview_language == "fr") {
-              HTML(text_data$text_fr[1])
+              safe_html_fragment_ui(text_data$text_fr[1])
             } else {
-              HTML(text_data$text_en[1])
+              safe_html_fragment_ui(text_data$text_en[1])
             }
           } else {
             tags$p("Text not found")
           }
         } else if (row$content_type == "image") {
-          image_query <- sprintf(
-            "SELECT * FROM application.images WHERE id = '%s'",
-            row$content_id
+          image_data <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "SELECT * FROM application.images WHERE id = $1",
+            params = list(row$content_id)
           )
-          image_data <- DBI::dbGetQuery(session$userData$AquaCache, image_query)
           if (nrow(image_data) > 0) {
             image_binary <- image_data$image[[1]]
             image_format <- image_data$format[[1]]
@@ -474,11 +474,11 @@ manageNewsContent <- function(id, language) {
       }
       showNotification("Page content committed.", type = 'message')
       load_pages()
-      q <- sprintf(
-        "SELECT * FROM application.page_content WHERE page = '%s' ORDER BY position",
-        input$page_select
-      )
-      preview_data(DBI::dbGetQuery(session$userData$AquaCache, q))
+      preview_data(DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM application.page_content WHERE page = $1 ORDER BY position",
+        params = list(input$page_select)
+      ))
     })
   })
 }

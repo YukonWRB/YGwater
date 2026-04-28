@@ -51,11 +51,11 @@ calculateFlowStats <- function(
         "SELECT 
             locations.name, 
             locations.location_code AS location, 
-            measurements_calculated_daily_corrected.date, 
-            measurements_calculated_daily_corrected.value 
-        FROM measurements_calculated_daily_corrected 
+            measurements_calculated_daily.date, 
+            measurements_calculated_daily.value 
+        FROM measurements_calculated_daily 
         INNER JOIN 
-          timeseries ON measurements_calculated_daily_corrected.timeseries_id = timeseries.timeseries_id 
+          timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id 
         INNER JOIN 
           locations ON timeseries.location_id = locations.location_id 
         WHERE (locations.location_code IN ('",

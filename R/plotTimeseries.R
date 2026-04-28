@@ -252,7 +252,7 @@ plotTimeseries <- function(
     end_date <- end_date + 24 * 60 * 60
   }
 
-  #back to UTC because DB queries are in UTC
+  # back to UTC because DB queries are in UTC
   attr(start_date, "tzone") <- "UTC"
   attr(end_date, "tzone") <- "UTC"
 
@@ -846,7 +846,7 @@ plotTimeseries <- function(
     if (is.null(as_of)) {
       trace_data <- dbGetQueryDT(
         con,
-        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
         params = list(tsid, start_date, end_date)
       )
     } else {
@@ -854,7 +854,7 @@ plotTimeseries <- function(
         con,
         paste(
           "SELECT date AS datetime, value, imputed",
-          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "FROM continuous.measurements_calculated_daily_at(",
           "  $1,",
           "  ARRAY[$2]::INTEGER[],",
           "  $3::DATE,",
@@ -894,15 +894,16 @@ plotTimeseries <- function(
         paste0(
           "SELECT datetime, value_corrected AS value, imputed",
           if (raw) ", value_raw",
-          " FROM measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime DESC LIMIT 200000;"
+          " FROM continuous.measurements_continuous_corrected($1, $2, $3)
+          ORDER BY datetime DESC;"
         )
       } else {
         paste0(
           "SELECT datetime, value_corrected AS value, imputed",
           if (raw) ", value_raw",
           " FROM continuous.measurements_continuous_corrected_at(",
-          "$1, ARRAY[$2]::INTEGER[], $3, $4",
-          ") ORDER BY datetime DESC LIMIT 200000;"
+          "$1, $2, $3, $4",
+          ") ORDER BY datetime DESC;"
         )
       },
       params = if (is.null(as_of)) {
@@ -916,13 +917,13 @@ plotTimeseries <- function(
 
   # Range data
   if (historic_range) {
-    # get data from the measurements_calculated_daily_corrected table for historic ranges plus values from measurements_continuous_corrected view. Where there isn't any data in the table fill in with the value from the daily table.
+    # get data from the measurements_calculated_daily table for historic ranges plus values from the measurements_continuous_corrected function. Where there isn't any data in the table fill in with the value from the daily table.
     range_end <- end_date + 1 * 24 * 60 * 60
     range_start <- start_date - 1 * 24 * 60 * 60
     if (is.null(as_of)) {
       range_data <- dbGetQueryDT(
         con,
-        "SELECT date AS datetime, min, max, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
+        "SELECT date AS datetime, min, max, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
         params = list(tsid, range_start, range_end)
       )
     } else {
@@ -930,7 +931,7 @@ plotTimeseries <- function(
         con,
         paste(
           "SELECT date AS datetime, min, max, q75, q25",
-          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "FROM continuous.measurements_calculated_daily_at(",
           "  $1,",
           "  ARRAY[$2]::INTEGER[],",
           "  $3::DATE,",
@@ -1053,7 +1054,7 @@ plotTimeseries <- function(
       if (is.null(as_of)) {
         extra <- dbGetQueryDT(
           con,
-          "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
+          "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
           params = list(
             tsid,
             min(trace_data$datetime),
@@ -1065,7 +1066,7 @@ plotTimeseries <- function(
           con,
           paste(
             "SELECT date AS datetime, value, imputed",
-            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "FROM continuous.measurements_calculated_daily_at(",
             "  $1,",
             "  ARRAY[$2]::INTEGER[],",
             "  $3::DATE,",
@@ -1096,7 +1097,7 @@ plotTimeseries <- function(
     if (is.null(as_of)) {
       trace_data <- dbGetQueryDT(
         con,
-        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
         params = list(tsid, start_date, end_date)
       )
     } else {
@@ -1104,7 +1105,7 @@ plotTimeseries <- function(
         con,
         paste(
           "SELECT date AS datetime, value, imputed",
-          "FROM continuous.measurements_calculated_daily_corrected_at(",
+          "FROM continuous.measurements_calculated_daily_at(",
           "  $1,",
           "  ARRAY[$2]::INTEGER[],",
           "  $3::DATE,",

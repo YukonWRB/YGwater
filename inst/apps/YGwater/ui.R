@@ -9,6 +9,10 @@
 #' @noRd
 
 app_ui <- function(request) {
+  default_app_title <- tr("title", "English")
+  default_app_brand_title <- "Water Data Explorer"
+  default_app_description <- "Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads."
+
   tagList(
     shinyjs::useShinyjs(),
     div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
@@ -41,8 +45,39 @@ app_ui <- function(request) {
       # JS below is for updating the title of the page from the server, when the user changes language
       tags$script(HTML(
         "
+      Shiny.addCustomMessageHandler('updateBrandTitle', function(newTitle) {
+        ['app-header-title', 'app-mobile-title'].forEach(function(id) {
+          var titleElement = document.getElementById(id);
+          if (titleElement) {
+            titleElement.textContent = newTitle;
+          }
+        });
+      });
+    "
+      )),
+      tags$script(HTML(
+        "
       Shiny.addCustomMessageHandler('updateTitle', function(newTitle) {
         document.title = newTitle;
+      });
+    "
+      )),
+      tags$script(HTML(
+        "
+      Shiny.addCustomMessageHandler('updateSeo', function(meta) {
+        var descriptionTag = document.getElementById('app-meta-description');
+        var ogTitleTag = document.getElementById('app-og-title');
+        var ogDescriptionTag = document.getElementById('app-og-description');
+
+        if (descriptionTag && meta.description) {
+          descriptionTag.setAttribute('content', meta.description);
+        }
+        if (ogTitleTag && meta.title) {
+          ogTitleTag.setAttribute('content', meta.title);
+        }
+        if (ogDescriptionTag && meta.description) {
+          ogDescriptionTag.setAttribute('content', meta.description);
+        }
       });
     "
       )),
@@ -52,6 +87,51 @@ app_ui <- function(request) {
         $('html').attr('lang', message.lang);
       });"
       )),
+      tags$script(HTML(
+        "
+      (function() {
+        function isVisible(el) {
+          return !!(el && el.offsetParent !== null);
+        }
+
+        function syncHeaderMode() {
+          var toggles = Array.prototype.slice.call(
+            document.querySelectorAll('.navbar-toggle, .navbar-toggler')
+          );
+          var collapsedView = toggles.some(isVisible);
+
+          if (!document.body) {
+            return;
+          }
+
+          document.body.classList.toggle('navbar-collapsed-view', collapsedView);
+          document.body.classList.toggle('navbar-expanded-view', !collapsedView);
+        }
+
+        window.addEventListener('resize', syncHeaderMode);
+        document.addEventListener('DOMContentLoaded', syncHeaderMode);
+        document.addEventListener('shiny:connected', function() {
+          window.setTimeout(syncHeaderMode, 0);
+        });
+      })();
+    "
+      )),
+      tags$meta(
+        id = "app-meta-description",
+        name = "description",
+        content = default_app_description
+      ),
+      tags$meta(
+        id = "app-og-title",
+        property = "og:title",
+        content = default_app_title
+      ),
+      tags$meta(
+        id = "app-og-description",
+        property = "og:description",
+        content = default_app_description
+      ),
+      tags$meta(property = "og:type", content = "website"),
       # Disable the login/logout button after it's clicked to prevent multiple clicks while waiting for response
       # Since re-enabling happens in an observer but the 'disable' is right in the browser, it's possible to click the button and have it disable before the server is ready - and until it's ready it won't accept the click anyways. The JS hook below ensures that it's only disabled once the server is ready to handle it, which prevents the button from getting stuck in a disabled state if clicked too early.
       tags$script(HTML(
@@ -128,7 +208,7 @@ app_ui <- function(request) {
       style = "padding:0; margin:0; max-width:100%;", # Remove the default padding/margin for better space utilization
       # Make the container for the top bar, which sits above the nav bar
       div(
-        class = "top-bar-container d-none d-md-block",
+        class = "top-bar-container",
         style = "background-color: #244C5A; margin-bottom: 0; border-bottom: none",
         fluidRow(
           column(
@@ -145,6 +225,17 @@ app_ui <- function(request) {
           ),
           column(
             9,
+            div(
+              class = paste(
+                "app-title-container",
+                if (config$public) "app-title-container--public" else ""
+              ),
+              tags$span(
+                id = "app-header-title",
+                class = "app-title-text",
+                default_app_brand_title
+              )
+            ),
             div(
               class = "aurora",
               htmltools::img(
@@ -178,15 +269,20 @@ app_ui <- function(request) {
       # And now the navbar itself
       page_navbar(
         title = tags$a(
-          class = "d-md-none",
+          class = "app-navbar-brand",
           href = "#",
           tags$img(
             src = "imgs/Yukon_logo_white-min.png",
-            style = "height: 50px; margin-right: 10px; margin-top: -15px;"
+            alt = "Yukon Government logo"
+          ),
+          tags$span(
+            id = "app-mobile-title",
+            class = "app-navbar-title",
+            default_app_brand_title
           )
         ),
         id = "navbar",
-        window_title = NULL,
+        window_title = default_app_title,
         navbar_options = navbar_options(
           bg = "#244C5A",
           collapsible = TRUE,
@@ -196,11 +292,15 @@ app_ui <- function(request) {
         lang = "en",
         theme = NULL, # Theme is set earlier by css file references
         gap = "10px",
+
+        # Home is just a nav panel, no nav_menu
         nav_panel(
           title = uiOutput("homeNavTitle"),
           value = "home",
           uiOutput("home_ui")
         ),
+
+        # Maps nav menu
         nav_menu(
           title = uiOutput("mapsNavMenuTitle"),
           value = "maps",
@@ -221,14 +321,14 @@ app_ui <- function(request) {
               uiOutput("mapRaster_ui")
             )
           },
-          if (!config$public) {
-            nav_panel(
-              title = uiOutput("mapsNavSnowbullTitle"),
-              value = "snowBulletinMap",
-              uiOutput("mapSnowbull_ui")
-            )
-          }
-        ),
+          nav_panel(
+            title = uiOutput("mapsNavSnowbullTitle"),
+            value = "snowBulletinMap",
+            uiOutput("mapSnowbull_ui")
+          )
+        ), # End maps nav_menu
+
+        # Plot nav menu
         nav_menu(
           title = uiOutput("plotsNavMenuTitle"),
           value = "plot",
@@ -242,7 +342,9 @@ app_ui <- function(request) {
             value = "contPlot",
             uiOutput("plotContinuous_ui")
           )
-        ),
+        ), # End plot nav_menu
+
+        # Reports nav menu
         if (!config$public) {
           nav_menu(
             title = uiOutput("reportsNavMenuTitle"),
@@ -280,6 +382,21 @@ app_ui <- function(request) {
             )
           ) # End reports nav_menu
         }, # End if !config$public for reports nav_menu
+
+        # Dashboards nav menu
+        if (!config$public) {
+          nav_menu(
+            title = uiOutput("dashboardsNavMenuTitle"),
+            value = "dashboards",
+            nav_panel(
+              title = uiOutput("dashboardsNavFloodTitle"),
+              value = "floodDashboard",
+              uiOutput("floodDashboard_ui")
+            )
+          ) # End dashboards nav_menu
+        }, # End if !config$public for dashboards nav_menu
+
+        # Images nav menu
         nav_menu(
           title = uiOutput("imagesNavMenuTitle"),
           value = "images",
@@ -293,8 +410,9 @@ app_ui <- function(request) {
             value = "imgMapView",
             uiOutput("imgMapView_ui")
           )
-        ),
+        ), # End images nav_menu
 
+        # Data nav menu
         nav_menu(
           title = uiOutput("dataNavMenuTitle"),
           value = "data",
@@ -332,6 +450,7 @@ app_ui <- function(request) {
           uiOutput("docTableView_ui")
         ),
 
+        # Info nav menu
         nav_menu(
           title = uiOutput("infoNavMenuTitle"),
           value = "info",
@@ -345,8 +464,9 @@ app_ui <- function(request) {
             value = "news",
             uiOutput("news_ui")
           )
-        ),
+        ), # End info nav_menu
 
+        # Admin side modules, only show, if public = FALSE and logged in.
         if (!config$public) {
           nav_menu(
             title = "Continuous data",

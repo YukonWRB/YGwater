@@ -68,7 +68,11 @@ test_that("tests for API V2 metadata endpoints", {
       "sensor_priority",
       "start_datetime",
       "end_datetime",
-      "note"
+      "note",
+      'timeseries_type_code',
+      'timeseries_type',
+      'timeseries_type_description',
+      'last_new_data'
     )
   )
   expect_gt(nrow(out), 0)
