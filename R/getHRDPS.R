@@ -176,7 +176,7 @@ getHRDPS <- function(clip = c("YT"), save_path = "choose", param = "APCP_Sfc") {
 
             Sys.setenv(
               CURL_CA_BUNDLE = system.file(
-                "data-raw//weather-gc-ca.pem",
+                "extdata/weather-gc-ca.pem",
                 package = "YGwater"
               )
             )

@@ -200,7 +200,7 @@ getHRDPA <- function(
 
       Sys.setenv(
         CURL_CA_BUNDLE = system.file(
-          "data-raw//weather-gc-ca.pem",
+          "extdata/weather-gc-ca.pem",
           package = "YGwater"
         )
       )
