@@ -211,8 +211,9 @@ reference_table_configs <- function() {
       key = "organizations",
       title = "Organizations",
       description = paste(
-        "Create and update organizations used across locations,",
-        "timeseries ownership, samples, documents, images, and instruments."
+        "Create and update owner and contributor organizations used",
+        "across locations, timeseries, samples, documents, images,",
+        "and instruments."
       ),
       schema = "public",
       table = "organizations",

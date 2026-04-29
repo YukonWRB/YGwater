@@ -957,6 +957,17 @@ addTimeseries <- function(id, language) {
         session$userData$AquaCache,
         "SELECT aggregation_type_id, aggregation_type FROM aggregation_types ORDER BY aggregation_type ASC"
       )
+      moduleData$correction_types <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste(
+          "SELECT correction_type_id, correction_type, description, priority,",
+          "value1, value1_description, value2, value2_description,",
+          "timestep_window, equation",
+          "FROM continuous.correction_types",
+          "WHERE correction_type IN ('trim', 'offset linear')",
+          "ORDER BY priority"
+        )
+      )
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT organization_id, name FROM organizations ORDER BY name ASC"
@@ -1074,6 +1085,179 @@ addTimeseries <- function(id, language) {
     choices <- ls(getNamespace("AquaCache"))
     moduleData$source_fx <- choices[grepl("^download", choices)]
 
+    correction_type_row <- function(correction_type) {
+      if (
+        is.null(moduleData$correction_types) ||
+          nrow(moduleData$correction_types) == 0
+      ) {
+        return(data.frame())
+      }
+
+      moduleData$correction_types[
+        moduleData$correction_types$correction_type == correction_type,
+        ,
+        drop = FALSE
+      ]
+    }
+
+    correction_type_id <- function(correction_type) {
+      row <- correction_type_row(correction_type)
+      if (nrow(row) != 1) {
+        return(NA_integer_)
+      }
+
+      as.integer(row$correction_type_id[[1]])
+    }
+
+    correction_description <- function(correction_type, fallback) {
+      row <- correction_type_row(correction_type)
+      if (
+        nrow(row) != 1 ||
+          is.na(row$description[[1]]) ||
+          !nzchar(row$description[[1]])
+      ) {
+        return(fallback)
+      }
+
+      row$description[[1]]
+    }
+
+    default_correction_bounds <- function() {
+      list(
+        start_dt = as.POSIXct("1800-01-01 00:00:00", tz = "UTC"),
+        end_dt = as.POSIXct("2100-01-01 00:00:00", tz = "UTC")
+      )
+    }
+
+    empty_default_corrections <- function() {
+      data.frame(
+        correction_type = integer(0),
+        correction_type_name = character(0),
+        start_dt = as.POSIXct(character(0), tz = "UTC"),
+        end_dt = as.POSIXct(character(0), tz = "UTC"),
+        value1 = numeric(0),
+        value2 = numeric(0),
+        stringsAsFactors = FALSE
+      )
+    }
+
+    build_default_corrections <- function() {
+      bounds <- default_correction_bounds()
+      corrections <- empty_default_corrections()
+
+      if (isTRUE(input$add_trim_correction)) {
+        trim_id <- correction_type_id("trim")
+        trim_min <- nullable_numeric(input$trim_value_min)
+        trim_max <- nullable_numeric(input$trim_value_max)
+
+        if (is.na(trim_id)) {
+          stop("Correction type 'trim' is not available in the database.")
+        }
+        if (is.na(trim_min)) {
+          stop("Enter a lower trim bound before adding a trim correction.")
+        }
+        if (!is.na(trim_max) && trim_max <= trim_min) {
+          stop("The upper trim bound must be greater than the lower bound.")
+        }
+
+        corrections <- rbind(
+          corrections,
+          data.frame(
+            correction_type = trim_id,
+            correction_type_name = "trim",
+            start_dt = bounds$start_dt,
+            end_dt = bounds$end_dt,
+            value1 = trim_min,
+            value2 = trim_max,
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+
+      if (isTRUE(input$add_offset_linear_correction)) {
+        offset_id <- correction_type_id("offset linear")
+        offset_value <- nullable_numeric(input$offset_linear_value)
+
+        if (is.na(offset_id)) {
+          stop(
+            "Correction type 'offset linear' is not available in the database."
+          )
+        }
+        if (is.na(offset_value)) {
+          stop(
+            "Enter an offset value before adding an offset linear correction."
+          )
+        }
+
+        corrections <- rbind(
+          corrections,
+          data.frame(
+            correction_type = offset_id,
+            correction_type_name = "offset linear",
+            start_dt = bounds$start_dt,
+            end_dt = bounds$end_dt,
+            value1 = offset_value,
+            value2 = NA_real_,
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+
+      corrections
+    }
+
+    default_corrections_display <- function(corrections) {
+      if (is.null(corrections) || nrow(corrections) == 0) {
+        return(data.frame(
+          message = "No default corrections selected.",
+          stringsAsFactors = FALSE
+        ))
+      }
+
+      out <- corrections
+      names(out) <- c(
+        "Correction type ID",
+        "Correction type",
+        "Start datetime",
+        "End datetime",
+        "Value 1",
+        "Value 2"
+      )
+      out[["Start datetime"]] <- format(
+        out[["Start datetime"]],
+        "%Y-%m-%d %H:%M:%S %Z",
+        tz = "UTC"
+      )
+      out[["End datetime"]] <- format(
+        out[["End datetime"]],
+        "%Y-%m-%d %H:%M:%S %Z",
+        tz = "UTC"
+      )
+      out
+    }
+
+    existing_corrections <- reactive({
+      tsid <- nullable_integer(selected_tsid())
+      if (is.na(tsid)) {
+        return(data.frame())
+      }
+
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste(
+          "SELECT c.correction_id, c.start_dt, c.end_dt,",
+          "ct.priority, ct.correction_type, c.value1, c.value2,",
+          "c.timestep_window, c.equation",
+          "FROM continuous.corrections c",
+          "LEFT JOIN continuous.correction_types ct",
+          "ON ct.correction_type_id = c.correction_type",
+          "WHERE c.timeseries_id = $1",
+          "ORDER BY c.start_dt, ct.priority, c.correction_id"
+        ),
+        params = list(tsid)
+      )
+    })
+
     output$ui <- renderUI({
       orgs <- isolate(moduleData$organizations)
 
@@ -1087,9 +1271,19 @@ addTimeseries <- function(id, language) {
         moduleData$users,
         moduleData$timeseries,
         moduleData$locations_z,
+        moduleData$correction_types,
         orgs,
         moduleData$agreements
       )
+      trim_description <- correction_description(
+        "trim",
+        "Remove data points outside of a specified value range."
+      )
+      offset_description <- correction_description(
+        "offset linear",
+        "Apply a linear offset correction."
+      )
+      bounds <- default_correction_bounds()
       tagList(
         actionButton(
           ns("reload_module"),
@@ -1422,11 +1616,78 @@ addTimeseries <- function(id, language) {
           accordion_panel(
             id = ns("corrections_panel"),
             title = "Automatic corrections/filters",
-
             tags$p(
-              # class = "text-muted",
-              # "Use these bounds to automatically filter out values below/above specified thresholds. Raw data will not be altered. If left blank, no bound is applied."
-              "This functionality is being developed."
+              class = "text-muted",
+              paste(
+                "Default corrections are inserted when creating a new",
+                "timeseries. Existing corrections are shown when modifying",
+                "a timeseries so you can avoid adding duplicates elsewhere."
+              )
+            ),
+            conditionalPanel(
+              condition = "input.mode == 'add'",
+              ns = ns,
+              tags$p(
+                class = "text-muted small",
+                paste(
+                  "New default corrections use broad UTC bounds:",
+                  format(bounds$start_dt, "%Y-%m-%d %H:%M:%S %Z", tz = "UTC"),
+                  "to",
+                  format(bounds$end_dt, "%Y-%m-%d %H:%M:%S %Z", tz = "UTC")
+                )
+              ),
+              checkboxInput(
+                ns("add_trim_correction"),
+                "Add trim correction",
+                value = FALSE
+              ),
+              conditionalPanel(
+                condition = "input.add_trim_correction",
+                ns = ns,
+                tags$p(class = "text-muted small", trim_description),
+                splitLayout(
+                  cellWidths = c("50%", "50%"),
+                  numericInput(
+                    ns("trim_value_min"),
+                    "Lower bound",
+                    value = NA,
+                    step = "any",
+                    width = "100%"
+                  ),
+                  numericInput(
+                    ns("trim_value_max"),
+                    "Upper bound (optional)",
+                    value = NA,
+                    step = "any",
+                    width = "100%"
+                  )
+                )
+              ),
+              checkboxInput(
+                ns("add_offset_linear_correction"),
+                "Add offset linear correction",
+                value = FALSE
+              ),
+              conditionalPanel(
+                condition = "input.add_offset_linear_correction",
+                ns = ns,
+                tags$p(class = "text-muted small", offset_description),
+                numericInput(
+                  ns("offset_linear_value"),
+                  "Shift for linear offset",
+                  value = NA,
+                  step = "any",
+                  width = "100%"
+                )
+              ),
+              uiOutput(ns("default_corrections_warning")),
+              DT::DTOutput(ns("default_corrections_preview"))
+            ),
+            conditionalPanel(
+              condition = "input.mode == 'modify'",
+              ns = ns,
+              uiOutput(ns("existing_corrections_message")),
+              DT::DTOutput(ns("existing_corrections_table"))
             )
           )
         ),
@@ -1456,6 +1717,95 @@ addTimeseries <- function(id, language) {
         )
       )
     }) # End of output$ui
+
+    output$default_corrections_warning <- renderUI({
+      tryCatch(
+        {
+          build_default_corrections()
+          NULL
+        },
+        error = function(e) {
+          tags$div(
+            class = "text-danger small mb-2",
+            conditionMessage(e)
+          )
+        }
+      )
+    })
+
+    output$default_corrections_preview <- DT::renderDT({
+      corrections <- tryCatch(
+        build_default_corrections(),
+        error = function(e) empty_default_corrections()
+      )
+
+      DT::datatable(
+        default_corrections_display(corrections),
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          dom = "t",
+          paging = FALSE,
+          searching = FALSE,
+          info = FALSE,
+          scrollX = TRUE
+        )
+      )
+    })
+
+    output$existing_corrections_message <- renderUI({
+      if (!identical(input$mode, "modify")) {
+        return(NULL)
+      }
+      if (is.na(nullable_integer(selected_tsid()))) {
+        return(tags$p(
+          class = "text-muted small",
+          "Select a timeseries to see its existing corrections."
+        ))
+      }
+      if (nrow(existing_corrections()) == 0) {
+        return(tags$p(
+          class = "text-muted small",
+          "No existing corrections for this timeseries."
+        ))
+      }
+
+      tags$p(
+        class = "text-muted small",
+        paste(nrow(existing_corrections()), "existing correction(s).")
+      )
+    })
+
+    output$existing_corrections_table <- DT::renderDT({
+      corrections <- existing_corrections()
+      hide_first_column <- TRUE
+      if (nrow(corrections) == 0) {
+        corrections <- data.frame(
+          message = "No existing corrections to display.",
+          stringsAsFactors = FALSE
+        )
+        hide_first_column <- FALSE
+      } else {
+        keep <- colSums(is.na(corrections)) < nrow(corrections)
+        corrections <- corrections[, keep, drop = FALSE]
+      }
+
+      DT::datatable(
+        corrections,
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          columnDefs = if (hide_first_column) {
+            list(list(targets = 0, visible = FALSE))
+          } else {
+            list()
+          },
+          pageLength = 5,
+          lengthChange = FALSE,
+          scrollX = TRUE
+        )
+      )
+    })
 
     # Render the timeseries table for modification
     output$ts_table <- DT::renderDT({
@@ -2231,7 +2581,8 @@ addTimeseries <- function(id, language) {
         source_fx_args,
         instrument_deployment,
         data,
-        share_with
+        share_with,
+        default_corrections
       ) {
         promises::future_promise(seed = TRUE, expr = {
           tryCatch(
@@ -2323,6 +2674,35 @@ addTimeseries <- function(id, language) {
                 timeseries_id = new_timeseries_id,
                 deployment_metadata_id = instrument_deployment
               )
+
+              if (
+                !is.null(default_corrections) &&
+                  nrow(default_corrections) > 0
+              ) {
+                for (row_idx in seq_len(nrow(default_corrections))) {
+                  DBI::dbExecute(
+                    con,
+                    paste(
+                      "INSERT INTO continuous.corrections",
+                      "(timeseries_id, start_dt, end_dt, correction_type,",
+                      " value1, value2, timestep_window, equation)",
+                      "VALUES ($1, $2, $3, $4, $5, $6, NULL, NULL)"
+                    ),
+                    params = list(
+                      as.integer(new_timeseries_id),
+                      default_corrections$start_dt[[row_idx]],
+                      default_corrections$end_dt[[row_idx]],
+                      as.integer(default_corrections$correction_type[[row_idx]]),
+                      as.numeric(default_corrections$value1[[row_idx]]),
+                      if (is.na(default_corrections$value2[[row_idx]])) {
+                        NA_real_
+                      } else {
+                        as.numeric(default_corrections$value2[[row_idx]])
+                      }
+                    )
+                  )
+                }
+              }
 
               # Fetch historical data if source_fx is provided
               if (!is.na(source_fx)) {
@@ -2485,6 +2865,21 @@ addTimeseries <- function(id, language) {
         }
       }
 
+      default_corrections <- tryCatch(
+        build_default_corrections(),
+        error = function(e) {
+          showNotification(
+            conditionMessage(e),
+            type = "error",
+            duration = 8
+          )
+          NULL
+        }
+      )
+      if (is.null(default_corrections)) {
+        return()
+      }
+
       # Call the extendedTask to add a new timeseries
       addNewTimeseries$invoke(
         config = session$userData$config,
@@ -2504,7 +2899,8 @@ addTimeseries <- function(id, language) {
         source_fx_args = input$source_fx_args,
         instrument_deployment = input$instrument_deployment,
         data = reactiveValuesToList(moduleData),
-        share_with = input$share_with
+        share_with = input$share_with,
+        default_corrections = default_corrections
       )
     })
 
@@ -2558,6 +2954,15 @@ addTimeseries <- function(id, language) {
         updateSelectizeInput(session, "share_with", selected = "public_reader")
         updateSelectizeInput(session, "source_fx", selected = character(0))
         updateTextInput(session, "source_fx_args", value = "")
+        updateCheckboxInput(session, "add_trim_correction", value = FALSE)
+        updateNumericInput(session, "trim_value_min", value = NA)
+        updateNumericInput(session, "trim_value_max", value = NA)
+        updateCheckboxInput(
+          session,
+          "add_offset_linear_correction",
+          value = FALSE
+        )
+        updateNumericInput(session, "offset_linear_value", value = NA)
         updateSelectizeInput(
           session,
           "instrument_deployment",

@@ -301,23 +301,26 @@ addContDataUI <- function(id) {
 
       br(),
 
-      actionButton(
+      bslib::input_task_button(
         ns("upload"),
         "Upload to AquaCache (no overwrite)",
+        type = "primary",
         style = "font-size: 14px;",
-        class = "btn btn-primary"
+        label_busy = "Uploading..."
       ),
-      actionButton(
+      bslib::input_task_button(
         ns("upload_overwrite_all"),
         "Upload to AquaCache (replace all points in new data range)",
+        type = "primary",
         style = "font-size: 14px;",
-        class = "btn btn-primary"
+        label_busy = "Uploading..."
       ),
-      actionButton(
+      bslib::input_task_button(
         ns("upload_overwrite_some"),
         "Upload to AquaCache (overwrite conflicting points only)",
+        type = "primary",
         style = "font-size: 14px;",
-        class = "btn btn-primary"
+        label_busy = "Uploading..."
       )
     )
   )
@@ -1064,6 +1067,48 @@ addContData <- function(id, language) {
       out
     }
 
+    uploaded_data_bounds <- function(tz_name = input$UTC_offset) {
+      if (nrow(data$df) == 0 || !("datetime" %in% names(data$df))) {
+        return(NULL)
+      }
+
+      utc_values <- table_datetimes_to_utc(data$df$datetime, input$UTC_offset)
+      valid_values <- utc_values[!is.na(utc_values)]
+      if (!length(valid_values)) {
+        return(NULL)
+      }
+
+      tz_name <- selected_offset_tz(tz_name, default = input$UTC_offset)
+      start_utc <- min(valid_values)
+      end_utc <- max(valid_values)
+
+      list(
+        start_utc = start_utc,
+        end_utc = end_utc,
+        start_display = format_utc_datetimes_for_display(start_utc, tz_name),
+        end_display = format_utc_datetimes_for_display(end_utc, tz_name),
+        tz = tz_name
+      )
+    }
+
+    uploaded_data_bounds_ui <- function(class_name) {
+      bounds <- uploaded_data_bounds(class_offset_tz(class_name))
+      if (is.null(bounds)) {
+        return(tags$p(
+          class = "text-muted small",
+          "Uploaded data range unavailable until valid datetime rows exist."
+        ))
+      }
+
+      tags$div(
+        class = "text-muted small mb-2",
+        tags$div(tags$strong("Uploaded data range")),
+        tags$div(paste("Start:", bounds$start_display)),
+        tags$div(paste("End:", bounds$end_display)),
+        tags$div(paste("UTC offset:", bounds$tz))
+      )
+    }
+
     previous_data_timezone <- reactiveVal(format_utc_offset(0L))
 
     observeEvent(input$UTC_offset, {
@@ -1509,6 +1554,18 @@ addContData <- function(id, language) {
             timeFormat = "HH:mm"
           )
         ),
+        uploaded_data_bounds_ui(class_name),
+        tags$div(
+          class = "d-flex gap-2 flex-wrap mb-3",
+          actionButton(
+            ns(paste0(class_name, "_modal_use_data_start")),
+            "Use data start"
+          ),
+          actionButton(
+            ns(paste0(class_name, "_modal_use_data_end")),
+            "Use data end"
+          )
+        ),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(ns(paste0("save_", class_name, "_modal")), "Save")
@@ -1537,6 +1594,30 @@ addContData <- function(id, language) {
             drop = FALSE
           ]
           sync_table_classes_from_ranges()
+        })
+        observeEvent(input[[paste0(class_name, "_modal_use_data_start")]], {
+          bounds <- uploaded_data_bounds(class_offset_tz(class_name))
+          if (is.null(bounds)) {
+            return()
+          }
+          shinyWidgets::updateAirDateInput(
+            session,
+            inputId = paste0(class_name, "_modal_start"),
+            value = bounds$start_utc,
+            tz = air_datetime_widget_timezone(bounds$tz)
+          )
+        })
+        observeEvent(input[[paste0(class_name, "_modal_use_data_end")]], {
+          bounds <- uploaded_data_bounds(class_offset_tz(class_name))
+          if (is.null(bounds)) {
+            return()
+          }
+          shinyWidgets::updateAirDateInput(
+            session,
+            inputId = paste0(class_name, "_modal_end"),
+            value = bounds$end_utc,
+            tz = air_datetime_widget_timezone(bounds$tz)
+          )
         })
         observeEvent(input[[paste0("save_", class_name, "_modal")]], {
           code <- as.character(input[[paste0(class_name, "_modal_code")]])
@@ -1918,7 +1999,24 @@ addContData <- function(id, language) {
       )
     })
 
-    preview_data <- reactive({
+    plot_data <- reactiveVal(NULL)
+    last_plot_signature <- reactiveVal(NULL)
+
+    current_plot_signature <- reactive({
+      list(
+        timeseries_id = timeseries(),
+        df = data$df,
+        grade = class_ranges$grade,
+        approval = class_ranges$approval,
+        qualifier = class_ranges$qualifier,
+        preview_historic_range = input$preview_historic_range,
+        preview_start_datetime = input$preview_start_datetime,
+        preview_end_datetime = input$preview_end_datetime,
+        preview_utc_offset = input$preview_utc_offset
+      )
+    })
+
+    preview_request <- reactive({
       req(timeseries())
       req(nrow(data$df) > 0)
 
@@ -1962,78 +2060,22 @@ addContData <- function(id, language) {
         range_end <- max(range_end, custom_end)
       }
 
-      extra <- dbGetQueryDT(
-        session$userData$AquaCache,
-        "SELECT datetime, value_corrected AS value FROM continuous.measurements_continuous_corrected($1, $2, $3)",
-        params = list(timeseries(), range_start, range_end)
-      )
-
-      if (nrow(extra) == 0) {
-        extra <- NULL
-      }
-
-      hist_out <- NULL
-      if (isTRUE(input$preview_historic_range)) {
-        # add a day to the end for the historic query to ensure we have enough ribbon
-        hist_out <- dbGetQueryDT(
-          session$userData$AquaCache,
-          "SELECT date AS datetime, min, max, q25, q75 FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date >= $2 AND date <= $3",
-          params = list(timeseries(), range_start, range_end + 86400)
-        )
-      }
-
-      df_new$datetime <- df_new$datetime + preview_offset_seconds
-      if (!is.null(extra)) {
-        extra$datetime <- coerce_utc_datetime(extra$datetime) +
-          preview_offset_seconds
-      }
-      if (!is.null(hist_out) && nrow(hist_out) > 0) {
-        hist_out$datetime <- coerce_utc_datetime(hist_out$datetime) +
-          preview_offset_seconds
-      }
-
-      parameter <- dbGetQueryDT(
-        session$userData$AquaCache,
-        paste(
-          "SELECT p.param_name,",
-          ac_parameter_unit_select_sql(
-            session$userData$AquaCache,
-            "p",
-            "unit_default",
-            matrix_state_alias = "ts",
-            media_alias = "ts"
-          ),
-          ", p.plot_default_y_orientation",
-          "FROM public.parameters p",
-          "JOIN continuous.timeseries ts ON p.parameter_id = ts.parameter_id",
-          "WHERE ts.timeseries_id = $1"
-        ),
-        params = list(timeseries())
-      )
-
       list(
+        timeseries_id = timeseries(),
         new_data = df_new,
-        db = extra,
-        historic = hist_out,
-        parameter = parameter,
+        range_start = range_start,
+        range_end = range_end,
         display_offset_seconds = preview_offset_seconds,
-        display_tz = preview_tz
-      )
-    })
-
-    plot_data <- reactiveVal(NULL)
-    last_plot_signature <- reactiveVal(NULL)
-
-    current_plot_signature <- reactive({
-      list(
-        df = data$df,
-        grade = class_ranges$grade,
-        approval = class_ranges$approval,
-        qualifier = class_ranges$qualifier,
-        preview_historic_range = input$preview_historic_range,
-        preview_start_datetime = input$preview_start_datetime,
-        preview_end_datetime = input$preview_end_datetime,
-        preview_utc_offset = input$preview_utc_offset
+        display_tz = preview_tz,
+        show_historic_range = isTRUE(input$preview_historic_range),
+        class_ranges = list(
+          grade = class_ranges$grade,
+          approval = class_ranges$approval,
+          qualifier = class_ranges$qualifier
+        ),
+        class_types = class_type_choices(),
+        config = session$userData$config,
+        signature = current_plot_signature()
       )
     })
 
@@ -2055,9 +2097,80 @@ addContData <- function(id, language) {
       )
     })
 
-    observeEvent(input$make_plot, {
-      req(timeseries())
-      pv <- preview_data()
+    make_preview_plot <- function(pv) {
+      db_config <- pv$config
+      pv$config <- NULL
+      con <- AquaConnect(
+        name = db_config$dbName,
+        host = db_config$dbHost,
+        port = db_config$dbPort,
+        username = db_config$dbUser,
+        password = db_config$dbPass,
+        silent = TRUE
+      )
+      db_config <- NULL
+      on.exit({
+        if (!is.null(con) && DBI::dbIsValid(con)) {
+          DBI::dbDisconnect(con)
+        }
+      }, add = TRUE)
+
+      extra <- dbGetQueryDT(
+        con,
+        "SELECT datetime, value_corrected AS value FROM continuous.measurements_continuous_corrected($1, $2, $3)",
+        params = list(pv$timeseries_id, pv$range_start, pv$range_end)
+      )
+
+      if (nrow(extra) == 0) {
+        extra <- NULL
+      }
+
+      hist_out <- NULL
+      if (isTRUE(pv$show_historic_range)) {
+        # Add a day to the end for the historic query to ensure enough ribbon.
+        hist_out <- dbGetQueryDT(
+          con,
+          "SELECT date AS datetime, min, max, q25, q75 FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date >= $2 AND date <= $3",
+          params = list(pv$timeseries_id, pv$range_start, pv$range_end + 86400)
+        )
+      }
+
+      pv$new_data$datetime <- pv$new_data$datetime + pv$display_offset_seconds
+      if (!is.null(extra)) {
+        extra$datetime <- coerce_utc_datetime(extra$datetime) +
+          pv$display_offset_seconds
+      }
+      if (!is.null(hist_out) && nrow(hist_out) > 0) {
+        hist_out$datetime <- coerce_utc_datetime(hist_out$datetime) +
+          pv$display_offset_seconds
+      }
+
+      parameter <- dbGetQueryDT(
+        con,
+        paste(
+          "SELECT p.param_name,",
+          ac_parameter_unit_select_sql(
+            con,
+            "p",
+            "unit",
+            matrix_state_alias = "ts",
+            media_alias = "ts"
+          ),
+          ", p.plot_default_y_orientation",
+          "FROM public.parameters p",
+          "JOIN continuous.timeseries ts ON p.parameter_id = ts.parameter_id",
+          "WHERE ts.timeseries_id = $1"
+        ),
+        params = list(pv$timeseries_id)
+      )
+
+      pv$db <- extra
+      pv$historic <- hist_out
+      pv$parameter <- parameter
+      class_ranges <- pv$class_ranges
+
+      DBI::dbDisconnect(con)
+      con <- NULL
 
       # Start with the range ribbons. Like in plotTimeseries, create ranges within the historic range data so that discontinuous range data doesn't connect across gaps.
       historic_range <- FALSE
@@ -2208,7 +2321,7 @@ addContData <- function(id, language) {
       if (has_class_bands && nrow(pv$new_data) > 0) {
         mindt <- min(pv$new_data$datetime, na.rm = TRUE)
         maxdt <- max(pv$new_data$datetime, na.rm = TRUE)
-        type_map <- class_type_choices()
+        type_map <- pv$class_types
         poly_list <- list()
         new_data_dt <- sort(unique(pv$new_data$datetime))
         approval_y <- NULL
@@ -2444,9 +2557,44 @@ addContData <- function(id, language) {
         ) |>
         plotly::config(locale = "en")
 
-      # Assign the plot to the reactive value so it can be displayed in the UI
-      plot_data(plot)
-      last_plot_signature(current_plot_signature())
+      plot
+    }
+
+    preview_plot_task <- ExtendedTask$new(function(pv) {
+      promises::future_promise({
+        tryCatch(
+          {
+            list(
+              plot = make_preview_plot(pv),
+              signature = pv$signature
+            )
+          },
+          error = function(e) {
+            conditionMessage(e)
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("make_plot")
+
+    observeEvent(input$make_plot, {
+      req(timeseries())
+      preview_plot_task$invoke(preview_request())
+    })
+
+    observeEvent(preview_plot_task$result(), {
+      result <- preview_plot_task$result()
+      if (inherits(result, "character")) {
+        showNotification(
+          paste("Preview plot failed:", result),
+          type = "error",
+          duration = 10
+        )
+        return()
+      }
+
+      plot_data(result$plot)
+      last_plot_signature(result$signature)
     })
 
     output$data_preview <- plotly::renderPlotly({
@@ -2526,59 +2674,153 @@ addContData <- function(id, language) {
       return(TRUE)
     }
 
-    observeEvent(input$upload, {
+    empty_continuous_upload_df <- function() {
+      data.frame(
+        datetime = character(),
+        value = numeric(),
+        grade = character(),
+        approval = character(),
+        qualifier = character(),
+        stringsAsFactors = FALSE
+      )
+    }
+
+    reset_upload_state <- function() {
+      data$df <- empty_continuous_upload_df()
+      data$parsed_datetime <- NULL
+      data$parsed_value <- NULL
+      class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
+      class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
+      class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
+      plot_data(NULL)
+      last_plot_signature(NULL)
+    }
+
+    build_upload_request <- function(overwrite) {
+      upload_data <- data$df
+      upload_data$datetime <- data$parsed_datetime
+      upload_data$value <- data$parsed_value
+      upload_data$owner <- as.integer(input$owner)
+      upload_data$contributor <- as.integer(input$contributor)
+      upload_data$no_update <- data.table::fifelse(
+        input$no_update == "yes",
+        TRUE,
+        FALSE
+      )
+
+      list(
+        timeseries_id = timeseries(),
+        data = upload_data,
+        overwrite = overwrite,
+        config = session$userData$config
+      )
+    }
+
+    upload_task <- ExtendedTask$new(function(req) {
+      promises::future_promise({
+        warnings <- character()
+        messages <- character()
+
+        tryCatch(
+          {
+            con <- AquaConnect(
+              name = req$config$dbName,
+              host = req$config$dbHost,
+              port = req$config$dbPort,
+              username = req$config$dbUser,
+              password = req$config$dbPass,
+              silent = TRUE
+            )
+            on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+            withCallingHandlers(
+              AquaCache::addNewContinuous(
+                tsid = req$timeseries_id,
+                df = req$data,
+                con = con,
+                target = "realtime",
+                overwrite = req$overwrite
+              ),
+              warning = function(w) {
+                warnings <<- c(warnings, conditionMessage(w))
+                invokeRestart("muffleWarning")
+              },
+              message = function(m) {
+                messages <<- c(messages, conditionMessage(m))
+                invokeRestart("muffleMessage")
+              }
+            )
+
+            list(
+              ok = TRUE,
+              overwrite = req$overwrite,
+              warnings = unique(warnings),
+              messages = unique(messages)
+            )
+          },
+          error = function(e) {
+            list(
+              ok = FALSE,
+              message = conditionMessage(e)
+            )
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("upload") |>
+      bslib::bind_task_button("upload_overwrite_all") |>
+      bslib::bind_task_button("upload_overwrite_some")
+
+    invoke_upload_task <- function(overwrite) {
       check <- check_fx()
       if (!check) {
         return()
       }
-      tryCatch(
-        {
-          upload_data <- data$df
-          upload_data$datetime <- data$parsed_datetime
-          upload_data$value <- data$parsed_value
-          upload_data$owner <- as.integer(input$owner)
-          upload_data$contributor <- as.integer(input$contributor)
-          upload_data$no_update <- data.table::fifelse(
-            input$no_update == "yes",
-            TRUE,
-            FALSE
-          )
-          AquaCache::addNewContinuous(
-            tsid = timeseries(),
-            df = upload_data,
-            con = session$userData$AquaCache,
-            target = "realtime",
-            overwrite = "no"
-          )
-          showNotification('Data added.', type = 'message')
-          data$df <- data.frame(
-            datetime = character(),
-            value = numeric(),
-            grade = character(),
-            approval = character(),
-            qualifier = character()
-          )
-          class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
-          class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
-          class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
-        },
-        error = function(e) {
-          showNotification(paste('Upload failed:', e$message), type = 'error')
-        },
-        warning = function(w) {
-          showNotification(
-            paste('Warning on upload:', w$message),
-            type = 'warning'
-          )
-        },
-        message = function(m) {
-          showNotification(
-            paste('Message on upload:', m$message),
-            type = 'message'
-          )
-        }
-      )
+
+      upload_task$invoke(build_upload_request(overwrite))
+    }
+
+    observeEvent(input$upload, {
+      invoke_upload_task("no")
     })
+
+    observeEvent(upload_task$result(), {
+      result <- upload_task$result()
+
+      if (!isTRUE(result$ok)) {
+        showNotification(
+          paste('Upload failed:', result$message),
+          type = 'error',
+          duration = 10
+        )
+        return()
+      }
+
+      if (length(result$warnings)) {
+        showNotification(
+          paste('Warning on upload:', paste(result$warnings, collapse = " ")),
+          type = 'warning',
+          duration = 10
+        )
+      }
+      if (length(result$messages)) {
+        showNotification(
+          paste('Message on upload:', paste(result$messages, collapse = " ")),
+          type = 'message',
+          duration = 8
+        )
+      }
+
+      notification <- switch(
+        result$overwrite,
+        all = 'Data added with overwrite.',
+        conflict = 'Data added with selective overwrite.',
+        'Data added.'
+      )
+      showNotification(notification, type = 'message')
+      reset_upload_state()
+    })
+
     observeEvent(input$upload_overwrite_all, {
       check <- check_fx()
       if (!check) {
@@ -2601,53 +2843,7 @@ addContData <- function(id, language) {
     })
     observeEvent(input$confirm_overwrite_all, {
       removeModal() # Close the modal dialog
-      tryCatch(
-        {
-          upload_data <- data$df
-          upload_data$datetime <- data$parsed_datetime
-          upload_data$value <- data$parsed_value
-          upload_data$owner <- as.integer(input$owner)
-          upload_data$contributor <- as.integer(input$contributor)
-          upload_data$no_update <- data.table::fifelse(
-            input$no_update == "yes",
-            TRUE,
-            FALSE
-          )
-          AquaCache::addNewContinuous(
-            tsid = timeseries(),
-            df = upload_data,
-            con = session$userData$AquaCache,
-            target = "realtime",
-            overwrite = "all"
-          )
-          showNotification('Data added with overwrite.', type = 'message')
-          data$df <- data.frame(
-            datetime = character(),
-            value = numeric(),
-            grade = character(),
-            approval = character(),
-            qualifier = character()
-          )
-          class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
-          class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
-          class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
-        },
-        error = function(e) {
-          showNotification(paste('Upload failed:', e$message), type = 'error')
-        },
-        warning = function(w) {
-          showNotification(
-            paste('Warning on upload:', w$message),
-            type = 'warning'
-          )
-        },
-        message = function(m) {
-          showNotification(
-            paste('Message on upload:', m$message),
-            type = 'message'
-          )
-        }
-      )
+      invoke_upload_task("all")
     })
 
     observeEvent(input$upload_overwrite_some, {
@@ -2672,56 +2868,7 @@ addContData <- function(id, language) {
     })
     observeEvent(input$confirm_overwrite_some, {
       removeModal() # Close the modal dialog
-      tryCatch(
-        {
-          upload_data <- data$df
-          upload_data$datetime <- data$parsed_datetime
-          upload_data$value <- data$parsed_value
-          upload_data$owner <- as.integer(input$owner)
-          upload_data$contributor <- as.integer(input$contributor)
-          upload_data$no_update <- data.table::fifelse(
-            input$no_update == "yes",
-            TRUE,
-            FALSE
-          )
-          AquaCache::addNewContinuous(
-            tsid = timeseries(),
-            df = upload_data,
-            con = session$userData$AquaCache,
-            target = "realtime",
-            overwrite = "conflict"
-          )
-          showNotification(
-            'Data added with selective overwrite.',
-            type = 'message'
-          )
-          data$df <- data.frame(
-            datetime = character(),
-            value = numeric(),
-            grade = character(),
-            approval = character(),
-            qualifier = character()
-          )
-          class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
-          class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
-          class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
-        },
-        error = function(e) {
-          showNotification(paste('Upload failed:', e$message), type = 'error')
-        },
-        warning = function(w) {
-          showNotification(
-            paste('Warning on upload:', w$message),
-            type = 'warning'
-          )
-        },
-        message = function(m) {
-          showNotification(
-            paste('Message on upload:', m$message),
-            type = 'message'
-          )
-        }
-      )
+      invoke_upload_task("conflict")
     })
 
     return(outputs)
