@@ -112,8 +112,14 @@ api_find_target <- function(version = NULL) {
 #' @export
 #' @examples
 #' \dontrun{
+#' # Latest version by default
 #' api()
+#'
+#' # Specify version with integer or "v"-prefixed string
+#' api(version = 1)
+#' api(version = "v1")
 #' }
+#'
 
 api <- function(
   version = NULL,
@@ -151,8 +157,10 @@ api <- function(
   Sys.setenv(APIaquacacheUser = dbUser)
   Sys.setenv(APIaquacachePass = dbPass)
 
+  # Launch the plumber2 API using the appropriate engine and implementation
   if (identical(api_target$engine, "plumber2")) {
     pr <- plumber2::api(api_target$path)
+    # Create documentation
     pr <- plumber2::api_doc_add(
       pr,
       list(servers = list(list(url = server))),
@@ -167,6 +175,8 @@ api <- function(
     return(plumber2::api_run(pr, host = host, port = port, silent = TRUE))
   }
 
+  # Code below won't run if plumber2 is used because of the return above
+  # For plumber v1, we need to modify the API spec to add security schemes and server information
   pr <- plumber::plumb(api_target$path)
 
   spec <- pr$getApiSpec()

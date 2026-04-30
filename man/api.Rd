@@ -51,6 +51,12 @@ without replacing the existing surface unintentionally.
 }
 \examples{
 \dontrun{
+# Latest version by default
 api()
+
+# Specify version with integer or "v"-prefixed string
+api(version = 1)
+api(version = "v1")
 }
+
 }

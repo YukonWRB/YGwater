@@ -67,15 +67,48 @@ v2_error_df <- function(message, status = "error") {
   )
 }
 
-v2_resolve_credentials <- function(request) {
-  hdr <- request$get_header("Authorization")
+v2_response <- function(body, status = 200L, headers = NULL) {
+  structure(
+    list(
+      body = body,
+      status = as.integer(status),
+      headers = headers
+    ),
+    class = "v2_api_response"
+  )
+}
 
+v2_finalize_response <- function(result, response, client_id, ...) {
+  on.exit(v2_clear_credentials(client_id), add = TRUE)
+
+  payload <- response$body
+  if (!inherits(payload, "v2_api_response")) {
+    return(result)
+  }
+
+  response$status <- payload$status
+  headers <- payload$headers
+  if (!is.null(headers) && length(headers) > 0L) {
+    for (header in names(headers)) {
+      response$set_header(header, headers[[header]])
+    }
+  }
+  response$body <- payload$body
+
+  result
+}
+
+v2_public_credentials <- function() {
+  list(
+    user = Sys.getenv("APIaquacacheUser", "public_reader"),
+    password = Sys.getenv("APIaquacachePass", "aquacache"),
+    authenticated = FALSE
+  )
+}
+
+v2_resolve_credentials_header <- function(hdr) {
   if (is.null(hdr) || length(hdr) == 0L || !nzchar(hdr)) {
-    return(list(
-      user = Sys.getenv("APIaquacacheUser", "public_reader"),
-      password = Sys.getenv("APIaquacachePass", "aquacache"),
-      authenticated = FALSE
-    ))
+    return(v2_public_credentials())
   }
 
   if (!grepl("^Basic\\s+", hdr)) {
@@ -101,6 +134,56 @@ v2_resolve_credentials <- function(request) {
   )
 }
 
+v2_credentials_dir <- function() {
+  path <- file.path(v2_cache_dir(), "credentials")
+  dir.create(path, recursive = TRUE, showWarnings = FALSE)
+  path
+}
+
+v2_credentials_file <- function(client_id) {
+  file.path(
+    v2_credentials_dir(),
+    paste0(v2_cache_key("client", client_id), ".rds")
+  )
+}
+
+v2_store_credentials <- function(client_id, credentials) {
+  if (is.null(client_id) || !nzchar(client_id)) {
+    return(invisible(FALSE))
+  }
+
+  saveRDS(credentials, v2_credentials_file(client_id))
+  invisible(TRUE)
+}
+
+v2_clear_credentials <- function(client_id) {
+  if (is.null(client_id) || !nzchar(client_id)) {
+    return(invisible(FALSE))
+  }
+
+  unlink(v2_credentials_file(client_id), force = TRUE)
+  invisible(TRUE)
+}
+
+v2_client_credentials <- function(client_id) {
+  if (is.null(client_id) || !nzchar(client_id)) {
+    return(v2_public_credentials())
+  }
+
+  path <- v2_credentials_file(client_id)
+  if (!file.exists(path)) {
+    return(v2_public_credentials())
+  }
+
+  credentials <- try(readRDS(path), silent = TRUE)
+  if (inherits(credentials, "try-error")) {
+    unlink(path, force = TRUE)
+    return(v2_public_credentials())
+  }
+
+  credentials
+}
+
 v2_open_connection <- function(credentials) {
   try(
     YGwater::AquaConnect(
@@ -115,21 +198,16 @@ v2_open_connection <- function(credentials) {
   )
 }
 
-v2_context <- function(request, response) {
-  credentials <- v2_resolve_credentials(request)
-  if (!is.null(credentials$error)) {
-    response$status <- 401L
-    response$set_header("WWW-Authenticate", 'Basic realm="AquaCache"')
-    response$set_header("X-Status", "error")
-    return(list(error = v2_error_df(credentials$error)))
-  }
-
+v2_context <- function(client_id) {
+  credentials <- v2_client_credentials(client_id)
   con <- v2_open_connection(credentials)
   if (inherits(con, "try-error")) {
-    response$status <- 503L
-    response$set_header("X-Status", "error")
     return(list(
-      error = v2_error_df("Database connection failed, check your credentials.")
+      error = v2_response(
+        v2_error_df("Database connection failed, check your credentials."),
+        status = 503L,
+        headers = list("X-Status" = "error")
+      )
     ))
   }
 
@@ -186,8 +264,8 @@ v2_parse_logical <- function(value, default = FALSE) {
   default
 }
 
-v2_lookup_query <- function(request, response, sql, empty_message) {
-  ctx <- v2_context(request, response)
+v2_lookup_query <- function(client_id, sql, empty_message) {
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -196,8 +274,10 @@ v2_lookup_query <- function(request, response, sql, empty_message) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    response$set_header("X-Status", "info")
-    return(v2_error_df(empty_message, status = "info"))
+    return(v2_response(
+      v2_error_df(empty_message, status = "info"),
+      headers = list("X-Status" = "info")
+    ))
   }
 
   out
@@ -268,7 +348,7 @@ v2_cache_read <- function(cache_file) {
 }
 
 v2_cache_numeric_env <- function(name, default) {
-  out <- suppressWarnings(as.numeric(Sys.getenv(name, default)))
+  out <- suppressWarnings(as.numeric(Sys.getenv(name, as.character(default))))
   if (length(out) == 0L || is.na(out) || out <= 0) {
     return(default)
   }
@@ -482,13 +562,12 @@ v2_snow_stamp <- function(con) {
 }
 
 v2_snow_info_endpoint <- function(
-  request,
-  response,
+  client_id,
   output,
   complete_yrs = FALSE,
   stats = FALSE
 ) {
-  ctx <- v2_context(request, response)
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -504,7 +583,6 @@ v2_snow_info_endpoint <- function(
       stats = stats
     )
   } else {
-    response$set_header("Cache-Control", "no-store")
     out <- YGwater::snowInfo(
       con = ctx$con,
       complete_yrs = complete_yrs,
@@ -517,10 +595,42 @@ v2_snow_info_endpoint <- function(
     )
   }
 
-  v2_csv_with_header(
+  body <- v2_csv_with_header(
     out[[output]],
     header_lines = out$headers[[output]][[1L]]
   )
+
+  if (v2_request_cache_allowed(ctx$credentials)) {
+    return(body)
+  }
+
+  v2_response(body, headers = list("Cache-Control" = "no-store"))
+}
+
+#* Store V2 request credentials for async handlers
+#* @header
+#* @any /v2/*
+function(request, response, client_id) {
+  credentials <- v2_resolve_credentials_header(
+    request$get_header("Authorization")
+  )
+
+  if (!is.null(credentials$error)) {
+    response$status <- 401L
+    response$set_header("WWW-Authenticate", 'Basic realm="AquaCache"')
+    response$set_header("X-Status", "error")
+    response$set_header("Content-Type", "text/csv")
+    response$body <- v2_csv_serializer()(v2_error_df(credentials$error))
+    return(plumber2::Break)
+  }
+
+  if (isTRUE(credentials$authenticated)) {
+    v2_store_credentials(client_id, credentials)
+  } else {
+    v2_clear_credentials(client_id)
+  }
+
+  plumber2::Next
 }
 
 #* List available locations
@@ -528,15 +638,17 @@ v2_snow_info_endpoint <- function(
 #* @query lang:string("en") Language for location names and descriptions ("en" or "fr").
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
   if (is.null(lang)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df("Invalid language parameter. Use 'en' or 'fr'."))
+    return(v2_response(
+      v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
   }
 
-  ctx <- v2_context(request, response)
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -551,27 +663,33 @@ function(request, response, query) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    response$set_header("X-Status", "info")
-    return(v2_error_df("No locations found in the database.", status = "info"))
+    return(v2_response(
+      v2_error_df("No locations found in the database.", status = "info"),
+      headers = list("X-Status" = "info")
+    ))
   }
 
   out
 }
+#* @then
+v2_finalize_response
 
 #* List available timeseries
 #* @get /v2/timeseries
 #* @query lang:string("en") Language for timeseries names and descriptions ("en" or "fr").
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
   if (is.null(lang)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df("Invalid language parameter. Use 'en' or 'fr'."))
+    return(v2_response(
+      v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
   }
 
-  ctx <- v2_context(request, response)
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -669,12 +787,16 @@ function(request, response, query) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    response$set_header("X-Status", "info")
-    return(v2_error_df("No timeseries found in the database.", status = "info"))
+    return(v2_response(
+      v2_error_df("No timeseries found in the database.", status = "info"),
+      headers = list("X-Status" = "info")
+    ))
   }
 
   out
 }
+#* @then
+v2_finalize_response
 
 #* Return measurements for a timeseries
 #* @get /v2/timeseries/measurements
@@ -684,37 +806,41 @@ function(request, response, query) {
 #* @query limit:integer(100000) Maximum number of records to return.
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   id <- v2_query_value(query, "id")
   if (is.null(id)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df("Missing required 'id' parameter."))
+    return(v2_response(
+      v2_error_df("Missing required 'id' parameter."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
   }
 
   start <- v2_query_value(query, "start")
   if (is.null(start)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df("Missing required 'start' parameter."))
+    return(v2_response(
+      v2_error_df("Missing required 'start' parameter."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
   }
 
   start <- v2_parse_datetime(start)
   if (is.null(start)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df(
-      "Invalid 'start' parameter. Must be in ISO 8601 format."
+    return(v2_response(
+      v2_error_df("Invalid 'start' parameter. Must be in ISO 8601 format."),
+      status = 400L,
+      headers = list("X-Status" = "error")
     ))
   }
 
   end <- v2_query_value(query, "end", Sys.time())
   end <- v2_parse_datetime(end)
   if (is.null(end)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df(
-      "Invalid 'end' parameter. Must be in ISO 8601 format."
+    return(v2_response(
+      v2_error_df("Invalid 'end' parameter. Must be in ISO 8601 format."),
+      status = 400L,
+      headers = list("X-Status" = "error")
     ))
   }
 
@@ -725,14 +851,16 @@ function(request, response, query) {
 
   ids <- v2_parse_integer_csv(id)
   if (length(ids) == 0L) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df(
-      "Invalid 'id' parameter. Must contain at least one integer timeseries_id."
+    return(v2_response(
+      v2_error_df(
+        "Invalid 'id' parameter. Must contain at least one integer timeseries_id."
+      ),
+      status = 400L,
+      headers = list("X-Status" = "error")
     ))
   }
 
-  ctx <- v2_context(request, response)
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -875,22 +1003,26 @@ function(request, response, query) {
   }
 
   if (nrow(out) == 0L) {
-    response$set_header("X-Status", "info")
-    return(v2_error_df(
-      "No measurements found for the specified timeseries and date range.",
-      status = "info"
+    return(v2_response(
+      v2_error_df(
+        "No measurements found for the specified timeseries and date range.",
+        status = "info"
+      ),
+      headers = list("X-Status" = "info")
     ))
   }
 
   out
 }
+#* @then
+v2_finalize_response
 
 #* Return available parameters in the database
 #* @get /v2/parameters
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
-  ctx <- v2_context(request, response)
+function(client_id, query) {
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -913,21 +1045,24 @@ function(request, response, query) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    response$set_header("X-Status", "info")
-    return(v2_error_df("No parameters found in the database.", status = "info"))
+    return(v2_response(
+      v2_error_df("No parameters found in the database.", status = "info"),
+      headers = list("X-Status" = "info")
+    ))
   }
 
   out
 }
+#* @then
+v2_finalize_response
 
 #* Return grade types in the database
 #* @get /v2/grades
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_lookup_query(
-    request,
-    response,
+    client_id,
     "SELECT
        grade_type_id,
        grade_type_code,
@@ -939,15 +1074,16 @@ function(request, response, query) {
     "No grade types found in the database."
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return approval types in the database
 #* @get /v2/approvals
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_lookup_query(
-    request,
-    response,
+    client_id,
     "SELECT
        approval_type_id,
        approval_type_code,
@@ -959,15 +1095,16 @@ function(request, response, query) {
     "No approval types found in the database."
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return qualifier types in the database
 #* @get /v2/qualifiers
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_lookup_query(
-    request,
-    response,
+    client_id,
     "SELECT
        qualifier_type_id,
        qualifier_type_code,
@@ -979,15 +1116,16 @@ function(request, response, query) {
     "No qualifier types found in the database."
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return organizations in the database
 #* @get /v2/organizations
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_lookup_query(
-    request,
-    response,
+    client_id,
     "SELECT
        organization_id,
        name,
@@ -1001,6 +1139,8 @@ function(request, response, query) {
     "No organizations found in the database."
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return sample metadata
 #* @get /v2/samples
@@ -1010,30 +1150,32 @@ function(request, response, query) {
 #* @query parameters:string Parameter IDs to target, separated by commas.
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   start <- v2_query_value(query, "start")
   if (is.null(start)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df("Missing required 'start' parameter."))
+    return(v2_response(
+      v2_error_df("Missing required 'start' parameter."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
   }
 
   start <- v2_parse_datetime(start)
   if (is.null(start)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df(
-      "Invalid 'start' parameter. Must be in ISO 8601 format."
+    return(v2_response(
+      v2_error_df("Invalid 'start' parameter. Must be in ISO 8601 format."),
+      status = 400L,
+      headers = list("X-Status" = "error")
     ))
   }
 
   end <- v2_query_value(query, "end", Sys.time())
   end <- v2_parse_datetime(end)
   if (is.null(end)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df(
-      "Invalid 'end' parameter. Must be in ISO 8601 format."
+    return(v2_response(
+      v2_error_df("Invalid 'end' parameter. Must be in ISO 8601 format."),
+      status = 400L,
+      headers = list("X-Status" = "error")
     ))
   }
 
@@ -1053,10 +1195,12 @@ function(request, response, query) {
   if (!is.null(locations)) {
     location_ids <- v2_parse_integer_csv(locations)
     if (length(location_ids) == 0L) {
-      response$status <- 400L
-      response$set_header("X-Status", "error")
-      return(v2_error_df(
-        "Invalid 'locations' parameter. Must contain integer location_id values."
+      return(v2_response(
+        v2_error_df(
+          "Invalid 'locations' parameter. Must contain integer location_id values."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
       ))
     }
     sql <- paste0(
@@ -1071,10 +1215,12 @@ function(request, response, query) {
   if (!is.null(parameters)) {
     parameter_ids <- v2_parse_integer_csv(parameters)
     if (length(parameter_ids) == 0L) {
-      response$status <- 400L
-      response$set_header("X-Status", "error")
-      return(v2_error_df(
-        "Invalid 'parameters' parameter. Must contain integer parameter_id values."
+      return(v2_response(
+        v2_error_df(
+          "Invalid 'parameters' parameter. Must contain integer parameter_id values."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
       ))
     }
     sql <- paste0(
@@ -1089,7 +1235,7 @@ function(request, response, query) {
   }
   sql <- paste0(sql, " ORDER BY datetime DESC")
 
-  ctx <- v2_context(request, response)
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -1098,15 +1244,19 @@ function(request, response, query) {
   out <- DBI::dbGetQuery(ctx$con, sql, params = list(start, end))
 
   if (nrow(out) == 0L) {
-    response$set_header("X-Status", "info")
-    return(v2_error_df(
-      "No samples found for the specified criteria.",
-      status = "info"
+    return(v2_response(
+      v2_error_df(
+        "No samples found for the specified criteria.",
+        status = "info"
+      ),
+      headers = list("X-Status" = "info")
     ))
   }
 
   out
 }
+#* @then
+v2_finalize_response
 
 #* Return sample results
 #* @get /v2/samples/results
@@ -1114,20 +1264,24 @@ function(request, response, query) {
 #* @query parameters:string Parameter IDs to target, separated by commas.
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   sample_ids <- v2_query_value(query, "sample_ids")
   if (is.null(sample_ids)) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df("Missing required 'sample_ids' parameter."))
+    return(v2_response(
+      v2_error_df("Missing required 'sample_ids' parameter."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
   }
 
   sample_ids <- v2_parse_integer_csv(sample_ids)
   if (length(sample_ids) == 0L) {
-    response$status <- 400L
-    response$set_header("X-Status", "error")
-    return(v2_error_df(
-      "Invalid 'sample_ids' parameter. Must contain integer sample_id values."
+    return(v2_response(
+      v2_error_df(
+        "Invalid 'sample_ids' parameter. Must contain integer sample_id values."
+      ),
+      status = 400L,
+      headers = list("X-Status" = "error")
     ))
   }
 
@@ -1151,10 +1305,12 @@ function(request, response, query) {
   if (!is.null(parameters)) {
     parameter_ids <- v2_parse_integer_csv(parameters)
     if (length(parameter_ids) == 0L) {
-      response$status <- 400L
-      response$set_header("X-Status", "error")
-      return(v2_error_df(
-        "Invalid 'parameters' parameter. Must contain integer parameter_id values."
+      return(v2_response(
+        v2_error_df(
+          "Invalid 'parameters' parameter. Must contain integer parameter_id values."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
       ))
     }
     sql <- paste0(
@@ -1166,7 +1322,7 @@ function(request, response, query) {
   }
   sql <- paste0(sql, " ORDER BY r.parameter_id")
 
-  ctx <- v2_context(request, response)
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
@@ -1175,15 +1331,19 @@ function(request, response, query) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    response$set_header("X-Status", "info")
-    return(v2_error_df(
-      "No results found for the specified sample ID and parameters.",
-      status = "info"
+    return(v2_response(
+      v2_error_df(
+        "No results found for the specified sample ID and parameters.",
+        status = "info"
+      ),
+      headers = list("X-Status" = "info")
     ))
   }
 
   out
 }
+#* @then
+v2_finalize_response
 
 #* Return SWE snow bulletin leaflet map HTML
 #* @get /v2/snow-bulletin/leaflet
@@ -1195,11 +1355,13 @@ function(request, response, query) {
 #* @query discrete:boolean(true) Consider discrete data for latest bulletin.
 #* @serializer text/html v2_text_serializer()
 #* @async
-function(request, response, query) {
-  ctx <- v2_context(request, response)
+function(client_id, query) {
+  ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
-    response$status <- 503L
-    return("<p>Database connection failed, check your credentials.</p>")
+    return(v2_response(
+      "<p>Database connection failed, check your credentials.</p>",
+      status = 503L
+    ))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
@@ -1209,17 +1371,16 @@ function(request, response, query) {
   month_given <- !is.null(month_value)
 
   if (xor(year_given, month_given)) {
-    response$status <- 400L
-    return(
-      "<p>Both 'year' and 'month' must be provided together or not at all.</p>"
-    )
+    return(v2_response(
+      "<p>Both 'year' and 'month' must be provided together or not at all.</p>",
+      status = 400L
+    ))
   }
 
   if (year_given) {
     year <- suppressWarnings(as.integer(year_value))
     if (is.na(year)) {
-      response$status <- 400L
-      return("<p>Invalid 'year' parameter.</p>")
+      return(v2_response("<p>Invalid 'year' parameter.</p>", status = 400L))
     }
   } else {
     continuous <- v2_parse_logical(v2_query_value(query, "continuous"), FALSE)
@@ -1272,8 +1433,10 @@ function(request, response, query) {
   if (month_given) {
     month <- suppressWarnings(as.integer(month_value))
     if (is.na(month) || month < 1L || month > 12L) {
-      response$status <- 400L
-      return("<p>Invalid 'month' parameter. Use 1-12.</p>")
+      return(v2_response(
+        "<p>Invalid 'month' parameter. Use 1-12.</p>",
+        status = 400L
+      ))
     }
   } else if (!is.null(year)) {
     continuous <- v2_parse_logical(v2_query_value(query, "continuous"), FALSE)
@@ -1346,7 +1509,6 @@ function(request, response, query) {
       con = ctx$con
     )
   } else {
-    response$set_header("Cache-Control", "no-store")
     map_payload <- YGwater:::create_snowbull_leaflet_html(
       year = year,
       month = month,
@@ -1357,77 +1519,90 @@ function(request, response, query) {
     )
   }
 
-  response$set_header("X-Map-Year", as.character(map_payload$year))
-  response$set_header("X-Map-Month", as.character(map_payload$month))
+  headers <- list(
+    "X-Map-Year" = as.character(map_payload$year),
+    "X-Map-Month" = as.character(map_payload$month)
+  )
 
-  map_payload$html
+  if (!v2_request_cache_allowed(ctx$credentials)) {
+    headers[["Cache-Control"]] <- "no-store"
+  }
+
+  v2_response(map_payload$html, headers = headers)
 }
+#* @then
+v2_finalize_response
 
 #* Return basic snow survey data
 #* @get /v2/snow-survey/data
 #* @serializer text/csv v2_text_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_snow_info_endpoint(
-    request,
-    response,
+    client_id,
     output = "measurements",
     complete_yrs = FALSE,
     stats = FALSE
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return basic snow survey metadata
 #* @get /v2/snow-survey/metadata
 #* @serializer text/csv v2_text_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_snow_info_endpoint(
-    request,
-    response,
+    client_id,
     output = "locations",
     complete_yrs = FALSE,
     stats = FALSE
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return snow survey statistics
 #* @get /v2/snow-survey/stats
 #* @serializer text/csv v2_text_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_snow_info_endpoint(
-    request,
-    response,
+    client_id,
     output = "stats",
     complete_yrs = TRUE,
     stats = TRUE
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return basic snow survey trends
 #* @get /v2/snow-survey/trends
 #* @serializer text/csv v2_text_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_snow_info_endpoint(
-    request,
-    response,
+    client_id,
     output = "trends",
     complete_yrs = TRUE,
     stats = TRUE
   )
 }
+#* @then
+v2_finalize_response
 
 #* Return CSW layer data
 #* @get /v2/csw-layer
 #* @serializer text/csv v2_csv_serializer()
 #* @async
-function(request, response, query) {
+function(client_id, query) {
   v2_lookup_query(
-    request,
-    response,
+    client_id,
     "SELECT * FROM public.get_csw_layer()",
     "No CSW layer data found in the database."
   )
 }
+#* @then
+v2_finalize_response

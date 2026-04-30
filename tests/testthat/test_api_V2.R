@@ -1,6 +1,55 @@
+v2_route_file <- function() {
+  path <- YGwater:::api_find_target(2)$path
+  if (dir.exists(path)) {
+    path <- file.path(path, "plumber.R")
+  }
+  path
+}
+
+v2_test_async <- function(expr, envir) {
+  promises::promise_resolve(eval(expr, envir = envir))
+}
+
+v2_resolve_request <- function(value, max_ticks = 500L) {
+  if (!promises::is.promise(value)) {
+    return(value)
+  }
+
+  resolved <- FALSE
+  out <- NULL
+  err <- NULL
+  value$then(
+    function(result) {
+      out <<- result
+      resolved <<- TRUE
+    },
+    function(error) {
+      err <<- error
+      resolved <<- TRUE
+    }
+  )
+
+  for (i in seq_len(max_ticks)) {
+    if (resolved) {
+      break
+    }
+    later::run_now(0.01)
+  }
+
+  if (!is.null(err)) {
+    stop(err)
+  }
+  if (!resolved) {
+    stop("Timed out waiting for async test request.", call. = FALSE)
+  }
+
+  out
+}
+
 test_that("api(version = 2) builds a plumber2 router without running", {
   skip_if_not_installed("plumber2")
 
+  withr::local_options(list(plumber2.async = v2_test_async))
   withr::local_envvar(list(
     aquacacheName = NA,
     aquacacheHost = NA,
@@ -22,7 +71,7 @@ test_that("api(version = 2) builds a plumber2 router without running", {
 })
 
 test_that("API V2 endpoints are marked async", {
-  lines <- readLines(YGwater:::api_find_target(2)$path, warn = FALSE)
+  lines <- readLines(v2_route_file(), warn = FALSE)
   route_starts <- grep("^#\\* @get\\s+", lines)
   route_ends <- c(route_starts[-1L] - 1L, length(lines))
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
@@ -39,11 +88,29 @@ test_that("API V2 endpoints are marked async", {
     length(missing_async) == 0L,
     info = paste(missing_async, collapse = ", ")
   )
+
+  missing_then <- routes[!vapply(
+    seq_along(route_starts),
+    function(i) {
+      block <- lines[route_starts[[i]]:route_ends[[i]]]
+      async_at <- grep("^#\\* @async\\s*$", block)
+      then_at <- grep("^#\\* @then\\s*$", block)
+      length(async_at) == 1L &&
+        length(then_at) == 1L &&
+        then_at[[1L]] > async_at[[1L]]
+    },
+    logical(1L)
+  )]
+
+  expect_true(
+    length(missing_then) == 0L,
+    info = paste(missing_then, collapse = ", ")
+  )
 })
 
 test_that("API V2 file cache reuses values and waits on in-flight work", {
   env <- new.env(parent = globalenv())
-  sys.source(YGwater:::api_find_target(2)$path, envir = env)
+  sys.source(v2_route_file(), envir = env)
 
   cache_dir <- tempfile("v2-cache")
   withr::local_envvar(c(
@@ -85,7 +152,10 @@ test_that("API V2 file cache reuses values and waits on in-flight work", {
 test_that("API V2 metadata and lookup endpoints return expected CSV", {
   skip_if_not_installed("plumber2")
   skip_if_not_installed("reqres")
+  skip_if_not_installed("promises")
+  skip_if_not_installed("later")
 
+  withr::local_options(list(plumber2.async = v2_test_async))
   pr <- api(
     version = 2,
     run = FALSE,
@@ -97,11 +167,11 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
   )
 
   get_v2 <- function(url, headers = list()) {
-    pr$test_request(reqres:::mock_rook(
+    v2_resolve_request(pr$test_request(reqres:::mock_rook(
       url = url,
       method = "get",
       headers = headers
-    ))
+    )))
   }
 
   get_ts <- get_v2("http://example.com/v2/timeseries")
@@ -285,7 +355,10 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
 test_that("API V2 measurements endpoint returns corrected measurements", {
   skip_if_not_installed("plumber2")
   skip_if_not_installed("reqres")
+  skip_if_not_installed("promises")
+  skip_if_not_installed("later")
 
+  withr::local_options(list(plumber2.async = v2_test_async))
   pr <- api(
     version = 2,
     run = FALSE,
@@ -297,7 +370,9 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   )
 
   get_v2 <- function(url) {
-    pr$test_request(reqres:::mock_rook(url = url, method = "get"))
+    v2_resolve_request(
+      pr$test_request(reqres:::mock_rook(url = url, method = "get"))
+    )
   }
 
   get_ts <- get_v2("http://example.com/v2/timeseries")
@@ -370,7 +445,10 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
 test_that("API V2 snow bulletin map endpoint returns HTML", {
   skip_if_not_installed("plumber2")
   skip_if_not_installed("reqres")
+  skip_if_not_installed("promises")
+  skip_if_not_installed("later")
 
+  withr::local_options(list(plumber2.async = v2_test_async))
   ns <- asNamespace("YGwater")
   original <- get("create_snowbull_leaflet_html", envir = ns)
 
@@ -401,10 +479,10 @@ test_that("API V2 snow bulletin map endpoint returns HTML", {
     dbPass = Sys.getenv("aquacachePass", "runner")
   )
 
-  res <- pr$test_request(reqres:::mock_rook(
+  res <- v2_resolve_request(pr$test_request(reqres:::mock_rook(
     url = "http://example.com/v2/snow-bulletin/leaflet?year=2024&month=5",
     method = "get"
-  ))
+  )))
 
   expect_equal(res$status, 200)
   expect_match(res$body, "stub map", fixed = TRUE)
