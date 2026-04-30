@@ -88,6 +88,26 @@ api_find_target <- function(version = NULL) {
   )
 }
 
+api_run_with_httpuv_retry <- function(expr, env = parent.frame()) {
+  expr <- substitute(expr)
+
+  tryCatch(
+    eval(expr, envir = env),
+    error = function(err) {
+      if (
+        !grepl("Failed to create server", conditionMessage(err), fixed = TRUE) ||
+          !requireNamespace("httpuv", quietly = TRUE)
+      ) {
+        stop(err)
+      }
+
+      httpuv::stopAllServers()
+      Sys.sleep(0.2)
+      eval(expr, envir = env)
+    }
+  )
+}
+
 #' Run the YGwater API
 #'
 #' @description
@@ -101,7 +121,10 @@ api_find_target <- function(version = NULL) {
 #'   which uses the latest complete file-based API version.
 #' @param host The host address to bind the server to. Default is the local host.
 #' @param port The port number to listen on. Default is 8000.
-#' @param server The server path for the API. Default is '/water-data/api'.
+#' @param server The public server path or URL to write into the OpenAPI
+#'   document. Version 2 leaves this unset by default so plumber2 can infer the
+#'   correct base path from the documentation request, which works both locally
+#'   and behind a reverse proxy.
 #' @param dbName The name of the PostgreSQL database. Default is taken from the environment variable 'aquacacheName'.
 #' @param dbHost The host address of the PostgreSQL database. Default is taken from the environment variable 'aquacacheHost'.
 #' @param dbPort The port number of the PostgreSQL database. Default is taken from the environment variable 'aquacachePort'.
@@ -133,6 +156,7 @@ api <- function(
   dbPass = Sys.getenv("aquacachePass"),
   run = TRUE
 ) {
+  server_supplied <- !missing(server)
   version <- api_normalize_version(version)
   api_target <- api_find_target(version)
 
@@ -160,18 +184,22 @@ api <- function(
   # Launch the plumber2 API using the appropriate engine and implementation
   if (identical(api_target$engine, "plumber2")) {
     pr <- plumber2::api(api_target$path)
-    pr <- plumber2::api_doc_add(
-      pr,
-      list(list(url = server)),
-      overwrite = TRUE,
-      subset = "servers"
-    )
+    if (server_supplied && !is.null(server) && nzchar(server)) {
+      pr <- plumber2::api_doc_add(
+        pr,
+        list(list(url = server)),
+        overwrite = TRUE,
+        subset = "servers"
+      )
+    }
 
     if (!run) {
       return(pr)
     }
 
-    return(plumber2::api_run(pr, host = host, port = port, silent = TRUE))
+    return(api_run_with_httpuv_retry(
+      plumber2::api_run(pr, host = host, port = port, silent = TRUE)
+    ))
   }
 
   # Code below won't run if plumber2 is used because of the return above
@@ -184,12 +212,14 @@ api <- function(
     scheme = "basic"
   )
   spec$security <- list(list(BasicAuth = list()))
-  spec$servers <- list(list(url = server))
+  if (!is.null(server) && nzchar(server)) {
+    spec$servers <- list(list(url = server))
+  }
   pr$setApiSpec(spec)
 
   if (!run) {
     return(pr)
   }
 
-  pr$run(host = host, port = port)
+  api_run_with_httpuv_retry(pr$run(host = host, port = port))
 }

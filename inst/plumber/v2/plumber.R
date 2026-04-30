@@ -609,7 +609,19 @@ v2_snow_info_endpoint <- function(
 
 #* Store V2 request credentials for async handlers
 #* @header
-#* @any /*
+#* @any /locations
+#* @any /timeseries
+#* @any /timeseries/*
+#* @any /parameters
+#* @any /grades
+#* @any /approvals
+#* @any /qualifiers
+#* @any /organizations
+#* @any /samples
+#* @any /samples/*
+#* @any /snow-bulletin/leaflet
+#* @any /snow-survey/*
+#* @any /csw-layer
 function(request, response, client_id) {
   credentials <- v2_resolve_credentials_header(
     request$get_header("Authorization")

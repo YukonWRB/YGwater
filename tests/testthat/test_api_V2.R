@@ -59,15 +59,35 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   pr <- api(
     version = 2,
     run = FALSE,
-    server = "/water-data/api/v2",
     dbName = "aquacache_test"
   )
 
   expect_s3_class(pr, "Plumber2")
+  expect_null(pr$.__enclos_env__$private$OPENAPI$servers)
+
+  pr_with_server <- api(
+    version = 2,
+    run = FALSE,
+    server = "/water-data/api/v2",
+    dbName = "aquacache_test"
+  )
+
   expect_equal(
-    pr$.__enclos_env__$private$OPENAPI$servers,
+    pr_with_server$.__enclos_env__$private$OPENAPI$servers,
     list(list(url = "/water-data/api/v2"))
   )
+  expect_equal(
+    head(names(pr$.__enclos_env__$private$OPENAPI$paths), 2L),
+    c("/locations", "/timeseries")
+  )
+
+  openapi <- pr_with_server$.__enclos_env__$private$OPENAPI
+  openapi$servers <- c(openapi$servers, list(list(url = "")))
+  openapi_json <- jsonlite::toJSON(
+    fireproof::prune_openapi(openapi),
+    auto_unbox = TRUE
+  )
+  expect_true(jsonlite::validate(openapi_json))
 
   expect_equal(Sys.getenv("APIaquacacheName"), "aquacache_test")
   expect_equal(Sys.getenv("APIaquacacheHost"), Sys.getenv("aquacacheHost"))
@@ -81,6 +101,7 @@ test_that("API V2 endpoints are marked async", {
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
 
   expect_false(any(grepl("^/v[0-9]+(?:/|$)", routes)))
+  expect_false(any(grepl("^#\\* @any\\s+/\\*\\s*$", lines)))
 
   missing_async <- routes[!vapply(
     seq_along(route_starts),
