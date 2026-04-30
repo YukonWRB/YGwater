@@ -59,11 +59,15 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   pr <- api(
     version = 2,
     run = FALSE,
-    server = "/water-data/api",
+    server = "/water-data/api/v2",
     dbName = "aquacache_test"
   )
 
   expect_s3_class(pr, "Plumber2")
+  expect_equal(
+    pr$.__enclos_env__$private$OPENAPI$servers,
+    list(list(url = "/water-data/api/v2"))
+  )
 
   expect_equal(Sys.getenv("APIaquacacheName"), "aquacache_test")
   expect_equal(Sys.getenv("APIaquacacheHost"), Sys.getenv("aquacacheHost"))
@@ -75,6 +79,8 @@ test_that("API V2 endpoints are marked async", {
   route_starts <- grep("^#\\* @get\\s+", lines)
   route_ends <- c(route_starts[-1L] - 1L, length(lines))
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
+
+  expect_false(any(grepl("^/v[0-9]+(?:/|$)", routes)))
 
   missing_async <- routes[!vapply(
     seq_along(route_starts),
@@ -174,7 +180,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
     )))
   }
 
-  get_ts <- get_v2("http://example.com/v2/timeseries")
+  get_ts <- get_v2("http://example.com/timeseries")
 
   expect_equal(get_ts$status, 200)
 
@@ -239,7 +245,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
   )
   expect_gt(nrow(out), 0)
 
-  get_locs <- get_v2("http://example.com/v2/locations")
+  get_locs <- get_v2("http://example.com/locations")
 
   expect_equal(get_locs$status, 200)
 
@@ -264,7 +270,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
   )
   expect_gt(nrow(locs), 0)
 
-  get_parameters <- get_v2("http://example.com/v2/parameters")
+  get_parameters <- get_v2("http://example.com/parameters")
 
   expect_equal(get_parameters$status, 200)
 
@@ -317,7 +323,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
   )
 
   for (endpoint in names(lookup_endpoints)) {
-    res <- get_v2(sprintf("http://example.com/v2/%s", endpoint))
+    res <- get_v2(sprintf("http://example.com/%s", endpoint))
 
     expect_equal(res$status, 200)
 
@@ -327,7 +333,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
     expect_gt(nrow(lookup), 0)
   }
 
-  invalid_lang <- get_v2("http://example.com/v2/locations?lang=es")
+  invalid_lang <- get_v2("http://example.com/locations?lang=es")
 
   expect_equal(invalid_lang$status, 400)
 
@@ -337,17 +343,17 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
   expect_match(invalid_lang_body$message[1], "Invalid language parameter")
 
   invalid_auth <- get_v2(
-    "http://example.com/v2/locations",
+    "http://example.com/locations",
     headers = list(Authorization = "Bearer invalid")
   )
 
   expect_equal(invalid_auth$status, 401)
 
-  missing_sample_start <- get_v2("http://example.com/v2/samples")
+  missing_sample_start <- get_v2("http://example.com/samples")
 
   expect_equal(missing_sample_start$status, 400)
 
-  missing_sample_ids <- get_v2("http://example.com/v2/samples/results")
+  missing_sample_ids <- get_v2("http://example.com/samples/results")
 
   expect_equal(missing_sample_ids$status, 400)
 })
@@ -375,7 +381,7 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
     )
   }
 
-  get_ts <- get_v2("http://example.com/v2/timeseries")
+  get_ts <- get_v2("http://example.com/timeseries")
   timeseries <- read.csv(text = get_ts$body)
   timeseries$end_datetime <- as.POSIXct(timeseries$end_datetime, tz = "UTC")
   timeseries <- timeseries[!is.na(timeseries$end_datetime), ]
@@ -392,7 +398,7 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
 
   get_measurements <- get_v2(sprintf(
     paste0(
-      "http://example.com/v2/timeseries/measurements",
+      "http://example.com/timeseries/measurements",
       "?id=%s&start=%s&end=%s&limit=10"
     ),
     test_timeseries_id,
@@ -436,7 +442,7 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   expect_gt(nrow(measurements), 0)
 
   missing_id <- get_v2(
-    "http://example.com/v2/timeseries/measurements?start=2020-01-01"
+    "http://example.com/timeseries/measurements?start=2020-01-01"
   )
 
   expect_equal(missing_id$status, 400)
@@ -480,7 +486,7 @@ test_that("API V2 snow bulletin map endpoint returns HTML", {
   )
 
   res <- v2_resolve_request(pr$test_request(reqres:::mock_rook(
-    url = "http://example.com/v2/snow-bulletin/leaflet?year=2024&month=5",
+    url = "http://example.com/snow-bulletin/leaflet?year=2024&month=5",
     method = "get"
   )))
 

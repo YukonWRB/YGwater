@@ -609,7 +609,7 @@ v2_snow_info_endpoint <- function(
 
 #* Store V2 request credentials for async handlers
 #* @header
-#* @any /v2/*
+#* @any /*
 function(request, response, client_id) {
   credentials <- v2_resolve_credentials_header(
     request$get_header("Authorization")
@@ -634,7 +634,7 @@ function(request, response, client_id) {
 }
 
 #* List available locations
-#* @get /v2/locations
+#* @get /locations
 #* @query lang:string("en") Language for location names and descriptions ("en" or "fr").
 #* @serializer text/csv v2_csv_serializer()
 #* @async
@@ -675,7 +675,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* List available timeseries
-#* @get /v2/timeseries
+#* @get /timeseries
 #* @query lang:string("en") Language for timeseries names and descriptions ("en" or "fr").
 #* @serializer text/csv v2_csv_serializer()
 #* @async
@@ -799,7 +799,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return measurements for a timeseries
-#* @get /v2/timeseries/measurements
+#* @get /timeseries/measurements
 #* @query id:string* Timeseries IDs to target, separated by commas.
 #* @query start:string* Start date/time, inclusive, in ISO 8601 format.
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
@@ -1018,7 +1018,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return available parameters in the database
-#* @get /v2/parameters
+#* @get /parameters
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -1057,7 +1057,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return grade types in the database
-#* @get /v2/grades
+#* @get /grades
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -1078,7 +1078,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return approval types in the database
-#* @get /v2/approvals
+#* @get /approvals
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -1099,7 +1099,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return qualifier types in the database
-#* @get /v2/qualifiers
+#* @get /qualifiers
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -1120,7 +1120,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return organizations in the database
-#* @get /v2/organizations
+#* @get /organizations
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -1143,7 +1143,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return sample metadata
-#* @get /v2/samples
+#* @get /samples
 #* @query start:string* Start date/time, inclusive, in ISO 8601 format.
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
 #* @query locations:string Location IDs to target, separated by commas.
@@ -1259,7 +1259,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return sample results
-#* @get /v2/samples/results
+#* @get /samples/results
 #* @query sample_ids:string* Sample IDs to target, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
 #* @serializer text/csv v2_csv_serializer()
@@ -1346,7 +1346,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return SWE snow bulletin leaflet map HTML
-#* @get /v2/snow-bulletin/leaflet
+#* @get /snow-bulletin/leaflet
 #* @query year:integer Bulletin year.
 #* @query month:integer Bulletin month.
 #* @query statistic:string("relative_to_med") Statistic to display.
@@ -1534,7 +1534,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return basic snow survey data
-#* @get /v2/snow-survey/data
+#* @get /snow-survey/data
 #* @serializer text/csv v2_text_serializer()
 #* @async
 function(client_id, query) {
@@ -1549,7 +1549,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return basic snow survey metadata
-#* @get /v2/snow-survey/metadata
+#* @get /snow-survey/metadata
 #* @serializer text/csv v2_text_serializer()
 #* @async
 function(client_id, query) {
@@ -1564,7 +1564,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return snow survey statistics
-#* @get /v2/snow-survey/stats
+#* @get /snow-survey/stats
 #* @serializer text/csv v2_text_serializer()
 #* @async
 function(client_id, query) {
@@ -1579,7 +1579,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return basic snow survey trends
-#* @get /v2/snow-survey/trends
+#* @get /snow-survey/trends
 #* @serializer text/csv v2_text_serializer()
 #* @async
 function(client_id, query) {
@@ -1594,7 +1594,7 @@ function(client_id, query) {
 v2_finalize_response
 
 #* Return CSW layer data
-#* @get /v2/csw-layer
+#* @get /csw-layer
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {

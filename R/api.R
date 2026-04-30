@@ -160,10 +160,9 @@ api <- function(
   # Launch the plumber2 API using the appropriate engine and implementation
   if (identical(api_target$engine, "plumber2")) {
     pr <- plumber2::api(api_target$path)
-    # Create documentation
     pr <- plumber2::api_doc_add(
       pr,
-      list(servers = list(list(url = server))),
+      list(list(url = server)),
       overwrite = TRUE,
       subset = "servers"
     )
