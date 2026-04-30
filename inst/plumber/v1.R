@@ -12,6 +12,10 @@ function(req, res) {
     "^/locations$",
     "^/timeseries$",
     "^/parameters$",
+    "^/grades$",
+    "^/approvals$",
+    "^/qualifiers$",
+    "^/organizations$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
     "^/snow-bulletin/leaflet$",
@@ -136,10 +140,43 @@ function(req, res, lang = "en") {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  if (lang == "en") {
-    sql <- "SELECT * FROM continuous.timeseries_metadata_en ORDER BY timeseries_id"
+  visibility_sql <- if (request_cache_allowed(req)) {
+    "WHERE ts.publicly_visible = TRUE"
+  } else {
+    ""
+  }
+
+  compound_sql <- "
+    SELECT
+      m.timeseries_id,
+      string_agg(
+        m.member_alias,
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_aliases,
+      string_agg(
+        m.member_timeseries_id::text,
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_timeseries_ids,
+      string_agg(
+        m.member_priority::text,
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_priorities,
+      string_agg(
+        COALESCE(m.use_from::text, ''),
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_use_from,
+      string_agg(
+        COALESCE(m.use_to::text, ''),
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_use_to
+    FROM continuous.timeseries_compound_members m
+    GROUP BY m.timeseries_id
+  "
+
+  metadata_sql <- if (lang == "en") {
+    "continuous.timeseries_metadata_en"
   } else if (lang == "fr") {
-    sql <- "SELECT * FROM continuous.timeseries_metadata_fr ORDER BY timeseries_id"
+    "continuous.timeseries_metadata_fr"
   } else {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -148,6 +185,56 @@ function(req, res, lang = "en") {
       stringsAsFactors = FALSE
     ))
   }
+
+  sql <- sprintf(
+    "SELECT
+       tm.*,
+       ts.publicly_visible,
+       ts.active,
+       ts.source_fx,
+       ts.source_fx_args::text AS source_fx_args,
+       ts.share_with,
+       ts.default_owner AS default_owner_organization_id,
+       org.name AS default_owner,
+       org.name_fr AS default_owner_fr,
+       ts.default_data_sharing_agreement_id,
+       ts.private_expiry,
+       ts.sync_remote,
+       ts.timezone_daily_calc,
+       ts.last_daily_calculation,
+       ts.last_synchronize,
+       ts.matrix_state_id,
+       ms.matrix_state_code,
+       ms.matrix_state_name,
+       ms.matrix_state_name_fr,
+       ts.sub_location_id,
+       sl.sub_location_name,
+       sl.sub_location_name_fr,
+       tc.expression_sql AS compound_expression_sql,
+       cm.compound_member_aliases,
+       cm.compound_member_timeseries_ids,
+       cm.compound_member_priorities,
+       cm.compound_member_use_from,
+       cm.compound_member_use_to
+     FROM %s tm
+     JOIN continuous.timeseries ts
+       ON tm.timeseries_id = ts.timeseries_id
+     LEFT JOIN public.organizations org
+       ON ts.default_owner = org.organization_id
+     LEFT JOIN public.matrix_states ms
+       ON ts.matrix_state_id = ms.matrix_state_id
+     LEFT JOIN public.sub_locations sl
+       ON ts.sub_location_id = sl.sub_location_id
+     LEFT JOIN continuous.timeseries_compounds tc
+       ON ts.timeseries_id = tc.timeseries_id
+     LEFT JOIN (%s) cm
+       ON ts.timeseries_id = cm.timeseries_id
+     %s
+     ORDER BY tm.timeseries_id",
+    metadata_sql,
+    compound_sql,
+    visibility_sql
+  )
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
@@ -251,13 +338,111 @@ function(req, res, id, start, end = NA, limit = 100000) {
       stringsAsFactors = FALSE
     ))
   }
+  include_private <- !request_cache_allowed(req)
+  measurement_join_sql <- "
+    LEFT JOIN LATERAL (
+      SELECT
+        g.grade_type_id,
+        gt.grade_type_code
+      FROM continuous.grades g
+      LEFT JOIN public.grade_types gt
+        ON g.grade_type_id = gt.grade_type_id
+      WHERE g.timeseries_id = m.timeseries_id
+        AND g.start_dt <= m.datetime
+        AND g.end_dt >= m.datetime
+      ORDER BY g.start_dt DESC, g.grade_id DESC
+      LIMIT 1
+    ) grade ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT
+        a.approval_type_id,
+        at.approval_type_code
+      FROM continuous.approvals a
+      LEFT JOIN public.approval_types at
+        ON a.approval_type_id = at.approval_type_id
+      WHERE a.timeseries_id = m.timeseries_id
+        AND a.start_dt <= m.datetime
+        AND a.end_dt >= m.datetime
+      ORDER BY a.start_dt DESC, a.approval_id DESC
+      LIMIT 1
+    ) approval ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT
+        string_agg(
+          q.qualifier_type_id::text,
+          ',' ORDER BY q.qualifier_type_id
+        ) AS qualifier_type_ids,
+        string_agg(
+          q.qualifier_type_code,
+          ',' ORDER BY q.qualifier_type_id
+        ) AS qualifier_type_codes
+      FROM (
+        SELECT DISTINCT ON (q.qualifier_type_id)
+          q.qualifier_type_id,
+          qt.qualifier_type_code
+        FROM continuous.qualifiers q
+        LEFT JOIN public.qualifier_types qt
+          ON q.qualifier_type_id = qt.qualifier_type_id
+        WHERE q.timeseries_id = m.timeseries_id
+          AND q.start_dt <= m.datetime
+          AND q.end_dt >= m.datetime
+        ORDER BY q.qualifier_type_id, q.start_dt DESC, q.qualifier_id DESC
+      ) q
+    ) qualifier ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT o.organization_id AS owner_organization_id
+      FROM continuous.owners o
+      WHERE o.timeseries_id = m.timeseries_id
+        AND o.start_dt <= m.datetime
+        AND o.end_dt >= m.datetime
+      ORDER BY o.start_dt DESC, o.owner_id DESC
+      LIMIT 1
+    ) owner_range ON TRUE
+    LEFT JOIN public.organizations owner_org
+      ON owner_range.owner_organization_id = owner_org.organization_id
+    LEFT JOIN LATERAL (
+      SELECT c.organization_id AS contributor_organization_id
+      FROM continuous.contributors c
+      WHERE c.timeseries_id = m.timeseries_id
+        AND c.start_dt <= m.datetime
+        AND c.end_dt >= m.datetime
+      ORDER BY c.start_dt DESC, c.contributor_id DESC
+      LIMIT 1
+    ) contributor_range ON TRUE
+    LEFT JOIN public.organizations contributor_org
+      ON contributor_range.contributor_organization_id =
+        contributor_org.organization_id
+  "
+
+  measurement_select_sql <- "
+    SELECT
+      m.*,
+      grade.grade_type_id,
+      grade.grade_type_code,
+      approval.approval_type_id,
+      approval.approval_type_code,
+      qualifier.qualifier_type_ids,
+      qualifier.qualifier_type_codes,
+      owner_range.owner_organization_id,
+      owner_org.name AS owner,
+      contributor_range.contributor_organization_id,
+      contributor_org.name AS contributor
+  "
+
   if (length(id) == 1) {
     out <- DBI::dbGetQuery(
       con,
-      "SELECT * FROM continuous.measurements_continuous_corrected($1, $2, $3)
-      ORDER BY datetime DESC
-      LIMIT $4",
-      params = list(as.integer(id), start, end, lim)
+      paste0(
+        measurement_select_sql,
+        "FROM continuous.measurements_continuous_corrected($1, $2, $3) m
+         JOIN continuous.timeseries ts
+           ON m.timeseries_id = ts.timeseries_id",
+        measurement_join_sql,
+        "WHERE ($4::boolean OR ts.publicly_visible)
+         ORDER BY m.datetime DESC
+         LIMIT $5"
+      ),
+      params = list(as.integer(id[[1]]), start, end, include_private, lim)
     )
   } else {
     # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
@@ -266,21 +451,29 @@ function(req, res, id, start, end = NA, limit = 100000) {
     out <- DBI::dbGetQuery(
       con,
       sprintf(
-        "WITH requested_timeseries(timeseries_id) AS (
+        paste0(
+          "WITH requested_timeseries(timeseries_id) AS (
            SELECT unnest(ARRAY[%s]::integer[])
          )
-         SELECT m.*
+         ",
+          measurement_select_sql,
+          "
          FROM requested_timeseries r
          JOIN LATERAL continuous.measurements_continuous_corrected(
            r.timeseries_id,
            $1,
            $2
          ) m ON TRUE
+         JOIN continuous.timeseries ts
+           ON m.timeseries_id = ts.timeseries_id",
+          measurement_join_sql,
+          "WHERE ($3::boolean OR ts.publicly_visible)
          ORDER BY m.datetime DESC
-         LIMIT $3",
+         LIMIT $4"
+        ),
         ids
       ),
-      params = list(start, end, lim)
+      params = list(start, end, include_private, lim)
     )
   }
 
@@ -339,6 +532,84 @@ function(req, res) {
   }
 
   return(out)
+}
+
+#' Return grade types in the database
+#* @get /grades
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       grade_type_id,
+       grade_type_code,
+       grade_type_description,
+       grade_type_description_fr,
+       color_code
+     FROM public.grade_types
+     ORDER BY grade_type_id",
+    "No grade types found in the database."
+  )
+}
+
+#' Return approval types in the database
+#* @get /approvals
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       approval_type_id,
+       approval_type_code,
+       approval_type_description,
+       approval_type_description_fr,
+       color_code
+     FROM public.approval_types
+     ORDER BY approval_type_id",
+    "No approval types found in the database."
+  )
+}
+
+#' Return qualifier types in the database
+#* @get /qualifiers
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       qualifier_type_id,
+       qualifier_type_code,
+       qualifier_type_description,
+       qualifier_type_description_fr,
+       color_code
+     FROM public.qualifier_types
+     ORDER BY qualifier_type_id",
+    "No qualifier types found in the database."
+  )
+}
+
+#' Return organizations in the database
+#* @get /organizations
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       organization_id,
+       name,
+       name_fr,
+       contact_name,
+       phone,
+       email,
+       note
+     FROM public.organizations
+     ORDER BY name, organization_id",
+    "No organizations found in the database."
+  )
 }
 
 #' Return sample metadata
@@ -1126,4 +1397,41 @@ csv_with_header <- function(df, header_lines = NULL) {
   header_lines <- paste0('"', header_lines, '"')
 
   paste(c(header_lines, csv_lines), collapse = "\n")
+}
+
+api_lookup_query <- function(req, res, sql, empty_message) {
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  out <- DBI::dbGetQuery(con, sql)
+
+  if (nrow(out) == 0) {
+    res$headers[["X-Status"]] <- "info"
+    return(data.frame(
+      status = "info",
+      message = empty_message,
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  out
 }

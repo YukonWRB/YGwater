@@ -622,31 +622,133 @@ get_latest_bulletin_month_year <- function(
 #' @return Character string containing the full self-contained HTML of the widget
 #' @noRd
 render_leaflet_widget_html <- function(widget) {
-    requireNamespace("pandoc")
-
-    tryCatch(
-        {
-            loc <- pandoc::pandoc_locate()
-        },
-        error = function(e) {
-            loc <<- pandoc::pandoc_bin()
-        }
-    )
-    if (is.null(loc)) {
-        message("Installing pandoc...")
-        pandoc::pandoc_install(force = TRUE)
+    if (!requireNamespace("base64enc", quietly = TRUE)) {
+        stop("Package 'base64enc' is required to render leaflet map HTML.")
+    }
+    if (!requireNamespace("htmlwidgets", quietly = TRUE)) {
+        stop("Package 'htmlwidgets' is required to render leaflet map HTML.")
     }
 
-    tmp_file <- tempfile(fileext = ".html")
-    on.exit(unlink(tmp_file), add = TRUE)
+    mime_type <- function(path) {
+        switch(
+            tolower(tools::file_ext(path)),
+            css = "text/css",
+            js = "application/javascript",
+            json = "application/json",
+            png = "image/png",
+            gif = "image/gif",
+            jpg = "image/jpeg",
+            jpeg = "image/jpeg",
+            svg = "image/svg+xml",
+            woff = "font/woff",
+            woff2 = "font/woff2",
+            ttf = "font/ttf",
+            eot = "application/vnd.ms-fontobject",
+            "application/octet-stream"
+        )
+    }
+
+    data_uri <- function(path, text = NULL) {
+        if (is.null(text)) {
+            return(base64enc::dataURI(file = path, mime = mime_type(path)))
+        }
+
+        paste0(
+            "data:",
+            mime_type(path),
+            ";base64,",
+            base64enc::base64encode(charToRaw(text), newline = FALSE)
+        )
+    }
+
+    inline_css_urls <- function(css, css_file) {
+        matches <- gregexpr("url\\(([^)]+)\\)", css, perl = TRUE)
+        css_urls <- regmatches(css, matches)[[1]]
+
+        if (length(css_urls) == 0L || identical(css_urls, character(0))) {
+            return(css)
+        }
+
+        for (css_url in unique(css_urls)) {
+            path <- sub("^url\\((.*)\\)$", "\\1", css_url)
+            path <- trimws(path)
+            path <- sub("^['\"]", "", path)
+            path <- sub("['\"]$", "", path)
+
+            if (
+                grepl("^(data:|https?:|//|#)", path, ignore.case = TRUE)
+            ) {
+                next
+            }
+
+            path_no_fragment <- sub("[?#].*$", "", path)
+            local_path <- file.path(
+                dirname(css_file),
+                utils::URLdecode(path_no_fragment)
+            )
+
+            if (!file.exists(local_path)) {
+                next
+            }
+
+            css <- gsub(
+                css_url,
+                paste0("url(\"", data_uri(local_path), "\")"),
+                css,
+                fixed = TRUE
+            )
+        }
+
+        css
+    }
+
+    tmp_dir <- tempfile("leaflet-widget-")
+    dir.create(tmp_dir)
+    on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+    tmp_file <- file.path(tmp_dir, "index.html")
+    lib_dir <- file.path(tmp_dir, "lib")
 
     htmlwidgets::saveWidget(
         widget,
         file = tmp_file,
-        selfcontained = TRUE
+        selfcontained = FALSE,
+        libdir = "lib"
     )
 
-    paste(readLines(tmp_file, warn = FALSE), collapse = "\n")
+    html <- paste(readLines(tmp_file, warn = FALSE), collapse = "\n")
+
+    if (!dir.exists(lib_dir)) {
+        return(html)
+    }
+
+    root <- normalizePath(tmp_dir, winslash = "/", mustWork = TRUE)
+    files <- list.files(lib_dir, recursive = TRUE, full.names = TRUE)
+
+    for (path in files) {
+        if (!file.exists(path)) {
+            next
+        }
+
+        normalized_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+        relative_path <- substring(normalized_path, nchar(root) + 2L)
+
+        uri <- if (tolower(tools::file_ext(path)) == "css") {
+            css <- paste(readLines(path, warn = FALSE), collapse = "\n")
+            data_uri(path, inline_css_urls(css, path))
+        } else {
+            data_uri(path)
+        }
+
+        html <- gsub(relative_path, uri, html, fixed = TRUE)
+
+        encoded_path <- utils::URLencode(relative_path, reserved = FALSE)
+        if (!identical(encoded_path, relative_path)) {
+            html <- gsub(encoded_path, uri, html, fixed = TRUE)
+        }
+    }
+
+    html
 }
 
 #' Create a self-contained HTML string for the snow bulletin leaflet map
