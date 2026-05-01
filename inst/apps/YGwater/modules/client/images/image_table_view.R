@@ -201,9 +201,6 @@ imgTableView <- function(id, language) {
       # Select only the necessary name column based on the language
       generic_name_col <- tr("generic_name_col", language$language)
 
-      print(input$type)
-      out <<- imgs$imgs
-
       if (input$type != "all") {
         tbl <- imgs$imgs[imgs$imgs$image_type == input$type]
       } else {
