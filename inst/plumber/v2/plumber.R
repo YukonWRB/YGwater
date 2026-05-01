@@ -78,12 +78,9 @@ v2_response <- function(body, status = 200L, headers = NULL) {
   )
 }
 
-v2_finalize_response <- function(result, response, client_id, ...) {
-  on.exit(v2_clear_credentials(client_id), add = TRUE)
-
-  payload <- response$body
+v2_apply_response <- function(payload, response) {
   if (!inherits(payload, "v2_api_response")) {
-    return(result)
+    return(payload)
   }
 
   response$status <- payload$status
@@ -93,7 +90,19 @@ v2_finalize_response <- function(result, response, client_id, ...) {
       response$set_header(header, headers[[header]])
     }
   }
-  response$body <- payload$body
+
+  payload$body
+}
+
+v2_finalize_response <- function(result, response, client_id, ...) {
+  on.exit(v2_clear_credentials(client_id), add = TRUE)
+
+  payload <- response$body
+  if (!inherits(payload, "v2_api_response")) {
+    return(result)
+  }
+
+  response$body <- v2_apply_response(payload, response)
 
   result
 }
@@ -198,8 +207,7 @@ v2_open_connection <- function(credentials) {
   )
 }
 
-v2_context <- function(client_id) {
-  credentials <- v2_client_credentials(client_id)
+v2_context_credentials <- function(credentials) {
   con <- v2_open_connection(credentials)
   if (inherits(con, "try-error")) {
     return(list(
@@ -212,6 +220,31 @@ v2_context <- function(client_id) {
   }
 
   list(con = con, credentials = credentials)
+}
+
+v2_context <- function(client_id) {
+  v2_context_credentials(v2_client_credentials(client_id))
+}
+
+v2_context_request <- function(request) {
+  credentials <- v2_resolve_credentials_header(
+    request$get_header("Authorization")
+  )
+
+  if (!is.null(credentials$error)) {
+    return(list(
+      error = v2_response(
+        v2_error_df(credentials$error),
+        status = 401L,
+        headers = list(
+          "WWW-Authenticate" = 'Basic realm="AquaCache"',
+          "X-Status" = "error"
+        )
+      )
+    ))
+  }
+
+  v2_context_credentials(credentials)
 }
 
 v2_request_cache_allowed <- function(credentials) {
@@ -277,6 +310,28 @@ v2_lookup_query <- function(client_id, sql, empty_message) {
     return(v2_response(
       v2_error_df(empty_message, status = "info"),
       headers = list("X-Status" = "info")
+    ))
+  }
+
+  out
+}
+
+v2_lookup_query_request <- function(request, response, sql, empty_message) {
+  ctx <- v2_context_request(request)
+  if (!is.null(ctx$error)) {
+    return(v2_apply_response(ctx$error, response))
+  }
+  on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+
+  out <- DBI::dbGetQuery(ctx$con, sql)
+
+  if (nrow(out) == 0L) {
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df(empty_message, status = "info"),
+        headers = list("X-Status" = "info")
+      ),
+      response
     ))
   }
 
@@ -609,19 +664,11 @@ v2_snow_info_endpoint <- function(
 
 #* Store V2 request credentials for async handlers
 #* @header
-#* @any /locations
-#* @any /timeseries
 #* @any /timeseries/*
-#* @any /parameters
-#* @any /grades
-#* @any /approvals
-#* @any /qualifiers
-#* @any /organizations
 #* @any /samples
 #* @any /samples/*
 #* @any /snow-bulletin/leaflet
 #* @any /snow-survey/*
-#* @any /csw-layer
 function(request, response, client_id) {
   credentials <- v2_resolve_credentials_header(
     request$get_header("Authorization")
@@ -649,20 +696,22 @@ function(request, response, client_id) {
 #* @get /locations
 #* @query lang:string("en") Language for location names and descriptions ("en" or "fr").
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
+function(request, response, query) {
   lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
   if (is.null(lang)) {
-    return(v2_response(
-      v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
-      status = 400L,
-      headers = list("X-Status" = "error")
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ),
+      response
     ))
   }
 
-  ctx <- v2_context(client_id)
+  ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
-    return(ctx$error)
+    return(v2_apply_response(ctx$error, response))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
@@ -675,35 +724,38 @@ function(client_id, query) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    return(v2_response(
-      v2_error_df("No locations found in the database.", status = "info"),
-      headers = list("X-Status" = "info")
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df("No locations found in the database.", status = "info"),
+        headers = list("X-Status" = "info")
+      ),
+      response
     ))
   }
 
   out
 }
-#* @then
-v2_finalize_response
 
 #* List available timeseries
 #* @get /timeseries
 #* @query lang:string("en") Language for timeseries names and descriptions ("en" or "fr").
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
+function(request, response, query) {
   lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
   if (is.null(lang)) {
-    return(v2_response(
-      v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
-      status = 400L,
-      headers = list("X-Status" = "error")
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df("Invalid language parameter. Use 'en' or 'fr'."),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ),
+      response
     ))
   }
 
-  ctx <- v2_context(client_id)
+  ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
-    return(ctx$error)
+    return(v2_apply_response(ctx$error, response))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
@@ -799,16 +851,17 @@ function(client_id, query) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    return(v2_response(
-      v2_error_df("No timeseries found in the database.", status = "info"),
-      headers = list("X-Status" = "info")
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df("No timeseries found in the database.", status = "info"),
+        headers = list("X-Status" = "info")
+      ),
+      response
     ))
   }
 
   out
 }
-#* @then
-v2_finalize_response
 
 #* Return measurements for a timeseries
 #* @get /timeseries/measurements
@@ -816,6 +869,7 @@ v2_finalize_response
 #* @query start:string* Start date/time, inclusive, in ISO 8601 format.
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
 #* @query limit:integer(100000) Maximum number of records to return.
+#* @query modifiedSince:string Only return measurements created or modified since this ISO 8601 date/time.
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -854,6 +908,20 @@ function(client_id, query) {
       status = 400L,
       headers = list("X-Status" = "error")
     ))
+  }
+
+  modified_since <- v2_query_value(query, "modifiedSince")
+  if (!is.null(modified_since)) {
+    modified_since <- v2_parse_datetime(modified_since)
+    if (is.null(modified_since)) {
+      return(v2_response(
+        v2_error_df(
+          "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ))
+    }
   }
 
   lim <- suppressWarnings(as.integer(v2_query_value(query, "limit", "100000")))
@@ -956,7 +1024,14 @@ function(client_id, query) {
 
   measurement_select_sql <- "
     SELECT
-      m.*,
+      m.timeseries_id,
+      m.datetime,
+      m.value_raw,
+      m.value_corrected,
+      m.period,
+      m.imputed,
+      m.created,
+      m.modified,
       grade.grade_type_id,
       grade.grade_type_code,
       approval.approval_type_id,
@@ -969,50 +1044,141 @@ function(client_id, query) {
       contributor_org.name AS contributor
   "
 
-  if (length(ids) == 1L) {
-    out <- DBI::dbGetQuery(
-      ctx$con,
+  basic_modified_filter_sql <- ""
+  compound_modified_filter_sql <- ""
+  query_params <- list(start, end, include_private, lim)
+  limit_param <- "$4"
+  if (!is.null(modified_since)) {
+    basic_modified_filter_sql <- "
+       AND (
+         mc.created >= $4
+         OR mc.modified >= $4
+       )"
+    compound_modified_filter_sql <- "
+       AND (
+         source_stamp.created >= $4
+         OR source_stamp.modified >= $4
+       )"
+    query_params <- list(start, end, include_private, modified_since, lim)
+    limit_param <- "$5"
+  }
+
+  out <- DBI::dbGetQuery(
+    ctx$con,
+    sprintf(
       paste0(
-        measurement_select_sql,
-        "FROM continuous.measurements_continuous_corrected($1, $2, $3) m
-         JOIN continuous.timeseries ts
-           ON m.timeseries_id = ts.timeseries_id",
-        measurement_join_sql,
-        "WHERE ($4::boolean OR ts.publicly_visible)
-         ORDER BY m.datetime DESC
-         LIMIT $5"
-      ),
-      params = list(as.integer(ids[[1L]]), start, end, include_private, lim)
-    )
-  } else {
-    out <- DBI::dbGetQuery(
-      ctx$con,
-      sprintf(
-        paste0(
-          "WITH requested_timeseries(timeseries_id) AS (
+        "WITH RECURSIVE requested_timeseries(timeseries_id) AS (
            SELECT unnest(ARRAY[%s]::integer[])
+         ),
+         selected_timeseries AS (
+           SELECT
+             ts.timeseries_id,
+             ts.timeseries_type
+           FROM requested_timeseries r
+           JOIN continuous.timeseries ts
+             ON r.timeseries_id = ts.timeseries_id
+           WHERE ($3::boolean OR ts.publicly_visible)
+         ),
+         timeseries_tree(
+           root_timeseries_id,
+           source_timeseries_id,
+           source_type,
+           path
+         ) AS (
+           SELECT
+             st.timeseries_id,
+             st.timeseries_id,
+             st.timeseries_type,
+             ARRAY[st.timeseries_id]
+           FROM selected_timeseries st
+
+           UNION ALL
+
+           SELECT
+             tt.root_timeseries_id,
+             cm.member_timeseries_id,
+             member_ts.timeseries_type,
+             tt.path || cm.member_timeseries_id
+           FROM timeseries_tree tt
+           JOIN continuous.timeseries_compound_members cm
+             ON tt.source_timeseries_id = cm.timeseries_id
+           JOIN continuous.timeseries member_ts
+             ON cm.member_timeseries_id = member_ts.timeseries_id
+           WHERE tt.source_type = 'compound'
+             AND NOT cm.member_timeseries_id = ANY(tt.path)
+         ),
+         timeseries_sources AS (
+           SELECT root_timeseries_id, source_timeseries_id
+           FROM timeseries_tree
+           WHERE source_type = 'basic'
+         ),
+         measurement_rows AS (
+           SELECT
+             mc.timeseries_id,
+             mc.datetime,
+             mc.value AS value_raw,
+             continuous.apply_corrections(
+               mc.timeseries_id,
+               mc.datetime,
+               mc.value
+             ) AS value_corrected,
+             mc.period,
+             mc.imputed,
+             mc.created,
+             mc.modified
+           FROM selected_timeseries st
+           JOIN continuous.measurements_continuous mc
+             ON st.timeseries_id = mc.timeseries_id
+           WHERE st.timeseries_type = 'basic'
+             AND mc.datetime >= $1
+             AND mc.datetime <= $2",
+        basic_modified_filter_sql,
+        "
+
+           UNION ALL
+
+           SELECT
+             m.timeseries_id,
+             m.datetime,
+             m.value_raw,
+             m.value_corrected,
+             m.period,
+             m.imputed,
+             source_stamp.created,
+             source_stamp.modified
+           FROM selected_timeseries st
+           JOIN LATERAL continuous.measurements_continuous_corrected(
+             st.timeseries_id,
+             $1,
+             $2
+           ) m ON TRUE
+           LEFT JOIN LATERAL (
+             SELECT
+               MAX(mc.created) AS created,
+               MAX(mc.modified) AS modified
+             FROM timeseries_sources src
+             JOIN continuous.measurements_continuous mc
+               ON src.source_timeseries_id = mc.timeseries_id
+              AND mc.datetime = m.datetime
+             WHERE src.root_timeseries_id = m.timeseries_id
+           ) source_stamp ON TRUE
+           WHERE st.timeseries_type <> 'basic'",
+        compound_modified_filter_sql,
+        "
          )
          ",
-          measurement_select_sql,
-          "
-         FROM requested_timeseries r
-         JOIN LATERAL continuous.measurements_continuous_corrected(
-           r.timeseries_id,
-           $1,
-           $2
-         ) m ON TRUE
-         JOIN continuous.timeseries ts
-           ON m.timeseries_id = ts.timeseries_id",
-          measurement_join_sql,
-          "WHERE ($3::boolean OR ts.publicly_visible)
-         ORDER BY m.datetime DESC
-         LIMIT $4"
-        ),
-        paste(ids, collapse = ",")
+        measurement_select_sql,
+        "
+         FROM measurement_rows m",
+        measurement_join_sql,
+        "ORDER BY m.datetime DESC
+         LIMIT %s"
       ),
-      params = list(start, end, include_private, lim)
-    )
-  }
+      paste(ids, collapse = ","),
+      limit_param
+    ),
+    params = query_params
+  )
 
   if (nrow(out) == 0L) {
     return(v2_response(
@@ -1032,11 +1198,10 @@ v2_finalize_response
 #* Return available parameters in the database
 #* @get /parameters
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
-  ctx <- v2_context(client_id)
+function(request, response, query) {
+  ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
-    return(ctx$error)
+    return(v2_apply_response(ctx$error, response))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
@@ -1057,24 +1222,25 @@ function(client_id, query) {
   out <- DBI::dbGetQuery(ctx$con, sql)
 
   if (nrow(out) == 0L) {
-    return(v2_response(
-      v2_error_df("No parameters found in the database.", status = "info"),
-      headers = list("X-Status" = "info")
+    return(v2_apply_response(
+      v2_response(
+        v2_error_df("No parameters found in the database.", status = "info"),
+        headers = list("X-Status" = "info")
+      ),
+      response
     ))
   }
 
   out
 }
-#* @then
-v2_finalize_response
 
 #* Return grade types in the database
 #* @get /grades
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
-  v2_lookup_query(
-    client_id,
+function(request, response, query) {
+  v2_lookup_query_request(
+    request,
+    response,
     "SELECT
        grade_type_id,
        grade_type_code,
@@ -1086,16 +1252,14 @@ function(client_id, query) {
     "No grade types found in the database."
   )
 }
-#* @then
-v2_finalize_response
 
 #* Return approval types in the database
 #* @get /approvals
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
-  v2_lookup_query(
-    client_id,
+function(request, response, query) {
+  v2_lookup_query_request(
+    request,
+    response,
     "SELECT
        approval_type_id,
        approval_type_code,
@@ -1107,16 +1271,14 @@ function(client_id, query) {
     "No approval types found in the database."
   )
 }
-#* @then
-v2_finalize_response
 
 #* Return qualifier types in the database
 #* @get /qualifiers
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
-  v2_lookup_query(
-    client_id,
+function(request, response, query) {
+  v2_lookup_query_request(
+    request,
+    response,
     "SELECT
        qualifier_type_id,
        qualifier_type_code,
@@ -1128,16 +1290,14 @@ function(client_id, query) {
     "No qualifier types found in the database."
   )
 }
-#* @then
-v2_finalize_response
 
 #* Return organizations in the database
 #* @get /organizations
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
-  v2_lookup_query(
-    client_id,
+function(request, response, query) {
+  v2_lookup_query_request(
+    request,
+    response,
     "SELECT
        organization_id,
        name,
@@ -1151,8 +1311,6 @@ function(client_id, query) {
     "No organizations found in the database."
   )
 }
-#* @then
-v2_finalize_response
 
 #* Return sample metadata
 #* @get /samples
@@ -1608,13 +1766,11 @@ v2_finalize_response
 #* Return CSW layer data
 #* @get /csw-layer
 #* @serializer text/csv v2_csv_serializer()
-#* @async
-function(client_id, query) {
-  v2_lookup_query(
-    client_id,
+function(request, response, query) {
+  v2_lookup_query_request(
+    request,
+    response,
     "SELECT * FROM public.get_csw_layer()",
     "No CSW layer data found in the database."
   )
 }
-#* @then
-v2_finalize_response

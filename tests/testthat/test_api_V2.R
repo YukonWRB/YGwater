@@ -94,31 +94,46 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   expect_equal(Sys.getenv("APIaquacachePort"), Sys.getenv("aquacachePort"))
 })
 
-test_that("API V2 endpoints are marked async", {
+test_that("API V2 async annotations are limited to long-running endpoints", {
   lines <- readLines(v2_route_file(), warn = FALSE)
   route_starts <- grep("^#\\* @get\\s+", lines)
   route_ends <- c(route_starts[-1L] - 1L, length(lines))
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
+  async_routes <- c(
+    "/timeseries/measurements",
+    "/samples",
+    "/samples/results",
+    "/snow-bulletin/leaflet",
+    "/snow-survey/data",
+    "/snow-survey/metadata",
+    "/snow-survey/stats",
+    "/snow-survey/trends"
+  )
 
   expect_false(any(grepl("^/v[0-9]+(?:/|$)", routes)))
   expect_false(any(grepl("^#\\* @any\\s+/\\*\\s*$", lines)))
 
-  missing_async <- routes[!vapply(
+  is_async <- vapply(
     seq_along(route_starts),
     function(i) {
       any(grepl("^#\\* @async\\s*$", lines[route_starts[[i]]:route_ends[[i]]]))
     },
     logical(1L)
-  )]
-
-  expect_true(
-    length(missing_async) == 0L,
-    info = paste(missing_async, collapse = ", ")
   )
 
-  missing_then <- routes[!vapply(
-    seq_along(route_starts),
-    function(i) {
+  expect_true(
+    all(async_routes %in% routes),
+    info = paste(setdiff(async_routes, routes), collapse = ", ")
+  )
+  expect_equal(
+    sort(routes[is_async]),
+    sort(async_routes)
+  )
+
+  missing_then <- async_routes[!vapply(
+    async_routes,
+    function(route) {
+      i <- match(route, routes)
       block <- lines[route_starts[[i]]:route_ends[[i]]]
       async_at <- grep("^#\\* @async\\s*$", block)
       then_at <- grep("^#\\* @then\\s*$", block)
@@ -129,9 +144,22 @@ test_that("API V2 endpoints are marked async", {
     logical(1L)
   )]
 
+  unexpected_then <- routes[!is_async & vapply(
+    seq_along(route_starts),
+    function(i) {
+      block <- lines[route_starts[[i]]:route_ends[[i]]]
+      any(grepl("^#\\* @then\\s*$", block))
+    },
+    logical(1L)
+  )]
+
   expect_true(
     length(missing_then) == 0L,
     info = paste(missing_then, collapse = ", ")
+  )
+  expect_true(
+    length(unexpected_then) == 0L,
+    info = paste(unexpected_then, collapse = ", ")
   )
 })
 
@@ -417,15 +445,35 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
     utils::URLencode(format(x, "%Y-%m-%d %H:%M:%S", tz = "UTC"), reserved = TRUE)
   }
 
-  get_measurements <- get_v2(sprintf(
-    paste0(
-      "http://example.com/timeseries/measurements",
-      "?id=%s&start=%s&end=%s&limit=10"
-    ),
-    test_timeseries_id,
-    encode_time(test_timeseries_start),
-    encode_time(test_timeseries_end)
-  ))
+  measurement_stamp <- function(x) {
+    created <- as.POSIXct(x$created, tz = "UTC")
+    modified <- as.POSIXct(x$modified, tz = "UTC")
+    out <- created
+    use_modified <- !is.na(modified) & (is.na(out) | modified > out)
+    out[use_modified] <- modified[use_modified]
+    out
+  }
+
+  measurement_url <- function(modified_since = NULL) {
+    suffix <- if (is.null(modified_since)) {
+      ""
+    } else {
+      paste0("&modifiedSince=", modified_since)
+    }
+
+    sprintf(
+      paste0(
+        "http://example.com/timeseries/measurements",
+        "?id=%s&start=%s&end=%s&limit=100%s"
+      ),
+      test_timeseries_id,
+      encode_time(test_timeseries_start),
+      encode_time(test_timeseries_end),
+      suffix
+    )
+  }
+
+  get_measurements <- get_v2(measurement_url())
 
   expect_equal(get_measurements$status, 200)
 
@@ -436,6 +484,57 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   ) {
     skip("No measurements found for selected test timeseries")
   }
+
+  get_measurements_since <- get_v2(measurement_url(
+    encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
+  ))
+
+  expect_equal(get_measurements_since$status, 200)
+  expect_named(
+    read.csv(text = get_measurements_since$body),
+    names(measurements)
+  )
+
+  measurement_stamps <- measurement_stamp(measurements)
+  if (any(!is.na(measurement_stamps))) {
+    newest_stamp <- max(measurement_stamps, na.rm = TRUE)
+    get_measurements_recent <- get_v2(measurement_url(encode_time(newest_stamp)))
+
+    expect_equal(get_measurements_recent$status, 200)
+
+    recent <- read.csv(text = get_measurements_recent$body)
+    if (
+      !identical(names(recent), c("status", "message")) ||
+        !identical(recent$status[1], "info")
+    ) {
+      recent_stamps <- measurement_stamp(recent)
+      expect_true(all(recent_stamps >= newest_stamp, na.rm = TRUE))
+      expect_lte(nrow(recent), nrow(measurements))
+    }
+  }
+
+  future_modified_since <- get_v2(measurement_url(
+    encode_time(Sys.time() + 365 * 24 * 60 * 60)
+  ))
+
+  expect_equal(future_modified_since$status, 200)
+
+  future_body <- read.csv(text = future_modified_since$body)
+
+  expect_equal(future_body$status[1], "info")
+  expect_match(future_body$message[1], "No measurements found")
+
+  invalid_modified_since <- get_v2(sprintf(
+    paste0(
+      "http://example.com/timeseries/measurements",
+      "?id=%s&start=%s&end=%s&modifiedSince=not-a-date"
+    ),
+    test_timeseries_id,
+    encode_time(test_timeseries_start),
+    encode_time(test_timeseries_end)
+  ))
+
+  expect_equal(invalid_modified_since$status, 400)
 
   expect_named(
     measurements,

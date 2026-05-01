@@ -255,9 +255,10 @@ function(req, res, lang = "en") {
 #* @param start Start date/time, inclusive (required, ISO 8601 i.e. 2025-01-01 00:00).
 #* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
+#* @param modifiedSince Only return measurements created or modified since this ISO 8601 date/time.
 #* @get /timeseries/measurements
 #* @serializer csv
-function(req, res, id, start, end = NA, limit = 100000) {
+function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
   if (missing(id)) {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -297,6 +298,23 @@ function(req, res, id, start, end = NA, limit = 100000) {
       message = "Invalid 'end' parameter. Must be in ISO 8601 format.",
       stringsAsFactors = FALSE
     ))
+  }
+
+  modified_since_missing <- missing(modifiedSince) ||
+    length(modifiedSince) == 0L ||
+    is.na(modifiedSince[1])
+  if (!modified_since_missing) {
+    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
+    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
+      res$headers[["X-Status"]] <- "error"
+      return(data.frame(
+        status = "error",
+        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
+        stringsAsFactors = FALSE
+      ))
+    }
+  } else {
+    modifiedSince <- NULL
   }
 
   lim <- suppressWarnings(as.integer(limit))
@@ -416,7 +434,14 @@ function(req, res, id, start, end = NA, limit = 100000) {
 
   measurement_select_sql <- "
     SELECT
-      m.*,
+      m.timeseries_id,
+      m.datetime,
+      m.value_raw,
+      m.value_corrected,
+      m.period,
+      m.imputed,
+      m.created,
+      m.modified,
       grade.grade_type_id,
       grade.grade_type_code,
       approval.approval_type_id,
@@ -429,53 +454,142 @@ function(req, res, id, start, end = NA, limit = 100000) {
       contributor_org.name AS contributor
   "
 
-  if (length(id) == 1) {
-    out <- DBI::dbGetQuery(
-      con,
+  basic_modified_filter_sql <- ""
+  compound_modified_filter_sql <- ""
+  query_params <- list(start, end, include_private, lim)
+  limit_param <- "$4"
+  if (!is.null(modifiedSince)) {
+    basic_modified_filter_sql <- "
+       AND (
+         mc.created >= $4
+         OR mc.modified >= $4
+       )"
+    compound_modified_filter_sql <- "
+       AND (
+         source_stamp.created >= $4
+         OR source_stamp.modified >= $4
+       )"
+    query_params <- list(start, end, include_private, modifiedSince, lim)
+    limit_param <- "$5"
+  }
+
+  # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
+  out <- DBI::dbGetQuery(
+    con,
+    sprintf(
       paste0(
-        measurement_select_sql,
-        "FROM continuous.measurements_continuous_corrected($1, $2, $3) m
-         JOIN continuous.timeseries ts
-           ON m.timeseries_id = ts.timeseries_id",
-        measurement_join_sql,
-        "WHERE ($4::boolean OR ts.publicly_visible)
-         ORDER BY m.datetime DESC
-         LIMIT $5"
-      ),
-      params = list(as.integer(id[[1]]), start, end, include_private, lim)
-    )
-  } else {
-    # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
-    ids <- paste(id, collapse = ",")
-    ids <- ids[!is.na(ids)]
-    out <- DBI::dbGetQuery(
-      con,
-      sprintf(
-        paste0(
-          "WITH requested_timeseries(timeseries_id) AS (
+        "WITH RECURSIVE requested_timeseries(timeseries_id) AS (
            SELECT unnest(ARRAY[%s]::integer[])
+         ),
+         selected_timeseries AS (
+           SELECT
+             ts.timeseries_id,
+             ts.timeseries_type
+           FROM requested_timeseries r
+           JOIN continuous.timeseries ts
+             ON r.timeseries_id = ts.timeseries_id
+           WHERE ($3::boolean OR ts.publicly_visible)
+         ),
+         timeseries_tree(
+           root_timeseries_id,
+           source_timeseries_id,
+           source_type,
+           path
+         ) AS (
+           SELECT
+             st.timeseries_id,
+             st.timeseries_id,
+             st.timeseries_type,
+             ARRAY[st.timeseries_id]
+           FROM selected_timeseries st
+
+           UNION ALL
+
+           SELECT
+             tt.root_timeseries_id,
+             cm.member_timeseries_id,
+             member_ts.timeseries_type,
+             tt.path || cm.member_timeseries_id
+           FROM timeseries_tree tt
+           JOIN continuous.timeseries_compound_members cm
+             ON tt.source_timeseries_id = cm.timeseries_id
+           JOIN continuous.timeseries member_ts
+             ON cm.member_timeseries_id = member_ts.timeseries_id
+           WHERE tt.source_type = 'compound'
+             AND NOT cm.member_timeseries_id = ANY(tt.path)
+         ),
+         timeseries_sources AS (
+           SELECT root_timeseries_id, source_timeseries_id
+           FROM timeseries_tree
+           WHERE source_type = 'basic'
+         ),
+         measurement_rows AS (
+           SELECT
+             mc.timeseries_id,
+             mc.datetime,
+             mc.value AS value_raw,
+             continuous.apply_corrections(
+               mc.timeseries_id,
+               mc.datetime,
+               mc.value
+             ) AS value_corrected,
+             mc.period,
+             mc.imputed,
+             mc.created,
+             mc.modified
+           FROM selected_timeseries st
+           JOIN continuous.measurements_continuous mc
+             ON st.timeseries_id = mc.timeseries_id
+           WHERE st.timeseries_type = 'basic'
+             AND mc.datetime >= $1
+             AND mc.datetime <= $2",
+        basic_modified_filter_sql,
+        "
+
+           UNION ALL
+
+           SELECT
+             m.timeseries_id,
+             m.datetime,
+             m.value_raw,
+             m.value_corrected,
+             m.period,
+             m.imputed,
+             source_stamp.created,
+             source_stamp.modified
+           FROM selected_timeseries st
+           JOIN LATERAL continuous.measurements_continuous_corrected(
+             st.timeseries_id,
+             $1,
+             $2
+           ) m ON TRUE
+           LEFT JOIN LATERAL (
+             SELECT
+               MAX(mc.created) AS created,
+               MAX(mc.modified) AS modified
+             FROM timeseries_sources src
+             JOIN continuous.measurements_continuous mc
+               ON src.source_timeseries_id = mc.timeseries_id
+              AND mc.datetime = m.datetime
+             WHERE src.root_timeseries_id = m.timeseries_id
+           ) source_stamp ON TRUE
+           WHERE st.timeseries_type <> 'basic'",
+        compound_modified_filter_sql,
+        "
          )
          ",
-          measurement_select_sql,
-          "
-         FROM requested_timeseries r
-         JOIN LATERAL continuous.measurements_continuous_corrected(
-           r.timeseries_id,
-           $1,
-           $2
-         ) m ON TRUE
-         JOIN continuous.timeseries ts
-           ON m.timeseries_id = ts.timeseries_id",
-          measurement_join_sql,
-          "WHERE ($3::boolean OR ts.publicly_visible)
-         ORDER BY m.datetime DESC
-         LIMIT $4"
-        ),
-        ids
+        measurement_select_sql,
+        "
+         FROM measurement_rows m",
+        measurement_join_sql,
+        "ORDER BY m.datetime DESC
+         LIMIT %s"
       ),
-      params = list(start, end, include_private, lim)
-    )
-  }
+      paste(id, collapse = ","),
+      limit_param
+    ),
+    params = query_params
+  )
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"
