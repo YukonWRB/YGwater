@@ -1318,6 +1318,7 @@ function(request, response, query) {
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
 #* @query locations:string Location IDs to target, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
+#* @query modifiedSince:string Only return samples created or modified since this ISO 8601 date/time.
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -1349,17 +1350,24 @@ function(client_id, query) {
     ))
   }
 
-  sql <- "SELECT sample_id, location_id, sub_location_id, mt.media_type AS media, z AS depth_height, datetime, target_datetime, cm.collection_method, st.sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, g.grade_type_description AS sample_grade, a.approval_type_description AS sample_approval, q.qualifier_type_description AS sample_qualifier, o1.name AS owner, o2.name AS contributor, field_visit_id, samples.note
-  FROM discrete.samples
-  LEFT JOIN media_types mt ON samples.media_id = mt.media_id
-  LEFT JOIN collection_methods cm ON samples.collection_method = cm.collection_method_id
-  LEFT JOIN sample_types st ON samples.sample_type = st.sample_type_id
-  LEFT JOIN public.grade_types g ON samples.sample_grade = g.grade_type_id
-  LEFT JOIN public.approval_types a ON samples.sample_approval = a.approval_type_id
-  LEFT JOIN public.qualifier_types q ON samples.sample_qualifier = q.qualifier_type_id
-  LEFT JOIN public.organizations o1 ON samples.owner = o1.organization_id
-  LEFT JOIN public.organizations o2 ON samples.contributor = o2.organization_id
-  WHERE datetime >= $1 AND datetime <= $2"
+  modified_since <- v2_query_value(query, "modifiedSince")
+  if (!is.null(modified_since)) {
+    modified_since <- v2_parse_datetime(modified_since)
+    if (is.null(modified_since)) {
+      return(v2_response(
+        v2_error_df(
+          "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ))
+    }
+  }
+
+  sql <- "SELECT
+    sm.*
+  FROM discrete.samples_metadata_en sm
+  WHERE sm.datetime >= $1 AND sm.datetime <= $2"
 
   locations <- v2_query_value(query, "locations")
   if (!is.null(locations)) {
@@ -1375,7 +1383,7 @@ function(client_id, query) {
     }
     sql <- paste0(
       sql,
-      " AND location_id IN (",
+      " AND sm.location_id IN (",
       paste(location_ids, collapse = ","),
       ")"
     )
@@ -1395,15 +1403,24 @@ function(client_id, query) {
     }
     sql <- paste0(
       sql,
-      " AND sample_id IN (
-          SELECT DISTINCT sample_id
-          FROM discrete.results
-          WHERE parameter_id IN (",
+      " AND EXISTS (
+        SELECT 1
+          FROM discrete.results r
+          WHERE r.sample_id = sm.sample_id
+            AND r.parameter_id IN (",
       paste(parameter_ids, collapse = ","),
       "))"
     )
   }
-  sql <- paste0(sql, " ORDER BY datetime DESC")
+  query_params <- list(start, end)
+  if (!is.null(modified_since)) {
+    sql <- paste0(
+      sql,
+      " AND (sm.created >= $3 OR sm.modified >= $3)"
+    )
+    query_params <- list(start, end, modified_since)
+  }
+  sql <- paste0(sql, " ORDER BY sm.datetime DESC")
 
   ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
@@ -1411,7 +1428,7 @@ function(client_id, query) {
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
-  out <- DBI::dbGetQuery(ctx$con, sql, params = list(start, end))
+  out <- DBI::dbGetQuery(ctx$con, sql, params = query_params)
 
   if (nrow(out) == 0L) {
     return(v2_response(
@@ -1432,6 +1449,7 @@ v2_finalize_response
 #* @get /samples/results
 #* @query sample_ids:string* Sample IDs to target, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
+#* @query modifiedSince:string Only return results created or modified since this ISO 8601 date/time.
 #* @serializer text/csv v2_csv_serializer()
 #* @async
 function(client_id, query) {
@@ -1456,16 +1474,9 @@ function(client_id, query) {
   }
 
   sql <- paste0(
-    "SELECT r.sample_id, rt.result_type, sf.sample_fraction, r.parameter_id, p.param_name, rs.result_speciation, r.result, rc.result_condition, r.result_condition_value, rvt.result_value_type, r.analysis_datetime, pm.protocol_name AS protocol, l.lab_name AS laboratory
-  FROM discrete.results r
-  LEFT JOIN discrete.result_types rt ON r.result_type = rt.result_type_id
-  LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
-  LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
-  LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
-  LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
-  LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-  LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
-  LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
+    "SELECT
+    r.*
+  FROM discrete.results_metadata_en r
   WHERE r.sample_id IN (",
     paste(sample_ids, collapse = ","),
     ")"
@@ -1490,6 +1501,23 @@ function(client_id, query) {
       ")"
     )
   }
+  modified_since <- v2_query_value(query, "modifiedSince")
+  if (!is.null(modified_since)) {
+    modified_since <- v2_parse_datetime(modified_since)
+    if (is.null(modified_since)) {
+      return(v2_response(
+        v2_error_df(
+          "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ))
+    }
+    sql <- paste0(
+      sql,
+      " AND (r.created >= $1 OR r.modified >= $1)"
+    )
+  }
   sql <- paste0(sql, " ORDER BY r.parameter_id")
 
   ctx <- v2_context(client_id)
@@ -1498,7 +1526,11 @@ function(client_id, query) {
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
-  out <- DBI::dbGetQuery(ctx$con, sql)
+  if (is.null(modified_since)) {
+    out <- DBI::dbGetQuery(ctx$con, sql)
+  } else {
+    out <- DBI::dbGetQuery(ctx$con, sql, params = list(modified_since))
+  }
 
   if (nrow(out) == 0L) {
     return(v2_response(

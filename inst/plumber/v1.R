@@ -731,9 +731,10 @@ function(req, res) {
 #* @param end End date (optional, ISO 8601 format, defaults to current date/time).
 #* @param locations Location ID (optional, integer string separated by commas). If provided, filters samples to these locations.
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters samples to only those which include these parameters.
+#* @param modifiedSince Only return samples created or modified since this ISO 8601 date/time.
 #* @get /samples
 #* @serializer csv
-function(req, res, start, end = NA, locations = NA, parameters = NA) {
+function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSince = NA) {
   # Ensure start and end are provided and can be converted to POSIXct
   if (missing(start)) {
     res$headers[["X-Status"]] <- "error"
@@ -765,6 +766,22 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
       stringsAsFactors = FALSE
     ))
   }
+  modified_since_missing <- missing(modifiedSince) ||
+    length(modifiedSince) == 0L ||
+    is.na(modifiedSince[1])
+  if (!modified_since_missing) {
+    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
+    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
+      res$headers[["X-Status"]] <- "error"
+      return(data.frame(
+        status = "error",
+        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
+        stringsAsFactors = FALSE
+      ))
+    }
+  } else {
+    modifiedSince <- NULL
+  }
 
   con <- try(
     YGwater::AquaConnect(
@@ -788,22 +805,15 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT sample_id, location_id, sub_location_id, mt.media_type AS media, z AS depth_height, datetime, target_datetime, cm.collection_method, st.sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, g.grade_type_description AS sample_grade, a.approval_type_description AS sample_approval, q.qualifier_type_description AS sample_qualifier, o1.name AS owner, o2.name AS contributor, field_visit_id, samples.note
-  FROM discrete.samples 
-  LEFT JOIN media_types mt ON samples.media_id = mt.media_id 
-  LEFT JOIN collection_methods cm ON samples.collection_method = cm.collection_method_id
-  LEFT JOIN sample_types st ON samples.sample_type = st.sample_type_id
-  LEFT JOIN public.grade_types g ON samples.sample_grade = g.grade_type_id
-  LEFT JOIN public.approval_types a ON samples.sample_approval = a.approval_type_id
-  LEFT JOIN public.qualifier_types q ON samples.sample_qualifier = q.qualifier_type_id
-  LEFT JOIN public.organizations o1 ON samples.owner = o1.organization_id
-  LEFT JOIN public.organizations o2 ON samples.contributor = o2.organization_id
-  WHERE datetime >= $1 AND datetime <= $2"
+  sql <- "SELECT
+    sm.*
+  FROM discrete.samples_metadata_en sm
+  WHERE sm.datetime >= $1 AND sm.datetime <= $2"
 
   if (!is.na(locations[1])) {
     sql <- paste0(
       sql,
-      " AND location_id IN (",
+      " AND sm.location_id IN (",
       paste(as.integer(strsplit(locations, ",")[[1]]), collapse = ","),
       ")"
     )
@@ -811,17 +821,29 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
   if (!is.na(parameters[1])) {
     sql <- paste0(
       sql,
-      " AND sample_id IN (SELECT DISTINCT sample_id FROM discrete.results WHERE parameter_id IN (",
+      " AND EXISTS (
+        SELECT 1
+        FROM discrete.results r
+        WHERE r.sample_id = sm.sample_id
+          AND r.parameter_id IN (",
       paste(as.integer(strsplit(parameters, ",")[[1]]), collapse = ","),
       "))"
     )
   }
-  sql <- paste0(sql, " ORDER BY datetime DESC")
+  query_params <- list(start, end)
+  if (!is.null(modifiedSince)) {
+    sql <- paste0(
+      sql,
+      " AND (sm.created >= $3 OR sm.modified >= $3)"
+    )
+    query_params <- list(start, end, modifiedSince)
+  }
+  sql <- paste0(sql, " ORDER BY sm.datetime DESC")
 
   out <- DBI::dbGetQuery(
     con,
     sql,
-    params = list(start, end)
+    params = query_params
   )
 
   if (nrow(out) == 0) {
@@ -838,9 +860,10 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
 #' Return sample results
 #* @param sample_ids Sample ID (required, integer string separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
+#* @param modifiedSince Only return results created or modified since this ISO 8601 date/time.
 #* @get /samples/results
 #* @serializer csv
-function(req, res, sample_ids, parameters = NA) {
+function(req, res, sample_ids, parameters = NA, modifiedSince = NA) {
   if (missing(sample_ids)) {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -872,18 +895,27 @@ function(req, res, sample_ids, parameters = NA) {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sids <- as.integer(strsplit(sample_ids, ",")[[1]])
+  modified_since_missing <- missing(modifiedSince) ||
+    length(modifiedSince) == 0L ||
+    is.na(modifiedSince[1])
+  if (!modified_since_missing) {
+    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
+    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
+      res$headers[["X-Status"]] <- "error"
+      return(data.frame(
+        status = "error",
+        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
+        stringsAsFactors = FALSE
+      ))
+    }
+  } else {
+    modifiedSince <- NULL
+  }
 
   sql <- paste0(
-    "SELECT r.sample_id, rt.result_type, sf.sample_fraction, r.parameter_id, p.param_name, rs.result_speciation, r.result, rc.result_condition, r.result_condition_value, rvt.result_value_type, r.analysis_datetime, pm.protocol_name AS protocol, l.lab_name AS laboratory
-  FROM discrete.results r
-  LEFT JOIN discrete.result_types rt ON r.result_type = rt.result_type_id
-  LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
-  LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
-  LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
-  LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
-  LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-  LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
-  LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
+    "SELECT
+    r.*
+  FROM discrete.results_metadata_en r
   WHERE r.sample_id IN (",
     paste(sids, collapse = ","),
     ")"
@@ -897,12 +929,21 @@ function(req, res, sample_ids, parameters = NA) {
       ")"
     )
   }
+  query_params <- list()
+  if (!is.null(modifiedSince)) {
+    sql <- paste0(
+      sql,
+      " AND (r.created >= $1 OR r.modified >= $1)"
+    )
+    query_params <- list(modifiedSince)
+  }
   sql <- paste0(sql, " ORDER BY r.parameter_id")
 
-  out <- DBI::dbGetQuery(
-    con,
-    sql
-  )
+  if (is.null(modifiedSince)) {
+    out <- DBI::dbGetQuery(con, sql)
+  } else {
+    out <- DBI::dbGetQuery(con, sql, params = query_params)
+  }
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"

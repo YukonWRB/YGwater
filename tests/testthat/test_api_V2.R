@@ -407,6 +407,215 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
   expect_equal(missing_sample_ids$status, 400)
 })
 
+test_that("API V2 sample endpoints use discrete metadata views and modifiedSince", {
+  skip_if_not_installed("plumber2")
+  skip_if_not_installed("reqres")
+  skip_if_not_installed("promises")
+  skip_if_not_installed("later")
+
+  withr::local_options(list(plumber2.async = v2_test_async))
+  pr <- api(
+    version = 2,
+    run = FALSE,
+    dbName = Sys.getenv("aquacacheName", "testdb"),
+    dbHost = Sys.getenv("aquacacheHost", "localhost"),
+    dbPort = Sys.getenv("aquacachePort", "5432"),
+    dbUser = Sys.getenv("aquacacheUser", "runner"),
+    dbPass = Sys.getenv("aquacachePass", "runner")
+  )
+
+  get_v2 <- function(url) {
+    v2_resolve_request(
+      pr$test_request(reqres:::mock_rook(url = url, method = "get"))
+    )
+  }
+
+  encode_time <- function(x) {
+    utils::URLencode(format(x, "%Y-%m-%d %H:%M:%S", tz = "UTC"), reserved = TRUE)
+  }
+
+  row_stamp <- function(x) {
+    parse_stamp <- function(value) {
+      value <- as.character(value)
+      value[!nzchar(value)] <- NA_character_
+      as.POSIXct(value, format = "%Y-%m-%d %H:%M:%OS", tz = "UTC")
+    }
+
+    created <- parse_stamp(x$created)
+    modified <- parse_stamp(x$modified)
+    out <- created
+    use_modified <- !is.na(modified) & (is.na(out) | modified > out)
+    out[use_modified] <- modified[use_modified]
+    out
+  }
+
+  floor_to_second <- function(x) {
+    as.POSIXct(
+      format(x, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+      format = "%Y-%m-%d %H:%M:%S",
+      tz = "UTC"
+    )
+  }
+
+  sample_url <- function(modified_since = NULL) {
+    suffix <- if (is.null(modified_since)) {
+      ""
+    } else {
+      paste0("&modifiedSince=", modified_since)
+    }
+    paste0(
+      "http://example.com/samples",
+      "?start=1900-01-01&end=3000-01-01",
+      suffix
+    )
+  }
+
+  get_samples <- get_v2(sample_url())
+
+  expect_equal(get_samples$status, 200)
+
+  samples <- read.csv(text = get_samples$body)
+  if (
+    identical(names(samples), c("status", "message")) &&
+      identical(samples$status[1], "info")
+  ) {
+    skip("No samples available for API V2 sample endpoint tests")
+  }
+
+  expect_true(all(c(
+    "sample_id",
+    "location_code",
+    "media_type",
+    "sample_type",
+    "created",
+    "modified"
+  ) %in% names(samples)))
+
+  get_samples_since <- get_v2(sample_url(
+    encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
+  ))
+
+  expect_equal(get_samples_since$status, 200)
+  expect_named(read.csv(text = get_samples_since$body), names(samples))
+
+  sample_stamps <- row_stamp(samples)
+  if (any(!is.na(sample_stamps))) {
+    newest_stamp <- floor_to_second(max(sample_stamps, na.rm = TRUE))
+    get_samples_recent <- get_v2(sample_url(encode_time(newest_stamp)))
+
+    expect_equal(get_samples_recent$status, 200)
+
+    recent_samples <- read.csv(text = get_samples_recent$body)
+    if (
+      !identical(names(recent_samples), c("status", "message")) ||
+        !identical(recent_samples$status[1], "info")
+    ) {
+      expect_true(all(row_stamp(recent_samples) >= newest_stamp, na.rm = TRUE))
+      expect_lte(nrow(recent_samples), nrow(samples))
+    }
+  }
+
+  get_samples_future <- get_v2(sample_url(
+    encode_time(Sys.time() + 365 * 24 * 60 * 60)
+  ))
+
+  expect_equal(get_samples_future$status, 200)
+
+  samples_future <- read.csv(text = get_samples_future$body)
+
+  expect_equal(samples_future$status[1], "info")
+  expect_match(samples_future$message[1], "No samples found")
+
+  invalid_samples_since <- get_v2(paste0(
+    "http://example.com/samples",
+    "?start=1900-01-01&end=3000-01-01&modifiedSince=not-a-date"
+  ))
+
+  expect_equal(invalid_samples_since$status, 400)
+
+  sample_ids <- utils::URLencode(
+    paste(utils::head(samples$sample_id, 50L), collapse = ","),
+    reserved = TRUE
+  )
+  results_url <- function(modified_since = NULL) {
+    suffix <- if (is.null(modified_since)) {
+      ""
+    } else {
+      paste0("&modifiedSince=", modified_since)
+    }
+    sprintf(
+      "http://example.com/samples/results?sample_ids=%s%s",
+      sample_ids,
+      suffix
+    )
+  }
+
+  get_results <- get_v2(results_url())
+
+  expect_equal(get_results$status, 200)
+
+  results <- read.csv(text = get_results$body)
+  if (
+    identical(names(results), c("status", "message")) &&
+      identical(results$status[1], "info")
+  ) {
+    skip("No sample results available for API V2 result endpoint tests")
+  }
+
+  expect_true(all(c(
+    "result_id",
+    "sample_id",
+    "location_code",
+    "parameter_id",
+    "parameter_name",
+    "result",
+    "created",
+    "modified"
+  ) %in% names(results)))
+
+  get_results_since <- get_v2(results_url(
+    encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
+  ))
+
+  expect_equal(get_results_since$status, 200)
+  expect_named(read.csv(text = get_results_since$body), names(results))
+
+  result_stamps <- row_stamp(results)
+  if (any(!is.na(result_stamps))) {
+    newest_stamp <- floor_to_second(max(result_stamps, na.rm = TRUE))
+    get_results_recent <- get_v2(results_url(encode_time(newest_stamp)))
+
+    expect_equal(get_results_recent$status, 200)
+
+    recent_results <- read.csv(text = get_results_recent$body)
+    if (
+      !identical(names(recent_results), c("status", "message")) ||
+        !identical(recent_results$status[1], "info")
+    ) {
+      expect_true(all(row_stamp(recent_results) >= newest_stamp, na.rm = TRUE))
+      expect_lte(nrow(recent_results), nrow(results))
+    }
+  }
+
+  get_results_future <- get_v2(results_url(
+    encode_time(Sys.time() + 365 * 24 * 60 * 60)
+  ))
+
+  expect_equal(get_results_future$status, 200)
+
+  results_future <- read.csv(text = get_results_future$body)
+
+  expect_equal(results_future$status[1], "info")
+  expect_match(results_future$message[1], "No results found")
+
+  invalid_results_since <- get_v2(sprintf(
+    "http://example.com/samples/results?sample_ids=%s&modifiedSince=not-a-date",
+    sample_ids
+  ))
+
+  expect_equal(invalid_results_since$status, 400)
+})
+
 test_that("API V2 measurements endpoint returns corrected measurements", {
   skip_if_not_installed("plumber2")
   skip_if_not_installed("reqres")
