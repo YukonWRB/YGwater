@@ -12,6 +12,10 @@ function(req, res) {
     "^/locations$",
     "^/timeseries$",
     "^/parameters$",
+    "^/grades$",
+    "^/approvals$",
+    "^/qualifiers$",
+    "^/organizations$",
     "^/samples(?:$|/)",
     "^/snow-survey(?:$|/)",
     "^/snow-bulletin/leaflet$",
@@ -136,10 +140,43 @@ function(req, res, lang = "en") {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  if (lang == "en") {
-    sql <- "SELECT * FROM continuous.timeseries_metadata_en ORDER BY timeseries_id"
+  visibility_sql <- if (request_cache_allowed(req)) {
+    "WHERE ts.publicly_visible = TRUE"
+  } else {
+    ""
+  }
+
+  compound_sql <- "
+    SELECT
+      m.timeseries_id,
+      string_agg(
+        m.member_alias,
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_aliases,
+      string_agg(
+        m.member_timeseries_id::text,
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_timeseries_ids,
+      string_agg(
+        m.member_priority::text,
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_priorities,
+      string_agg(
+        COALESCE(m.use_from::text, ''),
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_use_from,
+      string_agg(
+        COALESCE(m.use_to::text, ''),
+        ',' ORDER BY m.member_priority, m.member_alias
+      ) AS compound_member_use_to
+    FROM continuous.timeseries_compound_members m
+    GROUP BY m.timeseries_id
+  "
+
+  metadata_sql <- if (lang == "en") {
+    "continuous.timeseries_metadata_en"
   } else if (lang == "fr") {
-    sql <- "SELECT * FROM continuous.timeseries_metadata_fr ORDER BY timeseries_id"
+    "continuous.timeseries_metadata_fr"
   } else {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -148,6 +185,56 @@ function(req, res, lang = "en") {
       stringsAsFactors = FALSE
     ))
   }
+
+  sql <- sprintf(
+    "SELECT
+       tm.*,
+       ts.publicly_visible,
+       ts.active,
+       ts.source_fx,
+       ts.source_fx_args::text AS source_fx_args,
+       ts.share_with,
+       ts.default_owner AS default_owner_organization_id,
+       org.name AS default_owner,
+       org.name_fr AS default_owner_fr,
+       ts.default_data_sharing_agreement_id,
+       ts.private_expiry,
+       ts.sync_remote,
+       ts.timezone_daily_calc,
+       ts.last_daily_calculation,
+       ts.last_synchronize,
+       ts.matrix_state_id,
+       ms.matrix_state_code,
+       ms.matrix_state_name,
+       ms.matrix_state_name_fr,
+       ts.sub_location_id,
+       sl.sub_location_name,
+       sl.sub_location_name_fr,
+       tc.expression_sql AS compound_expression_sql,
+       cm.compound_member_aliases,
+       cm.compound_member_timeseries_ids,
+       cm.compound_member_priorities,
+       cm.compound_member_use_from,
+       cm.compound_member_use_to
+     FROM %s tm
+     JOIN continuous.timeseries ts
+       ON tm.timeseries_id = ts.timeseries_id
+     LEFT JOIN public.organizations org
+       ON ts.default_owner = org.organization_id
+     LEFT JOIN public.matrix_states ms
+       ON ts.matrix_state_id = ms.matrix_state_id
+     LEFT JOIN public.sub_locations sl
+       ON ts.sub_location_id = sl.sub_location_id
+     LEFT JOIN continuous.timeseries_compounds tc
+       ON ts.timeseries_id = tc.timeseries_id
+     LEFT JOIN (%s) cm
+       ON ts.timeseries_id = cm.timeseries_id
+     %s
+     ORDER BY tm.timeseries_id",
+    metadata_sql,
+    compound_sql,
+    visibility_sql
+  )
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
@@ -168,9 +255,10 @@ function(req, res, lang = "en") {
 #* @param start Start date/time, inclusive (required, ISO 8601 i.e. 2025-01-01 00:00).
 #* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
+#* @param modifiedSince Only return measurements created or modified since this ISO 8601 date/time.
 #* @get /timeseries/measurements
 #* @serializer csv
-function(req, res, id, start, end = NA, limit = 100000) {
+function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
   if (missing(id)) {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -212,6 +300,23 @@ function(req, res, id, start, end = NA, limit = 100000) {
     ))
   }
 
+  modified_since_missing <- missing(modifiedSince) ||
+    length(modifiedSince) == 0L ||
+    is.na(modifiedSince[1])
+  if (!modified_since_missing) {
+    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
+    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
+      res$headers[["X-Status"]] <- "error"
+      return(data.frame(
+        status = "error",
+        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
+        stringsAsFactors = FALSE
+      ))
+    }
+  } else {
+    modifiedSince <- NULL
+  }
+
   lim <- suppressWarnings(as.integer(limit))
   if (is.na(lim) || lim <= 0) {
     lim <- 100000
@@ -251,38 +356,240 @@ function(req, res, id, start, end = NA, limit = 100000) {
       stringsAsFactors = FALSE
     ))
   }
-  if (length(id) == 1) {
-    out <- DBI::dbGetQuery(
-      con,
-      "SELECT * FROM continuous.measurements_continuous_corrected($1, $2, $3)
-      ORDER BY datetime DESC
-      LIMIT $4",
-      params = list(as.integer(id), start, end, lim)
-    )
-  } else {
-    # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
-    ids <- paste(id, collapse = ",")
-    ids <- ids[!is.na(ids)]
-    out <- DBI::dbGetQuery(
-      con,
-      sprintf(
-        "WITH requested_timeseries(timeseries_id) AS (
-           SELECT unnest(ARRAY[%s]::integer[])
-         )
-         SELECT m.*
-         FROM requested_timeseries r
-         JOIN LATERAL continuous.measurements_continuous_corrected(
-           r.timeseries_id,
-           $1,
-           $2
-         ) m ON TRUE
-         ORDER BY m.datetime DESC
-         LIMIT $3",
-        ids
-      ),
-      params = list(start, end, lim)
-    )
+  include_private <- !request_cache_allowed(req)
+  measurement_join_sql <- "
+    LEFT JOIN LATERAL (
+      SELECT
+        g.grade_type_id,
+        gt.grade_type_code
+      FROM continuous.grades g
+      LEFT JOIN public.grade_types gt
+        ON g.grade_type_id = gt.grade_type_id
+      WHERE g.timeseries_id = m.timeseries_id
+        AND g.start_dt <= m.datetime
+        AND g.end_dt >= m.datetime
+      ORDER BY g.start_dt DESC, g.grade_id DESC
+      LIMIT 1
+    ) grade ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT
+        a.approval_type_id,
+        at.approval_type_code
+      FROM continuous.approvals a
+      LEFT JOIN public.approval_types at
+        ON a.approval_type_id = at.approval_type_id
+      WHERE a.timeseries_id = m.timeseries_id
+        AND a.start_dt <= m.datetime
+        AND a.end_dt >= m.datetime
+      ORDER BY a.start_dt DESC, a.approval_id DESC
+      LIMIT 1
+    ) approval ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT
+        string_agg(
+          q.qualifier_type_id::text,
+          ',' ORDER BY q.qualifier_type_id
+        ) AS qualifier_type_ids,
+        string_agg(
+          q.qualifier_type_code,
+          ',' ORDER BY q.qualifier_type_id
+        ) AS qualifier_type_codes
+      FROM (
+        SELECT DISTINCT ON (q.qualifier_type_id)
+          q.qualifier_type_id,
+          qt.qualifier_type_code
+        FROM continuous.qualifiers q
+        LEFT JOIN public.qualifier_types qt
+          ON q.qualifier_type_id = qt.qualifier_type_id
+        WHERE q.timeseries_id = m.timeseries_id
+          AND q.start_dt <= m.datetime
+          AND q.end_dt >= m.datetime
+        ORDER BY q.qualifier_type_id, q.start_dt DESC, q.qualifier_id DESC
+      ) q
+    ) qualifier ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT o.organization_id AS owner_organization_id
+      FROM continuous.owners o
+      WHERE o.timeseries_id = m.timeseries_id
+        AND o.start_dt <= m.datetime
+        AND o.end_dt >= m.datetime
+      ORDER BY o.start_dt DESC, o.owner_id DESC
+      LIMIT 1
+    ) owner_range ON TRUE
+    LEFT JOIN public.organizations owner_org
+      ON owner_range.owner_organization_id = owner_org.organization_id
+    LEFT JOIN LATERAL (
+      SELECT c.organization_id AS contributor_organization_id
+      FROM continuous.contributors c
+      WHERE c.timeseries_id = m.timeseries_id
+        AND c.start_dt <= m.datetime
+        AND c.end_dt >= m.datetime
+      ORDER BY c.start_dt DESC, c.contributor_id DESC
+      LIMIT 1
+    ) contributor_range ON TRUE
+    LEFT JOIN public.organizations contributor_org
+      ON contributor_range.contributor_organization_id =
+        contributor_org.organization_id
+  "
+
+  measurement_select_sql <- "
+    SELECT
+      m.timeseries_id,
+      m.datetime,
+      m.value_raw,
+      m.value_corrected,
+      m.period,
+      m.imputed,
+      m.created,
+      m.modified,
+      grade.grade_type_id,
+      grade.grade_type_code,
+      approval.approval_type_id,
+      approval.approval_type_code,
+      qualifier.qualifier_type_ids,
+      qualifier.qualifier_type_codes,
+      owner_range.owner_organization_id,
+      owner_org.name AS owner,
+      contributor_range.contributor_organization_id,
+      contributor_org.name AS contributor
+  "
+
+  basic_modified_filter_sql <- ""
+  compound_modified_filter_sql <- ""
+  query_params <- list(start, end, include_private, lim)
+  limit_param <- "$4"
+  if (!is.null(modifiedSince)) {
+    basic_modified_filter_sql <- "
+       AND (
+         mc.created >= $4
+         OR mc.modified >= $4
+       )"
+    compound_modified_filter_sql <- "
+       AND (
+         source_stamp.created >= $4
+         OR source_stamp.modified >= $4
+       )"
+    query_params <- list(start, end, include_private, modifiedSince, lim)
+    limit_param <- "$5"
   }
+
+  # timeseries_id passed in via sprintf, but no injection potential because converted to integer first.
+  out <- DBI::dbGetQuery(
+    con,
+    sprintf(
+      paste0(
+        "WITH RECURSIVE requested_timeseries(timeseries_id) AS (
+           SELECT unnest(ARRAY[%s]::integer[])
+         ),
+         selected_timeseries AS (
+           SELECT
+             ts.timeseries_id,
+             ts.timeseries_type
+           FROM requested_timeseries r
+           JOIN continuous.timeseries ts
+             ON r.timeseries_id = ts.timeseries_id
+           WHERE ($3::boolean OR ts.publicly_visible)
+         ),
+         timeseries_tree(
+           root_timeseries_id,
+           source_timeseries_id,
+           source_type,
+           path
+         ) AS (
+           SELECT
+             st.timeseries_id,
+             st.timeseries_id,
+             st.timeseries_type,
+             ARRAY[st.timeseries_id]
+           FROM selected_timeseries st
+
+           UNION ALL
+
+           SELECT
+             tt.root_timeseries_id,
+             cm.member_timeseries_id,
+             member_ts.timeseries_type,
+             tt.path || cm.member_timeseries_id
+           FROM timeseries_tree tt
+           JOIN continuous.timeseries_compound_members cm
+             ON tt.source_timeseries_id = cm.timeseries_id
+           JOIN continuous.timeseries member_ts
+             ON cm.member_timeseries_id = member_ts.timeseries_id
+           WHERE tt.source_type = 'compound'
+             AND NOT cm.member_timeseries_id = ANY(tt.path)
+         ),
+         timeseries_sources AS (
+           SELECT root_timeseries_id, source_timeseries_id
+           FROM timeseries_tree
+           WHERE source_type = 'basic'
+         ),
+         measurement_rows AS (
+           SELECT
+             mc.timeseries_id,
+             mc.datetime,
+             mc.value AS value_raw,
+             continuous.apply_corrections(
+               mc.timeseries_id,
+               mc.datetime,
+               mc.value
+             ) AS value_corrected,
+             mc.period,
+             mc.imputed,
+             mc.created,
+             mc.modified
+           FROM selected_timeseries st
+           JOIN continuous.measurements_continuous mc
+             ON st.timeseries_id = mc.timeseries_id
+           WHERE st.timeseries_type = 'basic'
+             AND mc.datetime >= $1
+             AND mc.datetime <= $2",
+        basic_modified_filter_sql,
+        "
+
+           UNION ALL
+
+           SELECT
+             m.timeseries_id,
+             m.datetime,
+             m.value_raw,
+             m.value_corrected,
+             m.period,
+             m.imputed,
+             source_stamp.created,
+             source_stamp.modified
+           FROM selected_timeseries st
+           JOIN LATERAL continuous.measurements_continuous_corrected(
+             st.timeseries_id,
+             $1,
+             $2
+           ) m ON TRUE
+           LEFT JOIN LATERAL (
+             SELECT
+               MAX(mc.created) AS created,
+               MAX(mc.modified) AS modified
+             FROM timeseries_sources src
+             JOIN continuous.measurements_continuous mc
+               ON src.source_timeseries_id = mc.timeseries_id
+              AND mc.datetime = m.datetime
+             WHERE src.root_timeseries_id = m.timeseries_id
+           ) source_stamp ON TRUE
+           WHERE st.timeseries_type <> 'basic'",
+        compound_modified_filter_sql,
+        "
+         )
+         ",
+        measurement_select_sql,
+        "
+         FROM measurement_rows m",
+        measurement_join_sql,
+        "ORDER BY m.datetime DESC
+         LIMIT %s"
+      ),
+      paste(id, collapse = ","),
+      limit_param
+    ),
+    params = query_params
+  )
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"
@@ -341,14 +648,93 @@ function(req, res) {
   return(out)
 }
 
+#' Return grade types in the database
+#* @get /grades
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       grade_type_id,
+       grade_type_code,
+       grade_type_description,
+       grade_type_description_fr,
+       color_code
+     FROM public.grade_types
+     ORDER BY grade_type_id",
+    "No grade types found in the database."
+  )
+}
+
+#' Return approval types in the database
+#* @get /approvals
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       approval_type_id,
+       approval_type_code,
+       approval_type_description,
+       approval_type_description_fr,
+       color_code
+     FROM public.approval_types
+     ORDER BY approval_type_id",
+    "No approval types found in the database."
+  )
+}
+
+#' Return qualifier types in the database
+#* @get /qualifiers
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       qualifier_type_id,
+       qualifier_type_code,
+       qualifier_type_description,
+       qualifier_type_description_fr,
+       color_code
+     FROM public.qualifier_types
+     ORDER BY qualifier_type_id",
+    "No qualifier types found in the database."
+  )
+}
+
+#' Return organizations in the database
+#* @get /organizations
+#* @serializer csv
+function(req, res) {
+  api_lookup_query(
+    req,
+    res,
+    "SELECT
+       organization_id,
+       name,
+       name_fr,
+       contact_name,
+       phone,
+       email,
+       note
+     FROM public.organizations
+     ORDER BY name, organization_id",
+    "No organizations found in the database."
+  )
+}
+
 #' Return sample metadata
 #* @param start Start date (required, ISO 8601 format).
 #* @param end End date (optional, ISO 8601 format, defaults to current date/time).
 #* @param locations Location ID (optional, integer string separated by commas). If provided, filters samples to these locations.
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters samples to only those which include these parameters.
+#* @param modifiedSince Only return samples created or modified since this ISO 8601 date/time.
 #* @get /samples
 #* @serializer csv
-function(req, res, start, end = NA, locations = NA, parameters = NA) {
+function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSince = NA) {
   # Ensure start and end are provided and can be converted to POSIXct
   if (missing(start)) {
     res$headers[["X-Status"]] <- "error"
@@ -380,6 +766,22 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
       stringsAsFactors = FALSE
     ))
   }
+  modified_since_missing <- missing(modifiedSince) ||
+    length(modifiedSince) == 0L ||
+    is.na(modifiedSince[1])
+  if (!modified_since_missing) {
+    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
+    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
+      res$headers[["X-Status"]] <- "error"
+      return(data.frame(
+        status = "error",
+        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
+        stringsAsFactors = FALSE
+      ))
+    }
+  } else {
+    modifiedSince <- NULL
+  }
 
   con <- try(
     YGwater::AquaConnect(
@@ -403,22 +805,15 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-  sql <- "SELECT sample_id, location_id, sub_location_id, mt.media_type AS media, z AS depth_height, datetime, target_datetime, cm.collection_method, st.sample_type, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, g.grade_type_description AS sample_grade, a.approval_type_description AS sample_approval, q.qualifier_type_description AS sample_qualifier, o1.name AS owner, o2.name AS contributor, field_visit_id, samples.note
-  FROM discrete.samples 
-  LEFT JOIN media_types mt ON samples.media_id = mt.media_id 
-  LEFT JOIN collection_methods cm ON samples.collection_method = cm.collection_method_id
-  LEFT JOIN sample_types st ON samples.sample_type = st.sample_type_id
-  LEFT JOIN public.grade_types g ON samples.sample_grade = g.grade_type_id
-  LEFT JOIN public.approval_types a ON samples.sample_approval = a.approval_type_id
-  LEFT JOIN public.qualifier_types q ON samples.sample_qualifier = q.qualifier_type_id
-  LEFT JOIN public.organizations o1 ON samples.owner = o1.organization_id
-  LEFT JOIN public.organizations o2 ON samples.contributor = o2.organization_id
-  WHERE datetime >= $1 AND datetime <= $2"
+  sql <- "SELECT
+    sm.*
+  FROM discrete.samples_metadata_en sm
+  WHERE sm.datetime >= $1 AND sm.datetime <= $2"
 
   if (!is.na(locations[1])) {
     sql <- paste0(
       sql,
-      " AND location_id IN (",
+      " AND sm.location_id IN (",
       paste(as.integer(strsplit(locations, ",")[[1]]), collapse = ","),
       ")"
     )
@@ -426,17 +821,29 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
   if (!is.na(parameters[1])) {
     sql <- paste0(
       sql,
-      " AND sample_id IN (SELECT DISTINCT sample_id FROM discrete.results WHERE parameter_id IN (",
+      " AND EXISTS (
+        SELECT 1
+        FROM discrete.results r
+        WHERE r.sample_id = sm.sample_id
+          AND r.parameter_id IN (",
       paste(as.integer(strsplit(parameters, ",")[[1]]), collapse = ","),
       "))"
     )
   }
-  sql <- paste0(sql, " ORDER BY datetime DESC")
+  query_params <- list(start, end)
+  if (!is.null(modifiedSince)) {
+    sql <- paste0(
+      sql,
+      " AND (sm.created >= $3 OR sm.modified >= $3)"
+    )
+    query_params <- list(start, end, modifiedSince)
+  }
+  sql <- paste0(sql, " ORDER BY sm.datetime DESC")
 
   out <- DBI::dbGetQuery(
     con,
     sql,
-    params = list(start, end)
+    params = query_params
   )
 
   if (nrow(out) == 0) {
@@ -453,9 +860,10 @@ function(req, res, start, end = NA, locations = NA, parameters = NA) {
 #' Return sample results
 #* @param sample_ids Sample ID (required, integer string separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
+#* @param modifiedSince Only return results created or modified since this ISO 8601 date/time.
 #* @get /samples/results
 #* @serializer csv
-function(req, res, sample_ids, parameters = NA) {
+function(req, res, sample_ids, parameters = NA, modifiedSince = NA) {
   if (missing(sample_ids)) {
     res$headers[["X-Status"]] <- "error"
     return(data.frame(
@@ -487,18 +895,27 @@ function(req, res, sample_ids, parameters = NA) {
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   sids <- as.integer(strsplit(sample_ids, ",")[[1]])
+  modified_since_missing <- missing(modifiedSince) ||
+    length(modifiedSince) == 0L ||
+    is.na(modifiedSince[1])
+  if (!modified_since_missing) {
+    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
+    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
+      res$headers[["X-Status"]] <- "error"
+      return(data.frame(
+        status = "error",
+        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
+        stringsAsFactors = FALSE
+      ))
+    }
+  } else {
+    modifiedSince <- NULL
+  }
 
   sql <- paste0(
-    "SELECT r.sample_id, rt.result_type, sf.sample_fraction, r.parameter_id, p.param_name, rs.result_speciation, r.result, rc.result_condition, r.result_condition_value, rvt.result_value_type, r.analysis_datetime, pm.protocol_name AS protocol, l.lab_name AS laboratory
-  FROM discrete.results r
-  LEFT JOIN discrete.result_types rt ON r.result_type = rt.result_type_id
-  LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
-  LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id
-  LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
-  LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
-  LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-  LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
-  LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
+    "SELECT
+    r.*
+  FROM discrete.results_metadata_en r
   WHERE r.sample_id IN (",
     paste(sids, collapse = ","),
     ")"
@@ -512,12 +929,21 @@ function(req, res, sample_ids, parameters = NA) {
       ")"
     )
   }
+  query_params <- list()
+  if (!is.null(modifiedSince)) {
+    sql <- paste0(
+      sql,
+      " AND (r.created >= $1 OR r.modified >= $1)"
+    )
+    query_params <- list(modifiedSince)
+  }
   sql <- paste0(sql, " ORDER BY r.parameter_id")
 
-  out <- DBI::dbGetQuery(
-    con,
-    sql
-  )
+  if (is.null(modifiedSince)) {
+    out <- DBI::dbGetQuery(con, sql)
+  } else {
+    out <- DBI::dbGetQuery(con, sql, params = query_params)
+  }
 
   if (nrow(out) == 0) {
     res$headers[["X-Status"]] <- "info"
@@ -1126,4 +1552,41 @@ csv_with_header <- function(df, header_lines = NULL) {
   header_lines <- paste0('"', header_lines, '"')
 
   paste(c(header_lines, csv_lines), collapse = "\n")
+}
+
+api_lookup_query <- function(req, res, sql, empty_message) {
+  con <- try(
+    YGwater::AquaConnect(
+      username = req$user,
+      password = req$password,
+      name = Sys.getenv("APIaquacacheName"),
+      host = Sys.getenv("APIaquacacheHost"),
+      port = Sys.getenv("APIaquacachePort"),
+      silent = TRUE
+    ),
+    silent = TRUE
+  )
+
+  if (inherits(con, "try-error")) {
+    res$status <- 503
+    return(data.frame(
+      status = "error",
+      message = "Database connection failed, check your credentials.",
+      stringsAsFactors = FALSE
+    ))
+  }
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  out <- DBI::dbGetQuery(con, sql)
+
+  if (nrow(out) == 0) {
+    res$headers[["X-Status"]] <- "info"
+    return(data.frame(
+      status = "info",
+      message = empty_message,
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  out
 }

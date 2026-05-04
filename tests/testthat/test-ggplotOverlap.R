@@ -297,6 +297,45 @@ test_that("ggplotOverlap can show data in the past", {
 
   as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
 
+  # Check if the connection can access function 'measurements_calculated_daily_at' which is used for historical queries. If not, skip the test.
+  tsid <- DBI::dbGetQuery(
+    con,
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1;"
+  )$timeseries_id[[1]]
+
+  yes <- FALSE
+  tryCatch(
+    {
+      DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT date, value, max, min, q75, q25",
+          "FROM continuous.measurements_calculated_daily_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER by date ASC;"
+        ),
+        params = list(as_of, tsid, "2022-06-01", "2022-06-05")
+      )
+      yes <- TRUE
+    },
+    error = function(e) {
+      message(
+        "Cannot access measurements_calculated_daily_at function: ",
+        e$message
+      )
+    }
+  )
+
+  if (!yes) {
+    skip(
+      "Connection cannot access measurements_calculated_daily_at function, which is required for historical queries."
+    )
+  }
+
   plot <- ggplotOverlap(
     "09EA004",
     "water level",

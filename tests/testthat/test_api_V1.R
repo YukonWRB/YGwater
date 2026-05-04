@@ -82,10 +82,37 @@ test_that("tests for API V1", {
       "start_datetime",
       "end_datetime",
       "note",
-      'timeseries_type_code',
-      'timeseries_type',
-      'timeseries_type_description',
-      'last_new_data'
+      "timeseries_type_code",
+      "timeseries_type",
+      "timeseries_type_description",
+      "last_new_data",
+      "publicly_visible",
+      "active",
+      "source_fx",
+      "source_fx_args",
+      "share_with",
+      "default_owner_organization_id",
+      "default_owner",
+      "default_owner_fr",
+      "default_data_sharing_agreement_id",
+      "private_expiry",
+      "sync_remote",
+      "timezone_daily_calc",
+      "last_daily_calculation",
+      "last_synchronize",
+      "matrix_state_id",
+      "matrix_state_code",
+      "matrix_state_name",
+      "matrix_state_name_fr",
+      "sub_location_id",
+      "sub_location_name",
+      "sub_location_name_fr",
+      "compound_expression_sql",
+      "compound_member_aliases",
+      "compound_member_timeseries_ids",
+      "compound_member_priorities",
+      "compound_member_use_from",
+      "compound_member_use_to"
     )
   )
   # Expect more than 0 rows returned
@@ -155,6 +182,71 @@ test_that("tests for API V1", {
     )
   )
 
+  ## Tests for grade, approval, qualifier, and organization lookup endpoints
+  lookup_endpoints <- list(
+    grades = c(
+      "grade_type_id",
+      "grade_type_code",
+      "grade_type_description",
+      "grade_type_description_fr",
+      "color_code"
+    ),
+    approvals = c(
+      "approval_type_id",
+      "approval_type_code",
+      "approval_type_description",
+      "approval_type_description_fr",
+      "color_code"
+    ),
+    qualifiers = c(
+      "qualifier_type_id",
+      "qualifier_type_code",
+      "qualifier_type_description",
+      "qualifier_type_description_fr",
+      "color_code"
+    ),
+    organizations = c(
+      "organization_id",
+      "name",
+      "name_fr",
+      "contact_name",
+      "phone",
+      "email",
+      "note"
+    )
+  )
+
+  for (endpoint in names(lookup_endpoints)) {
+    expect_s3_class(
+      get_lookup <- callthat::call_that_api_get(
+        api_session,
+        endpoint = endpoint
+      ),
+      "response"
+    )
+    expect_equal(
+      get_lookup$status_code,
+      200
+    )
+
+    out <- read.csv(
+      text = httr::content(
+        get_lookup,
+        type = "text",
+        encoding = "UTF-8"
+      )
+    )
+
+    expect_gt(
+      nrow(out),
+      0
+    )
+    expect_named(
+      out,
+      lookup_endpoints[[endpoint]]
+    )
+  }
+
   ## Tests for /timeseries/{timeseries_id} endpoint
   skip_on_ci()
   # Single timeseries
@@ -214,7 +306,17 @@ test_that("tests for API V1", {
       "period",
       "imputed",
       "created",
-      "modified"
+      "modified",
+      "grade_type_id",
+      "grade_type_code",
+      "approval_type_id",
+      "approval_type_code",
+      "qualifier_type_ids",
+      "qualifier_type_codes",
+      "owner_organization_id",
+      "owner",
+      "contributor_organization_id",
+      "contributor"
     )
   )
 })

@@ -39,7 +39,7 @@ Data is aggregated to daily resolution by default. Metadata includes the
 most recent measurement date for each station.
 }
 \details{
-The function queries the continuous.timeseries and continuous.measurements_calculated_daily_corrected
+The function queries the continuous.timeseries and continuous.measurements_calculated_daily
 tables to retrieve SWE data. Each station becomes a column in the wide-format
 timeseries data.frame, facilitating efficient historical analysis.
 }

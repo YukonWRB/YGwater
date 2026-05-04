@@ -26,7 +26,10 @@ which uses the latest complete file-based API version.}
 
 \item{port}{The port number to listen on. Default is 8000.}
 
-\item{server}{The server path for the API. Default is '/water-data/api'.}
+\item{server}{The public server path or URL to write into the OpenAPI
+document. Version 2 leaves this unset by default so plumber2 can infer the
+correct base path from the documentation request, which works both locally
+and behind a reverse proxy.}
 
 \item{dbName}{The name of the PostgreSQL database. Default is taken from the environment variable 'aquacacheName'.}
 
@@ -51,6 +54,12 @@ without replacing the existing surface unintentionally.
 }
 \examples{
 \dontrun{
+# Latest version by default
 api()
+
+# Specify version with integer or "v"-prefixed string
+api(version = 1)
+api(version = "v1")
 }
+
 }

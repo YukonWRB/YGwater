@@ -202,7 +202,7 @@ imgTableView <- function(id, language) {
       generic_name_col <- tr("generic_name_col", language$language)
 
       if (input$type != "all") {
-        tbl <- imgs$imgs[imgs$image_type == input$type]
+        tbl <- imgs$imgs[imgs$imgs$image_type == input$type]
       } else {
         tbl <- imgs$imgs
       }
