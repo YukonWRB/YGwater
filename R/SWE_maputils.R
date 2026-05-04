@@ -1705,6 +1705,8 @@ download_discrete_ts <- function(
             )
         }
 
+        # ts_query <- paste0(ts_query, " LIMIT 1")
+
         ts <- DBI::dbGetQuery(con, ts_query)
 
         if (nrow(ts) == 0) {
@@ -2038,6 +2040,7 @@ get_norms <- function(
             for (station in station_names) {
                 # check data completeness (for an individual year; eg Oct-Feb for March bulletin, or March for April bulletin)
                 vals <- ts[idx, station]
+
                 if (
                     sum(!is.na(vals)) >=
                         completeness_per_aggr_period * length(vals)
@@ -2133,6 +2136,17 @@ get_bulletin_value <- function(
         vals <- ts[idx, station]
         if (sum(!is.na(vals)) < completeness_per_aggr_period * length(vals)) {
             station_current[station] <- NA
+        }
+
+        # For water level or water flow, if val is NA, try previous day (often data is entered only until the last day of the month)
+        if (param_name %in% c("water level", "water flow")) {
+            if (is.na(station_current[station])) {
+                prev_day_idx <- idx - 1
+                station_current[station] <- aggr_fun(
+                    ts[prev_day_idx, station],
+                    na.rm = TRUE
+                )
+            }
         }
     }
 
@@ -4632,30 +4646,43 @@ get_display_data <- function(
         "anomaly"
     )
     dataset_state <- to_numeric_cols(dataset_state, numeric_cols)
-
     # update the annotations to display the value for the selected type
+    # Determine the unit suffix based on statistic
+    unit_suffix <- switch(
+        statistic,
+        "relative_to_med" = "%",
+        "value" = "mm",
+        "percentile" = "th",
+        "anomalies" = "mm",
+        "%"
+    )
+
     dataset_state$annotation_fr <- paste0(
         dataset_state$annotation_fr,
         "<br>(",
         round(dataset_state[[statistic]], 0),
-        " %)"
+        " ",
+        unit_suffix,
+        ")"
     )
 
     dataset_state$annotation_en <- paste0(
         dataset_state$annotation_en,
         "<br>(",
         round(dataset_state[[statistic]], 0),
-        "%)"
+        " ",
+        unit_suffix,
+        ")"
     )
 
     dataset_state$annotation_en <- gsub(
-        "\\(NA %\\)",
+        "\\(NA [^)]*\\)",
         "(N/A)",
         dataset_state$annotation_en
     )
 
     dataset_state$annotation_fr <- gsub(
-        "\\(NA %\\)",
+        "\\(NA [^)]*\\)",
         "(s. o.)",
         dataset_state$annotation_fr
     )
