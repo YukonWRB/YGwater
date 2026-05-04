@@ -11,7 +11,8 @@ YGwater_globals <- function(
   accessPath2,
   logout_timer_min,
   analytics,
-  public
+  public,
+  brand
 ) {
   library(shiny)
   library(shinyjs)
@@ -52,8 +53,123 @@ YGwater_globals <- function(
     }
   }
 
+  # 'client' side modules #####
+
+  # Plot modules
+  source(system.file(
+    "apps/YGwater/modules/client/plot/discretePlot.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/plot/continuousPlot.R",
+    package = "YGwater"
+  ))
+
+  # Map modules
+  source(system.file(
+    "apps/YGwater/modules/client/map/paramsMap.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/map/locationsMap.R",
+    package = "YGwater"
+  ))
+  # Only show the snow bulletin map if the app is running with brand = 'yukon'
+  if (brand == "yukon") {
+    source(system.file(
+      "apps/YGwater/modules/client/map/snowBulletinMap.R",
+      package = "YGwater"
+    ))
+  }
+
+  # Water well registry map
+  source(system.file(
+    "apps/YGwater/modules/client/WWR/registry_front_end.R",
+    package = "YGwater"
+  ))
+
+  # Image and document modules
+  source(system.file(
+    "apps/YGwater/modules/client/images/image_table_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/images/image_map_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/documents/document_table_view.R",
+    package = "YGwater"
+  ))
+
+  # Data modules
+  source(system.file(
+    "apps/YGwater/modules/client/data/continuousData.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/data/discreteData.R",
+    package = "YGwater"
+  ))
+
+  # Info modules
+  source(system.file(
+    "apps/YGwater/modules/client/info/home.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/info/news.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/info/about.R",
+    package = "YGwater"
+  ))
+
+  # Non-public client-side modules
   if (!public) {
-    # 'Admin' side modules #####
+    # Report modules
+    if (network_check) {
+      source(system.file(
+        "apps/YGwater/modules/client/reports/WQReport.R",
+        package = "YGwater"
+      ))
+      if (brand == "yukon") {
+        source(system.file(
+          "apps/YGwater/modules/client/reports/snowBulletin.R",
+          package = "YGwater"
+        ))
+      }
+    }
+    source(system.file(
+      "apps/YGwater/modules/client/reports/snowInfo.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/waterInfo.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/waterTemp.R",
+      package = "YGwater"
+    ))
+
+    # Dashboard modules
+    source(system.file(
+      "apps/YGwater/modules/client/reports/floodDashboard.R",
+      package = "YGwater"
+    ))
+
+    # Map modules
+    source(system.file(
+      "apps/YGwater/modules/client/map/rasterMap.R",
+      package = "YGwater"
+    ))
+  }
+
+  # 'Admin' side modules #####
+
+  if (!public) {
     # database admin modules
     source(system.file(
       "apps/YGwater/modules/admin/locations/locationMetadata.R",
@@ -919,7 +1035,10 @@ YGwater_globals <- function(
       options = c("RECOVER", "NOERROR", "NOWARNING")
     )
     body <- xml2::xml_find_first(doc, ".//body")
-    paste(vapply(xml2::xml_contents(body), render_node, character(1)), collapse = "")
+    paste(
+      vapply(xml2::xml_contents(body), render_node, character(1)),
+      collapse = ""
+    )
   }
 
   safe_html_fragment_ui <<- function(text, style = NULL, class = NULL) {
@@ -931,6 +1050,13 @@ YGwater_globals <- function(
     tags$div(class = class, style = style, HTML(html_text))
   }
 
+  # Create a dismissible banner that can be used for site-wide notifications or module-specific notices. The banner state is stored in localStorage so that it remains dismissed across sessions until the version changes.
+  # The banner message can include limited HTML markup (links, basic formatting) which is sanitized on render to prevent XSS while allowing some flexibility in presentation. The banner_id should be unique to avoid conflicts with other banners, and the banner_key_prefix can be used to control when the dismissal state resets (e.g. by including a version number).
+  # @param ns Shiny namespace function for the module where the banner will be used
+  # @param msg_text The message to display in the banner. Can include limited HTML markup (links, basic formatting) which will be sanitized on render.
+  # @param banner_id A unique identifier for the banner DOM element (default "app_banner")
+  # @param banner_key_prefix A prefix for the localStorage key used to track dismissal state. Including a version number in the prefix can be a simple way to reset the banner for all users when the message is updated (default "global_notice")
+  # @param banner_version Version string to differentiate between different messages.
   dismissible_banner_ui <<- function(
     ns,
     msg_text,
@@ -1044,114 +1170,6 @@ YGwater_globals <- function(
     return(TRUE)
   }
 
-  # 'client' side modules #####
-  # Plot modules
-  source(system.file(
-    "apps/YGwater/modules/client/plot/discretePlot.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/plot/continuousPlot.R",
-    package = "YGwater"
-  ))
-
-  # Non-public client-side modules
-  if (!public) {
-    # Report modules
-    if (network_check) {
-      source(system.file(
-        "apps/YGwater/modules/client/reports/WQReport.R",
-        package = "YGwater"
-      ))
-      source(system.file(
-        "apps/YGwater/modules/client/reports/snowBulletin.R",
-        package = "YGwater"
-      ))
-    }
-    source(system.file(
-      "apps/YGwater/modules/client/reports/snowInfo.R",
-      package = "YGwater"
-    ))
-    source(system.file(
-      "apps/YGwater/modules/client/reports/waterInfo.R",
-      package = "YGwater"
-    ))
-    source(system.file(
-      "apps/YGwater/modules/client/reports/waterTemp.R",
-      package = "YGwater"
-    ))
-
-    # Dashboard modules
-    source(system.file(
-      "apps/YGwater/modules/client/reports/floodDashboard.R",
-      package = "YGwater"
-    ))
-
-    # Map modules
-    source(system.file(
-      "apps/YGwater/modules/client/map/rasterMap.R",
-      package = "YGwater"
-    ))
-  }
-
-  # Map modules
-  source(system.file(
-    "apps/YGwater/modules/client/map/paramsMap.R",
-    package = "YGwater"
-  ))
-
-  source(system.file(
-    "apps/YGwater/modules/client/map/locationsMap.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/map/snowBulletinMap.R",
-    package = "YGwater"
-  ))
-  # Water well registry map
-  source(system.file(
-    "apps/YGwater/modules/client/WWR/registry_front_end.R",
-    package = "YGwater"
-  ))
-
-  # Image and document modules
-  source(system.file(
-    "apps/YGwater/modules/client/images/image_table_view.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/images/image_map_view.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/documents/document_table_view.R",
-    package = "YGwater"
-  ))
-
-  # Data modules
-  source(system.file(
-    "apps/YGwater/modules/client/data/continuousData.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/data/discreteData.R",
-    package = "YGwater"
-  ))
-
-  # Info modules
-  source(system.file(
-    "apps/YGwater/modules/client/info/home.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/info/news.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/info/about.R",
-    package = "YGwater"
-  ))
-
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
 
@@ -1219,7 +1237,8 @@ YGwater_globals <- function(
     analytics = analytics,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
-    main_bg = "#D9EFF2" # Default background color for all main panels
+    main_bg = "#D9EFF2", # Default background color for all main panels
+    brand = brand
   )
 
   return(config)
