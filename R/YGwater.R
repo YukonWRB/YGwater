@@ -38,7 +38,7 @@ YGwater <- function(
   server = FALSE,
   analytics = FALSE,
   public = TRUE,
-  brand = "public"
+  brand = "yukon"
 ) {
   rlang::check_installed("shiny", reason = "required to use YGwater app")
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")

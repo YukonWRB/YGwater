@@ -22,13 +22,13 @@ home <- function(id, language) {
         tags$div(style = "height: 20px;"),
         HTML(paste0(
           '<div class="montserrat" style="font-size: 24px; font-weight: 600; font-style: normal">',
-          tr("homeTitle", language$language),
+          tr(config$brand$text$homeTitle, language$language),
           '</div>'
         )),
         tags$div(style = "height: 10px;"),
         HTML(paste0(
           '<div class="nunito-sans" style="font-size: 16px; font-weight: 500; font-style: normal;">',
-          tr("homeText", language$language),
+          tr(config$brand$text$homeText, language$language),
           '</div>'
         )),
         tags$div(style = "height: 30px;"),

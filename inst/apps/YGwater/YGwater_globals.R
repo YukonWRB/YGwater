@@ -11,7 +11,8 @@ YGwater_globals <- function(
   accessPath2,
   logout_timer_min,
   analytics,
-  public
+  public,
+  brand
 ) {
   library(shiny)
   library(shinyjs)
@@ -1226,6 +1227,26 @@ YGwater_globals <- function(
   } else {
     "title_yg"
   }
+  brand[["text"]][["SEO_desc"]] <- if (brand$brand == 'public') {
+    "SEO_desc_public"
+  } else {
+    "SEO_desc_yg"
+  }
+  brand[["text"]][["homeText"]] <- if (brand$brand == 'public') {
+    "homeText_public"
+  } else {
+    "homeText_yg"
+  }
+  brand[["text"]][["homeTitle"]] <- if (brand$brand == 'public') {
+    "homeTitle_public"
+  } else {
+    "homeTitle_yg"
+  }
+  brand[["text"]][["about_content4"]] <- if (brand$brand == 'public') {
+    "about_content4_public"
+  } else {
+    "about_content4_yg"
+  }
 
   config <<- list(
     dbName = dbName,
@@ -1241,7 +1262,8 @@ YGwater_globals <- function(
     analytics = analytics,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
-    main_bg = "#D9EFF2" # Default background color for all main panels
+    main_bg = "#D9EFF2", # Default background color for all main panels
+    brand = brand
   )
 
   return(config)
