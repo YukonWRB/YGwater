@@ -3406,7 +3406,6 @@ app_server <- function(input, output, session) {
       message = list(msg = "hide dropdown")
     )
 
-    print(input$navbar)
     if (!can_access_page(input$navbar)) {
       if (isTRUE(session$userData$user_logged_in)) {
         showNotification(
