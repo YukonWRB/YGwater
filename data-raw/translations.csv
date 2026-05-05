@@ -1,6 +1,6 @@
 id,description,English,Français
 titleCase,Sets language to use in titleCase function,en,fr
-title_yg,the page/website title,Yukon Water Data Explorer,Explorateur des données sur l’eau du Yukon
+title_yg,the page/website title,Water Data Explorer,Explorateur des données sur l’eau
 title_public,the page/website title for public deployment,Water Data Explorer - Public,Explorateur des données sur l’eau - public
 SEO_desc_yg,search engine description for Yukon Gov deployment,"Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads.","Explorez les donnees yukonnaises sur l'eau de surface, les eaux souterraines, l'hydrometrie, la neige et la qualite de l'eau au moyen de cartes, graphiques, tableaux et telechargements interactifs."
 SEO_desc_public,search engine description for public deployment,"Explore water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads. This is a public adaptation of the Yukon's Water Data Explorer","Explorez les données sur l'eau de surface, les eaux souterraines, l'hydrométrie, la neige et la qualité de l'eau au moyen de cartes, graphiques, tableaux et téléchargements interactifs. Il s'agit d'une adaptation publique de l'explorateur de données sur l'eau du Yukon."
