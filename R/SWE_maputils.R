@@ -292,8 +292,8 @@ get_dynamic_style_elements <- function(
     relative_bins <- c(-Inf, -2, -1, 0, 50, 70, 90, 110, 130, 150, Inf)
     relative_colors <- c(
         "gray", # Gray (NA/NaN values)
-        "#d04900", # Green (much below normal)
-        "#307e0c", # Purple (below normal)
+        "#27A62C", # Green (No snow present where historical median is zero)
+        "#B200DD", # Purple (Snow present where historical median is zero)
         "#EBB966", # Orange (near normal)
         "#EEE383", # Yellow (normal)
         "#C1FB80", # Light green (above normal)
@@ -675,9 +675,7 @@ render_leaflet_widget_html <- function(widget) {
             path <- sub("^['\"]", "", path)
             path <- sub("['\"]$", "", path)
 
-            if (
-                grepl("^(data:|https?:|//|#)", path, ignore.case = TRUE)
-            ) {
+            if (grepl("^(data:|https?:|//|#)", path, ignore.case = TRUE)) {
                 next
             }
 

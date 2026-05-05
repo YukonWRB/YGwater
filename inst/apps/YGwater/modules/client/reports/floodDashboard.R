@@ -1,24 +1,25 @@
 ﻿resolve_fva_json_path <- function() {
-    candidates <- c(
-        file.path(getwd(), "flood_vulnerable_gauges_encoded.json"),
-        file.path(
-            getwd(),
-            "dev",
-            "freshet_forecasting",
-            "flood_vulnerable_gauges_encoded.json"
-        )
+    repo_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
+    if (grepl("/inst/apps/YGwater$", repo_root)) {
+        repo_root <- dirname(dirname(dirname(repo_root)))
+    }
+
+    path <- file.path(
+        repo_root,
+        "inst",
+        "data-raw",
+        "flood_vulnerable_gauges_encoded.json"
     )
 
-    existing <- Filter(file.exists, candidates)
-    if (length(existing) == 0) {
+    if (!file.exists(path)) {
         stop(
-            "Cannot locate flood_vulnerable_gauges_encoded.json. Checked: ",
-            paste(candidates, collapse = ", "),
+            "Cannot locate flood_vulnerable_gauges_encoded.json at: ",
+            path,
             call. = FALSE
         )
     }
 
-    existing[[1]]
+    path
 }
 
 read_fva_json <- function() {
@@ -58,6 +59,20 @@ daily_temperature_aggregation_name <- function() {
     "(min+max)/2"
 }
 
+#' Encode gauge metadata from community JSON data
+#'
+#' Extracts gauge names, location codes, location IDs, and encodings from the
+#' nested community configuration list and returns them as a flat data frame.
+#'
+#' @param community_data Named list of gauge configuration entries. Each
+#'   top-level name is a gauge name, and each element is a list of entries with
+#'   fields `location_code`, `location_id`, and `encoding`.
+#'
+#' @return A data frame with columns `gauge_name` (character),
+#'   `location_code` (character), `location_id` (integer), and
+#'   `encoding` (numeric). Rows with missing `location_code` and duplicate
+#'   `location_code` values are removed. Returns an empty data frame when
+#'   `community_data` is `NULL` or has length zero.
 get_encoded_gauge_metadata <- function(community_data) {
     if (is.null(community_data) || length(community_data) == 0) {
         return(data.frame())
@@ -1097,6 +1112,22 @@ get_latest_parameter_summary_by_location_id <- function(
     )
 }
 
+#' Fetch a spatial vector layer from the database as an sf object
+#'
+#' Queries the `spatial.vectors` table, optionally filtering by feature name,
+#' reprojects geometries to the requested CRS, and returns an `sf` object.
+#'
+#' @param feature_name Character vector of feature names to include. When
+#'   `NULL` (default) all features in the matching layer(s) are returned.
+#' @param layer_name Character vector of layer names to query (matched against
+#'   the `layer_name` column of `spatial.vectors`).
+#' @param con A DBI database connection.
+#' @param epsg Integer EPSG code for the output CRS. Defaults to `4326`
+#'   (WGS 84).
+#'
+#' @return An `sf` object with all columns from `spatial.vectors` plus the
+#'   well-known-text geometry reprojected to `epsg`, or `NULL` when no rows
+#'   match the supplied filters.
 get_spatial_layer_as_sf <- function(
     feature_name = NULL,
     layer_name,
@@ -1150,6 +1181,21 @@ get_spatial_layer_as_sf <- function(
     sf::st_as_sf(dat, wkt = "geom_wkt", crs = epsg)
 }
 
+#' Look up location records for gauges in a community configuration
+#'
+#' Resolves location metadata (name, code, ID, latitude, longitude) from the
+#' database for all gauges described in a community JSON configuration. The
+#' lookup first attempts to match by explicit `location_id` / `location_code`
+#' values found in the configuration entries; if no rows are found it falls
+#' back to matching by gauge name.
+#'
+#' @param community_data Named list of gauge configuration entries (same
+#'   structure as accepted by `get_encoded_gauge_metadata`).
+#' @param con A DBI database connection.
+#'
+#' @return A data frame with columns `name`, `location_code`, `location_id`,
+#'   `latitude`, and `longitude` (one row per unique matching location), or an
+#'   empty data frame when no matches are found or `community_data` is `NULL`.
 location_lookup_for_community <- function(community_data, con) {
     if (is.null(community_data) || length(community_data) == 0) {
         return(data.frame())
@@ -1192,15 +1238,16 @@ location_lookup_for_community <- function(community_data, con) {
         location_codes <- location_codes[nzchar(location_codes)]
     }
 
-    where_clauses <- character(0)
+    dat <- data.frame()
 
+    # Prefer strict DB matches by explicit IDs/codes from JSON metadata.
+    where_clauses <- character(0)
     if (length(location_ids) > 0) {
         where_clauses <- c(
             where_clauses,
             sprintf("location_id IN (%s)", paste(location_ids, collapse = ","))
         )
     }
-
     if (length(location_codes) > 0) {
         location_codes_sql <- paste(
             DBI::dbQuoteString(con, location_codes),
@@ -1212,37 +1259,65 @@ location_lookup_for_community <- function(community_data, con) {
         )
     }
 
-    if (length(location_names) > 0) {
+    if (length(where_clauses) > 0) {
+        dat <- YGwater::dbGetQueryDT(
+            paste(
+                "SELECT DISTINCT",
+                "    name,",
+                "    location_code,",
+                "    location_id,",
+                "    latitude,",
+                "    longitude",
+                "FROM locations",
+                sprintf("WHERE %s", paste(where_clauses, collapse = " OR ")),
+                "ORDER BY name"
+            ),
+            con = con
+        )
+    }
+
+    # Fallback: if no strict ID/code hits, try matching by location name.
+    if ((is.null(dat) || nrow(dat) == 0) && length(location_names) > 0) {
         location_names_sql <- paste(
             DBI::dbQuoteString(con, location_names),
             collapse = ","
         )
-        where_clauses <- c(
-            where_clauses,
-            sprintf("name IN (%s)", location_names_sql)
+        dat <- YGwater::dbGetQueryDT(
+            paste(
+                "SELECT DISTINCT",
+                "    name,",
+                "    location_code,",
+                "    location_id,",
+                "    latitude,",
+                "    longitude",
+                "FROM locations",
+                sprintf("WHERE name IN (%s)", location_names_sql),
+                "ORDER BY name"
+            ),
+            con = con
         )
     }
 
-    if (length(where_clauses) == 0) {
+    if (is.null(dat) || nrow(dat) == 0) {
         return(data.frame())
     }
 
-    YGwater::dbGetQueryDT(
-        paste(
-            "SELECT DISTINCT",
-            "    name,",
-            "    location_code,",
-            "    location_id,",
-            "    latitude,",
-            "    longitude",
-            "FROM locations",
-            sprintf("WHERE %s", paste(where_clauses, collapse = " OR ")),
-            "ORDER BY name"
-        ),
-        con = con
-    )
+    dat$location_code <- as.character(dat$location_code)
+    dat$name <- as.character(dat$name)
+    dat
 }
 
+#' Extract location codes from a community JSON configuration
+#'
+#' Walks the nested community configuration list and collects every unique,
+#' non-empty `location_code` string found in the leaf entries.
+#'
+#' @param community_data Named list of gauge configuration entries (same
+#'   structure as accepted by `get_encoded_gauge_metadata`).
+#'
+#' @return A character vector of unique, non-empty location codes, or
+#'   `character(0)` when `community_data` is `NULL`, empty, or contains no
+#'   valid codes.
 community_location_codes_from_json <- function(community_data) {
     if (is.null(community_data) || length(community_data) == 0) {
         return(character(0))
@@ -3126,7 +3201,9 @@ floodDashboardUIMod <- function(id) {
                 ns("controls"),
                 " .dashboard-controls-row .form-group { margin-bottom: 0; }"
             ),
-            ".station-plot-actions { display:flex; align-items:center; flex-wrap:wrap; gap:0.75rem; margin-left:auto; }",
+            ".station-plot-header { display:flex; flex-direction:column; align-items:stretch; gap:0.5rem; width:100%; }",
+            ".station-plot-title { width:100%; min-width:24rem; }",
+            ".station-plot-actions { display:flex; align-items:center; flex-wrap:wrap; gap:0.75rem; width:100%; }",
             ".station-plot-actions .shiny-input-container { margin-bottom:0; }",
             ".station-plot-actions .checkbox { margin:0; }",
             ".station-plot-actions .btn { white-space:nowrap; }",
@@ -3355,10 +3432,13 @@ floodDashboardUIMod <- function(id) {
             bslib::card(
                 bslib::card_header(
                     shiny::tags$div(
-                        style = "display:flex; align-items:center; gap:1rem; width:100%;",
-                        shiny::textOutput(
-                            ns("station_plot_title"),
-                            inline = TRUE
+                        class = "station-plot-header",
+                        shiny::tags$div(
+                            class = "station-plot-title",
+                            shiny::textOutput(
+                                ns("station_plot_title"),
+                                inline = TRUE
+                            )
                         ),
                         shiny::tags$div(
                             class = "station-plot-actions",
@@ -3371,7 +3451,7 @@ floodDashboardUIMod <- function(id) {
                             shiny::checkboxInput(
                                 inputId = ns("station_plot_label_traces"),
                                 label = "Label traces",
-                                value = FALSE,
+                                value = TRUE,
                                 width = NULL
                             ),
                             shiny::actionButton(
@@ -3396,10 +3476,7 @@ floodDashboardUIMod <- function(id) {
                 leaflet::leafletOutput(ns("stations_map"), height = "300px")
             ),
             bslib::card(
-                bslib::card_header(shiny::textOutput(
-                    ns("image_series_card_title"),
-                    inline = TRUE
-                )),
+                bslib::card_header(shiny::uiOutput(ns("image_series_header"))),
                 bslib::card_body(
                     shiny::uiOutput(ns("image_series_navigation")),
                     shiny::uiOutput(ns("station_image"))
@@ -3881,6 +3958,34 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
         })
 
+        community_roads <- shiny::reactive({
+            roads <- get_spatial_layer_as_sf(
+                layer_name = "Roads",
+                con = con,
+                epsg = 4326
+            )
+
+            if (is.null(roads) || nrow(roads) == 0) {
+                return(NULL)
+            }
+
+            roads
+        })
+
+        community_communities <- shiny::reactive({
+            communities <- get_spatial_layer_as_sf(
+                layer_name = "Communities",
+                con = con,
+                epsg = 4326
+            )
+
+            if (is.null(communities) || nrow(communities) == 0) {
+                return(NULL)
+            }
+
+            communities
+        })
+
         normalize_image_extension <- function(format_value) {
             ext <- tolower(trimws(as.character(format_value[[1]])))
             if (is.na(ext) || !nzchar(ext)) {
@@ -4006,7 +4111,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
         })
 
-        selected_image_series_index <- shiny::reactiveVal(1L)
+        selected_img_series_id <- shiny::reactiveVal(NULL)
+        selected_image_ts_index <- shiny::reactiveVal(NA_integer_)
 
         community_image_series <- shiny::reactive({
             basins <- community_basins()
@@ -4061,185 +4167,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             series <- community_image_series()
             shiny::req(nrow(series) > 0)
 
-            idx <- selected_image_series_index()
-            if (
-                length(idx) != 1 ||
-                    is.na(idx) ||
-                    idx < 1 ||
-                    idx > nrow(series)
-            ) {
-                idx <- 1L
-                selected_image_series_index(idx)
-            }
-
-            series[idx, , drop = FALSE]
-        })
-
-        shiny::observeEvent(
-            input$community,
-            {
-                selected_image_series_index(1L)
-            },
-            ignoreInit = FALSE
-        )
-
-        shiny::observeEvent(
-            community_image_series(),
-            {
-                series <- community_image_series()
-                if (nrow(series) == 0) {
-                    selected_image_series_index(1L)
-                    return()
-                }
-
-                idx <- selected_image_series_index()
-                if (
-                    length(idx) != 1 ||
-                        is.na(idx) ||
-                        idx < 1 ||
-                        idx > nrow(series)
-                ) {
-                    selected_image_series_index(1L)
-                }
-            },
-            ignoreInit = FALSE
-        )
-
-        shiny::observeEvent(input$previous_image_series, {
-            series <- community_image_series()
-            shiny::req(nrow(series) > 0)
-
-            idx <- selected_image_series_index()
-            if (
-                length(idx) != 1 ||
-                    is.na(idx) ||
-                    idx < 1 ||
-                    idx > nrow(series)
-            ) {
-                idx <- 1L
-            }
-
-            selected_image_series_index(
-                if (idx <= 1) nrow(series) else idx - 1L
-            )
-        })
-
-        shiny::observeEvent(input$next_image_series, {
-            series <- community_image_series()
-            shiny::req(nrow(series) > 0)
-
-            idx <- selected_image_series_index()
-            if (
-                length(idx) != 1 ||
-                    is.na(idx) ||
-                    idx < 1 ||
-                    idx > nrow(series)
-            ) {
-                idx <- 1L
-            }
-
-            selected_image_series_index(
-                if (idx >= nrow(series)) 1L else idx + 1L
-            )
-        })
-
-        output$image_series_card_title <- shiny::renderText({
-            series <- community_image_series()
-            if (is.null(series) || nrow(series) == 0) {
-                return("Latest Image")
-            }
-
-            selected <- selected_image_series()
-            location <- as.character(selected$name[[1]])
-            if (is.na(location) || !nzchar(location)) {
-                location <- as.character(selected$location_code[[1]])
-            }
-
-            time0 <- if (!is.null(input$time0) && nzchar(input$time0)) {
-                suppressWarnings(as.POSIXct(
-                    input$time0,
-                    format = "%Y-%m-%dT%H:%M",
-                    tz = "Etc/GMT+7"
-                ))
+            sid <- selected_img_series_id()
+            if (!is.null(sid) && sid %in% series$img_series_id) {
+                series[series$img_series_id == sid, , drop = FALSE][
+                    1,
+                    ,
+                    drop = FALSE
+                ]
             } else {
-                Sys.time()
+                series[1, , drop = FALSE]
             }
-
-            time0_sql <- DBI::dbQuoteString(
-                con,
-                format(as.POSIXct(time0), "%Y-%m-%d %H:%M:%S")
-            )
-
-            latest_image <- DBI::dbGetQuery(
-                con,
-                paste0(
-                    "SELECT datetime FROM images WHERE img_series_id = ",
-                    selected$img_series_id[[1]],
-                    " AND datetime <= ",
-                    time0_sql,
-                    " ORDER BY datetime DESC LIMIT 1"
-                )
-            )
-
-            if (nrow(latest_image) == 0 || is.na(latest_image$datetime[[1]])) {
-                return(paste("Image Series:", location))
-            }
-
-            latest_time <- format(
-                as.POSIXct(latest_image$datetime[[1]], tz = "Etc/GMT+7"),
-                "%d-%b-%y %H:%M",
-                tz = "Etc/GMT+7"
-            )
-            paste("Image Series:", location, "(Latest:", latest_time, ")")
         })
 
-        output$image_series_navigation <- shiny::renderUI({
-            series <- community_image_series()
-            if (is.null(series) || nrow(series) == 0) {
-                return(shiny::tags$div(
-                    "No recent image series found upstream of the selected community"
-                ))
-            }
-
-            idx <- selected_image_series_index()
-            if (
-                length(idx) != 1 ||
-                    is.na(idx) ||
-                    idx < 1 ||
-                    idx > nrow(series)
-            ) {
-                idx <- 1L
-            }
-
-            shiny::tags$div(
-                style = "display:flex; align-items:center; gap:0.4rem; margin-bottom:0.75rem;",
-                shiny::actionButton(
-                    inputId = session$ns("previous_image_series"),
-                    label = "◀",
-                    style = "padding:0.25rem 0.5rem; font-size:0.9rem; height:auto;"
-                ),
-                shiny::tags$span(
-                    sprintf("%d / %d", idx, nrow(series)),
-                    style = "font-size:0.9rem; min-width:3rem; text-align:center;"
-                ),
-                shiny::actionButton(
-                    inputId = session$ns("next_image_series"),
-                    label = "▶",
-                    style = "padding:0.25rem 0.5rem; font-size:0.9rem; height:auto;"
-                )
-            )
-        })
-
-        output$station_image <- shiny::renderUI({
-            series <- community_image_series()
-            if (is.null(series) || nrow(series) == 0) {
-                return(shiny::tags$div(
-                    style = "color:#6b7280;",
-                    "No image series available for this community."
-                ))
-            }
-
+        available_image_timestamps <- shiny::reactive({
             image_series <- selected_image_series()
+            shiny::req(!is.null(image_series) && nrow(image_series) > 0)
+
             img_series_id <- image_series$img_series_id[[1]]
 
             time0 <- if (!is.null(input$time0) && nzchar(input$time0)) {
@@ -4251,29 +4194,218 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             } else {
                 Sys.time()
             }
+
             time0_sql <- DBI::dbQuoteString(
                 con,
                 format(as.POSIXct(time0), "%Y-%m-%d %H:%M:%S")
             )
+            time_min_sql <- DBI::dbQuoteString(
+                con,
+                format(as.POSIXct(time0) - 7 * 24 * 3600, "%Y-%m-%d %H:%M:%S")
+            )
 
-            latest_image <- DBI::dbGetQuery(
+            DBI::dbGetQuery(
                 con,
                 paste0(
                     "SELECT image_id, datetime FROM images WHERE img_series_id = ",
                     img_series_id,
                     " AND datetime <= ",
                     time0_sql,
-                    " ORDER BY datetime DESC LIMIT 1"
+                    " AND datetime >= ",
+                    time_min_sql,
+                    " ORDER BY datetime ASC"
+                )
+            )
+        })
+
+        shiny::observeEvent(
+            input$community,
+            {
+                selected_img_series_id(NULL)
+                selected_image_ts_index(NA_integer_)
+            },
+            ignoreInit = FALSE
+        )
+
+        shiny::observeEvent(
+            community_image_series(),
+            {
+                series <- community_image_series()
+                if (is.null(series) || nrow(series) == 0) {
+                    selected_img_series_id(NULL)
+                    selected_image_ts_index(NA_integer_)
+                    return()
+                }
+
+                sid <- selected_img_series_id()
+                if (is.null(sid) || !(sid %in% series$img_series_id)) {
+                    selected_img_series_id(series$img_series_id[[1]])
+                }
+                selected_image_ts_index(NA_integer_)
+            },
+            ignoreInit = FALSE
+        )
+
+        shiny::observeEvent(
+            input$image_location_select,
+            {
+                selected_img_series_id(as.integer(input$image_location_select))
+                selected_image_ts_index(NA_integer_)
+            },
+            ignoreNULL = TRUE
+        )
+
+        shiny::observeEvent(input$previous_image_series, {
+            timestamps <- available_image_timestamps()
+            shiny::req(nrow(timestamps) > 0)
+
+            idx <- selected_image_ts_index()
+            if (
+                length(idx) != 1 ||
+                    is.na(idx) ||
+                    idx < 1 ||
+                    idx > nrow(timestamps)
+            ) {
+                idx <- nrow(timestamps)
+            }
+
+            selected_image_ts_index(
+                if (idx <= 1L) 1L else idx - 1L
+            )
+        })
+
+        shiny::observeEvent(input$next_image_series, {
+            timestamps <- available_image_timestamps()
+            shiny::req(nrow(timestamps) > 0)
+
+            idx <- selected_image_ts_index()
+            if (
+                length(idx) != 1 ||
+                    is.na(idx) ||
+                    idx < 1 ||
+                    idx > nrow(timestamps)
+            ) {
+                idx <- nrow(timestamps)
+            }
+
+            selected_image_ts_index(
+                if (idx >= nrow(timestamps)) nrow(timestamps) else idx + 1L
+            )
+        })
+
+        output$image_series_header <- shiny::renderUI({
+            series <- community_image_series()
+
+            timestamps <- tryCatch(
+                available_image_timestamps(),
+                error = function(e) NULL
+            )
+            ts_str <- if (!is.null(timestamps) && nrow(timestamps) > 0) {
+                idx <- selected_image_ts_index()
+                if (
+                    length(idx) != 1 ||
+                        is.na(idx) ||
+                        idx < 1 ||
+                        idx > nrow(timestamps)
+                ) {
+                    idx <- nrow(timestamps)
+                }
+                format(
+                    as.POSIXct(timestamps$datetime[[idx]], tz = "Etc/GMT+7"),
+                    "%d-%b-%y %H:%M",
+                    tz = "Etc/GMT+7"
+                )
+            } else {
+                "No images"
+            }
+
+            if (is.null(series) || nrow(series) == 0) {
+                return(shiny::tags$span(paste("Images \u2014", ts_str)))
+            }
+
+            choices <- stats::setNames(
+                as.character(series$img_series_id),
+                ifelse(
+                    !is.na(series$name) & nzchar(as.character(series$name)),
+                    as.character(series$name),
+                    as.character(series$img_series_id)
                 )
             )
 
-            if (nrow(latest_image) == 0) {
+            sid <- selected_img_series_id()
+            selected_val <- if (
+                !is.null(sid) &&
+                    as.character(sid) %in% as.character(series$img_series_id)
+            ) {
+                as.character(sid)
+            } else {
+                as.character(series$img_series_id[[1]])
+            }
+
+            shiny::tags$div(
+                style = "display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;",
+                shiny::selectInput(
+                    inputId = session$ns("image_location_select"),
+                    label = NULL,
+                    choices = choices,
+                    selected = selected_val,
+                    width = "auto",
+                    selectize = FALSE
+                ),
+                shiny::actionButton(
+                    inputId = session$ns("previous_image_series"),
+                    label = "\u25c0",
+                    style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+                ),
+                shiny::tags$span(
+                    if (!is.null(timestamps) && nrow(timestamps) > 0) {
+                        n <- nrow(timestamps)
+                        i <- selected_image_ts_index()
+                        if (length(i) != 1 || is.na(i) || i < 1 || i > n) {
+                            i <- n
+                        }
+                        sprintf("%d / %d", i, n)
+                    } else {
+                        "0 / 0"
+                    },
+                    style = "font-size:0.85rem; min-width:2.5rem; text-align:center; white-space:nowrap;"
+                ),
+                shiny::actionButton(
+                    inputId = session$ns("next_image_series"),
+                    label = "\u25b6",
+                    style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+                ),
+                shiny::tags$span(
+                    ts_str,
+                    style = "white-space:nowrap; font-size:0.85rem; color:#6b7280;"
+                )
+            )
+        })
+
+        output$image_series_navigation <- shiny::renderUI({
+            NULL
+        })
+
+        output$station_image <- shiny::renderUI({
+            timestamps <- available_image_timestamps()
+            if (is.null(timestamps) || nrow(timestamps) == 0) {
                 return(shiny::tags$div(
-                    "No images available for this image series location"
+                    style = "color:#6b7280;",
+                    "No images available in the last 7 days for this location."
                 ))
             }
 
-            image_id <- latest_image$image_id[[1]]
+            idx <- selected_image_ts_index()
+            if (
+                length(idx) != 1 ||
+                    is.na(idx) ||
+                    idx < 1 ||
+                    idx > nrow(timestamps)
+            ) {
+                idx <- nrow(timestamps)
+            }
+
+            image_id <- timestamps$image_id[[idx]]
             image <- DBI::dbGetQuery(
                 con,
                 paste0(
@@ -4307,9 +4439,16 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         output$stations_map <- leaflet::renderLeaflet({
             dat <- community_locations()
             basins <- community_basins()
+            roads <- community_roads()
+            communities <- community_communities()
             eligible_stations <- available_primary_stations()
 
-            if ((is.null(dat) || nrow(dat) == 0) && is.null(basins)) {
+            if (
+                (is.null(dat) || nrow(dat) == 0) &&
+                    (is.null(basins) || nrow(basins) == 0) &&
+                    (is.null(roads) || nrow(roads) == 0) &&
+                    (is.null(communities) || nrow(communities) == 0)
+            ) {
                 map <- leaflet::leaflet()
                 map <- leaflet::addProviderTiles(map, "CartoDB.Positron")
                 map <- leaflet::setView(map, lng = -135, lat = 64, zoom = 5)
@@ -4342,14 +4481,19 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     eligible_codes
                 dat$point_color <- ifelse(
                     dat$has_selected_parameter,
-                    "#06b6d4",
+                    "#2563eb",
                     "#16a34a"
                 )
 
-                station_name <- ifelse(
+                dat$station_name <- ifelse(
                     !is.na(dat$name) & nzchar(dat$name),
-                    dat$name,
+                    as.character(dat$name),
                     "Unknown station"
+                )
+                dat$station_code <- ifelse(
+                    !is.na(dat$location_code) & nzchar(dat$location_code),
+                    as.character(dat$location_code),
+                    ""
                 )
 
                 popup_parameter_order <- c(
@@ -4466,7 +4610,32 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         if (length(vals) == 0) {
                             return("None")
                         }
-                        paste(vals, collapse = ", ")
+                        paste(vals, collapse = "|")
+                    },
+                    character(1)
+                )
+
+                popup_params_html <- vapply(
+                    popup_params,
+                    function(param_text) {
+                        if (identical(param_text, "None")) {
+                            return("None")
+                        }
+                        param_items <- strsplit(
+                            param_text,
+                            "|",
+                            fixed = TRUE
+                        )[[1]]
+                        paste0(
+                            "<ul style='margin:0.25rem 0 0 1rem; padding:0;'>",
+                            paste0(
+                                "<li>",
+                                htmltools::htmlEscape(param_items),
+                                "</li>",
+                                collapse = ""
+                            ),
+                            "</ul>"
+                        )
                     },
                     character(1)
                 )
@@ -4474,28 +4643,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 map <- leaflet::leaflet(dat)
                 map <- leaflet::addProviderTiles(map, "CartoDB.Positron")
 
-                popup_text <- sprintf(
+                dat$popup_html <- sprintf(
                     paste0(
-                        "<strong>Location code:</strong> %s",
-                        "<br/><strong>Name:</strong> %s",
+                        "<strong>Station name:</strong> %s",
+                        "<br/><strong>Location code:</strong> %s",
                         "<br/><strong>Available parameters:</strong> %s"
                     ),
-                    htmltools::htmlEscape(dat$location_code),
-                    htmltools::htmlEscape(station_name),
-                    htmltools::htmlEscape(popup_params)
+                    htmltools::htmlEscape(dat$station_name),
+                    htmltools::htmlEscape(dat$station_code),
+                    popup_params_html
                 )
-
-                map <- leaflet::addCircleMarkers(
-                    map,
-                    lng = ~longitude,
-                    lat = ~latitude,
-                    radius = 5,
-                    stroke = TRUE,
-                    weight = 1,
-                    color = ~point_color,
-                    fillColor = ~point_color,
-                    fillOpacity = 0.8,
-                    popup = popup_text
+                dat$tooltip_text <- paste0(
+                    dat$station_name,
+                    " (",
+                    dat$station_code,
+                    ")"
                 )
             }
 
@@ -4508,11 +4670,86 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     fillColor = "#475569",
                     fillOpacity = 0.08,
                     smoothFactor = 0.3,
-                    popup = if ("feature_name" %in% names(basins)) {
-                        as.character(basins$feature_name)
-                    } else {
-                        NULL
-                    }
+                    options = leaflet::pathOptions(interactive = FALSE)
+                )
+            }
+
+            if (!is.null(roads) && nrow(roads) > 0) {
+                map <- leaflet::addPolylines(
+                    map,
+                    data = roads,
+                    color = "#64748b",
+                    weight = 1.5,
+                    opacity = 0.8,
+                    options = leaflet::pathOptions(interactive = FALSE)
+                )
+            }
+
+            if (!is.null(communities) && nrow(communities) > 0) {
+                communities <- sf::st_transform(communities, 4326)
+                community_coords <- sf::st_coordinates(sf::st_geometry(
+                    communities
+                ))
+                communities$longitude <- community_coords[, 1]
+                communities$latitude <- community_coords[, 2]
+                communities$feature_name <- if (
+                    "feature_name" %in% names(communities)
+                ) {
+                    as.character(communities$feature_name)
+                } else {
+                    ""
+                }
+
+                map <- leaflet::addCircleMarkers(
+                    map,
+                    data = communities,
+                    lng = ~longitude,
+                    lat = ~latitude,
+                    radius = 3,
+                    stroke = TRUE,
+                    weight = 1,
+                    color = "#111827",
+                    fillColor = "#111827",
+                    fillOpacity = 0.9,
+                    popup = ~feature_name
+                )
+            }
+
+            if (!is.null(dat) && nrow(dat) > 0) {
+                map <- leaflet::addCircleMarkers(
+                    map,
+                    data = dat,
+                    lng = ~longitude,
+                    lat = ~latitude,
+                    radius = 5,
+                    stroke = TRUE,
+                    weight = 1,
+                    color = ~point_color,
+                    fillColor = ~point_color,
+                    fillOpacity = 0.8,
+                    popup = ~popup_html
+                )
+            }
+
+            if (
+                (!is.null(dat) && nrow(dat) > 0) ||
+                    (!is.null(communities) && nrow(communities) > 0) ||
+                    (!is.null(roads) && nrow(roads) > 0)
+            ) {
+                legend_html <- paste0(
+                    "<div style='background:rgba(255,255,255,0.95); padding:8px 10px; border-radius:6px; border:1px solid #d1d5db; font-size:12px; line-height:1.35;'>",
+                    "<div style='font-weight:600; margin-bottom:6px;'>Legend</div>",
+                    "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#2563eb; border:1px solid #1e3a8a; margin-right:6px;'></span>Hydrometric station</div>",
+                    "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; border:1px solid #166534; margin-right:6px;'></span>Meteorological station</div>",
+                    "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#111827; border:1px solid #111827; margin-right:6px;'></span>Communities</div>",
+                    "<div style='display:flex; align-items:center;'><span style='display:inline-block; width:14px; height:0; border-top:2px solid #64748b; margin-right:6px;'></span>Roads</div>",
+                    "</div>"
+                )
+
+                map <- leaflet::addControl(
+                    map,
+                    html = legend_html,
+                    position = "bottomright"
                 )
             }
 
@@ -5274,11 +5511,27 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     pct_plot <- data.frame()
 
                     if (is_survey_param) {
+                        survey_anchor_dates <- as.POSIXct(
+                            sprintf(
+                                "%04d-%02d-01",
+                                ref_year,
+                                c(3L, 4L, 5L)
+                            ),
+                            tz = plot_timezone
+                        )
+
                         survey_points <- dat[
                             !is.na(dat$datetime),
                             c("datetime"),
                             drop = FALSE
                         ]
+                        survey_points <- rbind(
+                            survey_points,
+                            data.frame(
+                                datetime = survey_anchor_dates,
+                                stringsAsFactors = FALSE
+                            )
+                        )
                         survey_points <- as.data.frame(
                             survey_points,
                             stringsAsFactors = FALSE
@@ -6073,9 +6326,17 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
             x_range <- if (is.finite(x_min)) {
                 if (is_survey_param) {
+                    survey_start <- as.POSIXct(
+                        sprintf(
+                            "%04d-02-15 00:00:00",
+                            as.integer(format(ref_ts, "%Y", tz = plot_tz_label))
+                        ),
+                        tz = plot_tz_label
+                    )
+
                     list(
                         format(
-                            ref_ts - as.difftime(365, units = "days"),
+                            survey_start,
                             "%Y-%m-%d %H:%M:%S"
                         ),
                         format(
@@ -6099,6 +6360,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 NULL
             }
 
+            t0_line <- list(
+                type = "line",
+                xref = "x",
+                yref = "paper",
+                x0 = format(ref_ts, "%Y-%m-%d %H:%M:%S"),
+                x1 = format(ref_ts, "%Y-%m-%d %H:%M:%S"),
+                y0 = 0,
+                y1 = 1,
+                line = list(
+                    color = "#b91c1c",
+                    width = 1.5,
+                    dash = "dash"
+                )
+            )
+
             p %>%
                 plotly::layout(
                     xaxis = list(
@@ -6117,6 +6393,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         NULL
                     },
                     showlegend = show_legend,
+                    shapes = list(t0_line),
                     annotations = if (length(trace_label_annotations) > 0) {
                         trace_label_annotations
                     } else {

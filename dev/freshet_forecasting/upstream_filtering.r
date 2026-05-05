@@ -741,6 +741,7 @@ load_target_gauge_context <- function(
 
     station_status_table <- sf::st_drop_geometry(
         gauges_in_target_basin[, c(
+            "name",
             "location_code",
             "location_id",
             "station_status"
@@ -1059,23 +1060,37 @@ build_target_gauge_station_export <- function(
 ) {
     station_status_table <- target_context$station_status_table
     route_table <- target_context$target_gauge_route_table
+    target_gauges <- target_context$target_gauges
 
     lapply(seq_len(nrow(station_status_table)), function(row_index) {
         station_row <- station_status_table[row_index, , drop = FALSE]
+        station_location_code <- station_row$location_code[[1]]
+        station_location_id <- station_row$location_id[[1]]
+
+        station_location_name <- as.character(station_row$name[[1]])
+        if (is.na(station_location_name) || !nzchar(station_location_name)) {
+            station_location_name <- target_gauges[
+                target_gauges$location_code == station_location_code &
+                    target_gauges$location_id == station_location_id,
+                "name"
+            ][[1]]
+        }
+        if (is.na(station_location_name) || !nzchar(station_location_name)) {
+            station_location_name <- station_location_code
+        }
+
         station_parameters <- location_parameter_ids[
-            location_parameter_ids$location_code ==
-                station_row$location_code[[1]] &
-                location_parameter_ids$location_id ==
-                    station_row$location_id[[1]],
-            "parameter_id"
+            location_parameter_ids$location_code == station_location_code &
+                location_parameter_ids$location_id == station_location_id,
         ]
         station_parameter_ids <- sort(unique(as.integer(unlist(
-            station_parameters,
+            station_parameters$parameter_id,
             use.names = FALSE
         ))))
+
         route_row <- route_table[
-            route_table$location_code == station_row$location_code[[1]] &
-                route_table$location_id == station_row$location_id[[1]],
+            route_table$location_code == station_location_code &
+                route_table$location_id == station_location_id,
             ,
             drop = FALSE
         ]
@@ -1097,10 +1112,9 @@ build_target_gauge_station_export <- function(
         }
 
         list(
-            location_code = jsonlite::unbox(station_row$location_code[[1]]),
-            location_id = jsonlite::unbox(as.integer(station_row$location_id[[
-                1
-            ]])),
+            location_code = jsonlite::unbox(station_location_code),
+            location_id = jsonlite::unbox(as.integer(station_location_id)),
+            location_name = jsonlite::unbox(station_location_name),
             parameter_ids = unname(station_parameter_ids),
             encoding = jsonlite::unbox(as.integer(station_row$station_status[[
                 1
@@ -1118,6 +1132,20 @@ read_target_gauge_station_encoding_json <- function(
 ) {
     candidate_paths <- unique(stats::na.omit(c(
         input_path,
+        file.path(
+            "inst",
+            "data-raw",
+            "flood_vulnerable_gauges_encoded.json"
+        ),
+        file.path(
+            "data-raw",
+            "flood_vulnerable_gauges_encoded.json"
+        ),
+        file.path(
+            "inst",
+            "extdata",
+            "flood_vulnerable_gauges_encoded.json"
+        ),
         file.path(
             "dev",
             "freshet_forecasting",
@@ -1147,8 +1175,8 @@ read_target_gauge_station_encoding_json <- function(
 
 write_target_gauge_station_encoding_json <- function(
     output_path = file.path(
-        "dev",
-        "freshet_forecasting",
+        "inst",
+        "extdata",
         "flood_vulnerable_gauges_encoded.json"
     ),
     yaml_path = file.path(
@@ -1191,15 +1219,16 @@ write_target_gauge_station_encoding_json <- function(
         auto_unbox = FALSE,
         null = "null"
     )
-    writeLines(json_payload, con = output_path, useBytes = TRUE)
+    dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+    writeLines(json_payload, con = file(output_path, encoding = "UTF-8"))
 
     invisible(export_payload)
 }
 
 
 target_gauge_context <- load_target_gauge_context(
-    community = "Dawson",
-    target_gauge_name = "Yukon River At Dawson"
+    community = "Old Crow",
+    target_gauge_name = "Porcupine River Below Old Crow River",
 )
 
 target_gauge_hierarchy <- target_gauge_context$target_basin_hierarchy
@@ -1208,3 +1237,6 @@ target_gauge_route_table <- target_gauge_context$target_gauge_route_table
 dawson_routing_plot <- plot_target_gauge_routing(target_gauge_context)
 
 print(dawson_routing_plot)
+
+
+write_target_gauge_station_encoding_json()

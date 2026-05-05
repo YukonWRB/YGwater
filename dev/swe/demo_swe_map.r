@@ -17,7 +17,6 @@ snowBulletin(
     language = "english",
 )
 
-
 # load_all()
 dat <- load_bulletin_timeseries(
     con = con,
@@ -68,7 +67,6 @@ df <- DBI::dbGetQuery(
         "precipitation, total"
     )
 )
-
 
 bulletin_month <- 5
 bulletin_year <- 2026
