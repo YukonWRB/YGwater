@@ -997,8 +997,19 @@ app_server <- function(input, output, session) {
       }
 
       # Equipment tasks -----------------------------------------------------
-      if (isTRUE(session$userData$admin_privs$calibrate)) {
+      if (
+        any(
+          session$userData$admin_privs$calibrate,
+          session$userData$admin_privs$manageInstruments
+        )
+      ) {
         nav_show(id = "navbar", target = "equipTasks")
+        if (!isTRUE(session$userData$admin_privs$calibrate)) {
+          nav_hide(id = "navbar", target = "calibrate")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageInstruments)) {
+          nav_hide(id = "navbar", target = "manageInstruments")
+        }
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
       }
@@ -2527,15 +2538,14 @@ app_server <- function(input, output, session) {
                string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
         FROM tbls t
         CROSS JOIN LATERAL unnest(ARRAY['SELECT', 'INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
-        WHERE has_table_privilege($1, t.tbl_oid, p.priv)
+        WHERE has_table_privilege(current_user, t.tbl_oid, p.priv)
         GROUP BY t.schema, t.table_name
         ORDER BY t.schema, t.table_name;"
 
           # Store the table privileges in the session for use in other modules or to show/hide certain UI elements
           session$userData$table_privs <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            sql,
-            params = list(session$userData$config$dbUser)
+            sql
           )
           # Create a qualified name column for easier filtering
           session$userData$table_privs$qual_name <- paste0(
@@ -2763,6 +2773,29 @@ app_server <- function(input, output, session) {
                 c("INSERT")
               )
             ),
+            manageInstruments = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.instruments",
+                "instruments.instrument_maintenance",
+                "instruments.observers",
+                "instruments.instrument_make",
+                "instruments.instrument_model",
+                "instruments.instrument_type",
+                "public.organizations",
+                "instruments.suppliers"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT")
+              )
+            ),
             deploy_recover = has_priv(
               tbl = session$userData$table_privs,
               c(
@@ -2866,7 +2899,6 @@ app_server <- function(input, output, session) {
             addDiscData = has_priv(
               tbl = session$userData$table_privs,
               c(
-                "application.discrete_mappings",
                 "files.documents",
                 "discrete.samples",
                 "discrete.results"
@@ -2876,7 +2908,6 @@ app_server <- function(input, output, session) {
                   "INSERT",
                   "UPDATE"
                 ),
-                c("INSERT"),
                 c("INSERT"),
                 c("INSERT")
               )
@@ -3375,6 +3406,7 @@ app_server <- function(input, output, session) {
       message = list(msg = "hide dropdown")
     )
 
+    print(input$navbar)
     if (!can_access_page(input$navbar)) {
       if (isTRUE(session$userData$user_logged_in)) {
         showNotification(
