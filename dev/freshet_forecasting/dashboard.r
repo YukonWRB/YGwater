@@ -1509,21 +1509,19 @@ get_daily_percentiles <- function(
                     "WITH daily_temp AS (",
                     "    SELECT",
                     "        l.location_code,",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    WHERE l.location_code IN (%s)",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY l.location_code, DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_fdd AS (",
                     "    SELECT",
@@ -1615,21 +1613,19 @@ get_daily_percentiles <- function(
                     "WITH daily_temp AS (",
                     "    SELECT",
                     "        l.location_code,",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    WHERE l.location_code IN (%s)",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY l.location_code, DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_ddt AS (",
                     "    SELECT",
@@ -1960,21 +1956,19 @@ get_parameter_percentile_limits <- function(
                 paste(
                     "WITH daily_temp AS (",
                     "    SELECT",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    WHERE l.location_code = %s",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_fdd AS (",
                     "    SELECT",
@@ -2018,21 +2012,19 @@ get_parameter_percentile_limits <- function(
                 paste(
                     "WITH daily_temp AS (",
                     "    SELECT",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    WHERE l.location_code = %s",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_ddt AS (",
                     "    SELECT",
@@ -2508,21 +2500,37 @@ plot_continuous_with_percentiles_and_return_periods <- function(
     p <- plotly::plot_ly()
 
     if (include_percentiles && nrow(pct) > 0) {
-        # Extend the historical envelope from the selected start year through
-        # the end of reference year + 1.
+        # Build a padded envelope around the visible window, but keep it
+        # bounded to the configured historical period to avoid oversized
+        # ribbon polygons that can trigger plot clipping artifacts.
         ref_year <- suppressWarnings(as.integer(
             format(now_ts, "%Y", tz = plot_timezone)
         ))
         if (is.na(ref_year)) {
             ref_year <- as.integer(format(Sys.time(), "%Y", tz = plot_timezone))
         }
-        percentile_cycle_start_date <- as.Date(sprintf(
+
+        historical_start_date <- as.Date(sprintf(
             "%d-01-01",
             historical_start_year
         ))
-        percentile_cycle_end_date <- as.Date(
-            sprintf("%d-12-31", ref_year + 1L)
+        historical_end_date <- as.Date(sprintf("%d-12-31", ref_year + 1L))
+        padded_view_start <- as.Date(view_start, tz = plot_timezone) - 366
+        padded_view_end <- as.Date(view_end, tz = plot_timezone) + 366
+
+        percentile_cycle_start_date <- max(
+            historical_start_date,
+            padded_view_start
         )
+        percentile_cycle_end_date <- min(historical_end_date, padded_view_end)
+        if (percentile_cycle_end_date < percentile_cycle_start_date) {
+            percentile_cycle_start_date <- historical_start_date
+            percentile_cycle_end_date <- min(
+                historical_end_date,
+                historical_start_date + 366
+            )
+        }
+
         percentile_dates <- seq(
             percentile_cycle_start_date,
             percentile_cycle_end_date,
@@ -2820,7 +2828,7 @@ plot_continuous_with_percentiles_and_return_periods <- function(
             shapes = all_shapes,
             annotations = rp_annotations,
             legend = list(orientation = "v", x = 0.01, y = 0.99),
-            margin = list(r = 80)
+            margin = list(r = 80, t = 60)
         )
 }
 
@@ -4197,14 +4205,13 @@ get_fdd_summary <- function(
                 "    SELECT",
                 "        tt.location_id,",
                 "        tt.timeseries_id,",
-                "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                "        AVG(mc.value) AS mean_temp",
+                "        mcd.date AS date,",
+                "        mcd.value AS mean_temp",
                 "    FROM target_timeseries tt",
-                "    JOIN measurements_continuous mc",
-                "      ON mc.timeseries_id = tt.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                paste0("      AND mc.datetime <= ", ref_ts_sql),
-                "    GROUP BY tt.location_id, tt.timeseries_id, DATE_TRUNC('day', mc.datetime)::date",
+                "    JOIN measurements_calculated_daily mcd",
+                "      ON mcd.timeseries_id = tt.timeseries_id",
+                "    WHERE mcd.value IS NOT NULL",
+                paste0("      AND mcd.date <= ", ref_date_sql),
                 "),",
                 "daily_fdd AS (",
                 "    SELECT",
@@ -4341,14 +4348,13 @@ get_ddt_summary <- function(
                 "    SELECT",
                 "        tt.location_id,",
                 "        tt.timeseries_id,",
-                "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                "        AVG(mc.value) AS mean_temp",
+                "        mcd.date AS date,",
+                "        mcd.value AS mean_temp",
                 "    FROM target_timeseries tt",
-                "    JOIN measurements_continuous mc",
-                "      ON mc.timeseries_id = tt.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                paste0("      AND mc.datetime <= ", ref_ts_sql),
-                "    GROUP BY tt.location_id, tt.timeseries_id, DATE_TRUNC('day', mc.datetime)::date",
+                "    JOIN measurements_calculated_daily mcd",
+                "      ON mcd.timeseries_id = tt.timeseries_id",
+                "    WHERE mcd.value IS NOT NULL",
+                paste0("      AND mcd.date <= ", ref_date_sql),
                 "),",
                 "daily_ddt AS (",
                 "    SELECT",
@@ -5489,26 +5495,23 @@ get_historical_overlay_timeseries <- function(
                     paste(
                         "WITH daily_temp AS (",
                         "    SELECT",
-                        "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                        "        AVG(mc.value) AS mean_temp",
-                        "    FROM measurements_continuous mc",
-                        "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "        mcd.date AS date,",
+                        "        mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
                         "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                         "    JOIN locations l ON l.location_id = ts.location_id",
                         "    WHERE l.location_code = %s",
                         "      AND p.param_name = 'temperature, air'",
-                        "      AND mc.value IS NOT NULL",
+                        "      AND mcd.value IS NOT NULL",
                         paste0(
-                            "      AND mc.datetime >= ",
-                            season_start_sql,
-                            "::timestamp"
+                            "      AND mcd.date >= ",
+                            season_start_sql
                         ),
                         paste0(
-                            "      AND mc.datetime < (",
-                            year_end_sql,
-                            " + INTERVAL '1 day')::timestamp"
+                            "      AND mcd.date <= ",
+                            year_end_sql
                         ),
-                        "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                         "),",
                         "daily_fdd AS (",
                         "    SELECT",
@@ -5557,26 +5560,23 @@ get_historical_overlay_timeseries <- function(
                     paste(
                         "WITH daily_temp AS (",
                         "    SELECT",
-                        "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                        "        AVG(mc.value) AS mean_temp",
-                        "    FROM measurements_continuous mc",
-                        "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "        mcd.date AS date,",
+                        "        mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
                         "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                         "    JOIN locations l ON l.location_id = ts.location_id",
                         "    WHERE l.location_code = %s",
                         "      AND p.param_name = 'temperature, air'",
-                        "      AND mc.value IS NOT NULL",
+                        "      AND mcd.value IS NOT NULL",
                         paste0(
-                            "      AND mc.datetime >= ",
-                            season_start_sql,
-                            "::timestamp"
+                            "      AND mcd.date >= ",
+                            season_start_sql
                         ),
                         paste0(
-                            "      AND mc.datetime < (",
-                            year_end_sql,
-                            " + INTERVAL '1 day')::timestamp"
+                            "      AND mcd.date <= ",
+                            year_end_sql
                         ),
-                        "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                         "),",
                         "daily_ddt AS (",
                         "    SELECT",
@@ -5957,7 +5957,7 @@ launch_freshet_dashboard <- function(con) {
                             shiny::checkboxInput(
                                 "station_plot_show_legend",
                                 "Show legend",
-                                value = TRUE,
+                                value = FALSE,
                                 width = NULL
                             ),
                             shiny::actionButton(
@@ -5996,7 +5996,7 @@ launch_freshet_dashboard <- function(con) {
             bslib::card_body(
                 shiny::tags$p(
                     shiny::tags$b("Disclaimer: "),
-                    "Historical ranges and return periods are calculated on the fly using daily corrected data and have not been independently verified by a hydrologist. Note that sub-daily variance may not be captured by daily average historical ranges, especially for variables such as temperature. Real-time data may be unreliable and subject to future corrections.",
+                    "Historical ranges and return periods are calculated on the fly using daily corrected data and have not been independently verified by a hydrologist. Note that sub-daily variance may not be captured by daily average historical ranges, especially for variables such as temperature. Real-time data may be unreliable and subject to future corrections. Sharp edges in the historical record are likely caused by incomplete records, and not representative of sudden shifts in the underlying hydrology. Please contact the YG Water Security team if you have questions or concerns about the data or calculations used in this dashboard.",
                     style = "font-size:0.85em; color:#6b7280; margin:0;"
                 )
             )
@@ -8460,9 +8460,8 @@ launch_freshet_dashboard <- function(con) {
                 title_parts <- c(
                     title_parts,
                     sprintf(
-                        "Secondary %s: %s",
-                        station_label_for_code(request$secondary_station),
-                        request$secondary_parameter
+                        "Secondary %s",
+                        station_label_for_code(request$secondary_station)
                     )
                 )
             }
@@ -9037,7 +9036,6 @@ launch_freshet_dashboard <- function(con) {
     shiny::shinyApp(ui = ui, server = server)
 }
 
-if (sys.nframe() == 0) {
-    app <- launch_freshet_dashboard(con = con)
-    shiny::runApp(app)
-}
+
+app <- launch_freshet_dashboard(con = con)
+shiny::runApp(app)

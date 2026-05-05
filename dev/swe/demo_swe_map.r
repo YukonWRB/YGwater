@@ -8,6 +8,15 @@ con <- YGwater::AquaConnect(
     password = Sys.getenv("aquacacheAdminPass"),
 )
 
+# load_all()
+snowBulletin(
+    year = 2026,
+    month = 5,
+    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
+    con = con,
+    language = "english",
+)
+
 
 # load_all()
 dat <- load_bulletin_timeseries(
@@ -32,15 +41,6 @@ make_snowbull_map(
     snowbull_timeseries = dat,
     con = con,
     filename = "map.png"
-)
-
-load_all()
-snowBulletin(
-    year = 2026,
-    month = 5,
-    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
-    con = con,
-    language = "english",
 )
 
 # ggplotOverlap(
@@ -70,7 +70,7 @@ df <- DBI::dbGetQuery(
 )
 
 
-bulletin_month <- 4
+bulletin_month <- 5
 bulletin_year <- 2026
 bulletin_scale <- 1
 language <- list(language = "English", abbrev = "en")
@@ -156,6 +156,7 @@ df$description <- description
 # on.exit(DBI::dbDisconnect(con), add = TRUE)
 
 query <- "SELECT locations.name AS location_name, locations.location AS location_id, datetime, value_corrected AS value FROM measurements_continuous_corrected INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id INNER JOIN locations ON timeseries.location = locations.location\n                                           WHERE measurements_continuous_corrected.timeseries_id IN ('663', '665', '666', '668', '664', '671', '667')"
+
 
 DBI::dbGetQuery(con, query)
 
@@ -630,3 +631,35 @@ ggplot2::ggsave(
     height = 12,
     dpi = 300
 )
+
+
+loc_name <- "Watson"
+param_name <- "precipitation, total"
+query <- "
+SELECT
+l.location_id,
+l.location_code,
+l.name AS location_name,
+ts.timeseries_id,
+ts.record_rate,
+p.param_name
+FROM locations l
+INNER JOIN timeseries ts
+ON ts.location_id = l.location_id
+INNER JOIN parameters p
+ON p.parameter_id = ts.parameter_id
+WHERE l.name ILIKE $1
+AND p.param_name ILIKE $2
+ORDER BY l.name, ts.timeseries_id;
+"
+
+res <- DBI::dbGetQuery(
+    con,
+    query,
+    params = list(
+        paste0("%", loc_name, "%"),
+        paste0("%", param_name, "%")
+    )
+)
+
+View(res)
