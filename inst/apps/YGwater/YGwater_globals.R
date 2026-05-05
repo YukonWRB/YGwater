@@ -11,8 +11,7 @@ YGwater_globals <- function(
   accessPath2,
   logout_timer_min,
   analytics,
-  public,
-  brand
+  public
 ) {
   library(shiny)
   library(shinyjs)
@@ -74,13 +73,10 @@ YGwater_globals <- function(
     "apps/YGwater/modules/client/map/locationsMap.R",
     package = "YGwater"
   ))
-  # Only show the snow bulletin map if the app is running with brand = 'yukon'
-  if (brand == "yukon") {
-    source(system.file(
-      "apps/YGwater/modules/client/map/snowBulletinMap.R",
-      package = "YGwater"
-    ))
-  }
+  source(system.file(
+    "apps/YGwater/modules/client/map/snowBulletinMap.R",
+    package = "YGwater"
+  ))
 
   # Water well registry map
   source(system.file(
@@ -134,12 +130,10 @@ YGwater_globals <- function(
         "apps/YGwater/modules/client/reports/WQReport.R",
         package = "YGwater"
       ))
-      if (brand == "yukon") {
-        source(system.file(
-          "apps/YGwater/modules/client/reports/snowBulletin.R",
-          package = "YGwater"
-        ))
-      }
+      source(system.file(
+        "apps/YGwater/modules/client/reports/snowBulletin.R",
+        package = "YGwater"
+      ))
     }
     source(system.file(
       "apps/YGwater/modules/client/reports/snowInfo.R",
@@ -1247,8 +1241,7 @@ YGwater_globals <- function(
     analytics = analytics,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
-    main_bg = "#D9EFF2", # Default background color for all main panels
-    brand = brand
+    main_bg = "#D9EFF2" # Default background color for all main panels
   )
 
   return(config)

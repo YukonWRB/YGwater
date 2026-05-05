@@ -321,13 +321,14 @@ app_ui <- function(request) {
               uiOutput("mapRaster_ui")
             )
           },
+
           if (config$brand$brand == 'yukon') {
+
             nav_panel(
               title = uiOutput("mapsNavSnowbullTitle"),
               value = "snowBulletinMap",
               uiOutput("mapSnowbull_ui")
             )
-          }
         ), # End maps nav_menu
 
         # Plot nav menu
@@ -371,6 +372,7 @@ app_ui <- function(request) {
             },
             # Don't show the snow bulletin menu if not deployed on YG internal network
             if (config$network_check && config$brand$brand == 'yukon') {
+
               nav_panel(
                 title = uiOutput("reportsNavSnowbullTitle"),
                 value = "snowBulletin",
