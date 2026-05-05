@@ -9,7 +9,7 @@
 #' @noRd
 
 app_ui <- function(request) {
-  default_app_title <- tr("title", "English")
+  default_app_title <- tr(config$brand$text$app_title, "English")
   default_app_brand_title <- "Water Data Explorer"
   default_app_description <- "Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads."
 
@@ -321,6 +321,9 @@ app_ui <- function(request) {
               uiOutput("mapRaster_ui")
             )
           },
+
+          if (config$brand$brand == 'yukon') {
+
             nav_panel(
               title = uiOutput("mapsNavSnowbullTitle"),
               value = "snowBulletinMap",
@@ -368,7 +371,8 @@ app_ui <- function(request) {
               )
             },
             # Don't show the snow bulletin menu if not deployed on YG internal network
-            if (config$network_check) {
+            if (config$network_check && config$brand$brand == 'yukon') {
+
               nav_panel(
                 title = uiOutput("reportsNavSnowbullTitle"),
                 value = "snowBulletin",

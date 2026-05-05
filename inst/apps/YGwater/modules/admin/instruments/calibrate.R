@@ -4673,6 +4673,30 @@ table.on("click", "tr", function() {
       ignoreInit = TRUE
     )
 
+    do_saturation_mgl <- function(temp_c, pressure_bar) {
+      temp_k <- temp_c + 273.15
+      vapor <- exp(
+        24.4543 -
+          67.4509 * (100 / temp_k) -
+          4.8489 * log(temp_k / 100)
+      )
+      solubility <- exp(
+        -58.3877 +
+          85.8079 * (100 / temp_k) +
+          23.8439 * log(temp_k / 100)
+      ) / 22.4136 * 1e6 / 1.013253
+      solubility * pressure_bar * 0.20946 * (1 - vapor) * 31.9988 / 1000
+    }
+
+    convert_do <- function(value, from, temp_c, pressure_bar) {
+      saturation_mgl <- do_saturation_mgl(temp_c, pressure_bar)
+      if (identical(from, "percent_air")) {
+        value * saturation_mgl / 100
+      } else {
+        value / saturation_mgl * 100
+      }
+    }
+
     #Function to simplify DO calculated fields later on
     DO_calc <- function(pre_post, prct_abs, messages = TRUE) {
       trigger_name <- if (pre_post == "pre" & prct_abs == "prct") {
@@ -4770,14 +4794,16 @@ table.on("click", "tr", function() {
         }
       }
       if (!is.na(meas) & meas > 0 & go_baro & go_temp) {
-        res <- suppressWarnings(respR::convert_DO(
+        res <- convert_do(
           meas,
-          from = if (grepl("prct", trigger_name)) "%Air" else "mg/l",
-          to = if (grepl("prct", trigger_name)) "mg/l" else "%Air",
-          S = 0,
-          t = temp,
-          P = baro_press / 750.06156130264
-        ))
+          from = if (grepl("prct", trigger_name)) {
+            "percent_air"
+          } else {
+            "mg_l"
+          },
+          temp_c = temp,
+          pressure_bar = baro_press / 750.06156130264
+        )
         updateNumericInput(session, update_name, value = round(res, 2))
         if (messages) {
           alert(
