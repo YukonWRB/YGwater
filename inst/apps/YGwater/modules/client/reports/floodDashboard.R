@@ -1,3079 +1,4 @@
-﻿resolve_fva_json_path <- function() {
-    repo_root <- normalizePath(getwd(), winslash = "/", mustWork = TRUE)
-    if (grepl("/inst/apps/YGwater$", repo_root)) {
-        repo_root <- dirname(dirname(dirname(repo_root)))
-    }
-
-    path <- file.path(
-        repo_root,
-        "inst",
-        "data-raw",
-        "flood_vulnerable_gauges_encoded.json"
-    )
-
-    if (!file.exists(path)) {
-        stop(
-            "Cannot locate flood_vulnerable_gauges_encoded.json at: ",
-            path,
-            call. = FALSE
-        )
-    }
-
-    path
-}
-
-read_fva_json <- function() {
-    jsonlite::fromJSON(resolve_fva_json_path(), simplifyVector = FALSE)
-}
-
-`%||%` <- function(a, b) if (!is.null(a)) a else b
-
-normalize_selected_historical_years <- function(years) {
-    if (is.null(years) || length(years) == 0) {
-        return(integer(0))
-    }
-    valid <- suppressWarnings(as.integer(years))
-    sort(unique(valid[!is.na(valid)]), decreasing = TRUE)
-}
-
-parameter_query_name <- function(parameter) {
-    aliases <- c(
-        "FDD" = "temperature, air",
-        "DDT" = "temperature, air",
-        "precipitation (1wk)" = "precipitation, total",
-        "precipitation (24hr)" = "precipitation, total",
-        "snow water eq (pillow)" = "snow water equivalent",
-        "snow depth (pillow)" = "snow depth",
-        "snow water eq (survey)" = "snow water equivalent",
-        "snow depth (survey)" = "snow depth"
-    )
-
-    if (parameter %in% names(aliases)) {
-        aliases[[parameter]]
-    } else {
-        parameter
-    }
-}
-
-daily_temperature_aggregation_name <- function() {
-    "(min+max)/2"
-}
-
-#' Encode gauge metadata from community JSON data
-#'
-#' Extracts gauge names, location codes, location IDs, and encodings from the
-#' nested community configuration list and returns them as a flat data frame.
-#'
-#' @param community_data Named list of gauge configuration entries. Each
-#'   top-level name is a gauge name, and each element is a list of entries with
-#'   fields `location_code`, `location_id`, and `encoding`.
-#'
-#' @return A data frame with columns `gauge_name` (character),
-#'   `location_code` (character), `location_id` (integer), and
-#'   `encoding` (numeric). Rows with missing `location_code` and duplicate
-#'   `location_code` values are removed. Returns an empty data frame when
-#'   `community_data` is `NULL` or has length zero.
-get_encoded_gauge_metadata <- function(community_data) {
-    if (is.null(community_data) || length(community_data) == 0) {
-        return(data.frame())
-    }
-
-    extract_scalar <- function(entry, field, default = NA_character_) {
-        value <- entry[[field]]
-        if (is.null(value) || length(value) == 0) {
-            return(default)
-        }
-        as.character(value[[1]])
-    }
-
-    gauge_names <- names(community_data)
-    rows <- lapply(gauge_names, function(gauge_name) {
-        entries <- community_data[[gauge_name]]
-        if (is.null(entries) || length(entries) == 0) {
-            return(NULL)
-        }
-
-        data.frame(
-            gauge_name = rep(gauge_name, length(entries)),
-            location_code = vapply(
-                entries,
-                extract_scalar,
-                field = "location_code",
-                FUN.VALUE = character(1),
-                default = NA_character_
-            ),
-            location_id = suppressWarnings(as.integer(vapply(
-                entries,
-                extract_scalar,
-                field = "location_id",
-                FUN.VALUE = character(1),
-                default = NA_character_
-            ))),
-            encoding = suppressWarnings(as.numeric(vapply(
-                entries,
-                extract_scalar,
-                field = "encoding",
-                FUN.VALUE = character(1),
-                default = NA_character_
-            ))),
-            stringsAsFactors = FALSE
-        )
-    })
-
-    rows <- rows[vapply(rows, Negate(is.null), logical(1))]
-    if (length(rows) == 0) {
-        return(data.frame())
-    }
-
-    out <- do.call(rbind, rows)
-    out <- out[
-        !is.na(out$location_code) & nzchar(out$location_code),
-        ,
-        drop = FALSE
-    ]
-    out[!duplicated(out$location_code), , drop = FALSE]
-}
-
-get_location_ids_with_parameter <- function(location_ids, parameter, con) {
-    location_ids <- unique(stats::na.omit(as.integer(location_ids)))
-    if (length(location_ids) == 0) {
-        return(integer(0))
-    }
-
-    param_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
-
-    dat <- YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "SELECT DISTINCT ts.location_id",
-                "FROM timeseries ts",
-                "JOIN parameters p",
-                "  ON p.parameter_id = ts.parameter_id",
-                "WHERE ts.location_id IN (%s)",
-                "  AND p.param_name = %s"
-            ),
-            paste(location_ids, collapse = ","),
-            param_sql
-        ),
-        con = con
-    )
-
-    unique(stats::na.omit(as.integer(dat$location_id)))
-}
-
-dashboard_recent_cutoff_timestamp_sql <- function(reference_time = NULL) {
-    base_sql <- if (is.null(reference_time)) {
-        "NOW()"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
-            "'::timestamp"
-        )
-    }
-
-    paste0("(", base_sql, " - INTERVAL '14 days')")
-}
-
-dashboard_recent_cutoff_date_sql <- function(reference_time = NULL) {
-    base_sql <- if (is.null(reference_time)) {
-        "CURRENT_DATE"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d"),
-            "'::date"
-        )
-    }
-
-    paste0("(", base_sql, " - INTERVAL '14 days')::date")
-}
-
-interpret_loaded_times_as_local <- function(
-    dat,
-    time_columns = c("datetime", "latest_time")
-) {
-    fixed_timezone <- "Etc/GMT+7"
-
-    if (is.null(dat) || nrow(dat) == 0) {
-        return(dat)
-    }
-
-    for (col_name in intersect(time_columns, names(dat))) {
-        local_text <- if (inherits(dat[[col_name]], c("POSIXct", "POSIXt"))) {
-            format(dat[[col_name]], "%Y-%m-%d %H:%M:%S", tz = fixed_timezone)
-        } else {
-            as.character(dat[[col_name]])
-        }
-
-        x <- suppressWarnings(as.POSIXct(
-            local_text,
-            tz = fixed_timezone,
-            format = "%Y-%m-%d %H:%M:%S"
-        ))
-        if (all(is.na(x))) {
-            next
-        }
-
-        attr(x, "tzone") <- fixed_timezone
-        dat[[col_name]] <- x
-    }
-
-    dat
-}
-
-get_latest_parameter_summary <- function(
-    location_codes,
-    parameter,
-    con,
-    reference_time = NULL
-) {
-    location_codes <- unique(stats::na.omit(unlist(
-        location_codes,
-        use.names = FALSE
-    )))
-    if (length(location_codes) == 0) {
-        return(data.frame())
-    }
-
-    location_codes_sql <- paste(
-        DBI::dbQuoteString(con, location_codes),
-        collapse = ","
-    )
-    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
-
-    ref_ts_sql <- if (is.null(reference_time)) {
-        "NOW()"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
-            "'::timestamp"
-        )
-    }
-    ref_date_sql <- if (is.null(reference_time)) {
-        "CURRENT_DATE"
-    } else {
-        paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
-    }
-    recent_cutoff_ts_sql <- dashboard_recent_cutoff_timestamp_sql(
-        reference_time
-    )
-    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
-
-    dat <- YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH target_locations AS (",
-                "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
-                "),",
-                "target_timeseries AS (",
-                "    SELECT ts.location_id, ts.timeseries_id",
-                "    FROM timeseries ts",
-                "    JOIN locations l ON l.location_id = ts.location_id",
-                "    JOIN target_locations tl ON tl.location_code = l.location_code",
-                "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                "    WHERE p.param_name = %s",
-                "),",
-                "continuous_latest AS (",
-                "    SELECT DISTINCT ON (tt.location_id)",
-                "        tt.location_id,",
-                "        tt.timeseries_id,",
-                "        mc.datetime AS latest_time,",
-                "        mc.value AS current_value",
-                "    FROM target_timeseries tt",
-                "    JOIN measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
-                paste0("      AND mc.datetime <= ", ref_ts_sql),
-                "    ORDER BY tt.location_id, mc.datetime DESC, tt.timeseries_id",
-                "),",
-                "continuous_change AS (",
-                "    SELECT",
-                "        cl.location_id, cl.timeseries_id, cl.latest_time, cl.current_value,",
-                "        cl.current_value - prev.value AS change_24h,",
-                "        cl.current_value - prev48.value AS change_48h,",
-                "        cl.current_value - prev1w.value AS change_1w,",
-                "        1 AS source_priority",
-                "    FROM continuous_latest cl",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mc.value FROM measurements_continuous mc",
-                "        WHERE mc.timeseries_id = cl.timeseries_id",
-                "          AND mc.value IS NOT NULL",
-                "          AND mc.datetime <= cl.latest_time - INTERVAL '24 hours'",
-                "        ORDER BY mc.datetime DESC LIMIT 1",
-                "    ) prev ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mc.value FROM measurements_continuous mc",
-                "        WHERE mc.timeseries_id = cl.timeseries_id",
-                "          AND mc.value IS NOT NULL",
-                "          AND mc.datetime <= cl.latest_time - INTERVAL '48 hours'",
-                "        ORDER BY mc.datetime DESC LIMIT 1",
-                "    ) prev48 ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mc.value FROM measurements_continuous mc",
-                "        WHERE mc.timeseries_id = cl.timeseries_id",
-                "          AND mc.value IS NOT NULL",
-                "          AND mc.datetime <= cl.latest_time - INTERVAL '7 days'",
-                "        ORDER BY mc.datetime DESC LIMIT 1",
-                "    ) prev1w ON TRUE",
-                "),",
-                "daily_latest AS (",
-                "    SELECT DISTINCT ON (tt.location_id)",
-                "        tt.location_id, tt.timeseries_id, mcd.date::timestamp AS latest_time, mcd.value AS current_value",
-                "    FROM target_timeseries tt",
-                "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
-                "    WHERE mcd.value IS NOT NULL",
-                paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
-                paste0("      AND mcd.date <= ", ref_date_sql),
-                "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
-                "),",
-                "daily_change AS (",
-                "    SELECT",
-                "        dl.location_id, dl.timeseries_id, dl.latest_time, dl.current_value,",
-                "        dl.current_value - prev.value AS change_24h,",
-                "        dl.current_value - prev48.value AS change_48h,",
-                "        dl.current_value - prev1w.value AS change_1w,",
-                "        2 AS source_priority",
-                "    FROM daily_latest dl",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mcd.value FROM measurements_calculated_daily mcd",
-                "        WHERE mcd.timeseries_id = dl.timeseries_id",
-                "          AND mcd.value IS NOT NULL",
-                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
-                "        ORDER BY mcd.date DESC LIMIT 1",
-                "    ) prev ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mcd.value FROM measurements_calculated_daily mcd",
-                "        WHERE mcd.timeseries_id = dl.timeseries_id",
-                "          AND mcd.value IS NOT NULL",
-                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 days'",
-                "        ORDER BY mcd.date DESC LIMIT 1",
-                "    ) prev48 ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mcd.value FROM measurements_calculated_daily mcd",
-                "        WHERE mcd.timeseries_id = dl.timeseries_id",
-                "          AND mcd.value IS NOT NULL",
-                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 days'",
-                "        ORDER BY mcd.date DESC LIMIT 1",
-                "    ) prev1w ON TRUE",
-                "),",
-                "latest AS (",
-                "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, change_48h, change_1w, source_priority FROM continuous_change",
-                "    UNION ALL",
-                "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, change_48h, change_1w, source_priority FROM daily_change",
-                "),",
-                "best_latest AS (",
-                "    SELECT l.*,",
-                "        ROW_NUMBER() OVER (PARTITION BY l.location_id ORDER BY l.latest_time DESC, l.source_priority, l.timeseries_id) AS rn",
-                "    FROM latest l",
-                ")",
-                "SELECT loc.location_id, loc.location_code, loc.name, b.timeseries_id,",
-                "    b.latest_time, b.current_value, b.change_24h, b.change_48h, b.change_1w,",
-                paste0(
-                    "    EXTRACT(EPOCH FROM (",
-                    ref_ts_sql,
-                    " - b.latest_time)) / 3600.0 AS last_data_age_hours"
-                ),
-                "FROM best_latest b",
-                "JOIN locations loc ON loc.location_id = b.location_id",
-                "WHERE b.rn = 1",
-                "ORDER BY loc.location_code"
-            ),
-            location_codes_sql,
-            parameter_sql
-        ),
-        con = con
-    )
-
-    interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
-}
-
-get_fdd_summary <- function(location_codes, con, reference_time = NULL) {
-    location_codes <- unique(stats::na.omit(unlist(
-        location_codes,
-        use.names = FALSE
-    )))
-    if (length(location_codes) == 0) {
-        return(data.frame())
-    }
-
-    location_codes_sql <- paste(
-        DBI::dbQuoteString(con, location_codes),
-        collapse = ","
-    )
-    aggregation_sql <- DBI::dbQuoteString(
-        con,
-        daily_temperature_aggregation_name()
-    )
-
-    ref_ts_sql <- if (is.null(reference_time)) {
-        "NOW()"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
-            "'::timestamp"
-        )
-    }
-    ref_date_sql <- if (is.null(reference_time)) {
-        "CURRENT_DATE"
-    } else {
-        paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
-    }
-    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
-
-    dat <- YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH target_locations AS (",
-                "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
-                "),",
-                "target_timeseries AS (",
-                "    SELECT ts.location_id, ts.timeseries_id",
-                "    FROM timeseries ts",
-                "    JOIN locations l",
-                "      ON l.location_id = ts.location_id",
-                "    JOIN target_locations tl",
-                "      ON tl.location_code = l.location_code",
-                "    JOIN parameters p",
-                "      ON p.parameter_id = ts.parameter_id",
-                "    JOIN aggregation_types a",
-                "      ON a.aggregation_type_id = ts.aggregation_type_id",
-                "    WHERE p.param_name = 'temperature, air'",
-                "      AND a.aggregation_type = %s",
-                "),",
-                "daily_temp AS (",
-                "    SELECT",
-                "        tt.location_id,",
-                "        tt.timeseries_id,",
-                "        mcd.date AS date,",
-                "        mcd.value AS mean_temp",
-                "    FROM target_timeseries tt",
-                "    JOIN measurements_calculated_daily mcd",
-                "      ON mcd.timeseries_id = tt.timeseries_id",
-                "    WHERE mcd.value IS NOT NULL",
-                paste0("      AND mcd.date <= ", ref_date_sql),
-                "),",
-                "daily_fdd AS (",
-                "    SELECT",
-                "        dt.location_id,",
-                "        dt.timeseries_id,",
-                "        dt.date,",
-                "        GREATEST(-dt.mean_temp, 0) AS fdd_day,",
-                "        CASE",
-                "            WHEN EXTRACT(MONTH FROM dt.date) >= 10",
-                "            THEN EXTRACT(YEAR FROM dt.date)::int",
-                "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
-                "        END AS season_start_year",
-                "    FROM daily_temp dt",
-                "    WHERE dt.date <= ",
-                ref_date_sql,
-                "),",
-                "seasonal_fdd AS (",
-                "    SELECT",
-                "        df.location_id,",
-                "        df.timeseries_id,",
-                "        df.date,",
-                "        1 +",
-                "            SUM(df.fdd_day) OVER (",
-                "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
-                "                ORDER BY df.date",
-                "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
-                "            ) -",
-                "            FIRST_VALUE(df.fdd_day) OVER (",
-                "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
-                "                ORDER BY df.date",
-                "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
-                "            ) AS fdd",
-                "    FROM daily_fdd df",
-                "),",
-                "latest_by_location AS (",
-                "    SELECT DISTINCT ON (location_id)",
-                "        location_id,",
-                "        timeseries_id,",
-                "        date,",
-                "        fdd",
-                "    FROM seasonal_fdd",
-                "    ORDER BY location_id, date DESC, timeseries_id",
-                ")",
-                "SELECT",
-                "    loc.location_id,",
-                "    loc.location_code,",
-                "    loc.name,",
-                "    l.timeseries_id,",
-                "    l.date::timestamp AS latest_time,",
-                "    l.fdd AS current_value,",
-                "    l.fdd - prev24.fdd AS change_24h,",
-                "    l.fdd - prev48.fdd AS change_48h,",
-                "    l.fdd - prev1w.fdd AS change_1w,",
-                paste0(
-                    "    EXTRACT(EPOCH FROM (",
-                    ref_ts_sql,
-                    " - l.date::timestamp)) / 3600.0 AS last_data_age_hours"
-                ),
-                "FROM latest_by_location l",
-                "LEFT JOIN LATERAL (",
-                "    SELECT sf.fdd",
-                "    FROM seasonal_fdd sf",
-                "    WHERE sf.location_id = l.location_id",
-                "      AND sf.timeseries_id = l.timeseries_id",
-                "      AND sf.date <= l.date - INTERVAL '1 day'",
-                "    ORDER BY sf.date DESC",
-                "    LIMIT 1",
-                ") prev24 ON TRUE",
-                "LEFT JOIN LATERAL (",
-                "    SELECT sf.fdd",
-                "    FROM seasonal_fdd sf",
-                "    WHERE sf.location_id = l.location_id",
-                "      AND sf.timeseries_id = l.timeseries_id",
-                "      AND sf.date <= l.date - INTERVAL '2 days'",
-                "    ORDER BY sf.date DESC",
-                "    LIMIT 1",
-                ") prev48 ON TRUE",
-                "LEFT JOIN LATERAL (",
-                "    SELECT sf.fdd",
-                "    FROM seasonal_fdd sf",
-                "    WHERE sf.location_id = l.location_id",
-                "      AND sf.timeseries_id = l.timeseries_id",
-                "      AND sf.date <= l.date - INTERVAL '7 days'",
-                "    ORDER BY sf.date DESC",
-                "    LIMIT 1",
-                ") prev1w ON TRUE",
-                "JOIN locations loc",
-                "  ON loc.location_id = l.location_id",
-                paste0("WHERE l.date >= ", recent_cutoff_date_sql),
-                "ORDER BY loc.location_code"
-            ),
-            location_codes_sql,
-            aggregation_sql
-        ),
-        con = con
-    )
-
-    interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
-}
-
-get_ddt_summary <- function(location_codes, con, reference_time = NULL) {
-    location_codes <- unique(stats::na.omit(unlist(
-        location_codes,
-        use.names = FALSE
-    )))
-    if (length(location_codes) == 0) {
-        return(data.frame())
-    }
-
-    location_codes_sql <- paste(
-        DBI::dbQuoteString(con, location_codes),
-        collapse = ","
-    )
-    aggregation_sql <- DBI::dbQuoteString(
-        con,
-        daily_temperature_aggregation_name()
-    )
-
-    ref_ts_sql <- if (is.null(reference_time)) {
-        "NOW()"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
-            "'::timestamp"
-        )
-    }
-    ref_date_sql <- if (is.null(reference_time)) {
-        "CURRENT_DATE"
-    } else {
-        paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
-    }
-    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
-
-    dat <- YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH target_locations AS (",
-                "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
-                "),",
-                "target_timeseries AS (",
-                "    SELECT ts.location_id, ts.timeseries_id",
-                "    FROM timeseries ts",
-                "    JOIN locations l",
-                "      ON l.location_id = ts.location_id",
-                "    JOIN target_locations tl",
-                "      ON tl.location_code = l.location_code",
-                "    JOIN parameters p",
-                "      ON p.parameter_id = ts.parameter_id",
-                "    JOIN aggregation_types a",
-                "      ON a.aggregation_type_id = ts.aggregation_type_id",
-                "    WHERE p.param_name = 'temperature, air'",
-                "      AND a.aggregation_type = %s",
-                "),",
-                "daily_temp AS (",
-                "    SELECT",
-                "        tt.location_id,",
-                "        tt.timeseries_id,",
-                "        mcd.date AS date,",
-                "        mcd.value AS mean_temp",
-                "    FROM target_timeseries tt",
-                "    JOIN measurements_calculated_daily mcd",
-                "      ON mcd.timeseries_id = tt.timeseries_id",
-                "    WHERE mcd.value IS NOT NULL",
-                paste0("      AND mcd.date <= ", ref_date_sql),
-                "),",
-                "daily_ddt AS (",
-                "    SELECT",
-                "        dt.location_id,",
-                "        dt.timeseries_id,",
-                "        dt.date,",
-                "        GREATEST(dt.mean_temp, 0) AS ddt_day,",
-                "        CASE",
-                "            WHEN EXTRACT(MONTH FROM dt.date) >= 4",
-                "            THEN EXTRACT(YEAR FROM dt.date)::int",
-                "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
-                "        END AS season_start_year",
-                "    FROM daily_temp dt",
-                "    WHERE dt.date <= ",
-                ref_date_sql,
-                "),",
-                "seasonal_ddt AS (",
-                "    SELECT",
-                "        df.location_id,",
-                "        df.timeseries_id,",
-                "        df.date,",
-                "        1 +",
-                "            SUM(df.ddt_day) OVER (",
-                "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
-                "                ORDER BY df.date",
-                "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
-                "            ) -",
-                "            FIRST_VALUE(df.ddt_day) OVER (",
-                "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
-                "                ORDER BY df.date",
-                "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
-                "            ) AS ddt",
-                "    FROM daily_ddt df",
-                "),",
-                "latest_by_location AS (",
-                "    SELECT DISTINCT ON (location_id)",
-                "        location_id,",
-                "        timeseries_id,",
-                "        date,",
-                "        ddt",
-                "    FROM seasonal_ddt",
-                "    ORDER BY location_id, date DESC, timeseries_id",
-                ")",
-                "SELECT",
-                "    loc.location_id,",
-                "    loc.location_code,",
-                "    loc.name,",
-                "    l.timeseries_id,",
-                "    l.date::timestamp AS latest_time,",
-                "    l.ddt AS current_value,",
-                "    l.ddt - prev24.ddt AS change_24h,",
-                "    l.ddt - prev48.ddt AS change_48h,",
-                "    l.ddt - prev1w.ddt AS change_1w,",
-                paste0(
-                    "    EXTRACT(EPOCH FROM (",
-                    ref_ts_sql,
-                    " - l.date::timestamp)) / 3600.0 AS last_data_age_hours"
-                ),
-                "FROM latest_by_location l",
-                "LEFT JOIN LATERAL (",
-                "    SELECT sd.ddt",
-                "    FROM seasonal_ddt sd",
-                "    WHERE sd.location_id = l.location_id",
-                "      AND sd.timeseries_id = l.timeseries_id",
-                "      AND sd.date <= l.date - INTERVAL '1 day'",
-                "    ORDER BY sd.date DESC",
-                "    LIMIT 1",
-                ") prev24 ON TRUE",
-                "LEFT JOIN LATERAL (",
-                "    SELECT sd.ddt",
-                "    FROM seasonal_ddt sd",
-                "    WHERE sd.location_id = l.location_id",
-                "      AND sd.timeseries_id = l.timeseries_id",
-                "      AND sd.date <= l.date - INTERVAL '2 days'",
-                "    ORDER BY sd.date DESC",
-                "    LIMIT 1",
-                ") prev48 ON TRUE",
-                "LEFT JOIN LATERAL (",
-                "    SELECT sd.ddt",
-                "    FROM seasonal_ddt sd",
-                "    WHERE sd.location_id = l.location_id",
-                "      AND sd.timeseries_id = l.timeseries_id",
-                "      AND sd.date <= l.date - INTERVAL '7 days'",
-                "    ORDER BY sd.date DESC",
-                "    LIMIT 1",
-                ") prev1w ON TRUE",
-                "JOIN locations loc",
-                "  ON loc.location_id = l.location_id",
-                paste0("WHERE l.date >= ", recent_cutoff_date_sql),
-                "ORDER BY loc.location_code"
-            ),
-            location_codes_sql,
-            aggregation_sql
-        ),
-        con = con
-    )
-
-    interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
-}
-
-get_precipitation_timeseries_summary <- function(
-    location_codes,
-    con,
-    reference_time = NULL
-) {
-    location_codes <- unique(stats::na.omit(unlist(
-        location_codes,
-        use.names = FALSE
-    )))
-    if (length(location_codes) == 0) {
-        return(data.frame())
-    }
-
-    location_codes_sql <- paste(
-        DBI::dbQuoteString(con, location_codes),
-        collapse = ","
-    )
-
-    ref_ts_sql <- if (is.null(reference_time)) {
-        "NOW()"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
-            "'::timestamp"
-        )
-    }
-    ref_date_sql <- if (is.null(reference_time)) {
-        "CURRENT_DATE"
-    } else {
-        paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
-    }
-    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
-
-    dat <- YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH target_locations AS (",
-                "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
-                "),",
-                "target_timeseries AS (",
-                "    SELECT ts.location_id, ts.timeseries_id",
-                "    FROM timeseries ts",
-                "    JOIN locations loc ON loc.location_id = ts.location_id",
-                "    JOIN target_locations tl ON tl.location_code = loc.location_code",
-                "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                "    WHERE p.param_name = 'precipitation, total'",
-                "),",
-                "filtered AS MATERIALIZED (",
-                "    SELECT t.location_id, t.timeseries_id, mc.date, mc.value",
-                "    FROM measurements_calculated_daily mc",
-                "    JOIN target_timeseries t ON t.timeseries_id = mc.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                paste0(
-                    "      AND mc.date >= ",
-                    ref_date_sql,
-                    " - INTERVAL '6 months'"
-                ),
-                paste0(
-                    "      AND mc.date < ",
-                    ref_date_sql,
-                    " + INTERVAL '1 day'"
-                ),
-                "),",
-                "latest_by_location AS (",
-                "    SELECT DISTINCT ON (location_id)",
-                "        location_id, timeseries_id, date AS last_date",
-                "    FROM filtered",
-                "    ORDER BY location_id, date DESC, timeseries_id",
-                "),",
-                "current_accumulations AS (",
-                "    SELECT",
-                "        l.location_id,",
-                "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '7 days' AND mc.date <= l.last_date) AS precipitation_1w_accumulation,",
-                "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '1 month' AND mc.date <= l.last_date) AS precipitation_1m_accumulation,",
-                "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '6 months' AND mc.date <= l.last_date) AS precipitation_6m_accumulation",
-                "    FROM latest_by_location l",
-                "    JOIN measurements_calculated_daily mc ON mc.timeseries_id = l.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                "      AND mc.date > l.last_date - INTERVAL '6 months'",
-                "      AND mc.date <= l.last_date",
-                "    GROUP BY l.location_id",
-                ")",
-                "SELECT",
-                "    loc.location_id, loc.location_code, loc.name,",
-                "    l.last_date::timestamp AS latest_time,",
-                "    ca.precipitation_1w_accumulation,",
-                "    ca.precipitation_1m_accumulation,",
-                "    ca.precipitation_6m_accumulation,",
-                paste0(
-                    "    EXTRACT(EPOCH FROM (",
-                    ref_ts_sql,
-                    " - l.last_date::timestamp)) / 3600.0 AS last_data_age_hours"
-                ),
-                "FROM target_locations tl",
-                "JOIN locations loc ON loc.location_code = tl.location_code",
-                "LEFT JOIN latest_by_location l ON l.location_id = loc.location_id",
-                "LEFT JOIN current_accumulations ca ON ca.location_id = loc.location_id",
-                "WHERE l.last_date IS NOT NULL",
-                paste0("  AND l.last_date >= ", recent_cutoff_date_sql),
-                "ORDER BY loc.location_code"
-            ),
-            location_codes_sql
-        ),
-        con = con
-    )
-
-    interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
-}
-
-get_snow_survey_summary <- function(
-    location_codes,
-    parameter,
-    con,
-    reference_time = NULL
-) {
-    location_codes <- unique(stats::na.omit(unlist(
-        location_codes,
-        use.names = FALSE
-    )))
-    if (length(location_codes) == 0) {
-        return(data.frame())
-    }
-
-    location_codes_sql <- paste(
-        DBI::dbQuoteString(con, location_codes),
-        collapse = ","
-    )
-    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
-
-    ref_ts <- if (is.null(reference_time)) {
-        Sys.time()
-    } else {
-        as.POSIXct(reference_time)
-    }
-    ref_ts_sql <- paste0(
-        "'",
-        format(ref_ts, "%Y-%m-%d %H:%M:%S"),
-        "'::timestamp"
-    )
-    ref_year <- as.integer(format(ref_ts, "%Y"))
-
-    dat <- YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH target_locations AS (",
-                "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
-                "),",
-                "survey_values AS (",
-                "    SELECT l.location_id, l.location_code, s.sample_id,",
-                "        s.target_datetime, dr.result AS value",
-                "    FROM target_locations tl",
-                "    JOIN locations l ON l.location_code = tl.location_code",
-                "    JOIN samples s ON s.location_id = l.location_id",
-                "    JOIN discrete.results dr ON dr.sample_id = s.sample_id",
-                "    JOIN parameters p ON p.parameter_id = dr.parameter_id",
-                "    WHERE p.param_name = %s",
-                "      AND dr.result IS NOT NULL",
-                "      AND s.target_datetime IS NOT NULL",
-                paste0("      AND s.target_datetime <= ", ref_ts_sql),
-                "      AND EXTRACT(MONTH FROM s.target_datetime) IN (3, 4, 5)",
-                "      AND EXTRACT(DAY FROM s.target_datetime) = 1",
-                "),",
-                "latest_by_location AS (",
-                "    SELECT DISTINCT ON (location_id)",
-                "        location_id, sample_id, target_datetime AS latest_time, value AS current_value",
-                "    FROM survey_values",
-                "    ORDER BY location_id, target_datetime DESC, sample_id DESC",
-                "),",
-                "current_year_values AS (",
-                "    SELECT location_id,",
-                sprintf(
-                    "        MAX(value) FILTER (WHERE EXTRACT(YEAR FROM target_datetime)::int = %d AND EXTRACT(MONTH FROM target_datetime) = 3) AS march_1_value,",
-                    ref_year
-                ),
-                sprintf(
-                    "        MAX(value) FILTER (WHERE EXTRACT(YEAR FROM target_datetime)::int = %d AND EXTRACT(MONTH FROM target_datetime) = 4) AS april_1_value,",
-                    ref_year
-                ),
-                sprintf(
-                    "        MAX(value) FILTER (WHERE EXTRACT(YEAR FROM target_datetime)::int = %d AND EXTRACT(MONTH FROM target_datetime) = 5) AS may_1_value",
-                    ref_year
-                ),
-                "    FROM survey_values GROUP BY location_id",
-                ")",
-                "SELECT loc.location_id, loc.location_code, loc.name,",
-                "    l.latest_time, l.current_value,",
-                "    cy.march_1_value, cy.april_1_value, cy.may_1_value,",
-                paste0(
-                    "    EXTRACT(EPOCH FROM (",
-                    ref_ts_sql,
-                    " - l.latest_time)) / 3600.0 AS last_data_age_hours"
-                ),
-                "FROM latest_by_location l",
-                "JOIN locations loc ON loc.location_id = l.location_id",
-                "LEFT JOIN current_year_values cy ON cy.location_id = l.location_id",
-                "ORDER BY loc.location_code"
-            ),
-            location_codes_sql,
-            parameter_sql
-        ),
-        con = con
-    )
-
-    interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
-}
-
-get_latest_parameter_summary_by_location_id <- function(
-    location_ids,
-    parameter,
-    con,
-    reference_time = NULL
-) {
-    location_ids <- unique(stats::na.omit(as.integer(location_ids)))
-    if (length(location_ids) == 0) {
-        return(data.frame())
-    }
-
-    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
-    reference_ts <- if (is.null(reference_time)) {
-        "NOW()"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
-            "'::timestamp"
-        )
-    }
-    reference_date <- if (is.null(reference_time)) {
-        "CURRENT_DATE"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d"),
-            "'::date"
-        )
-    }
-
-    YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH target_locations AS (",
-                "    SELECT UNNEST(ARRAY[%s]::int[]) AS location_id",
-                "),",
-                "target_timeseries AS (",
-                "    SELECT ts.location_id, ts.timeseries_id",
-                "    FROM timeseries ts",
-                "    JOIN target_locations tl ON tl.location_id = ts.location_id",
-                "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                "    WHERE p.param_name = %s",
-                "),",
-                "continuous_latest AS (",
-                "    SELECT DISTINCT ON (tt.location_id)",
-                "        tt.location_id,",
-                "        tt.timeseries_id,",
-                "        mc.datetime AS latest_time,",
-                "        mc.value AS current_value",
-                "    FROM target_timeseries tt",
-                "    JOIN measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                paste0("      AND mc.datetime <= ", reference_ts),
-                "    ORDER BY tt.location_id, mc.datetime DESC, tt.timeseries_id",
-                "),",
-                "continuous_change AS (",
-                "    SELECT",
-                "        cl.location_id,",
-                "        cl.latest_time,",
-                paste0(
-                    "        EXTRACT(EPOCH FROM (",
-                    reference_ts,
-                    " - cl.latest_time)) / 3600.0 AS last_data_age_hours,"
-                ),
-                "        cl.current_value,",
-                "        cl.current_value - prev24.value AS change_24h,",
-                "        cl.current_value - prev48.value AS change_48h,",
-                "        cl.current_value - prev1w.value AS change_1w,",
-                "        1 AS source_priority",
-                "    FROM continuous_latest cl",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mc.value",
-                "        FROM measurements_continuous mc",
-                "        WHERE mc.timeseries_id = cl.timeseries_id",
-                "          AND mc.value IS NOT NULL",
-                "          AND mc.datetime <= cl.latest_time - INTERVAL '24 hours'",
-                "        ORDER BY mc.datetime DESC",
-                "        LIMIT 1",
-                "    ) prev24 ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mc.value",
-                "        FROM measurements_continuous mc",
-                "        WHERE mc.timeseries_id = cl.timeseries_id",
-                "          AND mc.value IS NOT NULL",
-                "          AND mc.datetime <= cl.latest_time - INTERVAL '48 hours'",
-                "        ORDER BY mc.datetime DESC",
-                "        LIMIT 1",
-                "    ) prev48 ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mc.value",
-                "        FROM measurements_continuous mc",
-                "        WHERE mc.timeseries_id = cl.timeseries_id",
-                "          AND mc.value IS NOT NULL",
-                "          AND mc.datetime <= cl.latest_time - INTERVAL '7 days'",
-                "        ORDER BY mc.datetime DESC",
-                "        LIMIT 1",
-                "    ) prev1w ON TRUE",
-                "),",
-                "daily_latest AS (",
-                "    SELECT DISTINCT ON (tt.location_id)",
-                "        tt.location_id,",
-                "        tt.timeseries_id,",
-                "        mcd.date::timestamp AS latest_time,",
-                "        mcd.value AS current_value",
-                "    FROM target_timeseries tt",
-                "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
-                "    WHERE mcd.value IS NOT NULL",
-                paste0("      AND mcd.date <= ", reference_date),
-                "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
-                "),",
-                "daily_change AS (",
-                "    SELECT",
-                "        dl.location_id,",
-                "        dl.latest_time,",
-                paste0(
-                    "        EXTRACT(EPOCH FROM (",
-                    reference_ts,
-                    " - dl.latest_time)) / 3600.0 AS last_data_age_hours,"
-                ),
-                "        dl.current_value,",
-                "        dl.current_value - prev24.value AS change_24h,",
-                "        dl.current_value - prev48.value AS change_48h,",
-                "        dl.current_value - prev1w.value AS change_1w,",
-                "        2 AS source_priority",
-                "    FROM daily_latest dl",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mcd.value",
-                "        FROM measurements_calculated_daily mcd",
-                "        WHERE mcd.timeseries_id = dl.timeseries_id",
-                "          AND mcd.value IS NOT NULL",
-                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
-                "        ORDER BY mcd.date DESC",
-                "        LIMIT 1",
-                "    ) prev24 ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mcd.value",
-                "        FROM measurements_calculated_daily mcd",
-                "        WHERE mcd.timeseries_id = dl.timeseries_id",
-                "          AND mcd.value IS NOT NULL",
-                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 day'",
-                "        ORDER BY mcd.date DESC",
-                "        LIMIT 1",
-                "    ) prev48 ON TRUE",
-                "    LEFT JOIN LATERAL (",
-                "        SELECT mcd.value",
-                "        FROM measurements_calculated_daily mcd",
-                "        WHERE mcd.timeseries_id = dl.timeseries_id",
-                "          AND mcd.value IS NOT NULL",
-                "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 day'",
-                "        ORDER BY mcd.date DESC",
-                "        LIMIT 1",
-                "    ) prev1w ON TRUE",
-                "),",
-                "combined AS (",
-                "    SELECT location_id, latest_time, last_data_age_hours, current_value, change_24h, change_48h, change_1w, source_priority FROM continuous_change",
-                "    UNION ALL",
-                "    SELECT location_id, latest_time, last_data_age_hours, current_value, change_24h, change_48h, change_1w, source_priority FROM daily_change",
-                "),",
-                "ranked AS (",
-                "    SELECT",
-                "        c.*,",
-                "        ROW_NUMBER() OVER (",
-                "            PARTITION BY c.location_id",
-                "            ORDER BY c.latest_time DESC, c.source_priority",
-                "        ) AS rn",
-                "    FROM combined c",
-                ")",
-                "SELECT",
-                "    location_id,",
-                "    latest_time,",
-                "    last_data_age_hours,",
-                "    current_value,",
-                "    change_24h,",
-                "    change_48h,",
-                "    change_1w",
-                "FROM ranked",
-                "WHERE rn = 1"
-            ),
-            paste(location_ids, collapse = ","),
-            parameter_sql
-        ),
-        con = con
-    )
-}
-
-#' Fetch a spatial vector layer from the database as an sf object
-#'
-#' Queries the `spatial.vectors` table, optionally filtering by feature name,
-#' reprojects geometries to the requested CRS, and returns an `sf` object.
-#'
-#' @param feature_name Character vector of feature names to include. When
-#'   `NULL` (default) all features in the matching layer(s) are returned.
-#' @param layer_name Character vector of layer names to query (matched against
-#'   the `layer_name` column of `spatial.vectors`).
-#' @param con A DBI database connection.
-#' @param epsg Integer EPSG code for the output CRS. Defaults to `4326`
-#'   (WGS 84).
-#'
-#' @return An `sf` object with all columns from `spatial.vectors` plus the
-#'   well-known-text geometry reprojected to `epsg`, or `NULL` when no rows
-#'   match the supplied filters.
-get_spatial_layer_as_sf <- function(
-    feature_name = NULL,
-    layer_name,
-    con,
-    epsg = 4326
-) {
-    layer_values <- unlist(layer_name, use.names = FALSE)
-    if (length(layer_values) == 0) {
-        return(NULL)
-    }
-
-    layer_sql <- paste(DBI::dbQuoteString(con, layer_values), collapse = ",")
-    where_clauses <- c(sprintf("layer_name IN (%s)", layer_sql))
-
-    if (!is.null(feature_name)) {
-        feature_values <- unique(stats::na.omit(unlist(
-            feature_name,
-            use.names = FALSE
-        )))
-        feature_values <- feature_values[nzchar(feature_values)]
-
-        if (length(feature_values) > 0) {
-            feature_sql <- paste(
-                DBI::dbQuoteString(con, feature_values),
-                collapse = ","
-            )
-            where_clauses <- c(
-                where_clauses,
-                sprintf("feature_name IN (%s)", feature_sql)
-            )
-        }
-    }
-
-    query <- sprintf(
-        paste(
-            "SELECT",
-            "    *,",
-            "    ST_AsText(ST_Transform(geom, %d)) AS geom_wkt",
-            "FROM spatial.vectors",
-            "WHERE %s"
-        ),
-        epsg,
-        paste(where_clauses, collapse = " AND ")
-    )
-
-    dat <- YGwater::dbGetQueryDT(query, con = con)
-    if (is.null(dat) || nrow(dat) == 0) {
-        return(NULL)
-    }
-
-    sf::st_as_sf(dat, wkt = "geom_wkt", crs = epsg)
-}
-
-#' Look up location records for gauges in a community configuration
-#'
-#' Resolves location metadata (name, code, ID, latitude, longitude) from the
-#' database for all gauges described in a community JSON configuration. The
-#' lookup first attempts to match by explicit `location_id` / `location_code`
-#' values found in the configuration entries; if no rows are found it falls
-#' back to matching by gauge name.
-#'
-#' @param community_data Named list of gauge configuration entries (same
-#'   structure as accepted by `get_encoded_gauge_metadata`).
-#' @param con A DBI database connection.
-#'
-#' @return A data frame with columns `name`, `location_code`, `location_id`,
-#'   `latitude`, and `longitude` (one row per unique matching location), or an
-#'   empty data frame when no matches are found or `community_data` is `NULL`.
-location_lookup_for_community <- function(community_data, con) {
-    if (is.null(community_data) || length(community_data) == 0) {
-        return(data.frame())
-    }
-
-    location_names <- unique(stats::na.omit(unlist(
-        names(community_data),
-        use.names = FALSE
-    )))
-
-    entry_list <- unlist(community_data, recursive = FALSE, use.names = FALSE)
-
-    extract_entry_scalar <- function(entry, field) {
-        value <- entry[[field]]
-        if (is.null(value) || length(value) == 0) {
-            return(NA_character_)
-        }
-        as.character(value[[1]])
-    }
-
-    location_ids <- integer(0)
-    location_codes <- character(0)
-
-    if (length(entry_list) > 0) {
-        location_ids <- suppressWarnings(as.integer(vapply(
-            entry_list,
-            extract_entry_scalar,
-            field = "location_id",
-            FUN.VALUE = character(1)
-        )))
-        location_ids <- unique(stats::na.omit(location_ids))
-
-        location_codes <- vapply(
-            entry_list,
-            extract_entry_scalar,
-            field = "location_code",
-            FUN.VALUE = character(1)
-        )
-        location_codes <- unique(stats::na.omit(location_codes))
-        location_codes <- location_codes[nzchar(location_codes)]
-    }
-
-    dat <- data.frame()
-
-    # Prefer strict DB matches by explicit IDs/codes from JSON metadata.
-    where_clauses <- character(0)
-    if (length(location_ids) > 0) {
-        where_clauses <- c(
-            where_clauses,
-            sprintf("location_id IN (%s)", paste(location_ids, collapse = ","))
-        )
-    }
-    if (length(location_codes) > 0) {
-        location_codes_sql <- paste(
-            DBI::dbQuoteString(con, location_codes),
-            collapse = ","
-        )
-        where_clauses <- c(
-            where_clauses,
-            sprintf("location_code IN (%s)", location_codes_sql)
-        )
-    }
-
-    if (length(where_clauses) > 0) {
-        dat <- YGwater::dbGetQueryDT(
-            paste(
-                "SELECT DISTINCT",
-                "    name,",
-                "    location_code,",
-                "    location_id,",
-                "    latitude,",
-                "    longitude",
-                "FROM locations",
-                sprintf("WHERE %s", paste(where_clauses, collapse = " OR ")),
-                "ORDER BY name"
-            ),
-            con = con
-        )
-    }
-
-    # Fallback: if no strict ID/code hits, try matching by location name.
-    if ((is.null(dat) || nrow(dat) == 0) && length(location_names) > 0) {
-        location_names_sql <- paste(
-            DBI::dbQuoteString(con, location_names),
-            collapse = ","
-        )
-        dat <- YGwater::dbGetQueryDT(
-            paste(
-                "SELECT DISTINCT",
-                "    name,",
-                "    location_code,",
-                "    location_id,",
-                "    latitude,",
-                "    longitude",
-                "FROM locations",
-                sprintf("WHERE name IN (%s)", location_names_sql),
-                "ORDER BY name"
-            ),
-            con = con
-        )
-    }
-
-    if (is.null(dat) || nrow(dat) == 0) {
-        return(data.frame())
-    }
-
-    dat$location_code <- as.character(dat$location_code)
-    dat$name <- as.character(dat$name)
-    dat
-}
-
-#' Extract location codes from a community JSON configuration
-#'
-#' Walks the nested community configuration list and collects every unique,
-#' non-empty `location_code` string found in the leaf entries.
-#'
-#' @param community_data Named list of gauge configuration entries (same
-#'   structure as accepted by `get_encoded_gauge_metadata`).
-#'
-#' @return A character vector of unique, non-empty location codes, or
-#'   `character(0)` when `community_data` is `NULL`, empty, or contains no
-#'   valid codes.
-community_location_codes_from_json <- function(community_data) {
-    if (is.null(community_data) || length(community_data) == 0) {
-        return(character(0))
-    }
-
-    entry_list <- unlist(community_data, recursive = FALSE, use.names = FALSE)
-    if (length(entry_list) == 0) {
-        return(character(0))
-    }
-
-    extract_code <- function(entry) {
-        value <- entry[["location_code"]]
-        if (is.null(value) || length(value) == 0) {
-            return(NA_character_)
-        }
-        as.character(value[[1]])
-    }
-
-    codes <- vapply(entry_list, extract_code, FUN.VALUE = character(1))
-    codes <- unique(stats::na.omit(codes))
-    codes[nzchar(codes)]
-}
-
-# ---------------------------------------------------------------------------
-# Plot helpers (ported from dev/freshet_forecasting/dashboard.r)
-# ---------------------------------------------------------------------------
-
-normalize_historical_start_year <- function(historical_start_year) {
-    current_year <- as.integer(format(Sys.Date(), "%Y"))
-    historical_start_year <- suppressWarnings(as.integer(
-        historical_start_year[[1]]
-    ))
-    if (
-        length(historical_start_year) != 1 ||
-            is.na(historical_start_year) ||
-            historical_start_year < 1980 ||
-            historical_start_year > current_year
-    ) {
-        return(2020L)
-    }
-    historical_start_year
-}
-
-parameter_axis_title <- function(parameter) {
-    axis_titles <- c(
-        "precipitation (1wk)" = "Precipitation (1wk accumulation, mm)",
-        "precipitation (24hr)" = "Precipitation (24hr, mm)",
-        "FDD" = "Freezing Degree Days (FDD)",
-        "DDT" = "Thawing Degree Days (DDT)",
-        "snow water eq (pillow)" = "Snow Water Equivalent (Pillow)",
-        "snow depth (pillow)" = "Snow Depth (Pillow)",
-        "snow water eq (survey)" = "Snow Water Equivalent (Survey)",
-        "snow depth (survey)" = "Snow Depth (Survey)"
-    )
-    if (parameter %in% names(axis_titles)) {
-        axis_titles[[parameter]]
-    } else {
-        parameter
-    }
-}
-
-sanitize_loaded_series_values <- function(dat, parameter) {
-    if (
-        is.null(dat) ||
-            nrow(dat) == 0 ||
-            !"value" %in% names(dat) ||
-            identical(parameter, "temperature, air")
-    ) {
-        return(dat)
-    }
-    dat$value[!is.na(dat$value) & dat$value < 0] <- NA_real_
-    dat
-}
-
-empty_plotly_widget <- function(title = NULL, annotations = NULL) {
-    widget <- plotly::plot_ly(
-        x = numeric(0),
-        y = numeric(0),
-        type = "scatter",
-        mode = "lines",
-        hoverinfo = "skip",
-        showlegend = FALSE
-    )
-    plotly::layout(widget, title = title, annotations = annotations)
-}
-
-get_return_period_discharge <- function(
-    location_codes,
-    parameter = "water flow",
-    return_periods = c(2, 5, 10, 25, 50, 100),
-    con
-) {
-    location_codes_str <- paste(sprintf("'%s'", location_codes), collapse = ",")
-    percentiles <- 1 - (1 / return_periods)
-    percentile_cols <- paste(
-        sprintf(
-            "percentile_cont(%.4f) WITHIN GROUP (ORDER BY annual_peak) AS rp_%d",
-            percentiles,
-            return_periods
-        ),
-        collapse = ", "
-    )
-    YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH annual_peaks AS (",
-                "    SELECT",
-                "        ts.location_id,",
-                "        l.location_code,",
-                "        EXTRACT(YEAR FROM mc.date)::int AS year,",
-                "        MAX(mc.value) AS annual_peak",
-                "    FROM measurements_calculated_daily mc",
-                "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
-                "    JOIN locations l ON ts.location_id = l.location_id",
-                "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
-                "    WHERE l.location_code IN (%s)",
-                "      AND p.param_name = '%s'",
-                "    GROUP BY ts.location_id, l.location_code, EXTRACT(YEAR FROM mc.date)",
-                ")",
-                "SELECT location_id, location_code, COUNT(*) AS n_years, %s",
-                "FROM annual_peaks",
-                "GROUP BY location_id, location_code"
-            ),
-            location_codes_str,
-            parameter,
-            percentile_cols
-        ),
-        con = con
-    )
-}
-
-get_daily_percentiles <- function(
-    location_codes,
-    parameter = "water flow",
-    con,
-    historical_start_year = 2020
-) {
-    query_parameter <- parameter_query_name(parameter)
-    location_codes_str <- paste(sprintf("'%s'", location_codes), collapse = ",")
-    historical_start_year <- normalize_historical_start_year(
-        historical_start_year
-    )
-    historical_start_date_sql <- paste0(
-        "MAKE_DATE(",
-        historical_start_year,
-        ", 1, 1)"
-    )
-
-    if (identical(parameter, "FDD")) {
-        return(YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "WITH daily_temp AS (",
-                    "    SELECT l.location_code,",
-                    "        mcd.date AS date,",
-                    "        mcd.value AS mean_temp",
-                    "    FROM measurements_calculated_daily mcd",
-                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
-                    "    JOIN locations l ON ts.location_id = l.location_id",
-                    "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
-                    "    WHERE l.location_code IN (%s)",
-                    "      AND p.param_name = 'temperature, air'",
-                    "      AND mcd.value IS NOT NULL",
-                    paste0(
-                        "      AND mcd.date >= ",
-                        historical_start_date_sql
-                    ),
-                    "),",
-                    "daily_fdd AS (",
-                    "    SELECT dt.location_code, dt.date,",
-                    "        GREATEST(-dt.mean_temp, 0) AS fdd_day,",
-                    "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 10",
-                    "            THEN EXTRACT(YEAR FROM dt.date)::int",
-                    "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
-                    "        END AS season_start_year",
-                    "    FROM daily_temp dt",
-                    "),",
-                    "seasonal_fdd AS (",
-                    "    SELECT df.location_code, df.date,",
-                    "        1 + SUM(df.fdd_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
-                    "          - FIRST_VALUE(df.fdd_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
-                    "    FROM daily_fdd df",
-                    "),",
-                    "daily_values AS (",
-                    "    SELECT location_code,",
-                    "        CASE WHEN EXTRACT(MONTH FROM date) > 2 AND ((EXTRACT(YEAR FROM date)::int %% 4 = 0 AND EXTRACT(YEAR FROM date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM date)::int %% 400 = 0)",
-                    "            THEN EXTRACT(DOY FROM date)::int - 1 ELSE EXTRACT(DOY FROM date)::int END AS doy,",
-                    "        value FROM seasonal_fdd",
-                    "    WHERE NOT (EXTRACT(MONTH FROM date) = 2 AND EXTRACT(DAY FROM date) = 29) AND value IS NOT NULL",
-                    "),",
-                    "by_doy AS (",
-                    "    SELECT location_code, doy, COUNT(*) AS n_values,",
-                    "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
-                    "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
-                    "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
-                    "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
-                    "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
-                    "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
-                    "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
-                    "    FROM daily_values GROUP BY location_code, doy",
-                    ")",
-                    "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
-                    "FROM (SELECT DISTINCT location_code FROM daily_values) lc",
-                    "CROSS JOIN generate_series(1, 365) AS gs(doy)",
-                    "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
-                    "ORDER BY lc.location_code, gs.doy"
-                ),
-                location_codes_str
-            ),
-            con = con
-        ))
-    }
-
-    if (identical(parameter, "DDT")) {
-        return(YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "WITH daily_temp AS (",
-                    "    SELECT l.location_code,",
-                    "        mcd.date AS date,",
-                    "        mcd.value AS mean_temp",
-                    "    FROM measurements_calculated_daily mcd",
-                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
-                    "    JOIN locations l ON ts.location_id = l.location_id",
-                    "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
-                    "    WHERE l.location_code IN (%s)",
-                    "      AND p.param_name = 'temperature, air'",
-                    "      AND mcd.value IS NOT NULL",
-                    paste0(
-                        "      AND mcd.date >= ",
-                        historical_start_date_sql
-                    ),
-                    "),",
-                    "daily_ddt AS (",
-                    "    SELECT dt.location_code, dt.date,",
-                    "        GREATEST(dt.mean_temp, 0) AS ddt_day,",
-                    "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 4",
-                    "            THEN EXTRACT(YEAR FROM dt.date)::int",
-                    "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
-                    "        END AS season_start_year",
-                    "    FROM daily_temp dt",
-                    "),",
-                    "seasonal_ddt AS (",
-                    "    SELECT df.location_code, df.date,",
-                    "        1 + SUM(df.ddt_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
-                    "          - FIRST_VALUE(df.ddt_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
-                    "    FROM daily_ddt df",
-                    "),",
-                    "daily_values AS (",
-                    "    SELECT location_code,",
-                    "        CASE WHEN EXTRACT(MONTH FROM date) > 2 AND ((EXTRACT(YEAR FROM date)::int %% 4 = 0 AND EXTRACT(YEAR FROM date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM date)::int %% 400 = 0)",
-                    "            THEN EXTRACT(DOY FROM date)::int - 1 ELSE EXTRACT(DOY FROM date)::int END AS doy,",
-                    "        value FROM seasonal_ddt",
-                    "    WHERE NOT (EXTRACT(MONTH FROM date) = 2 AND EXTRACT(DAY FROM date) = 29) AND value IS NOT NULL",
-                    "),",
-                    "by_doy AS (",
-                    "    SELECT location_code, doy, COUNT(*) AS n_values,",
-                    "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
-                    "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
-                    "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
-                    "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
-                    "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
-                    "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
-                    "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
-                    "    FROM daily_values GROUP BY location_code, doy",
-                    ")",
-                    "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
-                    "FROM (SELECT DISTINCT location_code FROM daily_values) lc",
-                    "CROSS JOIN generate_series(1, 365) AS gs(doy)",
-                    "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
-                    "ORDER BY lc.location_code, gs.doy"
-                ),
-                location_codes_str
-            ),
-            con = con
-        ))
-    }
-
-    if (identical(parameter, "precipitation (1wk)")) {
-        return(YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "WITH daily_values AS (",
-                    "    SELECT l.location_code, mc.date, mc.value",
-                    "    FROM measurements_calculated_daily mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
-                    "    JOIN locations l ON ts.location_id = l.location_id",
-                    "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
-                    "    WHERE l.location_code IN (%s)",
-                    "      AND p.param_name = 'precipitation, total'",
-                    paste0("      AND mc.date >= ", historical_start_date_sql),
-                    "      AND NOT (EXTRACT(MONTH FROM mc.date) = 2 AND EXTRACT(DAY FROM mc.date) = 29)",
-                    "      AND mc.value IS NOT NULL",
-                    "),",
-                    "rolling_week AS (",
-                    "    SELECT location_code, date,",
-                    "        SUM(value) OVER (PARTITION BY location_code ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS weekly_accumulation",
-                    "    FROM daily_values",
-                    "),",
-                    "daily_weekly AS (",
-                    "    SELECT location_code,",
-                    "        CASE WHEN EXTRACT(MONTH FROM date) > 2 AND ((EXTRACT(YEAR FROM date)::int %% 4 = 0 AND EXTRACT(YEAR FROM date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM date)::int %% 400 = 0)",
-                    "            THEN EXTRACT(DOY FROM date)::int - 1 ELSE EXTRACT(DOY FROM date)::int END AS doy,",
-                    "        weekly_accumulation AS value FROM rolling_week",
-                    "),",
-                    "by_doy AS (",
-                    "    SELECT location_code, doy, COUNT(*) AS n_values,",
-                    "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
-                    "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
-                    "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
-                    "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
-                    "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
-                    "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
-                    "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
-                    "    FROM daily_weekly GROUP BY location_code, doy",
-                    ")",
-                    "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
-                    "FROM (SELECT DISTINCT location_code FROM daily_weekly) lc",
-                    "CROSS JOIN generate_series(1, 365) AS gs(doy)",
-                    "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
-                    "ORDER BY lc.location_code, gs.doy"
-                ),
-                location_codes_str
-            ),
-            con = con
-        ))
-    }
-
-    if (parameter %in% c("snow water eq (survey)", "snow depth (survey)")) {
-        return(tryCatch(
-            YGwater::dbGetQueryDT(
-                sprintf(
-                    paste(
-                        "WITH survey_values AS (",
-                        "    SELECT l.location_code,",
-                        "        CASE WHEN EXTRACT(MONTH FROM s.target_datetime) > 2",
-                        "            AND ((EXTRACT(YEAR FROM s.target_datetime)::int %% 4 = 0",
-                        "                 AND EXTRACT(YEAR FROM s.target_datetime)::int %% 100 <> 0)",
-                        "                 OR EXTRACT(YEAR FROM s.target_datetime)::int %% 400 = 0)",
-                        "            THEN EXTRACT(DOY FROM s.target_datetime)::int - 1",
-                        "            ELSE EXTRACT(DOY FROM s.target_datetime)::int",
-                        "        END AS doy,",
-                        "        dr.result AS value",
-                        "    FROM samples s",
-                        "    JOIN discrete.results dr ON dr.sample_id = s.sample_id",
-                        "    JOIN parameters p ON p.parameter_id = dr.parameter_id",
-                        "    JOIN locations l ON l.location_id = s.location_id",
-                        "    WHERE l.location_code IN (%s)",
-                        "      AND p.param_name = '%s'",
-                        "      AND dr.result IS NOT NULL",
-                        "      AND s.target_datetime IS NOT NULL",
-                        paste0(
-                            "      AND s.target_datetime >= ",
-                            historical_start_date_sql
-                        ),
-                        "      AND NOT (EXTRACT(MONTH FROM s.target_datetime) = 2",
-                        "               AND EXTRACT(DAY FROM s.target_datetime) = 29)",
-                        "),",
-                        "by_doy AS (",
-                        "    SELECT location_code, doy, COUNT(*) AS n_values,",
-                        "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
-                        "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
-                        "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
-                        "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
-                        "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
-                        "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
-                        "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
-                        "    FROM survey_values GROUP BY location_code, doy",
-                        ")",
-                        "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
-                        "FROM (SELECT DISTINCT location_code FROM survey_values) lc",
-                        "CROSS JOIN generate_series(1, 365) AS gs(doy)",
-                        "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
-                        "ORDER BY lc.location_code, gs.doy"
-                    ),
-                    location_codes_str,
-                    query_parameter
-                ),
-                con = con
-            ),
-            error = function(e) data.frame()
-        ))
-    }
-
-    YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH daily_values AS (",
-                "    SELECT l.location_code,",
-                "        CASE WHEN EXTRACT(MONTH FROM mc.date) > 2 AND ((EXTRACT(YEAR FROM mc.date)::int %% 4 = 0 AND EXTRACT(YEAR FROM mc.date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM mc.date)::int %% 400 = 0)",
-                "            THEN EXTRACT(DOY FROM mc.date)::int - 1 ELSE EXTRACT(DOY FROM mc.date)::int END AS doy,",
-                "        mc.value",
-                "    FROM measurements_calculated_daily mc",
-                "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
-                "    JOIN locations l ON ts.location_id = l.location_id",
-                "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
-                "    WHERE l.location_code IN (%s)",
-                "      AND p.param_name = '%s'",
-                paste0("      AND mc.date >= ", historical_start_date_sql),
-                "      AND NOT (EXTRACT(MONTH FROM mc.date) = 2 AND EXTRACT(DAY FROM mc.date) = 29)",
-                "      AND mc.value IS NOT NULL",
-                "),",
-                "by_doy AS (",
-                "    SELECT location_code, doy, COUNT(*) AS n_values,",
-                "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
-                "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
-                "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
-                "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
-                "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
-                "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
-                "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
-                "    FROM daily_values GROUP BY location_code, doy",
-                ")",
-                "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
-                "FROM (SELECT DISTINCT location_code FROM daily_values) lc",
-                "CROSS JOIN generate_series(1, 365) AS gs(doy)",
-                "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
-                "ORDER BY lc.location_code, gs.doy"
-            ),
-            location_codes_str,
-            query_parameter
-        ),
-        con = con
-    )
-}
-
-get_station_timeseries <- function(
-    location_code,
-    parameter,
-    con,
-    reference_time = NULL,
-    load_entire_record = FALSE,
-    historical_start_year = 2020
-) {
-    if (is.na(location_code) || length(location_code) == 0) {
-        return(data.frame(
-            datetime = as.POSIXct(character()),
-            value = numeric()
-        ))
-    }
-
-    location_sql <- DBI::dbQuoteString(con, location_code)
-    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
-    historical_start_year <- normalize_historical_start_year(
-        historical_start_year
-    )
-
-    finalize_series <- function(dat) {
-        dat <- interpret_loaded_times_as_local(
-            dat,
-            time_columns = c("datetime")
-        )
-        if (
-            !is.null(dat) &&
-                nrow(dat) > 0 &&
-                "datetime" %in% names(dat)
-        ) {
-            dat <- dat[order(dat$datetime), , drop = FALSE]
-        }
-        dat
-    }
-
-    ref_ts_sql <- if (is.null(reference_time)) {
-        "NOW()"
-    } else {
-        paste0(
-            "'",
-            format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
-            "'::timestamp"
-        )
-    }
-    ref_date_sql <- if (is.null(reference_time)) {
-        "CURRENT_DATE"
-    } else {
-        paste0("'", format(as.POSIXct(reference_time), "%Y-%m-%d"), "'::date")
-    }
-    recent_cutoff_ts_sql <- dashboard_recent_cutoff_timestamp_sql(
-        reference_time
-    )
-    recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(reference_time)
-    historical_daily_min_date_sql <- paste0(
-        "MAKE_DATE(",
-        historical_start_year,
-        ", 1, 1)"
-    )
-
-    recent_parameter_sql <- if (parameter %in% c("FDD", "DDT")) {
-        DBI::dbQuoteString(con, "temperature, air")
-    } else if (
-        parameter %in% c("precipitation (1wk)", "precipitation (24hr)")
-    ) {
-        DBI::dbQuoteString(con, "precipitation, total")
-    } else {
-        parameter_sql
-    }
-
-    has_recent_data <- YGwater::dbGetQueryDT(
-        sprintf(
-            paste(
-                "WITH recent_continuous AS (",
-                "    SELECT 1 FROM measurements_continuous mc",
-                "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                "    JOIN locations l ON l.location_id = ts.location_id",
-                "    WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
-                paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
-                paste0("      AND mc.datetime <= ", ref_ts_sql),
-                "    LIMIT 1",
-                "),",
-                "recent_daily AS (",
-                "    SELECT 1 FROM measurements_calculated_daily mcd",
-                "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                "    JOIN locations l ON l.location_id = ts.location_id",
-                "    WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
-                paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
-                paste0("      AND mcd.date <= ", ref_date_sql),
-                "    LIMIT 1",
-                ")",
-                "SELECT EXISTS(SELECT 1 FROM recent_continuous) OR EXISTS(SELECT 1 FROM recent_daily) AS has_recent_data"
-            ),
-            location_sql,
-            recent_parameter_sql,
-            location_sql,
-            recent_parameter_sql
-        ),
-        con = con
-    )
-
-    if (
-        nrow(has_recent_data) == 0 ||
-            !isTRUE(has_recent_data$has_recent_data[[1]])
-    ) {
-        if (
-            parameter %in%
-                c(
-                    "temperature, air",
-                    "precipitation (1wk)",
-                    "precipitation (24hr)",
-                    "FDD",
-                    "DDT"
-                )
-        ) {
-            # Continue; these parameters are queried from daily series and may be older.
-        } else {
-            return(data.frame(
-                datetime = as.POSIXct(character()),
-                value = numeric()
-            ))
-        }
-    }
-
-    precip_start_filter_sql <- if (isTRUE(load_entire_record)) {
-        paste0("  AND mcd.date >= ", historical_daily_min_date_sql)
-    } else {
-        paste0("  AND mcd.date >= ", ref_date_sql, " - INTERVAL '2 months'")
-    }
-    continuous_start_filter_sql <- paste0(
-        "  AND mc.datetime >= ",
-        ref_ts_sql,
-        " - INTERVAL '7 days'"
-    )
-    daily_fallback_start_filter_sql <- if (isTRUE(load_entire_record)) {
-        paste0("  AND mcd.date >= ", historical_daily_min_date_sql)
-    } else {
-        paste0("  AND mcd.date >= ", ref_date_sql, " - INTERVAL '2 months'")
-    }
-
-    if (identical(parameter, "temperature, air")) {
-        temperature_daily <- YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
-                    "FROM measurements_calculated_daily mcd",
-                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                    "JOIN locations l ON l.location_id = ts.location_id",
-                    "WHERE l.location_code = %s",
-                    "  AND p.param_name = 'temperature, air'",
-                    "  AND mcd.value IS NOT NULL",
-                    daily_fallback_start_filter_sql,
-                    paste0("  AND mcd.date <= ", ref_date_sql),
-                    "ORDER BY mcd.date"
-                ),
-                location_sql
-            ),
-            con = con
-        )
-        temperature_daily <- sanitize_loaded_series_values(
-            temperature_daily,
-            parameter
-        )
-        temperature_daily$trace_source <- "observed"
-        return(finalize_series(temperature_daily))
-    }
-
-    if (identical(parameter, "FDD")) {
-        fdd_start_filter_sql <- if (isTRUE(load_entire_record)) {
-            paste0("  AND dt.date >= ", historical_daily_min_date_sql)
-        } else {
-            paste0(
-                "  AND dt.date >= MAKE_DATE(",
-                "CASE WHEN EXTRACT(MONTH FROM ",
-                ref_date_sql,
-                ") >= 10 ",
-                "THEN EXTRACT(YEAR FROM ",
-                ref_date_sql,
-                ")::int ",
-                "ELSE EXTRACT(YEAR FROM ",
-                ref_date_sql,
-                ")::int - 1 END, ",
-                "10, 1)"
-            )
-        }
-        fdd <- YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "WITH daily_temp AS (",
-                    "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                    "    FROM measurements_calculated_daily mcd",
-                    "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                    "    JOIN locations l ON l.location_id = ts.location_id",
-                    "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
-                    paste0("      AND mcd.date <= ", ref_date_sql),
-                    "),",
-                    "daily_fdd AS (",
-                    "    SELECT dt.date, GREATEST(-dt.mean_temp, 0) AS fdd_day,",
-                    "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 10 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
-                    "    FROM daily_temp dt WHERE dt.date <=",
-                    ref_date_sql,
-                    fdd_start_filter_sql,
-                    "),",
-                    "seasonal_fdd AS (",
-                    "    SELECT df.date::timestamp AS datetime,",
-                    "        1 + SUM(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
-                    "          - FIRST_VALUE(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
-                    "    FROM daily_fdd df",
-                    ")",
-                    "SELECT datetime, value FROM seasonal_fdd ORDER BY datetime"
-                ),
-                location_sql
-            ),
-            con = con
-        )
-        fdd$trace_source <- "observed"
-        return(finalize_series(fdd))
-    }
-
-    if (identical(parameter, "DDT")) {
-        ddt_start_filter_sql <- if (isTRUE(load_entire_record)) {
-            paste0("  AND dt.date >= ", historical_daily_min_date_sql)
-        } else {
-            paste0(
-                "  AND dt.date >= MAKE_DATE(",
-                "CASE WHEN EXTRACT(MONTH FROM ",
-                ref_date_sql,
-                ") >= 4 ",
-                "THEN EXTRACT(YEAR FROM ",
-                ref_date_sql,
-                ")::int ",
-                "ELSE EXTRACT(YEAR FROM ",
-                ref_date_sql,
-                ")::int - 1 END, ",
-                "4, 1)"
-            )
-        }
-        ddt <- YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "WITH daily_temp AS (",
-                    "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                    "    FROM measurements_calculated_daily mcd",
-                    "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                    "    JOIN locations l ON l.location_id = ts.location_id",
-                    "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
-                    paste0("      AND mcd.date <= ", ref_date_sql),
-                    "),",
-                    "daily_ddt AS (",
-                    "    SELECT dt.date, GREATEST(dt.mean_temp, 0) AS ddt_day,",
-                    "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 4 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
-                    "    FROM daily_temp dt WHERE dt.date <=",
-                    ref_date_sql,
-                    ddt_start_filter_sql,
-                    "),",
-                    "seasonal_ddt AS (",
-                    "    SELECT df.date::timestamp AS datetime,",
-                    "        1 + SUM(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
-                    "          - FIRST_VALUE(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
-                    "    FROM daily_ddt df",
-                    ")",
-                    "SELECT datetime, value FROM seasonal_ddt ORDER BY datetime"
-                ),
-                location_sql
-            ),
-            con = con
-        )
-        ddt$trace_source <- "observed"
-        return(finalize_series(ddt))
-    }
-
-    if (parameter %in% c("precipitation (1wk)", "precipitation (24hr)")) {
-        precip_db_sql <- DBI::dbQuoteString(con, "precipitation, total")
-
-        if (identical(parameter, "precipitation (1wk)")) {
-            precip_sql <- paste(
-                "SELECT mcd.date::timestamp AS datetime,",
-                "    SUM(mcd.value) OVER (ORDER BY mcd.date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS value",
-                "FROM measurements_calculated_daily mcd",
-                "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                "JOIN locations l ON l.location_id = ts.location_id",
-                "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
-                precip_start_filter_sql,
-                paste0("  AND mcd.date <= ", ref_date_sql),
-                "ORDER BY mcd.date"
-            )
-        } else {
-            precip_sql <- paste(
-                "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
-                "FROM measurements_calculated_daily mcd",
-                "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                "JOIN locations l ON l.location_id = ts.location_id",
-                "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
-                precip_start_filter_sql,
-                paste0("  AND mcd.date <= ", ref_date_sql),
-                "ORDER BY mcd.date"
-            )
-        }
-
-        precipitation <- YGwater::dbGetQueryDT(
-            sprintf(precip_sql, location_sql, precip_db_sql),
-            con = con
-        )
-        precipitation <- sanitize_loaded_series_values(precipitation, parameter)
-        precipitation$trace_source <- "observed"
-        return(finalize_series(precipitation))
-    }
-
-    continuous <- tryCatch(
-        YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "SELECT mc.datetime, mc.value AS value",
-                    "FROM measurements_continuous mc",
-                    "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                    "JOIN locations l ON l.location_id = ts.location_id",
-                    "WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
-                    continuous_start_filter_sql,
-                    paste0("  AND mc.datetime <= ", ref_ts_sql),
-                    "ORDER BY mc.datetime"
-                ),
-                location_sql,
-                parameter_sql
-            ),
-            con = con
-        ),
-        error = function(e) data.frame()
-    )
-
-    daily_fallback <- tryCatch(
-        YGwater::dbGetQueryDT(
-            sprintf(
-                paste(
-                    "SELECT mcd.date::timestamp AS datetime, mcd.value",
-                    "FROM measurements_calculated_daily mcd",
-                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                    "JOIN locations l ON l.location_id = ts.location_id",
-                    "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
-                    daily_fallback_start_filter_sql,
-                    paste0("  AND mcd.date <= ", ref_date_sql),
-                    "ORDER BY mcd.date"
-                ),
-                location_sql,
-                parameter_sql
-            ),
-            con = con
-        ),
-        error = function(e) data.frame()
-    )
-
-    continuous <- sanitize_loaded_series_values(continuous, parameter)
-    daily_fallback <- sanitize_loaded_series_values(daily_fallback, parameter)
-    continuous$trace_source <- "realtime_continuous"
-    daily_fallback$trace_source <- "historical_daily"
-
-    if (isTRUE(load_entire_record)) {
-        if (nrow(continuous) == 0) {
-            return(finalize_series(daily_fallback))
-        }
-        if (nrow(daily_fallback) == 0) {
-            return(finalize_series(continuous))
-        }
-        first_continuous_time <- min(continuous$datetime, na.rm = TRUE)
-        first_continuous_date <- as.POSIXct(
-            format(first_continuous_time, "%Y-%m-%d"),
-            tz = attr(first_continuous_time, "tzone") %||% "America/Whitehorse"
-        )
-        daily_history <- daily_fallback[
-            daily_fallback$datetime <= first_continuous_date,
-        ]
-        merged_series <- rbind(
-            daily_history[, c("datetime", "value", "trace_source")],
-            continuous[, c("datetime", "value", "trace_source")]
-        )
-        merged_series <- merged_series[order(merged_series$datetime), ]
-        return(finalize_series(merged_series))
-    }
-
-    if (nrow(continuous) == 0) {
-        daily_fallback$trace_source <- "observed"
-        return(finalize_series(daily_fallback))
-    }
-
-    if (nrow(daily_fallback) == 0) {
-        continuous$trace_source <- "observed"
-        return(finalize_series(continuous))
-    }
-
-    latest_continuous <- max(continuous$datetime, na.rm = TRUE)
-    latest_daily <- max(daily_fallback$datetime, na.rm = TRUE)
-
-    selected_series <- if (
-        is.finite(latest_daily) &&
-            (!is.finite(latest_continuous) || latest_daily > latest_continuous)
-    ) {
-        daily_fallback
-    } else {
-        continuous
-    }
-
-    selected_series$trace_source <- "observed"
-    finalize_series(selected_series)
-}
-
-empty_historical_overlay_data <- function() {
-    data.frame(
-        location_code = character(),
-        datetime = as.POSIXct(character(), tz = "America/Whitehorse"),
-        value = numeric(),
-        overlay_year = integer(),
-        trace_source = character(),
-        trace_label = character(),
-        stringsAsFactors = FALSE
-    )
-}
-
-empty_historical_overlay_traces <- function() {
-    list()
-}
-
-get_historical_overlay_timeseries <- function(
-    location_code,
-    parameter,
-    years,
-    con,
-    reference_time = NULL
-) {
-    if (
-        is.na(location_code) ||
-            length(location_code) == 0 ||
-            !nzchar(location_code)
-    ) {
-        return(empty_historical_overlay_traces())
-    }
-    plot_timezone <- "Etc/GMT+7"
-    target_time <- if (is.null(reference_time)) {
-        as.POSIXct(Sys.time(), tz = plot_timezone)
-    } else {
-        suppressWarnings(as.POSIXct(reference_time, tz = plot_timezone))
-    }
-    if (is.na(target_time)) {
-        target_time <- as.POSIXct(Sys.time(), tz = plot_timezone)
-    }
-    target_year <- as.integer(format(target_time, "%Y", tz = plot_timezone))
-
-    selected_years <- normalize_selected_historical_years(years)
-    selected_years <- selected_years[selected_years < target_year]
-    if (length(selected_years) == 0) {
-        return(empty_historical_overlay_traces())
-    }
-
-    location_sql <- DBI::dbQuoteString(con, location_code)
-    parameter_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
-
-    shift_dates_to_target_year <- function(dat, overlay_year) {
-        if (is.null(dat) || nrow(dat) == 0) {
-            return(empty_historical_overlay_data())
-        }
-        dat <- interpret_loaded_times_as_local(
-            dat,
-            time_columns = c("datetime")
-        )
-        dat <- sanitize_loaded_series_values(dat, parameter)
-        source_dates <- as.Date(dat$datetime, tz = plot_timezone)
-        source_month <- as.integer(format(source_dates, "%m"))
-        source_day <- as.integer(format(source_dates, "%d"))
-
-        # Align overlays by calendar day in the target year to avoid leap-year
-        # DOY drift that shifts post-February values and clips fills.
-        target_date_str <- sprintf(
-            "%04d-%02d-%02d",
-            target_year,
-            source_month,
-            source_day
-        )
-        shifted_dates <- as.Date(target_date_str)
-        shifted_dates[source_month == 2 & source_day == 29] <- as.Date(NA)
-        shifted_datetimes <- as.POSIXct(shifted_dates, tz = plot_timezone)
-        dat$datetime <- shifted_datetimes
-        dat <- dat[stats::complete.cases(dat[, c("datetime", "value")]), ]
-        if (nrow(dat) == 0) {
-            return(empty_historical_overlay_data())
-        }
-        dat$location_code <- location_code
-        dat$overlay_year <- as.integer(overlay_year)
-        dat$trace_source <- "selected_historical_year"
-        dat$trace_label <- sprintf("%d", overlay_year)
-        dat[, c(
-            "location_code",
-            "datetime",
-            "value",
-            "overlay_year",
-            "trace_source",
-            "trace_label"
-        )]
-    }
-
-    overlay_frames <- lapply(selected_years, function(overlay_year) {
-        year_start_sql <- sprintf("MAKE_DATE(%d, 1, 1)", overlay_year)
-        year_end_sql <- sprintf("MAKE_DATE(%d, 12, 31)", overlay_year)
-
-        overlay_data <- if (
-            parameter %in% c("snow water eq (survey)", "snow depth (survey)")
-        ) {
-            tryCatch(
-                YGwater::dbGetQueryDT(
-                    sprintf(
-                        paste(
-                            "SELECT s.target_datetime AS datetime,",
-                            "  dr.result AS value",
-                            "FROM samples s",
-                            "JOIN discrete.results dr",
-                            "  ON dr.sample_id = s.sample_id",
-                            "JOIN parameters p",
-                            "  ON p.parameter_id = dr.parameter_id",
-                            "JOIN locations l",
-                            "  ON l.location_id = s.location_id",
-                            "WHERE l.location_code = %s",
-                            "  AND p.param_name = %s",
-                            "  AND dr.result IS NOT NULL",
-                            "  AND s.target_datetime IS NOT NULL",
-                            "  AND EXTRACT(YEAR FROM s.target_datetime) = %d",
-                            "ORDER BY s.target_datetime"
-                        ),
-                        location_sql,
-                        parameter_sql,
-                        overlay_year
-                    ),
-                    con = con
-                ),
-                error = function(e) NULL
-            )
-        } else if (identical(parameter, "FDD")) {
-            season_start_sql <- sprintf(
-                "MAKE_DATE(%d, 10, 1)",
-                overlay_year - 1L
-            )
-            YGwater::dbGetQueryDT(
-                sprintf(
-                    paste(
-                        "WITH daily_temp AS (",
-                        "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                        "    FROM measurements_calculated_daily mcd",
-                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                        "    JOIN locations l ON l.location_id = ts.location_id",
-                        "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
-                        paste0(
-                            "      AND mcd.date >= ",
-                            season_start_sql
-                        ),
-                        paste0(
-                            "      AND mcd.date <= ",
-                            year_end_sql
-                        ),
-                        "),",
-                        "daily_fdd AS (",
-                        "    SELECT dt.date, GREATEST(-dt.mean_temp, 0) AS fdd_day,",
-                        "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 10 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
-                        "    FROM daily_temp dt",
-                        "),",
-                        "seasonal_fdd AS (",
-                        "    SELECT df.date::timestamp AS datetime,",
-                        "        1 + SUM(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
-                        "          - FIRST_VALUE(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
-                        "    FROM daily_fdd df",
-                        ")",
-                        "SELECT datetime, value FROM seasonal_fdd",
-                        paste0("WHERE datetime::date >= ", year_start_sql),
-                        paste0("  AND datetime::date <= ", year_end_sql),
-                        "ORDER BY datetime"
-                    ),
-                    location_sql
-                ),
-                con = con
-            )
-        } else if (identical(parameter, "DDT")) {
-            season_start_sql <- sprintf(
-                "MAKE_DATE(%d, 4, 1)",
-                overlay_year - 1L
-            )
-            YGwater::dbGetQueryDT(
-                sprintf(
-                    paste(
-                        "WITH daily_temp AS (",
-                        "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                        "    FROM measurements_calculated_daily mcd",
-                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                        "    JOIN locations l ON l.location_id = ts.location_id",
-                        "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
-                        paste0(
-                            "      AND mcd.date >= ",
-                            season_start_sql
-                        ),
-                        paste0(
-                            "      AND mcd.date <= ",
-                            year_end_sql
-                        ),
-                        "),",
-                        "daily_ddt AS (",
-                        "    SELECT dt.date, GREATEST(dt.mean_temp, 0) AS ddt_day,",
-                        "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 4 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
-                        "    FROM daily_temp dt",
-                        "),",
-                        "seasonal_ddt AS (",
-                        "    SELECT df.date::timestamp AS datetime,",
-                        "        1 + SUM(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
-                        "          - FIRST_VALUE(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
-                        "    FROM daily_ddt df",
-                        ")",
-                        "SELECT datetime, value FROM seasonal_ddt",
-                        paste0("WHERE datetime::date >= ", year_start_sql),
-                        paste0("  AND datetime::date <= ", year_end_sql),
-                        "ORDER BY datetime"
-                    ),
-                    location_sql
-                ),
-                con = con
-            )
-        } else if (identical(parameter, "precipitation (1wk)")) {
-            lookback_start_sql <- sprintf(
-                "MAKE_DATE(%d, 1, 1) - INTERVAL '6 days'",
-                overlay_year
-            )
-            precip_sql_q <- DBI::dbQuoteString(con, "precipitation, total")
-            YGwater::dbGetQueryDT(
-                sprintf(
-                    paste(
-                        "WITH daily_values AS (",
-                        "    SELECT mcd.date, mcd.value",
-                        "    FROM measurements_calculated_daily mcd",
-                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                        "    JOIN locations l ON l.location_id = ts.location_id",
-                        "    WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
-                        paste0("      AND mcd.date >= ", lookback_start_sql),
-                        paste0("      AND mcd.date <= ", year_end_sql),
-                        "),",
-                        "rolling_week AS (",
-                        "    SELECT date::timestamp AS datetime,",
-                        "        SUM(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS value",
-                        "    FROM daily_values",
-                        ")",
-                        "SELECT datetime, value FROM rolling_week",
-                        paste0("WHERE datetime::date >= ", year_start_sql),
-                        paste0("  AND datetime::date <= ", year_end_sql),
-                        "ORDER BY datetime"
-                    ),
-                    location_sql,
-                    precip_sql_q
-                ),
-                con = con
-            )
-        } else {
-            q_param_sql <- if (identical(parameter, "precipitation (24hr)")) {
-                DBI::dbQuoteString(con, "precipitation, total")
-            } else {
-                parameter_sql
-            }
-            YGwater::dbGetQueryDT(
-                sprintf(
-                    paste(
-                        "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
-                        "FROM measurements_calculated_daily mcd",
-                        "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                        "JOIN locations l ON l.location_id = ts.location_id",
-                        "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
-                        paste0("  AND mcd.date >= ", year_start_sql),
-                        paste0("  AND mcd.date <= ", year_end_sql),
-                        "ORDER BY mcd.date"
-                    ),
-                    location_sql,
-                    q_param_sql
-                ),
-                con = con
-            )
-        }
-
-        shift_dates_to_target_year(overlay_data, overlay_year)
-    })
-
-    overlay_frames <- overlay_frames[
-        vapply(overlay_frames, nrow, integer(1)) > 0
-    ]
-    if (length(overlay_frames) == 0) {
-        return(empty_historical_overlay_traces())
-    }
-    names(overlay_frames) <- vapply(
-        overlay_frames,
-        function(dat) as.character(dat$overlay_year[[1]]),
-        character(1)
-    )
-    lapply(overlay_frames, function(dat) {
-        dat[order(dat$datetime), , drop = FALSE]
-    })
-}
-
-simple_continuous_plotly_widget <- function(
-    location_code,
-    parameter,
-    continuous_data,
-    title_prefix = NULL
-) {
-    if (is.null(continuous_data) || nrow(continuous_data) == 0) {
-        return(empty_plotly_widget(
-            title = title_prefix,
-            annotations = list(list(
-                text = sprintf("No data available for %s.", location_code),
-                x = 0.5,
-                y = 0.5,
-                xref = "paper",
-                yref = "paper",
-                showarrow = FALSE
-            ))
-        ))
-    }
-    series <- continuous_data
-    if ("location_code" %in% names(series)) {
-        series <- series[series$location_code == location_code, , drop = FALSE]
-    }
-    if (nrow(series) == 0 || !all(c("datetime", "value") %in% names(series))) {
-        return(empty_plotly_widget(
-            title = title_prefix,
-            annotations = list(list(
-                text = sprintf("No plottable data for %s.", location_code),
-                x = 0.5,
-                y = 0.5,
-                xref = "paper",
-                yref = "paper",
-                showarrow = FALSE
-            ))
-        ))
-    }
-    plot_timezone <- attr(series$datetime, "tzone") %||% "America/Whitehorse"
-    series$datetime <- suppressWarnings(as.POSIXct(
-        series$datetime,
-        tz = plot_timezone
-    ))
-    series$value <- suppressWarnings(as.numeric(series$value))
-    series <- series[
-        stats::complete.cases(series[, c("datetime", "value")]),
-        ,
-        drop = FALSE
-    ]
-    series <- series[order(series$datetime), , drop = FALSE]
-    if (nrow(series) == 0) {
-        return(empty_plotly_widget(title = title_prefix))
-    }
-    title_text <- if (!is.null(title_prefix) && nzchar(title_prefix)) {
-        title_prefix
-    } else {
-        sprintf("%s [%s]", location_code, parameter)
-    }
-    plotly::plot_ly(
-        data = series,
-        x = ~datetime,
-        y = ~value,
-        type = "scatter",
-        mode = "lines",
-        name = "Observed",
-        line = list(color = "#000000", width = 1.5),
-        hovertemplate = "Observed: %{y:.3f}<extra></extra>"
-    ) %>%
-        plotly::layout(
-            title = title_text,
-            xaxis = list(title = "Date"),
-            yaxis = list(title = parameter_axis_title(parameter)),
-            hovermode = "x unified",
-            showlegend = FALSE
-        )
-}
-
-plot_continuous_with_percentiles_and_return_periods <- function(
-    location_code,
-    continuous_data = NULL,
-    percentiles = NULL,
-    return_periods = NULL,
-    parameter = "water flow",
-    return_period_values = c(2, 5, 10, 25, 50, 100),
-    start_date = NULL,
-    end_date = NULL,
-    reference_time = NULL,
-    load_entire_record = FALSE,
-    con = NULL,
-    historical_start_year = 2020
-) {
-    include_return_periods <- parameter %in% c("water flow", "water level")
-    include_percentiles <- parameter %in%
-        c(
-            "water flow",
-            "water level",
-            "precipitation (1wk)",
-            "precipitation (24hr)",
-            "temperature, air",
-            "FDD",
-            "DDT",
-            "snow water equivalent",
-            "snow depth",
-            "snow water eq (pillow)",
-            "snow depth (pillow)"
-        )
-    historical_start_year <- normalize_historical_start_year(
-        historical_start_year
-    )
-
-    safe_as_posix <- function(x, tz) {
-        tryCatch(suppressWarnings(as.POSIXct(x, tz = tz)), error = function(e) {
-            as.POSIXct(NA, tz = tz)
-        })
-    }
-
-    plot_timezone <- "America/Whitehorse"
-    now_ts <- if (is.null(reference_time)) {
-        Sys.time()
-    } else {
-        safe_as_posix(reference_time, plot_timezone)
-    }
-    if (is.na(now_ts)) {
-        now_ts <- Sys.time()
-    }
-
-    default_view_start <- now_ts - as.difftime(7, units = "days")
-    default_view_end <- now_ts + as.difftime(28, units = "days")
-
-    view_start <- if (!is.null(start_date)) {
-        safe_as_posix(start_date, plot_timezone)
-    } else {
-        default_view_start
-    }
-    view_end <- if (!is.null(end_date)) {
-        safe_as_posix(end_date, plot_timezone)
-    } else {
-        default_view_end
-    }
-    if (is.na(view_start)) {
-        view_start <- default_view_start
-    }
-    if (is.na(view_end)) {
-        view_end <- default_view_end
-    }
-
-    if (is.null(continuous_data) && !is.null(con)) {
-        continuous_data <- get_station_timeseries(
-            location_code = location_code,
-            parameter = parameter,
-            reference_time = now_ts,
-            load_entire_record = load_entire_record,
-            con = con,
-            historical_start_year = historical_start_year
-        )
-    }
-    if (!"location_code" %in% names(continuous_data)) {
-        continuous_data$location_code <- location_code
-    }
-
-    series <- continuous_data[continuous_data$location_code == location_code, ]
-    if (nrow(series) == 0) {
-        return(empty_plotly_widget(
-            title = sprintf("No data for %s (%s)", location_code, parameter)
-        ))
-    }
-
-    tz_attr <- attr(series$datetime, "tzone")
-    if (length(tz_attr) == 0 || is.na(tz_attr[[1]]) || !nzchar(tz_attr[[1]])) {
-        plot_timezone <- "America/Whitehorse"
-    } else {
-        plot_timezone <- tz_attr[[1]]
-    }
-
-    coerce_tz <- function(x) {
-        x <- safe_as_posix(x, tz = plot_timezone)
-        attr(x, "tzone") <- plot_timezone
-        x
-    }
-    series$datetime <- coerce_tz(series$datetime)
-    series <- series[order(series$datetime), , drop = FALSE]
-    now_ts <- coerce_tz(now_ts)
-    view_start <- coerce_tz(view_start)
-    view_end <- coerce_tz(view_end)
-
-    latest_obs <- max(series$datetime, na.rm = TRUE)
-    fixed_view_end <- now_ts + as.difftime(28, units = "days")
-    if (is.finite(latest_obs)) {
-        view_start <- min(view_start, latest_obs, now_ts)
-        view_end <- fixed_view_end
-    } else {
-        view_start <- min(view_start, now_ts)
-        view_end <- fixed_view_end
-    }
-
-    pct <- data.frame()
-    envelope_xlim <- NULL
-    if (include_percentiles) {
-        if (is.null(percentiles) && !is.null(con)) {
-            percentiles <- get_daily_percentiles(
-                location_codes = c(location_code),
-                parameter = parameter,
-                con = con,
-                historical_start_year = historical_start_year
-            )
-        }
-        if (!is.null(percentiles) && nrow(percentiles) > 0) {
-            pct <- percentiles[percentiles$location_code == location_code, ]
-        }
-    }
-
-    p <- plotly::plot_ly()
-
-    if (include_percentiles && nrow(pct) > 0) {
-        ref_year <- suppressWarnings(as.integer(format(
-            now_ts,
-            "%Y",
-            tz = plot_timezone
-        )))
-        if (is.na(ref_year)) {
-            ref_year <- as.integer(format(Sys.time(), "%Y", tz = plot_timezone))
-        }
-        # Build a padded envelope around the visible window, but keep it
-        # bounded to the configured historical period to avoid oversized
-        # ribbon polygons that can trigger plot clipping artifacts.
-        historical_start_date <- as.Date(sprintf(
-            "%d-01-01",
-            historical_start_year
-        ))
-        historical_end_date <- as.Date(sprintf("%d-12-31", ref_year + 1L))
-        padded_view_start <- as.Date(view_start, tz = plot_timezone) - 366
-        padded_view_end <- as.Date(view_end, tz = plot_timezone) + 366
-
-        pct_cycle_start <- max(historical_start_date, padded_view_start)
-        pct_cycle_end <- min(historical_end_date, padded_view_end)
-        if (pct_cycle_end < pct_cycle_start) {
-            pct_cycle_start <- historical_start_date
-            pct_cycle_end <- min(
-                historical_end_date,
-                historical_start_date + 366
-            )
-        }
-        pct_dates <- seq(pct_cycle_start, pct_cycle_end, by = "day")
-        pct_years <- as.integer(format(pct_dates, "%Y"))
-        pct_months <- as.integer(format(pct_dates, "%m"))
-        pct_days <- as.integer(format(pct_dates, "%d"))
-        pct_doys <- as.integer(format(pct_dates, "%j"))
-        pct_is_leap <- (pct_years %% 4 == 0 & pct_years %% 100 != 0) |
-            (pct_years %% 400 == 0)
-
-        pct_plot <- data.frame(
-            location_code = location_code,
-            datetime = as.POSIXct(pct_dates, tz = plot_timezone),
-            doy = ifelse(pct_months > 2 & pct_is_leap, pct_doys - 1L, pct_doys),
-            stringsAsFactors = FALSE
-        )
-        pct_plot$is_feb29 <- pct_months == 2 & pct_days == 29
-
-        pct_lookup <- pct[, c(
-            "location_code",
-            "doy",
-            "p0",
-            "p10",
-            "p25",
-            "p50",
-            "p75",
-            "p90",
-            "p100"
-        )]
-        pct_key <- paste(pct_lookup$location_code, pct_lookup$doy)
-        plot_key <- paste(pct_plot$location_code, pct_plot$doy)
-        match_idx <- match(plot_key, pct_key)
-        for (col in c("p0", "p10", "p25", "p50", "p75", "p90", "p100")) {
-            pct_plot[[col]] <- pct_lookup[[col]][match_idx]
-        }
-
-        # Percentile queries intentionally exclude Feb 29; synthesize leap-day
-        # values by linear interpolation between Feb 28 (DOY 59) and Mar 1 (DOY 60).
-        feb29_rows <- which(pct_plot$is_feb29)
-        if (length(feb29_rows) > 0) {
-            feb28_key <- paste(location_code, 59L)
-            mar01_key <- paste(location_code, 60L)
-            feb28_idx <- match(feb28_key, pct_key)
-            mar01_idx <- match(mar01_key, pct_key)
-
-            for (col in c("p0", "p10", "p25", "p50", "p75", "p90", "p100")) {
-                v0 <- pct_lookup[[col]][feb28_idx]
-                v1 <- pct_lookup[[col]][mar01_idx]
-                if (is.finite(v0) && is.finite(v1)) {
-                    pct_plot[feb29_rows, col] <- (v0 + v1) / 2
-                }
-            }
-        }
-        pct_plot <- pct_plot[order(pct_plot$datetime), ]
-
-        # Prevent ribbon self-clipping caused by NA gaps in percentile bands.
-        pct_plot <- pct_plot[
-            stats::complete.cases(pct_plot[, c(
-                "datetime",
-                "p0",
-                "p10",
-                "p25",
-                "p50",
-                "p75",
-                "p90",
-                "p100"
-            )]),
-        ]
-        pct_plot$is_feb29 <- NULL
-
-        if (nrow(pct_plot) > 0) {
-            envelope_xlim <- range(pct_plot$datetime, na.rm = TRUE)
-            if (any(!is.finite(envelope_xlim))) {
-                envelope_xlim <- NULL
-            }
-
-            p <- p %>%
-                plotly::add_ribbons(
-                    data = pct_plot,
-                    x = ~datetime,
-                    ymin = ~p0,
-                    ymax = ~p10,
-                    name = "P0-P10",
-                    legendrank = 80,
-                    hovertemplate = "P0-P10<extra></extra>",
-                    fillcolor = "rgba(127, 29, 29, 0.3)",
-                    line = list(color = "transparent")
-                ) %>%
-                plotly::add_ribbons(
-                    data = pct_plot,
-                    x = ~datetime,
-                    ymin = ~p10,
-                    ymax = ~p25,
-                    name = "P10-P25",
-                    legendrank = 70,
-                    hovertemplate = "P10-P25<extra></extra>",
-                    fillcolor = "rgba(180, 83, 9, 0.3)",
-                    line = list(color = "transparent")
-                ) %>%
-                plotly::add_ribbons(
-                    data = pct_plot,
-                    x = ~datetime,
-                    ymin = ~p25,
-                    ymax = ~p50,
-                    name = "P25-P50",
-                    legendrank = 60,
-                    hovertemplate = "P25-P50<extra></extra>",
-                    fillcolor = "rgba(245, 158, 11, 0.3)",
-                    line = list(color = "transparent")
-                ) %>%
-                plotly::add_ribbons(
-                    data = pct_plot,
-                    x = ~datetime,
-                    ymin = ~p50,
-                    ymax = ~p75,
-                    name = "P50-P75",
-                    legendrank = 50,
-                    hovertemplate = "P50-P75<extra></extra>",
-                    fillcolor = "rgba(163, 230, 53, 0.3)",
-                    line = list(color = "transparent")
-                ) %>%
-                plotly::add_ribbons(
-                    data = pct_plot,
-                    x = ~datetime,
-                    ymin = ~p75,
-                    ymax = ~p90,
-                    name = "P75-P90",
-                    legendrank = 40,
-                    hovertemplate = "P75-P90<extra></extra>",
-                    fillcolor = "rgba(34, 197, 94, 0.3)",
-                    line = list(color = "transparent")
-                ) %>%
-                plotly::add_ribbons(
-                    data = pct_plot,
-                    x = ~datetime,
-                    ymin = ~p90,
-                    ymax = ~p100,
-                    name = "P90-P100",
-                    legendrank = 30,
-                    hovertemplate = "P90-P100<extra></extra>",
-                    fillcolor = "rgba(15, 118, 110, 0.3)",
-                    line = list(color = "transparent")
-                )
-        }
-    }
-
-    observed_name <- if (identical(parameter, "precipitation (1wk)")) {
-        "Observed 1-week accumulation"
-    } else if (identical(parameter, "precipitation (24hr)")) {
-        "Observed 24-hour"
-    } else {
-        "Observed"
-    }
-
-    if (!"trace_source" %in% names(series)) {
-        series$trace_source <- "observed"
-    }
-
-    if (isTRUE(load_entire_record)) {
-        hist_series <- series[series$trace_source == "historical_daily", ]
-        rt_series <- series[series$trace_source == "realtime_continuous", ]
-        if (nrow(hist_series) > 0) {
-            p <- p %>%
-                plotly::add_lines(
-                    data = hist_series,
-                    x = ~datetime,
-                    y = ~value,
-                    name = "Daily observed",
-                    legendrank = 20,
-                    hovertemplate = "Daily observed: %{y:.3f}<extra></extra>",
-                    line = list(color = "#4b5563", width = 1)
-                )
-        }
-        if (nrow(rt_series) > 0) {
-            p <- p %>%
-                plotly::add_lines(
-                    data = rt_series,
-                    x = ~datetime,
-                    y = ~value,
-                    name = observed_name,
-                    legendrank = 10,
-                    hovertemplate = paste0(
-                        observed_name,
-                        ": %{y:.3f}<extra></extra>"
-                    ),
-                    line = list(color = "#000000", width = 2)
-                )
-        }
-        if (nrow(hist_series) == 0 && nrow(rt_series) == 0) {
-            p <- p %>%
-                plotly::add_lines(
-                    data = series,
-                    x = ~datetime,
-                    y = ~value,
-                    name = observed_name,
-                    legendrank = 10,
-                    hovertemplate = paste0(
-                        observed_name,
-                        ": %{y:.3f}<extra></extra>"
-                    ),
-                    line = list(color = "#000000", width = 2)
-                )
-        }
-    } else {
-        p <- p %>%
-            plotly::add_lines(
-                data = series,
-                x = ~datetime,
-                y = ~value,
-                name = observed_name,
-                legendrank = 10,
-                hovertemplate = paste0(
-                    observed_name,
-                    ": %{y:.3f}<extra></extra>"
-                ),
-                line = list(color = "#000000", width = 1)
-            )
-    }
-
-    rp_shapes <- list()
-    rp_annotations <- list()
-    if (include_return_periods) {
-        if (is.null(return_periods) && !is.null(con)) {
-            return_periods <- tryCatch(
-                get_return_period_discharge(
-                    location_codes = c(location_code),
-                    parameter = parameter,
-                    con = con
-                ),
-                error = function(e) data.frame()
-            )
-        }
-        if (!is.null(return_periods) && nrow(return_periods) > 0) {
-            rp <- return_periods[
-                return_periods$location_code == location_code,
-            ]
-            if (nrow(rp) > 0) {
-                rp_cols <- grep("^rp_", names(rp), value = TRUE)
-                if (length(rp_cols) > 0) {
-                    rp_x0 <- if (!is.null(envelope_xlim)) {
-                        envelope_xlim[[1]]
-                    } else {
-                        min(series$datetime, na.rm = TRUE)
-                    }
-                    rp_x1 <- if (!is.null(envelope_xlim)) {
-                        envelope_xlim[[2]]
-                    } else {
-                        max(series$datetime, na.rm = TRUE)
-                    }
-                    rp_label_x <- 0.995 - c(0, 0.03, 0.06, 0.09)
-                    for (i in seq_along(rp_cols)) {
-                        rp_years <- sub("^rp_", "", rp_cols[i])
-                        rp_val <- rp[[rp_cols[i]]][1]
-                        rp_shapes[[i]] <- list(
-                            type = "line",
-                            x0 = rp_x0,
-                            x1 = rp_x1,
-                            y0 = rp_val,
-                            y1 = rp_val,
-                            line = list(color = "#dc2626", width = 1)
-                        )
-                        rp_annotations[[i]] <- list(
-                            x = rp_label_x[((i - 1) %% length(rp_label_x)) + 1],
-                            y = rp_val,
-                            xref = "paper",
-                            yref = "y",
-                            text = sprintf("RP %s", rp_years),
-                            showarrow = FALSE,
-                            xanchor = "right",
-                            bgcolor = "rgba(255,255,255,0.85)",
-                            bordercolor = "rgba(220,38,38,0.35)",
-                            borderwidth = 1
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    now_line <- list(
-        type = "line",
-        x0 = now_ts,
-        x1 = now_ts,
-        xref = "x",
-        y0 = 0,
-        y1 = 1,
-        yref = "paper",
-        line = list(color = "#9ca3af", dash = "dash")
-    )
-
-    p %>%
-        plotly::layout(
-            xaxis = list(
-                title = "Date",
-                range = c(
-                    format(view_start, "%Y-%m-%d %H:%M:%S"),
-                    format(view_end, "%Y-%m-%d %H:%M:%S")
-                ),
-                hoverformat = "%Y-%m-%d"
-            ),
-            yaxis = list(title = parameter_axis_title(parameter)),
-            hovermode = "x unified",
-            showlegend = FALSE,
-            shapes = c(list(now_line), rp_shapes),
-            annotations = rp_annotations,
-            legend = list(orientation = "v", x = 0.01, y = 0.99),
-            margin = list(r = 80, t = 60)
-        )
-}
-
-build_station_plot <- function(
-    location_code,
-    parameter,
-    reference_time,
-    con,
-    snow_survey_parameters,
-    load_entire_record = FALSE,
-    continuous_data = NULL,
-    percentiles = NULL,
-    return_periods = NULL
-) {
-    tryCatch(
-        suppressWarnings({
-            if (is.null(continuous_data)) {
-                continuous_data <- get_station_timeseries(
-                    location_code = location_code,
-                    parameter = parameter,
-                    reference_time = reference_time,
-                    load_entire_record = load_entire_record,
-                    con = con,
-                    historical_start_year = 2020L
-                )
-            }
-            if (is.null(continuous_data) || nrow(continuous_data) == 0) {
-                return(simple_continuous_plotly_widget(
-                    location_code = location_code,
-                    parameter = parameter,
-                    continuous_data = continuous_data,
-                    title_prefix = sprintf("%s [%s]", location_code, parameter)
-                ))
-            }
-            if (!"location_code" %in% names(continuous_data)) {
-                continuous_data$location_code <- location_code
-            }
-            tryCatch(
-                plot_continuous_with_percentiles_and_return_periods(
-                    location_code = location_code,
-                    continuous_data = continuous_data,
-                    percentiles = percentiles,
-                    return_periods = return_periods,
-                    parameter = parameter,
-                    reference_time = as.character(reference_time),
-                    load_entire_record = load_entire_record,
-                    con = con,
-                    historical_start_year = 2020L
-                ),
-                error = function(e) {
-                    simple_continuous_plotly_widget(
-                        location_code = location_code,
-                        parameter = parameter,
-                        continuous_data = continuous_data,
-                        title_prefix = sprintf(
-                            "%s [%s]",
-                            location_code,
-                            parameter
-                        )
-                    )
-                }
-            )
-        }),
-        error = function(e) {
-            simple_continuous_plotly_widget(
-                location_code = location_code,
-                parameter = parameter,
-                continuous_data = NULL,
-                title_prefix = sprintf("%s [%s]", location_code, parameter)
-            )
-        }
-    )
-}
-
-# End plot helpers -----------------------------------------------------------
-
-floodDashboardUIMod <- function(id) {
+﻿floodDashboardUIMod <- function(id) {
     ns <- shiny::NS(id)
 
     placeholder_block <- function(text, height = "240px") {
@@ -3487,6 +412,3187 @@ floodDashboardUIMod <- function(id) {
 }
 
 floodDashboardMod <- function(id, language, inputs = NULL) {
+    read_fva_json <- function() {
+        jsonlite::fromJSON(system.file(
+            "extdata/flood_vulnerable_gauges_encoded.json",
+            package = "YGwater"
+        ))
+    }
+
+    `%||%` <- function(a, b) if (!is.null(a)) a else b
+
+    normalize_selected_historical_years <- function(years) {
+        if (is.null(years) || length(years) == 0) {
+            return(integer(0))
+        }
+        valid <- suppressWarnings(as.integer(years))
+        sort(unique(valid[!is.na(valid)]), decreasing = TRUE)
+    }
+
+    parameter_query_name <- function(parameter) {
+        aliases <- c(
+            "FDD" = "temperature, air",
+            "DDT" = "temperature, air",
+            "precipitation (1wk)" = "precipitation, total",
+            "precipitation (24hr)" = "precipitation, total",
+            "snow water eq (pillow)" = "snow water equivalent",
+            "snow depth (pillow)" = "snow depth",
+            "snow water eq (survey)" = "snow water equivalent",
+            "snow depth (survey)" = "snow depth"
+        )
+
+        if (parameter %in% names(aliases)) {
+            aliases[[parameter]]
+        } else {
+            parameter
+        }
+    }
+
+    daily_temperature_aggregation_name <- function() {
+        "(min+max)/2"
+    }
+
+    #' Encode gauge metadata from community JSON data
+    #'
+    #' Extracts gauge names, location codes, location IDs, and encodings from the
+    #' nested community configuration list and returns them as a flat data frame.
+    #'
+    #' @param community_data Named list of gauge configuration entries. Each
+    #'   top-level name is a gauge name, and each element is a list of entries with
+    #'   fields `location_code`, `location_id`, and `encoding`.
+    #'
+    #' @return A data frame with columns `gauge_name` (character),
+    #'   `location_code` (character), `location_id` (integer), and
+    #'   `encoding` (numeric). Rows with missing `location_code` and duplicate
+    #'   `location_code` values are removed. Returns an empty data frame when
+    #'   `community_data` is `NULL` or has length zero.
+    get_encoded_gauge_metadata <- function(community_data) {
+        if (is.null(community_data) || length(community_data) == 0) {
+            return(data.frame())
+        }
+
+        extract_scalar <- function(entry, field, default = NA_character_) {
+            value <- entry[[field]]
+            if (is.null(value) || length(value) == 0) {
+                return(default)
+            }
+            as.character(value[[1]])
+        }
+
+        gauge_names <- names(community_data)
+        rows <- lapply(gauge_names, function(gauge_name) {
+            entries <- community_data[[gauge_name]]
+            if (is.null(entries) || length(entries) == 0) {
+                return(NULL)
+            }
+
+            data.frame(
+                gauge_name = rep(gauge_name, length(entries)),
+                location_code = vapply(
+                    entries,
+                    extract_scalar,
+                    field = "location_code",
+                    FUN.VALUE = character(1),
+                    default = NA_character_
+                ),
+                location_id = suppressWarnings(as.integer(vapply(
+                    entries,
+                    extract_scalar,
+                    field = "location_id",
+                    FUN.VALUE = character(1),
+                    default = NA_character_
+                ))),
+                encoding = suppressWarnings(as.numeric(vapply(
+                    entries,
+                    extract_scalar,
+                    field = "encoding",
+                    FUN.VALUE = character(1),
+                    default = NA_character_
+                ))),
+                stringsAsFactors = FALSE
+            )
+        })
+
+        rows <- rows[vapply(rows, Negate(is.null), logical(1))]
+        if (length(rows) == 0) {
+            return(data.frame())
+        }
+
+        out <- do.call(rbind, rows)
+        out <- out[
+            !is.na(out$location_code) & nzchar(out$location_code),
+            ,
+            drop = FALSE
+        ]
+        out[!duplicated(out$location_code), , drop = FALSE]
+    }
+
+    get_location_ids_with_parameter <- function(location_ids, parameter, con) {
+        location_ids <- unique(stats::na.omit(as.integer(location_ids)))
+        if (length(location_ids) == 0) {
+            return(integer(0))
+        }
+
+        param_sql <- DBI::dbQuoteString(con, parameter_query_name(parameter))
+
+        dat <- YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "SELECT DISTINCT ts.location_id",
+                    "FROM timeseries ts",
+                    "JOIN parameters p",
+                    "  ON p.parameter_id = ts.parameter_id",
+                    "WHERE ts.location_id IN (%s)",
+                    "  AND p.param_name = %s"
+                ),
+                paste(location_ids, collapse = ","),
+                param_sql
+            ),
+            con = con
+        )
+
+        unique(stats::na.omit(as.integer(dat$location_id)))
+    }
+
+    dashboard_recent_cutoff_timestamp_sql <- function(reference_time = NULL) {
+        base_sql <- if (is.null(reference_time)) {
+            "NOW()"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+                "'::timestamp"
+            )
+        }
+
+        paste0("(", base_sql, " - INTERVAL '14 days')")
+    }
+
+    dashboard_recent_cutoff_date_sql <- function(reference_time = NULL) {
+        base_sql <- if (is.null(reference_time)) {
+            "CURRENT_DATE"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d"),
+                "'::date"
+            )
+        }
+
+        paste0("(", base_sql, " - INTERVAL '14 days')::date")
+    }
+
+    interpret_loaded_times_as_local <- function(
+        dat,
+        time_columns = c("datetime", "latest_time")
+    ) {
+        fixed_timezone <- "Etc/GMT+7"
+
+        if (is.null(dat) || nrow(dat) == 0) {
+            return(dat)
+        }
+
+        for (col_name in intersect(time_columns, names(dat))) {
+            local_text <- if (
+                inherits(dat[[col_name]], c("POSIXct", "POSIXt"))
+            ) {
+                format(
+                    dat[[col_name]],
+                    "%Y-%m-%d %H:%M:%S",
+                    tz = fixed_timezone
+                )
+            } else {
+                as.character(dat[[col_name]])
+            }
+
+            x <- suppressWarnings(as.POSIXct(
+                local_text,
+                tz = fixed_timezone,
+                format = "%Y-%m-%d %H:%M:%S"
+            ))
+            if (all(is.na(x))) {
+                next
+            }
+
+            attr(x, "tzone") <- fixed_timezone
+            dat[[col_name]] <- x
+        }
+
+        dat
+    }
+
+    get_latest_parameter_summary <- function(
+        location_codes,
+        parameter,
+        con,
+        reference_time = NULL
+    ) {
+        location_codes <- unique(stats::na.omit(unlist(
+            location_codes,
+            use.names = FALSE
+        )))
+        if (length(location_codes) == 0) {
+            return(data.frame())
+        }
+
+        location_codes_sql <- paste(
+            DBI::dbQuoteString(con, location_codes),
+            collapse = ","
+        )
+        parameter_sql <- DBI::dbQuoteString(
+            con,
+            parameter_query_name(parameter)
+        )
+
+        ref_ts_sql <- if (is.null(reference_time)) {
+            "NOW()"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+                "'::timestamp"
+            )
+        }
+        ref_date_sql <- if (is.null(reference_time)) {
+            "CURRENT_DATE"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d"),
+                "'::date"
+            )
+        }
+        recent_cutoff_ts_sql <- dashboard_recent_cutoff_timestamp_sql(
+            reference_time
+        )
+        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
+            reference_time
+        )
+
+        dat <- YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH target_locations AS (",
+                    "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
+                    "),",
+                    "target_timeseries AS (",
+                    "    SELECT ts.location_id, ts.timeseries_id",
+                    "    FROM timeseries ts",
+                    "    JOIN locations l ON l.location_id = ts.location_id",
+                    "    JOIN target_locations tl ON tl.location_code = l.location_code",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "    WHERE p.param_name = %s",
+                    "),",
+                    "continuous_latest AS (",
+                    "    SELECT DISTINCT ON (tt.location_id)",
+                    "        tt.location_id,",
+                    "        tt.timeseries_id,",
+                    "        mc.datetime AS latest_time,",
+                    "        mc.value AS current_value",
+                    "    FROM target_timeseries tt",
+                    "    JOIN measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
+                    "    WHERE mc.value IS NOT NULL",
+                    paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
+                    paste0("      AND mc.datetime <= ", ref_ts_sql),
+                    "    ORDER BY tt.location_id, mc.datetime DESC, tt.timeseries_id",
+                    "),",
+                    "continuous_change AS (",
+                    "    SELECT",
+                    "        cl.location_id, cl.timeseries_id, cl.latest_time, cl.current_value,",
+                    "        cl.current_value - prev.value AS change_24h,",
+                    "        cl.current_value - prev48.value AS change_48h,",
+                    "        cl.current_value - prev1w.value AS change_1w,",
+                    "        1 AS source_priority",
+                    "    FROM continuous_latest cl",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mc.value FROM measurements_continuous mc",
+                    "        WHERE mc.timeseries_id = cl.timeseries_id",
+                    "          AND mc.value IS NOT NULL",
+                    "          AND mc.datetime <= cl.latest_time - INTERVAL '24 hours'",
+                    "        ORDER BY mc.datetime DESC LIMIT 1",
+                    "    ) prev ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mc.value FROM measurements_continuous mc",
+                    "        WHERE mc.timeseries_id = cl.timeseries_id",
+                    "          AND mc.value IS NOT NULL",
+                    "          AND mc.datetime <= cl.latest_time - INTERVAL '48 hours'",
+                    "        ORDER BY mc.datetime DESC LIMIT 1",
+                    "    ) prev48 ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mc.value FROM measurements_continuous mc",
+                    "        WHERE mc.timeseries_id = cl.timeseries_id",
+                    "          AND mc.value IS NOT NULL",
+                    "          AND mc.datetime <= cl.latest_time - INTERVAL '7 days'",
+                    "        ORDER BY mc.datetime DESC LIMIT 1",
+                    "    ) prev1w ON TRUE",
+                    "),",
+                    "daily_latest AS (",
+                    "    SELECT DISTINCT ON (tt.location_id)",
+                    "        tt.location_id, tt.timeseries_id, mcd.date::timestamp AS latest_time, mcd.value AS current_value",
+                    "    FROM target_timeseries tt",
+                    "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
+                    "    WHERE mcd.value IS NOT NULL",
+                    paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
+                    paste0("      AND mcd.date <= ", ref_date_sql),
+                    "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
+                    "),",
+                    "daily_change AS (",
+                    "    SELECT",
+                    "        dl.location_id, dl.timeseries_id, dl.latest_time, dl.current_value,",
+                    "        dl.current_value - prev.value AS change_24h,",
+                    "        dl.current_value - prev48.value AS change_48h,",
+                    "        dl.current_value - prev1w.value AS change_1w,",
+                    "        2 AS source_priority",
+                    "    FROM daily_latest dl",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mcd.value FROM measurements_calculated_daily mcd",
+                    "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                    "          AND mcd.value IS NOT NULL",
+                    "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
+                    "        ORDER BY mcd.date DESC LIMIT 1",
+                    "    ) prev ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mcd.value FROM measurements_calculated_daily mcd",
+                    "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                    "          AND mcd.value IS NOT NULL",
+                    "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 days'",
+                    "        ORDER BY mcd.date DESC LIMIT 1",
+                    "    ) prev48 ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mcd.value FROM measurements_calculated_daily mcd",
+                    "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                    "          AND mcd.value IS NOT NULL",
+                    "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 days'",
+                    "        ORDER BY mcd.date DESC LIMIT 1",
+                    "    ) prev1w ON TRUE",
+                    "),",
+                    "latest AS (",
+                    "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, change_48h, change_1w, source_priority FROM continuous_change",
+                    "    UNION ALL",
+                    "    SELECT location_id, timeseries_id, latest_time, current_value, change_24h, change_48h, change_1w, source_priority FROM daily_change",
+                    "),",
+                    "best_latest AS (",
+                    "    SELECT l.*,",
+                    "        ROW_NUMBER() OVER (PARTITION BY l.location_id ORDER BY l.latest_time DESC, l.source_priority, l.timeseries_id) AS rn",
+                    "    FROM latest l",
+                    ")",
+                    "SELECT loc.location_id, loc.location_code, loc.name, b.timeseries_id,",
+                    "    b.latest_time, b.current_value, b.change_24h, b.change_48h, b.change_1w,",
+                    paste0(
+                        "    EXTRACT(EPOCH FROM (",
+                        ref_ts_sql,
+                        " - b.latest_time)) / 3600.0 AS last_data_age_hours"
+                    ),
+                    "FROM best_latest b",
+                    "JOIN locations loc ON loc.location_id = b.location_id",
+                    "WHERE b.rn = 1",
+                    "ORDER BY loc.location_code"
+                ),
+                location_codes_sql,
+                parameter_sql
+            ),
+            con = con
+        )
+
+        interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
+    }
+
+    get_fdd_summary <- function(location_codes, con, reference_time = NULL) {
+        location_codes <- unique(stats::na.omit(unlist(
+            location_codes,
+            use.names = FALSE
+        )))
+        if (length(location_codes) == 0) {
+            return(data.frame())
+        }
+
+        location_codes_sql <- paste(
+            DBI::dbQuoteString(con, location_codes),
+            collapse = ","
+        )
+        aggregation_sql <- DBI::dbQuoteString(
+            con,
+            daily_temperature_aggregation_name()
+        )
+
+        ref_ts_sql <- if (is.null(reference_time)) {
+            "NOW()"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+                "'::timestamp"
+            )
+        }
+        ref_date_sql <- if (is.null(reference_time)) {
+            "CURRENT_DATE"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d"),
+                "'::date"
+            )
+        }
+        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
+            reference_time
+        )
+
+        dat <- YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH target_locations AS (",
+                    "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
+                    "),",
+                    "target_timeseries AS (",
+                    "    SELECT ts.location_id, ts.timeseries_id",
+                    "    FROM timeseries ts",
+                    "    JOIN locations l",
+                    "      ON l.location_id = ts.location_id",
+                    "    JOIN target_locations tl",
+                    "      ON tl.location_code = l.location_code",
+                    "    JOIN parameters p",
+                    "      ON p.parameter_id = ts.parameter_id",
+                    "    JOIN aggregation_types a",
+                    "      ON a.aggregation_type_id = ts.aggregation_type_id",
+                    "    WHERE p.param_name = 'temperature, air'",
+                    "      AND a.aggregation_type = %s",
+                    "),",
+                    "daily_temp AS (",
+                    "    SELECT",
+                    "        tt.location_id,",
+                    "        tt.timeseries_id,",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM target_timeseries tt",
+                    "    JOIN measurements_calculated_daily mcd",
+                    "      ON mcd.timeseries_id = tt.timeseries_id",
+                    "    WHERE mcd.value IS NOT NULL",
+                    paste0("      AND mcd.date <= ", ref_date_sql),
+                    "),",
+                    "daily_fdd AS (",
+                    "    SELECT",
+                    "        dt.location_id,",
+                    "        dt.timeseries_id,",
+                    "        dt.date,",
+                    "        GREATEST(-dt.mean_temp, 0) AS fdd_day,",
+                    "        CASE",
+                    "            WHEN EXTRACT(MONTH FROM dt.date) >= 10",
+                    "            THEN EXTRACT(YEAR FROM dt.date)::int",
+                    "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
+                    "        END AS season_start_year",
+                    "    FROM daily_temp dt",
+                    "    WHERE dt.date <= ",
+                    ref_date_sql,
+                    "),",
+                    "seasonal_fdd AS (",
+                    "    SELECT",
+                    "        df.location_id,",
+                    "        df.timeseries_id,",
+                    "        df.date,",
+                    "        1 +",
+                    "            SUM(df.fdd_day) OVER (",
+                    "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
+                    "                ORDER BY df.date",
+                    "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                    "            ) -",
+                    "            FIRST_VALUE(df.fdd_day) OVER (",
+                    "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
+                    "                ORDER BY df.date",
+                    "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                    "            ) AS fdd",
+                    "    FROM daily_fdd df",
+                    "),",
+                    "latest_by_location AS (",
+                    "    SELECT DISTINCT ON (location_id)",
+                    "        location_id,",
+                    "        timeseries_id,",
+                    "        date,",
+                    "        fdd",
+                    "    FROM seasonal_fdd",
+                    "    ORDER BY location_id, date DESC, timeseries_id",
+                    ")",
+                    "SELECT",
+                    "    loc.location_id,",
+                    "    loc.location_code,",
+                    "    loc.name,",
+                    "    l.timeseries_id,",
+                    "    l.date::timestamp AS latest_time,",
+                    "    l.fdd AS current_value,",
+                    "    l.fdd - prev24.fdd AS change_24h,",
+                    "    l.fdd - prev48.fdd AS change_48h,",
+                    "    l.fdd - prev1w.fdd AS change_1w,",
+                    paste0(
+                        "    EXTRACT(EPOCH FROM (",
+                        ref_ts_sql,
+                        " - l.date::timestamp)) / 3600.0 AS last_data_age_hours"
+                    ),
+                    "FROM latest_by_location l",
+                    "LEFT JOIN LATERAL (",
+                    "    SELECT sf.fdd",
+                    "    FROM seasonal_fdd sf",
+                    "    WHERE sf.location_id = l.location_id",
+                    "      AND sf.timeseries_id = l.timeseries_id",
+                    "      AND sf.date <= l.date - INTERVAL '1 day'",
+                    "    ORDER BY sf.date DESC",
+                    "    LIMIT 1",
+                    ") prev24 ON TRUE",
+                    "LEFT JOIN LATERAL (",
+                    "    SELECT sf.fdd",
+                    "    FROM seasonal_fdd sf",
+                    "    WHERE sf.location_id = l.location_id",
+                    "      AND sf.timeseries_id = l.timeseries_id",
+                    "      AND sf.date <= l.date - INTERVAL '2 days'",
+                    "    ORDER BY sf.date DESC",
+                    "    LIMIT 1",
+                    ") prev48 ON TRUE",
+                    "LEFT JOIN LATERAL (",
+                    "    SELECT sf.fdd",
+                    "    FROM seasonal_fdd sf",
+                    "    WHERE sf.location_id = l.location_id",
+                    "      AND sf.timeseries_id = l.timeseries_id",
+                    "      AND sf.date <= l.date - INTERVAL '7 days'",
+                    "    ORDER BY sf.date DESC",
+                    "    LIMIT 1",
+                    ") prev1w ON TRUE",
+                    "JOIN locations loc",
+                    "  ON loc.location_id = l.location_id",
+                    paste0("WHERE l.date >= ", recent_cutoff_date_sql),
+                    "ORDER BY loc.location_code"
+                ),
+                location_codes_sql,
+                aggregation_sql
+            ),
+            con = con
+        )
+
+        interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
+    }
+
+    get_ddt_summary <- function(location_codes, con, reference_time = NULL) {
+        location_codes <- unique(stats::na.omit(unlist(
+            location_codes,
+            use.names = FALSE
+        )))
+        if (length(location_codes) == 0) {
+            return(data.frame())
+        }
+
+        location_codes_sql <- paste(
+            DBI::dbQuoteString(con, location_codes),
+            collapse = ","
+        )
+        aggregation_sql <- DBI::dbQuoteString(
+            con,
+            daily_temperature_aggregation_name()
+        )
+
+        ref_ts_sql <- if (is.null(reference_time)) {
+            "NOW()"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+                "'::timestamp"
+            )
+        }
+        ref_date_sql <- if (is.null(reference_time)) {
+            "CURRENT_DATE"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d"),
+                "'::date"
+            )
+        }
+        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
+            reference_time
+        )
+
+        dat <- YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH target_locations AS (",
+                    "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
+                    "),",
+                    "target_timeseries AS (",
+                    "    SELECT ts.location_id, ts.timeseries_id",
+                    "    FROM timeseries ts",
+                    "    JOIN locations l",
+                    "      ON l.location_id = ts.location_id",
+                    "    JOIN target_locations tl",
+                    "      ON tl.location_code = l.location_code",
+                    "    JOIN parameters p",
+                    "      ON p.parameter_id = ts.parameter_id",
+                    "    JOIN aggregation_types a",
+                    "      ON a.aggregation_type_id = ts.aggregation_type_id",
+                    "    WHERE p.param_name = 'temperature, air'",
+                    "      AND a.aggregation_type = %s",
+                    "),",
+                    "daily_temp AS (",
+                    "    SELECT",
+                    "        tt.location_id,",
+                    "        tt.timeseries_id,",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM target_timeseries tt",
+                    "    JOIN measurements_calculated_daily mcd",
+                    "      ON mcd.timeseries_id = tt.timeseries_id",
+                    "    WHERE mcd.value IS NOT NULL",
+                    paste0("      AND mcd.date <= ", ref_date_sql),
+                    "),",
+                    "daily_ddt AS (",
+                    "    SELECT",
+                    "        dt.location_id,",
+                    "        dt.timeseries_id,",
+                    "        dt.date,",
+                    "        GREATEST(dt.mean_temp, 0) AS ddt_day,",
+                    "        CASE",
+                    "            WHEN EXTRACT(MONTH FROM dt.date) >= 4",
+                    "            THEN EXTRACT(YEAR FROM dt.date)::int",
+                    "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
+                    "        END AS season_start_year",
+                    "    FROM daily_temp dt",
+                    "    WHERE dt.date <= ",
+                    ref_date_sql,
+                    "),",
+                    "seasonal_ddt AS (",
+                    "    SELECT",
+                    "        df.location_id,",
+                    "        df.timeseries_id,",
+                    "        df.date,",
+                    "        1 +",
+                    "            SUM(df.ddt_day) OVER (",
+                    "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
+                    "                ORDER BY df.date",
+                    "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                    "            ) -",
+                    "            FIRST_VALUE(df.ddt_day) OVER (",
+                    "                PARTITION BY df.location_id, df.timeseries_id, df.season_start_year",
+                    "                ORDER BY df.date",
+                    "                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW",
+                    "            ) AS ddt",
+                    "    FROM daily_ddt df",
+                    "),",
+                    "latest_by_location AS (",
+                    "    SELECT DISTINCT ON (location_id)",
+                    "        location_id,",
+                    "        timeseries_id,",
+                    "        date,",
+                    "        ddt",
+                    "    FROM seasonal_ddt",
+                    "    ORDER BY location_id, date DESC, timeseries_id",
+                    ")",
+                    "SELECT",
+                    "    loc.location_id,",
+                    "    loc.location_code,",
+                    "    loc.name,",
+                    "    l.timeseries_id,",
+                    "    l.date::timestamp AS latest_time,",
+                    "    l.ddt AS current_value,",
+                    "    l.ddt - prev24.ddt AS change_24h,",
+                    "    l.ddt - prev48.ddt AS change_48h,",
+                    "    l.ddt - prev1w.ddt AS change_1w,",
+                    paste0(
+                        "    EXTRACT(EPOCH FROM (",
+                        ref_ts_sql,
+                        " - l.date::timestamp)) / 3600.0 AS last_data_age_hours"
+                    ),
+                    "FROM latest_by_location l",
+                    "LEFT JOIN LATERAL (",
+                    "    SELECT sd.ddt",
+                    "    FROM seasonal_ddt sd",
+                    "    WHERE sd.location_id = l.location_id",
+                    "      AND sd.timeseries_id = l.timeseries_id",
+                    "      AND sd.date <= l.date - INTERVAL '1 day'",
+                    "    ORDER BY sd.date DESC",
+                    "    LIMIT 1",
+                    ") prev24 ON TRUE",
+                    "LEFT JOIN LATERAL (",
+                    "    SELECT sd.ddt",
+                    "    FROM seasonal_ddt sd",
+                    "    WHERE sd.location_id = l.location_id",
+                    "      AND sd.timeseries_id = l.timeseries_id",
+                    "      AND sd.date <= l.date - INTERVAL '2 days'",
+                    "    ORDER BY sd.date DESC",
+                    "    LIMIT 1",
+                    ") prev48 ON TRUE",
+                    "LEFT JOIN LATERAL (",
+                    "    SELECT sd.ddt",
+                    "    FROM seasonal_ddt sd",
+                    "    WHERE sd.location_id = l.location_id",
+                    "      AND sd.timeseries_id = l.timeseries_id",
+                    "      AND sd.date <= l.date - INTERVAL '7 days'",
+                    "    ORDER BY sd.date DESC",
+                    "    LIMIT 1",
+                    ") prev1w ON TRUE",
+                    "JOIN locations loc",
+                    "  ON loc.location_id = l.location_id",
+                    paste0("WHERE l.date >= ", recent_cutoff_date_sql),
+                    "ORDER BY loc.location_code"
+                ),
+                location_codes_sql,
+                aggregation_sql
+            ),
+            con = con
+        )
+
+        interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
+    }
+
+    get_precipitation_timeseries_summary <- function(
+        location_codes,
+        con,
+        reference_time = NULL
+    ) {
+        location_codes <- unique(stats::na.omit(unlist(
+            location_codes,
+            use.names = FALSE
+        )))
+        if (length(location_codes) == 0) {
+            return(data.frame())
+        }
+
+        location_codes_sql <- paste(
+            DBI::dbQuoteString(con, location_codes),
+            collapse = ","
+        )
+
+        ref_ts_sql <- if (is.null(reference_time)) {
+            "NOW()"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+                "'::timestamp"
+            )
+        }
+        ref_date_sql <- if (is.null(reference_time)) {
+            "CURRENT_DATE"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d"),
+                "'::date"
+            )
+        }
+        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
+            reference_time
+        )
+
+        dat <- YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH target_locations AS (",
+                    "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
+                    "),",
+                    "target_timeseries AS (",
+                    "    SELECT ts.location_id, ts.timeseries_id",
+                    "    FROM timeseries ts",
+                    "    JOIN locations loc ON loc.location_id = ts.location_id",
+                    "    JOIN target_locations tl ON tl.location_code = loc.location_code",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "    WHERE p.param_name = 'precipitation, total'",
+                    "),",
+                    "filtered AS MATERIALIZED (",
+                    "    SELECT t.location_id, t.timeseries_id, mc.date, mc.value",
+                    "    FROM measurements_calculated_daily mc",
+                    "    JOIN target_timeseries t ON t.timeseries_id = mc.timeseries_id",
+                    "    WHERE mc.value IS NOT NULL",
+                    paste0(
+                        "      AND mc.date >= ",
+                        ref_date_sql,
+                        " - INTERVAL '6 months'"
+                    ),
+                    paste0(
+                        "      AND mc.date < ",
+                        ref_date_sql,
+                        " + INTERVAL '1 day'"
+                    ),
+                    "),",
+                    "latest_by_location AS (",
+                    "    SELECT DISTINCT ON (location_id)",
+                    "        location_id, timeseries_id, date AS last_date",
+                    "    FROM filtered",
+                    "    ORDER BY location_id, date DESC, timeseries_id",
+                    "),",
+                    "current_accumulations AS (",
+                    "    SELECT",
+                    "        l.location_id,",
+                    "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '7 days' AND mc.date <= l.last_date) AS precipitation_1w_accumulation,",
+                    "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '1 month' AND mc.date <= l.last_date) AS precipitation_1m_accumulation,",
+                    "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '6 months' AND mc.date <= l.last_date) AS precipitation_6m_accumulation",
+                    "    FROM latest_by_location l",
+                    "    JOIN measurements_calculated_daily mc ON mc.timeseries_id = l.timeseries_id",
+                    "    WHERE mc.value IS NOT NULL",
+                    "      AND mc.date > l.last_date - INTERVAL '6 months'",
+                    "      AND mc.date <= l.last_date",
+                    "    GROUP BY l.location_id",
+                    ")",
+                    "SELECT",
+                    "    loc.location_id, loc.location_code, loc.name,",
+                    "    l.last_date::timestamp AS latest_time,",
+                    "    ca.precipitation_1w_accumulation,",
+                    "    ca.precipitation_1m_accumulation,",
+                    "    ca.precipitation_6m_accumulation,",
+                    paste0(
+                        "    EXTRACT(EPOCH FROM (",
+                        ref_ts_sql,
+                        " - l.last_date::timestamp)) / 3600.0 AS last_data_age_hours"
+                    ),
+                    "FROM target_locations tl",
+                    "JOIN locations loc ON loc.location_code = tl.location_code",
+                    "LEFT JOIN latest_by_location l ON l.location_id = loc.location_id",
+                    "LEFT JOIN current_accumulations ca ON ca.location_id = loc.location_id",
+                    "WHERE l.last_date IS NOT NULL",
+                    paste0("  AND l.last_date >= ", recent_cutoff_date_sql),
+                    "ORDER BY loc.location_code"
+                ),
+                location_codes_sql
+            ),
+            con = con
+        )
+
+        interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
+    }
+
+    get_snow_survey_summary <- function(
+        location_codes,
+        parameter,
+        con,
+        reference_time = NULL
+    ) {
+        location_codes <- unique(stats::na.omit(unlist(
+            location_codes,
+            use.names = FALSE
+        )))
+        if (length(location_codes) == 0) {
+            return(data.frame())
+        }
+
+        location_codes_sql <- paste(
+            DBI::dbQuoteString(con, location_codes),
+            collapse = ","
+        )
+        parameter_sql <- DBI::dbQuoteString(
+            con,
+            parameter_query_name(parameter)
+        )
+
+        ref_ts <- if (is.null(reference_time)) {
+            Sys.time()
+        } else {
+            as.POSIXct(reference_time)
+        }
+        ref_ts_sql <- paste0(
+            "'",
+            format(ref_ts, "%Y-%m-%d %H:%M:%S"),
+            "'::timestamp"
+        )
+        ref_year <- as.integer(format(ref_ts, "%Y"))
+
+        dat <- YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH target_locations AS (",
+                    "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
+                    "),",
+                    "survey_values AS (",
+                    "    SELECT l.location_id, l.location_code, s.sample_id,",
+                    "        s.target_datetime, dr.result AS value",
+                    "    FROM target_locations tl",
+                    "    JOIN locations l ON l.location_code = tl.location_code",
+                    "    JOIN samples s ON s.location_id = l.location_id",
+                    "    JOIN discrete.results dr ON dr.sample_id = s.sample_id",
+                    "    JOIN parameters p ON p.parameter_id = dr.parameter_id",
+                    "    WHERE p.param_name = %s",
+                    "      AND dr.result IS NOT NULL",
+                    "      AND s.target_datetime IS NOT NULL",
+                    paste0("      AND s.target_datetime <= ", ref_ts_sql),
+                    "      AND EXTRACT(MONTH FROM s.target_datetime) IN (3, 4, 5)",
+                    "      AND EXTRACT(DAY FROM s.target_datetime) = 1",
+                    "),",
+                    "latest_by_location AS (",
+                    "    SELECT DISTINCT ON (location_id)",
+                    "        location_id, sample_id, target_datetime AS latest_time, value AS current_value",
+                    "    FROM survey_values",
+                    "    ORDER BY location_id, target_datetime DESC, sample_id DESC",
+                    "),",
+                    "current_year_values AS (",
+                    "    SELECT location_id,",
+                    sprintf(
+                        "        MAX(value) FILTER (WHERE EXTRACT(YEAR FROM target_datetime)::int = %d AND EXTRACT(MONTH FROM target_datetime) = 3) AS march_1_value,",
+                        ref_year
+                    ),
+                    sprintf(
+                        "        MAX(value) FILTER (WHERE EXTRACT(YEAR FROM target_datetime)::int = %d AND EXTRACT(MONTH FROM target_datetime) = 4) AS april_1_value,",
+                        ref_year
+                    ),
+                    sprintf(
+                        "        MAX(value) FILTER (WHERE EXTRACT(YEAR FROM target_datetime)::int = %d AND EXTRACT(MONTH FROM target_datetime) = 5) AS may_1_value",
+                        ref_year
+                    ),
+                    "    FROM survey_values GROUP BY location_id",
+                    ")",
+                    "SELECT loc.location_id, loc.location_code, loc.name,",
+                    "    l.latest_time, l.current_value,",
+                    "    cy.march_1_value, cy.april_1_value, cy.may_1_value,",
+                    paste0(
+                        "    EXTRACT(EPOCH FROM (",
+                        ref_ts_sql,
+                        " - l.latest_time)) / 3600.0 AS last_data_age_hours"
+                    ),
+                    "FROM latest_by_location l",
+                    "JOIN locations loc ON loc.location_id = l.location_id",
+                    "LEFT JOIN current_year_values cy ON cy.location_id = l.location_id",
+                    "ORDER BY loc.location_code"
+                ),
+                location_codes_sql,
+                parameter_sql
+            ),
+            con = con
+        )
+
+        interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
+    }
+
+    get_latest_parameter_summary_by_location_id <- function(
+        location_ids,
+        parameter,
+        con,
+        reference_time = NULL
+    ) {
+        location_ids <- unique(stats::na.omit(as.integer(location_ids)))
+        if (length(location_ids) == 0) {
+            return(data.frame())
+        }
+
+        parameter_sql <- DBI::dbQuoteString(
+            con,
+            parameter_query_name(parameter)
+        )
+        reference_ts <- if (is.null(reference_time)) {
+            "NOW()"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+                "'::timestamp"
+            )
+        }
+        reference_date <- if (is.null(reference_time)) {
+            "CURRENT_DATE"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d"),
+                "'::date"
+            )
+        }
+
+        YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH target_locations AS (",
+                    "    SELECT UNNEST(ARRAY[%s]::int[]) AS location_id",
+                    "),",
+                    "target_timeseries AS (",
+                    "    SELECT ts.location_id, ts.timeseries_id",
+                    "    FROM timeseries ts",
+                    "    JOIN target_locations tl ON tl.location_id = ts.location_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "    WHERE p.param_name = %s",
+                    "),",
+                    "continuous_latest AS (",
+                    "    SELECT DISTINCT ON (tt.location_id)",
+                    "        tt.location_id,",
+                    "        tt.timeseries_id,",
+                    "        mc.datetime AS latest_time,",
+                    "        mc.value AS current_value",
+                    "    FROM target_timeseries tt",
+                    "    JOIN measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
+                    "    WHERE mc.value IS NOT NULL",
+                    paste0("      AND mc.datetime <= ", reference_ts),
+                    "    ORDER BY tt.location_id, mc.datetime DESC, tt.timeseries_id",
+                    "),",
+                    "continuous_change AS (",
+                    "    SELECT",
+                    "        cl.location_id,",
+                    "        cl.latest_time,",
+                    paste0(
+                        "        EXTRACT(EPOCH FROM (",
+                        reference_ts,
+                        " - cl.latest_time)) / 3600.0 AS last_data_age_hours,"
+                    ),
+                    "        cl.current_value,",
+                    "        cl.current_value - prev24.value AS change_24h,",
+                    "        cl.current_value - prev48.value AS change_48h,",
+                    "        cl.current_value - prev1w.value AS change_1w,",
+                    "        1 AS source_priority",
+                    "    FROM continuous_latest cl",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mc.value",
+                    "        FROM measurements_continuous mc",
+                    "        WHERE mc.timeseries_id = cl.timeseries_id",
+                    "          AND mc.value IS NOT NULL",
+                    "          AND mc.datetime <= cl.latest_time - INTERVAL '24 hours'",
+                    "        ORDER BY mc.datetime DESC",
+                    "        LIMIT 1",
+                    "    ) prev24 ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mc.value",
+                    "        FROM measurements_continuous mc",
+                    "        WHERE mc.timeseries_id = cl.timeseries_id",
+                    "          AND mc.value IS NOT NULL",
+                    "          AND mc.datetime <= cl.latest_time - INTERVAL '48 hours'",
+                    "        ORDER BY mc.datetime DESC",
+                    "        LIMIT 1",
+                    "    ) prev48 ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mc.value",
+                    "        FROM measurements_continuous mc",
+                    "        WHERE mc.timeseries_id = cl.timeseries_id",
+                    "          AND mc.value IS NOT NULL",
+                    "          AND mc.datetime <= cl.latest_time - INTERVAL '7 days'",
+                    "        ORDER BY mc.datetime DESC",
+                    "        LIMIT 1",
+                    "    ) prev1w ON TRUE",
+                    "),",
+                    "daily_latest AS (",
+                    "    SELECT DISTINCT ON (tt.location_id)",
+                    "        tt.location_id,",
+                    "        tt.timeseries_id,",
+                    "        mcd.date::timestamp AS latest_time,",
+                    "        mcd.value AS current_value",
+                    "    FROM target_timeseries tt",
+                    "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
+                    "    WHERE mcd.value IS NOT NULL",
+                    paste0("      AND mcd.date <= ", reference_date),
+                    "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
+                    "),",
+                    "daily_change AS (",
+                    "    SELECT",
+                    "        dl.location_id,",
+                    "        dl.latest_time,",
+                    paste0(
+                        "        EXTRACT(EPOCH FROM (",
+                        reference_ts,
+                        " - dl.latest_time)) / 3600.0 AS last_data_age_hours,"
+                    ),
+                    "        dl.current_value,",
+                    "        dl.current_value - prev24.value AS change_24h,",
+                    "        dl.current_value - prev48.value AS change_48h,",
+                    "        dl.current_value - prev1w.value AS change_1w,",
+                    "        2 AS source_priority",
+                    "    FROM daily_latest dl",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mcd.value",
+                    "        FROM measurements_calculated_daily mcd",
+                    "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                    "          AND mcd.value IS NOT NULL",
+                    "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
+                    "        ORDER BY mcd.date DESC",
+                    "        LIMIT 1",
+                    "    ) prev24 ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mcd.value",
+                    "        FROM measurements_calculated_daily mcd",
+                    "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                    "          AND mcd.value IS NOT NULL",
+                    "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 day'",
+                    "        ORDER BY mcd.date DESC",
+                    "        LIMIT 1",
+                    "    ) prev48 ON TRUE",
+                    "    LEFT JOIN LATERAL (",
+                    "        SELECT mcd.value",
+                    "        FROM measurements_calculated_daily mcd",
+                    "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                    "          AND mcd.value IS NOT NULL",
+                    "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 day'",
+                    "        ORDER BY mcd.date DESC",
+                    "        LIMIT 1",
+                    "    ) prev1w ON TRUE",
+                    "),",
+                    "combined AS (",
+                    "    SELECT location_id, latest_time, last_data_age_hours, current_value, change_24h, change_48h, change_1w, source_priority FROM continuous_change",
+                    "    UNION ALL",
+                    "    SELECT location_id, latest_time, last_data_age_hours, current_value, change_24h, change_48h, change_1w, source_priority FROM daily_change",
+                    "),",
+                    "ranked AS (",
+                    "    SELECT",
+                    "        c.*,",
+                    "        ROW_NUMBER() OVER (",
+                    "            PARTITION BY c.location_id",
+                    "            ORDER BY c.latest_time DESC, c.source_priority",
+                    "        ) AS rn",
+                    "    FROM combined c",
+                    ")",
+                    "SELECT",
+                    "    location_id,",
+                    "    latest_time,",
+                    "    last_data_age_hours,",
+                    "    current_value,",
+                    "    change_24h,",
+                    "    change_48h,",
+                    "    change_1w",
+                    "FROM ranked",
+                    "WHERE rn = 1"
+                ),
+                paste(location_ids, collapse = ","),
+                parameter_sql
+            ),
+            con = con
+        )
+    }
+
+    #' Fetch a spatial vector layer from the database as an sf object
+    #'
+    #' Queries the `spatial.vectors` table, optionally filtering by feature name,
+    #' reprojects geometries to the requested CRS, and returns an `sf` object.
+    #'
+    #' @param feature_name Character vector of feature names to include. When
+    #'   `NULL` (default) all features in the matching layer(s) are returned.
+    #' @param layer_name Character vector of layer names to query (matched against
+    #'   the `layer_name` column of `spatial.vectors`).
+    #' @param con A DBI database connection.
+    #' @param epsg Integer EPSG code for the output CRS. Defaults to `4326`
+    #'   (WGS 84).
+    #'
+    #' @return An `sf` object with all columns from `spatial.vectors` plus the
+    #'   well-known-text geometry reprojected to `epsg`, or `NULL` when no rows
+    #'   match the supplied filters.
+    get_spatial_layer_as_sf <- function(
+        feature_name = NULL,
+        layer_name,
+        con,
+        epsg = 4326
+    ) {
+        layer_values <- unlist(layer_name, use.names = FALSE)
+        if (length(layer_values) == 0) {
+            return(NULL)
+        }
+
+        layer_sql <- paste(
+            DBI::dbQuoteString(con, layer_values),
+            collapse = ","
+        )
+        where_clauses <- c(sprintf("layer_name IN (%s)", layer_sql))
+
+        if (!is.null(feature_name)) {
+            feature_values <- unique(stats::na.omit(unlist(
+                feature_name,
+                use.names = FALSE
+            )))
+            feature_values <- feature_values[nzchar(feature_values)]
+
+            if (length(feature_values) > 0) {
+                feature_sql <- paste(
+                    DBI::dbQuoteString(con, feature_values),
+                    collapse = ","
+                )
+                where_clauses <- c(
+                    where_clauses,
+                    sprintf("feature_name IN (%s)", feature_sql)
+                )
+            }
+        }
+
+        query <- sprintf(
+            paste(
+                "SELECT",
+                "    *,",
+                "    ST_AsText(ST_Transform(geom, %d)) AS geom_wkt",
+                "FROM spatial.vectors",
+                "WHERE %s"
+            ),
+            epsg,
+            paste(where_clauses, collapse = " AND ")
+        )
+
+        dat <- YGwater::dbGetQueryDT(query, con = con)
+        if (is.null(dat) || nrow(dat) == 0) {
+            return(NULL)
+        }
+
+        sf::st_as_sf(dat, wkt = "geom_wkt", crs = epsg)
+    }
+
+    #' Look up location records for gauges in a community configuration
+    #'
+    #' Resolves location metadata (name, code, ID, latitude, longitude) from the
+    #' database for all gauges described in a community JSON configuration. The
+    #' lookup first attempts to match by explicit `location_id` / `location_code`
+    #' values found in the configuration entries; if no rows are found it falls
+    #' back to matching by gauge name.
+    #'
+    #' @param community_data Named list of gauge configuration entries (same
+    #'   structure as accepted by `get_encoded_gauge_metadata`).
+    #' @param con A DBI database connection.
+    #'
+    #' @return A data frame with columns `name`, `location_code`, `location_id`,
+    #'   `latitude`, and `longitude` (one row per unique matching location), or an
+    #'   empty data frame when no matches are found or `community_data` is `NULL`.
+    location_lookup_for_community <- function(community_data, con) {
+        if (is.null(community_data) || length(community_data) == 0) {
+            return(data.frame())
+        }
+
+        location_names <- unique(stats::na.omit(unlist(
+            names(community_data),
+            use.names = FALSE
+        )))
+
+        entry_list <- unlist(
+            community_data,
+            recursive = FALSE,
+            use.names = FALSE
+        )
+
+        extract_entry_scalar <- function(entry, field) {
+            value <- entry[[field]]
+            if (is.null(value) || length(value) == 0) {
+                return(NA_character_)
+            }
+            as.character(value[[1]])
+        }
+
+        location_ids <- integer(0)
+        location_codes <- character(0)
+
+        if (length(entry_list) > 0) {
+            location_ids <- suppressWarnings(as.integer(vapply(
+                entry_list,
+                extract_entry_scalar,
+                field = "location_id",
+                FUN.VALUE = character(1)
+            )))
+            location_ids <- unique(stats::na.omit(location_ids))
+
+            location_codes <- vapply(
+                entry_list,
+                extract_entry_scalar,
+                field = "location_code",
+                FUN.VALUE = character(1)
+            )
+            location_codes <- unique(stats::na.omit(location_codes))
+            location_codes <- location_codes[nzchar(location_codes)]
+        }
+
+        dat <- data.frame()
+
+        # Prefer strict DB matches by explicit IDs/codes from JSON metadata.
+        where_clauses <- character(0)
+        if (length(location_ids) > 0) {
+            where_clauses <- c(
+                where_clauses,
+                sprintf(
+                    "location_id IN (%s)",
+                    paste(location_ids, collapse = ",")
+                )
+            )
+        }
+        if (length(location_codes) > 0) {
+            location_codes_sql <- paste(
+                DBI::dbQuoteString(con, location_codes),
+                collapse = ","
+            )
+            where_clauses <- c(
+                where_clauses,
+                sprintf("location_code IN (%s)", location_codes_sql)
+            )
+        }
+
+        if (length(where_clauses) > 0) {
+            dat <- YGwater::dbGetQueryDT(
+                paste(
+                    "SELECT DISTINCT",
+                    "    name,",
+                    "    location_code,",
+                    "    location_id,",
+                    "    latitude,",
+                    "    longitude",
+                    "FROM locations",
+                    sprintf(
+                        "WHERE %s",
+                        paste(where_clauses, collapse = " OR ")
+                    ),
+                    "ORDER BY name"
+                ),
+                con = con
+            )
+        }
+
+        # Fallback: if no strict ID/code hits, try matching by location name.
+        if ((is.null(dat) || nrow(dat) == 0) && length(location_names) > 0) {
+            location_names_sql <- paste(
+                DBI::dbQuoteString(con, location_names),
+                collapse = ","
+            )
+            dat <- YGwater::dbGetQueryDT(
+                paste(
+                    "SELECT DISTINCT",
+                    "    name,",
+                    "    location_code,",
+                    "    location_id,",
+                    "    latitude,",
+                    "    longitude",
+                    "FROM locations",
+                    sprintf("WHERE name IN (%s)", location_names_sql),
+                    "ORDER BY name"
+                ),
+                con = con
+            )
+        }
+
+        if (is.null(dat) || nrow(dat) == 0) {
+            return(data.frame())
+        }
+
+        dat$location_code <- as.character(dat$location_code)
+        dat$name <- as.character(dat$name)
+        dat
+    }
+
+    #' Extract location codes from a community JSON configuration
+    #'
+    #' Walks the nested community configuration list and collects every unique,
+    #' non-empty `location_code` string found in the leaf entries.
+    #'
+    #' @param community_data Named list of gauge configuration entries (same
+    #'   structure as accepted by `get_encoded_gauge_metadata`).
+    #'
+    #' @return A character vector of unique, non-empty location codes, or
+    #'   `character(0)` when `community_data` is `NULL`, empty, or contains no
+    #'   valid codes.
+    community_location_codes_from_json <- function(community_data) {
+        if (is.null(community_data) || length(community_data) == 0) {
+            return(character(0))
+        }
+
+        entry_list <- unlist(
+            community_data,
+            recursive = FALSE,
+            use.names = FALSE
+        )
+        if (length(entry_list) == 0) {
+            return(character(0))
+        }
+
+        extract_code <- function(entry) {
+            value <- entry[["location_code"]]
+            if (is.null(value) || length(value) == 0) {
+                return(NA_character_)
+            }
+            as.character(value[[1]])
+        }
+
+        codes <- vapply(entry_list, extract_code, FUN.VALUE = character(1))
+        codes <- unique(stats::na.omit(codes))
+        codes[nzchar(codes)]
+    }
+
+    # ---------------------------------------------------------------------------
+    # Plot helpers (ported from dev/freshet_forecasting/dashboard.r)
+    # ---------------------------------------------------------------------------
+
+    normalize_historical_start_year <- function(historical_start_year) {
+        current_year <- as.integer(format(Sys.Date(), "%Y"))
+        historical_start_year <- suppressWarnings(as.integer(
+            historical_start_year[[1]]
+        ))
+        if (
+            length(historical_start_year) != 1 ||
+                is.na(historical_start_year) ||
+                historical_start_year < 1980 ||
+                historical_start_year > current_year
+        ) {
+            return(2020L)
+        }
+        historical_start_year
+    }
+
+    parameter_axis_title <- function(parameter) {
+        axis_titles <- c(
+            "precipitation (1wk)" = "Precipitation (1wk accumulation, mm)",
+            "precipitation (24hr)" = "Precipitation (24hr, mm)",
+            "FDD" = "Freezing Degree Days (FDD)",
+            "DDT" = "Thawing Degree Days (DDT)",
+            "snow water eq (pillow)" = "Snow Water Equivalent (Pillow)",
+            "snow depth (pillow)" = "Snow Depth (Pillow)",
+            "snow water eq (survey)" = "Snow Water Equivalent (Survey)",
+            "snow depth (survey)" = "Snow Depth (Survey)"
+        )
+        if (parameter %in% names(axis_titles)) {
+            axis_titles[[parameter]]
+        } else {
+            parameter
+        }
+    }
+
+    sanitize_loaded_series_values <- function(dat, parameter) {
+        if (
+            is.null(dat) ||
+                nrow(dat) == 0 ||
+                !"value" %in% names(dat) ||
+                identical(parameter, "temperature, air")
+        ) {
+            return(dat)
+        }
+        dat$value[!is.na(dat$value) & dat$value < 0] <- NA_real_
+        dat
+    }
+
+    empty_plotly_widget <- function(title = NULL, annotations = NULL) {
+        widget <- plotly::plot_ly(
+            x = numeric(0),
+            y = numeric(0),
+            type = "scatter",
+            mode = "lines",
+            hoverinfo = "skip",
+            showlegend = FALSE
+        )
+        plotly::layout(widget, title = title, annotations = annotations)
+    }
+
+    get_return_period_discharge <- function(
+        location_codes,
+        parameter = "water flow",
+        return_periods = c(2, 5, 10, 25, 50, 100),
+        con
+    ) {
+        location_codes_str <- paste(
+            sprintf("'%s'", location_codes),
+            collapse = ","
+        )
+        percentiles <- 1 - (1 / return_periods)
+        percentile_cols <- paste(
+            sprintf(
+                "percentile_cont(%.4f) WITHIN GROUP (ORDER BY annual_peak) AS rp_%d",
+                percentiles,
+                return_periods
+            ),
+            collapse = ", "
+        )
+        YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH annual_peaks AS (",
+                    "    SELECT",
+                    "        ts.location_id,",
+                    "        l.location_code,",
+                    "        EXTRACT(YEAR FROM mc.date)::int AS year,",
+                    "        MAX(mc.value) AS annual_peak",
+                    "    FROM measurements_calculated_daily mc",
+                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "    JOIN locations l ON ts.location_id = l.location_id",
+                    "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
+                    "    WHERE l.location_code IN (%s)",
+                    "      AND p.param_name = '%s'",
+                    "    GROUP BY ts.location_id, l.location_code, EXTRACT(YEAR FROM mc.date)",
+                    ")",
+                    "SELECT location_id, location_code, COUNT(*) AS n_years, %s",
+                    "FROM annual_peaks",
+                    "GROUP BY location_id, location_code"
+                ),
+                location_codes_str,
+                parameter,
+                percentile_cols
+            ),
+            con = con
+        )
+    }
+
+    get_daily_percentiles <- function(
+        location_codes,
+        parameter = "water flow",
+        con,
+        historical_start_year = 2020
+    ) {
+        query_parameter <- parameter_query_name(parameter)
+        location_codes_str <- paste(
+            sprintf("'%s'", location_codes),
+            collapse = ","
+        )
+        historical_start_year <- normalize_historical_start_year(
+            historical_start_year
+        )
+        historical_start_date_sql <- paste0(
+            "MAKE_DATE(",
+            historical_start_year,
+            ", 1, 1)"
+        )
+
+        if (identical(parameter, "FDD")) {
+            return(YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_temp AS (",
+                        "    SELECT l.location_code,",
+                        "        mcd.date AS date,",
+                        "        mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
+                        "    WHERE l.location_code IN (%s)",
+                        "      AND p.param_name = 'temperature, air'",
+                        "      AND mcd.value IS NOT NULL",
+                        paste0(
+                            "      AND mcd.date >= ",
+                            historical_start_date_sql
+                        ),
+                        "),",
+                        "daily_fdd AS (",
+                        "    SELECT dt.location_code, dt.date,",
+                        "        GREATEST(-dt.mean_temp, 0) AS fdd_day,",
+                        "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 10",
+                        "            THEN EXTRACT(YEAR FROM dt.date)::int",
+                        "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
+                        "        END AS season_start_year",
+                        "    FROM daily_temp dt",
+                        "),",
+                        "seasonal_fdd AS (",
+                        "    SELECT df.location_code, df.date,",
+                        "        1 + SUM(df.fdd_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
+                        "          - FIRST_VALUE(df.fdd_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
+                        "    FROM daily_fdd df",
+                        "),",
+                        "daily_values AS (",
+                        "    SELECT location_code,",
+                        "        CASE WHEN EXTRACT(MONTH FROM date) > 2 AND ((EXTRACT(YEAR FROM date)::int %% 4 = 0 AND EXTRACT(YEAR FROM date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM date)::int %% 400 = 0)",
+                        "            THEN EXTRACT(DOY FROM date)::int - 1 ELSE EXTRACT(DOY FROM date)::int END AS doy,",
+                        "        value FROM seasonal_fdd",
+                        "    WHERE NOT (EXTRACT(MONTH FROM date) = 2 AND EXTRACT(DAY FROM date) = 29) AND value IS NOT NULL",
+                        "),",
+                        "by_doy AS (",
+                        "    SELECT location_code, doy, COUNT(*) AS n_values,",
+                        "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
+                        "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
+                        "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
+                        "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
+                        "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
+                        "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
+                        "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
+                        "    FROM daily_values GROUP BY location_code, doy",
+                        ")",
+                        "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
+                        "FROM (SELECT DISTINCT location_code FROM daily_values) lc",
+                        "CROSS JOIN generate_series(1, 365) AS gs(doy)",
+                        "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
+                        "ORDER BY lc.location_code, gs.doy"
+                    ),
+                    location_codes_str
+                ),
+                con = con
+            ))
+        }
+
+        if (identical(parameter, "DDT")) {
+            return(YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_temp AS (",
+                        "    SELECT l.location_code,",
+                        "        mcd.date AS date,",
+                        "        mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
+                        "    WHERE l.location_code IN (%s)",
+                        "      AND p.param_name = 'temperature, air'",
+                        "      AND mcd.value IS NOT NULL",
+                        paste0(
+                            "      AND mcd.date >= ",
+                            historical_start_date_sql
+                        ),
+                        "),",
+                        "daily_ddt AS (",
+                        "    SELECT dt.location_code, dt.date,",
+                        "        GREATEST(dt.mean_temp, 0) AS ddt_day,",
+                        "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 4",
+                        "            THEN EXTRACT(YEAR FROM dt.date)::int",
+                        "            ELSE EXTRACT(YEAR FROM dt.date)::int - 1",
+                        "        END AS season_start_year",
+                        "    FROM daily_temp dt",
+                        "),",
+                        "seasonal_ddt AS (",
+                        "    SELECT df.location_code, df.date,",
+                        "        1 + SUM(df.ddt_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
+                        "          - FIRST_VALUE(df.ddt_day) OVER (PARTITION BY df.location_code, df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
+                        "    FROM daily_ddt df",
+                        "),",
+                        "daily_values AS (",
+                        "    SELECT location_code,",
+                        "        CASE WHEN EXTRACT(MONTH FROM date) > 2 AND ((EXTRACT(YEAR FROM date)::int %% 4 = 0 AND EXTRACT(YEAR FROM date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM date)::int %% 400 = 0)",
+                        "            THEN EXTRACT(DOY FROM date)::int - 1 ELSE EXTRACT(DOY FROM date)::int END AS doy,",
+                        "        value FROM seasonal_ddt",
+                        "    WHERE NOT (EXTRACT(MONTH FROM date) = 2 AND EXTRACT(DAY FROM date) = 29) AND value IS NOT NULL",
+                        "),",
+                        "by_doy AS (",
+                        "    SELECT location_code, doy, COUNT(*) AS n_values,",
+                        "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
+                        "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
+                        "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
+                        "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
+                        "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
+                        "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
+                        "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
+                        "    FROM daily_values GROUP BY location_code, doy",
+                        ")",
+                        "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
+                        "FROM (SELECT DISTINCT location_code FROM daily_values) lc",
+                        "CROSS JOIN generate_series(1, 365) AS gs(doy)",
+                        "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
+                        "ORDER BY lc.location_code, gs.doy"
+                    ),
+                    location_codes_str
+                ),
+                con = con
+            ))
+        }
+
+        if (identical(parameter, "precipitation (1wk)")) {
+            return(YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_values AS (",
+                        "    SELECT l.location_code, mc.date, mc.value",
+                        "    FROM measurements_calculated_daily mc",
+                        "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
+                        "    WHERE l.location_code IN (%s)",
+                        "      AND p.param_name = 'precipitation, total'",
+                        paste0(
+                            "      AND mc.date >= ",
+                            historical_start_date_sql
+                        ),
+                        "      AND NOT (EXTRACT(MONTH FROM mc.date) = 2 AND EXTRACT(DAY FROM mc.date) = 29)",
+                        "      AND mc.value IS NOT NULL",
+                        "),",
+                        "rolling_week AS (",
+                        "    SELECT location_code, date,",
+                        "        SUM(value) OVER (PARTITION BY location_code ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS weekly_accumulation",
+                        "    FROM daily_values",
+                        "),",
+                        "daily_weekly AS (",
+                        "    SELECT location_code,",
+                        "        CASE WHEN EXTRACT(MONTH FROM date) > 2 AND ((EXTRACT(YEAR FROM date)::int %% 4 = 0 AND EXTRACT(YEAR FROM date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM date)::int %% 400 = 0)",
+                        "            THEN EXTRACT(DOY FROM date)::int - 1 ELSE EXTRACT(DOY FROM date)::int END AS doy,",
+                        "        weekly_accumulation AS value FROM rolling_week",
+                        "),",
+                        "by_doy AS (",
+                        "    SELECT location_code, doy, COUNT(*) AS n_values,",
+                        "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
+                        "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
+                        "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
+                        "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
+                        "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
+                        "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
+                        "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
+                        "    FROM daily_weekly GROUP BY location_code, doy",
+                        ")",
+                        "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
+                        "FROM (SELECT DISTINCT location_code FROM daily_weekly) lc",
+                        "CROSS JOIN generate_series(1, 365) AS gs(doy)",
+                        "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
+                        "ORDER BY lc.location_code, gs.doy"
+                    ),
+                    location_codes_str
+                ),
+                con = con
+            ))
+        }
+
+        if (parameter %in% c("snow water eq (survey)", "snow depth (survey)")) {
+            return(tryCatch(
+                YGwater::dbGetQueryDT(
+                    sprintf(
+                        paste(
+                            "WITH survey_values AS (",
+                            "    SELECT l.location_code,",
+                            "        CASE WHEN EXTRACT(MONTH FROM s.target_datetime) > 2",
+                            "            AND ((EXTRACT(YEAR FROM s.target_datetime)::int %% 4 = 0",
+                            "                 AND EXTRACT(YEAR FROM s.target_datetime)::int %% 100 <> 0)",
+                            "                 OR EXTRACT(YEAR FROM s.target_datetime)::int %% 400 = 0)",
+                            "            THEN EXTRACT(DOY FROM s.target_datetime)::int - 1",
+                            "            ELSE EXTRACT(DOY FROM s.target_datetime)::int",
+                            "        END AS doy,",
+                            "        dr.result AS value",
+                            "    FROM samples s",
+                            "    JOIN discrete.results dr ON dr.sample_id = s.sample_id",
+                            "    JOIN parameters p ON p.parameter_id = dr.parameter_id",
+                            "    JOIN locations l ON l.location_id = s.location_id",
+                            "    WHERE l.location_code IN (%s)",
+                            "      AND p.param_name = '%s'",
+                            "      AND dr.result IS NOT NULL",
+                            "      AND s.target_datetime IS NOT NULL",
+                            paste0(
+                                "      AND s.target_datetime >= ",
+                                historical_start_date_sql
+                            ),
+                            "      AND NOT (EXTRACT(MONTH FROM s.target_datetime) = 2",
+                            "               AND EXTRACT(DAY FROM s.target_datetime) = 29)",
+                            "),",
+                            "by_doy AS (",
+                            "    SELECT location_code, doy, COUNT(*) AS n_values,",
+                            "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
+                            "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
+                            "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
+                            "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
+                            "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
+                            "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
+                            "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
+                            "    FROM survey_values GROUP BY location_code, doy",
+                            ")",
+                            "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
+                            "FROM (SELECT DISTINCT location_code FROM survey_values) lc",
+                            "CROSS JOIN generate_series(1, 365) AS gs(doy)",
+                            "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
+                            "ORDER BY lc.location_code, gs.doy"
+                        ),
+                        location_codes_str,
+                        query_parameter
+                    ),
+                    con = con
+                ),
+                error = function(e) data.frame()
+            ))
+        }
+
+        YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH daily_values AS (",
+                    "    SELECT l.location_code,",
+                    "        CASE WHEN EXTRACT(MONTH FROM mc.date) > 2 AND ((EXTRACT(YEAR FROM mc.date)::int %% 4 = 0 AND EXTRACT(YEAR FROM mc.date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM mc.date)::int %% 400 = 0)",
+                    "            THEN EXTRACT(DOY FROM mc.date)::int - 1 ELSE EXTRACT(DOY FROM mc.date)::int END AS doy,",
+                    "        mc.value",
+                    "    FROM measurements_calculated_daily mc",
+                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "    JOIN locations l ON ts.location_id = l.location_id",
+                    "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
+                    "    WHERE l.location_code IN (%s)",
+                    "      AND p.param_name = '%s'",
+                    paste0("      AND mc.date >= ", historical_start_date_sql),
+                    "      AND NOT (EXTRACT(MONTH FROM mc.date) = 2 AND EXTRACT(DAY FROM mc.date) = 29)",
+                    "      AND mc.value IS NOT NULL",
+                    "),",
+                    "by_doy AS (",
+                    "    SELECT location_code, doy, COUNT(*) AS n_values,",
+                    "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
+                    "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
+                    "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
+                    "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
+                    "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
+                    "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
+                    "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
+                    "    FROM daily_values GROUP BY location_code, doy",
+                    ")",
+                    "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
+                    "FROM (SELECT DISTINCT location_code FROM daily_values) lc",
+                    "CROSS JOIN generate_series(1, 365) AS gs(doy)",
+                    "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
+                    "ORDER BY lc.location_code, gs.doy"
+                ),
+                location_codes_str,
+                query_parameter
+            ),
+            con = con
+        )
+    }
+
+    get_station_timeseries <- function(
+        location_code,
+        parameter,
+        con,
+        reference_time = NULL,
+        load_entire_record = FALSE,
+        historical_start_year = 2020
+    ) {
+        if (is.na(location_code) || length(location_code) == 0) {
+            return(data.frame(
+                datetime = as.POSIXct(character()),
+                value = numeric()
+            ))
+        }
+
+        location_sql <- DBI::dbQuoteString(con, location_code)
+        parameter_sql <- DBI::dbQuoteString(
+            con,
+            parameter_query_name(parameter)
+        )
+        historical_start_year <- normalize_historical_start_year(
+            historical_start_year
+        )
+
+        finalize_series <- function(dat) {
+            dat <- interpret_loaded_times_as_local(
+                dat,
+                time_columns = c("datetime")
+            )
+            if (
+                !is.null(dat) &&
+                    nrow(dat) > 0 &&
+                    "datetime" %in% names(dat)
+            ) {
+                dat <- dat[order(dat$datetime), , drop = FALSE]
+            }
+            dat
+        }
+
+        ref_ts_sql <- if (is.null(reference_time)) {
+            "NOW()"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d %H:%M:%S"),
+                "'::timestamp"
+            )
+        }
+        ref_date_sql <- if (is.null(reference_time)) {
+            "CURRENT_DATE"
+        } else {
+            paste0(
+                "'",
+                format(as.POSIXct(reference_time), "%Y-%m-%d"),
+                "'::date"
+            )
+        }
+        recent_cutoff_ts_sql <- dashboard_recent_cutoff_timestamp_sql(
+            reference_time
+        )
+        recent_cutoff_date_sql <- dashboard_recent_cutoff_date_sql(
+            reference_time
+        )
+        historical_daily_min_date_sql <- paste0(
+            "MAKE_DATE(",
+            historical_start_year,
+            ", 1, 1)"
+        )
+
+        recent_parameter_sql <- if (parameter %in% c("FDD", "DDT")) {
+            DBI::dbQuoteString(con, "temperature, air")
+        } else if (
+            parameter %in% c("precipitation (1wk)", "precipitation (24hr)")
+        ) {
+            DBI::dbQuoteString(con, "precipitation, total")
+        } else {
+            parameter_sql
+        }
+
+        has_recent_data <- YGwater::dbGetQueryDT(
+            sprintf(
+                paste(
+                    "WITH recent_continuous AS (",
+                    "    SELECT 1 FROM measurements_continuous mc",
+                    "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "    JOIN locations l ON l.location_id = ts.location_id",
+                    "    WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
+                    paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
+                    paste0("      AND mc.datetime <= ", ref_ts_sql),
+                    "    LIMIT 1",
+                    "),",
+                    "recent_daily AS (",
+                    "    SELECT 1 FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "    JOIN locations l ON l.location_id = ts.location_id",
+                    "    WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
+                    paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
+                    paste0("      AND mcd.date <= ", ref_date_sql),
+                    "    LIMIT 1",
+                    ")",
+                    "SELECT EXISTS(SELECT 1 FROM recent_continuous) OR EXISTS(SELECT 1 FROM recent_daily) AS has_recent_data"
+                ),
+                location_sql,
+                recent_parameter_sql,
+                location_sql,
+                recent_parameter_sql
+            ),
+            con = con
+        )
+
+        if (
+            nrow(has_recent_data) == 0 ||
+                !isTRUE(has_recent_data$has_recent_data[[1]])
+        ) {
+            if (
+                parameter %in%
+                    c(
+                        "temperature, air",
+                        "precipitation (1wk)",
+                        "precipitation (24hr)",
+                        "FDD",
+                        "DDT"
+                    )
+            ) {
+                # Continue; these parameters are queried from daily series and may be older.
+            } else {
+                return(data.frame(
+                    datetime = as.POSIXct(character()),
+                    value = numeric()
+                ))
+            }
+        }
+
+        precip_start_filter_sql <- if (isTRUE(load_entire_record)) {
+            paste0("  AND mcd.date >= ", historical_daily_min_date_sql)
+        } else {
+            paste0("  AND mcd.date >= ", ref_date_sql, " - INTERVAL '2 months'")
+        }
+        continuous_start_filter_sql <- paste0(
+            "  AND mc.datetime >= ",
+            ref_ts_sql,
+            " - INTERVAL '7 days'"
+        )
+        daily_fallback_start_filter_sql <- if (isTRUE(load_entire_record)) {
+            paste0("  AND mcd.date >= ", historical_daily_min_date_sql)
+        } else {
+            paste0("  AND mcd.date >= ", ref_date_sql, " - INTERVAL '2 months'")
+        }
+
+        if (identical(parameter, "temperature, air")) {
+            temperature_daily <- YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
+                        "FROM measurements_calculated_daily mcd",
+                        "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "JOIN locations l ON l.location_id = ts.location_id",
+                        "WHERE l.location_code = %s",
+                        "  AND p.param_name = 'temperature, air'",
+                        "  AND mcd.value IS NOT NULL",
+                        daily_fallback_start_filter_sql,
+                        paste0("  AND mcd.date <= ", ref_date_sql),
+                        "ORDER BY mcd.date"
+                    ),
+                    location_sql
+                ),
+                con = con
+            )
+            temperature_daily <- sanitize_loaded_series_values(
+                temperature_daily,
+                parameter
+            )
+            temperature_daily$trace_source <- "observed"
+            return(finalize_series(temperature_daily))
+        }
+
+        if (identical(parameter, "FDD")) {
+            fdd_start_filter_sql <- if (isTRUE(load_entire_record)) {
+                paste0("  AND dt.date >= ", historical_daily_min_date_sql)
+            } else {
+                paste0(
+                    "  AND dt.date >= MAKE_DATE(",
+                    "CASE WHEN EXTRACT(MONTH FROM ",
+                    ref_date_sql,
+                    ") >= 10 ",
+                    "THEN EXTRACT(YEAR FROM ",
+                    ref_date_sql,
+                    ")::int ",
+                    "ELSE EXTRACT(YEAR FROM ",
+                    ref_date_sql,
+                    ")::int - 1 END, ",
+                    "10, 1)"
+                )
+            }
+            fdd <- YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_temp AS (",
+                        "    SELECT mcd.date AS date, mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
+                        "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
+                        paste0("      AND mcd.date <= ", ref_date_sql),
+                        "),",
+                        "daily_fdd AS (",
+                        "    SELECT dt.date, GREATEST(-dt.mean_temp, 0) AS fdd_day,",
+                        "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 10 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
+                        "    FROM daily_temp dt WHERE dt.date <=",
+                        ref_date_sql,
+                        fdd_start_filter_sql,
+                        "),",
+                        "seasonal_fdd AS (",
+                        "    SELECT df.date::timestamp AS datetime,",
+                        "        1 + SUM(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
+                        "          - FIRST_VALUE(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
+                        "    FROM daily_fdd df",
+                        ")",
+                        "SELECT datetime, value FROM seasonal_fdd ORDER BY datetime"
+                    ),
+                    location_sql
+                ),
+                con = con
+            )
+            fdd$trace_source <- "observed"
+            return(finalize_series(fdd))
+        }
+
+        if (identical(parameter, "DDT")) {
+            ddt_start_filter_sql <- if (isTRUE(load_entire_record)) {
+                paste0("  AND dt.date >= ", historical_daily_min_date_sql)
+            } else {
+                paste0(
+                    "  AND dt.date >= MAKE_DATE(",
+                    "CASE WHEN EXTRACT(MONTH FROM ",
+                    ref_date_sql,
+                    ") >= 4 ",
+                    "THEN EXTRACT(YEAR FROM ",
+                    ref_date_sql,
+                    ")::int ",
+                    "ELSE EXTRACT(YEAR FROM ",
+                    ref_date_sql,
+                    ")::int - 1 END, ",
+                    "4, 1)"
+                )
+            }
+            ddt <- YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_temp AS (",
+                        "    SELECT mcd.date AS date, mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
+                        "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
+                        paste0("      AND mcd.date <= ", ref_date_sql),
+                        "),",
+                        "daily_ddt AS (",
+                        "    SELECT dt.date, GREATEST(dt.mean_temp, 0) AS ddt_day,",
+                        "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 4 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
+                        "    FROM daily_temp dt WHERE dt.date <=",
+                        ref_date_sql,
+                        ddt_start_filter_sql,
+                        "),",
+                        "seasonal_ddt AS (",
+                        "    SELECT df.date::timestamp AS datetime,",
+                        "        1 + SUM(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
+                        "          - FIRST_VALUE(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
+                        "    FROM daily_ddt df",
+                        ")",
+                        "SELECT datetime, value FROM seasonal_ddt ORDER BY datetime"
+                    ),
+                    location_sql
+                ),
+                con = con
+            )
+            ddt$trace_source <- "observed"
+            return(finalize_series(ddt))
+        }
+
+        if (parameter %in% c("precipitation (1wk)", "precipitation (24hr)")) {
+            precip_db_sql <- DBI::dbQuoteString(con, "precipitation, total")
+
+            if (identical(parameter, "precipitation (1wk)")) {
+                precip_sql <- paste(
+                    "SELECT mcd.date::timestamp AS datetime,",
+                    "    SUM(mcd.value) OVER (ORDER BY mcd.date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS value",
+                    "FROM measurements_calculated_daily mcd",
+                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "JOIN locations l ON l.location_id = ts.location_id",
+                    "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
+                    precip_start_filter_sql,
+                    paste0("  AND mcd.date <= ", ref_date_sql),
+                    "ORDER BY mcd.date"
+                )
+            } else {
+                precip_sql <- paste(
+                    "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
+                    "FROM measurements_calculated_daily mcd",
+                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "JOIN locations l ON l.location_id = ts.location_id",
+                    "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
+                    precip_start_filter_sql,
+                    paste0("  AND mcd.date <= ", ref_date_sql),
+                    "ORDER BY mcd.date"
+                )
+            }
+
+            precipitation <- YGwater::dbGetQueryDT(
+                sprintf(precip_sql, location_sql, precip_db_sql),
+                con = con
+            )
+            precipitation <- sanitize_loaded_series_values(
+                precipitation,
+                parameter
+            )
+            precipitation$trace_source <- "observed"
+            return(finalize_series(precipitation))
+        }
+
+        continuous <- tryCatch(
+            YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "SELECT mc.datetime, mc.value AS value",
+                        "FROM measurements_continuous mc",
+                        "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "JOIN locations l ON l.location_id = ts.location_id",
+                        "WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
+                        continuous_start_filter_sql,
+                        paste0("  AND mc.datetime <= ", ref_ts_sql),
+                        "ORDER BY mc.datetime"
+                    ),
+                    location_sql,
+                    parameter_sql
+                ),
+                con = con
+            ),
+            error = function(e) data.frame()
+        )
+
+        daily_fallback <- tryCatch(
+            YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "SELECT mcd.date::timestamp AS datetime, mcd.value",
+                        "FROM measurements_calculated_daily mcd",
+                        "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "JOIN locations l ON l.location_id = ts.location_id",
+                        "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
+                        daily_fallback_start_filter_sql,
+                        paste0("  AND mcd.date <= ", ref_date_sql),
+                        "ORDER BY mcd.date"
+                    ),
+                    location_sql,
+                    parameter_sql
+                ),
+                con = con
+            ),
+            error = function(e) data.frame()
+        )
+
+        continuous <- sanitize_loaded_series_values(continuous, parameter)
+        daily_fallback <- sanitize_loaded_series_values(
+            daily_fallback,
+            parameter
+        )
+        continuous$trace_source <- "realtime_continuous"
+        daily_fallback$trace_source <- "historical_daily"
+
+        if (isTRUE(load_entire_record)) {
+            if (nrow(continuous) == 0) {
+                return(finalize_series(daily_fallback))
+            }
+            if (nrow(daily_fallback) == 0) {
+                return(finalize_series(continuous))
+            }
+            first_continuous_time <- min(continuous$datetime, na.rm = TRUE)
+            first_continuous_date <- as.POSIXct(
+                format(first_continuous_time, "%Y-%m-%d"),
+                tz = attr(first_continuous_time, "tzone") %||%
+                    "America/Whitehorse"
+            )
+            daily_history <- daily_fallback[
+                daily_fallback$datetime <= first_continuous_date,
+            ]
+            merged_series <- rbind(
+                daily_history[, c("datetime", "value", "trace_source")],
+                continuous[, c("datetime", "value", "trace_source")]
+            )
+            merged_series <- merged_series[order(merged_series$datetime), ]
+            return(finalize_series(merged_series))
+        }
+
+        if (nrow(continuous) == 0) {
+            daily_fallback$trace_source <- "observed"
+            return(finalize_series(daily_fallback))
+        }
+
+        if (nrow(daily_fallback) == 0) {
+            continuous$trace_source <- "observed"
+            return(finalize_series(continuous))
+        }
+
+        latest_continuous <- max(continuous$datetime, na.rm = TRUE)
+        latest_daily <- max(daily_fallback$datetime, na.rm = TRUE)
+
+        selected_series <- if (
+            is.finite(latest_daily) &&
+                (!is.finite(latest_continuous) ||
+                    latest_daily > latest_continuous)
+        ) {
+            daily_fallback
+        } else {
+            continuous
+        }
+
+        selected_series$trace_source <- "observed"
+        finalize_series(selected_series)
+    }
+
+    empty_historical_overlay_data <- function() {
+        data.frame(
+            location_code = character(),
+            datetime = as.POSIXct(character(), tz = "America/Whitehorse"),
+            value = numeric(),
+            overlay_year = integer(),
+            trace_source = character(),
+            trace_label = character(),
+            stringsAsFactors = FALSE
+        )
+    }
+
+    empty_historical_overlay_traces <- function() {
+        list()
+    }
+
+    get_historical_overlay_timeseries <- function(
+        location_code,
+        parameter,
+        years,
+        con,
+        reference_time = NULL
+    ) {
+        if (
+            is.na(location_code) ||
+                length(location_code) == 0 ||
+                !nzchar(location_code)
+        ) {
+            return(empty_historical_overlay_traces())
+        }
+        plot_timezone <- "Etc/GMT+7"
+        target_time <- if (is.null(reference_time)) {
+            as.POSIXct(Sys.time(), tz = plot_timezone)
+        } else {
+            suppressWarnings(as.POSIXct(reference_time, tz = plot_timezone))
+        }
+        if (is.na(target_time)) {
+            target_time <- as.POSIXct(Sys.time(), tz = plot_timezone)
+        }
+        target_year <- as.integer(format(target_time, "%Y", tz = plot_timezone))
+
+        selected_years <- normalize_selected_historical_years(years)
+        selected_years <- selected_years[selected_years < target_year]
+        if (length(selected_years) == 0) {
+            return(empty_historical_overlay_traces())
+        }
+
+        location_sql <- DBI::dbQuoteString(con, location_code)
+        parameter_sql <- DBI::dbQuoteString(
+            con,
+            parameter_query_name(parameter)
+        )
+
+        shift_dates_to_target_year <- function(dat, overlay_year) {
+            if (is.null(dat) || nrow(dat) == 0) {
+                return(empty_historical_overlay_data())
+            }
+            dat <- interpret_loaded_times_as_local(
+                dat,
+                time_columns = c("datetime")
+            )
+            dat <- sanitize_loaded_series_values(dat, parameter)
+            source_dates <- as.Date(dat$datetime, tz = plot_timezone)
+            source_month <- as.integer(format(source_dates, "%m"))
+            source_day <- as.integer(format(source_dates, "%d"))
+
+            # Align overlays by calendar day in the target year to avoid leap-year
+            # DOY drift that shifts post-February values and clips fills.
+            target_date_str <- sprintf(
+                "%04d-%02d-%02d",
+                target_year,
+                source_month,
+                source_day
+            )
+            shifted_dates <- as.Date(target_date_str)
+            shifted_dates[source_month == 2 & source_day == 29] <- as.Date(NA)
+            shifted_datetimes <- as.POSIXct(shifted_dates, tz = plot_timezone)
+            dat$datetime <- shifted_datetimes
+            dat <- dat[stats::complete.cases(dat[, c("datetime", "value")]), ]
+            if (nrow(dat) == 0) {
+                return(empty_historical_overlay_data())
+            }
+            dat$location_code <- location_code
+            dat$overlay_year <- as.integer(overlay_year)
+            dat$trace_source <- "selected_historical_year"
+            dat$trace_label <- sprintf("%d", overlay_year)
+            dat[, c(
+                "location_code",
+                "datetime",
+                "value",
+                "overlay_year",
+                "trace_source",
+                "trace_label"
+            )]
+        }
+
+        overlay_frames <- lapply(selected_years, function(overlay_year) {
+            year_start_sql <- sprintf("MAKE_DATE(%d, 1, 1)", overlay_year)
+            year_end_sql <- sprintf("MAKE_DATE(%d, 12, 31)", overlay_year)
+
+            overlay_data <- if (
+                parameter %in%
+                    c("snow water eq (survey)", "snow depth (survey)")
+            ) {
+                tryCatch(
+                    YGwater::dbGetQueryDT(
+                        sprintf(
+                            paste(
+                                "SELECT s.target_datetime AS datetime,",
+                                "  dr.result AS value",
+                                "FROM samples s",
+                                "JOIN discrete.results dr",
+                                "  ON dr.sample_id = s.sample_id",
+                                "JOIN parameters p",
+                                "  ON p.parameter_id = dr.parameter_id",
+                                "JOIN locations l",
+                                "  ON l.location_id = s.location_id",
+                                "WHERE l.location_code = %s",
+                                "  AND p.param_name = %s",
+                                "  AND dr.result IS NOT NULL",
+                                "  AND s.target_datetime IS NOT NULL",
+                                "  AND EXTRACT(YEAR FROM s.target_datetime) = %d",
+                                "ORDER BY s.target_datetime"
+                            ),
+                            location_sql,
+                            parameter_sql,
+                            overlay_year
+                        ),
+                        con = con
+                    ),
+                    error = function(e) NULL
+                )
+            } else if (identical(parameter, "FDD")) {
+                season_start_sql <- sprintf(
+                    "MAKE_DATE(%d, 10, 1)",
+                    overlay_year - 1L
+                )
+                YGwater::dbGetQueryDT(
+                    sprintf(
+                        paste(
+                            "WITH daily_temp AS (",
+                            "    SELECT mcd.date AS date, mcd.value AS mean_temp",
+                            "    FROM measurements_calculated_daily mcd",
+                            "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "    JOIN locations l ON l.location_id = ts.location_id",
+                            "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
+                            paste0(
+                                "      AND mcd.date >= ",
+                                season_start_sql
+                            ),
+                            paste0(
+                                "      AND mcd.date <= ",
+                                year_end_sql
+                            ),
+                            "),",
+                            "daily_fdd AS (",
+                            "    SELECT dt.date, GREATEST(-dt.mean_temp, 0) AS fdd_day,",
+                            "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 10 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
+                            "    FROM daily_temp dt",
+                            "),",
+                            "seasonal_fdd AS (",
+                            "    SELECT df.date::timestamp AS datetime,",
+                            "        1 + SUM(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
+                            "          - FIRST_VALUE(df.fdd_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
+                            "    FROM daily_fdd df",
+                            ")",
+                            "SELECT datetime, value FROM seasonal_fdd",
+                            paste0("WHERE datetime::date >= ", year_start_sql),
+                            paste0("  AND datetime::date <= ", year_end_sql),
+                            "ORDER BY datetime"
+                        ),
+                        location_sql
+                    ),
+                    con = con
+                )
+            } else if (identical(parameter, "DDT")) {
+                season_start_sql <- sprintf(
+                    "MAKE_DATE(%d, 4, 1)",
+                    overlay_year - 1L
+                )
+                YGwater::dbGetQueryDT(
+                    sprintf(
+                        paste(
+                            "WITH daily_temp AS (",
+                            "    SELECT mcd.date AS date, mcd.value AS mean_temp",
+                            "    FROM measurements_calculated_daily mcd",
+                            "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "    JOIN locations l ON l.location_id = ts.location_id",
+                            "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
+                            paste0(
+                                "      AND mcd.date >= ",
+                                season_start_sql
+                            ),
+                            paste0(
+                                "      AND mcd.date <= ",
+                                year_end_sql
+                            ),
+                            "),",
+                            "daily_ddt AS (",
+                            "    SELECT dt.date, GREATEST(dt.mean_temp, 0) AS ddt_day,",
+                            "        CASE WHEN EXTRACT(MONTH FROM dt.date) >= 4 THEN EXTRACT(YEAR FROM dt.date)::int ELSE EXTRACT(YEAR FROM dt.date)::int - 1 END AS season_start_year",
+                            "    FROM daily_temp dt",
+                            "),",
+                            "seasonal_ddt AS (",
+                            "    SELECT df.date::timestamp AS datetime,",
+                            "        1 + SUM(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)",
+                            "          - FIRST_VALUE(df.ddt_day) OVER (PARTITION BY df.season_start_year ORDER BY df.date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS value",
+                            "    FROM daily_ddt df",
+                            ")",
+                            "SELECT datetime, value FROM seasonal_ddt",
+                            paste0("WHERE datetime::date >= ", year_start_sql),
+                            paste0("  AND datetime::date <= ", year_end_sql),
+                            "ORDER BY datetime"
+                        ),
+                        location_sql
+                    ),
+                    con = con
+                )
+            } else if (identical(parameter, "precipitation (1wk)")) {
+                lookback_start_sql <- sprintf(
+                    "MAKE_DATE(%d, 1, 1) - INTERVAL '6 days'",
+                    overlay_year
+                )
+                precip_sql_q <- DBI::dbQuoteString(con, "precipitation, total")
+                YGwater::dbGetQueryDT(
+                    sprintf(
+                        paste(
+                            "WITH daily_values AS (",
+                            "    SELECT mcd.date, mcd.value",
+                            "    FROM measurements_calculated_daily mcd",
+                            "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "    JOIN locations l ON l.location_id = ts.location_id",
+                            "    WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
+                            paste0(
+                                "      AND mcd.date >= ",
+                                lookback_start_sql
+                            ),
+                            paste0("      AND mcd.date <= ", year_end_sql),
+                            "),",
+                            "rolling_week AS (",
+                            "    SELECT date::timestamp AS datetime,",
+                            "        SUM(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS value",
+                            "    FROM daily_values",
+                            ")",
+                            "SELECT datetime, value FROM rolling_week",
+                            paste0("WHERE datetime::date >= ", year_start_sql),
+                            paste0("  AND datetime::date <= ", year_end_sql),
+                            "ORDER BY datetime"
+                        ),
+                        location_sql,
+                        precip_sql_q
+                    ),
+                    con = con
+                )
+            } else {
+                q_param_sql <- if (
+                    identical(parameter, "precipitation (24hr)")
+                ) {
+                    DBI::dbQuoteString(con, "precipitation, total")
+                } else {
+                    parameter_sql
+                }
+                YGwater::dbGetQueryDT(
+                    sprintf(
+                        paste(
+                            "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
+                            "FROM measurements_calculated_daily mcd",
+                            "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "JOIN locations l ON l.location_id = ts.location_id",
+                            "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
+                            paste0("  AND mcd.date >= ", year_start_sql),
+                            paste0("  AND mcd.date <= ", year_end_sql),
+                            "ORDER BY mcd.date"
+                        ),
+                        location_sql,
+                        q_param_sql
+                    ),
+                    con = con
+                )
+            }
+
+            shift_dates_to_target_year(overlay_data, overlay_year)
+        })
+
+        overlay_frames <- overlay_frames[
+            vapply(overlay_frames, nrow, integer(1)) > 0
+        ]
+        if (length(overlay_frames) == 0) {
+            return(empty_historical_overlay_traces())
+        }
+        names(overlay_frames) <- vapply(
+            overlay_frames,
+            function(dat) as.character(dat$overlay_year[[1]]),
+            character(1)
+        )
+        lapply(overlay_frames, function(dat) {
+            dat[order(dat$datetime), , drop = FALSE]
+        })
+    }
+
+    simple_continuous_plotly_widget <- function(
+        location_code,
+        parameter,
+        continuous_data,
+        title_prefix = NULL
+    ) {
+        if (is.null(continuous_data) || nrow(continuous_data) == 0) {
+            return(empty_plotly_widget(
+                title = title_prefix,
+                annotations = list(list(
+                    text = sprintf("No data available for %s.", location_code),
+                    x = 0.5,
+                    y = 0.5,
+                    xref = "paper",
+                    yref = "paper",
+                    showarrow = FALSE
+                ))
+            ))
+        }
+        series <- continuous_data
+        if ("location_code" %in% names(series)) {
+            series <- series[
+                series$location_code == location_code,
+                ,
+                drop = FALSE
+            ]
+        }
+        if (
+            nrow(series) == 0 || !all(c("datetime", "value") %in% names(series))
+        ) {
+            return(empty_plotly_widget(
+                title = title_prefix,
+                annotations = list(list(
+                    text = sprintf("No plottable data for %s.", location_code),
+                    x = 0.5,
+                    y = 0.5,
+                    xref = "paper",
+                    yref = "paper",
+                    showarrow = FALSE
+                ))
+            ))
+        }
+        plot_timezone <- attr(series$datetime, "tzone") %||%
+            "America/Whitehorse"
+        series$datetime <- suppressWarnings(as.POSIXct(
+            series$datetime,
+            tz = plot_timezone
+        ))
+        series$value <- suppressWarnings(as.numeric(series$value))
+        series <- series[
+            stats::complete.cases(series[, c("datetime", "value")]),
+            ,
+            drop = FALSE
+        ]
+        series <- series[order(series$datetime), , drop = FALSE]
+        if (nrow(series) == 0) {
+            return(empty_plotly_widget(title = title_prefix))
+        }
+        title_text <- if (!is.null(title_prefix) && nzchar(title_prefix)) {
+            title_prefix
+        } else {
+            sprintf("%s [%s]", location_code, parameter)
+        }
+        plotly::plot_ly(
+            data = series,
+            x = ~datetime,
+            y = ~value,
+            type = "scatter",
+            mode = "lines",
+            name = "Observed",
+            line = list(color = "#000000", width = 1.5),
+            hovertemplate = "Observed: %{y:.3f}<extra></extra>"
+        ) %>%
+            plotly::layout(
+                title = title_text,
+                xaxis = list(title = "Date"),
+                yaxis = list(title = parameter_axis_title(parameter)),
+                hovermode = "x unified",
+                showlegend = FALSE
+            )
+    }
+
+    plot_continuous_with_percentiles_and_return_periods <- function(
+        location_code,
+        continuous_data = NULL,
+        percentiles = NULL,
+        return_periods = NULL,
+        parameter = "water flow",
+        return_period_values = c(2, 5, 10, 25, 50, 100),
+        start_date = NULL,
+        end_date = NULL,
+        reference_time = NULL,
+        load_entire_record = FALSE,
+        con = NULL,
+        historical_start_year = 2020
+    ) {
+        include_return_periods <- parameter %in% c("water flow", "water level")
+        include_percentiles <- parameter %in%
+            c(
+                "water flow",
+                "water level",
+                "precipitation (1wk)",
+                "precipitation (24hr)",
+                "temperature, air",
+                "FDD",
+                "DDT",
+                "snow water equivalent",
+                "snow depth",
+                "snow water eq (pillow)",
+                "snow depth (pillow)"
+            )
+        historical_start_year <- normalize_historical_start_year(
+            historical_start_year
+        )
+
+        safe_as_posix <- function(x, tz) {
+            tryCatch(
+                suppressWarnings(as.POSIXct(x, tz = tz)),
+                error = function(e) {
+                    as.POSIXct(NA, tz = tz)
+                }
+            )
+        }
+
+        plot_timezone <- "America/Whitehorse"
+        now_ts <- if (is.null(reference_time)) {
+            Sys.time()
+        } else {
+            safe_as_posix(reference_time, plot_timezone)
+        }
+        if (is.na(now_ts)) {
+            now_ts <- Sys.time()
+        }
+
+        default_view_start <- now_ts - as.difftime(7, units = "days")
+        default_view_end <- now_ts + as.difftime(28, units = "days")
+
+        view_start <- if (!is.null(start_date)) {
+            safe_as_posix(start_date, plot_timezone)
+        } else {
+            default_view_start
+        }
+        view_end <- if (!is.null(end_date)) {
+            safe_as_posix(end_date, plot_timezone)
+        } else {
+            default_view_end
+        }
+        if (is.na(view_start)) {
+            view_start <- default_view_start
+        }
+        if (is.na(view_end)) {
+            view_end <- default_view_end
+        }
+
+        if (is.null(continuous_data) && !is.null(con)) {
+            continuous_data <- get_station_timeseries(
+                location_code = location_code,
+                parameter = parameter,
+                reference_time = now_ts,
+                load_entire_record = load_entire_record,
+                con = con,
+                historical_start_year = historical_start_year
+            )
+        }
+        if (!"location_code" %in% names(continuous_data)) {
+            continuous_data$location_code <- location_code
+        }
+
+        series <- continuous_data[
+            continuous_data$location_code == location_code,
+        ]
+        if (nrow(series) == 0) {
+            return(empty_plotly_widget(
+                title = sprintf("No data for %s (%s)", location_code, parameter)
+            ))
+        }
+
+        tz_attr <- attr(series$datetime, "tzone")
+        if (
+            length(tz_attr) == 0 || is.na(tz_attr[[1]]) || !nzchar(tz_attr[[1]])
+        ) {
+            plot_timezone <- "America/Whitehorse"
+        } else {
+            plot_timezone <- tz_attr[[1]]
+        }
+
+        coerce_tz <- function(x) {
+            x <- safe_as_posix(x, tz = plot_timezone)
+            attr(x, "tzone") <- plot_timezone
+            x
+        }
+        series$datetime <- coerce_tz(series$datetime)
+        series <- series[order(series$datetime), , drop = FALSE]
+        now_ts <- coerce_tz(now_ts)
+        view_start <- coerce_tz(view_start)
+        view_end <- coerce_tz(view_end)
+
+        latest_obs <- max(series$datetime, na.rm = TRUE)
+        fixed_view_end <- now_ts + as.difftime(28, units = "days")
+        if (is.finite(latest_obs)) {
+            view_start <- min(view_start, latest_obs, now_ts)
+            view_end <- fixed_view_end
+        } else {
+            view_start <- min(view_start, now_ts)
+            view_end <- fixed_view_end
+        }
+
+        pct <- data.frame()
+        envelope_xlim <- NULL
+        if (include_percentiles) {
+            if (is.null(percentiles) && !is.null(con)) {
+                percentiles <- get_daily_percentiles(
+                    location_codes = c(location_code),
+                    parameter = parameter,
+                    con = con,
+                    historical_start_year = historical_start_year
+                )
+            }
+            if (!is.null(percentiles) && nrow(percentiles) > 0) {
+                pct <- percentiles[percentiles$location_code == location_code, ]
+            }
+        }
+
+        p <- plotly::plot_ly()
+
+        if (include_percentiles && nrow(pct) > 0) {
+            ref_year <- suppressWarnings(as.integer(format(
+                now_ts,
+                "%Y",
+                tz = plot_timezone
+            )))
+            if (is.na(ref_year)) {
+                ref_year <- as.integer(format(
+                    Sys.time(),
+                    "%Y",
+                    tz = plot_timezone
+                ))
+            }
+            # Build a padded envelope around the visible window, but keep it
+            # bounded to the configured historical period to avoid oversized
+            # ribbon polygons that can trigger plot clipping artifacts.
+            historical_start_date <- as.Date(sprintf(
+                "%d-01-01",
+                historical_start_year
+            ))
+            historical_end_date <- as.Date(sprintf("%d-12-31", ref_year + 1L))
+            padded_view_start <- as.Date(view_start, tz = plot_timezone) - 366
+            padded_view_end <- as.Date(view_end, tz = plot_timezone) + 366
+
+            pct_cycle_start <- max(historical_start_date, padded_view_start)
+            pct_cycle_end <- min(historical_end_date, padded_view_end)
+            if (pct_cycle_end < pct_cycle_start) {
+                pct_cycle_start <- historical_start_date
+                pct_cycle_end <- min(
+                    historical_end_date,
+                    historical_start_date + 366
+                )
+            }
+            pct_dates <- seq(pct_cycle_start, pct_cycle_end, by = "day")
+            pct_years <- as.integer(format(pct_dates, "%Y"))
+            pct_months <- as.integer(format(pct_dates, "%m"))
+            pct_days <- as.integer(format(pct_dates, "%d"))
+            pct_doys <- as.integer(format(pct_dates, "%j"))
+            pct_is_leap <- (pct_years %% 4 == 0 & pct_years %% 100 != 0) |
+                (pct_years %% 400 == 0)
+
+            pct_plot <- data.frame(
+                location_code = location_code,
+                datetime = as.POSIXct(pct_dates, tz = plot_timezone),
+                doy = ifelse(
+                    pct_months > 2 & pct_is_leap,
+                    pct_doys - 1L,
+                    pct_doys
+                ),
+                stringsAsFactors = FALSE
+            )
+            pct_plot$is_feb29 <- pct_months == 2 & pct_days == 29
+
+            pct_lookup <- pct[, c(
+                "location_code",
+                "doy",
+                "p0",
+                "p10",
+                "p25",
+                "p50",
+                "p75",
+                "p90",
+                "p100"
+            )]
+            pct_key <- paste(pct_lookup$location_code, pct_lookup$doy)
+            plot_key <- paste(pct_plot$location_code, pct_plot$doy)
+            match_idx <- match(plot_key, pct_key)
+            for (col in c("p0", "p10", "p25", "p50", "p75", "p90", "p100")) {
+                pct_plot[[col]] <- pct_lookup[[col]][match_idx]
+            }
+
+            # Percentile queries intentionally exclude Feb 29; synthesize leap-day
+            # values by linear interpolation between Feb 28 (DOY 59) and Mar 1 (DOY 60).
+            feb29_rows <- which(pct_plot$is_feb29)
+            if (length(feb29_rows) > 0) {
+                feb28_key <- paste(location_code, 59L)
+                mar01_key <- paste(location_code, 60L)
+                feb28_idx <- match(feb28_key, pct_key)
+                mar01_idx <- match(mar01_key, pct_key)
+
+                for (col in c(
+                    "p0",
+                    "p10",
+                    "p25",
+                    "p50",
+                    "p75",
+                    "p90",
+                    "p100"
+                )) {
+                    v0 <- pct_lookup[[col]][feb28_idx]
+                    v1 <- pct_lookup[[col]][mar01_idx]
+                    if (is.finite(v0) && is.finite(v1)) {
+                        pct_plot[feb29_rows, col] <- (v0 + v1) / 2
+                    }
+                }
+            }
+            pct_plot <- pct_plot[order(pct_plot$datetime), ]
+
+            # Prevent ribbon self-clipping caused by NA gaps in percentile bands.
+            pct_plot <- pct_plot[
+                stats::complete.cases(pct_plot[, c(
+                    "datetime",
+                    "p0",
+                    "p10",
+                    "p25",
+                    "p50",
+                    "p75",
+                    "p90",
+                    "p100"
+                )]),
+            ]
+            pct_plot$is_feb29 <- NULL
+
+            if (nrow(pct_plot) > 0) {
+                envelope_xlim <- range(pct_plot$datetime, na.rm = TRUE)
+                if (any(!is.finite(envelope_xlim))) {
+                    envelope_xlim <- NULL
+                }
+
+                p <- p %>%
+                    plotly::add_ribbons(
+                        data = pct_plot,
+                        x = ~datetime,
+                        ymin = ~p0,
+                        ymax = ~p10,
+                        name = "P0-P10",
+                        legendrank = 80,
+                        hovertemplate = "P0-P10<extra></extra>",
+                        fillcolor = "rgba(127, 29, 29, 0.3)",
+                        line = list(color = "transparent")
+                    ) %>%
+                    plotly::add_ribbons(
+                        data = pct_plot,
+                        x = ~datetime,
+                        ymin = ~p10,
+                        ymax = ~p25,
+                        name = "P10-P25",
+                        legendrank = 70,
+                        hovertemplate = "P10-P25<extra></extra>",
+                        fillcolor = "rgba(180, 83, 9, 0.3)",
+                        line = list(color = "transparent")
+                    ) %>%
+                    plotly::add_ribbons(
+                        data = pct_plot,
+                        x = ~datetime,
+                        ymin = ~p25,
+                        ymax = ~p50,
+                        name = "P25-P50",
+                        legendrank = 60,
+                        hovertemplate = "P25-P50<extra></extra>",
+                        fillcolor = "rgba(245, 158, 11, 0.3)",
+                        line = list(color = "transparent")
+                    ) %>%
+                    plotly::add_ribbons(
+                        data = pct_plot,
+                        x = ~datetime,
+                        ymin = ~p50,
+                        ymax = ~p75,
+                        name = "P50-P75",
+                        legendrank = 50,
+                        hovertemplate = "P50-P75<extra></extra>",
+                        fillcolor = "rgba(163, 230, 53, 0.3)",
+                        line = list(color = "transparent")
+                    ) %>%
+                    plotly::add_ribbons(
+                        data = pct_plot,
+                        x = ~datetime,
+                        ymin = ~p75,
+                        ymax = ~p90,
+                        name = "P75-P90",
+                        legendrank = 40,
+                        hovertemplate = "P75-P90<extra></extra>",
+                        fillcolor = "rgba(34, 197, 94, 0.3)",
+                        line = list(color = "transparent")
+                    ) %>%
+                    plotly::add_ribbons(
+                        data = pct_plot,
+                        x = ~datetime,
+                        ymin = ~p90,
+                        ymax = ~p100,
+                        name = "P90-P100",
+                        legendrank = 30,
+                        hovertemplate = "P90-P100<extra></extra>",
+                        fillcolor = "rgba(15, 118, 110, 0.3)",
+                        line = list(color = "transparent")
+                    )
+            }
+        }
+
+        observed_name <- if (identical(parameter, "precipitation (1wk)")) {
+            "Observed 1-week accumulation"
+        } else if (identical(parameter, "precipitation (24hr)")) {
+            "Observed 24-hour"
+        } else {
+            "Observed"
+        }
+
+        if (!"trace_source" %in% names(series)) {
+            series$trace_source <- "observed"
+        }
+
+        if (isTRUE(load_entire_record)) {
+            hist_series <- series[series$trace_source == "historical_daily", ]
+            rt_series <- series[series$trace_source == "realtime_continuous", ]
+            if (nrow(hist_series) > 0) {
+                p <- p %>%
+                    plotly::add_lines(
+                        data = hist_series,
+                        x = ~datetime,
+                        y = ~value,
+                        name = "Daily observed",
+                        legendrank = 20,
+                        hovertemplate = "Daily observed: %{y:.3f}<extra></extra>",
+                        line = list(color = "#4b5563", width = 1)
+                    )
+            }
+            if (nrow(rt_series) > 0) {
+                p <- p %>%
+                    plotly::add_lines(
+                        data = rt_series,
+                        x = ~datetime,
+                        y = ~value,
+                        name = observed_name,
+                        legendrank = 10,
+                        hovertemplate = paste0(
+                            observed_name,
+                            ": %{y:.3f}<extra></extra>"
+                        ),
+                        line = list(color = "#000000", width = 2)
+                    )
+            }
+            if (nrow(hist_series) == 0 && nrow(rt_series) == 0) {
+                p <- p %>%
+                    plotly::add_lines(
+                        data = series,
+                        x = ~datetime,
+                        y = ~value,
+                        name = observed_name,
+                        legendrank = 10,
+                        hovertemplate = paste0(
+                            observed_name,
+                            ": %{y:.3f}<extra></extra>"
+                        ),
+                        line = list(color = "#000000", width = 2)
+                    )
+            }
+        } else {
+            p <- p %>%
+                plotly::add_lines(
+                    data = series,
+                    x = ~datetime,
+                    y = ~value,
+                    name = observed_name,
+                    legendrank = 10,
+                    hovertemplate = paste0(
+                        observed_name,
+                        ": %{y:.3f}<extra></extra>"
+                    ),
+                    line = list(color = "#000000", width = 1)
+                )
+        }
+
+        rp_shapes <- list()
+        rp_annotations <- list()
+        if (include_return_periods) {
+            if (is.null(return_periods) && !is.null(con)) {
+                return_periods <- tryCatch(
+                    get_return_period_discharge(
+                        location_codes = c(location_code),
+                        parameter = parameter,
+                        con = con
+                    ),
+                    error = function(e) data.frame()
+                )
+            }
+            if (!is.null(return_periods) && nrow(return_periods) > 0) {
+                rp <- return_periods[
+                    return_periods$location_code == location_code,
+                ]
+                if (nrow(rp) > 0) {
+                    rp_cols <- grep("^rp_", names(rp), value = TRUE)
+                    if (length(rp_cols) > 0) {
+                        rp_x0 <- if (!is.null(envelope_xlim)) {
+                            envelope_xlim[[1]]
+                        } else {
+                            min(series$datetime, na.rm = TRUE)
+                        }
+                        rp_x1 <- if (!is.null(envelope_xlim)) {
+                            envelope_xlim[[2]]
+                        } else {
+                            max(series$datetime, na.rm = TRUE)
+                        }
+                        rp_label_x <- 0.995 - c(0, 0.03, 0.06, 0.09)
+                        for (i in seq_along(rp_cols)) {
+                            rp_years <- sub("^rp_", "", rp_cols[i])
+                            rp_val <- rp[[rp_cols[i]]][1]
+                            rp_shapes[[i]] <- list(
+                                type = "line",
+                                x0 = rp_x0,
+                                x1 = rp_x1,
+                                y0 = rp_val,
+                                y1 = rp_val,
+                                line = list(color = "#dc2626", width = 1)
+                            )
+                            rp_annotations[[i]] <- list(
+                                x = rp_label_x[
+                                    ((i - 1) %% length(rp_label_x)) + 1
+                                ],
+                                y = rp_val,
+                                xref = "paper",
+                                yref = "y",
+                                text = sprintf("RP %s", rp_years),
+                                showarrow = FALSE,
+                                xanchor = "right",
+                                bgcolor = "rgba(255,255,255,0.85)",
+                                bordercolor = "rgba(220,38,38,0.35)",
+                                borderwidth = 1
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        now_line <- list(
+            type = "line",
+            x0 = now_ts,
+            x1 = now_ts,
+            xref = "x",
+            y0 = 0,
+            y1 = 1,
+            yref = "paper",
+            line = list(color = "#9ca3af", dash = "dash")
+        )
+
+        p %>%
+            plotly::layout(
+                xaxis = list(
+                    title = "Date",
+                    range = c(
+                        format(view_start, "%Y-%m-%d %H:%M:%S"),
+                        format(view_end, "%Y-%m-%d %H:%M:%S")
+                    ),
+                    hoverformat = "%Y-%m-%d"
+                ),
+                yaxis = list(title = parameter_axis_title(parameter)),
+                hovermode = "x unified",
+                showlegend = FALSE,
+                shapes = c(list(now_line), rp_shapes),
+                annotations = rp_annotations,
+                legend = list(orientation = "v", x = 0.01, y = 0.99),
+                margin = list(r = 80, t = 60)
+            )
+    }
+
+    build_station_plot <- function(
+        location_code,
+        parameter,
+        reference_time,
+        con,
+        snow_survey_parameters,
+        load_entire_record = FALSE,
+        continuous_data = NULL,
+        percentiles = NULL,
+        return_periods = NULL
+    ) {
+        tryCatch(
+            suppressWarnings({
+                if (is.null(continuous_data)) {
+                    continuous_data <- get_station_timeseries(
+                        location_code = location_code,
+                        parameter = parameter,
+                        reference_time = reference_time,
+                        load_entire_record = load_entire_record,
+                        con = con,
+                        historical_start_year = 2020L
+                    )
+                }
+                if (is.null(continuous_data) || nrow(continuous_data) == 0) {
+                    return(simple_continuous_plotly_widget(
+                        location_code = location_code,
+                        parameter = parameter,
+                        continuous_data = continuous_data,
+                        title_prefix = sprintf(
+                            "%s [%s]",
+                            location_code,
+                            parameter
+                        )
+                    ))
+                }
+                if (!"location_code" %in% names(continuous_data)) {
+                    continuous_data$location_code <- location_code
+                }
+                tryCatch(
+                    plot_continuous_with_percentiles_and_return_periods(
+                        location_code = location_code,
+                        continuous_data = continuous_data,
+                        percentiles = percentiles,
+                        return_periods = return_periods,
+                        parameter = parameter,
+                        reference_time = as.character(reference_time),
+                        load_entire_record = load_entire_record,
+                        con = con,
+                        historical_start_year = 2020L
+                    ),
+                    error = function(e) {
+                        simple_continuous_plotly_widget(
+                            location_code = location_code,
+                            parameter = parameter,
+                            continuous_data = continuous_data,
+                            title_prefix = sprintf(
+                                "%s [%s]",
+                                location_code,
+                                parameter
+                            )
+                        )
+                    }
+                )
+            }),
+            error = function(e) {
+                simple_continuous_plotly_widget(
+                    location_code = location_code,
+                    parameter = parameter,
+                    continuous_data = NULL,
+                    title_prefix = sprintf("%s [%s]", location_code, parameter)
+                )
+            }
+        )
+    }
+
+    # End plot helpers -----------------------------------------------------------
+
     shiny::moduleServer(id, function(input, output, session) {
         shiny::req(language$language)
 
