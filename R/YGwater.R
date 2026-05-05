@@ -17,6 +17,8 @@
 #' @param server Set to TRUE to run on Shiny Server, otherwise FALSE to run locally.
 #' @param analytics FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as `system.file("apps/YGwater/www/html/matomo.html", package = "YGwater")`. This file will be called within the main UI as `tags$head(includeHTML(file))`. Default is FALSE.
 #' @param public TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.
+#' @param brand Character string to specify the branding of the app. Default is "public", which is a more generic version of the app with Yukon-specific references removed. The "yukon" branding includes Yukon-specific logos and references. This parameter can be used in the future to create other branded versions of the app for different users or organizations.
+
 #'
 #' @return Opens a Shiny application.
 #' @export
@@ -25,7 +27,7 @@ YGwater <- function(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
   dbName = Sys.getenv("aquacachenName", "aquacache"),
-  dbHost = Sys.getenv("aquacacheHost"),
+  dbHost = Sys.getenv("aquacacheHost", "localhost"),
   dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
@@ -35,7 +37,8 @@ YGwater <- function(
   logout_timer_min = 10,
   server = FALSE,
   analytics = FALSE,
-  public = TRUE
+  public = TRUE,
+  brand = "yukon"
 ) {
   rlang::check_installed("shiny", reason = "required to use YGwater app")
   rlang::check_installed("shinyjs", reason = "required to use YGwater app")
@@ -83,10 +86,6 @@ YGwater <- function(
       reason = "required to use YGwater app with public = FALSE"
     )
     rlang::check_installed(
-      "respR",
-      reason = "required to use YGwater app with public = FALSE"
-    )
-    rlang::check_installed(
       "pdftools",
       reason = "required to use YGwater app with public = FALSE"
     )
@@ -115,6 +114,13 @@ YGwater <- function(
 
   if (appDir == "") {
     stop("YGwater app not found.")
+  }
+
+  # Check that 'brand' is either "public" or "yukon"
+  if (!brand %in% c("public", "yukon")) {
+    stop(
+      "The 'brand' argument must be either 'public' or 'yukon'. New brands can be added in the future, but for now only these two options are available."
+    )
   }
 
   # Make sure the analytics file can be found if specified
@@ -149,7 +155,8 @@ YGwater <- function(
     network_check = network_check,
     public = public,
     logout_timer_min = logout_timer_min,
-    analytics = analytics
+    analytics = analytics,
+    brand = brand
   )
 
   # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
