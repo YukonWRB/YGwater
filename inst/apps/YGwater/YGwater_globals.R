@@ -1223,6 +1223,16 @@ YGwater_globals <- function(
   # Make the configuration list available globally
   # double assignment creates a global variable that can be accessed by all UI and server functions
 
+  # Turn 'brand' into a list now so that we can add additional elements to it.
+  brand <- list(brand = brand, text = list())
+
+  # these strings refer to elements in translations.csv (which is turned into package data for use)
+  brand[["text"]][["app_title"]] <- if (brand$brand == 'public') {
+    "title_public"
+  } else {
+    "title_yg"
+  }
+
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,

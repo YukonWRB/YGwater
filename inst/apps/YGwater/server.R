@@ -221,11 +221,14 @@ app_server <- function(input, output, session) {
     if (page_id == "manageUsers") {
       return("can_create_role")
     }
-    if (page_id %in% c(
-      "simplerIndex",
-      "editBoreholesWells",
-      "manageBoreholeDocuments"
-    )) {
+    if (
+      page_id %in%
+        c(
+          "simplerIndex",
+          "editBoreholesWells",
+          "manageBoreholeDocuments"
+        )
+    ) {
       return("boreholes_wells")
     }
     page_id
@@ -423,17 +426,18 @@ app_server <- function(input, output, session) {
     }
 
     if (
-      input_id %in% c(
-        "feedback_text",
-        "submit_feedback",
-        "thumbs_up",
-        "thumbs_down",
-        "user_last_activity",
-        "userLang",
-        "window_dimensions",
-        "usage_download_click",
-        "usage_input_changed"
-      )
+      input_id %in%
+        c(
+          "feedback_text",
+          "submit_feedback",
+          "thumbs_up",
+          "thumbs_down",
+          "user_last_activity",
+          "userLang",
+          "window_dimensions",
+          "usage_download_click",
+          "usage_input_changed"
+        )
     ) {
       return(FALSE)
     }
@@ -2038,7 +2042,7 @@ app_server <- function(input, output, session) {
 
     session$sendCustomMessage(
       "updateTitle",
-      tr("title", languageSelection$language)
+      tr(config$brand$text$app_title, languageSelection$language)
     ) # Update the browser title of the app based on the selected language
     session$sendCustomMessage(
       "updateBrandTitle",
@@ -2047,7 +2051,7 @@ app_server <- function(input, output, session) {
     session$sendCustomMessage(
       "updateSeo",
       list(
-        title = tr("title", languageSelection$language),
+        title = tr(config$brand$text$app_title, languageSelection$language),
         description = app_seo_description(languageSelection$language)
       )
     )

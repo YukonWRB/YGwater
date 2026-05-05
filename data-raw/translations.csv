@@ -1,6 +1,7 @@
 id,description,English,Français
 titleCase,Sets language to use in titleCase function,en,fr
-title,the page/website title,Yukon Water Data Explorer,Explorateur des données sur l’eau du Yukon
+title_yg,the page/website title,Yukon Water Data Explorer,Explorateur des données sur l’eau du Yukon
+title_public,the page/website title for public deployment,Water Data Explorer - Public,Explorateur des données sur l’eau - public
 home,homeNavTitle,Home,Accueil
 maps,mapsNavMenuTitle,Maps,Cartes
 maps_locs,mapsNavLocsTitle,Monitoring locations,Points de surveillance
