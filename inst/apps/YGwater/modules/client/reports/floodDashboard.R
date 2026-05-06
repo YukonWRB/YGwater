@@ -413,10 +413,13 @@
 
 floodDashboardMod <- function(id, language, inputs = NULL) {
     read_fva_json <- function() {
-        jsonlite::fromJSON(system.file(
-            "extdata/flood_vulnerable_gauges_encoded.json",
-            package = "YGwater"
-        ))
+        jsonlite::fromJSON(
+            system.file(
+                "extdata/flood_vulnerable_gauges_encoded.json",
+                package = "YGwater"
+            ),
+            simplifyVector = FALSE
+        )
     }
 
     `%||%` <- function(a, b) if (!is.null(a)) a else b
@@ -5033,6 +5036,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             row_idx <- input$summary_table_rows_selected
             dat <- summary_data()
             if (is.null(dat) || nrow(dat) == 0 || is.null(row_idx)) {
+                return()
+            }
+            if (row_idx < 1L || row_idx > nrow(dat)) {
                 return()
             }
             selected_code <- dat$location_code[[row_idx]]
