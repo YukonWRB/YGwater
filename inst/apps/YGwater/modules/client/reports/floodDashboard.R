@@ -1,4 +1,4 @@
-﻿floodDashboardUIMod <- function(id) {
+floodDashboardUIMod <- function(id) {
     ns <- shiny::NS(id)
 
     placeholder_block <- function(text, height = "240px") {
