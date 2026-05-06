@@ -663,11 +663,15 @@ render_leaflet_widget_html <- function(widget) {
 
     inline_css_urls <- function(css, css_file) {
         matches <- gregexpr("url\\(([^)]+)\\)", css, perl = TRUE)
-        css_urls <- regmatches(css, matches)[[1]]
+        matched_results <- regmatches(css, matches)
 
-        if (length(css_urls) == 0L || identical(css_urls, character(0))) {
+        if (
+            length(matched_results) == 0L || length(matched_results[[1]]) == 0L
+        ) {
             return(css)
         }
+
+        css_urls <- matched_results[[1]]
 
         for (css_url in unique(css_urls)) {
             path <- sub("^url\\((.*)\\)$", "\\1", css_url)

@@ -4295,13 +4295,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             img_series_id <- image_series$img_series_id[[1]]
 
             time0 <- if (!is.null(input$time0) && nzchar(input$time0)) {
-                suppressWarnings(as.POSIXct(
+                parsed <- suppressWarnings(as.POSIXct(
                     input$time0,
                     format = "%Y-%m-%dT%H:%M",
                     tz = "Etc/GMT+7"
                 ))
+                if (is.na(parsed)) Sys.time() else parsed
             } else {
                 Sys.time()
+            }
+
+            img_series_id_int <- as.integer(img_series_id)
+            if (is.na(img_series_id_int)) {
+                return(data.frame(
+                    image_id = integer(0),
+                    datetime = character(0)
+                ))
             }
 
             time0_sql <- DBI::dbQuoteString(
@@ -4317,7 +4326,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 con,
                 paste0(
                     "SELECT image_id, datetime FROM images WHERE img_series_id = ",
-                    img_series_id,
+                    img_series_id_int,
                     " AND datetime <= ",
                     time0_sql,
                     " AND datetime >= ",
