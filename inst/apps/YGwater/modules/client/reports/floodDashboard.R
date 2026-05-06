@@ -5000,13 +5000,19 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
 
             if (isTRUE(use_relative)) {
-                names(view)[names(view) == "change_24h"] <- "Δ 24 h (%)"
-                names(view)[names(view) == "change_48h"] <- "Δ 48 h (%)"
-                names(view)[names(view) == "change_1wk"] <- "Δ 1 wk (%)"
+                names(view)[
+                    names(view) == "change_24h"
+                ] <- "\u0394 24 h (\u0025)"
+                names(view)[
+                    names(view) == "change_48h"
+                ] <- "\u0394 48 h (\u0025)"
+                names(view)[
+                    names(view) == "change_1wk"
+                ] <- "\u0394 1 wk (\u0025)"
             } else {
-                names(view)[names(view) == "change_24h"] <- "Δ 24 h"
-                names(view)[names(view) == "change_48h"] <- "Δ 48 h"
-                names(view)[names(view) == "change_1wk"] <- "Δ 1 wk"
+                names(view)[names(view) == "change_24h"] <- "\u0394 24 h"
+                names(view)[names(view) == "change_48h"] <- "\u0394 48 h"
+                names(view)[names(view) == "change_1wk"] <- "\u0394 1 wk"
             }
 
             result_table <- DT::datatable(
@@ -5016,7 +5022,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 options = dt_options
             )
 
-            change_positions <- grep("^Δ", names(view))
+            change_positions <- grep("\u005E\u0394", names(view))
             if (length(change_positions) > 0) {
                 result_table <- DT::formatStyle(
                     result_table,
@@ -5229,7 +5235,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
         # Auto-refresh the stored request when soft inputs change (no need
         # to hit Create Plot again for these).
-        # NOTE: show_legend is intentionally excluded here — it is handled
+        # NOTE: show_legend is intentionally excluded here, it is handled
         # via plotlyProxy (relayout) so the plot is never re-rendered just
         # because the legend is toggled.
         shiny::observe({
@@ -5364,7 +5370,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     ))
                 }
 
-                # Discrete snow survey data — query samples/discrete.results.
+                # Discrete snow survey data: query samples/discrete.results.
                 if (parameter_name %in% snow_survey_params_local) {
                     code_sql <- DBI::dbQuoteString(con, location_code)
                     param_sql <- DBI::dbQuoteString(
