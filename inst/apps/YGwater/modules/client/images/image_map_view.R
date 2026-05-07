@@ -597,9 +597,15 @@ imgMapView <- function(id, language) {
       input$map_bounds,
       {
         # basins <- getVector(layer_name = "Drainage basins")
-        communities <- getVector(layer_name = "Communities")
-        roads <- getVector(layer_name = "Roads")
-        # watercourses <- getVector(layer_name = "Watercourses")
+        communities <- getVector(
+          layer_name = "Communities",
+          con = session$userData$AquaCache
+        )
+        roads <- getVector(
+          layer_name = "Roads",
+          con = session$userData$AquaCache
+        )
+        # watercourses <- getVector(layer_name = "Watercourses", con = session$userData$AquaCache)
 
         m <- leaflet::leafletProxy("map", session)
         # if (!is.null(basins)) {

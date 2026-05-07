@@ -1,3 +1,11 @@
+#' Flood Dashboard UI Module
+#'
+#' @description Builds the UI for the flood dashboard, including controls,
+#' summary table, station plot, map, and image panel.
+#' @param id Character module id.
+#' @return A Shiny UI definition.
+#' @keywords internal
+#' @noRd
 floodDashboardUIMod <- function(id) {
     ns <- shiny::NS(id)
 
@@ -340,6 +348,7 @@ floodDashboardUIMod <- function(id) {
             id = ns("dashboard-panels"),
             class = "compact",
             bslib::card(
+                style = "height:450px;",
                 bslib::card_header(
                     shiny::tags$div(
                         style = "display:flex; align-items:center; justify-content:space-between; gap:1rem; width:100%;",
@@ -352,9 +361,13 @@ floodDashboardUIMod <- function(id) {
                         )
                     )
                 ),
-                DT::DTOutput(ns("summary_table"))
+                bslib::card_body(
+                    style = "height:390px; overflow:auto;",
+                    DT::DTOutput(ns("summary_table"))
+                )
             ),
             bslib::card(
+                style = "height:450px;",
                 bslib::card_header(
                     shiny::tags$div(
                         class = "station-plot-header",
@@ -390,19 +403,23 @@ floodDashboardUIMod <- function(id) {
                 shiny::tags$div(
                     id = ns("station-plot-shell"),
                     class = "station-plot-shell",
+                    style = "height:390px; overflow:hidden;",
                     plotly::plotlyOutput(ns("station_plot")),
                     shiny::uiOutput(ns("station_plot_stale_banner"))
                 )
             ),
             bslib::card(
+                style = "height:450px;",
                 bslib::card_header(
                     "Drainage area and hydrometeorological station map"
                 ),
-                leaflet::leafletOutput(ns("stations_map"), height = "300px")
+                leaflet::leafletOutput(ns("stations_map"), height = "390px")
             ),
             bslib::card(
+                style = "height:450px;",
                 bslib::card_header(shiny::uiOutput(ns("image_series_header"))),
                 bslib::card_body(
+                    style = "height:390px; overflow:auto;",
                     shiny::uiOutput(ns("image_series_navigation")),
                     shiny::uiOutput(ns("station_image"))
                 )
@@ -411,7 +428,22 @@ floodDashboardUIMod <- function(id) {
     )
 }
 
+#' Flood Dashboard Server Module
+#'
+#' @description Server logic for the flood dashboard module, including data
+#' retrieval, station summaries, map rendering, and plot generation.
+#' @param id Character module id.
+#' @param language Reactive language object used for localized labels.
+#' @param inputs Optional list of pre-specified input values.
+#' @return A Shiny module server binding.
+#' @keywords internal
+#' @noRd
 floodDashboardMod <- function(id, language, inputs = NULL) {
+    #' Read flood-vulnerable gauge mapping JSON
+    #'
+    #' @return Nested list parsed from flood vulnerable gauge JSON metadata.
+    #' @keywords internal
+    #' @noRd
     read_fva_json <- function() {
         jsonlite::fromJSON(
             system.file(
@@ -424,6 +456,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
     `%||%` <- function(a, b) if (!is.null(a)) a else b
 
+    #' Normalize selected historical years
+    #'
+    #' @param years Character or integer vector of years.
+    #' @return Integer vector of unique years sorted descending.
+    #' @keywords internal
+    #' @noRd
     normalize_selected_historical_years <- function(years) {
         if (is.null(years) || length(years) == 0) {
             return(integer(0))
@@ -432,6 +470,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         sort(unique(valid[!is.na(valid)]), decreasing = TRUE)
     }
 
+    #' Map UI parameter names to database parameter names
+    #'
+    #' @param parameter Character parameter label from dashboard controls.
+    #' @return Character parameter name suitable for SQL filtering.
+    #' @keywords internal
+    #' @noRd
     parameter_query_name <- function(parameter) {
         aliases <- c(
             "FDD" = "temperature, air",
@@ -530,6 +574,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         out[!duplicated(out$location_code), , drop = FALSE]
     }
 
+    #' Filter locations that have a parameter timeseries
+    #'
+    #' @param location_ids Integer vector of location ids.
+    #' @param parameter Character parameter label.
+    #' @param con DBI database connection.
+    #' @return Integer vector of location ids with matching parameter records.
+    #' @keywords internal
+    #' @noRd
     get_location_ids_with_parameter <- function(location_ids, parameter, con) {
         location_ids <- unique(stats::na.omit(as.integer(location_ids)))
         if (length(location_ids) == 0) {
@@ -585,6 +637,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         paste0("(", base_sql, " - INTERVAL '14 days')::date")
     }
 
+    #' Interpret loaded datetime fields as UTC-7 local time
+    #'
+    #' @param dat Data frame containing datetime-like columns.
+    #' @param time_columns Character vector of columns to coerce.
+    #' @return Data frame with specified columns coerced to `Etc/GMT+7`.
+    #' @keywords internal
+    #' @noRd
     interpret_loaded_times_as_local <- function(
         dat,
         time_columns = c("datetime", "latest_time")
@@ -624,6 +683,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         dat
     }
 
+    #' Summarize latest continuous/daily parameter values by location code
+    #'
+    #' @param location_codes Character vector of location codes.
+    #' @param parameter Character parameter label.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @return Data frame with latest value and recent deltas per location.
+    #' @keywords internal
+    #' @noRd
     get_latest_parameter_summary <- function(
         location_codes,
         parameter,
@@ -800,6 +868,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
     }
 
+    #' Summarize freezing degree days (FDD) by location
+    #'
+    #' @param location_codes Character vector of location codes.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @return Data frame with latest FDD and recent deltas by location.
+    #' @keywords internal
+    #' @noRd
     get_fdd_summary <- function(location_codes, con, reference_time = NULL) {
         location_codes <- unique(stats::na.omit(unlist(
             location_codes,
@@ -971,6 +1047,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
     }
 
+    #' Summarize thawing degree days (DDT) by location
+    #'
+    #' @param location_codes Character vector of location codes.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @return Data frame with latest DDT and recent deltas by location.
+    #' @keywords internal
+    #' @noRd
     get_ddt_summary <- function(location_codes, con, reference_time = NULL) {
         location_codes <- unique(stats::na.omit(unlist(
             location_codes,
@@ -1142,6 +1226,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
     }
 
+    #' Summarize precipitation accumulations by location
+    #'
+    #' @param location_codes Character vector of location codes.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @return Data frame with latest time and 1-week, 1-month, 6-month totals.
+    #' @keywords internal
+    #' @noRd
     get_precipitation_timeseries_summary <- function(
         location_codes,
         con,
@@ -1258,6 +1350,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
     }
 
+    #' Summarize latest snow survey observations by location
+    #'
+    #' @param location_codes Character vector of location codes.
+    #' @param parameter Snow survey parameter label.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @return Data frame with latest and March/April/May values.
+    #' @keywords internal
+    #' @noRd
     get_snow_survey_summary <- function(
         location_codes,
         parameter,
@@ -1358,6 +1459,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         interpret_loaded_times_as_local(dat, time_columns = c("latest_time"))
     }
 
+    #' Summarize latest parameter values by location id
+    #'
+    #' @param location_ids Integer vector of location ids.
+    #' @param parameter Character parameter label.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @return Data frame with latest values and deltas by location id.
+    #' @keywords internal
+    #' @noRd
     get_latest_parameter_summary_by_location_id <- function(
         location_ids,
         parameter,
@@ -1797,6 +1907,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
     # Plot helpers (ported from dev/freshet_forecasting/dashboard.r)
     # ---------------------------------------------------------------------------
 
+    #' Normalize historical start year for climatology windows
+    #'
+    #' @param historical_start_year Candidate start year input.
+    #' @return Integer year constrained to a valid range, defaulting to 2020.
+    #' @keywords internal
+    #' @noRd
     normalize_historical_start_year <- function(historical_start_year) {
         current_year <- as.integer(format(Sys.Date(), "%Y"))
         historical_start_year <- suppressWarnings(as.integer(
@@ -1813,6 +1929,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         historical_start_year
     }
 
+    #' Get y-axis title for a parameter
+    #'
+    #' @param parameter Character parameter label.
+    #' @return Character axis title.
+    #' @keywords internal
+    #' @noRd
     parameter_axis_title <- function(parameter) {
         axis_titles <- c(
             "precipitation (1wk)" = "Precipitation (1wk accumulation, mm)",
@@ -2205,6 +2327,17 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         )
     }
 
+    #' Load station timeseries for plotting
+    #'
+    #' @param location_code Character location code.
+    #' @param parameter Character parameter label.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @param load_entire_record Logical; if TRUE load full historical record.
+    #' @param historical_start_year Integer start year for historical daily data.
+    #' @return Data frame with `datetime`, `value`, and trace source metadata.
+    #' @keywords internal
+    #' @noRd
     get_station_timeseries <- function(
         location_code,
         parameter,
@@ -2651,6 +2784,16 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         list()
     }
 
+    #' Build historical overlay traces for selected years
+    #'
+    #' @param location_code Character location code.
+    #' @param parameter Character parameter label.
+    #' @param years Integer years selected for overlays.
+    #' @param con DBI database connection.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @return Named list of per-year data frames aligned to the target year.
+    #' @keywords internal
+    #' @noRd
     get_historical_overlay_timeseries <- function(
         location_code,
         parameter,
@@ -2939,6 +3082,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         })
     }
 
+    #' Build a minimal observed-timeseries Plotly widget
+    #'
+    #' @param location_code Character location code.
+    #' @param parameter Character parameter label.
+    #' @param continuous_data Data frame of observed points.
+    #' @param title_prefix Optional plot title text.
+    #' @return Plotly widget.
+    #' @keywords internal
+    #' @noRd
     simple_continuous_plotly_widget <- function(
         location_code,
         parameter,
@@ -3021,6 +3173,23 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
     }
 
+    #' Build a continuous plot with percentile ribbons and return periods
+    #'
+    #' @param location_code Character location code.
+    #' @param continuous_data Optional observed data frame.
+    #' @param percentiles Optional daily percentile table.
+    #' @param return_periods Optional return-period table.
+    #' @param parameter Character parameter label.
+    #' @param return_period_values Numeric vector of RP intervals.
+    #' @param start_date Optional x-axis start date.
+    #' @param end_date Optional x-axis end date.
+    #' @param reference_time Optional POSIXct-like reference time.
+    #' @param load_entire_record Logical; include full observed record.
+    #' @param con Optional DBI connection for lazy data retrieval.
+    #' @param historical_start_year Integer climatology start year.
+    #' @return Plotly widget.
+    #' @keywords internal
+    #' @noRd
     plot_continuous_with_percentiles_and_return_periods <- function(
         location_code,
         continuous_data = NULL,
@@ -3519,6 +3688,20 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
     }
 
+    #' Build the primary station plot for dashboard display
+    #'
+    #' @param location_code Character location code.
+    #' @param parameter Character parameter label.
+    #' @param reference_time POSIXct-like reference time.
+    #' @param con DBI database connection.
+    #' @param snow_survey_parameters Character vector of survey parameters.
+    #' @param load_entire_record Logical; include full observed record.
+    #' @param continuous_data Optional preloaded observed data.
+    #' @param percentiles Optional preloaded percentile table.
+    #' @param return_periods Optional preloaded return-period table.
+    #' @return Plotly widget.
+    #' @keywords internal
+    #' @noRd
     build_station_plot <- function(
         location_code,
         parameter,
@@ -3602,6 +3785,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         con <- session$userData$AquaCache
         shiny::req(con)
 
+        has_valid_connection <- function() {
+            !is.null(con) &&
+                isTRUE(tryCatch(
+                    DBI::dbIsValid(con),
+                    error = function(e) FALSE
+                ))
+        }
+
         fva <- read_fva_json()
         communities <- names(fva)
         current_calendar_year <- as.integer(format(Sys.Date(), "%Y"))
@@ -3651,9 +3842,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
         community_locations <- shiny::reactive({
             shiny::req(input$community)
+            if (!has_valid_connection()) {
+                return(data.frame())
+            }
 
             community_data <- fva[[input$community]]
-            dat <- location_lookup_for_community(community_data, con)
+            dat <- tryCatch(
+                location_lookup_for_community(community_data, con),
+                error = function(e) data.frame()
+            )
             encoded <- get_encoded_gauge_metadata(community_data)
 
             if (is.null(dat) || nrow(dat) == 0) {
@@ -3690,6 +3887,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         )
 
         summary_data <- shiny::reactive({
+            if (!has_valid_connection()) {
+                return(data.frame())
+            }
+
             dat <- community_locations()
             if (is.null(dat) || nrow(dat) == 0) {
                 return(data.frame())
@@ -3812,6 +4013,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             dat
         })
 
+        safe_summary_data <- shiny::reactive({
+            tryCatch(
+                summary_data(),
+                error = function(e) data.frame()
+            )
+        })
+
         available_primary_stations <- shiny::reactive({
             dat <- community_locations()
             if (is.null(dat) || nrow(dat) == 0) {
@@ -3826,7 +4034,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             # Snow survey data lives in the discrete samples tables, not in
             # timeseries. Use summary_data() which already queries that path.
             if (selected_parameter %in% snow_survey_parameters) {
-                sd <- summary_data()
+                sd <- safe_summary_data()
                 if (is.null(sd) || nrow(sd) == 0) {
                     return(data.frame())
                 }
@@ -4095,6 +4303,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             communities
         })
 
+        #' Normalize image format strings for MIME construction
+        #'
+        #' @param format_value Character-like image format value.
+        #' @return Character normalized extension (e.g., `jpeg`, `tiff`).
+        #' @keywords internal
+        #' @noRd
         normalize_image_extension <- function(format_value) {
             ext <- tolower(trimws(as.character(format_value[[1]])))
             if (is.na(ext) || !nzchar(ext)) {
@@ -4115,6 +4329,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             ext
         }
 
+        #' Coerce database image payloads to raw bytes
+        #'
+        #' @param blob Image payload in list/raw/hex/integer form.
+        #' @return Raw vector of image bytes or NULL.
+        #' @keywords internal
+        #' @noRd
         coerce_image_blob_to_raw <- function(blob) {
             if (is.null(blob)) {
                 return(NULL)
@@ -4160,6 +4380,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             stop("Unsupported image byte format")
         }
 
+        #' Convert image bytes to a data URI
+        #'
+        #' @param image_blob Raw-like image payload.
+        #' @param image_format Image format/extension value.
+        #' @return Character data URI, or NULL when bytes are unavailable.
+        #' @keywords internal
+        #' @noRd
         image_blob_to_data_uri <- function(image_blob, image_format) {
             raw_bytes <- coerce_image_blob_to_raw(image_blob)
             if (is.null(raw_bytes) || length(raw_bytes) == 0) {
@@ -4170,6 +4397,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             base64enc::dataURI(data = raw_bytes, mime = mime)
         }
 
+        #' Load image-series locations as sf points
+        #'
+        #' @param con DBI database connection.
+        #' @return `sf` point object for image series station locations.
+        #' @keywords internal
+        #' @noRd
         get_image_series_locations_as_sf <- function(con) {
             image_series_locations <- YGwater::dbGetQueryDT(
                 paste(
@@ -4289,6 +4522,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         })
 
         available_image_timestamps <- shiny::reactive({
+            if (!has_valid_connection()) {
+                return(data.frame(
+                    image_id = integer(0),
+                    datetime = character(0)
+                ))
+            }
+
             image_series <- selected_image_series()
             shiny::req(!is.null(image_series) && nrow(image_series) > 0)
 
@@ -4313,26 +4553,43 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ))
             }
 
-            time0_sql <- DBI::dbQuoteString(
-                con,
-                format(as.POSIXct(time0), "%Y-%m-%d %H:%M:%S")
-            )
-            time_min_sql <- DBI::dbQuoteString(
-                con,
-                format(as.POSIXct(time0) - 7 * 24 * 3600, "%Y-%m-%d %H:%M:%S")
-            )
+            tryCatch(
+                {
+                    time0_sql <- DBI::dbQuoteString(
+                        con,
+                        format(as.POSIXct(time0), "%Y-%m-%d %H:%M:%S")
+                    )
+                    time_min_sql <- DBI::dbQuoteString(
+                        con,
+                        format(
+                            as.POSIXct(time0) - 7 * 24 * 3600,
+                            "%Y-%m-%d %H:%M:%S"
+                        )
+                    )
 
-            DBI::dbGetQuery(
-                con,
-                paste0(
-                    "SELECT image_id, datetime FROM images WHERE img_series_id = ",
-                    img_series_id_int,
-                    " AND datetime <= ",
-                    time0_sql,
-                    " AND datetime >= ",
-                    time_min_sql,
-                    " ORDER BY datetime ASC"
-                )
+                    interpret_loaded_times_as_local(
+                        DBI::dbGetQuery(
+                            con,
+                            paste0(
+                                "SELECT image_id, datetime FROM images WHERE img_series_id = ",
+                                img_series_id_int,
+                                " AND datetime <= ",
+                                time0_sql,
+                                " AND datetime >= ",
+                                time_min_sql,
+                                " AND file IS NOT NULL",
+                                " ORDER BY datetime ASC"
+                            )
+                        ),
+                        time_columns = "datetime"
+                    )
+                },
+                error = function(e) {
+                    data.frame(
+                        image_id = integer(0),
+                        datetime = character(0)
+                    )
+                }
             )
         })
 
@@ -4505,6 +4762,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         })
 
         output$station_image <- shiny::renderUI({
+            if (!has_valid_connection()) {
+                return(shiny::tags$div(
+                    style = "color:#6b7280;",
+                    "Image lookup is unavailable: database connection is not active."
+                ))
+            }
+
             timestamps <- available_image_timestamps()
             if (is.null(timestamps) || nrow(timestamps) == 0) {
                 return(shiny::tags$div(
@@ -4524,12 +4788,16 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
 
             image_id <- timestamps$image_id[[idx]]
-            image <- DBI::dbGetQuery(
-                con,
-                paste0(
-                    "SELECT format, file FROM images WHERE image_id = ",
-                    image_id
-                )
+
+            image <- tryCatch(
+                DBI::dbGetQuery(
+                    con,
+                    paste0(
+                        "SELECT format, file FROM images WHERE image_id = ",
+                        image_id
+                    )
+                ),
+                error = function(e) data.frame()
             )
 
             if (nrow(image) == 0 || is.null(image$file[[1]])) {
@@ -4555,24 +4823,37 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         })
 
         output$stations_map <- leaflet::renderLeaflet({
-            dat <- community_locations()
-            basins <- community_basins()
-            roads <- community_roads()
-            communities <- community_communities()
-            eligible_stations <- available_primary_stations()
+            dat <- tryCatch(community_locations(), error = function(e) {
+                data.frame()
+            })
+            image_series_sf <- tryCatch(
+                community_image_series(),
+                error = function(e) NULL
+            )
+            basins <- tryCatch(community_basins(), error = function(e) NULL)
+            roads <- tryCatch(community_roads(), error = function(e) NULL)
+            communities <- tryCatch(
+                community_communities(),
+                error = function(e) NULL
+            )
 
-            if (
-                (is.null(dat) || nrow(dat) == 0) &&
-                    (is.null(basins) || nrow(basins) == 0) &&
-                    (is.null(roads) || nrow(roads) == 0) &&
-                    (is.null(communities) || nrow(communities) == 0)
-            ) {
-                map <- leaflet::leaflet()
-                map <- leaflet::addProviderTiles(map, "CartoDB.Positron")
-                map <- leaflet::setView(map, lng = -135, lat = 64, zoom = 5)
-                return(
-                    map
-                )
+            if (is.null(dat) || !is.data.frame(dat)) {
+                dat <- data.frame()
+            }
+            if (!"longitude" %in% names(dat)) {
+                dat$longitude <- rep(NA_real_, nrow(dat))
+            }
+            if (!"latitude" %in% names(dat)) {
+                dat$latitude <- rep(NA_real_, nrow(dat))
+            }
+            if (!"name" %in% names(dat)) {
+                dat$name <- rep("", nrow(dat))
+            }
+            if (!"location_code" %in% names(dat)) {
+                dat$location_code <- rep("", nrow(dat))
+            }
+            if (!"location_id" %in% names(dat)) {
+                dat$location_id <- rep(NA_integer_, nrow(dat))
             }
 
             dat$longitude <- suppressWarnings(as.numeric(dat$longitude))
@@ -4583,25 +4864,157 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 drop = FALSE
             ]
 
-            if (nrow(dat) == 0) {
-                map <- leaflet::leaflet()
-                map <- leaflet::addProviderTiles(map, "CartoDB.Positron")
-                map <- leaflet::setView(map, lng = -135, lat = 64, zoom = 5)
-            } else {
-                eligible_codes <- if (
-                    !is.null(eligible_stations) && nrow(eligible_stations) > 0
+            basin_colors <- c(
+                "Hydrometric" = "#2563eb",
+                "Meteorological" = "#16a34a",
+                "Snow survey" = "#d97706",
+                "Other" = "#94a3b8"
+            )
+
+            map <- leaflet::leaflet() %>%
+                leaflet::addProviderTiles("CartoDB.Positron")
+
+            if (nrow(dat) > 0) {
+                location_ids_all <- unique(stats::na.omit(as.integer(
+                    dat$location_id
+                )))
+                location_codes_all <- unique(stats::na.omit(as.character(
+                    dat$location_code
+                )))
+                location_codes_all <- location_codes_all[nzchar(
+                    location_codes_all
+                )]
+
+                hydro_ids <- unique(c(
+                    tryCatch(
+                        get_location_ids_with_parameter(
+                            location_ids = location_ids_all,
+                            parameter = "water level",
+                            con = con
+                        ),
+                        error = function(e) integer(0)
+                    ),
+                    tryCatch(
+                        get_location_ids_with_parameter(
+                            location_ids = location_ids_all,
+                            parameter = "water flow",
+                            con = con
+                        ),
+                        error = function(e) integer(0)
+                    )
+                ))
+                hydro_codes <- unique(dat$location_code[
+                    dat$location_id %in% hydro_ids
+                ])
+
+                met_ids <- unique(c(
+                    tryCatch(
+                        get_location_ids_with_parameter(
+                            location_ids = location_ids_all,
+                            parameter = "precipitation (1wk)",
+                            con = con
+                        ),
+                        error = function(e) integer(0)
+                    ),
+                    tryCatch(
+                        get_location_ids_with_parameter(
+                            location_ids = location_ids_all,
+                            parameter = "precipitation (24hr)",
+                            con = con
+                        ),
+                        error = function(e) integer(0)
+                    ),
+                    tryCatch(
+                        get_location_ids_with_parameter(
+                            location_ids = location_ids_all,
+                            parameter = "temperature, air",
+                            con = con
+                        ),
+                        error = function(e) integer(0)
+                    )
+                ))
+                met_codes <- unique(dat$location_code[
+                    dat$location_id %in% met_ids
+                ])
+
+                snow_codes <- unique(c(
+                    tryCatch(
+                        as.character(
+                            get_snow_survey_summary(
+                                location_codes = location_codes_all,
+                                parameter = "snow water eq (survey)",
+                                con = con
+                            )$location_code
+                        ),
+                        error = function(e) character(0)
+                    ),
+                    tryCatch(
+                        as.character(
+                            get_snow_survey_summary(
+                                location_codes = location_codes_all,
+                                parameter = "snow depth (survey)",
+                                con = con
+                            )$location_code
+                        ),
+                        error = function(e) character(0)
+                    )
+                ))
+
+                dat$has_hydro <- dat$location_code %in% hydro_codes
+                dat$has_met <- dat$location_code %in% met_codes
+                dat$has_snow <- dat$location_code %in% snow_codes
+
+                dat$station_type <- "Other"
+                # Priority assignment avoids a separate mixed class.
+                dat$station_type[dat$has_hydro] <- "Hydrometric"
+                dat$station_type[!dat$has_hydro & dat$has_met] <-
+                    "Meteorological"
+                dat$station_type[
+                    !dat$has_hydro & !dat$has_met & dat$has_snow
+                ] <- "Snow survey"
+
+                if (
+                    !is.null(basins) &&
+                        inherits(basins, "sf") &&
+                        nrow(basins) > 0
                 ) {
-                    unique(as.character(eligible_stations$location_code))
-                } else {
-                    character(0)
+                    if (!"feature_name" %in% names(basins)) {
+                        basins$feature_name <- ""
+                    }
+                    basin_idx <- match(
+                        as.character(basins$feature_name),
+                        as.character(dat$location_code)
+                    )
+                    basins$basin_type <- ifelse(
+                        !is.na(basin_idx),
+                        dat$station_type[basin_idx],
+                        "Other"
+                    )
+                    basins$basin_color <- unname(basin_colors[
+                        basins$basin_type
+                    ])
+                    basins$basin_color[is.na(
+                        basins$basin_color
+                    )] <- basin_colors[["Other"]]
+
+                    map <- leaflet::addPolygons(
+                        map,
+                        data = basins,
+                        color = "#374151",
+                        weight = 2,
+                        fill = TRUE,
+                        fillColor = "#374151",
+                        fillOpacity = 0.2,
+                        opacity = 0.95,
+                        options = leaflet::pathOptions(interactive = FALSE),
+                        popup = ~ paste0(
+                            "<strong>Basin:</strong> ",
+                            htmltools::htmlEscape(as.character(feature_name)),
+                            "<br/><strong>Type:</strong> ",
+                            htmltools::htmlEscape(as.character(basin_type))
+                        )
+                    )
                 }
-                dat$has_selected_parameter <- dat$location_code %in%
-                    eligible_codes
-                dat$point_color <- ifelse(
-                    dat$has_selected_parameter,
-                    "#2563eb",
-                    "#16a34a"
-                )
 
                 dat$station_name <- ifelse(
                     !is.na(dat$name) & nzchar(dat$name),
@@ -4613,227 +5026,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     as.character(dat$location_code),
                     ""
                 )
-
-                popup_parameter_order <- c(
-                    "water level",
-                    "water flow",
-                    "precipitation (1wk)",
-                    "precipitation (24hr)",
-                    "temperature, air",
-                    "FDD",
-                    "DDT",
-                    "snow water eq (pillow)",
-                    "snow depth (pillow)",
-                    "snow water eq (survey)",
-                    "snow depth (survey)"
-                )
-
-                parameter_available_by_code <- setNames(
-                    vector("list", nrow(dat)),
-                    dat$location_code
-                )
-
-                location_ids_all <- unique(stats::na.omit(as.integer(
-                    dat$location_id
-                )))
-                location_codes_all <- unique(stats::na.omit(as.character(
-                    dat$location_code
-                )))
-
-                append_available_parameter <- function(code_vec, param_label) {
-                    if (length(code_vec) == 0) {
-                        return(invisible(NULL))
-                    }
-                    for (code_i in code_vec) {
-                        if (!isTRUE(nzchar(code_i))) {
-                            next
-                        }
-                        existing <- parameter_available_by_code[[code_i]]
-                        parameter_available_by_code[[code_i]] <<- unique(c(
-                            existing,
-                            param_label
-                        ))
-                    }
-                    invisible(NULL)
-                }
-
-                timeseries_parameter_candidates <- c(
-                    "water level",
-                    "water flow",
-                    "precipitation (1wk)",
-                    "precipitation (24hr)",
-                    "temperature, air",
-                    "snow water eq (pillow)",
-                    "snow depth (pillow)"
-                )
-
-                for (param_i in timeseries_parameter_candidates) {
-                    eligible_ids_i <- tryCatch(
-                        get_location_ids_with_parameter(
-                            location_ids = location_ids_all,
-                            parameter = param_i,
-                            con = con
-                        ),
-                        error = function(e) integer(0)
-                    )
-                    if (length(eligible_ids_i) == 0) {
-                        next
-                    }
-                    eligible_codes_i <- dat$location_code[
-                        dat$location_id %in% eligible_ids_i
-                    ]
-                    append_available_parameter(
-                        unique(as.character(eligible_codes_i)),
-                        param_i
-                    )
-                }
-
-                temp_codes <- names(parameter_available_by_code)[vapply(
-                    parameter_available_by_code,
-                    function(x) "temperature, air" %in% x,
-                    logical(1)
-                )]
-                append_available_parameter(temp_codes, "FDD")
-                append_available_parameter(temp_codes, "DDT")
-
-                for (survey_param in c(
-                    "snow water eq (survey)",
-                    "snow depth (survey)"
-                )) {
-                    survey_summary <- tryCatch(
-                        get_snow_survey_summary(
-                            location_codes = location_codes_all,
-                            parameter = survey_param,
-                            con = con
-                        ),
-                        error = function(e) data.frame()
-                    )
-                    if (nrow(survey_summary) == 0) {
-                        next
-                    }
-                    append_available_parameter(
-                        unique(as.character(survey_summary$location_code)),
-                        survey_param
-                    )
-                }
-
-                popup_params <- vapply(
-                    dat$location_code,
-                    function(code_i) {
-                        vals <- parameter_available_by_code[[code_i]]
-                        vals <- vals[vals %in% popup_parameter_order]
-                        vals <- popup_parameter_order[
-                            popup_parameter_order %in% vals
-                        ]
-                        if (length(vals) == 0) {
-                            return("None")
-                        }
-                        paste(vals, collapse = "|")
-                    },
-                    character(1)
-                )
-
-                popup_params_html <- vapply(
-                    popup_params,
-                    function(param_text) {
-                        if (identical(param_text, "None")) {
-                            return("None")
-                        }
-                        param_items <- strsplit(
-                            param_text,
-                            "|",
-                            fixed = TRUE
-                        )[[1]]
-                        paste0(
-                            "<ul style='margin:0.25rem 0 0 1rem; padding:0;'>",
-                            paste0(
-                                "<li>",
-                                htmltools::htmlEscape(param_items),
-                                "</li>",
-                                collapse = ""
-                            ),
-                            "</ul>"
-                        )
-                    },
-                    character(1)
-                )
-
-                map <- leaflet::leaflet(dat)
-                map <- leaflet::addProviderTiles(map, "CartoDB.Positron")
-
+                dat$station_color <- unname(basin_colors[dat$station_type])
+                dat$station_color[is.na(dat$station_color)] <- basin_colors[[
+                    "Other"
+                ]]
                 dat$popup_html <- sprintf(
                     paste0(
                         "<strong>Station name:</strong> %s",
                         "<br/><strong>Location code:</strong> %s",
-                        "<br/><strong>Available parameters:</strong> %s"
+                        "<br/><strong>Type:</strong> %s"
                     ),
                     htmltools::htmlEscape(dat$station_name),
                     htmltools::htmlEscape(dat$station_code),
-                    popup_params_html
+                    htmltools::htmlEscape(dat$station_type)
                 )
-                dat$tooltip_text <- paste0(
-                    dat$station_name,
-                    " (",
-                    dat$station_code,
-                    ")"
-                )
-            }
 
-            if (!is.null(basins) && nrow(basins) > 0) {
-                map <- leaflet::addPolygons(
-                    map,
-                    data = basins,
-                    color = "#334155",
-                    weight = 1,
-                    fillColor = "#475569",
-                    fillOpacity = 0.08,
-                    smoothFactor = 0.3,
-                    options = leaflet::pathOptions(interactive = FALSE)
-                )
-            }
-
-            if (!is.null(roads) && nrow(roads) > 0) {
-                map <- leaflet::addPolylines(
-                    map,
-                    data = roads,
-                    color = "#64748b",
-                    weight = 1.5,
-                    opacity = 0.8,
-                    options = leaflet::pathOptions(interactive = FALSE)
-                )
-            }
-
-            if (!is.null(communities) && nrow(communities) > 0) {
-                communities <- sf::st_transform(communities, 4326)
-                community_coords <- sf::st_coordinates(sf::st_geometry(
-                    communities
-                ))
-                communities$longitude <- community_coords[, 1]
-                communities$latitude <- community_coords[, 2]
-                communities$feature_name <- if (
-                    "feature_name" %in% names(communities)
-                ) {
-                    as.character(communities$feature_name)
-                } else {
-                    ""
-                }
-
-                map <- leaflet::addCircleMarkers(
-                    map,
-                    data = communities,
-                    lng = ~longitude,
-                    lat = ~latitude,
-                    radius = 3,
-                    stroke = TRUE,
-                    weight = 1,
-                    color = "#111827",
-                    fillColor = "#111827",
-                    fillOpacity = 0.9,
-                    popup = ~feature_name
-                )
-            }
-
-            if (!is.null(dat) && nrow(dat) > 0) {
                 map <- leaflet::addCircleMarkers(
                     map,
                     data = dat,
@@ -4842,45 +5049,218 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     radius = 5,
                     stroke = TRUE,
                     weight = 1,
-                    color = ~point_color,
-                    fillColor = ~point_color,
-                    fillOpacity = 0.8,
+                    color = ~station_color,
+                    fillColor = ~station_color,
+                    fillOpacity = 0.85,
                     popup = ~popup_html
                 )
             }
 
             if (
-                (!is.null(dat) && nrow(dat) > 0) ||
-                    (!is.null(communities) && nrow(communities) > 0) ||
-                    (!is.null(roads) && nrow(roads) > 0)
+                !is.null(image_series_sf) &&
+                    inherits(image_series_sf, "sf") &&
+                    nrow(image_series_sf) > 0
             ) {
-                legend_html <- paste0(
-                    "<div style='background:rgba(255,255,255,0.95); padding:8px 10px; border-radius:6px; border:1px solid #d1d5db; font-size:12px; line-height:1.35;'>",
-                    "<div style='font-weight:600; margin-bottom:6px;'>Legend</div>",
-                    "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#2563eb; border:1px solid #1e3a8a; margin-right:6px;'></span>Hydrometric station</div>",
-                    "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; border:1px solid #166534; margin-right:6px;'></span>Meteorological station</div>",
-                    "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#111827; border:1px solid #111827; margin-right:6px;'></span>Communities</div>",
-                    "<div style='display:flex; align-items:center;'><span style='display:inline-block; width:14px; height:0; border-top:2px solid #64748b; margin-right:6px;'></span>Roads</div>",
-                    "</div>"
+                image_series_markers <- tryCatch(
+                    sf::st_drop_geometry(image_series_sf),
+                    error = function(e) as.data.frame(image_series_sf)
                 )
 
-                map <- leaflet::addControl(
+                if (!"longitude" %in% names(image_series_markers)) {
+                    image_series_markers$longitude <- rep(
+                        NA_real_,
+                        nrow(image_series_markers)
+                    )
+                }
+                if (!"latitude" %in% names(image_series_markers)) {
+                    image_series_markers$latitude <- rep(
+                        NA_real_,
+                        nrow(image_series_markers)
+                    )
+                }
+                if (!"name" %in% names(image_series_markers)) {
+                    image_series_markers$name <- rep(
+                        "Unknown station",
+                        nrow(image_series_markers)
+                    )
+                }
+                if (!"location_code" %in% names(image_series_markers)) {
+                    image_series_markers$location_code <- rep(
+                        "",
+                        nrow(image_series_markers)
+                    )
+                }
+                if (!"img_series_id" %in% names(image_series_markers)) {
+                    image_series_markers$img_series_id <- rep(
+                        NA_integer_,
+                        nrow(image_series_markers)
+                    )
+                }
+
+                image_series_markers$longitude <- suppressWarnings(as.numeric(
+                    image_series_markers$longitude
+                ))
+                image_series_markers$latitude <- suppressWarnings(as.numeric(
+                    image_series_markers$latitude
+                ))
+                image_series_markers <- image_series_markers[
+                    !is.na(image_series_markers$longitude) &
+                        !is.na(image_series_markers$latitude),
+                    ,
+                    drop = FALSE
+                ]
+
+                if (nrow(image_series_markers) > 0) {
+                    image_series_markers$image_popup_html <- sprintf(
+                        paste0(
+                            "<strong>Image station:</strong> %s",
+                            "<br/><strong>Location code:</strong> %s",
+                            "<br/><strong>Image series ID:</strong> %s"
+                        ),
+                        htmltools::htmlEscape(as.character(
+                            image_series_markers$name
+                        )),
+                        htmltools::htmlEscape(as.character(
+                            image_series_markers$location_code
+                        )),
+                        htmltools::htmlEscape(as.character(
+                            image_series_markers$img_series_id
+                        ))
+                    )
+
+                    square_labels <- lapply(
+                        seq_len(nrow(image_series_markers)),
+                        function(i) {
+                            htmltools::HTML(
+                                "<span style='color:#0f172a; font-size:20px; line-height:1; font-weight:700;'>&#9633;</span>"
+                            )
+                        }
+                    )
+
+                    map <- leaflet::addLabelOnlyMarkers(
+                        map,
+                        data = image_series_markers,
+                        lng = ~longitude,
+                        lat = ~latitude,
+                        label = square_labels,
+                        labelOptions = leaflet::labelOptions(
+                            noHide = TRUE,
+                            direction = "center",
+                            textOnly = TRUE
+                        )
+                    )
+
+                    map <- leaflet::addCircleMarkers(
+                        map,
+                        data = image_series_markers,
+                        lng = ~longitude,
+                        lat = ~latitude,
+                        radius = 10,
+                        stroke = FALSE,
+                        fillOpacity = 0,
+                        opacity = 0,
+                        popup = ~image_popup_html
+                    )
+                }
+            }
+
+            if (
+                !is.null(roads) &&
+                    inherits(roads, "sf") &&
+                    nrow(roads) > 0
+            ) {
+                map <- leaflet::addPolylines(
                     map,
-                    html = legend_html,
-                    position = "bottomright"
+                    data = roads,
+                    color = "#64748b",
+                    weight = 1.5,
+                    opacity = 0.85,
+                    options = leaflet::pathOptions(interactive = FALSE)
                 )
             }
 
-            if (!is.null(basins) && nrow(basins) > 0) {
-                basin_bbox <- sf::st_bbox(sf::st_transform(basins, 4326))
-                map <- leaflet::fitBounds(
-                    map,
-                    lng1 = basin_bbox[["xmin"]],
-                    lat1 = basin_bbox[["ymin"]],
-                    lng2 = basin_bbox[["xmax"]],
-                    lat2 = basin_bbox[["ymax"]]
+            if (
+                !is.null(communities) &&
+                    inherits(communities, "sf") &&
+                    nrow(communities) > 0
+            ) {
+                communities <- tryCatch(
+                    sf::st_transform(communities, 4326),
+                    error = function(e) communities
                 )
-            } else if (nrow(dat) > 0) {
+                community_coords <- tryCatch(
+                    sf::st_coordinates(sf::st_centroid(sf::st_geometry(
+                        communities
+                    ))),
+                    error = function(e) matrix(numeric(0), ncol = 2)
+                )
+                if (
+                    nrow(community_coords) == nrow(communities) &&
+                        ncol(community_coords) >= 2
+                ) {
+                    communities$longitude <- community_coords[, 1]
+                    communities$latitude <- community_coords[, 2]
+                    communities$feature_name <- if (
+                        "feature_name" %in% names(communities)
+                    ) {
+                        as.character(communities$feature_name)
+                    } else {
+                        ""
+                    }
+
+                    map <- leaflet::addCircleMarkers(
+                        map,
+                        data = communities,
+                        lng = ~longitude,
+                        lat = ~latitude,
+                        radius = 3,
+                        stroke = TRUE,
+                        weight = 1,
+                        color = "#111827",
+                        fillColor = "#111827",
+                        fillOpacity = 0.95,
+                        popup = ~feature_name
+                    )
+                }
+            }
+
+            legend_html <- paste0(
+                "<div style='background:rgba(255,255,255,0.95); padding:8px 10px; border-radius:6px; border:1px solid #d1d5db; font-size:12px; line-height:1.35;'>",
+                "<div style='font-weight:600; margin-bottom:6px;'>Legend</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#2563eb; border:1px solid #1e3a8a; margin-right:6px;'></span>Hydrometric</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; border:1px solid #166534; margin-right:6px;'></span>Meteorological</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#d97706; border:1px solid #92400e; margin-right:6px;'></span>Snow survey</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border:2px solid #475569; background:transparent; box-sizing:border-box; margin-right:6px;'></span>Gauge image series</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#111827; border:1px solid #111827; margin-right:6px;'></span>Community</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:14px; height:0; border-top:2px solid #64748b; margin-right:6px;'></span>Roads</div>",
+                "</div>"
+            )
+            map <- leaflet::addControl(
+                map,
+                html = legend_html,
+                position = "bottomright"
+            )
+
+            if (
+                !is.null(basins) && inherits(basins, "sf") && nrow(basins) > 0
+            ) {
+                basin_bbox <- tryCatch(
+                    sf::st_bbox(sf::st_transform(basins, 4326)),
+                    error = function(e) NULL
+                )
+                if (!is.null(basin_bbox)) {
+                    map <- leaflet::fitBounds(
+                        map,
+                        lng1 = basin_bbox[["xmin"]],
+                        lat1 = basin_bbox[["ymin"]],
+                        lng2 = basin_bbox[["xmax"]],
+                        lat2 = basin_bbox[["ymax"]]
+                    )
+                    return(map)
+                }
+            }
+
+            if (nrow(dat) > 0) {
                 map <- leaflet::fitBounds(
                     map,
                     lng1 = min(dat$longitude, na.rm = TRUE),
@@ -4888,13 +5268,20 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     lng2 = max(dat$longitude, na.rm = TRUE),
                     lat2 = max(dat$latitude, na.rm = TRUE)
                 )
+            } else {
+                map <- leaflet::setView(map, lng = -135, lat = 64, zoom = 5)
             }
 
             map
         })
+        shiny::outputOptions(
+            output,
+            "stations_map",
+            suspendWhenHidden = FALSE
+        )
 
         output$summary_table <- DT::renderDT({
-            dat <- summary_data()
+            dat <- safe_summary_data()
             use_relative <- isTRUE(input$summary_relative)
 
             if (is.null(dat) || nrow(dat) == 0) {
@@ -5049,7 +5436,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         # Table row selection -> update station selectize
         shiny::observe({
             row_idx <- input$summary_table_rows_selected
-            dat <- summary_data()
+            dat <- safe_summary_data()
             if (is.null(dat) || nrow(dat) == 0 || is.null(row_idx)) {
                 return()
             }
@@ -5069,7 +5456,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         # Station selectize -> highlight matching table row
         shiny::observe({
             code <- input$station
-            dat <- summary_data()
+            dat <- safe_summary_data()
             if (
                 is.null(dat) || nrow(dat) == 0 || is.null(code) || !nzchar(code)
             ) {
@@ -5105,6 +5492,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
         })
 
+        #' Resolve display label for a station code
+        #'
+        #' @param code Character location code.
+        #' @return Preferred station name, falling back to code.
+        #' @keywords internal
+        #' @noRd
         station_label_for_code <- function(code) {
             if (is.null(code) || !nzchar(code %||% "")) {
                 return("")
@@ -5179,6 +5572,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
         })
 
+        #' Normalize a plot request for staleness comparison
+        #'
+        #' @param request List of current plot request fields.
+        #' @return Normalized list with non-comparable fields removed.
+        #' @keywords internal
+        #' @noRd
         normalize_plot_request <- function(request) {
             if (is.null(request)) {
                 return(NULL)
@@ -5226,7 +5625,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 return()
             }
 
-            summary_data()
+            safe_summary_data()
 
             request <- current_station_plot_request()
 
