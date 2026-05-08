@@ -192,6 +192,14 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/instruments/manageInstruments.R",
       package = "YGwater"
     ))
+    source(system.file(
+      "apps/YGwater/modules/admin/instruments/manageSensors.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/instruments/instrumentMaintenance.R",
+      package = "YGwater"
+    ))
 
     # continuous data sub-modules
     source(system.file(
@@ -748,10 +756,11 @@ YGwater_globals <- function(
   application_notifications_ui <<- function(
     ns,
     lang,
-    con,
+    con = NULL,
     module_id, # Set to 'all' to show the notification across all modules
     banner_key_prefix = "notification",
-    fallback_lang = "English"
+    fallback_lang = "English",
+    text = NULL
   ) {
     get_active_notifications <- function(
       con,
@@ -868,15 +877,37 @@ YGwater_globals <- function(
       fallback_lang = fallback_lang
     )
 
+    if (!is.null(text) && length(text) > 0) {
+      text <- as.character(text)
+      text <- text[!is.na(text) & nzchar(trimws(text))]
+      for (i in seq_along(text)) {
+        notifications[[length(notifications) + 1]] <- list(
+          id = paste0("static_", i),
+          message = text[[i]],
+          key_prefix = paste0(
+            banner_key_prefix,
+            "_",
+            module_id,
+            "_static_",
+            i
+          )
+        )
+      }
+    }
+
     if (!length(notifications)) {
       return(NULL)
     }
     tagList(lapply(notifications, function(notification) {
+      key_prefix <- notification$key_prefix
+      if (is.null(key_prefix) || !length(key_prefix) || is.na(key_prefix)) {
+        key_prefix <- paste0(banner_key_prefix, "_", notification$id)
+      }
       dismissible_banner_ui(
         ns = ns,
         msg_text = notification$message,
         banner_id = paste0("notification_", notification$id),
-        banner_key_prefix = paste0(banner_key_prefix, "_", notification$id)
+        banner_key_prefix = key_prefix
       )
     }))
   }

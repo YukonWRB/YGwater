@@ -144,20 +144,6 @@ manageInstrumentsUI <- function(id) {
         )
       ),
       tags$hr(),
-      tags$h5("Maintenance due"),
-      dateInput(
-        ns("date_maintenance_due"),
-        "Next maintenance due",
-        value = NULL
-      ),
-      textAreaInput(
-        ns("maintenance_due_note"),
-        "What maintenance is due?",
-        value = "",
-        width = "100%",
-        height = "110px"
-      ),
-      tags$hr(),
       tags$h5("Technical details"),
       bslib::layout_columns(
         col_widths = c(6, 6),
@@ -210,6 +196,13 @@ manageInstruments <- function(id, language) {
     ns <- session$ns
     con <- session$userData$AquaCache
     table_proxy <- DT::dataTableProxy("records_table", session = session)
+    sensor_instrument_notice <- paste(
+      "<strong>What's the difference between a sensor and an instrument?</strong>",
+      "A sensor <strong>must</strong> be connected to an instrument to take measurements;",
+      "it is not usable on its own.",
+      "Instruments may or may not use sensors and are stand-alone pieces of",
+      "equipment capable of displaying and/or recording measurements."
+    )
 
     output$banner <- renderUI({
       req(language$language)
@@ -217,7 +210,8 @@ manageInstruments <- function(id, language) {
         ns = ns,
         lang = language$language,
         con = con,
-        module_id = "manageInstruments"
+        module_id = "manageInstruments",
+        text = sensor_instrument_notice
       )
     })
 
@@ -385,15 +379,15 @@ manageInstruments <- function(id, language) {
       )
       instrument_data$makes <- DBI::dbGetQuery(
         con,
-        "SELECT make_id, make FROM instruments.instrument_make ORDER BY make"
+        "SELECT make_id, make FROM instruments.instrument_makes ORDER BY make"
       )
       instrument_data$models <- DBI::dbGetQuery(
         con,
-        "SELECT model_id, model FROM instruments.instrument_model ORDER BY model"
+        "SELECT model_id, model FROM instruments.instrument_models ORDER BY model"
       )
       instrument_data$types <- DBI::dbGetQuery(
         con,
-        "SELECT type_id, type FROM instruments.instrument_type ORDER BY type"
+        "SELECT type_id, type FROM instruments.instrument_types ORDER BY type"
       )
       instrument_data$owners <- DBI::dbGetQuery(
         con,
@@ -478,27 +472,16 @@ manageInstruments <- function(id, language) {
           "i.owner, org.name AS owner_name, i.date_end_of_life,",
           "i.created_by, i.modified_by, i.created, i.modified,",
           "i.supplier_id, s.supplier_name, i.purchase_price,",
-          "due.maintenance_event_id, due.date_maintenance_due, due.maintenance_due_note,",
           "i.takes_measurements, i.cable_length_m, i.firmware_version,",
           "i.voltage, i.power_active_ma, i.power_quiescent_ma,",
           "i.can_be_logger, i.can_be_telemetry_component",
           "FROM instruments.instruments AS i",
           "LEFT JOIN instruments.observers AS o ON i.observer = o.observer_id",
-          "LEFT JOIN instruments.instrument_make AS mk ON i.make = mk.make_id",
-          "LEFT JOIN instruments.instrument_model AS mdl ON i.model = mdl.model_id",
-          "LEFT JOIN instruments.instrument_type AS tp ON i.type = tp.type_id",
+          "LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id",
+          "LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id",
+          "LEFT JOIN instruments.instrument_types AS tp ON i.type = tp.type_id",
           "LEFT JOIN public.organizations AS org ON i.owner = org.organization_id",
           "LEFT JOIN instruments.suppliers AS s ON i.supplier_id = s.supplier_id",
-          "LEFT JOIN (",
-          "  SELECT DISTINCT ON (instrument_id)",
-          "    event_id AS maintenance_event_id,",
-          "    instrument_id,",
-          "    date_maintenance_due,",
-          "    note AS maintenance_due_note",
-          "  FROM instruments.instrument_maintenance",
-          "  WHERE date_maintenance_due IS NOT NULL",
-          "  ORDER BY instrument_id, obs_datetime DESC, event_id DESC",
-          ") AS due ON i.instrument_id = due.instrument_id",
           "ORDER BY i.date_retired NULLS FIRST, i.serial_no, i.instrument_id"
         )
       )
@@ -582,8 +565,6 @@ manageInstruments <- function(id, language) {
       updateDateInput(session, "date_purchased", value = NULL)
       updateDateInput(session, "date_retired", value = NULL)
       updateDateInput(session, "date_end_of_life", value = NULL)
-      updateDateInput(session, "date_maintenance_due", value = NULL)
-      updateTextAreaInput(session, "maintenance_due_note", value = "")
       updateNumericInput(session, "purchase_price", value = NA_real_)
       updateNumericInput(session, "cable_length_m", value = NA_real_)
       updateTextInput(session, "firmware_version", value = "")
@@ -664,16 +645,6 @@ manageInstruments <- function(id, language) {
         "date_end_of_life",
         value = record$date_end_of_life
       )
-      updateDateInput(
-        session,
-        "date_maintenance_due",
-        value = record$date_maintenance_due
-      )
-      updateTextAreaInput(
-        session,
-        "maintenance_due_note",
-        value = safe_text(record$maintenance_due_note)
-      )
       updateNumericInput(
         session,
         "purchase_price",
@@ -750,7 +721,6 @@ manageInstruments <- function(id, language) {
         "owner_name",
         "supplier_name",
         "observer_name",
-        "date_maintenance_due",
         "obs_datetime",
         "date_in_service",
         "date_purchased",
@@ -790,7 +760,6 @@ manageInstruments <- function(id, language) {
         "Owner",
         "Supplier",
         "Observer",
-        "Next maintenance due",
         "Observed at",
         "In service",
         "Purchased",
@@ -1083,7 +1052,7 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            "INSERT INTO instruments.instrument_make
+            "INSERT INTO instruments.instrument_makes
               (make, description)
               VALUES ($1, $2)
               RETURNING make_id",
@@ -1169,7 +1138,7 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            "INSERT INTO instruments.instrument_model
+            "INSERT INTO instruments.instrument_models
               (model, description)
               VALUES ($1, $2)
               RETURNING model_id",
@@ -1261,7 +1230,7 @@ manageInstruments <- function(id, language) {
         new_id <- with_db_feedback(
           DBI::dbGetQuery(
             con,
-            "INSERT INTO instruments.instrument_type
+            "INSERT INTO instruments.instrument_types
               (type, description)
               VALUES ($1, $2)
               RETURNING type_id",
@@ -1499,17 +1468,6 @@ manageInstruments <- function(id, language) {
         current_id <- normalize_record_id(input$record_id)
         obs_datetime <- scalar_utc_datetime(input$obs_datetime)
         serial_no <- safe_text(input$serial_no)
-        maintenance_due_date <- date_or_na(input$date_maintenance_due)
-        maintenance_due_note <- blank_to_na(input$maintenance_due_note)
-        current_record <- selected_record(current_id)
-        current_due_event_id <- if (
-          is.null(current_record) ||
-            all(is.na(current_record$maintenance_event_id))
-        ) {
-          NA_integer_
-        } else {
-          as.integer(current_record$maintenance_event_id[[1]])
-        }
 
         missing_fields <- c()
         if (!nzchar(serial_no)) {
@@ -1541,15 +1499,6 @@ manageInstruments <- function(id, language) {
           )
           return()
         }
-        if (xor(is.na(maintenance_due_date), is.na(maintenance_due_note))) {
-          showNotification(
-            "Next maintenance due date and due note must be filled together.",
-            type = "error",
-            duration = NULL
-          )
-          return()
-        }
-
         duplicate_serial <- with_db_feedback(
           DBI::dbGetQuery(
             con,
@@ -1651,60 +1600,6 @@ manageInstruments <- function(id, language) {
 
         if (is.null(saved_id)) {
           return()
-        }
-
-        if (!is.na(maintenance_due_date) && !is.na(maintenance_due_note)) {
-          if (is.na(current_due_event_id)) {
-            with_db_feedback(
-              DBI::dbExecute(
-                con,
-                "INSERT INTO instruments.instrument_maintenance
-                  (instrument_id, observer, obs_datetime, note, date_maintenance_due)
-                  VALUES ($1, $2, $3, $4, $5)",
-                params = list(
-                  saved_id,
-                  int_or_na(input$observer),
-                  obs_datetime,
-                  maintenance_due_note,
-                  maintenance_due_date
-                )
-              )
-            )
-          } else {
-            with_db_feedback(
-              DBI::dbExecute(
-                con,
-                "UPDATE instruments.instrument_maintenance
-                  SET instrument_id = $1, observer = $2, obs_datetime = $3,
-                  note = $4, date_maintenance_due = $5
-                  WHERE event_id = $6",
-                params = list(
-                  saved_id,
-                  int_or_na(input$observer),
-                  obs_datetime,
-                  maintenance_due_note,
-                  maintenance_due_date,
-                  current_due_event_id
-                )
-              )
-            )
-          }
-        } else if (!is.na(current_due_event_id)) {
-          with_db_feedback(
-            DBI::dbExecute(
-              con,
-              "UPDATE instruments.instrument_maintenance
-                SET date_maintenance_due = NULL, note = $1
-                WHERE event_id = $2",
-              params = list(
-                safe_text(
-                  current_record$maintenance_due_note,
-                  "Maintenance due cleared"
-                ),
-                current_due_event_id
-              )
-            )
-          )
         }
 
         refresh_all(

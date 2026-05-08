@@ -92,6 +92,8 @@ app_server <- function(input, output, session) {
     "deploy_recover",
     "calibrate",
     "manageInstruments",
+    "manageSensors",
+    "instrumentMaintenance",
     "addContData",
     "continuousCorrections",
     "imputeMissing",
@@ -178,6 +180,8 @@ app_server <- function(input, output, session) {
     "addContData",
     "editContData",
     "manageInstruments",
+    "manageSensors",
+    "instrumentMaintenance",
     "addSamples",
     "addSampleSeries",
     "syncCont",
@@ -1000,7 +1004,9 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$calibrate,
-          session$userData$admin_privs$manageInstruments
+          session$userData$admin_privs$manageInstruments,
+          session$userData$admin_privs$manageSensors,
+          session$userData$admin_privs$instrumentMaintenance
         )
       ) {
         nav_show(id = "navbar", target = "equipTasks")
@@ -1009,6 +1015,12 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$manageInstruments)) {
           nav_hide(id = "navbar", target = "manageInstruments")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageSensors)) {
+          nav_hide(id = "navbar", target = "manageSensors")
+        }
+        if (!isTRUE(session$userData$admin_privs$instrumentMaintenance)) {
+          nav_hide(id = "navbar", target = "instrumentMaintenance")
         }
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
@@ -1681,6 +1693,8 @@ app_server <- function(input, output, session) {
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$calibrate <- FALSE
     ui_loaded$manageInstruments <- FALSE
+    ui_loaded$manageSensors <- FALSE
+    ui_loaded$instrumentMaintenance <- FALSE
 
     ui_loaded$addContData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
@@ -1771,6 +1785,8 @@ app_server <- function(input, output, session) {
     "deploy_recover",
     "calibrate",
     "manageInstruments",
+    "manageSensors",
+    "instrumentMaintenance",
     "addContData",
     "continuousCorrections",
     "imputeMissing",
@@ -2683,13 +2699,9 @@ app_server <- function(input, output, session) {
                 "instruments.calibrate_dissolved_oxygen",
                 "instruments.calibrate_depth",
                 "instruments.instruments",
-                "instruments.instrument_maintenance",
-                "instruments.array_maintenance_changes",
-                "instruments.sensors",
-                "instruments.sensor_types",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
                 "instruments.observers",
                 "public.organizations"
               ),
@@ -2738,16 +2750,6 @@ app_server <- function(input, output, session) {
                   "INSERT",
                   "UPDATE"
                 ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT"),
-                c("INSERT"),
                 c("INSERT"),
                 c("INSERT"),
                 c("INSERT"),
@@ -2759,16 +2761,14 @@ app_server <- function(input, output, session) {
               tbl = session$userData$table_privs,
               c(
                 "instruments.instruments",
-                "instruments.instrument_maintenance",
                 "instruments.observers",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
                 "public.organizations",
                 "instruments.suppliers"
               ),
               list(
-                c("SELECT", "INSERT", "UPDATE"),
                 c("SELECT", "INSERT", "UPDATE"),
                 c("SELECT", "INSERT"),
                 c("SELECT", "INSERT"),
@@ -2776,6 +2776,62 @@ app_server <- function(input, output, session) {
                 c("SELECT", "INSERT"),
                 c("SELECT", "INSERT"),
                 c("SELECT", "INSERT")
+              )
+            ),
+            manageSensors = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.sensors",
+                "instruments.sensor_types",
+                "instruments.sensor_makes",
+                "instruments.sensor_models",
+                "public.organizations",
+                "instruments.suppliers"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
+            instrumentMaintenance = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.instruments",
+                "instruments.instrument_maintenance",
+                "instruments.instrument_maintenance_due",
+                "instruments.instrument_sensor_events",
+                "instruments.instrument_sensor_event_slots",
+                "instruments.sensors",
+                "instruments.sensor_types",
+                "instruments.sensor_makes",
+                "instruments.sensor_models",
+                "instruments.observers",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
+                "public.organizations",
+                "instruments.suppliers"
+              ),
+              list(
+                c("SELECT"),
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT", "UPDATE", "DELETE"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
               )
             ),
             deploy_recover = has_priv(
@@ -2786,9 +2842,9 @@ app_server <- function(input, output, session) {
                 "public.sub_locations",
                 "public.locations_z",
                 "instruments.instruments",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type"
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types"
               ),
               list(
                 c(
@@ -3051,9 +3107,9 @@ app_server <- function(input, output, session) {
                 "public.locations_metadata_instruments",
                 "public.locations",
                 "instruments.instruments",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
                 "instruments.communication_protocols"
               ),
               list(
@@ -3136,9 +3192,9 @@ app_server <- function(input, output, session) {
                 "public.locations_metadata_instruments",
                 "public.locations",
                 "instruments.instruments",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
                 "instruments.transmission_methods",
                 "instruments.transmission_component_roles"
               ),
@@ -3440,6 +3496,8 @@ app_server <- function(input, output, session) {
           "deploy_recover",
           "calibrate",
           "manageInstruments",
+          "manageSensors",
+          "instrumentMaintenance",
           "addContData",
           "continuousCorrections",
           "imputeMissing",
@@ -3815,6 +3873,25 @@ app_server <- function(input, output, session) {
         ))
         ui_loaded$manageInstruments <- TRUE
         manageInstruments("manageInstruments", language = languageSelection)
+      }
+    }
+    if (input$navbar == "manageSensors") {
+      if (!ui_loaded$manageSensors) {
+        output$manageSensors_ui <- renderUI(manageSensorsUI("manageSensors"))
+        ui_loaded$manageSensors <- TRUE
+        manageSensors("manageSensors", language = languageSelection)
+      }
+    }
+    if (input$navbar == "instrumentMaintenance") {
+      if (!ui_loaded$instrumentMaintenance) {
+        output$instrumentMaintenance_ui <- renderUI(instrumentMaintenanceUI(
+          "instrumentMaintenance"
+        ))
+        ui_loaded$instrumentMaintenance <- TRUE
+        instrumentMaintenance(
+          "instrumentMaintenance",
+          language = languageSelection
+        )
       }
     }
     if (input$navbar == "addContData") {

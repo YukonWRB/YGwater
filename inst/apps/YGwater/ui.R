@@ -617,6 +617,16 @@ app_ui <- function(request) {
               title = "Create / modify instruments",
               value = "manageInstruments",
               uiOutput("manageInstruments_ui")
+            ),
+            nav_panel(
+              title = "Create / modify sensors",
+              value = "manageSensors",
+              uiOutput("manageSensors_ui")
+            ),
+            nav_panel(
+              title = "Instrument maintenance",
+              value = "instrumentMaintenance",
+              uiOutput("instrumentMaintenance_ui")
             )
           )
         },

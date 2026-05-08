@@ -105,6 +105,42 @@ addTimeseries <- function(id, language) {
       as.integer(value)
     }
 
+    normalize_integer_vector <- function(x) {
+      if (is.null(x) || length(x) == 0) {
+        return(integer(0))
+      }
+      if (is.list(x) && length(x) == 1) {
+        x <- x[[1]]
+      }
+      if (is.null(x) || length(x) == 0) {
+        return(integer(0))
+      }
+      if (is.character(x) && length(x) == 1 && grepl("^\\{.*\\}$", x)) {
+        x <- strsplit(sub("^\\{(.*)\\}$", "\\1", x), ",", fixed = TRUE)[[1]]
+      }
+
+      x <- x[!is.na(x)]
+      if (!length(x)) {
+        return(integer(0))
+      }
+
+      sort(unique(as.integer(x)))
+    }
+
+    row_has_timeseries <- function(row, timeseries_id, column_name) {
+      timeseries_id <- nullable_integer(timeseries_id)
+      if (
+        is.na(timeseries_id) ||
+          is.null(row) ||
+          nrow(row) == 0 ||
+          !column_name %in% names(row)
+      ) {
+        return(FALSE)
+      }
+
+      timeseries_id %in% normalize_integer_vector(row[[column_name]][[1]])
+    }
+
     nullable_numeric <- function(x) {
       if (is.null(x) || !length(x)) {
         return(NA_real_)
@@ -237,7 +273,8 @@ addTimeseries <- function(id, language) {
             "units_",
             moduleData$matrix_states$matrix_state_code[[i]]
           )
-          unit_col %in% names(param_row) &&
+          unit_col %in%
+            names(param_row) &&
             !is.na(param_row[[unit_col]][[1]]) &&
             nzchar(param_row[[unit_col]][[1]])
         },
@@ -484,7 +521,10 @@ addTimeseries <- function(id, language) {
         sub_location_id = integer(0),
         z_id = integer(0),
         z_meters = numeric(0),
-        timeseries_id = integer(0),
+        direct_timeseries_count = integer(0),
+        direct_timeseries_ids = I(vector("list", 0)),
+        signal_timeseries_ids = I(vector("list", 0)),
+        associated_timeseries_ids = I(vector("list", 0)),
         associated_timeseries_id = integer(0),
         connection_count = integer(0),
         signal_row_count = integer(0),
@@ -509,15 +549,31 @@ addTimeseries <- function(id, language) {
       sql <- paste(
         "SELECT",
         "  lmi.metadata_id,",
-        "  lmi.timeseries_id,",
+        "  COALESCE(lmit.timeseries_count, 0) AS direct_timeseries_count,",
         paste(
-          "COALESCE(",
-          "  lmi.timeseries_id,",
-          "  CASE",
-          "    WHEN COALESCE(sig.distinct_signal_timeseries_count, 0) = 1",
-          "      THEN sig.signal_timeseries_id",
-          "  END",
-          ") AS associated_timeseries_id,"
+          "COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])",
+          "AS direct_timeseries_ids,"
+        ),
+        paste(
+          "COALESCE(sig.signal_timeseries_ids, ARRAY[]::integer[])",
+          "AS signal_timeseries_ids,"
+        ),
+        paste(
+          "CASE",
+          "  WHEN COALESCE(sig.signal_row_count, 0) > 0",
+          "    THEN COALESCE(sig.signal_timeseries_ids, ARRAY[]::integer[])",
+          "  ELSE COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])",
+          "END AS associated_timeseries_ids,"
+        ),
+        paste(
+          "CASE",
+          "  WHEN COALESCE(sig.signal_row_count, 0) > 0 AND",
+          "    COALESCE(sig.distinct_signal_timeseries_count, 0) = 1",
+          "    THEN sig.signal_timeseries_id",
+          "  WHEN COALESCE(sig.signal_row_count, 0) = 0 AND",
+          "    COALESCE(lmit.timeseries_count, 0) = 1",
+          "    THEN lmit.single_timeseries_id",
+          "END AS associated_timeseries_id,"
         ),
         "  COALESCE(sig.connection_count, 0) AS connection_count,",
         "  COALESCE(sig.signal_row_count, 0) AS signal_row_count,",
@@ -543,7 +599,12 @@ addTimeseries <- function(id, language) {
         paste(
           "MIN(s.timeseries_id)",
           "FILTER (WHERE s.timeseries_id IS NOT NULL)",
-          "AS signal_timeseries_id"
+          "AS signal_timeseries_id,"
+        ),
+        paste(
+          "ARRAY_AGG(DISTINCT s.timeseries_id ORDER BY s.timeseries_id)",
+          "FILTER (WHERE s.timeseries_id IS NOT NULL)",
+          "AS signal_timeseries_ids"
         ),
         "  FROM public.locations_metadata_instrument_connections AS c",
         "  LEFT JOIN public.locations_metadata_instrument_connection_signals AS s",
@@ -552,6 +613,17 @@ addTimeseries <- function(id, language) {
         "    AND c.start_datetime <= NOW()",
         "    AND (c.end_datetime IS NULL OR c.end_datetime > NOW())",
         ") AS sig ON TRUE",
+        "LEFT JOIN LATERAL (",
+        "  SELECT",
+        "    COUNT(*)::integer AS timeseries_count,",
+        "    MIN(lmit.timeseries_id) AS single_timeseries_id,",
+        paste(
+          "ARRAY_AGG(lmit.timeseries_id ORDER BY lmit.timeseries_id)",
+          "AS timeseries_ids"
+        ),
+        "  FROM public.locations_metadata_instrument_timeseries AS lmit",
+        "  WHERE lmit.metadata_id = lmi.metadata_id",
+        ") AS lmit ON TRUE",
         "WHERE lmi.start_datetime <= NOW()",
         "  AND (lmi.end_datetime IS NULL OR lmi.end_datetime > NOW())",
         if (is.na(metadata_id)) {
@@ -642,12 +714,19 @@ addTimeseries <- function(id, language) {
         return(empty_deployed_instruments())
       }
 
-      moduleData$deployed_instruments[
-        !is.na(moduleData$deployed_instruments$associated_timeseries_id) &
-          moduleData$deployed_instruments$associated_timeseries_id == tsid,
-        ,
-        drop = FALSE
-      ]
+      rows <- vapply(
+        seq_len(nrow(moduleData$deployed_instruments)),
+        function(i) {
+          row_has_timeseries(
+            moduleData$deployed_instruments[i, , drop = FALSE],
+            tsid,
+            "associated_timeseries_ids"
+          )
+        },
+        logical(1)
+      )
+
+      moduleData$deployed_instruments[rows, , drop = FALSE]
     })
 
     available_instrument_deployments <- reactive({
@@ -691,13 +770,22 @@ addTimeseries <- function(id, language) {
         ]
       }
 
-      available <- available[
-        is.na(available$associated_timeseries_id) |
-          (!is.na(current_tsid) &
-            available$associated_timeseries_id == current_tsid),
-        ,
-        drop = FALSE
-      ]
+      if (nrow(available) > 0) {
+        rows <- vapply(
+          seq_len(nrow(available)),
+          function(i) {
+            row <- available[i, , drop = FALSE]
+            !deployment_has_signal_rows(row) ||
+              row_has_timeseries(
+                row,
+                current_tsid,
+                "signal_timeseries_ids"
+              )
+          },
+          logical(1)
+        )
+        available <- available[rows, , drop = FALSE]
+      }
 
       if (nrow(available) == 0) {
         return(available)
@@ -738,8 +826,21 @@ addTimeseries <- function(id, language) {
         labels[signal_idx] <- paste0(labels[signal_idx], " [signal metadata]")
       }
 
-      current_idx <- !is.na(current_tsid) &
-        df$associated_timeseries_id == current_tsid
+      current_idx <- if (is.na(current_tsid)) {
+        rep(FALSE, nrow(df))
+      } else {
+        vapply(
+          seq_len(nrow(df)),
+          function(i) {
+            row_has_timeseries(
+              df[i, , drop = FALSE],
+              current_tsid,
+              "associated_timeseries_ids"
+            )
+          },
+          logical(1)
+        )
+      }
       if (any(current_idx, na.rm = TRUE)) {
         labels[current_idx] <- paste0(
           labels[current_idx],
@@ -773,13 +874,27 @@ addTimeseries <- function(id, language) {
       active_deployments <- active_deployment_association_rows(con)
 
       if (is.na(deployment_metadata_id)) {
-        current_signal_assoc <- active_deployments[
-          !is.na(active_deployments$associated_timeseries_id) &
-            active_deployments$associated_timeseries_id == timeseries_id &
-            active_deployments$signal_row_count > 0,
-          ,
-          drop = FALSE
-        ]
+        current_signal_assoc <- if (nrow(active_deployments) == 0) {
+          active_deployments
+        } else {
+          active_deployments[
+            vapply(
+              seq_len(nrow(active_deployments)),
+              function(i) {
+                row <- active_deployments[i, , drop = FALSE]
+                deployment_has_signal_rows(row) &&
+                  row_has_timeseries(
+                    row,
+                    timeseries_id,
+                    "signal_timeseries_ids"
+                  )
+              },
+              logical(1)
+            ),
+            ,
+            drop = FALSE
+          ]
+        }
 
         if (nrow(current_signal_assoc) > 0) {
           stop(
@@ -794,11 +909,12 @@ addTimeseries <- function(id, language) {
         DBI::dbExecute(
           con,
           "
-          UPDATE public.locations_metadata_instruments
-          SET timeseries_id = NULL
-          WHERE timeseries_id = $1
-            AND start_datetime <= NOW()
-            AND (end_datetime IS NULL OR end_datetime > NOW())
+          DELETE FROM public.locations_metadata_instrument_timeseries AS lmit
+          USING public.locations_metadata_instruments AS lmi
+          WHERE lmit.metadata_id = lmi.metadata_id
+            AND lmit.timeseries_id = $1
+            AND lmi.start_datetime <= NOW()
+            AND (lmi.end_datetime IS NULL OR lmi.end_datetime > NOW())
           ",
           params = list(timeseries_id)
         )
@@ -821,8 +937,11 @@ addTimeseries <- function(id, language) {
 
       if (deployment_has_signal_rows(selected_deployment)) {
         if (
-          !is.na(selected_deployment$associated_timeseries_id[[1]]) &&
-            selected_deployment$associated_timeseries_id[[1]] == timeseries_id
+          row_has_timeseries(
+            selected_deployment,
+            timeseries_id,
+            "signal_timeseries_ids"
+          )
         ) {
           return(invisible(NULL))
         }
@@ -836,27 +955,28 @@ addTimeseries <- function(id, language) {
         )
       }
 
-      if (
-        !is.na(selected_deployment$timeseries_id[[1]]) &&
-          selected_deployment$timeseries_id[[1]] != timeseries_id
-      ) {
-        stop(
-          paste(
-            "The selected instrument already has a different timeseries",
-            "association. Use Field -> Deploy/recover instruments to",
-            "change existing associations."
-          )
-        )
+      other_signal_assoc <- if (nrow(active_deployments) == 0) {
+        active_deployments
+      } else {
+        active_deployments[
+          active_deployments$metadata_id != deployment_metadata_id &
+            vapply(
+              seq_len(nrow(active_deployments)),
+              function(i) {
+                row <- active_deployments[i, , drop = FALSE]
+                deployment_has_signal_rows(row) &&
+                  row_has_timeseries(
+                    row,
+                    timeseries_id,
+                    "signal_timeseries_ids"
+                  )
+              },
+              logical(1)
+            ),
+          ,
+          drop = FALSE
+        ]
       }
-
-      other_signal_assoc <- active_deployments[
-        active_deployments$metadata_id != deployment_metadata_id &
-          !is.na(active_deployments$associated_timeseries_id) &
-          active_deployments$associated_timeseries_id == timeseries_id &
-          active_deployments$signal_row_count > 0,
-        ,
-        drop = FALSE
-      ]
 
       if (nrow(other_signal_assoc) > 0) {
         stop(
@@ -871,12 +991,13 @@ addTimeseries <- function(id, language) {
       DBI::dbExecute(
         con,
         "
-        UPDATE public.locations_metadata_instruments
-        SET timeseries_id = NULL
-        WHERE timeseries_id = $1
-          AND metadata_id <> $2
-          AND start_datetime <= NOW()
-          AND (end_datetime IS NULL OR end_datetime > NOW())
+        DELETE FROM public.locations_metadata_instrument_timeseries AS lmit
+        USING public.locations_metadata_instruments AS lmi
+        WHERE lmit.metadata_id = lmi.metadata_id
+          AND lmit.timeseries_id = $1
+          AND lmit.metadata_id <> $2
+          AND lmi.start_datetime <= NOW()
+          AND (lmi.end_datetime IS NULL OR lmi.end_datetime > NOW())
         ",
         params = list(timeseries_id, deployment_metadata_id)
       )
@@ -884,11 +1005,13 @@ addTimeseries <- function(id, language) {
       DBI::dbExecute(
         con,
         "
-        UPDATE public.locations_metadata_instruments
-        SET timeseries_id = $1
-        WHERE metadata_id = $2
+        INSERT INTO public.locations_metadata_instrument_timeseries (
+          metadata_id,
+          timeseries_id
+        ) VALUES ($1, $2)
+        ON CONFLICT (metadata_id, timeseries_id) DO NOTHING
         ",
-        params = list(timeseries_id, deployment_metadata_id)
+        params = list(deployment_metadata_id, timeseries_id)
       )
 
       invisible(NULL)
@@ -1024,14 +1147,24 @@ addTimeseries <- function(id, language) {
           lmi.sub_location_id,
           lmi.z_id,
           lz.z_meters,
-          lmi.timeseries_id,
-          COALESCE(
-            lmi.timeseries_id,
-            CASE
-              WHEN COALESCE(sig.distinct_signal_timeseries_count, 0) = 1
-                THEN sig.signal_timeseries_id
-            END
-          ) AS associated_timeseries_id,
+          COALESCE(lmit.timeseries_count, 0) AS direct_timeseries_count,
+          COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])
+            AS direct_timeseries_ids,
+          COALESCE(sig.signal_timeseries_ids, ARRAY[]::integer[])
+            AS signal_timeseries_ids,
+          CASE
+            WHEN COALESCE(sig.signal_row_count, 0) > 0
+              THEN COALESCE(sig.signal_timeseries_ids, ARRAY[]::integer[])
+            ELSE COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])
+          END AS associated_timeseries_ids,
+          CASE
+            WHEN COALESCE(sig.signal_row_count, 0) > 0 AND
+              COALESCE(sig.distinct_signal_timeseries_count, 0) = 1
+              THEN sig.signal_timeseries_id
+            WHEN COALESCE(sig.signal_row_count, 0) = 0 AND
+              COALESCE(lmit.timeseries_count, 0) = 1
+              THEN lmit.single_timeseries_id
+          END AS associated_timeseries_id,
           COALESCE(sig.connection_count, 0) AS connection_count,
           COALESCE(sig.signal_row_count, 0) AS signal_row_count,
           COALESCE(sig.mapped_signal_count, 0) AS mapped_signal_count,
@@ -1055,7 +1188,10 @@ addTimeseries <- function(id, language) {
               AS distinct_signal_timeseries_count,
             MIN(s.timeseries_id)
               FILTER (WHERE s.timeseries_id IS NOT NULL)
-              AS signal_timeseries_id
+              AS signal_timeseries_id,
+            ARRAY_AGG(DISTINCT s.timeseries_id ORDER BY s.timeseries_id)
+              FILTER (WHERE s.timeseries_id IS NOT NULL)
+              AS signal_timeseries_ids
           FROM public.locations_metadata_instrument_connections AS c
           LEFT JOIN public.locations_metadata_instrument_connection_signals AS s
             ON s.connection_id = c.connection_id
@@ -1063,13 +1199,22 @@ addTimeseries <- function(id, language) {
             AND c.start_datetime <= NOW()
             AND (c.end_datetime IS NULL OR c.end_datetime > NOW())
         ) AS sig ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(*)::integer AS timeseries_count,
+            MIN(lmit.timeseries_id) AS single_timeseries_id,
+            ARRAY_AGG(lmit.timeseries_id ORDER BY lmit.timeseries_id)
+              AS timeseries_ids
+          FROM public.locations_metadata_instrument_timeseries AS lmit
+          WHERE lmit.metadata_id = lmi.metadata_id
+        ) AS lmit ON TRUE
         INNER JOIN instruments.instruments AS i
           ON lmi.instrument_id = i.instrument_id
-        LEFT JOIN instruments.instrument_make AS mk
+        LEFT JOIN instruments.instrument_makes AS mk
           ON i.make = mk.make_id
-        LEFT JOIN instruments.instrument_model AS mdl
+        LEFT JOIN instruments.instrument_models AS mdl
           ON i.model = mdl.model_id
-        LEFT JOIN instruments.instrument_type AS it
+        LEFT JOIN instruments.instrument_types AS it
           ON i.type = it.type_id
         LEFT JOIN public.locations_z AS lz
           ON lmi.z_id = lz.z_id
@@ -1861,8 +2006,7 @@ addTimeseries <- function(id, language) {
           tags$p(
             paste(
               "This list only includes instruments that are currently deployed",
-              "at the same location, sub-location, and elevation/depth and do",
-              "not already have a timeseries association."
+              "at the same location, sub-location, and elevation/depth."
             )
           ),
           tags$p(
@@ -1936,8 +2080,7 @@ addTimeseries <- function(id, language) {
           div(
             class = "alert alert-warning",
             paste(
-              "No currently deployed instruments without a timeseries",
-              "association match the current location, sub-location, and",
+              "No currently deployed instruments match the current location, sub-location, and",
               "elevation/depth."
             )
           )
@@ -2521,7 +2664,11 @@ addTimeseries <- function(id, language) {
           } else {
             NA
           },
-          note = if (isTruthy(input$contact_note)) trimws(input$contact_note) else NA
+          note = if (isTruthy(input$contact_note)) {
+            trimws(input$contact_note)
+          } else {
+            NA
+          }
         )
         DBI::dbExecute(
           session$userData$AquaCache,
@@ -2692,7 +2839,9 @@ addTimeseries <- function(id, language) {
                       as.integer(new_timeseries_id),
                       default_corrections$start_dt[[row_idx]],
                       default_corrections$end_dt[[row_idx]],
-                      as.integer(default_corrections$correction_type[[row_idx]]),
+                      as.integer(default_corrections$correction_type[[
+                        row_idx
+                      ]]),
                       as.numeric(default_corrections$value1[[row_idx]]),
                       if (is.na(default_corrections$value2[[row_idx]])) {
                         NA_real_
