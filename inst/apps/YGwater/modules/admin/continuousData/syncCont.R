@@ -11,7 +11,12 @@ syncContUI <- function(id) {
     conditionalPanel(
       condition = "input.all_ts == false",
       ns = ns,
-      DT::DTOutput(ns("ts_table"))
+      DT::DTOutput(ns("ts_table")),
+      checkboxInput(
+        ns("select_filtered_ts"),
+        "Select all filtered records",
+        FALSE
+      )
     ),
     dateInput(ns("start"), "Start datetime", value = Sys.Date() - 30),
     selectInput(
@@ -63,7 +68,17 @@ syncCont <- function(id, language) {
     ts_meta <- reactive({
       res <- dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS nominal_record_rate, note FROM continuous.timeseries_metadata_en"
+        "SELECT
+          md.timeseries_id,
+          md.location_name AS location,
+          md.parameter_name AS parameter,
+          md.media_type AS media,
+          md.aggregation_type AS aggregation,
+          md.recording_rate AS nominal_record_rate,
+          ts.source_fx,
+          md.note
+        FROM continuous.timeseries_metadata_en md
+        JOIN continuous.timeseries ts ON md.timeseries_id = ts.timeseries_id"
       )
       # Make columns factors for better filtering in DT
       res[, location := as.factor(location)]
@@ -71,6 +86,7 @@ syncCont <- function(id, language) {
       res[, media := as.factor(media)]
       res[, aggregation := as.factor(aggregation)]
       res[, nominal_record_rate := as.factor(nominal_record_rate)]
+      res[, source_fx := as.factor(source_fx)]
       res
     })
 
@@ -99,6 +115,29 @@ syncCont <- function(id, language) {
         filter = 'top',
       )
     })
+
+    observeEvent(
+      input$select_filtered_ts,
+      {
+        proxy <- DT::dataTableProxy("ts_table", session = session)
+        if (isTRUE(input$select_filtered_ts)) {
+          DT::selectRows(proxy, input$ts_table_rows_all)
+        } else {
+          DT::selectRows(proxy, NULL)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$ts_table_rows_all,
+      {
+        req(isTRUE(input$select_filtered_ts))
+        DT::dataTableProxy("ts_table", session = session) |>
+          DT::selectRows(input$ts_table_rows_all)
+      },
+      ignoreInit = TRUE
+    )
 
     task <- ExtendedTask$new(function(
       ts_ids,
