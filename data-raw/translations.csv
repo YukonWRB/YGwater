@@ -320,9 +320,11 @@ add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the
 well_purpose,,Well purpose,Usage des puits
 well_name_contains,,Well name contains,Le nom du puits contient
 well_name_contains_placeholder,,e.g. YOWN,ex. YOWN
-well_name_starts,,Starts with,Commence par
-well_name_ends,,Ends with,Se termine par
-well_name_case_sensitive,,Case sensitive,Respect de la casse
+starts_with,,Starts with,Commence par
+ends_with,,Ends with,Se termine par
+case_sensitive,,Case sensitive,Respect de la casse
+location_name_contains,,Location name contains,Le nom du point contient
+location_name_contains_placeholder,,e.g. Yukon,ex. Yukon
 well_completion_yr,,Well completion year,Année d'achèvement
 include_unknown_well_completion,,Include wells with unknown completion year,Inclure les puits ou l'année d'achèvement est inconnue
 include_missing_well_depth,,Include wells with missing depth,Inclure les puits où la profondeur est manquante

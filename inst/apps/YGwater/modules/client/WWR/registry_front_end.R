@@ -206,19 +206,20 @@ wellRegistry <- function(id, language) {
         ),
         div(
           class = "compact-checkboxes",
+          style = "margin-top: 10px;", # Tiny space to separate the text input from the checkboxes
           checkboxInput(
             ns("well_name_starts_with"),
-            label = tr("well_name_starts", language$language),
+            label = tr("starts_with", language$language),
             value = FALSE
           ),
           checkboxInput(
             ns("well_name_ends_with"),
-            label = tr("well_name_ends", language$language),
+            label = tr("ends_with", language$language),
             value = FALSE
           ),
           checkboxInput(
             ns("well_name_case_sensitive"),
-            label = tr("well_name_case_sensitive", language$language),
+            label = tr("case_sensitive", language$language),
             value = FALSE
           )
         ),
