@@ -61,6 +61,7 @@ addContDataUI <- function(id) {
           id = ns("data_entry_panel"),
           title = "Add data",
           icon = icon("table"),
+          uiOutput(ns("selected_units_warning")),
           radioButtons(
             ns("entry_mode"),
             "Input method",
@@ -87,15 +88,27 @@ addContDataUI <- function(id) {
           DT::DTOutput(ns("data_table")),
 
           tags$div(
-            "Hint: double click a cell to edit its contents."
+            "Hint: type directly in the table cells. Press Enter or leave the cell to save."
           ),
           tags$br(),
-          selectizeInput(
-            ns("UTC_offset"),
-            "UTC offset of data",
-            choices = input_timezone_choices(),
-            selected = format_utc_offset(0L),
-            multiple = FALSE
+          splitLayout(
+            cellWidths = c("70%", "30%"),
+            selectizeInput(
+              ns("UTC_offset"),
+              "UTC offset of data",
+              choices = input_timezone_choices(),
+              selected = format_utc_offset(0L),
+              multiple = FALSE
+            ),
+            div(
+              style = "padding-top: 25px;",
+              actionButton(
+                ns("open_unit_conversion"),
+                "Convert units",
+                icon = icon("calculator"),
+                class = "btn-warning"
+              )
+            )
           ),
           splitLayout(
             cellWidths = c("50%", "50%"),
@@ -300,6 +313,7 @@ addContDataUI <- function(id) {
       ), # end accordion for data manipulation options
 
       br(),
+      uiOutput(ns("selected_units_warning_last")),
 
       bslib::input_task_button(
         ns("upload"),
@@ -346,6 +360,22 @@ addContData <- function(id, language) {
       organizations = DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
+      ),
+      unit_conversions = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT
+           uc.conversion_id,
+           u_from.unit_name AS from_unit,
+           u_to.unit_name AS to_unit,
+           uc.conversion_type,
+           uc.scale_a,
+           uc.scale_b
+         FROM public.unit_conversions uc
+         JOIN public.units u_from
+           ON u_from.unit_id = uc.from_unit_id
+         JOIN public.units u_to
+           ON u_to.unit_id = uc.to_unit_id
+         ORDER BY u_from.unit_name, u_to.unit_name"
       )
     )
 
@@ -370,7 +400,7 @@ addContData <- function(id, language) {
       dbGetQueryDT(
         session$userData$AquaCache,
         # "SELECT timeseries_id, location_name AS location, alias_name AS alias, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes, sensor_priority FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
+        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, units, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
       )
     })
 
@@ -379,11 +409,27 @@ addContData <- function(id, language) {
       ts_meta(dbGetQueryDT(
         session$userData$AquaCache,
         # "SELECT timeseries_id, location_name AS location, alias_name AS alias, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes, sensor_priority FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
+        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, units, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
       ))
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
+      )
+      moduleData$unit_conversions <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT
+           uc.conversion_id,
+           u_from.unit_name AS from_unit,
+           u_to.unit_name AS to_unit,
+           uc.conversion_type,
+           uc.scale_a,
+           uc.scale_b
+         FROM public.unit_conversions uc
+         JOIN public.units u_from
+           ON u_from.unit_id = uc.from_unit_id
+         JOIN public.units u_to
+           ON u_to.unit_id = uc.to_unit_id
+         ORDER BY u_from.unit_name, u_to.unit_name"
       )
     })
 
@@ -435,6 +481,60 @@ addContData <- function(id, language) {
       } else {
         timeseries(NULL)
       }
+    })
+
+    selected_timeseries_meta <- reactive({
+      req(timeseries())
+      meta <- ts_meta()
+      meta[meta$timeseries_id == timeseries(), , drop = FALSE]
+    })
+
+    selected_timeseries_units <- reactive({
+      meta <- selected_timeseries_meta()
+      if (!nrow(meta)) {
+        return(NA_character_)
+      }
+      unit <- meta$units[[1]]
+      if (is.na(unit) || !nzchar(unit)) {
+        return(NA_character_)
+      }
+      unit
+    })
+
+    selected_units_warning_tag <- function() {
+      if (is.null(timeseries())) {
+        return(div(
+          class = "alert alert-warning",
+          style = "margin-bottom: 10px;",
+          tags$strong("Select a timeseries before entering or uploading data."),
+        ))
+      }
+
+      unit <- selected_timeseries_units()
+      unit_text <- if (is.na(unit)) {
+        "No database unit is set for this timeseries."
+      } else {
+        paste0("Database unit for this timeseries: ", unit)
+      }
+      detail <- "Enter or convert values to this unit before upload."
+
+      div(
+        class = if (is.na(unit)) {
+          "alert alert-danger"
+        } else {
+          "alert alert-warning"
+        },
+        style = "margin-bottom: 10px;",
+        tags$strong(unit_text),
+        tags$div(detail)
+      )
+    }
+
+    output$selected_units_warning <- renderUI({
+      selected_units_warning_tag()
+    })
+    output$selected_units_warning_last <- renderUI({
+      selected_units_warning_tag()
     })
 
     # Update owner and contributor selectize inputs when organizations data is loaded
@@ -724,6 +824,263 @@ addContData <- function(id, language) {
       parsed_value = NULL
     )
 
+    unit_conversion_state <- reactiveValues(
+      previous_values = NULL,
+      previous_label = NULL
+    )
+
+    table_render_tick <- reactiveVal(0L)
+    refresh_data_table <- function() {
+      table_render_tick(isolate(table_render_tick()) + 1L)
+    }
+
+    observeEvent(timeseries(), {
+      unit_conversion_state$previous_values <- NULL
+      unit_conversion_state$previous_label <- NULL
+    })
+
+    unit_conversion_choices <- reactive({
+      req(moduleData$unit_conversions)
+      unit <- selected_timeseries_units()
+      if (is.na(unit)) {
+        return(moduleData$unit_conversions[0, , drop = FALSE])
+      }
+
+      moduleData$unit_conversions[
+        moduleData$unit_conversions$to_unit == unit,
+        ,
+        drop = FALSE
+      ]
+    })
+
+    unit_conversion_controls <- function() {
+      req(timeseries())
+      unit <- selected_timeseries_units()
+      if (is.na(unit)) {
+        return(div(
+          class = "alert alert-danger",
+          "Unit conversion is unavailable because the selected timeseries has no database unit."
+        ))
+      }
+
+      choices_df <- unit_conversion_choices()
+      choices <- stats::setNames(
+        as.character(choices_df$conversion_id),
+        paste0(
+          choices_df$from_unit,
+          " to ",
+          choices_df$to_unit,
+          " (value * ",
+          signif(as.numeric(choices_df$scale_a), 8),
+          ifelse(
+            as.numeric(choices_df$scale_b) == 0,
+            "",
+            paste0(" + ", signif(as.numeric(choices_df$scale_b), 8))
+          ),
+          ")"
+        )
+      )
+
+      tagList(
+        div(
+          class = "well",
+          style = "padding: 10px; margin-bottom: 10px;",
+          tags$strong("Convert table values to database units"),
+          tags$div(
+            class = "text-muted small",
+            paste0(
+              "Use this if the value column is not already in ",
+              unit,
+              ". Only the value column is changed."
+            )
+          ),
+          radioButtons(
+            ns("unit_conversion_mode"),
+            "Conversion source",
+            choices = c(
+              "Database conversion" = "database",
+              "Custom factor" = "custom"
+            ),
+            selected = "database",
+            inline = TRUE
+          ),
+          conditionalPanel(
+            condition = "input.unit_conversion_mode == 'database'",
+            ns = ns,
+            selectizeInput(
+              ns("unit_conversion_id"),
+              "Convert from",
+              choices = choices,
+              selected = if (length(choices)) choices[[1]] else NULL,
+              options = list(placeholder = "No database conversion listed")
+            )
+          ),
+          conditionalPanel(
+            condition = "input.unit_conversion_mode == 'custom'",
+            ns = ns,
+            numericInput(
+              ns("custom_unit_factor"),
+              paste0("Custom factor to ", unit),
+              value = NA_real_,
+              min = 0,
+              step = "any"
+            )
+          ),
+          div(
+            actionButton(ns("convert_units"), "Convert value column"),
+            actionButton(ns("rollback_unit_conversion"), "Roll back conversion")
+          ),
+          uiOutput(ns("unit_conversion_status"))
+        )
+      )
+    }
+
+    output$unit_conversion_modal_body <- renderUI({
+      unit_conversion_controls()
+    })
+
+    observeEvent(input$open_unit_conversion, {
+      if (is.null(timeseries())) {
+        showNotification(
+          "Select a timeseries before converting units.",
+          type = "error"
+        )
+        return()
+      }
+
+      showModal(modalDialog(
+        title = "Convert table values to database units",
+        uiOutput(ns("unit_conversion_modal_body")),
+        easyClose = TRUE,
+        footer = modalButton("Close"),
+        size = "m"
+      ))
+    })
+
+    output$unit_conversion_status <- renderUI({
+      if (is.null(unit_conversion_state$previous_values)) {
+        return(NULL)
+      }
+
+      div(
+        class = "text-muted small",
+        paste("Last conversion:", unit_conversion_state$previous_label)
+      )
+    })
+
+    observeEvent(input$convert_units, {
+      if (!is.null(unit_conversion_state$previous_values)) {
+        showNotification(
+          "Values have already been converted. Roll back before converting again.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      if (nrow(data$df) == 0) {
+        showNotification("No table values to convert.", type = "error")
+        return()
+      }
+
+      values <- suppressWarnings(as.numeric(data$df$value))
+      if (any(is.na(values))) {
+        showNotification(
+          "Value column must be numeric with no missing values before conversion.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      unit <- selected_timeseries_units()
+      if (is.na(unit)) {
+        showNotification(
+          "No database unit is set for the selected timeseries.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      if (identical(input$unit_conversion_mode, "custom")) {
+        factor <- suppressWarnings(as.numeric(input$custom_unit_factor))
+        if (length(factor) != 1 || is.na(factor) || factor <= 0) {
+          showNotification(
+            "Enter a positive custom conversion factor.",
+            type = "error"
+          )
+          return()
+        }
+        new_values <- values * factor
+        label <- paste0("custom factor ", signif(factor, 8), " to ", unit)
+      } else {
+        if (!isTruthy(input$unit_conversion_id)) {
+          showNotification(
+            paste0("No database conversion to ", unit, " is selected."),
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        choices_df <- unit_conversion_choices()
+        idx <- match(
+          as.integer(input$unit_conversion_id),
+          choices_df$conversion_id
+        )
+        if (is.na(idx)) {
+          showNotification(
+            paste0("No database conversion to ", unit, " is selected."),
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+        new_values <- as.numeric(choices_df$scale_a[[idx]]) *
+          values +
+          as.numeric(choices_df$scale_b[[idx]])
+        label <- paste0(
+          choices_df$from_unit[[idx]],
+          " to ",
+          choices_df$to_unit[[idx]]
+        )
+      }
+
+      unit_conversion_state$previous_values <- data$df$value
+      unit_conversion_state$previous_label <- label
+      data$df$value <- new_values
+      refresh_data_table()
+      showNotification(
+        paste("Converted value column:", label),
+        type = "message"
+      )
+    })
+
+    observeEvent(input$rollback_unit_conversion, {
+      if (is.null(unit_conversion_state$previous_values)) {
+        showNotification("No unit conversion to roll back.", type = "message")
+        return()
+      }
+
+      if (length(unit_conversion_state$previous_values) != nrow(data$df)) {
+        showNotification(
+          "Cannot roll back because the table row count has changed.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      data$df$value <- unit_conversion_state$previous_values
+      refresh_data_table()
+      showNotification(
+        paste("Rolled back conversion:", unit_conversion_state$previous_label),
+        type = "message"
+      )
+      unit_conversion_state$previous_values <- NULL
+      unit_conversion_state$previous_label <- NULL
+    })
+
     upload_raw <- reactive({
       req(input$file)
       req(input$raw_start_row)
@@ -995,16 +1352,23 @@ addContData <- function(id, language) {
     }
 
     prepare_table_data <- function(df) {
-      df <- df[, c("datetime", "value")]
+      out <- df[, c("datetime", "value")]
 
-      df$datetime <- if (inherits(df$datetime, "POSIXct")) {
-        format(df$datetime, "%Y-%m-%d %H:%M:%S")
+      out$datetime <- if (inherits(out$datetime, "POSIXct")) {
+        format(out$datetime, "%Y-%m-%d %H:%M:%S")
       } else {
-        as.character(df$datetime)
+        as.character(out$datetime)
       }
 
-      df$value <- suppressWarnings(as.numeric(df$value))
-      df
+      out$value <- suppressWarnings(as.numeric(out$value))
+      for (class_name in c("grade", "approval", "qualifier")) {
+        out[[class_name]] <- if (class_name %in% names(df)) {
+          as.character(df[[class_name]])
+        } else {
+          ""
+        }
+      }
+      out
     }
 
     selected_offset_tz <- function(value, default = input$UTC_offset) {
@@ -1124,6 +1488,7 @@ addContData <- function(id, language) {
           previous_tz,
           master_tz
         )
+        refresh_data_table()
       }
 
       previous_data_timezone(master_tz)
@@ -1386,6 +1751,7 @@ addContData <- function(id, language) {
       dt <- table_datetimes_to_utc(new_df$datetime, input$UTC_offset)
       if (!any(!is.na(dt))) {
         data$df <- new_df
+        refresh_data_table()
         return()
       }
       for (nm in c("grade", "approval", "qualifier")) {
@@ -1418,6 +1784,7 @@ addContData <- function(id, language) {
       }
       if (!isTRUE(all.equal(data$df, new_df, check.attributes = FALSE))) {
         data$df <- new_df
+        refresh_data_table()
       }
     }
 
@@ -1437,17 +1804,6 @@ addContData <- function(id, language) {
       }
       out
     }
-
-    observeEvent(
-      data$df,
-      {
-        if (nrow(data$df) == 0) {
-          return()
-        }
-        isolate(sync_table_classes_from_ranges())
-      },
-      ignoreInit = TRUE
-    )
 
     output$grade_ranges_table <- DT::renderDT(
       {
@@ -1809,6 +2165,8 @@ addContData <- function(id, language) {
           build_df_from_column_mapping()
         }
 
+        unit_conversion_state$previous_values <- NULL
+        unit_conversion_state$previous_label <- NULL
         data$df <- prepare_table_data(df_mapped)
         if ("grade" %in% names(df_mapped)) {
           data$df$grade <- as.character(df_mapped$grade)
@@ -1826,6 +2184,7 @@ addContData <- function(id, language) {
           "qualifier"
         )
         sync_table_classes_from_ranges()
+        refresh_data_table()
       },
       ignoreInit = TRUE
     )
@@ -1836,10 +2195,10 @@ addContData <- function(id, language) {
           coerce_utc_datetime(Sys.time()),
           selected_offset_tz(input$UTC_offset)
         )[[1]],
-        value = numeric(),
-        grade = character(),
-        approval = character(),
-        qualifier = character(),
+        value = NA_real_,
+        grade = "",
+        approval = "",
+        qualifier = "",
         stringsAsFactors = FALSE
       )
     }
@@ -1848,6 +2207,7 @@ addContData <- function(id, language) {
       position <- match.arg(position)
       if (nrow(data$df) == 0) {
         data$df <- new_data_row()
+        refresh_data_table()
         showNotification("Table was empty; added a new row.", type = "message")
         return(invisible(NULL))
       }
@@ -1896,10 +2256,12 @@ addContData <- function(id, language) {
         data$df[0, , drop = FALSE]
       }
       data$df <- rbind(top, new_data_row(), bottom)
+      refresh_data_table()
     }
 
     observeEvent(input$add_row, {
       data$df <- rbind(data$df, new_data_row())
+      refresh_data_table()
     })
 
     observeEvent(input$add_row_above, {
@@ -1915,6 +2277,7 @@ addContData <- function(id, language) {
       {
         req(input$data_table_rows_selected)
         data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
+        refresh_data_table()
       }
     )
 
@@ -1950,6 +2313,7 @@ addContData <- function(id, language) {
       }
       removed_n <- sum(!keep_idx)
       data$df <- data$df[keep_idx, , drop = FALSE]
+      refresh_data_table()
       showNotification(
         sprintf("Removed %s row(s).", removed_n),
         type = "message"
@@ -1964,23 +2328,133 @@ addContData <- function(id, language) {
       apply_datetime_cutoff("after")
     })
 
-    data_table_proxy <- DT::dataTableProxy("data_table")
+    class_code_choices <- function(class_name) {
+      types <- class_type_choices()[[class_name]]
+      out <- as.character(types$code)
+      stats::setNames(
+        c("", out),
+        c("", paste0(out, " - ", types$description))
+      )
+    }
+
+    table_cell_input <- function(row, col, value) {
+      value <- if (is.na(value)) "" else as.character(value)
+      escaped_value <- htmltools::htmlEscape(value, attribute = TRUE)
+
+      if (col %in% c("grade", "approval", "qualifier")) {
+        choices <- class_code_choices(col)
+        if (!(value %in% unname(choices))) {
+          value <- ""
+        }
+        options <- paste0(
+          vapply(
+            seq_along(choices),
+            function(i) {
+              selected <- if (identical(unname(choices)[[i]], value)) {
+                " selected"
+              } else {
+                ""
+              }
+              paste0(
+                "<option value=\"",
+                htmltools::htmlEscape(unname(choices)[[i]], attribute = TRUE),
+                "\"",
+                selected,
+                ">",
+                htmltools::htmlEscape(names(choices)[[i]]),
+                "</option>"
+              )
+            },
+            character(1)
+          ),
+          collapse = ""
+        )
+        return(paste0(
+          "<select class=\"cont-data-cell cont-data-select\" style=\"width:100%;min-width:110px;box-sizing:border-box;\" data-row=\"",
+          row,
+          "\" data-col=\"",
+          col,
+          "\">",
+          options,
+          "</select>"
+        ))
+      }
+
+      input_type <- if (identical(col, "value")) "number" else "text"
+      step_attr <- if (identical(col, "value")) " step=\"any\"" else ""
+      paste0(
+        "<input class=\"cont-data-cell\" style=\"width:100%;min-width:110px;box-sizing:border-box;\" type=\"",
+        input_type,
+        "\"",
+        step_attr,
+        " data-row=\"",
+        row,
+        "\" data-col=\"",
+        col,
+        "\" value=\"",
+        escaped_value,
+        "\">"
+      )
+    }
+
+    display_table_data <- reactive({
+      table_render_tick()
+      df <- isolate(data$df)
+      if (nrow(df) == 0) {
+        return(df)
+      }
+
+      for (col in names(df)) {
+        df[[col]] <- vapply(
+          seq_len(nrow(df)),
+          function(i) table_cell_input(i, col, df[[col]][[i]]),
+          character(1)
+        )
+      }
+      df
+    })
 
     output$data_table <- DT::renderDT(
       {
         DT::datatable(
-          data$df,
-          editable = TRUE,
+          display_table_data(),
+          escape = FALSE,
           selection = list(
             mode = "multiple",
             target = "row",
             selector = "td:first-child"
           ),
-          options = list(scrollX = TRUE),
+          options = list(
+            scrollX = TRUE,
+            ordering = FALSE,
+            columnDefs = list(list(targets = "_all", orderable = FALSE))
+          ),
           callback = htmlwidgets::JS(
-            "table.on('click.dt', 'tbody td', function() {",
-            "  if ($(this).index() === 0) { return; }",
-            "  table.cell(this).edit();",
+            sprintf(
+              "var ns = '%s';
+              table.on('change', '.cont-data-cell', function() {
+                Shiny.setInputValue(ns + 'data_table_cell_update', {
+                  row: parseInt(this.dataset.row, 10),
+                  col: this.dataset.col,
+                  value: this.value,
+                  nonce: Math.random()
+                }, {priority: 'event'});
+              });
+              table.on('keydown', '.cont-data-cell', function(e) {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  $(this).trigger('change');
+                  this.blur();
+                }
+              });",
+              ns("")
+            ),
+            "table.on('draw.dt', function() {",
+            "  table.$('.cont-data-cell').css({",
+            "    'width': '100%',",
+            "    'min-width': '110px',",
+            "    'box-sizing': 'border-box'",
+            "  });",
             "});"
           ),
           rownames = FALSE
@@ -1989,14 +2463,30 @@ addContData <- function(id, language) {
       server = FALSE
     )
 
-    observeEvent(input$data_table_cell_edit, {
-      info <- input$data_table_cell_edit
-      data$df <- DT::editData(
-        data$df,
-        info,
-        proxy = data_table_proxy,
-        rownames = FALSE
-      )
+    observeEvent(input$data_table_cell_update, {
+      info <- input$data_table_cell_update
+      row <- as.integer(info$row)
+      col <- as.character(info$col)
+      if (
+        is.na(row) ||
+          row < 1 ||
+          row > nrow(data$df) ||
+          !(col %in% names(data$df))
+      ) {
+        return()
+      }
+
+      value <- as.character(info$value)
+      if (identical(col, "value")) {
+        data$df[[col]] <- as.character(data$df[[col]])
+        data$df[[col]][row] <- value
+      } else if (col %in% c("grade", "approval", "qualifier")) {
+        allowed <- unname(class_code_choices(col))
+        data$df[[col]][row] <- if (value %in% allowed) value else ""
+        class_ranges[[col]] <- ranges_from_table_classes(data$df, col)
+      } else {
+        data$df[[col]][row] <- value
+      }
     })
 
     plot_data <- reactiveVal(NULL)
@@ -2109,11 +2599,14 @@ addContData <- function(id, language) {
         silent = TRUE
       )
       db_config <- NULL
-      on.exit({
-        if (!is.null(con) && DBI::dbIsValid(con)) {
-          DBI::dbDisconnect(con)
-        }
-      }, add = TRUE)
+      on.exit(
+        {
+          if (!is.null(con) && DBI::dbIsValid(con)) {
+            DBI::dbDisconnect(con)
+          }
+        },
+        add = TRUE
+      )
 
       extra <- dbGetQueryDT(
         con,
@@ -2689,11 +3182,14 @@ addContData <- function(id, language) {
       data$df <- empty_continuous_upload_df()
       data$parsed_datetime <- NULL
       data$parsed_value <- NULL
+      unit_conversion_state$previous_values <- NULL
+      unit_conversion_state$previous_label <- NULL
       class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
       class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
       class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
       plot_data(NULL)
       last_plot_signature(NULL)
+      refresh_data_table()
     }
 
     build_upload_request <- function(overwrite) {
