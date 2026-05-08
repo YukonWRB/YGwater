@@ -479,12 +479,12 @@ app_ui <- function(request) {
               uiOutput("addContData_ui")
             ),
             nav_panel(
-              title = "Edit/delete continuous data",
+              title = "Edit / delete continuous data",
               value = "editContData",
               uiOutput("editContData_ui")
             ),
             nav_panel(
-              title = "Add/modify timeseries corrections",
+              title = "Add / modify timeseries corrections",
               value = "continuousCorrections",
               uiOutput("continuousCorrections_ui")
             ),
@@ -499,7 +499,7 @@ app_ui <- function(request) {
               uiOutput("grades_approvals_qualifiers_ui")
             ),
             nav_panel(
-              title = "Add/edit timeseries",
+              title = "Add / edit timeseries",
               value = "addTimeseries",
               uiOutput("addTimeseries_ui")
             ),
@@ -521,22 +521,22 @@ app_ui <- function(request) {
               uiOutput("addDiscData_ui")
             ),
             nav_panel(
-              title = "Add/edit samples",
+              title = "Add / edit samples",
               value = "addSamples",
               uiOutput("addSamples_ui")
             ),
             nav_panel(
-              title = "Edit/delete discrete data",
+              title = "Edit / delete discrete data",
               value = "editDiscData",
               uiOutput("editDiscData_ui")
             ),
             nav_panel(
-              title = "Add/modify guidelines",
+              title = "Add / modify guidelines",
               value = "addGuidelines",
               uiOutput("addGuidelines_ui")
             ),
             nav_panel(
-              title = "Add/edit sample series",
+              title = "Add / edit sample series",
               value = "addSampleSeries",
               uiOutput("addSampleSeries_ui")
             ),
@@ -553,12 +553,12 @@ app_ui <- function(request) {
             title = "Locations",
             value = "dbLocsTasks",
             nav_panel(
-              title = "Add/modify locations",
+              title = "Add / modify locations",
               value = "addLocation",
               uiOutput("addLocation_ui")
             ),
             nav_panel(
-              title = "Add/modify sub-locations",
+              title = "Add / modify sub-locations",
               value = "addSubLocation",
               uiOutput("addSubLocation_ui")
             )
@@ -567,7 +567,7 @@ app_ui <- function(request) {
 
         if (!config$public) {
           nav_menu(
-            title = "Files/Docs",
+            title = "Files / Docs",
             value = "fileTasks",
             nav_panel(
               title = "Documents",
@@ -592,14 +592,9 @@ app_ui <- function(request) {
             title = "Field",
             value = "fieldTasks",
             nav_panel(
-              title = "Add/modify field visit",
+              title = "Add / modify field visit",
               value = "visit",
               uiOutput("visit_ui")
-            ),
-            nav_panel(
-              title = "Deploy/recover instruments",
-              value = "deploy_recover",
-              uiOutput("deploy_recover_ui"), # points to the same module as in Equipment
             )
           )
         },
@@ -624,16 +619,21 @@ app_ui <- function(request) {
               uiOutput("manageSensors_ui")
             ),
             nav_panel(
-              title = "Instrument maintenance",
+              title = "Log instrument maintenance",
               value = "instrumentMaintenance",
               uiOutput("instrumentMaintenance_ui")
+            ),
+            nav_panel(
+              title = "Deploy / recover instruments",
+              value = "deploy_recover",
+              uiOutput("deploy_recover_ui"), # points to the same module as in Equipment
             )
           )
         },
 
         if (!config$public) {
           nav_menu(
-            title = "Boreholes/wells",
+            title = "Boreholes / wells",
             value = "wellTasks",
             nav_panel(
               title = "Simpler Index",
@@ -641,7 +641,7 @@ app_ui <- function(request) {
               uiOutput("simplerIndex_ui")
             ),
             nav_panel(
-              title = "Edit borehole/well records",
+              title = "Edit borehole / well records",
               value = "editBoreholesWells",
               uiOutput("editBoreholesWells_ui")
             ),

@@ -2013,7 +2013,7 @@ addTimeseries <- function(id, language) {
             paste(
               "For new deployments, re-deployments, or changing instrument",
               "timeseries associations outside this form, use",
-              "Field -> Deploy/recover instruments."
+              "Equipment -> Deploy/recover instruments."
             )
           ),
           tags$p(

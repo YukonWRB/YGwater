@@ -15,7 +15,7 @@ manageSensorsUI <- function(id) {
         multiple = TRUE,
         options = list(
           maxItems = 1,
-          placeholder = "Search for an existing sensor"
+          placeholder = "Search for an existing sensor or select from the table"
         )
       ),
       div(
@@ -231,7 +231,10 @@ manageSensors <- function(id, language) {
         " | ",
         label_piece(df$sensor_type_label),
         " | ",
-        trimws(paste(label_piece(df$sensor_make, ""), label_piece(df$sensor_model, ""))),
+        trimws(paste(
+          label_piece(df$sensor_make, ""),
+          label_piece(df$sensor_model, "")
+        )),
         " | ",
         label_piece(df$owner_name)
       )
@@ -283,7 +286,11 @@ manageSensors <- function(id, language) {
       updateSelectizeInput(
         session,
         "sensor_type",
-        choices = build_choices(sensor_data$types, "sensor_type_id", "sensor_type"),
+        choices = build_choices(
+          sensor_data$types,
+          "sensor_type_id",
+          "sensor_type"
+        ),
         selected = normalize_select_value(selected$sensor_type),
         server = TRUE
       )
@@ -311,7 +318,11 @@ manageSensors <- function(id, language) {
       updateSelectizeInput(
         session,
         "supplier_id",
-        choices = build_choices(sensor_data$suppliers, "supplier_id", "supplier_name"),
+        choices = build_choices(
+          sensor_data$suppliers,
+          "supplier_id",
+          "supplier_name"
+        ),
         selected = normalize_select_value(selected$supplier_id),
         server = TRUE
       )
@@ -422,19 +433,63 @@ manageSensors <- function(id, language) {
         clear_form(reset_record = FALSE, clear_table = FALSE)
         return(invisible(NULL))
       }
-      updateTextInput(session, "sensor_serial", value = safe_text(record$sensor_serial))
-      updateSelectizeInput(session, "sensor_type", selected = normalize_select_value(record$sensor_type))
-      updateSelectizeInput(session, "sensor_make", selected = normalize_select_value(record$sensor_make_id))
-      updateSelectizeInput(session, "sensor_model", selected = normalize_select_value(record$sensor_model_id))
-      updateSelectizeInput(session, "owner", selected = normalize_select_value(record$owner))
-      updateSelectizeInput(session, "supplier_id", selected = normalize_select_value(record$supplier_id))
-      updateTextInput(session, "sensor_asset_tag", value = safe_text(record$sensor_asset_tag))
-      updateDateInput(session, "date_in_service", value = record$date_in_service)
+      updateTextInput(
+        session,
+        "sensor_serial",
+        value = safe_text(record$sensor_serial)
+      )
+      updateSelectizeInput(
+        session,
+        "sensor_type",
+        selected = normalize_select_value(record$sensor_type)
+      )
+      updateSelectizeInput(
+        session,
+        "sensor_make",
+        selected = normalize_select_value(record$sensor_make_id)
+      )
+      updateSelectizeInput(
+        session,
+        "sensor_model",
+        selected = normalize_select_value(record$sensor_model_id)
+      )
+      updateSelectizeInput(
+        session,
+        "owner",
+        selected = normalize_select_value(record$owner)
+      )
+      updateSelectizeInput(
+        session,
+        "supplier_id",
+        selected = normalize_select_value(record$supplier_id)
+      )
+      updateTextInput(
+        session,
+        "sensor_asset_tag",
+        value = safe_text(record$sensor_asset_tag)
+      )
+      updateDateInput(
+        session,
+        "date_in_service",
+        value = record$date_in_service
+      )
       updateDateInput(session, "date_purchased", value = record$date_purchased)
-      updateTextInput(session, "retired_by", value = safe_text(record$retired_by))
+      updateTextInput(
+        session,
+        "retired_by",
+        value = safe_text(record$retired_by)
+      )
       updateDateInput(session, "date_retired", value = record$date_retired)
-      updateDateInput(session, "date_maintenance_due", value = record$date_maintenance_due)
-      updateTextAreaInput(session, "sensor_notes", value = safe_text(record$sensor_notes))
+      updateDateInput(
+        session,
+        "date_maintenance_due",
+        value = record$date_maintenance_due
+      )
+      updateTextAreaInput(
+        session,
+        "sensor_notes",
+        value = safe_text(record$sensor_notes)
+      )
       invisible(NULL)
     }
 
@@ -475,7 +530,10 @@ manageSensors <- function(id, language) {
          (sensor_type, sensor_type_description)
          VALUES ($1, $2)
          RETURNING sensor_type_id",
-        params = list(sensor_type, blank_to_na(input$new_sensor_type_description))
+        params = list(
+          sensor_type,
+          blank_to_na(input$new_sensor_type_description)
+        )
       )$sensor_type_id[[1]]
     }
 
@@ -485,7 +543,12 @@ manageSensors <- function(id, language) {
         return(id)
       }
       make <- safe_text(value)
-      existing_id <- lookup_id_from_text(make, sensor_data$makes, "make_id", "make")
+      existing_id <- lookup_id_from_text(
+        make,
+        sensor_data$makes,
+        "make_id",
+        "make"
+      )
       if (!is.na(existing_id)) {
         return(existing_id)
       }
@@ -505,7 +568,12 @@ manageSensors <- function(id, language) {
         return(id)
       }
       model <- safe_text(value)
-      existing_id <- lookup_id_from_text(model, sensor_data$models, "model_id", "model")
+      existing_id <- lookup_id_from_text(
+        model,
+        sensor_data$models,
+        "model_id",
+        "model"
+      )
       if (!is.na(existing_id)) {
         return(existing_id)
       }
@@ -520,7 +588,13 @@ manageSensors <- function(id, language) {
     }
 
     output$new_sensor_type_details <- renderUI({
-      if (!is_new_lookup_value(input$sensor_type, sensor_data$types, "sensor_type_id")) {
+      if (
+        !is_new_lookup_value(
+          input$sensor_type,
+          sensor_data$types,
+          "sensor_type_id"
+        )
+      ) {
         return(NULL)
       }
       textAreaInput(
@@ -532,7 +606,9 @@ manageSensors <- function(id, language) {
     })
 
     output$new_sensor_make_details <- renderUI({
-      if (!is_new_lookup_value(input$sensor_make, sensor_data$makes, "make_id")) {
+      if (
+        !is_new_lookup_value(input$sensor_make, sensor_data$makes, "make_id")
+      ) {
         return(NULL)
       }
       textAreaInput(
@@ -544,7 +620,9 @@ manageSensors <- function(id, language) {
     })
 
     output$new_sensor_model_details <- renderUI({
-      if (!is_new_lookup_value(input$sensor_model, sensor_data$models, "model_id")) {
+      if (
+        !is_new_lookup_value(input$sensor_model, sensor_data$models, "model_id")
+      ) {
         return(NULL)
       }
       textAreaInput(

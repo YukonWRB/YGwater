@@ -15,7 +15,7 @@ manageInstrumentsUI <- function(id) {
         multiple = TRUE,
         options = list(
           maxItems = 1,
-          placeholder = "Search for an existing instrument"
+          placeholder = "Search for an existing instrument or select from the table"
         )
       ),
       div(
@@ -173,6 +173,7 @@ manageInstrumentsUI <- function(id) {
           value = NA_real_,
           step = 0.01
         ),
+        br(),
         actionButton(
           ns("save"),
           "Save instrument",
