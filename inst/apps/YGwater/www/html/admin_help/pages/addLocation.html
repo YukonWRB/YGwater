@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add / modify locations help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; max-width: 900px; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+    code { background: #f3f4f5; padding: 0.1rem 0.25rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Add / modify locations</h1>
+  <p>Use this page to create a new monitoring location or update metadata for an existing location in AquaCache. Locations are the parent records for sub-locations, timeseries, samples, documents, images, deployments, and many other records, so it is worth getting the location metadata right before adding related data.</p>
+
+  <h2>Add or modify mode</h2>
+  <p>Choose <strong>Add new location</strong> to create a new record. Choose <strong>Modify existing location</strong> to select a location from the table and update its fields. In modify mode, selecting a row loads the current location details into the form and changes the main button to <strong>Update location</strong>.</p>
+
+  <h2>Location codes</h2>
+  <p>Every location needs a unique location code. For non-Water Survey of Canada locations, use the auto-generate button unless you have a specific code that should be used and that code is based on National Hydro Network logic. Auto-generated codes reduce duplicates and keep codes consistent across the database.</p>
+  <p>If the location is a Water Survey of Canada station and HYDAT is available, enter the WSC code and use the HYDAT auto-fill option to populate available station details. Review all auto-filled fields before saving.</p>
+
+  <h2>Names and aliases</h2>
+  <p>Enter the English location name and, when available, the French location name. Use the alias field for an alternate common name, short name, or legacy name. Use <strong>Add/Modify names in other languages</strong> when the location has names in additional languages. Each alternate-language row must include both a language and a name.</p>
+
+  <h2>Type and coordinates</h2>
+  <p>Select the location type that best describes the monitoring site. Enter latitude and longitude in decimal degrees using WGS84. Yukon and western Canada longitudes should normally be negative. The map button can be used to choose or verify coordinates; zoom in before saving map-selected coordinates.</p>
+
+  <h2>Well association</h2>
+  <p>If this location should be linked to an existing nearby well record, select <strong>Associate with nearby well</strong>, set an appropriate search radius, and choose the correct well from the nearby-well list. This is useful when a monitoring location represents or is directly tied to a borehole or well record.</p>
+
+  <h2>Access and visibility</h2>
+  <p>The <strong>Share with groups</strong> field controls which database roles can see the location. <code>public_reader</code> makes the record broadly visible to users with public read access. Use narrower groups for restricted records. Avoid combining public visibility with restricted intent.</p>
+  <p>The <strong>Publicly relevant</strong> checkbox marks locations that should be shown to the public. The <strong>Influenced by human activity</strong> checkbox flags locations affected by dams, mining, diversions, infrastructure, or other anthropogenic controls.</p>
+
+  <h2>Vertical datum conversion</h2>
+  <p>The datum fields describe how local or assumed elevation measurements relate to another vertical datum. For most locations, leave both datum fields as assumed datum and set the conversion to 0. Only enter a conversion when a reliable conversion is known and should be applied.</p>
+
+  <h2>Networks and projects</h2>
+  <p>Networks and projects are optional but recommended. They make locations easier to find, filter, report, and govern. Existing values can be selected from the lists. If a needed network or project is missing, type a new value and complete the add-new-network or add-new-project dialog.</p>
+
+  <h2>Purpose, contact, and notes</h2>
+  <p>Use contact details for the person, group, or organization responsible for the location. Use installation purpose for why the location was established, current purpose for why it is currently maintained, and notes for concise context that does not fit elsewhere.</p>
+
+  <h2>Before saving</h2>
+  <p>Check for duplicate names or codes, confirm coordinates on the map, confirm access groups, and verify networks, projects, and datum settings. After saving a new location, create any needed sub-locations before adding timeseries, samples, deployments, images, or documents that depend on the location.</p>
+</body>
+</html>

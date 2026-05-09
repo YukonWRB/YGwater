@@ -79,7 +79,8 @@ app_server <- function(input, output, session) {
     "wellTasks",
     "metadataTasks",
     "acquisitionTelemetryTasks",
-    "adminTasks"
+    "adminTasks",
+    "adminHelpTasks"
   )
 
   admin_leaf_pages <- c(
@@ -1356,6 +1357,7 @@ app_server <- function(input, output, session) {
       # Admin menu ----------------------------------------------------------
       # Admin menu is always shown because every logged in user can change their own password
       nav_show(id = "navbar", target = "adminTasks")
+      nav_show(id = "navbar", target = "adminHelpTasks")
       nav_show(id = "navbar", target = "adminHome")
       nav_show(id = "navbar", target = "changePwd")
       if (!isTRUE(session$userData$can_create_role)) {
@@ -1383,6 +1385,7 @@ app_server <- function(input, output, session) {
         "visit",
         "deploy_recover",
         "adminTasks",
+        "adminHelpTasks",
         "metadataTasks",
         "acquisitionTelemetryTasks",
         "wellTasks"
@@ -3397,6 +3400,61 @@ app_server <- function(input, output, session) {
   last_viz_tab <- reactiveVal("home") # Default tab for viz mode
   last_admin_tab <- reactiveVal("adminHome") # Default tab for admin mode
 
+  open_help_file <- function(path) {
+    shinyjs::runjs(sprintf(
+      "window.open(%s, '_blank');",
+      jsonlite::toJSON(path, auto_unbox = TRUE)
+    ))
+  }
+
+  app_www_file_exists <- function(path) {
+    candidates <- c(
+      file.path("www", path),
+      file.path("inst", "apps", "YGwater", "www", path),
+      system.file("apps", "YGwater", "www", path, package = "YGwater")
+    )
+    any(file.exists(candidates[nzchar(candidates)]))
+  }
+
+  aquacache_doc_path <- system.file("doc", package = "AquaCache")
+  aquacache_vignette_file <- file.path(
+    aquacache_doc_path,
+    "AquaCache_DB_documentation.html"
+  )
+  if (nzchar(aquacache_doc_path) && file.exists(aquacache_vignette_file)) {
+    shiny::addResourcePath("aquacache-doc", aquacache_doc_path)
+  }
+
+  observeEvent(input$open_admin_page_help, {
+    page_id <- last_admin_tab()
+    if (
+      is.null(page_id) ||
+        !nzchar(page_id) ||
+        !page_id %in% admin_leaf_pages
+    ) {
+      page_id <- "adminHome"
+    }
+
+    page_help_path <- paste0("html/admin_help/pages/", page_id, ".html")
+
+    if (!app_www_file_exists(page_help_path)) {
+      page_help_path <- paste0(
+        "html/admin_help/page_help_placeholder.html?page=",
+        utils::URLencode(page_id, reserved = TRUE)
+      )
+    }
+
+    open_help_file(page_help_path)
+  })
+
+  observeEvent(input$open_aquacache_vignette, {
+    if (nzchar(aquacache_doc_path) && file.exists(aquacache_vignette_file)) {
+      open_help_file("aquacache-doc/AquaCache_DB_documentation.html")
+    } else {
+      open_help_file("html/admin_help/aquacache_vignette.html")
+    }
+  })
+
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
   observeEvent(input$admin, {
@@ -3484,40 +3542,7 @@ app_server <- function(input, output, session) {
     ) {
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (
-      input$navbar %in%
-        c(
-          "adminHome",
-          "syncCont",
-          "syncDisc",
-          "addLocation",
-          "addSubLocation",
-          "addTimeseries",
-          "deploy_recover",
-          "calibrate",
-          "manageInstruments",
-          "manageSensors",
-          "instrumentMaintenance",
-          "addContData",
-          "continuousCorrections",
-          "imputeMissing",
-          "editContData",
-          "grades_approvals_qualifiers",
-          "addDiscData",
-          "editDiscData",
-          "addGuidelines",
-          "addDocs",
-          "addImgs",
-          "addImgSeries",
-          "manageNewsContent",
-          "manageNotifications",
-          "viewFeedback",
-          "visit",
-          "changePwd",
-          "manageUsers",
-          "simplerIndex"
-        )
-    ) {
+    } else if (input$navbar %in% admin_leaf_pages) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }

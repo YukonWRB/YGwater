@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add discrete data help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; max-width: 900px; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+    code { background: #f3f4f5; padding: 0.1rem 0.25rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Add discrete data</h1>
+  <p>Use this page to add discrete sample results to AquaCache. The workflow creates sample records in <code>discrete.samples</code> and result records in <code>discrete.results</code> from either uploaded files or manually entered rows.</p>
+
+  <h2>Location and sub-location</h2>
+  <p>Select the location before uploading or entering results. Select the sub-location when results belong to a specific point within the location. If the needed location or sub-location does not exist, the page can send you to the relevant location tool to create it first.</p>
+
+  <h2>Input methods</h2>
+  <p>Use file upload when you have a spreadsheet or tabular export. Use manual entry for a small number of results. Uploaded files can be mapped from wide or long formats, depending on how parameters, units, dates, and values are arranged.</p>
+
+  <h2>Mappings</h2>
+  <p>Mappings tell the app where to find parameters, units, dates, values, and samples in the uploaded file. Save reusable mappings for common lab exports or repeated field templates. Before saving a mapping, verify that parameter columns resolve to the intended AquaCache parameters.</p>
+
+  <h2>Parameters, units, and values</h2>
+  <p>Check parameter names and units before upload. A result should only be saved when the parameter is identified and the value is valid. Avoid uploading ambiguous columns until the mapping is corrected.</p>
+
+  <h2>Documents</h2>
+  <p>Attach supporting documents when they should be linked with the uploaded samples, such as lab reports, field sheets, or chain-of-custody documents.</p>
+
+  <h2>Before uploading</h2>
+  <p>Review the preview table carefully. Confirm sample dates, location, sub-location, parameter matches, units, values, and attached documents. Upload only after the preview reflects the records that should be added to AquaCache.</p>
+</body>
+</html>

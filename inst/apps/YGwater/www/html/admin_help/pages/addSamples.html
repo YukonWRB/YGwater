@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add / edit samples help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; max-width: 900px; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+    code { background: #f3f4f5; padding: 0.1rem 0.25rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Add / edit samples</h1>
+  <p>Use this page to create or update records in <code>discrete.samples</code>. A sample record describes a sampling event: where and when the sample was collected, the sample type, collection method, owner, access groups, and related field details. Analytical results are managed separately in the discrete-data results workflow.</p>
+
+  <h2>Add or modify mode</h2>
+  <p>Choose <strong>Add new</strong> to create a sample. Choose <strong>Modify existing</strong> to select samples from the table and update their metadata. Multi-sample edit can update selected fields across several samples at once; fields such as location, sub-location, elevation/depth, sample datetime, target datetime, and import source ID remain single-sample edits.</p>
+
+  <h2>Location and time</h2>
+  <p>Every sample needs a location and datetime. Select a sub-location when the sample belongs to a specific point within the parent location. Use the timezone controls carefully so the saved datetime represents the true sampling time.</p>
+
+  <h2>Sample details</h2>
+  <p>Select media, collection method, and sample type. Use volume, purge volume, purge time, flow rate, and wave height when those values are relevant to the sampling method. Linked sample can be used when samples should be related to one another.</p>
+
+  <h2>Grades, approvals, and qualifiers</h2>
+  <p>Sample grade, approval, and qualifier fields describe sample-level quality and review status. Use them to document whether a sample is provisional, approved, rejected, qualified, or otherwise limited before results are interpreted.</p>
+
+  <h2>Organizations and documents</h2>
+  <p>Set the owner and, when available, contributor, commissioning organization, and sampling organization. Attach documents when supporting field sheets, chain-of-custody forms, photos, or other files are relevant to the sample record.</p>
+
+  <h2>Access and update locking</h2>
+  <p>The <strong>Share with groups</strong> field controls which roles can see the sample. <code>public_reader</code> makes the sample broadly visible. Use <strong>Lock sample from updates</strong> when a sample should not be overwritten by later imports or synchronization processes.</p>
+
+  <h2>Before saving</h2>
+  <p>Confirm location, sub-location, datetime, media, collection method, sample type, owner, access groups, and any quality fields. After creating sample records, add or import analytical results in <strong>Add discrete data</strong>.</p>
+</body>
+</html>

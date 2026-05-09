@@ -803,6 +803,30 @@ app_ui <- function(request) {
             )
           )
         },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Help",
+            value = "adminHelpTasks",
+            nav_item(tags$a(
+              "YGwater admin help",
+              href = "html/admin_help/admin_help.html",
+              target = "_blank",
+              rel = "noopener noreferrer",
+              class = "dropdown-item"
+            )),
+            nav_item(actionLink(
+              "open_admin_page_help",
+              "Current page help",
+              class = "dropdown-item"
+            )),
+            nav_item(actionLink(
+              "open_aquacache_vignette",
+              "AquaCache database reference",
+              class = "dropdown-item"
+            ))
+          )
+        },
         # The nav_spacer() and nav_item below are used to have an actionButton to toggle language on the right side of the navbar
         nav_spacer(),
         # actionButton with no border (so only text is visible). Slight gray to match nav_panel text, white on hover
