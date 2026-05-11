@@ -379,7 +379,6 @@ function(
     LEFT JOIN LATERAL (
       SELECT
         g.grade_type_id,
-        gt.grade_type_code,
         gt.grade_type_description
       FROM continuous.grades g
       LEFT JOIN public.grade_types gt
@@ -393,7 +392,6 @@ function(
     LEFT JOIN LATERAL (
       SELECT
         a.approval_type_id,
-        at.approval_type_code,
         at.approval_type_description
       FROM continuous.approvals a
       LEFT JOIN public.approval_types at
@@ -410,10 +408,6 @@ function(
           q.qualifier_type_id::text,
           ',' ORDER BY q.qualifier_type_id
         ) AS qualifier_type_ids,
-        string_agg(
-          q.qualifier_type_code,
-          ',' ORDER BY q.qualifier_type_id
-        ) AS qualifier_type_codes,
         string_agg(
           q.qualifier_type_description,
           ',' ORDER BY q.qualifier_type_id
@@ -468,13 +462,10 @@ function(
       m.created,
       m.modified,
       grade.grade_type_id,
-      grade.grade_type_code,
       grade.grade_type_description,
       approval.approval_type_id,
-      approval.approval_type_code,
       approval.approval_type_description,
       qualifier.qualifier_type_ids,
-      qualifier.qualifier_type_codes,
       qualifier.qualifier_type_descriptions,
       owner_range.owner_organization_id,
       owner_org.name AS owner,

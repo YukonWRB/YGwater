@@ -35,7 +35,8 @@ test_that("tests for API V1", {
     # ---------------- Make API call --------------------
     get_ts <- callthat::call_that_api_get(
       api_session,
-      endpoint = "timeseries"
+      endpoint = "timeseries",
+      query = list(format = "csv")
     ),
     "response"
   )
@@ -66,6 +67,7 @@ test_that("tests for API V1", {
       "timeseries_id",
       "location_id",
       "location_name",
+      "location_type",
       "alias_name",
       "depth_height_m",
       "latitude",
@@ -88,20 +90,13 @@ test_that("tests for API V1", {
       "last_new_data",
       "publicly_visible",
       "active",
-      "source_fx",
-      "source_fx_args",
-      "share_with",
       "default_owner_organization_id",
       "default_owner",
       "default_owner_fr",
-      "default_data_sharing_agreement_id",
-      "private_expiry",
-      "sync_remote",
       "timezone_daily_calc",
       "last_daily_calculation",
       "last_synchronize",
       "matrix_state_id",
-      "matrix_state_code",
       "matrix_state_name",
       "matrix_state_name_fr",
       "sub_location_id",
@@ -143,7 +138,7 @@ test_that("tests for API V1", {
     get_locs <- callthat::call_that_api_get(
       api_session,
       endpoint = "locations",
-      query = list(weight = 1)
+      query = list(weight = 1, format = "csv")
     ),
     "response"
   )
@@ -171,6 +166,7 @@ test_that("tests for API V1", {
       "name",
       "alias",
       "location_code",
+      "location_type",
       "latitude",
       "longitude",
       "elevation",
@@ -220,7 +216,8 @@ test_that("tests for API V1", {
     expect_s3_class(
       get_lookup <- callthat::call_that_api_get(
         api_session,
-        endpoint = endpoint
+        endpoint = endpoint,
+        query = list(format = "csv")
       ),
       "response"
     )
@@ -259,7 +256,8 @@ test_that("tests for API V1", {
         start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
         end = test_timeseries_end,
         limit = 100,
-        id = test_timeseries_id
+        id = test_timeseries_id,
+        format = "csv"
       )
     ),
     "response"
@@ -274,7 +272,8 @@ test_that("tests for API V1", {
         start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
         end = test_timeseries_end,
         limit = 100,
-        id = paste(test_timeseries_id, test_timeseries_id_2, sep = ",")
+        id = paste(test_timeseries_id, test_timeseries_id_2, sep = ","),
+        format = "csv"
       )
     ),
     "response"
@@ -308,11 +307,11 @@ test_that("tests for API V1", {
       "created",
       "modified",
       "grade_type_id",
-      "grade_type_code",
+      "grade_type_description",
       "approval_type_id",
-      "approval_type_code",
+      "approval_type_description",
       "qualifier_type_ids",
-      "qualifier_type_codes",
+      "qualifier_type_descriptions",
       "owner_organization_id",
       "owner",
       "contributor_organization_id",
