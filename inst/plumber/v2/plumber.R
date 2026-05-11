@@ -5,16 +5,72 @@
 #* @version 2.0.0
 "_API"
 
-v2_csv_serializer <- function(...) {
+# Helper function to create a simple serializer that converts R objects to character strings, handling NULL values gracefully
+v2_identity_serializer <- function(...) {
   function(value) {
     if (is.null(value)) {
       return("")
     }
 
-    paste(
-      capture.output(utils::write.csv(value, row.names = FALSE, na = "")),
-      collapse = "\n"
+    paste(as.character(value), collapse = "\n")
+  }
+}
+
+# Helper function to determine API response format based on query parameter or Accept header, defaulting to CSV for backward compatibility
+v2_format <- function(request, query = NULL, response = NULL) {
+  format <- v2_query_value(query, "format")
+  format_supplied <- !is.null(format) && nzchar(format)
+  format <- tolower(format %||% "")
+
+  if (format_supplied && !format %in% c("json", "csv")) {
+    if (!is.null(response)) {
+      response$status <- 400
+    }
+    stop("Invalid format parameter. Use 'csv' or 'json'.", call. = FALSE)
+  }
+
+  if (format %in% c("json", "csv")) {
+    return(format)
+  }
+
+  if (!is.null(request)) {
+    accept <- request$get_header("Accept") %||% ""
+
+    if (grepl("application/json", accept, ignore.case = TRUE)) {
+      return("json")
+    }
+  }
+
+  "csv"
+}
+
+# Helper function to resolve response format for endpoints that don't have access to the response object, using query parameters or request headers
+v2_resolve_format <- function(request = NULL, query = NULL) {
+  v2_format(
+    request = request,
+    query = query,
+    response = NULL
+  )
+}
+
+
+v2_csv_serializer <- function(...) {
+  function(value) {
+    if (is.null(value)) {
+      return("")
+    }
+    tmp <- tempfile(fileext = ".csv")
+    on.exit(unlink(tmp), add = TRUE)
+
+    data.table::fwrite(
+      value,
+      file = tmp,
+      na = "",
+      quote = "auto",
+      dateTimeAs = "ISO"
     )
+
+    paste(readLines(tmp, warn = FALSE), collapse = "\n")
   }
 }
 
@@ -28,8 +84,115 @@ v2_text_serializer <- function(...) {
   }
 }
 
+# Clean up classes 'pq_text' and 'pq_jsonb' from RPostgres to ensure they serialize properly to JSON, converting arrays to lists and parsing JSON strings as needed
+v2_clean_for_json <- function(x) {
+  if (!is.data.frame(x)) {
+    return(x)
+  }
+
+  x[] <- lapply(x, function(col) {
+    cls <- class(col)
+
+    # PostgreSQL array columns from RPostgres, e.g. pq__text
+    if (any(grepl("^pq__", cls))) {
+      return(lapply(col, function(v) {
+        if (is.null(v) || length(v) == 0L || all(is.na(v))) {
+          return(character(0))
+        }
+
+        as.character(v)
+      }))
+    }
+
+    # PostgreSQL json/jsonb columns from RPostgres
+    if (inherits(col, "pq_jsonb") || inherits(col, "pq_json")) {
+      return(lapply(col, function(v) {
+        if (is.null(v) || length(v) == 0L || all(is.na(v))) {
+          return(NULL)
+        }
+
+        if (!is.character(v)) {
+          return(v)
+        }
+
+        tryCatch(
+          jsonlite::fromJSON(v, simplifyVector = FALSE),
+          error = function(e) as.character(v)
+        )
+      }))
+    }
+
+    col
+  })
+
+  x
+}
+
+# Helper function to serialize tabular data to JSON or CSV based on request parameters and set appropriate Content-Type header
+v2_serialize_tabular <- function(
+  x,
+  request = NULL,
+  response = NULL,
+  query = NULL
+) {
+  format <- tryCatch(
+    v2_format(request = request, query = query, response = response),
+    error = function(e) {
+      if (!is.null(response)) {
+        response$status <- 400L
+        response$set_header("Content-Type", "application/json")
+      }
+      return("format_error")
+    }
+  )
+
+  if (identical(format, "format_error")) {
+    return(jsonlite::toJSON(
+      v2_error_df("Invalid format parameter. Use 'csv' or 'json'."),
+      dataframe = "rows",
+      auto_unbox = TRUE
+    ))
+  }
+
+  if (format == "json") {
+    if (!is.null(response)) {
+      response$set_header("Content-Type", "application/json")
+    }
+
+    x <- v2_clean_for_json(x)
+
+    return(jsonlite::toJSON(
+      x,
+      dataframe = "rows",
+      na = "null",
+      null = "null",
+      POSIXt = "ISO8601",
+      pretty = FALSE,
+      auto_unbox = TRUE
+    ))
+  }
+
+  if (!is.null(response)) {
+    response$set_header("Content-Type", "text/csv; charset=UTF-8")
+  }
+
+  v2_csv_serializer()(x)
+}
+
+
 v2_csv_with_header <- function(df, header_lines = NULL) {
-  csv_lines <- capture.output(utils::write.csv(df, row.names = FALSE, na = ""))
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp), add = TRUE)
+
+  data.table::fwrite(
+    df,
+    file = tmp,
+    na = "",
+    quote = "auto",
+    dateTimeAs = "ISO"
+  )
+
+  csv_lines <- readLines(tmp, warn = FALSE)
 
   if (is.null(header_lines) || length(header_lines) == 0L) {
     return(paste(csv_lines, collapse = "\n"))
@@ -59,6 +222,7 @@ v2_query_value <- function(query, name, default = NULL) {
   value[[1]]
 }
 
+# Helper function to create a standardized error response for the API, returning a data frame with status and message, and allowing for an optional status code to indicate the type of error (e.g., "error", "info")
 v2_error_df <- function(message, status = "error") {
   data.frame(
     status = status,
@@ -67,23 +231,31 @@ v2_error_df <- function(message, status = "error") {
   )
 }
 
-v2_response <- function(body, status = 200L, headers = NULL) {
+v2_response <- function(
+  body,
+  status = 200L,
+  headers = NULL,
+  serialized = FALSE
+) {
   structure(
     list(
       body = body,
       status = as.integer(status),
-      headers = headers
+      headers = headers,
+      serialized = serialized
     ),
     class = "v2_api_response"
   )
 }
 
-v2_apply_response <- function(payload, response) {
+# For synchronous tabular helpers
+v2_apply_response <- function(payload, response, request = NULL, query = NULL) {
   if (!inherits(payload, "v2_api_response")) {
     return(payload)
   }
 
   response$status <- payload$status
+
   headers <- payload$headers
   if (!is.null(headers) && length(headers) > 0L) {
     for (header in names(headers)) {
@@ -91,20 +263,180 @@ v2_apply_response <- function(payload, response) {
     }
   }
 
-  payload$body
+  if (isTRUE(payload$serialized)) {
+    return(payload$body)
+  }
+
+  v2_serialize_tabular(
+    payload$body,
+    request = request,
+    response = response,
+    query = query
+  )
 }
 
+# For HTML/text async responses
 v2_finalize_response <- function(result, response, client_id, ...) {
-  on.exit(v2_clear_credentials(client_id), add = TRUE)
+  on.exit(
+    {
+      v2_clear_credentials(client_id)
+      v2_clear_request_format(client_id)
+    },
+    add = TRUE
+  )
 
   payload <- response$body
   if (!inherits(payload, "v2_api_response")) {
     return(result)
   }
 
-  response$body <- v2_apply_response(payload, response)
+  response$status <- payload$status
+
+  headers <- payload$headers
+  if (!is.null(headers) && length(headers) > 0L) {
+    for (header in names(headers)) {
+      response$set_header(header, headers[[header]])
+    }
+  }
+
+  response$body <- payload$body
 
   result
+}
+
+# Helper function to finalize API responses for tabular data, applying appropriate serialization and headers based on the response payload, and ensuring credentials are cleared after the response is finalized
+# For CSV/JSON async responses
+v2_finalize_tabular_response <- function(
+  result,
+  response,
+  client_id,
+  query = NULL,
+  ...
+) {
+  on.exit(
+    {
+      v2_clear_credentials(client_id)
+      v2_clear_request_format(client_id)
+    },
+    add = TRUE
+  )
+
+  payload <- response$body
+
+  if (inherits(payload, "v2_api_response")) {
+    response$status <- payload$status
+
+    headers <- payload$headers
+    if (!is.null(headers) && length(headers) > 0L) {
+      for (header in names(headers)) {
+        response$set_header(header, headers[[header]])
+      }
+    }
+
+    if (isTRUE(payload$serialized)) {
+      response$body <- payload$body
+      return(result)
+    }
+
+    response$body <- v2_serialize_tabular(
+      payload$body,
+      request = NULL,
+      response = response,
+      query = query
+    )
+
+    return(result)
+  }
+
+  response$body <- v2_serialize_tabular(
+    payload,
+    request = NULL,
+    response = response,
+    query = query
+  )
+
+  result
+}
+
+# Helper function to create a standardized API response for tabular data, determining the appropriate format and headers based on query parameters and client preferences, and ensuring credentials are cleared after the response is finalized
+v2_make_serialized_tabular_response <- function(
+  x,
+  client_id,
+  query = NULL,
+  status = 200L,
+  headers = NULL
+) {
+  stored_format <- v2_client_request_format(client_id)
+
+  if (!is.null(stored_format) && is.null(v2_query_value(query, "format"))) {
+    query$format <- stored_format
+  }
+
+  format <- v2_format(request = NULL, query = query, response = NULL)
+
+  content_type <- if (identical(format, "json")) {
+    "application/json"
+  } else {
+    "text/csv; charset=UTF-8"
+  }
+
+  headers <- c(headers %||% list(), list("Content-Type" = content_type))
+
+  v2_response(
+    body = v2_serialize_tabular(
+      x,
+      request = NULL,
+      response = NULL,
+      query = query
+    ),
+    status = status,
+    headers = headers,
+    serialized = TRUE
+  )
+}
+
+v2_request_format_file <- function(client_id) {
+  file.path(
+    v2_credentials_dir(),
+    paste0(v2_cache_key("format", client_id), ".rds")
+  )
+}
+
+v2_store_request_format <- function(client_id, format) {
+  if (is.null(client_id) || !nzchar(client_id)) {
+    return(invisible(FALSE))
+  }
+
+  saveRDS(format, v2_request_format_file(client_id))
+  invisible(TRUE)
+}
+
+v2_clear_request_format <- function(client_id) {
+  if (is.null(client_id) || !nzchar(client_id)) {
+    return(invisible(FALSE))
+  }
+
+  unlink(v2_request_format_file(client_id), force = TRUE)
+  invisible(TRUE)
+}
+
+v2_client_request_format <- function(client_id) {
+  if (is.null(client_id) || !nzchar(client_id)) {
+    return(NULL)
+  }
+
+  path <- v2_request_format_file(client_id)
+  if (!file.exists(path)) {
+    return(NULL)
+  }
+
+  format <- try(readRDS(path), silent = TRUE)
+  if (inherits(format, "try-error")) {
+    unlink(path, force = TRUE)
+    return(NULL)
+  }
+
+  format
 }
 
 v2_public_credentials <- function() {
@@ -316,10 +648,21 @@ v2_lookup_query <- function(client_id, sql, empty_message) {
   out
 }
 
-v2_lookup_query_request <- function(request, response, sql, empty_message) {
+v2_lookup_query_request <- function(
+  request,
+  response,
+  query,
+  sql,
+  empty_message
+) {
   ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
-    return(v2_apply_response(ctx$error, response))
+    return(v2_apply_response(
+      ctx$error,
+      response,
+      request = request,
+      query = query
+    ))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
@@ -331,11 +674,18 @@ v2_lookup_query_request <- function(request, response, sql, empty_message) {
         v2_error_df(empty_message, status = "info"),
         headers = list("X-Status" = "info")
       ),
-      response
+      response,
+      request = request,
+      query = query
     ))
   }
 
-  out
+  v2_serialize_tabular(
+    out,
+    request = request,
+    response = response,
+    query = query
+  )
 }
 
 v2_cache_missing <- new.env(parent = emptyenv())
@@ -423,7 +773,10 @@ v2_cache_get_or_compute <- function(key, compute) {
     }
 
     if (dir.create(paths$lock_dir, showWarnings = FALSE)) {
-      on.exit(unlink(paths$lock_dir, recursive = TRUE, force = TRUE), add = TRUE)
+      on.exit(
+        unlink(paths$lock_dir, recursive = TRUE, force = TRUE),
+        add = TRUE
+      )
 
       cached <- v2_cache_read(paths$cache_file)
       if (!identical(cached, v2_cache_missing)) {
@@ -692,10 +1045,38 @@ function(request, response, client_id) {
   plumber2::Next
 }
 
+#* Store V2 request format for async tabular handlers
+#* @header
+#* @any /timeseries/measurements
+#* @any /samples
+#* @any /samples/results
+function(request, response, client_id) {
+  format <- tryCatch(
+    v2_resolve_format(request = request, query = request$query),
+    error = function(e) "format_error"
+  )
+
+  if (identical(format, "format_error")) {
+    response$status <- 400L
+    response$set_header("Content-Type", "application/json")
+    response$body <- jsonlite::toJSON(
+      v2_error_df("Invalid format parameter. Use 'csv' or 'json'."),
+      dataframe = "rows",
+      auto_unbox = TRUE
+    )
+    return(plumber2::Break)
+  }
+
+  v2_store_request_format(client_id, format)
+
+  plumber2::Next
+}
+
 #* List available locations
 #* @get /locations
 #* @query lang:string("en") Language for location names and descriptions ("en" or "fr").
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
   lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
   if (is.null(lang)) {
@@ -705,13 +1086,15 @@ function(request, response, query) {
         status = 400L,
         headers = list("X-Status" = "error")
       ),
-      response
+      response,
+      request,
+      query
     ))
   }
 
   ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
-    return(v2_apply_response(ctx$error, response))
+    return(v2_apply_response(ctx$error, response, request, query))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
@@ -729,17 +1112,25 @@ function(request, response, query) {
         v2_error_df("No locations found in the database.", status = "info"),
         headers = list("X-Status" = "info")
       ),
-      response
+      response,
+      request,
+      query
     ))
   }
 
-  out
+  v2_serialize_tabular(
+    out,
+    request = request,
+    response = response,
+    query = query
+  )
 }
 
 #* List available timeseries
 #* @get /timeseries
 #* @query lang:string("en") Language for timeseries names and descriptions ("en" or "fr").
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
   lang <- v2_validate_lang(v2_query_value(query, "lang", "en"))
   if (is.null(lang)) {
@@ -749,13 +1140,15 @@ function(request, response, query) {
         status = 400L,
         headers = list("X-Status" = "error")
       ),
-      response
+      response,
+      request,
+      query
     ))
   }
 
   ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
-    return(v2_apply_response(ctx$error, response))
+    return(v2_apply_response(ctx$error, response, request, query))
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
@@ -803,20 +1196,13 @@ function(request, response, query) {
        tm.*,
        ts.publicly_visible,
        ts.active,
-       ts.source_fx,
-       ts.source_fx_args::text AS source_fx_args,
-       ts.share_with,
        ts.default_owner AS default_owner_organization_id,
        org.name AS default_owner,
        org.name_fr AS default_owner_fr,
-       ts.default_data_sharing_agreement_id,
-       ts.private_expiry,
-       ts.sync_remote,
        ts.timezone_daily_calc,
        ts.last_daily_calculation,
        ts.last_synchronize,
        ts.matrix_state_id,
-       ms.matrix_state_code,
        ms.matrix_state_name,
        ms.matrix_state_name_fr,
        ts.sub_location_id,
@@ -856,11 +1242,18 @@ function(request, response, query) {
         v2_error_df("No timeseries found in the database.", status = "info"),
         headers = list("X-Status" = "info")
       ),
-      response
+      response,
+      request,
+      query
     ))
   }
 
-  out
+  v2_serialize_tabular(
+    out,
+    request = request,
+    response = response,
+    query = query
+  )
 }
 
 #* Return measurements for a timeseries
@@ -870,7 +1263,8 @@ function(request, response, query) {
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
 #* @query limit:integer(100000) Maximum number of records to return.
 #* @query modifiedSince:string Only return measurements created or modified since this ISO 8601 date/time.
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 #* @async
 function(client_id, query) {
   id <- v2_query_value(query, "id")
@@ -951,7 +1345,7 @@ function(client_id, query) {
     LEFT JOIN LATERAL (
       SELECT
         g.grade_type_id,
-        gt.grade_type_code
+        gt.grade_type_description
       FROM continuous.grades g
       LEFT JOIN public.grade_types gt
         ON g.grade_type_id = gt.grade_type_id
@@ -964,7 +1358,7 @@ function(client_id, query) {
     LEFT JOIN LATERAL (
       SELECT
         a.approval_type_id,
-        at.approval_type_code
+        at.approval_type_description
       FROM continuous.approvals a
       LEFT JOIN public.approval_types at
         ON a.approval_type_id = at.approval_type_id
@@ -981,13 +1375,13 @@ function(client_id, query) {
           ',' ORDER BY q.qualifier_type_id
         ) AS qualifier_type_ids,
         string_agg(
-          q.qualifier_type_code,
+          q.qualifier_type_description,
           ',' ORDER BY q.qualifier_type_id
-        ) AS qualifier_type_codes
+        ) AS qualifier_type_descriptions
       FROM (
         SELECT DISTINCT ON (q.qualifier_type_id)
           q.qualifier_type_id,
-          qt.qualifier_type_code
+          qt.qualifier_type_description
         FROM continuous.qualifiers q
         LEFT JOIN public.qualifier_types qt
           ON q.qualifier_type_id = qt.qualifier_type_id
@@ -1033,11 +1427,11 @@ function(client_id, query) {
       m.created,
       m.modified,
       grade.grade_type_id,
-      grade.grade_type_code,
+      grade.grade_type_description,
       approval.approval_type_id,
-      approval.approval_type_code,
+      approval.approval_type_description,
       qualifier.qualifier_type_ids,
-      qualifier.qualifier_type_codes,
+      qualifier.qualifier_type_descriptions,
       owner_range.owner_organization_id,
       owner_org.name AS owner,
       contributor_range.contributor_organization_id,
@@ -1171,7 +1565,7 @@ function(client_id, query) {
         "
          FROM measurement_rows m",
         measurement_join_sql,
-        "ORDER BY m.datetime DESC
+        "ORDER BY m.datetime ASC
          LIMIT %s"
       ),
       paste(ids, collapse = ","),
@@ -1190,14 +1584,19 @@ function(client_id, query) {
     ))
   }
 
-  out
+  v2_make_serialized_tabular_response(
+    out,
+    client_id = client_id,
+    query = query
+  )
 }
 #* @then
-v2_finalize_response
+v2_finalize_tabular_response
 
 #* Return available parameters in the database
 #* @get /parameters
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
   ctx <- v2_context_request(request)
   if (!is.null(ctx$error)) {
@@ -1227,20 +1626,29 @@ function(request, response, query) {
         v2_error_df("No parameters found in the database.", status = "info"),
         headers = list("X-Status" = "info")
       ),
-      response
+      response,
+      request,
+      query
     ))
   }
 
-  out
+  v2_serialize_tabular(
+    out,
+    request = request,
+    response = response,
+    query = query
+  )
 }
 
 #* Return grade types in the database
 #* @get /grades
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
-  v2_lookup_query_request(
+  out <- v2_lookup_query_request(
     request,
     response,
+    query,
     "SELECT
        grade_type_id,
        grade_type_code,
@@ -1255,11 +1663,13 @@ function(request, response, query) {
 
 #* Return approval types in the database
 #* @get /approvals
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
-  v2_lookup_query_request(
+  out <- v2_lookup_query_request(
     request,
     response,
+    query,
     "SELECT
        approval_type_id,
        approval_type_code,
@@ -1274,11 +1684,13 @@ function(request, response, query) {
 
 #* Return qualifier types in the database
 #* @get /qualifiers
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
-  v2_lookup_query_request(
+  out <- v2_lookup_query_request(
     request,
     response,
+    query,
     "SELECT
        qualifier_type_id,
        qualifier_type_code,
@@ -1293,11 +1705,13 @@ function(request, response, query) {
 
 #* Return organizations in the database
 #* @get /organizations
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
-  v2_lookup_query_request(
+  out <- v2_lookup_query_request(
     request,
     response,
+    query,
     "SELECT
        organization_id,
        name,
@@ -1319,7 +1733,8 @@ function(request, response, query) {
 #* @query locations:string Location IDs to target, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
 #* @query modifiedSince:string Only return samples created or modified since this ISO 8601 date/time.
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 #* @async
 function(client_id, query) {
   start <- v2_query_value(query, "start")
@@ -1420,7 +1835,7 @@ function(client_id, query) {
     )
     query_params <- list(start, end, modified_since)
   }
-  sql <- paste0(sql, " ORDER BY sm.datetime DESC")
+  sql <- paste0(sql, " ORDER BY sm.datetime ASC")
 
   ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
@@ -1440,17 +1855,22 @@ function(client_id, query) {
     ))
   }
 
-  out
+  return(v2_make_serialized_tabular_response(
+    out,
+    client_id = client_id,
+    query = query
+  ))
 }
 #* @then
-v2_finalize_response
+v2_finalize_tabular_response
 
 #* Return sample results
 #* @get /samples/results
 #* @query sample_ids:string* Sample IDs to target, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
 #* @query modifiedSince:string Only return results created or modified since this ISO 8601 date/time.
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 #* @async
 function(client_id, query) {
   sample_ids <- v2_query_value(query, "sample_ids")
@@ -1542,10 +1962,14 @@ function(client_id, query) {
     ))
   }
 
-  out
+  return(v2_make_serialized_tabular_response(
+    out,
+    client_id = client_id,
+    query = query
+  ))
 }
 #* @then
-v2_finalize_response
+v2_finalize_tabular_response
 
 #* Return SWE snow bulletin leaflet map HTML
 #* @get /snow-bulletin/leaflet
@@ -1797,11 +2221,13 @@ v2_finalize_response
 
 #* Return CSW layer data
 #* @get /csw-layer
-#* @serializer text/csv v2_csv_serializer()
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
 function(request, response, query) {
   v2_lookup_query_request(
     request,
     response,
+    query,
     "SELECT * FROM public.get_csw_layer()",
     "No CSW layer data found in the database."
   )

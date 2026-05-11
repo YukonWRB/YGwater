@@ -130,28 +130,33 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
     sort(async_routes)
   )
 
-  missing_then <- async_routes[!vapply(
-    async_routes,
-    function(route) {
-      i <- match(route, routes)
-      block <- lines[route_starts[[i]]:route_ends[[i]]]
-      async_at <- grep("^#\\* @async\\s*$", block)
-      then_at <- grep("^#\\* @then\\s*$", block)
-      length(async_at) == 1L &&
-        length(then_at) == 1L &&
-        then_at[[1L]] > async_at[[1L]]
-    },
-    logical(1L)
-  )]
+  missing_then <- async_routes[
+    !vapply(
+      async_routes,
+      function(route) {
+        i <- match(route, routes)
+        block <- lines[route_starts[[i]]:route_ends[[i]]]
+        async_at <- grep("^#\\* @async\\s*$", block)
+        then_at <- grep("^#\\* @then\\s*$", block)
+        length(async_at) == 1L &&
+          length(then_at) == 1L &&
+          then_at[[1L]] > async_at[[1L]]
+      },
+      logical(1L)
+    )
+  ]
 
-  unexpected_then <- routes[!is_async & vapply(
-    seq_along(route_starts),
-    function(i) {
-      block <- lines[route_starts[[i]]:route_ends[[i]]]
-      any(grepl("^#\\* @then\\s*$", block))
-    },
-    logical(1L)
-  )]
+  unexpected_then <- routes[
+    !is_async &
+      vapply(
+        seq_along(route_starts),
+        function(i) {
+          block <- lines[route_starts[[i]]:route_ends[[i]]]
+          any(grepl("^#\\* @then\\s*$", block))
+        },
+        logical(1L)
+      )
+  ]
 
   expect_true(
     length(missing_then) == 0L,
@@ -243,6 +248,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
       "timeseries_id",
       "location_id",
       "location_name",
+      "location_type",
       "alias_name",
       "depth_height_m",
       "latitude",
@@ -265,20 +271,13 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
       "last_new_data",
       "publicly_visible",
       "active",
-      "source_fx",
-      "source_fx_args",
-      "share_with",
       "default_owner_organization_id",
       "default_owner",
       "default_owner_fr",
-      "default_data_sharing_agreement_id",
-      "private_expiry",
-      "sync_remote",
       "timezone_daily_calc",
       "last_daily_calculation",
       "last_synchronize",
       "matrix_state_id",
-      "matrix_state_code",
       "matrix_state_name",
       "matrix_state_name_fr",
       "sub_location_id",
@@ -307,6 +306,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
       "name",
       "alias",
       "location_code",
+      "location_type",
       "latitude",
       "longitude",
       "elevation",
@@ -431,7 +431,10 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
   }
 
   encode_time <- function(x) {
-    utils::URLencode(format(x, "%Y-%m-%d %H:%M:%S", tz = "UTC"), reserved = TRUE)
+    utils::URLencode(
+      format(x, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+      reserved = TRUE
+    )
   }
 
   row_stamp <- function(x) {
@@ -482,14 +485,17 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
     skip("No samples available for API V2 sample endpoint tests")
   }
 
-  expect_true(all(c(
-    "sample_id",
-    "location_code",
-    "media_type",
-    "sample_type",
-    "created",
-    "modified"
-  ) %in% names(samples)))
+  expect_true(all(
+    c(
+      "sample_id",
+      "location_code",
+      "media_type",
+      "sample_type",
+      "created",
+      "modified"
+    ) %in%
+      names(samples)
+  ))
 
   get_samples_since <- get_v2(sample_url(
     encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
@@ -562,16 +568,19 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
     skip("No sample results available for API V2 result endpoint tests")
   }
 
-  expect_true(all(c(
-    "result_id",
-    "sample_id",
-    "location_code",
-    "parameter_id",
-    "parameter_name",
-    "result",
-    "created",
-    "modified"
-  ) %in% names(results)))
+  expect_true(all(
+    c(
+      "result_id",
+      "sample_id",
+      "location_code",
+      "parameter_id",
+      "parameter_name",
+      "result",
+      "created",
+      "modified"
+    ) %in%
+      names(results)
+  ))
 
   get_results_since <- get_v2(results_url(
     encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
@@ -651,7 +660,10 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   test_timeseries_start <- test_timeseries_end - 365 * 24 * 60 * 60
 
   encode_time <- function(x) {
-    utils::URLencode(format(x, "%Y-%m-%d %H:%M:%S", tz = "UTC"), reserved = TRUE)
+    utils::URLencode(
+      format(x, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+      reserved = TRUE
+    )
   }
 
   measurement_stamp <- function(x) {
@@ -707,7 +719,9 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   measurement_stamps <- measurement_stamp(measurements)
   if (any(!is.na(measurement_stamps))) {
     newest_stamp <- max(measurement_stamps, na.rm = TRUE)
-    get_measurements_recent <- get_v2(measurement_url(encode_time(newest_stamp)))
+    get_measurements_recent <- get_v2(measurement_url(encode_time(
+      newest_stamp
+    )))
 
     expect_equal(get_measurements_recent$status, 200)
 
@@ -757,11 +771,11 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
       "created",
       "modified",
       "grade_type_id",
-      "grade_type_code",
+      "grade_type_description",
       "approval_type_id",
-      "approval_type_code",
+      "approval_type_description",
       "qualifier_type_ids",
-      "qualifier_type_codes",
+      "qualifier_type_descriptions",
       "owner_organization_id",
       "owner",
       "contributor_organization_id",
