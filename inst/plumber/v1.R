@@ -61,9 +61,10 @@ request_cache_allowed <- function(req) {
 
 #' List available locations
 #* @param lang Language for location names and descriptions ("en" or "fr").
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /locations
-#* @serializer csv
-function(req, res, lang = "en") {
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(req, res, lang = "en", format = NULL) {
   con <- try(
     YGwater::AquaConnect(
       username = req$user,
@@ -78,11 +79,12 @@ function(req, res, lang = "en") {
 
   if (inherits(con, "try-error")) {
     res$status <- 503
-    return(data.frame(
+    response <- data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -91,33 +93,36 @@ function(req, res, lang = "en") {
   } else if (lang == "fr") {
     "SELECT * FROM public.location_metadata_fr ORDER BY location_id"
   } else {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Invalid language parameter. Use 'en' or 'fr'.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
 
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
-    return(data.frame(
+    res$setHeader("X-Status", "info")
+    response <- data.frame(
       status = "info",
       message = "No locations found in the database.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
 
-  return(out)
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' List available timeseries
 #* @param lang Language for timeseries names and descriptions ("en" or "fr").
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /timeseries
-#* @serializer csv
-function(req, res, lang = "en") {
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(req, res, lang = "en", format = NULL) {
   con <- try(
     YGwater::AquaConnect(
       username = req$user,
@@ -132,11 +137,12 @@ function(req, res, lang = "en") {
 
   if (inherits(con, "try-error")) {
     res$status <- 503
-    return(data.frame(
+    response <- data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -178,12 +184,13 @@ function(req, res, lang = "en") {
   } else if (lang == "fr") {
     "continuous.timeseries_metadata_fr"
   } else {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Invalid language parameter. Use 'en' or 'fr'.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
 
   sql <- sprintf(
@@ -191,20 +198,13 @@ function(req, res, lang = "en") {
        tm.*,
        ts.publicly_visible,
        ts.active,
-       ts.source_fx,
-       ts.source_fx_args::text AS source_fx_args,
-       ts.share_with,
        ts.default_owner AS default_owner_organization_id,
        org.name AS default_owner,
        org.name_fr AS default_owner_fr,
-       ts.default_data_sharing_agreement_id,
-       ts.private_expiry,
-       ts.sync_remote,
        ts.timezone_daily_calc,
        ts.last_daily_calculation,
        ts.last_synchronize,
        ts.matrix_state_id,
-       ms.matrix_state_code,
        ms.matrix_state_name,
        ms.matrix_state_name_fr,
        ts.sub_location_id,
@@ -238,15 +238,16 @@ function(req, res, lang = "en") {
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
-    return(data.frame(
+    res$setHeader("X-Status", "info")
+    response <- data.frame(
       status = "info",
       message = "No timeseries found in the database.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
 
-  return(out)
+  return(serialize_tabular(out, req, res, format))
 }
 
 
@@ -256,26 +257,38 @@ function(req, res, lang = "en") {
 #* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
 #* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @param modifiedSince Only return measurements created or modified since this ISO 8601 date/time.
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /timeseries/measurements
-#* @serializer csv
-function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(
+  req,
+  res,
+  id,
+  start,
+  end = NA,
+  limit = 100000,
+  modifiedSince = NA,
+  format = NULL
+) {
   if (missing(id)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Missing required 'id' parameter.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
 
   # Ensure start and end are provided and can be converted to POSIXct
   if (missing(start)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Missing required 'start' parameter.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   if (missing(end)) {
     end <- Sys.time()
@@ -284,20 +297,22 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
   end <- try(as.POSIXct(end, tz = "UTC"), silent = TRUE)
 
   if (inherits(start, "try-error") || is.na(start)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Invalid 'start' parameter. Must be in ISO 8601 format.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   if (inherits(end, "try-error") || is.na(end)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Invalid 'end' parameter. Must be in ISO 8601 format.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
 
   modified_since_missing <- missing(modifiedSince) ||
@@ -306,12 +321,13 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
   if (!modified_since_missing) {
     modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
     if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
-      res$headers[["X-Status"]] <- "error"
-      return(data.frame(
+      res$setHeader("X-Status", "error")
+      response <- data.frame(
         status = "error",
         message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
         stringsAsFactors = FALSE
-      ))
+      )
+      return(serialize_tabular(response, req, res, format))
     }
   } else {
     modifiedSince <- NULL
@@ -336,11 +352,12 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
 
   if (inherits(con, "try-error")) {
     res$status <- 503
-    return(data.frame(
+    response <- data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -349,19 +366,21 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
   id <- as.integer(id)
   id <- id[!is.na(id)]
   if (length(id) == 0) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Invalid 'id' parameter. Must contain at least one integer timeseries_id.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   include_private <- !request_cache_allowed(req)
   measurement_join_sql <- "
     LEFT JOIN LATERAL (
       SELECT
         g.grade_type_id,
-        gt.grade_type_code
+        gt.grade_type_code,
+        gt.grade_type_description
       FROM continuous.grades g
       LEFT JOIN public.grade_types gt
         ON g.grade_type_id = gt.grade_type_id
@@ -374,7 +393,8 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
     LEFT JOIN LATERAL (
       SELECT
         a.approval_type_id,
-        at.approval_type_code
+        at.approval_type_code,
+        at.approval_type_description
       FROM continuous.approvals a
       LEFT JOIN public.approval_types at
         ON a.approval_type_id = at.approval_type_id
@@ -393,11 +413,16 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
         string_agg(
           q.qualifier_type_code,
           ',' ORDER BY q.qualifier_type_id
-        ) AS qualifier_type_codes
+        ) AS qualifier_type_codes,
+        string_agg(
+          q.qualifier_type_description,
+          ',' ORDER BY q.qualifier_type_id
+        ) AS qualifier_type_descriptions
       FROM (
         SELECT DISTINCT ON (q.qualifier_type_id)
           q.qualifier_type_id,
-          qt.qualifier_type_code
+          qt.qualifier_type_code,
+          qt.qualifier_type_description
         FROM continuous.qualifiers q
         LEFT JOIN public.qualifier_types qt
           ON q.qualifier_type_id = qt.qualifier_type_id
@@ -444,10 +469,13 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
       m.modified,
       grade.grade_type_id,
       grade.grade_type_code,
+      grade.grade_type_description,
       approval.approval_type_id,
       approval.approval_type_code,
+      approval.approval_type_description,
       qualifier.qualifier_type_ids,
       qualifier.qualifier_type_codes,
+      qualifier.qualifier_type_descriptions,
       owner_range.owner_organization_id,
       owner_org.name AS owner,
       contributor_range.contributor_organization_id,
@@ -545,7 +573,6 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
              AND mc.datetime <= $2",
         basic_modified_filter_sql,
         "
-
            UNION ALL
 
            SELECT
@@ -582,7 +609,7 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
         "
          FROM measurement_rows m",
         measurement_join_sql,
-        "ORDER BY m.datetime DESC
+        "ORDER BY m.datetime ASC
          LIMIT %s"
       ),
       paste(id, collapse = ","),
@@ -592,20 +619,23 @@ function(req, res, id, start, end = NA, limit = 100000, modifiedSince = NA) {
   )
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
-    return(data.frame(
+    res$setHeader("X-Status", "info")
+    response <- data.frame(
       status = "info",
       message = "No measurements found for the specified timeseries and date range.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
-  return(out)
+
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' Return available parameters in the database
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /parameters
-#* @serializer csv
-function(req, res) {
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(req, res, format = NULL) {
   con <- try(
     YGwater::AquaConnect(
       username = req$user,
@@ -620,11 +650,12 @@ function(req, res) {
 
   if (inherits(con, "try-error")) {
     res$status <- 503
-    return(data.frame(
+    response <- data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -637,22 +668,24 @@ function(req, res) {
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
-    return(data.frame(
+    res$setHeader("X-Status", "info")
+    response <- data.frame(
       status = "info",
       message = "No parameters found in the database.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
 
-  return(out)
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' Return grade types in the database
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /grades
-#* @serializer csv
-function(req, res) {
-  api_lookup_query(
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(req, res, format = NULL) {
+  out <- api_lookup_query(
     req,
     res,
     "SELECT
@@ -665,13 +698,16 @@ function(req, res) {
      ORDER BY grade_type_id",
     "No grade types found in the database."
   )
+
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' Return approval types in the database
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /approvals
-#* @serializer csv
-function(req, res) {
-  api_lookup_query(
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(req, res, format = NULL) {
+  out <- api_lookup_query(
     req,
     res,
     "SELECT
@@ -684,13 +720,15 @@ function(req, res) {
      ORDER BY approval_type_id",
     "No approval types found in the database."
   )
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' Return qualifier types in the database
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /qualifiers
-#* @serializer csv
-function(req, res) {
-  api_lookup_query(
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(req, res, format = NULL) {
+  out <- api_lookup_query(
     req,
     res,
     "SELECT
@@ -703,13 +741,16 @@ function(req, res) {
      ORDER BY qualifier_type_id",
     "No qualifier types found in the database."
   )
+
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' Return organizations in the database
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /organizations
-#* @serializer csv
-function(req, res) {
-  api_lookup_query(
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(req, res, format = NULL) {
+  out <- api_lookup_query(
     req,
     res,
     "SELECT
@@ -724,6 +765,8 @@ function(req, res) {
      ORDER BY name, organization_id",
     "No organizations found in the database."
   )
+
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' Return sample metadata
@@ -732,17 +775,28 @@ function(req, res) {
 #* @param locations Location ID (optional, integer string separated by commas). If provided, filters samples to these locations.
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters samples to only those which include these parameters.
 #* @param modifiedSince Only return samples created or modified since this ISO 8601 date/time.
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /samples
-#* @serializer csv
-function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSince = NA) {
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(
+  req,
+  res,
+  start,
+  end = NA,
+  locations = NA,
+  parameters = NA,
+  modifiedSince = NA,
+  format = NULL
+) {
   # Ensure start and end are provided and can be converted to POSIXct
   if (missing(start)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Missing required 'start' parameter.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   if (missing(end)) {
     end <- Sys.time()
@@ -751,20 +805,22 @@ function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSin
   end <- try(as.POSIXct(end, tz = "UTC"), silent = TRUE)
 
   if (inherits(start, "try-error") || is.na(start)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Invalid 'start' parameter. Must be in ISO 8601 format.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   if (inherits(end, "try-error") || is.na(end)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Invalid 'end' parameter. Must be in ISO 8601 format.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   modified_since_missing <- missing(modifiedSince) ||
     length(modifiedSince) == 0L ||
@@ -772,12 +828,13 @@ function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSin
   if (!modified_since_missing) {
     modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
     if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
-      res$headers[["X-Status"]] <- "error"
-      return(data.frame(
+      res$setHeader("X-Status", "error")
+      response <- data.frame(
         status = "error",
         message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
         stringsAsFactors = FALSE
-      ))
+      )
+      return(serialize_tabular(response, req, res, format))
     }
   } else {
     modifiedSince <- NULL
@@ -797,11 +854,12 @@ function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSin
 
   if (inherits(con, "try-error")) {
     res$status <- 503
-    return(data.frame(
+    response <- data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -838,7 +896,7 @@ function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSin
     )
     query_params <- list(start, end, modifiedSince)
   }
-  sql <- paste0(sql, " ORDER BY sm.datetime DESC")
+  sql <- paste0(sql, " ORDER BY sm.datetime ASC")
 
   out <- DBI::dbGetQuery(
     con,
@@ -847,30 +905,40 @@ function(req, res, start, end = NA, locations = NA, parameters = NA, modifiedSin
   )
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
-    return(data.frame(
+    res$setHeader("X-Status", "info")
+    response <- data.frame(
       status = "info",
       message = "No samples found for the specified criteria.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
-  return(out)
+  return(serialize_tabular(out, req, res, format))
 }
 
 #' Return sample results
 #* @param sample_ids Sample ID (required, integer string separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
 #* @param modifiedSince Only return results created or modified since this ISO 8601 date/time.
+#* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /samples/results
-#* @serializer csv
-function(req, res, sample_ids, parameters = NA, modifiedSince = NA) {
+#* @serializer contentType list(type = "text/plain; charset=UTF-8")
+function(
+  req,
+  res,
+  sample_ids,
+  parameters = NA,
+  modifiedSince = NA,
+  format = NULL
+) {
   if (missing(sample_ids)) {
-    res$headers[["X-Status"]] <- "error"
-    return(data.frame(
+    res$setHeader("X-Status", "error")
+    response <- data.frame(
       status = "error",
       message = "Missing required 'sample_ids' parameter.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   con <- try(
     YGwater::AquaConnect(
@@ -886,11 +954,12 @@ function(req, res, sample_ids, parameters = NA, modifiedSince = NA) {
 
   if (inherits(con, "try-error")) {
     res$status <- 503
-    return(data.frame(
+    response <- data.frame(
       status = "error",
       message = "Database connection failed, check your credentials.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -901,12 +970,13 @@ function(req, res, sample_ids, parameters = NA, modifiedSince = NA) {
   if (!modified_since_missing) {
     modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
     if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
-      res$headers[["X-Status"]] <- "error"
-      return(data.frame(
+      res$setHeader("X-Status", "error")
+      response <- data.frame(
         status = "error",
         message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
         stringsAsFactors = FALSE
-      ))
+      )
+      return(serialize_tabular(response, req, res, format))
     }
   } else {
     modifiedSince <- NULL
@@ -946,14 +1016,15 @@ function(req, res, sample_ids, parameters = NA, modifiedSince = NA) {
   }
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
-    return(data.frame(
+    res$setHeader("X-Status", "info")
+    response <- data.frame(
       status = "info",
       message = "No results found for the specified sample ID and parameters.",
       stringsAsFactors = FALSE
-    ))
+    )
+    return(serialize_tabular(response, req, res, format))
   }
-  return(out)
+  return(serialize_tabular(out, req, res, format))
 }
 
 
@@ -1200,8 +1271,8 @@ function(
     )
   }
 
-  res$headers[["X-Map-Year"]] <- as.character(map_payload$year)
-  res$headers[["X-Map-Month"]] <- as.character(map_payload$month)
+  res$setHeader("X-Map-Year", as.character(map_payload$year))
+  res$setHeader("X-Map-Month", as.character(map_payload$month))
 
   map_payload$html
 }
@@ -1496,7 +1567,7 @@ function(req, res) {
 }
 
 # End point to pass postgres function get_csw_layer() output directly as CSV, as it comes out of the DB.
-#' Return CSW layer data
+#' Return CSW layer data (Geomatics Yukon specific)
 #* @get /csw-layer
 #* @serializer csv
 function(req, res) {
@@ -1525,7 +1596,7 @@ function(req, res) {
   out <- DBI::dbGetQuery(con, "SELECT * FROM public.get_csw_layer()")
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
+    res$setHeader("X-Status", "info")
     return(data.frame(
       status = "info",
       message = "No CSW layer data found in the database.",
@@ -1538,7 +1609,18 @@ function(req, res) {
 
 # Helper function to serialize data.frame to CSV with optional header lines
 csv_with_header <- function(df, header_lines = NULL) {
-  csv_lines <- capture.output(utils::write.csv(df, row.names = FALSE, na = ""))
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp), add = TRUE)
+
+  data.table::fwrite(
+    df,
+    file = tmp,
+    na = "",
+    quote = "auto",
+    dateTimeAs = "ISO"
+  )
+
+  csv_lines <- readLines(tmp, warn = FALSE)
 
   if (is.null(header_lines) || length(header_lines) == 0) {
     return(paste(csv_lines, collapse = "\n"))
@@ -1554,6 +1636,7 @@ csv_with_header <- function(df, header_lines = NULL) {
   paste(c(header_lines, csv_lines), collapse = "\n")
 }
 
+# Helper function to perform a database query for lookup tables (e.g. parameters, grade types) and handle connection and empty results uniformly
 api_lookup_query <- function(req, res, sql, empty_message) {
   con <- try(
     YGwater::AquaConnect(
@@ -1580,7 +1663,7 @@ api_lookup_query <- function(req, res, sql, empty_message) {
   out <- DBI::dbGetQuery(con, sql)
 
   if (nrow(out) == 0) {
-    res$headers[["X-Status"]] <- "info"
+    res$setHeader("X-Status", "info")
     return(data.frame(
       status = "info",
       message = empty_message,
@@ -1589,4 +1672,127 @@ api_lookup_query <- function(req, res, sql, empty_message) {
   }
 
   out
+}
+
+# Helper function to determine API response format based on query parameter or Accept header, defaulting to CSV for backward compatibility
+api_format <- function(req, res = NULL, format = NULL) {
+  format_supplied <- !is.null(format) && nzchar(format)
+  format <- tolower(format %||% "")
+
+  if (format_supplied && !format %in% c("json", "csv")) {
+    if (!is.null(res)) {
+      res$status <- 400
+    }
+    stop("Invalid format parameter. Use 'csv' or 'json'.", call. = FALSE)
+  }
+
+  if (format %in% c("json", "csv")) {
+    return(format)
+  }
+
+  accept <- req$HTTP_ACCEPT %||% ""
+
+  if (grepl("application/json", accept, ignore.case = TRUE)) {
+    return("json")
+  }
+
+  "csv"
+}
+
+# Clean up classes 'pq_text' and 'pq_jsonb' from RPostgres to ensure they serialize properly to JSON, converting arrays to lists and parsing JSON strings as needed
+clean_for_json <- function(x) {
+  if (!is.data.frame(x)) {
+    return(x)
+  }
+
+  x[] <- lapply(x, function(col) {
+    cls <- class(col)
+
+    # PostgreSQL array columns from RPostgres, e.g. pq__text
+    if (any(grepl("^pq__", cls))) {
+      return(lapply(col, function(v) {
+        if (is.null(v) || length(v) == 0L || all(is.na(v))) {
+          return(character(0))
+        }
+
+        as.character(v)
+      }))
+    }
+
+    # PostgreSQL json/jsonb columns from RPostgres
+    if (inherits(col, "pq_jsonb") || inherits(col, "pq_json")) {
+      return(lapply(col, function(v) {
+        if (is.null(v) || length(v) == 0L || all(is.na(v))) {
+          return(NULL)
+        }
+
+        if (!is.character(v)) {
+          return(v)
+        }
+
+        tryCatch(
+          jsonlite::fromJSON(v, simplifyVector = FALSE),
+          error = function(e) as.character(v)
+        )
+      }))
+    }
+
+    col
+  })
+
+  x
+}
+
+# Helper function to serialize tabular data to JSON or CSV based on request parameters and set appropriate Content-Type header
+serialize_tabular <- function(x, req, res, format = NULL) {
+  format <- tryCatch(
+    api_format(req = req, res = res, format = format),
+    error = function(e) {
+      res$status <- 400
+      res$setHeader("Content-Type", "application/json")
+      return("format_error")
+    }
+  )
+
+  if (identical(format, "format_error")) {
+    return(jsonlite::toJSON(
+      data.frame(
+        status = "error",
+        message = "Invalid format parameter. Use 'csv' or 'json'.",
+        stringsAsFactors = FALSE
+      ),
+      dataframe = "rows",
+      auto_unbox = TRUE
+    ))
+  }
+  if (format == "json") {
+    res$setHeader("Content-Type", "application/json")
+
+    x <- clean_for_json(x)
+
+    return(jsonlite::toJSON(
+      x,
+      dataframe = "rows",
+      na = "null",
+      null = "null",
+      POSIXt = "ISO8601",
+      pretty = FALSE,
+      auto_unbox = TRUE
+    ))
+  }
+
+  res$setHeader("Content-Type", "text/csv; charset=UTF-8")
+
+  tmp <- tempfile(fileext = ".csv")
+  on.exit(unlink(tmp), add = TRUE)
+
+  data.table::fwrite(
+    x,
+    file = tmp,
+    na = "",
+    quote = "auto",
+    dateTimeAs = "ISO"
+  )
+
+  paste(readLines(tmp, warn = FALSE), collapse = "\n")
 }
