@@ -95,7 +95,11 @@ api_run_with_httpuv_retry <- function(expr, env = parent.frame()) {
     eval(expr, envir = env),
     error = function(err) {
       if (
-        !grepl("Failed to create server", conditionMessage(err), fixed = TRUE) ||
+        !grepl(
+          "Failed to create server",
+          conditionMessage(err),
+          fixed = TRUE
+        ) ||
           !requireNamespace("httpuv", quietly = TRUE)
       ) {
         stop(err)
@@ -130,6 +134,7 @@ api_run_with_httpuv_retry <- function(expr, env = parent.frame()) {
 #' @param dbPort The port number of the PostgreSQL database. Default is taken from the environment variable 'aquacachePort'.
 #' @param dbUser The username for the PostgreSQL database. Default is taken from the environment variable 'aquacacheUser'.
 #' @param dbPass The password for the PostgreSQL database. Default is taken from the environment variable 'aquacachePass'.
+#' @param workers The number of worker processes to use for the API server. Default is parallel::detectCores(-2). This parameter is only applicable when using plumber2, as plumber v1 does not support multiple workers.
 #' @param run Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.
 #' @return Runs the API server.
 #' @export
@@ -154,6 +159,7 @@ api <- function(
   dbPort = Sys.getenv("aquacachePort"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
+  workers = parallel::detectCores(-2),
   run = TRUE
 ) {
   server_supplied <- !missing(server)
@@ -196,6 +202,8 @@ api <- function(
     if (!run) {
       return(pr)
     }
+
+    mirai::daemons(workers)
 
     return(api_run_with_httpuv_retry(
       plumber2::api_run(pr, host = host, port = port, silent = TRUE)
