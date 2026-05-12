@@ -1,3 +1,78 @@
+# Notably, most tests here exercise the plumber2 router via api(run = FALSE).
+# Tests for api.R are in tests/testthat/test-api.R
+
+# Helpers to test JSON responses
+content_text <- function(response) {
+  if (!is.null(response$body)) {
+    return(response$body)
+  }
+
+  httr::content(
+    response,
+    type = "text",
+    encoding = "UTF-8"
+  )
+}
+
+expect_content_type <- function(response, pattern) {
+  headers <- if (!is.null(response$headers)) {
+    response$headers
+  } else {
+    httr::headers(response)
+  }
+  content_type <- headers[[which(tolower(names(headers)) == "content-type")[1L]]]
+
+  expect_true(
+    grepl(pattern, content_type, ignore.case = TRUE),
+    info = paste("Unexpected Content-Type:", content_type)
+  )
+}
+
+response_status <- function(response) {
+  if (!is.null(response$status_code)) {
+    return(response$status_code)
+  }
+
+  response$status
+}
+
+parse_json_df <- function(response) {
+  text <- content_text(response)
+
+  expect_true(
+    jsonlite::validate(text),
+    info = text
+  )
+
+  out <- jsonlite::fromJSON(
+    text,
+    simplifyDataFrame = TRUE,
+    simplifyVector = TRUE
+  )
+
+  as.data.frame(out, stringsAsFactors = FALSE)
+}
+
+expect_json_df_response <- function(response, expected_names = NULL) {
+  expect_equal(response_status(response), 200)
+  expect_content_type(response, "application/json")
+
+  out <- parse_json_df(response)
+
+  expect_gt(nrow(out), 0)
+
+  if (!is.null(expected_names)) {
+    expect_named(out, expected_names)
+  }
+
+  out
+}
+
+v2_url_with_format <- function(url, format = "json") {
+  separator <- if (grepl("\\?", url)) "&" else "?"
+  paste0(url, separator, "format=", format)
+}
+
 v2_route_file <- function() {
   path <- YGwater:::api_find_target(2)$path
   if (dir.exists(path)) {
@@ -209,7 +284,7 @@ test_that("API V2 file cache reuses values and waits on in-flight work", {
   )
 })
 
-test_that("API V2 metadata and lookup endpoints return expected CSV", {
+test_that("API V2 metadata and lookup endpoints return expected CSV and JSON", {
   skip_if_not_installed("plumber2")
   skip_if_not_installed("reqres")
   skip_if_not_installed("promises")
@@ -235,108 +310,137 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
   }
 
   get_ts <- get_v2("http://example.com/timeseries")
+  get_ts_json <- get_v2("http://example.com/timeseries?format=json")
 
   expect_equal(get_ts$status, 200)
+  expect_equal(get_ts_json$status, 200)
 
   out <- read.csv(text = get_ts$body)
+  out_json <- parse_json_df(get_ts_json)
   out$end_datetime <- as.POSIXct(out$end_datetime, tz = "UTC")
   out$start_datetime <- as.POSIXct(out$start_datetime, tz = "UTC")
+  out_json$end_datetime <- as.POSIXct(out_json$end_datetime, tz = "UTC")
+  out_json$start_datetime <- as.POSIXct(out_json$start_datetime, tz = "UTC")
 
+  timeseries_names <- c(
+    "timeseries_id",
+    "location_id",
+    "location_name",
+    "location_type",
+    "alias_name",
+    "depth_height_m",
+    "latitude",
+    "longitude",
+    "location_elevation",
+    "projects",
+    "networks",
+    "media_type",
+    "parameter_name",
+    "units",
+    "aggregation_type",
+    "recording_rate",
+    "sensor_priority",
+    "start_datetime",
+    "end_datetime",
+    "note",
+    "timeseries_type_code",
+    "timeseries_type",
+    "timeseries_type_description",
+    "last_new_data",
+    "publicly_visible",
+    "active",
+    "default_owner_organization_id",
+    "default_owner",
+    "default_owner_fr",
+    "timezone_daily_calc",
+    "last_daily_calculation",
+    "last_synchronize",
+    "matrix_state_id",
+    "matrix_state_name",
+    "matrix_state_name_fr",
+    "sub_location_id",
+    "sub_location_name",
+    "sub_location_name_fr",
+    "compound_expression_sql",
+    "compound_member_aliases",
+    "compound_member_timeseries_ids",
+    "compound_member_priorities",
+    "compound_member_use_from",
+    "compound_member_use_to"
+  )
   expect_named(
     out,
-    c(
-      "timeseries_id",
-      "location_id",
-      "location_name",
-      "location_type",
-      "alias_name",
-      "depth_height_m",
-      "latitude",
-      "longitude",
-      "location_elevation",
-      "projects",
-      "networks",
-      "media_type",
-      "parameter_name",
-      "units",
-      "aggregation_type",
-      "recording_rate",
-      "sensor_priority",
-      "start_datetime",
-      "end_datetime",
-      "note",
-      "timeseries_type_code",
-      "timeseries_type",
-      "timeseries_type_description",
-      "last_new_data",
-      "publicly_visible",
-      "active",
-      "default_owner_organization_id",
-      "default_owner",
-      "default_owner_fr",
-      "timezone_daily_calc",
-      "last_daily_calculation",
-      "last_synchronize",
-      "matrix_state_id",
-      "matrix_state_name",
-      "matrix_state_name_fr",
-      "sub_location_id",
-      "sub_location_name",
-      "sub_location_name_fr",
-      "compound_expression_sql",
-      "compound_member_aliases",
-      "compound_member_timeseries_ids",
-      "compound_member_priorities",
-      "compound_member_use_from",
-      "compound_member_use_to"
-    )
+    timeseries_names
+  )
+  expect_named(
+    out_json,
+    timeseries_names
   )
   expect_gt(nrow(out), 0)
+  expect_gt(nrow(out_json), 0)
 
   get_locs <- get_v2("http://example.com/locations")
+  get_locs_json <- get_v2("http://example.com/locations?format=json")
 
   expect_equal(get_locs$status, 200)
+  expect_equal(get_locs_json$status, 200)
 
   locs <- read.csv(text = get_locs$body)
+  locs_json <- parse_json_df(get_locs_json)
 
+  location_names <- c(
+    "location_id",
+    "name",
+    "alias",
+    "location_code",
+    "location_type",
+    "latitude",
+    "longitude",
+    "elevation",
+    "datum",
+    "note",
+    "projects",
+    "networks",
+    "fn_names"
+  )
   expect_named(
     locs,
-    c(
-      "location_id",
-      "name",
-      "alias",
-      "location_code",
-      "location_type",
-      "latitude",
-      "longitude",
-      "elevation",
-      "datum",
-      "note",
-      "projects",
-      "networks",
-      "fn_names"
-    )
+    location_names
+  )
+  expect_named(
+    locs_json,
+    location_names
   )
   expect_gt(nrow(locs), 0)
+  expect_gt(nrow(locs_json), 0)
 
   get_parameters <- get_v2("http://example.com/parameters")
+  get_parameters_json <- get_v2("http://example.com/parameters?format=json")
 
   expect_equal(get_parameters$status, 200)
+  expect_equal(get_parameters_json$status, 200)
 
   parameters <- read.csv(text = get_parameters$body)
+  parameters_json <- parse_json_df(get_parameters_json)
 
+  parameter_names <- c(
+    "parameter_id",
+    "param_name",
+    "param_name_fr",
+    "description",
+    "description_fr",
+    "units"
+  )
   expect_named(
     parameters,
-    c(
-      "parameter_id",
-      "param_name",
-      "param_name_fr",
-      "description",
-      "description_fr",
-      "units"
-    )
+    parameter_names
+  )
+  expect_named(
+    parameters_json,
+    parameter_names
   )
   expect_gt(nrow(parameters), 0)
+  expect_gt(nrow(parameters_json), 0)
 
   lookup_endpoints <- list(
     grades = c(
@@ -373,13 +477,18 @@ test_that("API V2 metadata and lookup endpoints return expected CSV", {
 
   for (endpoint in names(lookup_endpoints)) {
     res <- get_v2(sprintf("http://example.com/%s", endpoint))
+    res_json <- get_v2(sprintf("http://example.com/%s?format=json", endpoint))
 
     expect_equal(res$status, 200)
+    expect_equal(res_json$status, 200)
 
     lookup <- read.csv(text = res$body)
+    lookup_json <- parse_json_df(res_json)
 
     expect_named(lookup, lookup_endpoints[[endpoint]])
+    expect_named(lookup_json, lookup_endpoints[[endpoint]])
     expect_gt(nrow(lookup), 0)
+    expect_gt(nrow(lookup_json), 0)
   }
 
   invalid_lang <- get_v2("http://example.com/locations?lang=es")
@@ -474,10 +583,17 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
   }
 
   get_samples <- get_v2(sample_url())
+  get_samples_json <- get_v2(v2_url_with_format(sample_url()))
 
   expect_equal(get_samples$status, 200)
+  expect_equal(get_samples_json$status, 200)
 
   samples <- read.csv(text = get_samples$body)
+  samples_json <- if (get_samples_json$status == 200L) {
+    parse_json_df(get_samples_json)
+  } else {
+    data.frame()
+  }
   if (
     identical(names(samples), c("status", "message")) &&
       identical(samples$status[1], "info")
@@ -496,13 +612,34 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
     ) %in%
       names(samples)
   ))
+  if (get_samples_json$status == 200L) {
+    expect_true(all(
+      c(
+        "sample_id",
+        "location_code",
+        "media_type",
+        "sample_type",
+        "created",
+        "modified"
+      ) %in%
+        names(samples_json)
+    ))
+    expect_gt(nrow(samples_json), 0)
+  }
 
   get_samples_since <- get_v2(sample_url(
     encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
   ))
+  get_samples_since_json <- get_v2(v2_url_with_format(sample_url(
+    encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
+  )))
 
   expect_equal(get_samples_since$status, 200)
+  expect_equal(get_samples_since_json$status, 200)
   expect_named(read.csv(text = get_samples_since$body), names(samples))
+  if (get_samples_since_json$status == 200L) {
+    expect_named(parse_json_df(get_samples_since_json), names(samples))
+  }
 
   sample_stamps <- row_stamp(samples)
   if (any(!is.na(sample_stamps))) {
@@ -524,13 +661,26 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
   get_samples_future <- get_v2(sample_url(
     encode_time(Sys.time() + 365 * 24 * 60 * 60)
   ))
+  get_samples_future_json <- get_v2(v2_url_with_format(sample_url(
+    encode_time(Sys.time() + 365 * 24 * 60 * 60)
+  )))
 
   expect_equal(get_samples_future$status, 200)
+  expect_equal(get_samples_future_json$status, 200)
 
   samples_future <- read.csv(text = get_samples_future$body)
+  samples_future_json <- if (get_samples_future_json$status == 200L) {
+    parse_json_df(get_samples_future_json)
+  } else {
+    data.frame()
+  }
 
   expect_equal(samples_future$status[1], "info")
   expect_match(samples_future$message[1], "No samples found")
+  if (get_samples_future_json$status == 200L) {
+    expect_equal(samples_future_json$status[1], "info")
+    expect_match(samples_future_json$message[1], "No samples found")
+  }
 
   invalid_samples_since <- get_v2(paste0(
     "http://example.com/samples",
@@ -557,10 +707,17 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
   }
 
   get_results <- get_v2(results_url())
+  get_results_json <- get_v2(v2_url_with_format(results_url()))
 
   expect_equal(get_results$status, 200)
+  expect_equal(get_results_json$status, 200)
 
   results <- read.csv(text = get_results$body)
+  results_json <- if (get_results_json$status == 200L) {
+    parse_json_df(get_results_json)
+  } else {
+    data.frame()
+  }
   if (
     identical(names(results), c("status", "message")) &&
       identical(results$status[1], "info")
@@ -581,13 +738,36 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
     ) %in%
       names(results)
   ))
+  if (get_results_json$status == 200L) {
+    expect_true(all(
+      c(
+        "result_id",
+        "sample_id",
+        "location_code",
+        "parameter_id",
+        "parameter_name",
+        "result",
+        "created",
+        "modified"
+      ) %in%
+        names(results_json)
+    ))
+    expect_gt(nrow(results_json), 0)
+  }
 
   get_results_since <- get_v2(results_url(
     encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
   ))
+  get_results_since_json <- get_v2(v2_url_with_format(results_url(
+    encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
+  )))
 
   expect_equal(get_results_since$status, 200)
+  expect_equal(get_results_since_json$status, 200)
   expect_named(read.csv(text = get_results_since$body), names(results))
+  if (get_results_since_json$status == 200L) {
+    expect_named(parse_json_df(get_results_since_json), names(results))
+  }
 
   result_stamps <- row_stamp(results)
   if (any(!is.na(result_stamps))) {
@@ -609,13 +789,26 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
   get_results_future <- get_v2(results_url(
     encode_time(Sys.time() + 365 * 24 * 60 * 60)
   ))
+  get_results_future_json <- get_v2(v2_url_with_format(results_url(
+    encode_time(Sys.time() + 365 * 24 * 60 * 60)
+  )))
 
   expect_equal(get_results_future$status, 200)
+  expect_equal(get_results_future_json$status, 200)
 
   results_future <- read.csv(text = get_results_future$body)
+  results_future_json <- if (get_results_future_json$status == 200L) {
+    parse_json_df(get_results_future_json)
+  } else {
+    data.frame()
+  }
 
   expect_equal(results_future$status[1], "info")
   expect_match(results_future$message[1], "No results found")
+  if (get_results_future_json$status == 200L) {
+    expect_equal(results_future_json$status[1], "info")
+    expect_match(results_future_json$message[1], "No results found")
+  }
 
   invalid_results_since <- get_v2(sprintf(
     "http://example.com/samples/results?sample_ids=%s&modifiedSince=not-a-date",
@@ -695,10 +888,17 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   }
 
   get_measurements <- get_v2(measurement_url())
+  get_measurements_json <- get_v2(v2_url_with_format(measurement_url()))
 
   expect_equal(get_measurements$status, 200)
+  expect_equal(get_measurements_json$status, 200)
 
   measurements <- read.csv(text = get_measurements$body)
+  measurements_json <- if (get_measurements_json$status == 200L) {
+    parse_json_df(get_measurements_json)
+  } else {
+    data.frame()
+  }
   if (
     identical(names(measurements), c("status", "message")) &&
       identical(measurements$status[1], "info")
@@ -709,12 +909,22 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   get_measurements_since <- get_v2(measurement_url(
     encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
   ))
+  get_measurements_since_json <- get_v2(v2_url_with_format(measurement_url(
+    encode_time(as.POSIXct("1900-01-01", tz = "UTC"))
+  )))
 
   expect_equal(get_measurements_since$status, 200)
+  expect_equal(get_measurements_since_json$status, 200)
   expect_named(
     read.csv(text = get_measurements_since$body),
     names(measurements)
   )
+  if (get_measurements_since_json$status == 200L) {
+    expect_named(
+      parse_json_df(get_measurements_since_json),
+      names(measurements)
+    )
+  }
 
   measurement_stamps <- measurement_stamp(measurements)
   if (any(!is.na(measurement_stamps))) {
@@ -759,30 +969,40 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
 
   expect_equal(invalid_modified_since$status, 400)
 
+  measurement_names <- c(
+    "timeseries_id",
+    "datetime",
+    "value_raw",
+    "value_corrected",
+    "period",
+    "imputed",
+    "created",
+    "modified",
+    "grade_type_id",
+    "grade_type_description",
+    "approval_type_id",
+    "approval_type_description",
+    "qualifier_type_ids",
+    "qualifier_type_descriptions",
+    "owner_organization_id",
+    "owner",
+    "contributor_organization_id",
+    "contributor"
+  )
   expect_named(
     measurements,
-    c(
-      "timeseries_id",
-      "datetime",
-      "value_raw",
-      "value_corrected",
-      "period",
-      "imputed",
-      "created",
-      "modified",
-      "grade_type_id",
-      "grade_type_description",
-      "approval_type_id",
-      "approval_type_description",
-      "qualifier_type_ids",
-      "qualifier_type_descriptions",
-      "owner_organization_id",
-      "owner",
-      "contributor_organization_id",
-      "contributor"
-    )
+    measurement_names
   )
+  if (get_measurements_json$status == 200L) {
+    expect_named(
+      measurements_json,
+      measurement_names
+    )
+  }
   expect_gt(nrow(measurements), 0)
+  if (get_measurements_json$status == 200L) {
+    expect_gt(nrow(measurements_json), 0)
+  }
 
   missing_id <- get_v2(
     "http://example.com/timeseries/measurements?start=2020-01-01"
