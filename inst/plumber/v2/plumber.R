@@ -1345,10 +1345,8 @@ function(client_id, query) {
     LEFT JOIN LATERAL (
       SELECT
         g.grade_type_id,
-        gt.grade_type_description
-      FROM continuous.grades g
-      LEFT JOIN public.grade_types gt
-        ON g.grade_type_id = gt.grade_type_id
+        g.grade_type_description
+      FROM grade_ranges g
       WHERE g.timeseries_id = m.timeseries_id
         AND g.start_dt <= m.datetime
         AND g.end_dt >= m.datetime
@@ -1358,10 +1356,8 @@ function(client_id, query) {
     LEFT JOIN LATERAL (
       SELECT
         a.approval_type_id,
-        at.approval_type_description
-      FROM continuous.approvals a
-      LEFT JOIN public.approval_types at
-        ON a.approval_type_id = at.approval_type_id
+        a.approval_type_description
+      FROM approval_ranges a
       WHERE a.timeseries_id = m.timeseries_id
         AND a.start_dt <= m.datetime
         AND a.end_dt >= m.datetime
@@ -1381,10 +1377,8 @@ function(client_id, query) {
       FROM (
         SELECT DISTINCT ON (q.qualifier_type_id)
           q.qualifier_type_id,
-          qt.qualifier_type_description
-        FROM continuous.qualifiers q
-        LEFT JOIN public.qualifier_types qt
-          ON q.qualifier_type_id = qt.qualifier_type_id
+          q.qualifier_type_description
+        FROM qualifier_ranges q
         WHERE q.timeseries_id = m.timeseries_id
           AND q.start_dt <= m.datetime
           AND q.end_dt >= m.datetime
@@ -1392,8 +1386,8 @@ function(client_id, query) {
       ) q
     ) qualifier ON TRUE
     LEFT JOIN LATERAL (
-      SELECT o.organization_id AS owner_organization_id
-      FROM continuous.owners o
+      SELECT o.owner_organization_id
+      FROM owner_ranges o
       WHERE o.timeseries_id = m.timeseries_id
         AND o.start_dt <= m.datetime
         AND o.end_dt >= m.datetime
@@ -1403,8 +1397,8 @@ function(client_id, query) {
     LEFT JOIN public.organizations owner_org
       ON owner_range.owner_organization_id = owner_org.organization_id
     LEFT JOIN LATERAL (
-      SELECT c.organization_id AS contributor_organization_id
-      FROM continuous.contributors c
+      SELECT c.contributor_organization_id
+      FROM contributor_ranges c
       WHERE c.timeseries_id = m.timeseries_id
         AND c.start_dt <= m.datetime
         AND c.end_dt >= m.datetime
@@ -1457,14 +1451,16 @@ function(client_id, query) {
     limit_param <- "$5"
   }
 
-  out <- DBI::dbGetQuery(
-    ctx$con,
-    sprintf(
-      paste0(
-        "WITH RECURSIVE requested_timeseries(timeseries_id) AS (
-           SELECT unnest(ARRAY[%s]::integer[])
+  # Apply common correction types set-wise and prefetch range metadata once per
+  # request. This avoids per-row correction function calls and repeated RLS work.
+  # timeseries_id is pasted into SQL only after conversion to integer.
+  sql <- paste0(
+    "WITH RECURSIVE requested_timeseries(timeseries_id) AS (
+           SELECT unnest(ARRAY[",
+    paste(ids, collapse = ","),
+    "]::integer[])
          ),
-         selected_timeseries AS (
+         selected_timeseries AS MATERIALIZED (
            SELECT
              ts.timeseries_id,
              ts.timeseries_type
@@ -1506,7 +1502,122 @@ function(client_id, query) {
            FROM timeseries_tree
            WHERE source_type = 'basic'
          ),
-         measurement_rows AS (
+         grade_ranges AS MATERIALIZED (
+           SELECT
+             g.timeseries_id,
+             g.start_dt,
+             g.end_dt,
+             g.grade_id,
+             g.grade_type_id,
+             gt.grade_type_description
+           FROM selected_timeseries st
+           JOIN continuous.grades g
+             ON g.timeseries_id = st.timeseries_id
+           LEFT JOIN public.grade_types gt
+             ON g.grade_type_id = gt.grade_type_id
+           WHERE g.start_dt <= $2
+             AND g.end_dt >= $1
+         ),
+         approval_ranges AS MATERIALIZED (
+           SELECT
+             a.timeseries_id,
+             a.start_dt,
+             a.end_dt,
+             a.approval_id,
+             a.approval_type_id,
+             at.approval_type_description
+           FROM selected_timeseries st
+           JOIN continuous.approvals a
+             ON a.timeseries_id = st.timeseries_id
+           LEFT JOIN public.approval_types at
+             ON a.approval_type_id = at.approval_type_id
+           WHERE a.start_dt <= $2
+             AND a.end_dt >= $1
+         ),
+         qualifier_ranges AS MATERIALIZED (
+           SELECT
+             q.timeseries_id,
+             q.start_dt,
+             q.end_dt,
+             q.qualifier_id,
+             q.qualifier_type_id,
+             qt.qualifier_type_description
+           FROM selected_timeseries st
+           JOIN continuous.qualifiers q
+             ON q.timeseries_id = st.timeseries_id
+           LEFT JOIN public.qualifier_types qt
+             ON q.qualifier_type_id = qt.qualifier_type_id
+           WHERE q.start_dt <= $2
+             AND q.end_dt >= $1
+         ),
+         owner_ranges AS MATERIALIZED (
+           SELECT
+             o.timeseries_id,
+             o.start_dt,
+             o.end_dt,
+             o.owner_id,
+             o.organization_id AS owner_organization_id
+           FROM selected_timeseries st
+           JOIN continuous.owners o
+             ON o.timeseries_id = st.timeseries_id
+           WHERE o.start_dt <= $2
+             AND o.end_dt >= $1
+         ),
+         contributor_ranges AS MATERIALIZED (
+           SELECT
+             c.timeseries_id,
+             c.start_dt,
+             c.end_dt,
+             c.contributor_id,
+             c.organization_id AS contributor_organization_id
+           FROM selected_timeseries st
+           JOIN continuous.contributors c
+             ON c.timeseries_id = st.timeseries_id
+           WHERE c.start_dt <= $2
+             AND c.end_dt >= $1
+         ),
+         basic_slow_correction_timeseries AS MATERIALIZED (
+           SELECT DISTINCT c.timeseries_id
+           FROM selected_timeseries st
+           JOIN continuous.corrections c
+             ON c.timeseries_id = st.timeseries_id
+           JOIN continuous.correction_types ct
+             ON c.correction_type = ct.correction_type_id
+           WHERE st.timeseries_type = 'basic'
+             AND c.start_dt <= $2
+             AND c.end_dt >= $1
+             AND ct.correction_type NOT IN (
+               'delete',
+               'trim',
+               'offset linear',
+               'offset two-point',
+               'scale',
+               'drift linear'
+             )
+         ),
+         basic_measurements_fast AS MATERIALIZED (
+           SELECT
+             mc.timeseries_id,
+             mc.datetime,
+             mc.value AS value_raw,
+             mc.value AS value_corrected,
+             mc.period,
+             mc.imputed,
+             mc.created,
+             mc.modified
+           FROM selected_timeseries st
+           JOIN continuous.measurements_continuous mc
+             ON st.timeseries_id = mc.timeseries_id
+           LEFT JOIN basic_slow_correction_timeseries slow
+             ON slow.timeseries_id = st.timeseries_id
+           WHERE st.timeseries_type = 'basic'
+             AND slow.timeseries_id IS NULL
+             AND mc.datetime >= $1
+             AND mc.datetime <= $2",
+         basic_modified_filter_sql,
+         "
+         ),
+         basic_measurements_slow AS MATERIALIZED (
            SELECT
              mc.timeseries_id,
              mc.datetime,
@@ -1521,13 +1632,150 @@ function(client_id, query) {
              mc.created,
              mc.modified
            FROM selected_timeseries st
+           JOIN basic_slow_correction_timeseries slow
+             ON slow.timeseries_id = st.timeseries_id
            JOIN continuous.measurements_continuous mc
              ON st.timeseries_id = mc.timeseries_id
            WHERE st.timeseries_type = 'basic'
              AND mc.datetime >= $1
              AND mc.datetime <= $2",
-        basic_modified_filter_sql,
-        "
+         basic_modified_filter_sql,
+         "
+         ),
+         basic_corrections AS MATERIALIZED (
+           SELECT
+             c.timeseries_id,
+             row_number() OVER (
+               PARTITION BY c.timeseries_id
+               ORDER BY ct.priority ASC, c.correction_id ASC
+             ) AS correction_step,
+             c.start_dt,
+             c.end_dt,
+             c.value1,
+             c.value2,
+             c.timestep_window,
+             ct.correction_type
+           FROM selected_timeseries st
+           JOIN continuous.corrections c
+             ON c.timeseries_id = st.timeseries_id
+           JOIN continuous.correction_types ct
+             ON c.correction_type = ct.correction_type_id
+           LEFT JOIN basic_slow_correction_timeseries slow
+             ON slow.timeseries_id = st.timeseries_id
+           WHERE st.timeseries_type = 'basic'
+             AND slow.timeseries_id IS NULL
+             AND c.start_dt <= $2
+             AND c.end_dt >= $1
+         ),
+         basic_correction_counts AS MATERIALIZED (
+           SELECT
+             timeseries_id,
+             count(*)::integer AS correction_count
+           FROM basic_corrections
+           GROUP BY timeseries_id
+         ),
+         basic_corrected_recursive AS (
+           SELECT
+             0::integer AS correction_step,
+             m.timeseries_id,
+             m.datetime,
+             m.value_raw,
+             m.value_corrected,
+             m.period,
+             m.imputed,
+             m.created,
+             m.modified
+           FROM basic_measurements_fast m
+
+           UNION ALL
+
+           SELECT
+             c.correction_step::integer,
+             r.timeseries_id,
+             r.datetime,
+             r.value_raw,
+             CASE
+               WHEN r.value_corrected IS NULL THEN NULL
+               WHEN NOT (
+                 c.start_dt <= r.datetime
+                 AND c.end_dt >= r.datetime
+               ) THEN r.value_corrected
+               WHEN c.correction_type = 'delete' THEN NULL
+               WHEN c.correction_type = 'trim' THEN
+                 CASE
+                   WHEN c.value1 IS NOT NULL
+                     AND r.value_corrected < c.value1 THEN NULL
+                   WHEN c.value2 IS NOT NULL
+                     AND r.value_corrected > c.value2 THEN NULL
+                   ELSE r.value_corrected
+                 END
+               WHEN c.correction_type = 'offset linear' THEN
+                 r.value_corrected + c.value1
+               WHEN c.correction_type = 'offset two-point' THEN
+                 r.value_corrected + c.value1 + (
+                   (c.value2 - c.value1) /
+                   EXTRACT(EPOCH FROM (c.end_dt - c.start_dt)) *
+                   EXTRACT(EPOCH FROM (r.datetime - c.start_dt))
+                 )
+               WHEN c.correction_type = 'scale' THEN
+                 r.value_corrected * (c.value1 / 100.0)
+               WHEN c.correction_type = 'drift linear' THEN
+                 r.value_corrected + (
+                   c.value1 /
+                   EXTRACT(EPOCH FROM c.timestep_window) *
+                   EXTRACT(EPOCH FROM (r.datetime - c.start_dt))
+                 )
+               ELSE r.value_corrected
+             END AS value_corrected,
+             r.period,
+             r.imputed,
+             r.created,
+             r.modified
+           FROM basic_corrected_recursive r
+           JOIN basic_corrections c
+             ON c.timeseries_id = r.timeseries_id
+            AND c.correction_step = r.correction_step + 1
+         ),
+         basic_corrected_measurements AS MATERIALIZED (
+           SELECT
+             r.timeseries_id,
+             r.datetime,
+             r.value_raw,
+             r.value_corrected,
+             r.period,
+             r.imputed,
+             r.created,
+             r.modified
+           FROM basic_corrected_recursive r
+           LEFT JOIN basic_correction_counts c
+             ON c.timeseries_id = r.timeseries_id
+           WHERE r.correction_step = COALESCE(c.correction_count, 0)
+         ),
+         measurement_rows AS MATERIALIZED (
+           SELECT
+             timeseries_id,
+             datetime,
+             value_raw,
+             value_corrected,
+             period,
+             imputed,
+             created,
+             modified
+           FROM basic_corrected_measurements
+
+           UNION ALL
+
+           SELECT
+             timeseries_id,
+             datetime,
+             value_raw,
+             value_corrected,
+             period,
+             imputed,
+             created,
+             modified
+           FROM basic_measurements_slow
+
 
            UNION ALL
 
@@ -1566,11 +1814,12 @@ function(client_id, query) {
          FROM measurement_rows m",
         measurement_join_sql,
         "ORDER BY m.datetime ASC
-         LIMIT %s"
-      ),
-      paste(ids, collapse = ","),
-      limit_param
-    ),
+         LIMIT ",
+    limit_param
+  )
+  out <- DBI::dbGetQuery(
+    ctx$con,
+    sql,
     params = query_params
   )
 
