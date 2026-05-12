@@ -1061,6 +1061,47 @@ build_target_gauge_station_export <- function(
     station_status_table <- target_context$station_status_table
     route_table <- target_context$target_gauge_route_table
     target_gauges <- target_context$target_gauges
+    target_gauge <- target_context$target_gauge
+
+    if (is.null(station_status_table) || nrow(station_status_table) == 0) {
+        station_status_table <- data.frame(
+            name = character(),
+            location_code = character(),
+            location_id = integer(),
+            station_status = integer(),
+            stringsAsFactors = FALSE
+        )
+    }
+
+    # Always include the active target gauge and always force its encoding to 0.
+    # This prevents the target from being dropped by monitoring-data filters.
+    if (!is.null(target_gauge) && nrow(target_gauge) > 0) {
+        target_rows <- data.frame(
+            name = as.character(target_gauge$name),
+            location_code = as.character(target_gauge$location_code),
+            location_id = as.integer(target_gauge$location_id),
+            station_status = 0L,
+            stringsAsFactors = FALSE
+        )
+
+        target_keys <- paste0(
+            target_rows$location_code,
+            "::",
+            target_rows$location_id
+        )
+        station_keys <- paste0(
+            as.character(station_status_table$location_code),
+            "::",
+            as.integer(station_status_table$location_id)
+        )
+
+        station_status_table <- station_status_table[
+            !(station_keys %in% target_keys),
+            ,
+            drop = FALSE
+        ]
+        station_status_table <- unique(rbind(station_status_table, target_rows))
+    }
 
     lapply(seq_len(nrow(station_status_table)), function(row_index) {
         station_row <- station_status_table[row_index, , drop = FALSE]

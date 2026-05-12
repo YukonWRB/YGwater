@@ -60,7 +60,7 @@ floodDashboardUIMod <- function(id) {
             paste0(
                 "#",
                 ns("controls"),
-                " .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 7rem 9rem; justify-content:start; align-items:end; }"
+                " .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 12rem 7rem 9rem; justify-content:start; align-items:end; }"
             ),
             paste0(
                 "#",
@@ -197,6 +197,15 @@ floodDashboardUIMod <- function(id) {
                                 label = "Community",
                                 choices = character(0),
                                 selected = NULL
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::checkboxInput(
+                                inputId = ns("filter_upstream_gauges"),
+                                label = "Filter upstream gauges",
+                                value = FALSE,
+                                width = NULL
                             )
                         ),
                         shiny::tags$div(
@@ -655,16 +664,23 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         }
 
         for (col_name in intersect(time_columns, names(dat))) {
-            local_text <- if (
-                inherits(dat[[col_name]], c("POSIXct", "POSIXt"))
-            ) {
-                format(
-                    dat[[col_name]],
-                    "%Y-%m-%d %H:%M:%S",
-                    tz = fixed_timezone
-                )
+            if (inherits(dat[[col_name]], c("POSIXct", "POSIXt"))) {
+                existing_tz <- attr(dat[[col_name]], "tzone")
+                if (
+                    length(existing_tz) > 0 &&
+                        is.character(existing_tz[[1]]) &&
+                        nzchar(existing_tz[[1]]) &&
+                        identical(existing_tz[[1]], fixed_timezone)
+                ) {
+                    next
+                }
+                # Preserve the instant and only change display timezone.
+                x <- dat[[col_name]]
+                attr(x, "tzone") <- fixed_timezone
+                dat[[col_name]] <- x
+                next
             } else {
-                as.character(dat[[col_name]])
+                local_text <- as.character(dat[[col_name]])
             }
 
             x <- suppressWarnings(as.POSIXct(
@@ -4020,6 +4036,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
         })
 
+        filtered_summary_data <- shiny::reactive({
+            dat <- safe_summary_data()
+            if (is.null(dat) || nrow(dat) == 0) {
+                return(dat)
+            }
+
+            if (isTRUE(input$filter_upstream_gauges)) {
+                upstream_mask <- !is.na(dat$encoding) &
+                    suppressWarnings(as.integer(dat$encoding)) == 2L
+                dat <- dat[!upstream_mask, , drop = FALSE]
+            }
+
+            dat
+        })
+
         available_primary_stations <- shiny::reactive({
             dat <- community_locations()
             if (is.null(dat) || nrow(dat) == 0) {
@@ -4874,6 +4905,65 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             map <- leaflet::leaflet() %>%
                 leaflet::addProviderTiles("CartoDB.Positron")
 
+            map_primary_selection_input <- session$ns("map_primary_selection")
+
+            popup_parameter_order <- c(
+                "water level",
+                "water flow",
+                "precipitation (1wk)",
+                "precipitation (24hr)",
+                "temperature, air",
+                "snow water eq (survey)",
+                "snow depth (survey)"
+            )
+
+            build_popup_parameter_links <- function(
+                station_code,
+                station_location_id,
+                parameter_location_id_map
+            ) {
+                available_parameters <- popup_parameter_order[vapply(
+                    popup_parameter_order,
+                    function(parameter_name) {
+                        station_location_id %in%
+                            (parameter_location_id_map[[parameter_name]] %||%
+                                integer(0))
+                    },
+                    logical(1)
+                )]
+
+                if (length(available_parameters) == 0) {
+                    return("<em>No supported parameters</em>")
+                }
+
+                parameter_links <- vapply(
+                    available_parameters,
+                    function(parameter_name) {
+                        payload <- jsonlite::toJSON(
+                            list(
+                                station = as.character(station_code),
+                                parameter = as.character(parameter_name)
+                            ),
+                            auto_unbox = TRUE
+                        )
+
+                        sprintf(
+                            paste0(
+                                "<a href='#' onclick='",
+                                "Shiny.setInputValue(\"%s\", %s, {priority:\"event\"});",
+                                " return false;'>%s</a>"
+                            ),
+                            map_primary_selection_input,
+                            payload,
+                            htmltools::htmlEscape(parameter_name)
+                        )
+                    },
+                    character(1)
+                )
+
+                paste(parameter_links, collapse = "<br/>")
+            }
+
             if (nrow(dat) > 0) {
                 location_ids_all <- unique(stats::na.omit(as.integer(
                     dat$location_id
@@ -4885,8 +4975,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     location_codes_all
                 )]
 
-                hydro_ids <- unique(c(
-                    tryCatch(
+                parameter_location_id_map <- list(
+                    "water level" = tryCatch(
                         get_location_ids_with_parameter(
                             location_ids = location_ids_all,
                             parameter = "water level",
@@ -4894,21 +4984,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         ),
                         error = function(e) integer(0)
                     ),
-                    tryCatch(
+                    "water flow" = tryCatch(
                         get_location_ids_with_parameter(
                             location_ids = location_ids_all,
                             parameter = "water flow",
                             con = con
                         ),
                         error = function(e) integer(0)
-                    )
-                ))
-                hydro_codes <- unique(dat$location_code[
-                    dat$location_id %in% hydro_ids
-                ])
-
-                met_ids <- unique(c(
-                    tryCatch(
+                    ),
+                    "precipitation (1wk)" = tryCatch(
                         get_location_ids_with_parameter(
                             location_ids = location_ids_all,
                             parameter = "precipitation (1wk)",
@@ -4916,7 +5000,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         ),
                         error = function(e) integer(0)
                     ),
-                    tryCatch(
+                    "precipitation (24hr)" = tryCatch(
                         get_location_ids_with_parameter(
                             location_ids = location_ids_all,
                             parameter = "precipitation (24hr)",
@@ -4924,41 +5008,66 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         ),
                         error = function(e) integer(0)
                     ),
-                    tryCatch(
+                    "temperature, air" = tryCatch(
                         get_location_ids_with_parameter(
                             location_ids = location_ids_all,
                             parameter = "temperature, air",
                             con = con
                         ),
                         error = function(e) integer(0)
+                    ),
+                    "snow water eq (survey)" = tryCatch(
+                        as.integer(
+                            get_snow_survey_summary(
+                                location_codes = location_codes_all,
+                                parameter = "snow water eq (survey)",
+                                con = con
+                            )$location_id
+                        ),
+                        error = function(e) integer(0)
+                    ),
+                    "snow depth (survey)" = tryCatch(
+                        as.integer(
+                            get_snow_survey_summary(
+                                location_codes = location_codes_all,
+                                parameter = "snow depth (survey)",
+                                con = con
+                            )$location_id
+                        ),
+                        error = function(e) integer(0)
                     )
+                )
+
+                hydro_ids <- unique(unlist(
+                    parameter_location_id_map[c("water level", "water flow")],
+                    use.names = FALSE
+                ))
+                hydro_codes <- unique(dat$location_code[
+                    dat$location_id %in% hydro_ids
+                ])
+
+                met_ids <- unique(unlist(
+                    parameter_location_id_map[c(
+                        "precipitation (1wk)",
+                        "precipitation (24hr)",
+                        "temperature, air"
+                    )],
+                    use.names = FALSE
                 ))
                 met_codes <- unique(dat$location_code[
                     dat$location_id %in% met_ids
                 ])
 
-                snow_codes <- unique(c(
-                    tryCatch(
-                        as.character(
-                            get_snow_survey_summary(
-                                location_codes = location_codes_all,
-                                parameter = "snow water eq (survey)",
-                                con = con
-                            )$location_code
-                        ),
-                        error = function(e) character(0)
-                    ),
-                    tryCatch(
-                        as.character(
-                            get_snow_survey_summary(
-                                location_codes = location_codes_all,
-                                parameter = "snow depth (survey)",
-                                con = con
-                            )$location_code
-                        ),
-                        error = function(e) character(0)
-                    )
+                snow_ids <- unique(unlist(
+                    parameter_location_id_map[c(
+                        "snow water eq (survey)",
+                        "snow depth (survey)"
+                    )],
+                    use.names = FALSE
                 ))
+                snow_codes <- unique(dat$location_code[
+                    dat$location_id %in% snow_ids
+                ])
 
                 dat$has_hydro <- dat$location_code %in% hydro_codes
                 dat$has_met <- dat$location_code %in% met_codes
@@ -5030,15 +5139,33 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 dat$station_color[is.na(dat$station_color)] <- basin_colors[[
                     "Other"
                 ]]
+                upstream_mask <- !is.na(dat$encoding) &
+                    suppressWarnings(as.integer(dat$encoding)) == 2L
+                dat$station_color[upstream_mask] <- "#9ca3af"
+                dat$parameter_links_html <- vapply(
+                    seq_len(nrow(dat)),
+                    function(i) {
+                        build_popup_parameter_links(
+                            station_code = dat$station_code[[i]],
+                            station_location_id = as.integer(
+                                dat$location_id[[i]]
+                            ),
+                            parameter_location_id_map = parameter_location_id_map
+                        )
+                    },
+                    character(1)
+                )
                 dat$popup_html <- sprintf(
                     paste0(
                         "<strong>Station name:</strong> %s",
                         "<br/><strong>Location code:</strong> %s",
-                        "<br/><strong>Type:</strong> %s"
+                        "<br/><strong>Type:</strong> %s",
+                        "<br/><strong>Parameters:</strong><br/>%s"
                     ),
                     htmltools::htmlEscape(dat$station_name),
                     htmltools::htmlEscape(dat$station_code),
-                    htmltools::htmlEscape(dat$station_type)
+                    htmltools::htmlEscape(dat$station_type),
+                    dat$parameter_links_html
                 )
 
                 map <- leaflet::addCircleMarkers(
@@ -5227,6 +5354,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             legend_html <- paste0(
                 "<div style='background:rgba(255,255,255,0.95); padding:8px 10px; border-radius:6px; border:1px solid #d1d5db; font-size:12px; line-height:1.35;'>",
                 "<div style='font-weight:600; margin-bottom:6px;'>Legend</div>",
+                "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#9ca3af; border:1px solid #6b7280; margin-right:6px;'></span>Upstream gauge (encoding 2)</div>",
                 "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#2563eb; border:1px solid #1e3a8a; margin-right:6px;'></span>Hydrometric</div>",
                 "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#16a34a; border:1px solid #166534; margin-right:6px;'></span>Meteorological</div>",
                 "<div style='display:flex; align-items:center; margin-bottom:4px;'><span style='display:inline-block; width:10px; height:10px; border-radius:50%; background:#d97706; border:1px solid #92400e; margin-right:6px;'></span>Snow survey</div>",
@@ -5280,8 +5408,43 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             suspendWhenHidden = FALSE
         )
 
+        shiny::observeEvent(
+            input$map_primary_selection,
+            {
+                selection <- input$map_primary_selection
+
+                if (
+                    is.null(selection) ||
+                        is.null(selection$station) ||
+                        is.null(selection$parameter)
+                ) {
+                    return()
+                }
+
+                selected_station <- as.character(selection$station %||% "")
+                selected_parameter <- as.character(selection$parameter %||% "")
+
+                if (!nzchar(selected_station) || !nzchar(selected_parameter)) {
+                    return()
+                }
+
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "parameter",
+                    selected = selected_parameter
+                )
+
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "station",
+                    selected = selected_station
+                )
+            },
+            ignoreInit = TRUE
+        )
+
         output$summary_table <- DT::renderDT({
-            dat <- safe_summary_data()
+            dat <- filtered_summary_data()
             use_relative <- isTRUE(input$summary_relative)
 
             if (is.null(dat) || nrow(dat) == 0) {
@@ -5436,7 +5599,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         # Table row selection -> update station selectize
         shiny::observe({
             row_idx <- input$summary_table_rows_selected
-            dat <- safe_summary_data()
+            dat <- filtered_summary_data()
             if (is.null(dat) || nrow(dat) == 0 || is.null(row_idx)) {
                 return()
             }
@@ -5456,7 +5619,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         # Station selectize -> highlight matching table row
         shiny::observe({
             code <- input$station
-            dat <- safe_summary_data()
+            dat <- filtered_summary_data()
             if (
                 is.null(dat) || nrow(dat) == 0 || is.null(code) || !nzchar(code)
             ) {
@@ -6277,6 +6440,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                         datetime = c(box_start, box_end),
                                         ymin = c(y0, y0),
                                         ymax = c(y1, y1),
+                                        band_low = c(y0, y0),
+                                        band_high = c(y1, y1),
                                         stringsAsFactors = FALSE
                                     )
                                     p <- p %>%
@@ -6288,9 +6453,23 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                             yaxis = "y",
                                             name = .band$name,
                                             legendrank = .band$rank,
+                                            customdata = ~ paste0(
+                                                "Low: ",
+                                                formatC(
+                                                    band_low,
+                                                    format = "f",
+                                                    digits = 3
+                                                ),
+                                                "<br>High: ",
+                                                formatC(
+                                                    band_high,
+                                                    format = "f",
+                                                    digits = 3
+                                                )
+                                            ),
                                             hovertemplate = paste0(
                                                 .band$name,
-                                                "<extra></extra>"
+                                                "<br>%{customdata}<extra></extra>"
                                             ),
                                             fillcolor = .band$color,
                                             line = list(color = "transparent"),
@@ -6310,7 +6489,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     yaxis = "y",
                                     name = "P0-P10",
                                     legendrank = 80,
-                                    hovertemplate = "P0-P10<extra></extra>",
+                                    customdata = ~ paste0(
+                                        "Low: ",
+                                        formatC(p0, format = "f", digits = 3),
+                                        "<br>High: ",
+                                        formatC(p10, format = "f", digits = 3)
+                                    ),
+                                    hovertemplate = "P0-P10<br>%{customdata}<extra></extra>",
                                     fillcolor = "rgba(127, 29, 29, 0.3)",
                                     line = list(color = "transparent"),
                                     connectgaps = FALSE,
@@ -6324,7 +6509,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     yaxis = "y",
                                     name = "P10-P25",
                                     legendrank = 70,
-                                    hovertemplate = "P10-P25<extra></extra>",
+                                    customdata = ~ paste0(
+                                        "Low: ",
+                                        formatC(p10, format = "f", digits = 3),
+                                        "<br>High: ",
+                                        formatC(p25, format = "f", digits = 3)
+                                    ),
+                                    hovertemplate = "P10-P25<br>%{customdata}<extra></extra>",
                                     fillcolor = "rgba(180, 83, 9, 0.3)",
                                     line = list(color = "transparent"),
                                     connectgaps = FALSE,
@@ -6338,7 +6529,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     yaxis = "y",
                                     name = "P25-P50",
                                     legendrank = 60,
-                                    hovertemplate = "P25-P50<extra></extra>",
+                                    customdata = ~ paste0(
+                                        "Low: ",
+                                        formatC(p25, format = "f", digits = 3),
+                                        "<br>High: ",
+                                        formatC(p50, format = "f", digits = 3)
+                                    ),
+                                    hovertemplate = "P25-P50<br>%{customdata}<extra></extra>",
                                     fillcolor = "rgba(245, 158, 11, 0.3)",
                                     line = list(color = "transparent"),
                                     connectgaps = FALSE,
@@ -6352,7 +6549,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     yaxis = "y",
                                     name = "P50-P75",
                                     legendrank = 50,
-                                    hovertemplate = "P50-P75<extra></extra>",
+                                    customdata = ~ paste0(
+                                        "Low: ",
+                                        formatC(p50, format = "f", digits = 3),
+                                        "<br>High: ",
+                                        formatC(p75, format = "f", digits = 3)
+                                    ),
+                                    hovertemplate = "P50-P75<br>%{customdata}<extra></extra>",
                                     fillcolor = "rgba(163, 230, 53, 0.3)",
                                     line = list(color = "transparent"),
                                     connectgaps = FALSE,
@@ -6366,7 +6569,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     yaxis = "y",
                                     name = "P75-P90",
                                     legendrank = 40,
-                                    hovertemplate = "P75-P90<extra></extra>",
+                                    customdata = ~ paste0(
+                                        "Low: ",
+                                        formatC(p75, format = "f", digits = 3),
+                                        "<br>High: ",
+                                        formatC(p90, format = "f", digits = 3)
+                                    ),
+                                    hovertemplate = "P75-P90<br>%{customdata}<extra></extra>",
                                     fillcolor = "rgba(34, 197, 94, 0.3)",
                                     line = list(color = "transparent"),
                                     connectgaps = FALSE,
@@ -6380,7 +6589,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     yaxis = "y",
                                     name = "P90-P100",
                                     legendrank = 30,
-                                    hovertemplate = "P90-P100<extra></extra>",
+                                    customdata = ~ paste0(
+                                        "Low: ",
+                                        formatC(p90, format = "f", digits = 3),
+                                        "<br>High: ",
+                                        formatC(p100, format = "f", digits = 3)
+                                    ),
+                                    hovertemplate = "P90-P100<br>%{customdata}<extra></extra>",
                                     fillcolor = "rgba(15, 118, 110, 0.3)",
                                     line = list(color = "transparent"),
                                     connectgaps = FALSE,
