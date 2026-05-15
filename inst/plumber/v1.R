@@ -242,13 +242,19 @@ function(req, res, id, start, end = NA, limit = 100000) {
   # Break id apart by comma and convert to integer vector
   id <- unlist(strsplit(id, ","))
   id <- as.integer(id)
+  id <- id[!is.na(id)]
+  if (length(id) == 0) {
+    res$headers[["X-Status"]] <- "error"
+    return(data.frame(
+      status = "error",
+      message = "Invalid 'id' parameter. Must contain at least one integer timeseries_id.",
+      stringsAsFactors = FALSE
+    ))
+  }
   if (length(id) == 1) {
     out <- DBI::dbGetQuery(
       con,
-      "SELECT * FROM continuous.measurements_continuous_corrected 
-      WHERE timeseries_id = $1 
-      AND datetime >= $2 
-      AND datetime <= $3 
+      "SELECT * FROM continuous.measurements_continuous_corrected($1, $2, $3)
       ORDER BY datetime DESC
       LIMIT $4",
       params = list(as.integer(id), start, end, lim)
@@ -260,12 +266,18 @@ function(req, res, id, start, end = NA, limit = 100000) {
     out <- DBI::dbGetQuery(
       con,
       sprintf(
-        "SELECT * FROM continuous.measurements_continuous_corrected 
-          WHERE timeseries_id IN (%s) 
-          AND datetime >= $1 
-          AND datetime <= $2 
-          ORDER BY datetime DESC
-          LIMIT $3",
+        "WITH requested_timeseries(timeseries_id) AS (
+           SELECT unnest(ARRAY[%s]::integer[])
+         )
+         SELECT m.*
+         FROM requested_timeseries r
+         JOIN LATERAL continuous.measurements_continuous_corrected(
+           r.timeseries_id,
+           $1,
+           $2
+         ) m ON TRUE
+         ORDER BY m.datetime DESC
+         LIMIT $3",
         ids
       ),
       params = list(start, end, lim)

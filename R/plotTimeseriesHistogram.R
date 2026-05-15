@@ -344,14 +344,18 @@ plotTimeseriesHistogram <- function(
   bin_windows <- build_bin_windows(season_windows)
 
   if (is.null(as_of)) {
-    source_sql <- "continuous.measurements_continuous_corrected"
-    query_params <- list(timeseries_id)
-    next_param <- 2L
+    source_sql <- "continuous.measurements_continuous_corrected($1, $2, $3)"
+    query_params <- list(
+      timeseries_id,
+      min(season_windows$season_start_utc),
+      max(season_windows$season_end_utc)
+    )
+    next_param <- 4L
   } else {
     source_sql <- paste(
       "continuous.measurements_continuous_corrected_at(",
       "  $1,",
-      "  ARRAY[$2]::INTEGER[],",
+      "  $2,",
       "  $3,",
       "  $4",
       ")"
@@ -379,11 +383,7 @@ plotTimeseriesHistogram <- function(
     next_param <- next_param + 2L
   }
 
-  where_sql <- if (is.null(as_of)) {
-    paste0("m.timeseries_id = $1 AND (", paste(sql_windows, collapse = " OR "), ")")
-  } else {
-    paste(sql_windows, collapse = " OR ")
-  }
+  where_sql <- paste(sql_windows, collapse = " OR ")
 
   sql <- paste0(
     "SELECT m.datetime, m.value_corrected AS value

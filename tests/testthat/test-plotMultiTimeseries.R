@@ -46,6 +46,23 @@ test_that("plotMultiTimeseries returns data as expected", {
   )
 })
 
+test_that("plotMultiTimeseries subplots preserve inverted y-axis orientation", {
+  plot <- plotMultiTimeseries(
+    type = "subplots",
+    locations = c("09EA004", "09EA004"),
+    parameters = c(1165, 1150),
+    start_date = "2021-01-01",
+    end_date = "2021-01-03",
+    datum = FALSE,
+    historic_range = FALSE,
+    invert = c(TRUE, FALSE),
+    webgl = FALSE
+  )
+
+  expect_identical(plot$x$layout$yaxis$autorange, "reversed")
+  expect_true(isTRUE(plot$x$layout$yaxis2$autorange))
+})
+
 test_that("plotMultiTimeseries accepts hourly resolution", {
   # Expect a warning about datums not being applied
   expect_warning(

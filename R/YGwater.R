@@ -196,11 +196,22 @@ YGwater <- function(
       "The user you're connecting with can't see the table 'parameters'. This table is required for the app to function."
     )
   }
-  if (!DBI::dbExistsTable(con, "measurements_continuous_corrected")) {
+  has_corrected_measurements <- DBI::dbGetQuery(
+    con,
+    "SELECT COALESCE(
+       has_function_privilege(
+         current_user,
+         to_regprocedure('continuous.measurements_continuous_corrected(integer,timestamp with time zone,timestamp with time zone)'),
+         'EXECUTE'
+       ),
+       FALSE
+     ) AS can_execute"
+  )
+  if (!isTRUE(has_corrected_measurements$can_execute[1])) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
-      "The user you're connecting with can't see the view table 'measurements_continuous_corrected'. This table is required for the app to function."
+      "The user you're connecting with can't execute the function 'continuous.measurements_continuous_corrected'. This function is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "samples")) {

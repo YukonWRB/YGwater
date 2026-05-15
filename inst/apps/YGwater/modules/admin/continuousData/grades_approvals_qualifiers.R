@@ -337,9 +337,10 @@ grades_approvals_qualifiers <- function(id, language) {
           selected_record(NULL)
           next_edge("start")
           range_info <- safe_query(
+            # table 'timeseries', columns 'start_datetime' and 'end_datetime' are updated via triggers on measurements_continuous and measurements_calculated_daily
             DBI::dbGetQuery(
               session$userData$AquaCache,
-              "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
+              "SELECT start_datetime AS min_dt, end_datetime AS max_dt FROM continuous.timeseries WHERE timeseries_id = $1",
               params = list(tsid)
             )
           )
@@ -405,7 +406,7 @@ grades_approvals_qualifiers <- function(id, language) {
           range_info <- safe_query(
             DBI::dbGetQuery(
               session$userData$AquaCache,
-              "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
+              "SELECT start_datetime AS min_dt, end_datetime AS max_dt FROM continuous.timeseries WHERE timeseries_id = $1",
               params = list(tsid)
             )
           )
@@ -464,7 +465,7 @@ grades_approvals_qualifiers <- function(id, language) {
           range_info <- safe_query(
             DBI::dbGetQuery(
               session$userData$AquaCache,
-              "SELECT MIN(datetime) AS min_dt, MAX(datetime) AS max_dt FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1",
+              "SELECT start_datetime AS min_dt, end_datetime AS max_dt FROM continuous.timeseries WHERE timeseries_id = $1",
               params = list(tsid)
             )
           )
@@ -608,7 +609,7 @@ grades_approvals_qualifiers <- function(id, language) {
       df <- safe_query(
         DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT datetime, value_raw, value_corrected FROM continuous.measurements_continuous_corrected WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime",
+          "SELECT datetime, value_raw, value_corrected FROM continuous.measurements_continuous_corrected($1, $2, $3) ORDER BY datetime",
           params = list(selected_ts(), start_dt, end_dt)
         )
       )

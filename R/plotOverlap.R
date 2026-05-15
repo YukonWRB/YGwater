@@ -758,7 +758,7 @@ plotOverlap <- function(
     daily <- dbGetQueryDT(
       con,
       glue::glue_sql(
-        "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
+        "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
         .con = con
       )
     )
@@ -767,7 +767,7 @@ plotOverlap <- function(
       con,
       paste(
         "SELECT date, value, max, min, q75, q25",
-        "FROM continuous.measurements_calculated_daily_corrected_at(",
+        "FROM continuous.measurements_calculated_daily_at(",
         "  $1,",
         "  ARRAY[$2]::INTEGER[],",
         "  $3::DATE,",
@@ -819,10 +819,11 @@ plotOverlap <- function(
         if (is.null(as_of)) {
           new_realtime <- dbGetQueryDT(
             con,
-            glue::glue_sql(
-              "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = {tsid} AND datetime BETWEEN {start_UTC} AND {end_UTC} AND value_corrected IS NOT NULL ORDER BY datetime",
-              .con = con
-            )
+            "SELECT datetime, value_corrected AS value
+             FROM continuous.measurements_continuous_corrected($1, $2, $3)
+             WHERE value_corrected IS NOT NULL
+             ORDER BY datetime",
+            params = list(tsid, start_UTC, end_UTC)
           )
         } else {
           new_realtime <- dbGetQueryDT(
@@ -831,7 +832,7 @@ plotOverlap <- function(
               "SELECT datetime, value_corrected AS value",
               "FROM continuous.measurements_continuous_corrected_at(",
               "  $1,",
-              "  ARRAY[$2]::INTEGER[],",
+              "  $2,",
               "  $3,",
               "  $4",
               ")",

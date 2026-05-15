@@ -40,7 +40,7 @@ snowInfoMod <- function(id, language) {
          JOIN locations_networks AS ln ON l.location_id = ln.location_id
          JOIN networks AS n ON ln.network_id = n.network_id
          JOIN samples AS s ON l.location_id = s.location_id
-         WHERE n.name = 'Snow Survey Network'
+         WHERE n.name = 'Yukon Snow Survey Network'
          ORDER BY l.name;"
       )
     )
@@ -275,6 +275,22 @@ snowInfoMod <- function(id, language) {
       invisible(NULL)
     }
 
+    trigger_download <- function(output_id) {
+      session$onFlushed(
+        function() {
+          shinyjs::runjs(sprintf(
+            "var el = document.getElementById('%s'); if (el) { el.click(); }",
+            ns(output_id)
+          ))
+        },
+        once = TRUE
+      )
+    }
+
+    session$onSessionEnded(function() {
+      cleanup_download_bundle(download_bundle())
+    })
+
     report_task <- ExtendedTask$new(function(req, config) {
       promises::future_promise({
         tryCatch(
@@ -374,7 +390,7 @@ snowInfoMod <- function(id, language) {
 
       cleanup_download_bundle(download_bundle())
       download_bundle(result)
-      shinyjs::click("download")
+      trigger_download("download")
     })
 
     # Listen for the 'go' and make the report when called
@@ -397,9 +413,6 @@ snowInfoMod <- function(id, language) {
             "Unable to copy the generated report archive to the download location."
           )
         }
-
-        cleanup_download_bundle(bundle)
-        download_bundle(NULL)
       }, # End content
       contentType = "application/zip"
     ) # End downloadHandler

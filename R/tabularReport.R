@@ -593,7 +593,7 @@ tabularReport <- function(
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           level_locations[i, "timeseries_id"],
@@ -604,7 +604,7 @@ tabularReport <- function(
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             level_locations[i, "timeseries_id"],
@@ -617,14 +617,12 @@ tabularReport <- function(
       }
       rt <- DBI::dbGetQuery(
         con,
-        paste0(
-          "SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ",
+        "SELECT value_corrected AS value, datetime
+         FROM continuous.measurements_continuous_corrected($1, $2, $3)",
+        params = list(
           level_locations[i, "timeseries_id"],
-          " AND datetime BETWEEN '",
           .POSIXct(report_time, "UTC") - (past + 2) * 60 * 60 * 24,
-          "' AND '",
-          .POSIXct(report_time, "UTC"),
-          "'"
+          .POSIXct(report_time, "UTC")
         )
       )
       if (nrow(rt) > 0) {
@@ -655,7 +653,7 @@ tabularReport <- function(
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           flow_locations[i, "timeseries_id"],
@@ -666,7 +664,7 @@ tabularReport <- function(
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             flow_locations[i, "timeseries_id"],
@@ -679,14 +677,12 @@ tabularReport <- function(
       }
       rt <- DBI::dbGetQuery(
         con,
-        paste0(
-          "SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ",
+        "SELECT value_corrected AS value, datetime
+         FROM continuous.measurements_continuous_corrected($1, $2, $3)",
+        params = list(
           flow_locations[i, "timeseries_id"],
-          " AND datetime BETWEEN '",
           .POSIXct(report_time, "UTC") - (past + 2) * 60 * 60 * 24,
-          "' AND '",
-          .POSIXct(report_time, "UTC"),
-          "'"
+          .POSIXct(report_time, "UTC")
         )
       )
       if (nrow(rt) > 0) {
@@ -717,7 +713,7 @@ tabularReport <- function(
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           snow_locations[i, "timeseries_id"],
@@ -728,7 +724,7 @@ tabularReport <- function(
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             snow_locations[i, "timeseries_id"],
@@ -741,14 +737,12 @@ tabularReport <- function(
       }
       rt <- DBI::dbGetQuery(
         con,
-        paste0(
-          "SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ",
+        "SELECT value_corrected AS value, datetime
+         FROM continuous.measurements_continuous_corrected($1, $2, $3)",
+        params = list(
           snow_locations[i, "timeseries_id"],
-          " AND datetime BETWEEN '",
           .POSIXct(report_time, "UTC") - (past + 2) * 60 * 60 * 24,
-          "' AND '",
-          .POSIXct(report_time, "UTC"),
-          "'"
+          .POSIXct(report_time, "UTC")
         )
       )
       if (nrow(rt) > 0) {
@@ -779,7 +773,7 @@ tabularReport <- function(
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           bridge_locations[i, "timeseries_id"],
@@ -790,7 +784,7 @@ tabularReport <- function(
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily_corrected WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             bridge_locations[i, "timeseries_id"],
@@ -803,14 +797,12 @@ tabularReport <- function(
       }
       rt <- DBI::dbGetQuery(
         con,
-        paste0(
-          "SELECT value_corrected AS value, datetime FROM measurements_continuous_corrected WHERE timeseries_id = ",
+        "SELECT value_corrected AS value, datetime
+         FROM continuous.measurements_continuous_corrected($1, $2, $3)",
+        params = list(
           bridge_locations[i, "timeseries_id"],
-          " AND datetime BETWEEN '",
           .POSIXct(report_time, "UTC") - (past + 2) * 60 * 60 * 24,
-          "' AND '",
-          .POSIXct(report_time, "UTC"),
-          "'"
+          .POSIXct(report_time, "UTC")
         )
       )
       if (nrow(rt) > 0) {

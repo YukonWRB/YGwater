@@ -202,7 +202,6 @@ titles <- list(
     ACKNOWLEDGEMENTS = "Acknowledgements",
     WHATS_NEW = "What's New in this Bulletin",
     HOW_TO_READ = "How to Read this Bulletin",
-    DISCLAIMER = "Disclaimer and Limitation of Liability",
     WEATHER_SNOWPACK = "Yukon Territory Weather and Snowpack Conditions",
     FLOW_CONDITIONS = "Yukon Territory Flow Conditions and Outlook",
     MAP1 = "Map 1. Temperature",
@@ -227,7 +226,6 @@ titles <- list(
     ACKNOWLEDGEMENTS = "Remerciements",
     WHATS_NEW = "Nouveautés dans ce bulletin",
     HOW_TO_READ = "Comment lire ce bulletin",
-    DISCLAIMER = "Avis de non-responsabilité",
     WEATHER_SNOWPACK = "Conditions météorologiques et nivologiques",
     FLOW_CONDITIONS = "Conditions d'écoulement et perspectives",
     MAP1 = "Carte 1. Anomalies des températures",
@@ -545,18 +543,22 @@ snowBullPrecip <- function(
   if (grepl("old crow", loc_name_lower)) {
     ts_monthly <- ts_monthly[ts_monthly$year != 2011, ]
     ts_monthly <- ts_monthly[ts_monthly$year != 1974, ]
+
   } else if (grepl("teslin", loc_name_lower)) {
     ts_monthly[ts_monthly$year == 2013 & ts_monthly$month == 12, "value"] <-
       ts_monthly[ts_monthly$year == 2013 & ts_monthly$month == 12, "value"] + 63
     ts_monthly[ts_monthly$year == 2011 & ts_monthly$month == 1, "value"] <-
       ts_monthly[ts_monthly$year == 2011 & ts_monthly$month == 1, "value"] - 83
+
   } else if (grepl("dawson", loc_name_lower)) {
     ts_monthly <- ts_monthly[!(ts_monthly$year == 2008 & ts_monthly$month == 2), ]
     ts_monthly <- ts_monthly[!(ts_monthly$year == 1907 & ts_monthly$month == 10), ]
     ts_monthly <- ts_monthly[!(ts_monthly$year == 1919 & ts_monthly$month == 11), ]
+
   } else if (grepl("watson", loc_name_lower)) {
     ts_monthly <- ts_monthly[ts_monthly$year != 2009, ]
   } else if (grepl("mayo", loc_name_lower)) {
+    
     ts_monthly <- ts_monthly[ts_monthly$year != 1949, ]
   }
 
@@ -624,7 +626,7 @@ snowBullPrecip <- function(
 
 # Function to create CDDF plots
 snowbullCDDF <- function(timeseries, loc_name, location_id, subplot = "") {
-  # data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ", timeseries_id, " AND datetime <= '", year, "-0", month, "-01' "))
+  # data <- DBI::dbGetQuery(con, paste0("SELECT datetime, value_corrected AS value FROM continuous.measurements_continuous_corrected(", timeseries_id, ", NULL::timestamptz, '", year, "-0", month, "-01'::timestamptz)"))
 
   # data <- getCDDF(data, year)
 
@@ -985,11 +987,10 @@ paste0(
 )
 }`
 
-
-# `r titles$DISCLAIMER`
-
 `r if (language$abbrev == "en") {
 '
+**Disclaimer and Limitation of Liability**
+
 The User understands and acknowledges that the use of the data is solely at their own risk. The User is solely responsible for confirming the accuracy, availability, suitability, reliability, usability, completeness or timeliness of the data. 
 
 The User accepts the data “as is” and acknowledges that the Government of Yukon makes no warranties or representations (express or implied) with respect to the accuracy, availability, suitability, reliability, usability, completeness or timeliness of the data, including, without limitation, implied warranties for merchantability, fitness for a particular purpose, and non-infringement. 
@@ -998,6 +999,8 @@ In consideration of access to the data, the User also agrees that in no event wi
 '
 } else {
 paste0("
+**Avis de non-responsabilité**
+
 L’utilisateur comprend qu’il se sert des données à ses propres risques. Il lui revient de vérifier l’exactitude, la disponibilité, la pertinence, la fiabilité, l’utilité, l’exhaustivité et l’actualité des données.
 
 L’utilisateur accepte les données «", knitr::asis_output("\U00A0"), "telles quelles", knitr::asis_output("\U00A0"), "» et reconnaît que le gouvernement du Yukon ne fait aucune déclaration ni ne donne aucune garantie, expresses ou implicites, quant à l’exactitude, à la disponibilité, à la pertinence, à la fiabilité, à l’utilité, à l’exhaustivité et à l’actualité des données, y compris de garanties implicites de qualité marchande ou d’adaptation à un usage particulier et d’absence de contrefaçon.

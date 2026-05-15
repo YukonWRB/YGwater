@@ -6,14 +6,16 @@ maps,mapsNavMenuTitle,Maps,Cartes
 maps_locs,mapsNavLocsTitle,Monitoring locations,Points de surveillance
 maps_params,mapsNavParamsTitle,Current/past conditions,Données passées/actuelles
 maps_raster,mapsNavRastersTitle,Rasters,Rasters
-maps_snowbull,mapsNavSnowbullTitle,Snow bulletin,Bulletin nivométrique
+maps_snowbull,mapsNavSnowbullTitle,Snow conditions,Conditions de neige
 plots,plotsNavMenuTitle,Plots,Graphiques
 plots_discrete,plotsNavDiscTitle,Discrete,Discrètes
-plots_continuous_old,plotsNavContOldTitle,Continuous (old version),Continues (ancienne version)
 plots_mix,plotsNavMixTitle,Mixed data,Données mixtes
 reports,reportsNavMenuTitle,Reports,Rapports
+dashboards,dashboardsNavMenuTitle,Dashboards,Tableaux de bord
+dashboards_flood,dashboardsNavFloodTitle,Flood conditions,Conditions d'inondation
 reports_snow,reportsNavSnowstatsTitle,Snowpack statistics,Statistiques nivométriques
 reports_water,reportsNavWaterTitle,Water level/flow statistics,Statistiques de niveau/débit d'eau
+reports_flood,reportsNavFloodTitle,Flood dashboard,Tableau de bord des inondations
 reports_wq,reportsNavWQTitle,Water quality report,Rapport de qualité de l'eau
 reports_snowbull,reportsNavSnowbullTitle,Snow bulletin and stats,Bulletin nivométrique et statistiques
 reports_waterTemp,reportsNavWaterTempTitle,Water temperature,Température de l'eau
@@ -450,11 +452,11 @@ pw_change_success,modal text,Password updated successfully.,Mot de passe mis à 
 pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
-snowbull_relative_median,,Percent of median,Pourcentage de la médiane historique
-snowbull_percent_of_normal,,Percent of normal,Pourcentage de la normale
-snowbull_historical_median,,Historical median,Médiane historique
+snowbull_relative_median,,Percent of Median,Pourcentage de la médiane historique
+snowbull_percent_of_normal,,Percent of Normal,Pourcentage de la normale
+snowbull_historical_median,,Historical Median,Médiane historique
 snowbull_anomalies,,Anomalies,Anomalies
-snowbull_deviation,,Deviation from normal,Écart par rapport à la normale
+snowbull_deviation,,Deviation from Normal,Écart par rapport à la normale
 snowbull_values,,Values,Valeurs
 snowbull_swe,,Snow Water Equivalent,Équivalent en eau de la neige
 snowbull_swe_abbrev,,SWE,ÉEN

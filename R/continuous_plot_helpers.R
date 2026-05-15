@@ -15,6 +15,19 @@ continuous_trace_uses_corrected_source <- function(
   start_date,
   end_date
 ) {
+  ts_type <- DBI::dbGetQuery(
+    con,
+    "SELECT timeseries_type FROM continuous.timeseries WHERE timeseries_id = $1",
+    params = list(timeseries_id)
+  )
+  if (
+    nrow(ts_type) > 0 &&
+      !is.na(ts_type$timeseries_type[1]) &&
+      ts_type$timeseries_type[1] != "basic"
+  ) {
+    return(TRUE)
+  }
+
   if (!DBI::dbExistsTable(con, "measurements_continuous")) {
     return(TRUE)
   }
@@ -133,28 +146,23 @@ fetch_hourly_trace_data <- function(
   as_of = NULL
 ) {
   if (is.null(as_of)) {
-    source_table <- if (isTRUE(use_corrected_source)) {
-      "measurements_continuous_corrected"
+    if (isTRUE(use_corrected_source)) {
+      source_table <- "continuous.measurements_continuous_corrected($1, $2, $3)"
+      value_col <- "value_corrected"
+      raw_value_col <- "value_raw"
+      where_sql <- ""
+      params <- list(timeseries_id, start_date, end_date)
     } else {
-      "measurements_continuous"
+      source_table <- "measurements_continuous"
+      value_col <- "value"
+      raw_value_col <- "value"
+      where_sql <- "WHERE m.timeseries_id = $1 AND m.datetime BETWEEN $2 AND $3 "
+      params <- list(timeseries_id, start_date, end_date)
     }
-
-    value_col <- if (isTRUE(use_corrected_source)) {
-      "value_corrected"
-    } else {
-      "value"
-    }
-    raw_value_col <- if (isTRUE(use_corrected_source)) {
-      "value_raw"
-    } else {
-      "value"
-    }
-    where_sql <- "WHERE m.timeseries_id = $1 AND m.datetime BETWEEN $2 AND $3 "
-    params <- list(timeseries_id, start_date, end_date)
   } else {
     source_table <- paste0(
       "continuous.measurements_continuous_corrected_at(",
-      "$1, ARRAY[$2]::INTEGER[], $3, $4",
+      "$1, $2, $3, $4",
       ")"
     )
     value_col <- "value_corrected"

@@ -262,7 +262,7 @@ ui <- fluidPage(
                             class = "panel-body",
                             fluidRow(
                                 column(
-                                    6,
+                                    5,
                                     selectizeInput(
                                         "timeseries_id",
                                         "Select Continuous Time Series:",
@@ -1124,7 +1124,8 @@ server <- function(input, output, session) {
             type = "message",
             duration = 2
         )
-    }) # Interactive plot output - now handles multiple series with individual traces
+    })
+
     output$timeseriesPlot <- renderPlotly({
         cont_data <- continuous_data()
         disc_data <- discrete_data()

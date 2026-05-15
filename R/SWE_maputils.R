@@ -768,8 +768,9 @@ standardize_param_name <- function(param_name, con = NULL) {
         "temperature, air",
         "water level",
         "water flow",
-        "fdd",
-        "snow depth"
+        "fdd", # calculated post-query since not in public.parameters table
+        "snow depth",
+        "streamflow" # unique case where map includes water level and flow
     )
 
     # check that param_name is in available choices
@@ -783,7 +784,7 @@ standardize_param_name <- function(param_name, con = NULL) {
     }
 
     # except parameters that are not in AquaCache public.parameters table
-    param_not_in_ac <- (param_name %in% c("fdd"))
+    param_not_in_ac <- (param_name %in% c("fdd", "streamflow"))
 
     # if con is provided, validate con and query param_name existence
     if (!is.null(con) && !param_not_in_ac) {
@@ -1390,7 +1391,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
 #' most recent measurement date for each station.
 #'
 #' @details
-#' The function queries the continuous.timeseries and continuous.measurements_calculated_daily_corrected
+#' The function queries the continuous.timeseries and continuous.measurements_calculated_daily
 #' tables to retrieve SWE data. Each station becomes a column in the wide-format
 #' timeseries data.frame, facilitating efficient historical analysis.
 #'
@@ -1440,7 +1441,7 @@ download_continuous_ts <- function(
 
         # Retrieve measurements for this timeseries
         ts_query <- sprintf(
-            "SELECT date, value FROM continuous.measurements_calculated_daily_corrected
+            "SELECT date, value FROM continuous.measurements_calculated_daily
              WHERE timeseries_id = %d AND value IS NOT NULL",
             as.integer(ts_id)
         )
@@ -2196,10 +2197,11 @@ get_normalized_bulletin_values <- function(
 
     norms_for_month <- norms_for_month[station_names]
 
-    # Calculate the ratio of current_aggr to station_norms for each station
-    relative_to_norm <- 100 *
-        (bulletin_values /
-            norms_for_month)
+    # # Calculate the ratio of current_aggr to station_norms for each station
+    # relative_to_norm <- 100 *
+    #     ((bulletin_values - norms_for_month) / norms_for_month)
+
+    relative_to_norm <- bulletin_values / norms_for_month * 100
 
     # Handle special cases for SWE
     if (param_name == "snow water equivalent") {
@@ -5757,13 +5759,13 @@ make_ggplot_map <- function(
         param_name,
         "snow water equivalent" = paste0(
             tr("snowbull_swe", language),
-            "\n"
+            " "
         ),
         "precipitation, total" = paste0(
             tr("snowbull_precipitation", language),
-            "\n"
+            " "
         ),
-        "temperature, air" = paste0(tr("snowbull_temperature", language), "\n"),
+        "temperature, air" = paste0(tr("snowbull_temperature", language), " "),
         ""
     )
 
@@ -6033,6 +6035,7 @@ make_snowbull_map <- function(
             load_swe = param_name == "snow water equivalent",
             load_precip = param_name == "precipitation, total",
             load_temp = param_name == "temperature, air",
+            load_streamflow = param_name == "streamflow",
             epsg = epsg,
             start_year_historical = start_year_historical,
             end_year_historical = end_year_historical,
@@ -6084,6 +6087,11 @@ make_snowbull_map <- function(
             point_data = snowbull_timeseries$temperature,
             point_data_secondary = NULL
         ),
+        "streamflow" = list(
+            poly_data = NULL,
+            point_data = snowbull_timeseries$water_flow,
+            point_data_secondary = snowbull_timeseries$water_level
+        ),
         stop("Unsupported param_name: ", param_name)
     )
 
@@ -6126,6 +6134,38 @@ make_snowbull_map <- function(
         }
     }
 
+    # for streamflow, we filter the stations to only include the ones that are in the bulletin, based on station name
+    if (param_name == "streamflow") {
+        flow_stations <- c(
+            "Nordenskiold River Below Rowlinson Creek",
+            "Pelly River At Pelly Crossing",
+            "Stewart River At The Mouth",
+            "White River At Km 1881.6 Alaska Highway",
+            "Yukon River Above White River",
+            "Klondike River Above Bonanza Creek",
+            "Porcupine River Near International Boundary",
+            "Peel River Above Canyon Creek",
+            "Liard River At Upper Crossing",
+            "Alsek River Above Bates River"
+        )
+
+        level_stations <- c(
+            "Marsh Lake Near Whitehorse",
+            "Lake Laberge Near Whitehorse",
+            "Teslin Lake At Teslin"
+        )
+
+        map_data[["point_data"]] <- map_data[["point_data"]][
+            map_data[["point_data"]]$name %in% flow_stations,
+        ]
+
+        map_data[["point_data_secondary"]] <- map_data[[
+            "point_data_secondary"
+        ]][
+            map_data[["point_data_secondary"]]$name %in% level_stations,
+        ]
+    }
+
     # Build bulletin_data for downstream use (e.g., export, reporting)
     bulletin_data <- list(
         month = month,
@@ -6150,22 +6190,29 @@ make_snowbull_map <- function(
         return(df)
     }
 
-    # Attach processed map data to bulletin_data by parameter type
-    if (param_name == "snow water equivalent") {
-        bulletin_data$swe_basins <- remove_mapping_fields(map_data$poly_data)
-        bulletin_data$swe_surveys <- remove_mapping_fields(map_data$point_data)
-        bulletin_data$swe_pillows <- remove_mapping_fields(
-            map_data$point_data_secondary
-        )
-    } else if (param_name == "precipitation, total") {
-        bulletin_data$precip_stations <- remove_mapping_fields(
-            map_data$point_data
-        )
-    } else if (param_name == "temperature, air") {
-        bulletin_data$temp_stations <- remove_mapping_fields(
-            map_data$point_data
-        )
-    }
+    # # Attach processed map data to bulletin_data by parameter type
+    # if (param_name == "snow water equivalent") {
+    #     bulletin_data$swe_basins <- remove_mapping_fields(map_data$poly_data)
+    #     bulletin_data$swe_surveys <- remove_mapping_fields(map_data$point_data)
+    #     bulletin_data$swe_pillows <- remove_mapping_fields(
+    #         map_data$point_data_secondary
+    #     )
+    # } else if (param_name == "precipitation, total") {
+    #     bulletin_data$precip_stations <- remove_mapping_fields(
+    #         map_data$point_data
+    #     )
+    # } else if (param_name == "temperature, air") {
+    #     bulletin_data$temp_stations <- remove_mapping_fields(
+    #         map_data$point_data
+    #     )
+    # } else if (param_name == "streamflow") {
+    #     bulletin_data$flow_stations <- remove_mapping_fields(
+    #         map_data$point_data
+    #     )
+    #     bulletin_data$level_stations <- remove_mapping_fields(
+    #         map_data$point_data_secondary
+    #     )
+    # }
 
     switch(
         format,
@@ -6205,8 +6252,7 @@ make_snowbull_map <- function(
             )
 
             return(list(
-                map = map,
-                data = bulletin_data
+                map = map
             ))
         },
         stop("Unknown format: ", format)

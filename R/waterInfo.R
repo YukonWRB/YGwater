@@ -148,7 +148,7 @@ waterInfo <- function(
     daily <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT date, value FROM measurements_calculated_daily_corrected WHERE timeseries_id = '",
+        "SELECT date, value FROM measurements_calculated_daily WHERE timeseries_id = '",
         locs[i, "timeseries_id"],
         "' AND date < '",
         as.character(end_date),

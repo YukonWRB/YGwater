@@ -513,7 +513,7 @@ ggplotOverlap <- function(
         daily <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date <= '",
             daily_end,
@@ -525,7 +525,7 @@ ggplotOverlap <- function(
           con,
           paste(
             "SELECT date, value, max, min, q75, q25",
-            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "FROM continuous.measurements_calculated_daily_at(",
             "  $1,",
             "  ARRAY[$2]::INTEGER[],",
             "  $3::DATE,",
@@ -550,7 +550,7 @@ ggplotOverlap <- function(
         daily <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily_corrected WHERE timeseries_id = ",
+            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date <= '",
             daily_end,
@@ -562,7 +562,7 @@ ggplotOverlap <- function(
           con,
           paste(
             "SELECT date, value, max, min, q75, q25",
-            "FROM continuous.measurements_calculated_daily_corrected_at(",
+            "FROM continuous.measurements_calculated_daily_at(",
             "  $1,",
             "  ARRAY[$2]::INTEGER[],",
             "  $3::DATE,",
@@ -618,15 +618,10 @@ ggplotOverlap <- function(
           if (is.null(as_of)) {
             new_realtime <- dbGetQueryDT(
               con,
-              paste0(
-                "SELECT datetime, value_corrected AS value FROM measurements_continuous_corrected WHERE timeseries_id = ",
-                tsid,
-                " AND datetime BETWEEN '",
-                as.character(start_UTC),
-                "' AND '",
-                as.character(end_UTC),
-                "' AND value_corrected IS NOT NULL"
-              )
+              "SELECT datetime, value_corrected AS value
+               FROM continuous.measurements_continuous_corrected($1, $2, $3)
+               WHERE value_corrected IS NOT NULL",
+              params = list(tsid, start_UTC, end_UTC)
             )
           } else {
             new_realtime <- dbGetQueryDT(
@@ -635,7 +630,7 @@ ggplotOverlap <- function(
                 "SELECT datetime, value_corrected AS value",
                 "FROM continuous.measurements_continuous_corrected_at(",
                 "  $1,",
-                "  ARRAY[$2]::INTEGER[],",
+                "  $2,",
                 "  $3,",
                 "  $4",
                 ")",
@@ -882,10 +877,13 @@ ggplotOverlap <- function(
 
       if (length(daily_cols) > 0) {
         if (data.table::is.data.table(daily)) {
-          daily[, (daily_cols) := lapply(
-            .SD,
-            function(x) x + datum$conversion_m
-          ), .SDcols = daily_cols]
+          daily[,
+            (daily_cols) := lapply(
+              .SD,
+              function(x) x + datum$conversion_m
+            ),
+            .SDcols = daily_cols
+          ]
         } else {
           daily[daily_cols] <- lapply(
             daily[daily_cols],
@@ -896,10 +894,13 @@ ggplotOverlap <- function(
 
       if (length(realtime_cols) > 0) {
         if (data.table::is.data.table(realtime)) {
-          realtime[, (realtime_cols) := lapply(
-            .SD,
-            function(x) x + datum$conversion_m
-          ), .SDcols = realtime_cols]
+          realtime[,
+            (realtime_cols) := lapply(
+              .SD,
+              function(x) x + datum$conversion_m
+            ),
+            .SDcols = realtime_cols
+          ]
         } else {
           realtime[realtime_cols] <- lapply(
             realtime[realtime_cols],
@@ -1559,10 +1560,13 @@ ggplotOverlap <- function(
         )
         return_cols <- intersect(return_cols, names(loc_returns))
         if (data.table::is.data.table(loc_returns)) {
-          loc_returns[, (return_cols) := lapply(
-            .SD,
-            function(x) x + datum$conversion_m
-          ), .SDcols = return_cols]
+          loc_returns[,
+            (return_cols) := lapply(
+              .SD,
+              function(x) x + datum$conversion_m
+            ),
+            .SDcols = return_cols
+          ]
         } else {
           loc_returns[return_cols] <- lapply(
             loc_returns[return_cols],
