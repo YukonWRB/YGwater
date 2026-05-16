@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add continuous data help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+  </style>
+</head>
+<body>
+  <h1>Add continuous data</h1>
+  <p>Use this page to append continuous measurements to an existing AquaCache timeseries. This tool uploads values for records that already exist in <code>continuous.timeseries</code>. It does not create new monitoring locations and it does not create new timeseries records directly in the upload workflow.</p>
+
+  <h2>Before you start</h2>
+  <p>Select the target timeseries first. The list of available timeseries comes from AquaCache timeseries metadata and includes the location, parameter, unit, media type, aggregation type, and recording rate. Each timeseries is associated with an existing location through <code>location_id</code>, and may also be associated with a sub-location through <code>sub_location_id</code>. If the timeseries you need is not listed, create it first from <strong>Add / edit timeseries</strong>. If the monitoring location or sub-location does not exist yet, create that first from the location tools, then create the timeseries, then return here to upload data.</p>
+
+  <h2>Appending data</h2>
+  <p>Continuous data uploads are intended to add values to an existing timeseries. Confirm that the selected timeseries represents the same location, sub-location, parameter, unit, media, aggregation, and recording interval as the file or manual values you are about to upload. Uploading to the wrong timeseries can make later review, correction, publication, and data downloads misleading.</p>
+
+  <h2>Units and timestamps</h2>
+  <p>The page shows the database unit for the selected timeseries. Convert incoming values to the database unit before upload, or use the available unit conversion tools where appropriate. Check timestamps carefully, including timezone and daylight saving transitions. The uploaded date/time values should represent the measurement times for the selected timeseries, not the file creation time or logger download time.</p>
+
+  <h2>Review before committing</h2>
+  <p>Use the plotting and review tools before committing data. Compare the new values against recent values and daily summaries where available. Confirm grades, approvals, qualifiers, owners, contributors, and any overwrite choices before upload. Only delete values that have no possible later use, such as obvious pre-deployment or post-recovery noise; values that may be useful later should usually be uploaded and handled with corrections, grades, approvals, or qualifiers.</p>
+
+  <h2>Timeseries and instrument deployments</h2>
+  <p>A timeseries can be associated with an instrument deployment. This association is useful when the measurements were produced by a deployed logger, sensor, or instrument, because it preserves the operational context for the data: which instrument was in the field, where it was deployed, when the deployment started and ended, and how the data source relates to maintenance, calibration, recovery, and telemetry records.</p>
+
+  <p>Deployment associations help later users understand why values changed, which sensor produced a record, which deployment a gap or shift belongs to, and whether data should be interpreted with information from checks, calibrations, repairs, or deployment notes. They also help separate long-term station timeseries from the physical instruments that may be swapped, repaired, recalibrated, or redeployed over time.</p>
+
+  <p>Use <strong>Deploy / recover instruments</strong> to create and maintain deployment records in <code>public.locations_metadata_instruments</code>. Direct deployment-to-timeseries links are stored in <code>public.locations_metadata_instrument_timeseries</code>. Use <strong>Add / edit timeseries</strong> or the deployment workflow to associate timeseries with active deployments. Some telemetry workflows link timeseries at the connection-signal level through <code>public.locations_metadata_instrument_connection_signals.timeseries_id</code>; when that is the case, update the link in the Acquisition / telemetry tools rather than forcing a direct deployment-timeseries association.</p>
+
+  <h2>If something is missing</h2>
+  <p>If the target location, sub-location, timeseries, instrument, sensor, deployment, or telemetry connection is missing, add the missing metadata before uploading values. Continuous measurements are much easier to maintain when the database structure is correct before data are appended.</p>
+</body>
+</html>

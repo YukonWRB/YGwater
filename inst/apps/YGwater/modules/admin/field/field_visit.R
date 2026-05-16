@@ -164,7 +164,7 @@ visit <- function(id, language) {
       )
       moduleData$instruments <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT i.instrument_id, i.serial_no, instrument_make.make, instrument_model.model, instrument_type.type, i.owner FROM instruments AS i LEFT JOIN instrument_make ON i.make = instrument_make.make_id LEFT JOIN instrument_model ON i.model = instrument_model.model_id LEFT JOIN instrument_type ON i.type = instrument_type.type_id ORDER BY i.instrument_id"
+        "SELECT i.instrument_id, i.serial_no, instrument_makes.make, instrument_models.model, instrument_types.type, i.owner FROM instruments AS i LEFT JOIN instrument_makes ON i.make = instrument_makes.make_id LEFT JOIN instrument_models ON i.model = instrument_models.model_id LEFT JOIN instrument_types ON i.type = instrument_types.type_id ORDER BY i.instrument_id"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,

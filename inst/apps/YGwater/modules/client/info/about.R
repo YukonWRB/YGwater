@@ -62,10 +62,11 @@ about <- function(id, language) {
 
       output$content_fun_facts <- renderUI({
         format_count <- function(value) {
+          value <- as.numeric(value)
           if (is.na(value)) {
             return("0")
           }
-          format(value, big.mark = ",", scientific = FALSE, trim = TRUE)
+          format(value, big.mark = "&nbsp", scientific = FALSE, trim = TRUE)
         }
 
         timeseries_count <- DBI::dbGetQuery(
@@ -140,7 +141,7 @@ about <- function(id, language) {
           '" target="_blank">',
           tr("about_url_aquacache", language$language),
           '</a>.',
-          tr("about_content4", language$language),
+          tr(config$brand$text$about_content4, language$language),
           '<br><br>',
           tr("about_content5", language$language),
           '<br><br>',

@@ -431,7 +431,9 @@ snowBulletinMod <- function(id, language) {
           return(matched[[1]])
         }
         if (length(matched) > 1) {
-          stop("Multiple report files were generated where only one was expected.")
+          stop(
+            "Multiple report files were generated where only one was expected."
+          )
         }
       }
 
@@ -488,7 +490,11 @@ snowBulletinMod <- function(id, language) {
 
                 return(list(
                   path = zip_path,
-                  filename = paste0("Snow bulletin stats issued ", Sys.Date(), ".zip")
+                  filename = paste0(
+                    "Snow bulletin stats issued ",
+                    Sys.Date(),
+                    ".zip"
+                  )
                 ))
               }
 

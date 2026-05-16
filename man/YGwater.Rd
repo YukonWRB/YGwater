@@ -8,7 +8,7 @@ YGwater(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
   dbName = Sys.getenv("aquacachenName", "aquacache"),
-  dbHost = Sys.getenv("aquacacheHost"),
+  dbHost = Sys.getenv("aquacacheHost", "localhost"),
   dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
@@ -19,7 +19,8 @@ YGwater(
   logout_timer_min = 10,
   server = FALSE,
   analytics = FALSE,
-  public = TRUE
+  public = TRUE,
+  brand = "yukon"
 )
 }
 \arguments{
@@ -50,6 +51,8 @@ YGwater(
 \item{analytics}{FALSE (no analytics) or path to an HTML file containing analytics code to insert into the app, such as a matomo analytics script. If a file in the package's inst directory, point to it as \code{system.file("apps/YGwater/www/html/matomo.html", package = "YGwater")}. This file will be called within the main UI as \code{tags$head(includeHTML(file))}. Default is FALSE.}
 
 \item{public}{TRUE restricts or doesn't create some UI elements that are not intended for public use, such as a login button and some crude report generation modules. Default is TRUE.}
+
+\item{brand}{Character string to specify the branding of the app. Default is "public", which is a more generic version of the app with Yukon-specific references removed. The "yukon" branding includes Yukon-specific logos and references. This parameter can be used in the future to create other branded versions of the app for different users or organizations.}
 }
 \value{
 Opens a Shiny application.

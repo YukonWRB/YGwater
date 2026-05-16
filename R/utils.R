@@ -325,6 +325,7 @@ ac_parameter_unit_schema <- function(con) {
 #' @param parameter_alias An optional string representing the table alias for the parameters table in the SQL query. If provided, column references will be prefixed with this alias.
 #' @param output_alias A string representing the desired alias for the output column in the SQL query. Defaults to "unit_default".
 #' @param prefer A string indicating the preference for which unit to return if multiple are available. Options are "default_or_solid" (default), "default", "solid", and "solid_or_default".
+#' @param ... Additional arguments for specifying aliases and column names for matrix state and media, which may be used in certain database schemas to resolve the appropriate unit based on the context of the parameter.
 #' @return A string containing the SQL expression to select the parameter unit with appropriate fallback logic based on the database schema.
 #' @export
 
@@ -336,16 +337,12 @@ ac_parameter_unit_select_sql <- function(
   ...
 ) {
   dots <- list(...)
-  matrix_state_alias <- if (
-    is.null(dots$matrix_state_alias)
-  ) {
+  matrix_state_alias <- if (is.null(dots$matrix_state_alias)) {
     NULL
   } else {
     dots$matrix_state_alias
   }
-  matrix_state_column <- if (
-    is.null(dots$matrix_state_column)
-  ) {
+  matrix_state_column <- if (is.null(dots$matrix_state_column)) {
     "matrix_state_id"
   } else {
     dots$matrix_state_column
@@ -374,9 +371,12 @@ ac_parameter_unit_select_sql <- function(
     unit_schema <- ac_parameter_unit_schema(con)
 
     parameter_id_ref <- ac_sql_column_ref(parameter_alias, "parameter_id")
-    matrix_state_ref <- if (is.null(matrix_state_alias) || !nzchar(
-      matrix_state_alias
-    )) {
+    matrix_state_ref <- if (
+      is.null(matrix_state_alias) ||
+        !nzchar(
+          matrix_state_alias
+        )
+    ) {
       NULL
     } else {
       ac_sql_column_ref(matrix_state_alias, matrix_state_column)

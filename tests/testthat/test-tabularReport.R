@@ -1,3 +1,6 @@
+skip_on_ci()
+skip_on_cran()
+
 test_that("tabular report is created without error on current data", {
   con <- AquaConnect(silent = TRUE)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
@@ -46,7 +49,7 @@ test_that("tabular report is created without error on historic data", {
   # Check the 'timeseries' table to make sure there's data for today.
   check <- DBI::dbGetQuery(
     con,
-    "SELECT COUNT(*) FROM measurements_continuous_corrected WHERE DATE(datetime) = '2020-06-01'"
+    "SELECT COUNT(*) FROM continuous.measurements_continuous WHERE DATE(datetime) = '2020-06-01'"
   )[1, 1]
   if (check == 0) {
     skip("No data available for this day in the past, skipping test.")

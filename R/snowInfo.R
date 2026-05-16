@@ -87,7 +87,7 @@ snowInfo <- function(
     locations <- DBI::dbGetQuery(
       con,
       "
-    SELECT DISTINCT l.location_code AS location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
+    SELECT DISTINCT l.location_code AS location, l.name, l.name_fr, l.alias, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
@@ -100,35 +100,51 @@ snowInfo <- function(
     all_locs <- TRUE
   } else {
     locs_in <- locations
+    quoted_locs <- paste(DBI::dbQuoteString(con, as.character(locs_in)), collapse = ", ")
     locations <- DBI::dbGetQuery(
       con,
       paste0(
         "
-    SELECT DISTINCT l.location_code AS location, l.name, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
+    SELECT DISTINCT l.location_code AS location, l.name, l.name_fr, l.alias, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
     FROM locations AS l
     JOIN locations_networks AS ln ON l.location_id = ln.location_id
     JOIN networks AS n ON ln.network_id = n.network_id
     JOIN samples AS s ON l.location_id = s.location_id
     JOIN datum_conversions AS d ON l.location_id = d.location_id
-    WHERE n.name = 'Yukon Snow Survey Network' AND l.location_id IN ('",
-        paste(locations, collapse = "', '"),
-        "') OR l.alias IN ('",
-        paste(locations, collapse = "', '"),
-        "') OR l.name IN ('",
-        paste(locations, collapse = "', '"),
-        "') OR l.name_fr IN ('",
-        paste(locations, collapse = "', '"),
-        "'))
+    WHERE n.name = 'Yukon Snow Survey Network'
+      AND (
+        l.location_id::text IN (",
+        quoted_locs,
+        ")
+        OR l.location_code IN (",
+        quoted_locs,
+        ")
+        OR l.alias IN (",
+        quoted_locs,
+        ")
+        OR l.name IN (",
+        quoted_locs,
+        ")
+        OR l.name_fr IN (",
+        quoted_locs,
+        ")
+      )
     ORDER BY l.name;
   "
       )
     )
-    # Find the missing locations if any were not found. locations is a vector of requested locations
-    check_locs <- locations[!locations$name %in% locs_in, "location"]
-    if (length(check_locs) > 0) {
+    matched_locs <- unique(c(
+      locations$location,
+      locations$name,
+      locations$name_fr,
+      locations$alias,
+      as.character(locations$location_id)
+    ))
+    missing_locs <- setdiff(as.character(locs_in), matched_locs)
+    if (length(missing_locs) > 0) {
       message(
         "Could not find a record for location ",
-        check_locs,
+        paste(missing_locs, collapse = ", "),
         ". All other locations will be returned."
       )
     }

@@ -193,7 +193,7 @@ app_server <- function(input, output, session) {
         )[1, 1]
         yrs <- DBI::dbGetQuery(
           session$userData$con,
-          "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily_corrected WHERE timeseries_id = $1 ORDER BY year DESC;",
+          "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily WHERE timeseries_id = $1 ORDER BY year DESC;",
           params = list(tsid)
         )
         updateSelectizeInput(

@@ -21,7 +21,15 @@ mapParamsUI <- function(id) {
     # All UI elements rendered in server function to allow multi-language functionality
     uiOutput(ns("banner")),
     uiOutput(ns("top")),
-    uiOutput(ns("main"))
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar_controls"))
+      ),
+      leaflet::leafletOutput(ns("map"), height = '80vh')
+    )
   )
 } # End of mapParamsUI
 
@@ -72,83 +80,73 @@ mapParams <- function(id, language) {
     }) |> # End of renderUI for instructions
       bindEvent(language$language)
 
-    output$main <- renderUI({
+    output$sidebar_controls <- renderUI({
       req(moduleData, language)
-      mapCreated(FALSE)
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          bg = config$sidebar_bg, # Set in globals file
-          open = list(mobile = "always-above"),
-          tagList(
-            selectizeInput(
-              ns("mapType"),
-              label = tr("map_mapType", language$language),
-              choices = stats::setNames(
-                c("range", "actual"),
-                c(
-                  tr("map_relative", language$language),
-                  tr("map_actual_values", language$language)
-                )
-              ),
-              selected = "range",
-              multiple = FALSE
-            ),
-            dateInput(
-              ns("target"),
-              label = tr("map_target_date", language$language),
-              value = Sys.Date(),
-              max = Sys.Date(),
-              format = "yyyy-mm-dd",
-              language = language$abbrev
-            ),
-            checkboxInput(
-              ns("latest"),
-              tr("map_latest_measurements", language$language),
-              value = FALSE
-            ),
-            conditionalPanel(
-              condition = "input.latest == true",
-              ns = ns,
-              checkboxInput(
-                ns("auto_update_latest"),
-                tr("map_latest_auto_update", language$language),
-                value = FALSE
-              )
-            ),
-            htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
-            actionButton(
-              ns("edit_primary_param"),
-              if (config$public) {
-                tr("map_edit_primary_param_solo", language$language)
-              } else {
-                tr("map_edit_primary_param", language$language)
-              },
-              style = "display: block; width: 100%;",
-              class = "btn btn-primary"
-            ),
-            if (!config$public) {
-              htmlOutput(ns("secondary_param"))
-            },
-            if (!config$public) {
-              actionButton(
-                ns("edit_secondary_param"),
-                tr(
-                  if (map_params$params == 2) {
-                    "map_edit_second_param"
-                  } else {
-                    "map_add_second_param"
-                  },
-                  language$language
-                ),
-                style = "display: block; width: 100%",
-                class = "btn btn-primary"
-              )
-            }
+      tagList(
+        selectizeInput(
+          ns("mapType"),
+          label = tr("map_mapType", language$language),
+          choices = stats::setNames(
+            c("range", "actual"),
+            c(
+              tr("map_relative", language$language),
+              tr("map_actual_values", language$language)
+            )
+          ),
+          selected = "range",
+          multiple = FALSE
+        ),
+        dateInput(
+          ns("target"),
+          label = tr("map_target_date", language$language),
+          value = Sys.Date(),
+          max = Sys.Date(),
+          format = "yyyy-mm-dd",
+          language = language$abbrev
+        ),
+        checkboxInput(
+          ns("latest"),
+          tr("map_latest_measurements", language$language),
+          value = FALSE
+        ),
+        conditionalPanel(
+          condition = "input.latest == true",
+          ns = ns,
+          checkboxInput(
+            ns("auto_update_latest"),
+            tr("map_latest_auto_update", language$language),
+            value = FALSE
           )
         ),
-        # Main panel (left)
-        leaflet::leafletOutput(ns("map"), height = '80vh')
+        htmlOutput(ns("primary_param")), # Primary parameter information, rendered separately as it needs to update if selections change
+        actionButton(
+          ns("edit_primary_param"),
+          if (config$public) {
+            tr("map_edit_primary_param_solo", language$language)
+          } else {
+            tr("map_edit_primary_param", language$language)
+          },
+          style = "display: block; width: 100%;",
+          class = "btn btn-primary"
+        ),
+        if (!config$public) {
+          htmlOutput(ns("secondary_param"))
+        },
+        if (!config$public) {
+          actionButton(
+            ns("edit_secondary_param"),
+            tr(
+              if (map_params$params == 2) {
+                "map_edit_second_param"
+              } else {
+                "map_add_second_param"
+              },
+              language$language
+            ),
+            style = "display: block; width: 100%",
+            class = "btn btn-primary"
+          )
+        }
       )
     }) |>
       bindEvent(language$language)
@@ -412,6 +410,8 @@ mapParams <- function(id, language) {
 
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
+      map_type <- req(input$mapType)
+
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
         return()
@@ -444,34 +444,31 @@ mapParams <- function(id, language) {
       }
 
       if (map_params$latest) {
-        # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days1 days
+        # Pull the most recent corrected measurement for each timeseries IF a measurement is available within map_params$days1 days
         closest_measurements1 <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
-            "WITH ranked_data AS (
-                    SELECT 
-                        timeseries_id, 
-                        datetime, 
-                        value_corrected AS value,
-                        ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY datetime DESC) AS row_num
-                    FROM 
-                        measurements_continuous_corrected
-                    WHERE 
-                        timeseries_id IN (",
+            "WITH requested_timeseries(timeseries_id) AS (
+              SELECT unnest(ARRAY[",
             paste(tsids1, collapse = ","),
-            ") 
-                        AND datetime > '",
+            "]::integer[])
+            )
+            SELECT m.timeseries_id, m.datetime, m.value
+            FROM requested_timeseries r
+            JOIN LATERAL (
+              SELECT timeseries_id, datetime, value_corrected AS value
+              FROM continuous.measurements_continuous_corrected(
+                r.timeseries_id,
+                '",
             as.POSIXct(Sys.time(), tz = "UTC") -
               as.numeric(map_params$days1) -
               60 * 60 * 24,
-            "'
-                )
-                SELECT 
-                    timeseries_id, datetime, value
-                FROM 
-                    ranked_data
-                WHERE 
-                    row_num = 1;"
+            "'::timestamptz,
+                NULL::timestamptz
+              )
+              ORDER BY datetime DESC
+              LIMIT 1
+            ) m ON TRUE;"
           )
         )
 
@@ -495,7 +492,7 @@ mapParams <- function(id, language) {
                                               doy_count,
                                               ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                           FROM 
-                                              measurements_calculated_daily_corrected 
+                                              measurements_calculated_daily
                                           WHERE 
                                               doy_count >= ",
             as.numeric(map_params$yrs1),
@@ -529,7 +526,7 @@ mapParams <- function(id, language) {
         range1 <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
-            "SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily_corrected WHERE doy_count >= ",
+            "SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ",
             as.numeric(map_params$yrs1),
             " AND timeseries_id IN (",
             paste(tsids1, collapse = ","),
@@ -585,34 +582,31 @@ mapParams <- function(id, language) {
         }
 
         if (map_params$latest) {
-          # Pull the most recent measurement in view table measurements_continuous_corrected for each timeseries IF a measurement is available within map_params$days2 days
+          # Pull the most recent corrected measurement for each timeseries IF a measurement is available within map_params$days2 days
           closest_measurements2 <- dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "WITH ranked_data AS (
-                      SELECT 
-                          timeseries_id, 
-                          datetime, 
-                          value_corrected AS value,
-                          ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY datetime DESC) AS row_num
-                      FROM 
-                          measurements_continuous_corrected
-                      WHERE 
-                          timeseries_id IN (",
+              "WITH requested_timeseries(timeseries_id) AS (
+                SELECT unnest(ARRAY[",
               paste(tsids2, collapse = ","),
-              ") 
-                          AND datetime > '",
+              "]::integer[])
+              )
+              SELECT m.timeseries_id, m.datetime, m.value
+              FROM requested_timeseries r
+              JOIN LATERAL (
+                SELECT timeseries_id, datetime, value_corrected AS value
+                FROM continuous.measurements_continuous_corrected(
+                  r.timeseries_id,
+                  '",
               as.POSIXct(Sys.time(), tz = "UTC") -
                 as.numeric(map_params$days2) -
                 60 * 60 * 24,
-              "'
-                  )
-                  SELECT 
-                      timeseries_id, datetime, value
-                  FROM 
-                      ranked_data
-                  WHERE 
-                      row_num = 1;"
+              "'::timestamptz,
+                  NULL::timestamptz
+                )
+                ORDER BY datetime DESC
+                LIMIT 1
+              ) m ON TRUE;"
             )
           )
 
@@ -628,7 +622,7 @@ mapParams <- function(id, language) {
                                                 doy_count,
                                                 ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                             FROM 
-                                                measurements_calculated_daily_corrected 
+                                                measurements_calculated_daily
                                             WHERE 
                                                 doy_count >= ",
               as.numeric(map_params$yrs2),
@@ -661,7 +655,7 @@ mapParams <- function(id, language) {
           range2 <- dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily_corrected WHERE doy_count >= ",
+              "SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ",
               as.numeric(map_params$yrs2),
               " AND timeseries_id IN (",
               paste(tsids2, collapse = ","),
@@ -724,7 +718,7 @@ mapParams <- function(id, language) {
       )
       mapping_data[, percent_historic_range_capped := percent_historic_range]
 
-      if (input$mapType == "actual") {
+      if (map_type == "actual") {
         actual_vals <- mapping_data$value
 
         if (length(actual_vals) == 0) {
@@ -811,14 +805,14 @@ mapParams <- function(id, language) {
           lng = ~longitude,
           lat = ~latitude,
           fillColor = ~ value_palette(
-            if (input$mapType == "actual") {
+            if (map_type == "actual") {
               value
             } else {
               percent_historic_range_capped
             }
           ),
           color = ~ value_palette(
-            if (input$mapType == "actual") {
+            if (map_type == "actual") {
               value
             } else {
               percent_historic_range_capped
@@ -914,11 +908,9 @@ mapParams <- function(id, language) {
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5)
-
       mapCreated(TRUE)
       map
-    }) |>
-      bindEvent(language$language) # Re-render the map if the language changes
+    })
 
     # Auto-update for latest measurements every 15 minutes
     autoUpdateTimer <- reactiveTimer(15 * 60 * 1000) # 15 minutes in milliseconds

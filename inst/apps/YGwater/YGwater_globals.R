@@ -11,7 +11,8 @@ YGwater_globals <- function(
   accessPath2,
   logout_timer_min,
   analytics,
-  public
+  public,
+  brand
 ) {
   library(shiny)
   library(shinyjs)
@@ -52,8 +53,126 @@ YGwater_globals <- function(
     }
   }
 
+  # 'client' side modules #####
+
+  # Plot modules
+  source(system.file(
+    "apps/YGwater/modules/client/plot/discretePlot.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/plot/continuousPlot.R",
+    package = "YGwater"
+  ))
+
+  # Non-public plot module used for huge plot experiments.
   if (!public) {
-    # 'Admin' side modules #####
+    source(system.file(
+      "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+      package = "YGwater"
+    ))
+  }
+
+  # Map modules
+  source(system.file(
+    "apps/YGwater/modules/client/map/paramsMap.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/map/locationsMap.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/map/snowBulletinMap.R",
+    package = "YGwater"
+  ))
+
+  # Water well registry map
+  source(system.file(
+    "apps/YGwater/modules/client/WWR/registry_front_end.R",
+    package = "YGwater"
+  ))
+
+  # Image and document modules
+  source(system.file(
+    "apps/YGwater/modules/client/images/image_table_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/images/image_map_view.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/documents/document_table_view.R",
+    package = "YGwater"
+  ))
+
+  # Data modules
+  source(system.file(
+    "apps/YGwater/modules/client/data/continuousData.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/data/discreteData.R",
+    package = "YGwater"
+  ))
+
+  # Info modules
+  source(system.file(
+    "apps/YGwater/modules/client/info/home.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/info/news.R",
+    package = "YGwater"
+  ))
+  source(system.file(
+    "apps/YGwater/modules/client/info/about.R",
+    package = "YGwater"
+  ))
+
+  # Non-public client-side modules
+  if (!public) {
+    # Report modules
+    if (network_check) {
+      source(system.file(
+        "apps/YGwater/modules/client/reports/WQReport.R",
+        package = "YGwater"
+      ))
+      source(system.file(
+        "apps/YGwater/modules/client/reports/snowBulletin.R",
+        package = "YGwater"
+      ))
+    }
+    source(system.file(
+      "apps/YGwater/modules/client/reports/snowInfo.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/waterInfo.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/client/reports/waterTemp.R",
+      package = "YGwater"
+    ))
+
+    # Dashboard modules
+    source(system.file(
+      "apps/YGwater/modules/client/reports/floodDashboard.R",
+      package = "YGwater"
+    ))
+
+    # Map modules
+    source(system.file(
+      "apps/YGwater/modules/client/map/rasterMap.R",
+      package = "YGwater"
+    ))
+  }
+
+  # 'Admin' side modules #####
+
+  if (!public) {
     # database admin modules
     source(system.file(
       "apps/YGwater/modules/admin/locations/locationMetadata.R",
@@ -74,11 +193,19 @@ YGwater_globals <- function(
 
     # equipment sub-modules
     source(system.file(
-      "apps/YGwater/modules/admin/equipment/calibrate.R",
+      "apps/YGwater/modules/admin/instruments/calibrate.R",
       package = "YGwater"
     ))
     source(system.file(
       "apps/YGwater/modules/admin/instruments/manageInstruments.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/instruments/manageSensors.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/instruments/instrumentMaintenance.R",
       package = "YGwater"
     ))
 
@@ -176,6 +303,7 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
 
+    # Admin modules
     source(system.file(
       "apps/YGwater/modules/admin/applicationTasks/adminLanding.R",
       package = "YGwater"
@@ -200,6 +328,8 @@ YGwater_globals <- function(
       "apps/YGwater/modules/admin/users/changePassword.R",
       package = "YGwater"
     ))
+
+    # Help modules
 
     # Set up a temporary directory for storing R documentation files during app runtime
     .rd_dir <<- file.path(tempdir(), "rdocs")
@@ -634,10 +764,11 @@ YGwater_globals <- function(
   application_notifications_ui <<- function(
     ns,
     lang,
-    con,
+    con = NULL,
     module_id, # Set to 'all' to show the notification across all modules
     banner_key_prefix = "notification",
-    fallback_lang = "English"
+    fallback_lang = "English",
+    text = NULL
   ) {
     get_active_notifications <- function(
       con,
@@ -754,22 +885,215 @@ YGwater_globals <- function(
       fallback_lang = fallback_lang
     )
 
+    if (!is.null(text) && length(text) > 0) {
+      text <- as.character(text)
+      text <- text[!is.na(text) & nzchar(trimws(text))]
+      for (i in seq_along(text)) {
+        notifications[[length(notifications) + 1]] <- list(
+          id = paste0("static_", i),
+          message = text[[i]],
+          key_prefix = paste0(
+            banner_key_prefix,
+            "_",
+            module_id,
+            "_static_",
+            i
+          )
+        )
+      }
+    }
+
     if (!length(notifications)) {
       return(NULL)
     }
     tagList(lapply(notifications, function(notification) {
+      key_prefix <- notification$key_prefix
+      if (is.null(key_prefix) || !length(key_prefix) || is.na(key_prefix)) {
+        key_prefix <- paste0(banner_key_prefix, "_", notification$id)
+      }
       dismissible_banner_ui(
         ns = ns,
-        msg_html = notification$message,
+        msg_text = notification$message,
         banner_id = paste0("notification_", notification$id),
-        banner_key_prefix = paste0(banner_key_prefix, "_", notification$id)
+        banner_key_prefix = key_prefix
       )
     }))
   }
 
+  sanitize_link_href <- function(value) {
+    if (is.null(value) || !length(value)) {
+      return(NULL)
+    }
+
+    href <- trimws(as.character(value[[1]]))
+    if (!nzchar(href)) {
+      return(NULL)
+    }
+
+    href_lower <- tolower(href)
+    if (
+      startsWith(href_lower, "http://") ||
+        startsWith(href_lower, "https://") ||
+        startsWith(href_lower, "mailto:") ||
+        startsWith(href_lower, "tel:") ||
+        startsWith(href, "/") ||
+        startsWith(href, "#")
+    ) {
+      href
+    } else {
+      NULL
+    }
+  }
+
+  # Render a restricted HTML fragment while stripping executable markup.
+  sanitize_html_fragment <<- function(text) {
+    if (is.null(text) || length(text) == 0 || all(is.na(text))) {
+      return("")
+    }
+
+    text_value <- as.character(text[[1]])
+    if (is.na(text_value) || !nzchar(text_value)) {
+      return("")
+    }
+
+    allowed_tags <- c(
+      "a",
+      "b",
+      "blockquote",
+      "br",
+      "code",
+      "div",
+      "em",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "hr",
+      "i",
+      "li",
+      "ol",
+      "p",
+      "pre",
+      "span",
+      "strong",
+      "sub",
+      "sup",
+      "ul"
+    )
+    drop_tags <- c(
+      "script",
+      "style",
+      "iframe",
+      "object",
+      "embed",
+      "form",
+      "input",
+      "button",
+      "select",
+      "textarea",
+      "svg",
+      "math",
+      "meta",
+      "link",
+      "base"
+    )
+
+    render_node <- function(node) {
+      node_type <- xml2::xml_type(node)
+      if (identical(node_type, "text")) {
+        return(htmltools::htmlEscape(xml2::xml_text(node)))
+      }
+      if (!identical(node_type, "element")) {
+        return("")
+      }
+
+      tag <- tolower(xml2::xml_name(node))
+      if (tag %in% drop_tags) {
+        return("")
+      }
+
+      child_html <- paste(
+        vapply(xml2::xml_contents(node), render_node, character(1)),
+        collapse = ""
+      )
+
+      if (!(tag %in% allowed_tags)) {
+        return(child_html)
+      }
+
+      attr_parts <- character(0)
+      if (tag == "a") {
+        href <- sanitize_link_href(xml2::xml_attr(node, "href"))
+        if (!is.null(href)) {
+          attr_parts <- c(
+            attr_parts,
+            sprintf(
+              "href=\"%s\"",
+              htmltools::htmlEscape(href, attribute = TRUE)
+            )
+          )
+        }
+
+        target <- xml2::xml_attr(node, "target")
+        if (!is.na(target) && target %in% c("_blank", "_self")) {
+          attr_parts <- c(
+            attr_parts,
+            sprintf(
+              "target=\"%s\"",
+              htmltools::htmlEscape(target, attribute = TRUE)
+            )
+          )
+          if (identical(target, "_blank")) {
+            attr_parts <- c(attr_parts, "rel=\"noopener noreferrer\"")
+          }
+        }
+      }
+
+      attr_text <- if (length(attr_parts)) {
+        paste0(" ", paste(attr_parts, collapse = " "))
+      } else {
+        ""
+      }
+
+      if (tag %in% c("br", "hr")) {
+        return(sprintf("<%s%s>", tag, attr_text))
+      }
+
+      sprintf("<%s%s>%s</%s>", tag, attr_text, child_html, tag)
+    }
+
+    doc <- xml2::read_html(
+      paste0("<body>", text_value, "</body>"),
+      options = c("RECOVER", "NOERROR", "NOWARNING")
+    )
+    body <- xml2::xml_find_first(doc, ".//body")
+    paste(
+      vapply(xml2::xml_contents(body), render_node, character(1)),
+      collapse = ""
+    )
+  }
+
+  safe_html_fragment_ui <<- function(text, style = NULL, class = NULL) {
+    html_text <- sanitize_html_fragment(text)
+    if (!nzchar(html_text)) {
+      return(NULL)
+    }
+
+    tags$div(class = class, style = style, HTML(html_text))
+  }
+
+  # Create a dismissible banner that can be used for site-wide notifications or module-specific notices. The banner state is stored in localStorage so that it remains dismissed across sessions until the version changes.
+  # The banner message can include limited HTML markup (links, basic formatting) which is sanitized on render to prevent XSS while allowing some flexibility in presentation. The banner_id should be unique to avoid conflicts with other banners, and the banner_key_prefix can be used to control when the dismissal state resets (e.g. by including a version number).
+  # @param ns Shiny namespace function for the module where the banner will be used
+  # @param msg_text The message to display in the banner. Can include limited HTML markup (links, basic formatting) which will be sanitized on render.
+  # @param banner_id A unique identifier for the banner DOM element (default "app_banner")
+  # @param banner_key_prefix A prefix for the localStorage key used to track dismissal state. Including a version number in the prefix can be a simple way to reset the banner for all users when the message is updated (default "global_notice")
+  # @param banner_version Version string to differentiate between different messages.
   dismissible_banner_ui <<- function(
     ns,
-    msg_html,
+    msg_text,
     banner_id = "app_banner",
     banner_key_prefix = "global_notice",
     banner_version = utils::packageVersion("YGwater")
@@ -821,7 +1145,10 @@ YGwater_globals <- function(
         bslib::card_header(
           class = "d-flex align-items-start",
           style = "gap:12px;",
-          tags$div(style = "flex: 1 1 auto; min-width: 0;", HTML(msg_html)),
+          safe_html_fragment_ui(
+            msg_text,
+            style = "flex: 1 1 auto; min-width: 0;"
+          ),
           tags$button(
             type = "button",
             class = "btn-close ms-auto",
@@ -877,114 +1204,6 @@ YGwater_globals <- function(
     return(TRUE)
   }
 
-  # 'client' side modules #####
-  # Plot modules
-  source(system.file(
-    "apps/YGwater/modules/client/plot/discretePlot.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/plot/continuousPlot.R",
-    package = "YGwater"
-  ))
-
-  # Non-public client-side modules
-  if (!public) {
-    # Old plot modules (kept for backward compatibility)
-    source(system.file(
-      "apps/YGwater/modules/client/plot/continuousPlot_old.R",
-      package = "YGwater"
-    ))
-    source(system.file(
-      "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
-      package = "YGwater"
-    ))
-
-    # Report modules
-    if (network_check) {
-      source(system.file(
-        "apps/YGwater/modules/client/reports/WQReport.R",
-        package = "YGwater"
-      ))
-      source(system.file(
-        "apps/YGwater/modules/client/reports/snowBulletin.R",
-        package = "YGwater"
-      ))
-    }
-    source(system.file(
-      "apps/YGwater/modules/client/reports/snowInfo.R",
-      package = "YGwater"
-    ))
-    source(system.file(
-      "apps/YGwater/modules/client/reports/waterInfo.R",
-      package = "YGwater"
-    ))
-    source(system.file(
-      "apps/YGwater/modules/client/reports/waterTemp.R",
-      package = "YGwater"
-    ))
-  }
-
-  # Map modules
-  source(system.file(
-    "apps/YGwater/modules/client/map/paramsMap.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/map/rasterMap.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/map/locationsMap.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/map/snowBulletinMap.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/WWR/registry_front_end.R",
-    package = "YGwater"
-  ))
-
-  # Image and document modules
-  source(system.file(
-    "apps/YGwater/modules/client/images/image_table_view.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/images/image_map_view.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/documents/document_table_view.R",
-    package = "YGwater"
-  ))
-
-  # Data modules
-  source(system.file(
-    "apps/YGwater/modules/client/data/continuousData.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/data/discreteData.R",
-    package = "YGwater"
-  ))
-
-  # Info modules
-  source(system.file(
-    "apps/YGwater/modules/client/info/home.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/info/news.R",
-    package = "YGwater"
-  ))
-  source(system.file(
-    "apps/YGwater/modules/client/info/about.R",
-    package = "YGwater"
-  ))
-
   # Establish database connection parameters
   # The actual connection to AquaCache is being done at the server level and stored in session$userData$AquaCache. This allows using a login input form to connect to the database with edit privileges or to see additional elements
 
@@ -1038,6 +1257,36 @@ YGwater_globals <- function(
   # Make the configuration list available globally
   # double assignment creates a global variable that can be accessed by all UI and server functions
 
+  # Turn 'brand' into a list now so that we can add additional elements to it.
+  brand <- list(brand = brand, text = list())
+
+  # these strings refer to elements in translations.csv (which is turned into package data for use)
+  brand[["text"]][["app_title"]] <- if (brand$brand == 'public') {
+    "title_public"
+  } else {
+    "title_yg"
+  }
+  brand[["text"]][["SEO_desc"]] <- if (brand$brand == 'public') {
+    "SEO_desc_public"
+  } else {
+    "SEO_desc_yg"
+  }
+  brand[["text"]][["homeText"]] <- if (brand$brand == 'public') {
+    "homeText_public"
+  } else {
+    "homeText_yg"
+  }
+  brand[["text"]][["homeTitle"]] <- if (brand$brand == 'public') {
+    "homeTitle_public"
+  } else {
+    "homeTitle_yg"
+  }
+  brand[["text"]][["about_content4"]] <- if (brand$brand == 'public') {
+    "about_content4_public"
+  } else {
+    "about_content4_yg"
+  }
+
   config <<- list(
     dbName = dbName,
     dbHost = dbHost,
@@ -1052,7 +1301,8 @@ YGwater_globals <- function(
     analytics = analytics,
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
-    main_bg = "#D9EFF2" # Default background color for all main panels
+    main_bg = "#D9EFF2", # Default background color for all main panels
+    brand = brand
   )
 
   return(config)

@@ -13,6 +13,16 @@ test_that("output has correct tables", {
   expect_named(res, c("locations", "measurements"))
 })
 
+test_that("single selected location runs without SQL errors", {
+  expect_no_error(suppressWarnings(snowInfo(
+    locations = c("08AA-SC01"),
+    inactive = FALSE,
+    save_path = NULL,
+    stats = FALSE,
+    plots = FALSE
+  )))
+})
+
 test_that("locations table has correct names", {
   expect_named(
     res$locations,

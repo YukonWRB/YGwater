@@ -219,7 +219,8 @@ mapSnowbull <- function(id, language) {
             month = as.integer(input$month),
             dataset = timeseries_data[[data_type]],
             statistic = input$statistic,
-            language = language$language
+            language = language$language,
+            october_start = TRUE
           )
 
           map_data[[

@@ -281,6 +281,81 @@ test_that("french labels work with overlaping years", {
   expect_snapshot_file(path)
 })
 
+test_that("ggplotOverlap can show data in the past", {
+  skip_on_ci() # Because the CI instance would not have the necessary historical data
+  con <- AquaConnect(silent = TRUE)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  if (
+    !isTRUE(DBI::dbGetQuery(
+      con,
+      "SELECT has_schema_privilege(current_user, 'audit', 'USAGE') AS ok;"
+    )$ok[[1]])
+  ) {
+    skip("Historical queries require USAGE on schema audit.")
+  }
+
+  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+
+  # Check if the connection can access function 'measurements_calculated_daily_at' which is used for historical queries. If not, skip the test.
+  tsid <- DBI::dbGetQuery(
+    con,
+    "SELECT timeseries_id FROM timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1;"
+  )$timeseries_id[[1]]
+
+  yes <- FALSE
+  tryCatch(
+    {
+      DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT date, value, max, min, q75, q25",
+          "FROM continuous.measurements_calculated_daily_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER by date ASC;"
+        ),
+        params = list(as_of, tsid, "2022-06-01", "2022-06-05")
+      )
+      yes <- TRUE
+    },
+    error = function(e) {
+      message(
+        "Cannot access measurements_calculated_daily_at function: ",
+        e$message
+      )
+    }
+  )
+
+  if (!yes) {
+    skip(
+      "Connection cannot access measurements_calculated_daily_at function, which is required for historical queries."
+    )
+  }
+
+  plot <- ggplotOverlap(
+    "09EA004",
+    "water level",
+    startDay = "2022-06-01",
+    endDay = "2022-06-05",
+    years = "2022",
+    tzone = "UTC",
+    returns = "none",
+    historic_range = "last",
+    gridx = FALSE,
+    con = con,
+    as_of = as_of
+  )
+
+  expect_equal(
+    plot$labels$subtitle,
+    paste0("As of ", format(as_of, tz = "UTC", usetz = TRUE))
+  )
+})
+
 test_that("continuous level plot is as expected for multiple years when output to console", {
   skip_on_ci()
 

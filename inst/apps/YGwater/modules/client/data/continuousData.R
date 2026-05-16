@@ -2077,8 +2077,10 @@ contData <- function(id, language, inputs) {
 
       # Get the relevant timeseries based on the user's input selections (filteredData might not be narrowed to the user's selections if they used a selector 'upstream' of an earlier selection)
       relevant_ts <- filteredData$timeseries[
-        filteredData$timeseries$start_datetime >= input$date_range[1] &
-          filteredData$timeseries$end_datetime <= input$date_range[2] + 1,
+        filteredData$timeseries$start_datetime <=
+          as.POSIXct(paste0(input$date_range[2], " 23:59:59"), tz = "UTC") &
+          filteredData$timeseries$end_datetime >=
+            as.POSIXct(input$date_range[1], tz = "UTC"),
       ]
       if (input$locations[1] != "all") {
         relevant_ts <- relevant_ts[
@@ -2108,25 +2110,35 @@ contData <- function(id, language, inputs) {
         relevant_ts <- relevant_ts[relevant_ts$record_rate %in% input$rate, ]
       }
 
+      relevant_tsids <- unique(stats::na.omit(relevant_ts$timeseries_id))
+
       if (language$language == "Français") {
         timeseries <- dbGetQueryDT(
           session$userData$AquaCache,
-          paste0(
-            "SELECT * FROM timeseries_metadata_fr
+          if (length(relevant_tsids) == 0) {
+            "SELECT * FROM timeseries_metadata_fr WHERE FALSE;"
+          } else {
+            paste0(
+              "SELECT * FROM timeseries_metadata_fr
                                    WHERE timeseries_id IN (",
-            paste(relevant_ts$timeseries_id, collapse = ", "),
-            ");"
-          )
+              paste(relevant_tsids, collapse = ", "),
+              ");"
+            )
+          }
         )
       } else {
         timeseries <- dbGetQueryDT(
           session$userData$AquaCache,
-          paste0(
-            "SELECT * FROM timeseries_metadata_en
+          if (length(relevant_tsids) == 0) {
+            "SELECT * FROM timeseries_metadata_en WHERE FALSE;"
+          } else {
+            paste0(
+              "SELECT * FROM timeseries_metadata_en
                                    WHERE timeseries_id IN (",
-            paste(relevant_ts$timeseries_id, collapse = ", "),
-            ");"
-          )
+              paste(relevant_tsids, collapse = ", "),
+              ");"
+            )
+          }
         )
       }
       table_data(timeseries)
@@ -2229,7 +2241,7 @@ contData <- function(id, language, inputs) {
       # Get the timeseries sample
       ## Code below is for high frequency data, not used for now as this is a preview
       # # Single query using a window function to limit to 3 rows/results per timeseries_id
-      #   query <- paste0("SELECT * FROM (SELECT timeseries_id, datetime, ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY datetime) AS rn FROM measurements_continuous_corrected WHERE timeseries_id IN (", paste(selected_tsids, collapse = ","), ")) sub WHERE rn <= 3 ORDER BY timeseries_id, datetime;")
+      #   query <- paste0("SELECT * FROM (...) sub WHERE rn <= 3 ORDER BY timeseries_id, datetime;")
       #
       # subset <- dbGetQueryDT(session$userData$AquaCache, query)
       # subset[, rn := NULL] # Drop column 'rn', left over from the window function
@@ -2241,7 +2253,7 @@ contData <- function(id, language, inputs) {
           timeseries_id,
           MIN(date) AS first_date,
           MAX(date) AS last_date
-          FROM measurements_calculated_daily_corrected
+          FROM measurements_calculated_daily
           WHERE timeseries_id IN (",
         paste(selected_tsids, collapse = ", "),
         ")
@@ -2254,7 +2266,7 @@ contData <- function(id, language, inputs) {
         m.percent_historic_range,
         m.max, m.min, m.q90, m.q75, m.q50, m.q25, m.q10, m.mean,
         m.doy_count
-        FROM measurements_calculated_daily_corrected AS m
+        FROM measurements_calculated_daily AS m
         JOIN extremes AS e
         ON m.timeseries_id = e.timeseries_id
         AND (m.date = e.first_date OR m.date = e.last_date)
@@ -2473,7 +2485,7 @@ contData <- function(id, language, inputs) {
             rows <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT COUNT(*) FROM measurements_calculated_daily_corrected WHERE timeseries_id IN (",
+                "SELECT COUNT(*) FROM measurements_calculated_daily WHERE timeseries_id IN (",
                 paste(selected_tsids, collapse = ", "),
                 ") AND date > '",
                 input$modal_date_range[1],
@@ -2488,7 +2500,7 @@ contData <- function(id, language, inputs) {
             #   timeseries_id,
             #   MIN(date) AS first_date,
             #   MAX(date) AS last_date
-            #   FROM measurements_calculated_daily_corrected
+            #   FROM measurements_calculated_daily
             #   WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
             #   AND date >= '", input$modal_date_range[1], "' AND date <= '", input$modal_date_range[2], "'
             #   GROUP BY timeseries_id
@@ -2500,7 +2512,7 @@ contData <- function(id, language, inputs) {
             # m.percent_historic_range,
             # m.max, m.min, m.q90, m.q75, m.q50, m.q25, m.q10, m.mean,
             # m.doy_count
-            # FROM measurements_calculated_daily_corrected AS m
+            # FROM measurements_calculated_daily AS m
             # JOIN extremes AS e
             # ON m.timeseries_id = e.timeseries_id
             # AND (m.date = e.first_date OR m.date = e.last_date)
@@ -2513,14 +2525,22 @@ contData <- function(id, language, inputs) {
             rows <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT COUNT(*) FROM measurements_continuous_corrected WHERE timeseries_id IN (",
+                "WITH requested_timeseries(timeseries_id) AS (
+                  SELECT unnest(ARRAY[",
                 paste(selected_tsids, collapse = ", "),
-                ") AND datetime > '",
-                input$modal_date_range[1],
-                "' AND datetime < '",
-                input$modal_date_range[2],
-                "';"
-              )
+                "]::integer[])
+                )
+                SELECT COUNT(*)
+                FROM requested_timeseries r
+                JOIN LATERAL continuous.measurements_continuous_corrected(
+                  r.timeseries_id,
+                  $1::timestamptz,
+                  $2::timestamptz
+                ) m ON TRUE
+                WHERE m.datetime > $1::timestamptz
+                  AND m.datetime < $2::timestamptz;"
+              ),
+              params = list(input$modal_date_range[1], input$modal_date_range[2])
             )[[1]]
 
             #   query <- paste0("WITH extremes AS (
@@ -2528,7 +2548,7 @@ contData <- function(id, language, inputs) {
             #   timeseries_id,
             #   MIN(datetime) AS first_datetime,
             #   MAX(datetime) AS last_datetime
-            #   FROM measurements_continuous_corrected
+            #   FROM corrected measurements source
             #   WHERE timeseries_id IN (", paste(selected_tsids, collapse = ", "), ")
             #   AND datetime >= '", input$modal_date_range[1], "' AND datetime <= '", input$modal_date_range[2], "'
             #   GROUP BY timeseries_id
@@ -2540,7 +2560,7 @@ contData <- function(id, language, inputs) {
             # m.value_corrected,
             # m.imputed,
             # m.period
-            # FROM measurements_continuous_corrected AS m
+            # FROM corrected measurements source AS m
             # JOIN extremes AS e
             # ON m.timeseries_id = e.timeseries_id
             # AND (m.datetime = e.first_datetime OR m.datetime = e.last_datetime)
@@ -2559,7 +2579,7 @@ contData <- function(id, language, inputs) {
           timeseries_id,
           MIN(date) AS first_date,
           MAX(date) AS last_date
-          FROM measurements_calculated_daily_corrected
+          FROM measurements_calculated_daily
           WHERE timeseries_id IN (",
             paste(selected_tsids, collapse = ", "),
             ")
@@ -2577,7 +2597,7 @@ contData <- function(id, language, inputs) {
         m.percent_historic_range,
         m.max, m.min, m.q90, m.q75, m.q50, m.q25, m.q10, m.mean,
         m.doy_count
-        FROM measurements_calculated_daily_corrected AS m
+        FROM measurements_calculated_daily AS m
         JOIN extremes AS e
         ON m.timeseries_id = e.timeseries_id
         AND (m.date = e.first_date OR m.date = e.last_date)
@@ -2740,7 +2760,7 @@ contData <- function(id, language, inputs) {
           daily_means_stats = dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "SELECT * FROM measurements_calculated_daily_corrected WHERE timeseries_id IN (",
+              "SELECT * FROM measurements_calculated_daily WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
               ") AND date >= '",
               input$modal_date_range[1],
@@ -2827,14 +2847,20 @@ contData <- function(id, language, inputs) {
           data$max_resolution <- dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "SELECT * FROM measurements_continuous_corrected WHERE timeseries_id IN (",
+              "WITH requested_timeseries(timeseries_id) AS (
+                SELECT unnest(ARRAY[",
               paste(selected_tsids, collapse = ", "),
-              ") AND datetime >= '",
-              input$modal_date_range[1],
-              "' AND datetime <= '",
-              input$modal_date_range[2],
-              "';"
-            )
+              "]::integer[])
+              )
+              SELECT m.*
+              FROM requested_timeseries r
+              JOIN LATERAL continuous.measurements_continuous_corrected(
+                r.timeseries_id,
+                $1::timestamptz,
+                $2::timestamptz
+              ) m ON TRUE;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           )
         }
 

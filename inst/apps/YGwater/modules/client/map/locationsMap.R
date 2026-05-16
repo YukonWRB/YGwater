@@ -90,7 +90,15 @@ mapLocsUI <- function(id) {
     ),
     # All UI elements rendered in server function to allow multi-language functionality
     uiOutput(ns("banner")),
-    uiOutput(ns("sidebar_page"))
+    page_sidebar(
+      sidebar = sidebar(
+        title = NULL,
+        bg = config$sidebar_bg,
+        open = list(mobile = "always-above"),
+        uiOutput(ns("sidebar_controls"))
+      ),
+      leaflet::leafletOutput(ns("map"), height = '80vh')
+    )
   )
 }
 
@@ -217,14 +225,9 @@ mapLocs <- function(id, language) {
       )
     })
 
-    output$sidebar_page <- renderUI({
+    output$sidebar_controls <- renderUI({
       req(moduleData, language)
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          bg = config$sidebar_bg, # Set in globals file'
-          open = list(mobile = "always-above"),
-          tagList(
+      tagList(
             checkboxInput(
               ns("cluster_points"),
               label = tr("cluster_points_label", language$language),
@@ -329,6 +332,34 @@ mapLocs <- function(id, language) {
               selected = "all",
               multiple = TRUE
             ),
+            textInput(
+              ns("location_name_search"),
+              label = tr("location_name_contains", language$language),
+              value = "",
+              placeholder = tr(
+                "location_name_contains_placeholder",
+                language$language
+              )
+            ),
+            div(
+              class = "compact-checkboxes",
+              style = "margin-top: 10px;",
+              checkboxInput(
+                ns("location_name_starts_with"),
+                label = tr("starts_with", language$language),
+                value = FALSE
+              ),
+              checkboxInput(
+                ns("location_name_ends_with"),
+                label = tr("ends_with", language$language),
+                value = FALSE
+              ),
+              checkboxInput(
+                ns("location_name_case_sensitive"),
+                label = tr("case_sensitive", language$language),
+                value = FALSE
+              )
+            ),
             sliderInput(
               ns("yrs"),
               label = tr("year_filter", language$language),
@@ -352,9 +383,6 @@ mapLocs <- function(id, language) {
               tr("reset", language$language),
               class = "btn btn-primary"
             )
-          ) # End sidebar tagList
-        ),
-        leaflet::leafletOutput(ns("map"), height = '80vh'),
       )
     }) |>
       bindEvent(moduleData, language$language)
@@ -455,6 +483,26 @@ mapLocs <- function(id, language) {
           min(moduleData$timeseries$start_datetime, na.rm = TRUE),
           max(moduleData$timeseries$end_datetime, na.rm = TRUE)
         ))
+      )
+      updateTextInput(
+        session,
+        "location_name_search",
+        value = ""
+      )
+      updateCheckboxInput(
+        session,
+        "location_name_starts_with",
+        value = FALSE
+      )
+      updateCheckboxInput(
+        session,
+        "location_name_ends_with",
+        value = FALSE
+      )
+      updateCheckboxInput(
+        session,
+        "location_name_case_sensitive",
+        value = FALSE
       )
     }) # End of observeEvent for reset filters button
 
@@ -680,8 +728,7 @@ mapLocs <- function(id, language) {
           L.control.zoom({position:'bottomright'}).addTo(this);
         }"
         )
-    }) |>
-      bindEvent(language$language)
+    })
 
     # Filter the map data based on user's selection and add points to map ############################
 
@@ -936,6 +983,45 @@ mapLocs <- function(id, language) {
       loc.sub <- moduleData$locations[
         moduleData$locations$location_id %in% timeseries.sub$location_id,
       ]
+
+      search_term <- trimws(input$location_name_search %||% "")
+      if (nzchar(search_term)) {
+        location_names <- loc.sub[[tr("generic_name_col", language$language)]]
+        valid_name <- !is.na(location_names)
+
+        names_for_match <- if (isTRUE(input$location_name_case_sensitive)) {
+          location_names
+        } else {
+          tolower(location_names)
+        }
+
+        search_for_match <- if (isTRUE(input$location_name_case_sensitive)) {
+          search_term
+        } else {
+          tolower(search_term)
+        }
+
+        match_idx <- rep(FALSE, nrow(loc.sub))
+        if (isTRUE(input$location_name_starts_with)) {
+          match_idx[valid_name] <- startsWith(
+            names_for_match[valid_name],
+            search_for_match
+          )
+        } else if (isTRUE(input$location_name_ends_with)) {
+          match_idx[valid_name] <- endsWith(
+            names_for_match[valid_name],
+            search_for_match
+          )
+        } else {
+          match_idx[valid_name] <- grepl(
+            search_for_match,
+            names_for_match[valid_name],
+            fixed = TRUE
+          )
+        }
+        loc.sub <- loc.sub[match_idx]
+      }
+
       loc.sub <- loc.sub[
         popup_data,
         on = .(location_id),

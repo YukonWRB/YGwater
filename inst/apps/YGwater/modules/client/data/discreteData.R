@@ -1847,7 +1847,7 @@ discData <- function(id, language, inputs) {
           matrix_state_alias = "r",
           media_alias = "s"
         ),
-        ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY sample_id ORDER BY result_id) AS rn 
+        ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY r.sample_id ORDER BY result_id) AS rn 
         FROM results r
         JOIN samples s ON r.sample_id = s.sample_id
         JOIN parameters p ON r.parameter_id = p.parameter_id
@@ -1858,7 +1858,7 @@ discData <- function(id, language, inputs) {
         LEFT JOIN result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
         LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN laboratories l ON r.laboratory = l.lab_id
-        WHERE sample_id IN (",
+        WHERE r.sample_id IN (",
         sample_ids_str,
         ")) sub WHERE rn <= 3;"
       )

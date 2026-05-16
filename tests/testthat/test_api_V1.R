@@ -1,8 +1,58 @@
 # plumber tests use package callthat to manage the background process
 # devtools::install_github("edgararuiz/callthat")
 
-# Notably, this does not test the R function at api.R, but does test the plumber file at plumber/v1.R
+# Notably, this does not test the R function at api.R which launches the API but does test the plumber file at plumber/v1.R
 # Tests for api.R are in tests/testthat/test-api.R
+
+# Helpers to test JSON responses
+content_text <- function(response) {
+  httr::content(
+    response,
+    type = "text",
+    encoding = "UTF-8"
+  )
+}
+
+expect_content_type <- function(response, pattern) {
+  content_type <- httr::headers(response)[["content-type"]]
+
+  expect_true(
+    grepl(pattern, content_type, ignore.case = TRUE),
+    info = paste("Unexpected Content-Type:", content_type)
+  )
+}
+
+parse_json_df <- function(response) {
+  text <- content_text(response)
+
+  expect_true(
+    jsonlite::validate(text),
+    info = text
+  )
+
+  out <- jsonlite::fromJSON(
+    text,
+    simplifyDataFrame = TRUE,
+    simplifyVector = TRUE
+  )
+
+  as.data.frame(out, stringsAsFactors = FALSE)
+}
+
+expect_json_df_response <- function(response, expected_names = NULL) {
+  expect_equal(response$status_code, 200)
+  expect_content_type(response, "application/json")
+
+  out <- parse_json_df(response)
+
+  expect_gt(nrow(out), 0)
+
+  if (!is.null(expected_names)) {
+    expect_named(out, expected_names)
+  }
+
+  out
+}
 
 test_that("tests for API V1", {
   # Set some environment variables for the API to use. These are normally set when the API is launched using api() but are set here in the local environment.
@@ -35,15 +85,28 @@ test_that("tests for API V1", {
     # ---------------- Make API call --------------------
     get_ts <- callthat::call_that_api_get(
       api_session,
-      endpoint = "timeseries"
+      endpoint = "timeseries",
+      query = list(format = "csv")
     ),
     "response"
   )
 
+  expect_s3_class(
+    get_ts_json <- callthat::call_that_api_get(
+      api_session,
+      endpoint = "timeseries",
+      query = list(format = "json")
+    ),
+    "response"
+  )
   # ---------- Run tests against response ---------------
   ## Test to confirm that the response was a success
   expect_equal(
     get_ts$status_code,
+    200
+  )
+  expect_equal(
+    get_ts_json$status_code,
     200
   )
 
@@ -55,38 +118,77 @@ test_that("tests for API V1", {
       encoding = "UTF-8"
     )
   )
+  out_json <<- parse_json_df(get_ts_json)
 
   out$end_datetime <- as.POSIXct(out$end_datetime, tz = "UTC")
   out$start_datetime <- as.POSIXct(out$start_datetime, tz = "UTC")
 
+  out_json$end_datetime <- as.POSIXct(out_json$end_datetime, tz = "UTC")
+  out_json$start_datetime <- as.POSIXct(out_json$start_datetime, tz = "UTC")
+
   ## Test to confirm the output of the API is correct
+  # Names are the same for csv and json responses
+  names <- c(
+    "timeseries_id",
+    "location_id",
+    "location_name",
+    "location_type",
+    "alias_name",
+    "depth_height_m",
+    "latitude",
+    "longitude",
+    "location_elevation",
+    "projects",
+    "networks",
+    "media_type",
+    "parameter_name",
+    "units",
+    "aggregation_type",
+    "recording_rate",
+    "sensor_priority",
+    "start_datetime",
+    "end_datetime",
+    "note",
+    "timeseries_type_code",
+    "timeseries_type",
+    "timeseries_type_description",
+    "last_new_data",
+    "publicly_visible",
+    "active",
+    "default_owner_organization_id",
+    "default_owner",
+    "default_owner_fr",
+    "timezone_daily_calc",
+    "last_daily_calculation",
+    "last_synchronize",
+    "matrix_state_id",
+    "matrix_state_name",
+    "matrix_state_name_fr",
+    "sub_location_id",
+    "sub_location_name",
+    "sub_location_name_fr",
+    "compound_expression_sql",
+    "compound_member_aliases",
+    "compound_member_timeseries_ids",
+    "compound_member_priorities",
+    "compound_member_use_from",
+    "compound_member_use_to"
+  )
   expect_named(
     out,
-    c(
-      "timeseries_id",
-      "location_id",
-      "location_name",
-      "alias_name",
-      "depth_height_m",
-      "latitude",
-      "longitude",
-      "location_elevation",
-      "projects",
-      "networks",
-      "media_type",
-      "parameter_name",
-      "units",
-      "aggregation_type",
-      "recording_rate",
-      "sensor_priority",
-      "start_datetime",
-      "end_datetime",
-      "note"
-    )
+    names
+  )
+  expect_named(
+    out_json,
+    names
   )
   # Expect more than 0 rows returned
   expect_gt(
     nrow(out),
+    0
+  )
+  expect_gt(
+    nrow(out_json),
     0
   )
   # pick a timeseries_id to test the /timeseries/{timeseries_id} endpoint later on
@@ -108,11 +210,18 @@ test_that("tests for API V1", {
 
   # Tests for /locations endpoint
   expect_s3_class(
-    # ---------------- Make API call --------------------
     get_locs <- callthat::call_that_api_get(
       api_session,
       endpoint = "locations",
-      query = list(weight = 1)
+      query = list(weight = 1, format = "csv")
+    ),
+    "response"
+  )
+  expect_s3_class(
+    get_locs_json <- callthat::call_that_api_get(
+      api_session,
+      endpoint = "locations",
+      query = list(weight = 1, format = "json")
     ),
     "response"
   )
@@ -121,6 +230,11 @@ test_that("tests for API V1", {
     get_locs$status_code,
     200
   )
+  expect_equal(
+    get_locs_json$status_code,
+    200
+  )
+  out_json <- parse_json_df(get_locs_json)
   out <- read.csv(
     text = httr::content(
       get_locs,
@@ -133,23 +247,124 @@ test_that("tests for API V1", {
     nrow(out),
     0
   )
+  expect_gt(
+    nrow(out_json),
+    0
+  )
+
+  # Test names, same for both json and csv responses
+  names <- c(
+    "location_id",
+    "name",
+    "alias",
+    "location_code",
+    "location_type",
+    "latitude",
+    "longitude",
+    "elevation",
+    "datum",
+    "note",
+    "projects",
+    "networks",
+    "fn_names"
+  )
   expect_named(
     out,
-    c(
-      "location_id",
+    names
+  )
+  expect_named(
+    out_json,
+    names
+  )
+
+  ## Tests for grade, approval, qualifier, and organization lookup endpoints
+  lookup_endpoints <- list(
+    grades = c(
+      "grade_type_id",
+      "grade_type_code",
+      "grade_type_description",
+      "grade_type_description_fr",
+      "color_code"
+    ),
+    approvals = c(
+      "approval_type_id",
+      "approval_type_code",
+      "approval_type_description",
+      "approval_type_description_fr",
+      "color_code"
+    ),
+    qualifiers = c(
+      "qualifier_type_id",
+      "qualifier_type_code",
+      "qualifier_type_description",
+      "qualifier_type_description_fr",
+      "color_code"
+    ),
+    organizations = c(
+      "organization_id",
       "name",
-      "alias",
-      "location_code",
-      "latitude",
-      "longitude",
-      "elevation",
-      "datum",
-      "note",
-      "projects",
-      "networks",
-      "fn_names"
+      "name_fr",
+      "contact_name",
+      "phone",
+      "email",
+      "note"
     )
   )
+
+  for (endpoint in names(lookup_endpoints)) {
+    expect_s3_class(
+      get_lookup <- callthat::call_that_api_get(
+        api_session,
+        endpoint = endpoint,
+        query = list(format = "csv")
+      ),
+      "response"
+    )
+    expect_s3_class(
+      get_lookup_json <- callthat::call_that_api_get(
+        api_session,
+        endpoint = endpoint,
+        query = list(format = "json")
+      ),
+      "response"
+    )
+
+    expect_equal(
+      get_lookup$status_code,
+      200
+    )
+    expect_equal(
+      get_lookup_json$status_code,
+      200
+    )
+
+    out <- read.csv(
+      text = httr::content(
+        get_lookup,
+        type = "text",
+        encoding = "UTF-8"
+      )
+    )
+    out_json <- parse_json_df(get_lookup_json)
+
+    expect_gt(
+      nrow(out),
+      0
+    )
+    expect_gt(
+      nrow(out_json),
+      0
+    )
+
+    expect_named(
+      out,
+      lookup_endpoints[[endpoint]]
+    )
+    expect_named(
+      out_json,
+      lookup_endpoints[[endpoint]]
+    )
+  }
 
   ## Tests for /timeseries/{timeseries_id} endpoint
   skip_on_ci()
@@ -163,31 +378,68 @@ test_that("tests for API V1", {
         start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
         end = test_timeseries_end,
         limit = 100,
-        id = test_timeseries_id
+        id = test_timeseries_id,
+        format = "csv"
       )
     ),
     "response"
   )
+  get_ts_id_json <- callthat::call_that_api_get(
+    api_session,
+    endpoint = "timeseries/measurements",
+    query = list(
+      start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
+      end = test_timeseries_end,
+      limit = 100,
+      id = test_timeseries_id,
+      format = "json"
+    )
+  )
   # Two timeseries
   expect_s3_class(
     # ---------------- Make API call --------------------
-    get_ts_id <- callthat::call_that_api_get(
+    get_ts_id2 <- callthat::call_that_api_get(
       api_session,
       endpoint = "timeseries/measurements",
       query = list(
         start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
         end = test_timeseries_end,
         limit = 100,
-        id = paste(test_timeseries_id, test_timeseries_id_2, sep = ",")
+        id = paste(test_timeseries_id, test_timeseries_id_2, sep = ","),
+        format = "csv"
       )
     ),
     "response"
+  )
+  get_ts_id2_json <- callthat::call_that_api_get(
+    api_session,
+    endpoint = "timeseries/measurements",
+    query = list(
+      start = test_timeseries_end - 365 * 24 * 60 * 60, # one year before end date
+      end = test_timeseries_end,
+      limit = 100,
+      id = paste(test_timeseries_id, test_timeseries_id_2, sep = ","),
+      format = "json"
+    )
   )
   # Test to confirm that the response was a success
   expect_equal(
     get_ts_id$status_code,
     200
   )
+  expect_equal(
+    get_ts_id_json$status_code,
+    200
+  )
+  expect_equal(
+    get_ts_id2$status_code,
+    200
+  )
+  expect_equal(
+    get_ts_id2_json$status_code,
+    200
+  )
+
   out <- read.csv(
     text = httr::content(
       get_ts_id,
@@ -195,22 +447,62 @@ test_that("tests for API V1", {
       encoding = "UTF-8"
     )
   )
+  out_json <- parse_json_df(get_ts_id_json)
   # ---------- Run tests against response ---------------
   expect_gt(
     nrow(out),
     0
   )
+  expect_gt(
+    nrow(out_json),
+    0
+  )
+
+  # Test names, same for both json and csv responses
+  names <- c(
+    "timeseries_id",
+    "datetime",
+    "value_raw",
+    "value_corrected",
+    "period",
+    "imputed",
+    "created",
+    "modified",
+    "grade_type_id",
+    "grade_type_description",
+    "approval_type_id",
+    "approval_type_description",
+    "qualifier_type_ids",
+    "qualifier_type_descriptions",
+    "owner_organization_id",
+    "owner",
+    "contributor_organization_id",
+    "contributor"
+  )
   expect_named(
     out,
-    c(
-      "timeseries_id",
-      "datetime",
-      "value_raw",
-      "value_corrected",
-      "period",
-      "imputed",
-      "created",
-      "modified"
+    names
+  )
+  expect_named(
+    out_json,
+    names
+  )
+
+  # Test that the two timeseries_ids requested in the two timeseries test are present in the response
+  out2 <- read.csv(
+    text = httr::content(
+      get_ts_id2,
+      type = "text",
+      encoding = "UTF-8"
+    )
+  )
+  out_json2 <- parse_json_df(get_ts_id2_json)
+  expect_true(
+    all(c(test_timeseries_id, test_timeseries_id_2) %in% out2$timeseries_id)
+  )
+  expect_true(
+    all(
+      c(test_timeseries_id, test_timeseries_id_2) %in% out_json2$timeseries_id
     )
   )
 })

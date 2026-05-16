@@ -24,7 +24,23 @@ imgMapViewUI <- function(id) {
       # Top row with filters (collapsible using bslib accordion)
       uiOutput(ns("accordion")),
       # Map and selected image in a side-by-side layout, with collapsible map.
-      uiOutput(ns("sidebar_page"))
+      page_sidebar(
+        sidebar = sidebar(
+          title = NULL,
+          width = 600,
+          leaflet::leafletOutput(ns("map"), width = "100%", height = "300px"),
+          div(
+            style = "margin-top: 10px;",
+            verbatimTextOutput(ns("img_info"))
+          )
+        ),
+        div(
+          style = "display: flex; justify-content: stretch; align-items: left; margin-bottom: 10px; gap: 10px; width: 100%;",
+          uiOutput(ns("image_nav_controls")),
+          plotOutput(ns("img_graph"), height = "40px", width = "100%")
+        ),
+        imageOutput(ns("img"), fill = TRUE)
+      )
     )
   )
 }
@@ -178,10 +194,6 @@ imgMapView <- function(id, language) {
           id = ns("map_options"),
           title = tr("map_options", language$language),
           page_fluid(
-            actionButton(
-              ns("load_additional_layers"),
-              tr("map_load_addtional_layers", language$language)
-            ),
             actionButton(ns("reset_view"), tr("reset_view", language$language)),
             actionButton(
               ns("refresh_images"),
@@ -198,26 +210,13 @@ imgMapView <- function(id, language) {
     }) |>
       bindEvent(language$language)
 
-    output$sidebar_page <- renderUI({
-      page_sidebar(
-        sidebar = sidebar(
-          title = NULL,
-          width = 600,
-          leaflet::leafletOutput(ns("map"), width = "100%", height = "300px"),
-          div(
-            style = "margin-top: 10px;",
-            verbatimTextOutput(ns("img_info"))
-          )
-        ),
-        div(
-          style = "display: flex; justify-content: stretch; align-items: left; margin-bottom: 10px; gap: 10px; width: 100%;",
-          actionButton(ns("prev_img"), tr("tbl_prev", language$language)),
-          actionButton(ns("next_img"), tr("tbl_next", language$language)),
-          plotOutput(ns("img_graph"), height = "40px", width = "100%")
-        ),
-        imageOutput(ns("img"), fill = TRUE)
+    output$image_nav_controls <- renderUI({
+      tagList(
+        actionButton(ns("prev_img"), tr("tbl_prev", language$language)),
+        actionButton(ns("next_img"), tr("tbl_next", language$language))
       )
-    })
+    }) |>
+      bindEvent(language$language)
 
     output$map <- leaflet::renderLeaflet({
       leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 13)) %>%
@@ -252,12 +251,10 @@ imgMapView <- function(id, language) {
       filtered_images <- images$images[selection, ]
       if (nrow(filtered_images) == 0) {
         leaflet::leafletProxy("map", session) %>%
-          leaflet::clearMarkers() %>%
-          leaflet::clearMarkerClusters()
+          leaflet::clearGroup("Images")
       } else {
         leaflet::leafletProxy("map", session) %>%
-          leaflet::clearMarkers() %>%
-          leaflet::clearMarkerClusters() %>%
+          leaflet::clearGroup("Images") %>%
           leaflet::addCircleMarkers(
             data = filtered_images,
             lng = ~longitude,
@@ -596,89 +593,116 @@ imgMapView <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    observeEvent(input$load_additional_layers, {
-      showNotification(
-        "Loading additional layers (30-120 seconds)...",
-        type = "message"
-      )
-      basins <- getVector(layer_name = "Drainage basins")
-      #locations <- getVector(layer_name = "Locations")
-      roads <- getVector(layer_name = "Roads")
-      watercourses <- getVector(layer_name = "Watercourses")
+    observeEvent(
+      input$map_bounds,
+      {
+        # basins <- getVector(layer_name = "Drainage basins")
+        communities <- getVector(
+          layer_name = "Communities",
+          con = session$userData$AquaCache
+        )
+        roads <- getVector(
+          layer_name = "Roads",
+          con = session$userData$AquaCache
+        )
+        # watercourses <- getVector(layer_name = "Watercourses", con = session$userData$AquaCache)
 
-      m <- leaflet::leafletProxy("map", session)
-      if (!is.null(basins)) {
-        if ("area" %in% names(basins)) {
-          basins <- basins[order(basins$area, decreasing = TRUE), ]
-        }
-        for (i in seq_len(nrow(basins))) {
+        m <- leaflet::leafletProxy("map", session)
+        # if (!is.null(basins)) {
+        #   if ("area" %in% names(basins)) {
+        #     basins <- basins[order(basins$area, decreasing = TRUE), ]
+        #   }
+        #   for (i in seq_len(nrow(basins))) {
+        #     m <- m %>%
+        #       leaflet::addPolygons(
+        #         data = basins[i, ],
+        #         color = "#1f78b4",
+        #         weight = 2,
+        #         opacity = 0.7,
+        #         fillOpacity = 0.2,
+        #         group = "Basins",
+        #         label = ~ as.character(feature_name)
+        #       )
+        #   }
+        # }
+
+        # if (!is.null(locations)) {
+        #   m <- m %>%
+        #     leaflet::addCircleMarkers(
+        #       data = locations,
+        #       color = "#444444",
+        #       weight = 2,
+        #       opacity = 1,
+        #       fillOpacity = 0.2,
+        #       group = "Locations",
+        #       label = ~as.character(feature_name),
+        #       options = leaflet::markerOptions(interactive = FALSE, keyboard = FALSE, riseOnHover = TRUE)
+        #     )
+        # }
+
+        if (!is.null(roads)) {
+          m <- leaflet::leafletProxy("map", session)
           m <- m %>%
-            leaflet::addPolygons(
-              data = basins[i, ],
-              color = "#1f78b4",
-              weight = 2,
-              opacity = 0.7,
-              fillOpacity = 0.2,
-              group = "Basins",
+            leaflet::addPolylines(
+              data = roads,
+              color = "red",
+              weight = 1,
+              opacity = 0.5,
+              group = "Roads",
               label = ~ as.character(feature_name)
             )
         }
-      }
 
-      # if (!is.null(locations)) {
-      #   m <- m %>%
-      #     leaflet::addCircleMarkers(
-      #       data = locations,
-      #       color = "#444444",
-      #       weight = 2,
-      #       opacity = 1,
-      #       fillOpacity = 0.2,
-      #       group = "Locations",
-      #       label = ~as.character(feature_name),
-      #       options = leaflet::markerOptions(interactive = FALSE, keyboard = FALSE, riseOnHover = TRUE)
-      #     )
-      # }
+        if (!is.null(communities)) {
+          communities_sf <- sf::st_as_sf(communities)
+          m <- leaflet::leafletProxy("map", session)
+          m <- m %>%
+            leaflet::addCircleMarkers(
+              data = communities_sf,
+              color = "black",
+              weight = 2,
+              opacity = 0.8,
+              fillColor = "black",
+              fillOpacity = 0.5,
+              radius = 5,
+              group = "Communities",
+              label = ~ as.character(feature_name),
+              labelOptions = leaflet::labelOptions(
+                permanent = TRUE,
+                direction = "top",
+                textOnly = FALSE,
+                style = list(
+                  "background-color" = "rgba(255, 255, 255, 0.5)",
+                  "border" = "none",
+                  "box-shadow" = "none"
+                )
+              )
+            )
+        }
 
-      if (!is.null(roads)) {
-        m <- leaflet::leafletProxy("map", session)
+        # if (!is.null(watercourses)) {
+        #   m <- leaflet::leafletProxy("map", session)
+        #   m <- m %>%
+        #     leaflet::addPolylines(
+        #       data = watercourses,
+        #       color = "#134bc4",
+        #       weight = 1,
+        #       opacity = 0.5,
+        #       group = "Watercourses",
+        #       label = ~ as.character(feature_name)
+        #     )
+        # }
+
         m <- m %>%
-          leaflet::addPolylines(
-            data = roads,
-            color = "#FF0000",
-            weight = 1,
-            opacity = 0.5,
-            group = "Roads",
-            label = ~ as.character(feature_name)
+          leaflet::addLayersControl(
+            baseGroups = c("Satellite", "USGS", "Terrain"),
+            overlayGroups = c("Communities", "Roads"),
+            options = leaflet::layersControlOptions(collapsed = FALSE)
           )
-      }
-
-      if (!is.null(watercourses)) {
-        m <- leaflet::leafletProxy("map", session)
-        m <- m %>%
-          leaflet::addPolylines(
-            data = watercourses,
-            color = "#134bc4",
-            weight = 1,
-            opacity = 0.5,
-            group = "Watercourses",
-            label = ~ as.character(feature_name)
-          )
-      }
-
-      m <- m %>%
-        leaflet::addLayersControl(
-          overlayGroups = c(
-            "Satellite",
-            "USGS",
-            "Terrain",
-            "Basins",
-            "Watercourses",
-            "Roads"
-          ),
-          options = leaflet::layersControlOptions(collapsed = FALSE)
-        ) %>%
-        leaflet::hideGroup("Locations")
-    })
+      },
+      once = TRUE,
+      ignoreNULL = TRUE
+    )
 
     observeEvent(input$reset_view, {
       leaflet::leafletProxy("map", session) %>%

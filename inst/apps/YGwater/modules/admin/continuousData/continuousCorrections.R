@@ -383,7 +383,9 @@ continuousCorrections <- function(id, language) {
       }
       DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT datetime, value, continuous.apply_corrections($1, datetime, value) AS corrected FROM measurements_continuous WHERE timeseries_id = $1 AND datetime BETWEEN $2 AND $3 ORDER BY datetime",
+        "SELECT datetime, value_raw AS value, value_corrected AS corrected
+         FROM continuous.measurements_continuous_corrected($1, $2, $3)
+         ORDER BY datetime",
         params = list(timeseries(), start_dt, end_dt)
       )
     }

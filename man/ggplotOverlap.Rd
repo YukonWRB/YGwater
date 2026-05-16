@@ -36,7 +36,8 @@ ggplotOverlap(
   con = NULL,
   continuous_data = NULL,
   snowbulletin = FALSE,
-  lang = "en"
+  lang = "en",
+  as_of = NULL
 )
 }
 \arguments{
@@ -103,6 +104,11 @@ ggplotOverlap(
 \item{snowbulletin}{If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.}
 
 \item{lang}{The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".}
+
+\item{as_of}{Optional point-in-time timestamp at which measurement values and
+stored daily summaries should be reconstructed. Character, Date, and
+POSIXct inputs are supported. Date-like inputs are interpreted as the end
+of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
 }
 \value{
 A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
