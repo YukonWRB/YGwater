@@ -26,6 +26,16 @@
 #' @param legend_position The position of the legend, 'v' for vertical on the right side or 'h' for horizontal on the bottom. Default is 'v'. If 'h', slider will be set to FALSE due to interference.
 #' @param gridx Should gridlines be drawn on the x-axis? Default is FALSE
 #' @param gridy Should gridlines be drawn on the y-axis? Default is FALSE
+#' @param sub_location_ids Optional AquaCache sub-location ids to include.
+#' @param media Optional AquaCache media type ids or names to include.
+#' @param sample_types Optional AquaCache sample type ids or names to include.
+#' @param collection_methods Optional AquaCache collection method ids or names to include.
+#' @param result_types Optional AquaCache result type ids or names to include.
+#' @param sample_fractions Optional AquaCache sample fraction ids or names to include, for example total or dissolved.
+#' @param result_value_types Optional AquaCache result value type ids or names to include, for example Actual or Calculated.
+#' @param result_speciations Optional AquaCache result speciation ids or names to include.
+#' @param include_blanks Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.
+#' @param duplicate_action How AquaCache duplicate/replicate samples should be handled. One of "show", "hide", or "average".
 #' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbCon A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`.
@@ -60,6 +70,16 @@ plotDiscrete <- function(
   legend_position = 'v',
   gridx = FALSE,
   gridy = FALSE,
+  sub_location_ids = NULL,
+  media = NULL,
+  sample_types = NULL,
+  collection_methods = NULL,
+  result_types = NULL,
+  sample_fractions = NULL,
+  result_value_types = NULL,
+  result_speciations = NULL,
+  include_blanks = TRUE,
+  duplicate_action = c("show", "hide", "average"),
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
@@ -142,6 +162,7 @@ plotDiscrete <- function(
   # initial checks, connection, and validations #######################################################################################
 
   return_data <- data # data is used in this function, but keeping the function argument as 'data' keeps things consistent with other functions
+  duplicate_action <- match.arg(duplicate_action)
 
   if (!dbSource %in% c("AC", "EQ")) {
     stop("dbSource must be either 'AC' or 'EQ'")
@@ -204,6 +225,20 @@ plotDiscrete <- function(
         stop("Parameter 'paramGrp' must be a single group name/code")
       }
     }
+
+    ac_args <- list(
+      sub_location_ids = sub_location_ids,
+      media = media,
+      sample_types = sample_types,
+      collection_methods = collection_methods,
+      result_types = result_types,
+      sample_fractions = sample_fractions,
+      result_value_types = result_value_types,
+      result_speciations = result_speciations
+    )
+    if (any(vapply(ac_args, Negate(is.null), logical(1)))) {
+      warning("AquaCache result/sample filters are ignored when 'dbSource' is 'EQ'")
+    }
   }
 
   # check for proper call of standards
@@ -245,6 +280,145 @@ plotDiscrete <- function(
   # Create a data.frame to hold the plotting data. EQWin and aquacache fill this list in differently, but the end result is the same to pass on to the plotting portion.
   # 'data' should contain columns named location, location_name, parameter, datetime, result, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_speciation.
   data <- data.frame()
+
+  filter_ac_values <- function(df, values, id_col, label_col) {
+    if (is.null(values) || length(values) == 0 || nrow(df) == 0) {
+      return(df)
+    }
+
+    values <- values[!is.na(values) & nzchar(as.character(values))]
+    if (length(values) == 0) {
+      return(df)
+    }
+
+    value_chr <- as.character(values)
+    numeric_values <- suppressWarnings(as.numeric(value_chr))
+    use_ids <- all(!is.na(numeric_values)) && id_col %in% names(df)
+
+    if (use_ids) {
+      df[df[[id_col]] %in% numeric_values, , drop = FALSE]
+    } else if (label_col %in% names(df)) {
+      df[
+        tolower(as.character(df[[label_col]])) %in% tolower(value_chr),
+        ,
+        drop = FALSE
+      ]
+    } else {
+      df
+    }
+  }
+
+  collapse_unique <- function(x) {
+    x <- unique(as.character(x[!is.na(x) & nzchar(as.character(x))]))
+    if (length(x) == 0) {
+      return(NA_character_)
+    }
+    paste(x, collapse = "; ")
+  }
+
+  average_discrete_duplicates <- function(df) {
+    if (nrow(df) < 2) {
+      return(df)
+    }
+
+    if ("linked_with" %in% names(df) && "sample_id" %in% names(df)) {
+      df$duplicate_group <- data.table::fifelse(
+        is.na(df$linked_with),
+        df$sample_id,
+        df$linked_with
+      )
+    }
+
+    group_cols <- intersect(
+      c(
+        "location",
+        "location_name",
+        "param_name",
+        "parameter_id",
+        "units",
+        if ("duplicate_group" %in% names(df)) {
+          "duplicate_group"
+        } else {
+          c("datetime", "target_datetime")
+        },
+        "sample_fraction",
+        "result_speciation",
+        "result_type",
+        "result_value_type",
+        "matrix_state"
+      ),
+      names(df)
+    )
+
+    if (length(group_cols) == 0) {
+      return(df)
+    }
+
+    keys <- do.call(
+      paste,
+      c(
+        lapply(df[group_cols], function(x) {
+          x <- as.character(x)
+          x[is.na(x)] <- "<NA>"
+          x
+        }),
+        sep = "\r"
+      )
+    )
+
+    averaged <- lapply(split(seq_len(nrow(df)), keys), function(idx) {
+      rows <- df[idx, , drop = FALSE]
+      if (nrow(rows) == 1) {
+        return(rows)
+      }
+
+      out <- rows[1, , drop = FALSE]
+      measured <- rows$result[!is.na(rows$result)]
+      if (length(measured) > 0) {
+        out$result <- mean(measured, na.rm = TRUE)
+        out$result_condition <- NA_character_
+        out$result_condition_value <- NA_real_
+      } else {
+        out$result <- NA_real_
+        out$result_condition <- collapse_unique(rows$result_condition)
+        out$result_condition_value <- mean(
+          rows$result_condition_value,
+          na.rm = TRUE
+        )
+        if (!is.finite(out$result_condition_value)) {
+          out$result_condition_value <- NA_real_
+        }
+      }
+
+      if ("sample_id" %in% names(out)) {
+        out$sample_id <- NA
+      }
+      if ("result_id" %in% names(out)) {
+        out$result_id <- NA
+      }
+      if ("linked_with" %in% names(out)) {
+        out$linked_with <- rows$duplicate_group[[1]]
+      }
+      if ("sample_type" %in% names(out)) {
+        out$sample_type <- paste0("Average of ", nrow(rows), " samples")
+      }
+      for (col in intersect(
+        c(
+          "collection_method",
+          "media_type",
+          "grade_type_description",
+          "approval_type_description",
+          "qualifier_type_description"
+        ),
+        names(out)
+      )) {
+        out[[col]] <- collapse_unique(rows[[col]])
+      }
+      out
+    })
+
+    dplyr::bind_rows(averaged)
+  }
 
   # Fetch the data ##############################################################################################################
   if (dbSource == "EQ") {
@@ -862,12 +1036,16 @@ plotDiscrete <- function(
         sl.sub_location_name,
         sl.sub_location_name_fr,
         s.sub_location_id,
+        s.media_id,
         mt.media_type,
         mt.media_type_fr,
         s.z,
         s.datetime,
         s.target_datetime,
+        s.linked_with,
+        s.collection_method AS collection_method_id,
         cm.collection_method,
+        s.sample_type AS sample_type_id,
         st.sample_type,
         gt.grade_type_description,
         gt.grade_type_description_fr,
@@ -909,12 +1087,17 @@ SELECT
     s.location_id,
     sl.sub_location_name,
     sl.sub_location_name_fr,
+    s.sub_location_id,
+    s.media_id,
     mt.media_type,
     mt.media_type_fr,
     s.z,
     s.datetime,
     s.target_datetime,
+    s.linked_with,
+    s.collection_method AS collection_method_id,
     cm.collection_method,
+    s.sample_type AS sample_type_id,
     st.sample_type,
     gt.grade_type_description,
     gt.grade_type_description_fr,
@@ -995,23 +1178,37 @@ AND s.datetime > '",
     res_query <- paste0(
       "
     SELECT 
+        r.result_id,
         r.sample_id,
         r.parameter_id,
-        r.result_type,
+        r.result_type AS result_type_id,
         r.result,
         r.result_condition, 
         r.result_condition_value,
+        r.result_value_type AS result_value_type_id,
+        r.sample_fraction_id,
+        r.result_speciation_id,
+        r.matrix_state_id,
+        rt.result_type,
+        rc.result_condition AS result_condition_label,
         rvt.result_value_type,
         sf.sample_fraction, 
-        rs.result_speciation 
+        rs.result_speciation,
+        ms.matrix_state_name AS matrix_state
     FROM 
         results AS r
+    LEFT JOIN
+        result_types AS rt ON r.result_type = rt.result_type_id
+    LEFT JOIN
+        result_conditions AS rc ON r.result_condition = rc.result_condition_id
     LEFT JOIN 
         sample_fractions AS sf ON r.sample_fraction_id = sf.sample_fraction_id
     LEFT JOIN 
         result_speciations AS rs ON r.result_speciation_id = rs.result_speciation_id
     LEFT JOIN
         result_value_types AS rvt ON r.result_value_type = rvt.result_value_type_id
+    LEFT JOIN
+        matrix_states AS ms ON r.matrix_state_id = ms.matrix_state_id
     WHERE 
         r.sample_id IN (",
       paste0(samples$sample_id, collapse = ", "),
@@ -1042,18 +1239,84 @@ AND s.datetime > '",
     data <- merge(results, samples, by = "sample_id", all.x = TRUE)
     data <- merge(data, paramIds, by = "parameter_id", all.x = TRUE)
 
+    data <- filter_ac_values(
+      data,
+      sub_location_ids,
+      "sub_location_id",
+      "sub_location_name"
+    )
+    data <- filter_ac_values(data, media, "media_id", "media_type")
+    data <- filter_ac_values(
+      data,
+      sample_types,
+      "sample_type_id",
+      "sample_type"
+    )
+    data <- filter_ac_values(
+      data,
+      collection_methods,
+      "collection_method_id",
+      "collection_method"
+    )
+    data <- filter_ac_values(data, result_types, "result_type_id", "result_type")
+    data <- filter_ac_values(
+      data,
+      sample_fractions,
+      "sample_fraction_id",
+      "sample_fraction"
+    )
+    data <- filter_ac_values(
+      data,
+      result_value_types,
+      "result_value_type_id",
+      "result_value_type"
+    )
+    data <- filter_ac_values(
+      data,
+      result_speciations,
+      "result_speciation_id",
+      "result_speciation"
+    )
+
+    if (!isTRUE(include_blanks) && "sample_type" %in% names(data)) {
+      data <- data[
+        is.na(data$sample_type) |
+          !grepl("blank", data$sample_type, ignore.case = TRUE),
+        ,
+        drop = FALSE
+      ]
+    }
+
+    if (duplicate_action == "hide" && "sample_type" %in% names(data)) {
+      data <- data[
+        is.na(data$sample_type) |
+          !grepl("duplicate|replicate", data$sample_type, ignore.case = TRUE),
+        ,
+        drop = FALSE
+      ]
+    }
+
+    if (nrow(data) == 0) {
+      stop("No results were found after applying the requested sample/result filters.")
+    }
+
     # Now make result_condition column understandable
     #result_condition should get < DL, > DL, or NA depending on if 1 or 2 show up in column 'result_condition'
+    result_condition_id <- suppressWarnings(as.integer(data$result_condition))
     data$result_condition <- data.table::fifelse(
-      grepl("1", data$result_condition),
+      result_condition_id == 1,
       "< DL",
-      data.table::fifelse(grepl("2", data$result_condition), "> DL", NA)
+      data.table::fifelse(result_condition_id == 2, "> DL", NA)
     )
 
     # Retain columns depending on if 'fr' or 'en', rename cols to match EQWin output
     if (lang == "fr") {
       data <- data[, c(
         "result",
+        "result_id",
+        "sample_id",
+        "linked_with",
+        "parameter_id",
         "target_datetime",
         "datetime",
         "param_name_fr",
@@ -1062,13 +1325,24 @@ AND s.datetime > '",
         "name",
         "result_condition",
         "result_condition_value",
+        "media_type_fr",
+        "result_type",
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation"
+        "result_speciation",
+        "result_value_type",
+        "matrix_state",
+        "grade_type_description_fr",
+        "approval_type_description_fr",
+        "qualifier_type_description_fr"
       )]
       names(data) <- c(
         "result",
+        "result_id",
+        "sample_id",
+        "linked_with",
+        "parameter_id",
         "target_datetime",
         "datetime",
         "param_name",
@@ -1077,14 +1351,25 @@ AND s.datetime > '",
         "location_name",
         "result_condition",
         "result_condition_value",
+        "media_type",
+        "result_type",
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation"
+        "result_speciation",
+        "result_value_type",
+        "matrix_state",
+        "grade_type_description",
+        "approval_type_description",
+        "qualifier_type_description"
       )
     } else {
       data <- data[, c(
         "result",
+        "result_id",
+        "sample_id",
+        "linked_with",
+        "parameter_id",
         "target_datetime",
         "datetime",
         "param_name",
@@ -1093,13 +1378,24 @@ AND s.datetime > '",
         "name",
         "result_condition",
         "result_condition_value",
+        "media_type",
+        "result_type",
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation"
+        "result_speciation",
+        "result_value_type",
+        "matrix_state",
+        "grade_type_description",
+        "approval_type_description",
+        "qualifier_type_description"
       )]
       names(data) <- c(
         "result",
+        "result_id",
+        "sample_id",
+        "linked_with",
+        "parameter_id",
         "target_datetime",
         "datetime",
         "param_name",
@@ -1108,11 +1404,22 @@ AND s.datetime > '",
         "location_name",
         "result_condition",
         "result_condition_value",
+        "media_type",
+        "result_type",
         "sample_type",
         "collection_method",
         "sample_fraction",
-        "result_speciation"
+        "result_speciation",
+        "result_value_type",
+        "matrix_state",
+        "grade_type_description",
+        "approval_type_description",
+        "qualifier_type_description"
       )
+    }
+
+    if (duplicate_action == "average") {
+      data <- average_discrete_duplicates(data)
     }
   }
 
@@ -1279,6 +1586,64 @@ AND s.datetime > '",
           df$result_speciation <- titleCase(df$result_speciation, lang)
         }
       }
+      has_result_type <- FALSE
+      if ("result_type" %in% names(df)) {
+        if (any(!is.na(df$result_type))) {
+          has_result_type <- TRUE
+          df$result_type <- titleCase(df$result_type, lang)
+        }
+      }
+      has_result_value_type <- FALSE
+      if ("result_value_type" %in% names(df)) {
+        if (any(!is.na(df$result_value_type))) {
+          has_result_value_type <- TRUE
+          df$result_value_type <- titleCase(df$result_value_type, lang)
+        }
+      }
+      has_matrix_state <- FALSE
+      if ("matrix_state" %in% names(df)) {
+        if (any(!is.na(df$matrix_state))) {
+          has_matrix_state <- TRUE
+          df$matrix_state <- titleCase(df$matrix_state, lang)
+        }
+      }
+      has_media <- FALSE
+      if ("media_type" %in% names(df)) {
+        if (any(!is.na(df$media_type))) {
+          has_media <- TRUE
+          df$media_type <- titleCase(df$media_type, lang)
+        }
+      }
+      grade <- FALSE
+      if ("grade_type_description" %in% names(df)) {
+        if (any(!is.na(df$grade_type_description))) {
+          grade <- TRUE
+          df$grade_type_description <- titleCase(
+            df$grade_type_description,
+            lang
+          )
+        }
+      }
+      approval <- FALSE
+      if ("approval_type_description" %in% names(df)) {
+        if (any(!is.na(df$approval_type_description))) {
+          approval <- TRUE
+          df$approval_type_description <- titleCase(
+            df$approval_type_description,
+            lang
+          )
+        }
+      }
+      qualifier <- FALSE
+      if ("qualifier_type_description" %in% names(df)) {
+        if (any(!is.na(df$qualifier_type_description))) {
+          qualifier <- TRUE
+          df$qualifier_type_description <- titleCase(
+            df$qualifier_type_description,
+            lang
+          )
+        }
+      }
       if (targ_dt) {
         if (!"target_datetime" %in% names(df)) {
           targ_dt <- FALSE
@@ -1312,8 +1677,15 @@ AND s.datetime > '",
           units, # result and units
           if (type) paste("<br>Sample type:", sample_type), # Sample type if provided
           if (collection) paste("<br>Collection method:", collection_method), # Collection method if provided
+          if (has_media) paste("<br>Media:", media_type),
+          if (has_result_type) paste("<br>Result type:", result_type),
           if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
-          if (speciation) paste("<br>Result speciation", result_speciation) # Result speciation if provided
+          if (speciation) paste("<br>Result speciation:", result_speciation), # Result speciation if provided
+          if (has_result_value_type) paste("<br>Result value type:", result_value_type),
+          if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
+          if (grade) paste("<br>Grade:", grade_type_description),
+          if (approval) paste("<br>Approval:", approval_type_description),
+          if (qualifier) paste("<br>Qualifier:", qualifier_type_description)
         )
       ) %>%
         plotly::layout(
@@ -1372,8 +1744,15 @@ AND s.datetime > '",
             units, # Result condition and result
             if (type) paste("<br>Sample type:", sample_type), # Sample type if provided
             if (collection) paste("<br>Collection method:", collection_method), # Collection method if provided
+            if (has_media) paste("<br>Media:", media_type),
+            if (has_result_type) paste("<br>Result type:", result_type),
             if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
-            if (speciation) paste("<br>Result speciation", result_speciation) # Result speciation if provided
+            if (speciation) paste("<br>Result speciation:", result_speciation), # Result speciation if provided
+            if (has_result_value_type) paste("<br>Result value type:", result_value_type),
+            if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
+            if (grade) paste("<br>Grade:", grade_type_description),
+            if (approval) paste("<br>Approval:", approval_type_description),
+            if (qualifier) paste("<br>Qualifier:", qualifier_type_description)
           )
         )
       }

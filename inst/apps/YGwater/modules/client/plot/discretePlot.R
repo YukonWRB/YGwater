@@ -49,6 +49,167 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       session$userData$AquaCache,
       "SELECT DISTINCT s.location_id, r.parameter_id FROM samples s INNER JOIN results r ON s.sample_id = r.sample_id"
     )
+    moduleData$AC_samples <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type, collection_method FROM samples;"
+    )
+    moduleData$AC_results <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT sample_id, parameter_id, result_type, sample_fraction_id, result_value_type, result_speciation_id FROM results;"
+    )
+    moduleData$AC_sub_locs <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE sub_location_id IN (SELECT DISTINCT sub_location_id FROM samples WHERE sub_location_id IS NOT NULL) ORDER BY sub_location_name ASC;"
+    )
+    moduleData$AC_media <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT media_id, media_type, media_type_fr FROM media_types WHERE media_id IN (SELECT DISTINCT media_id FROM samples) ORDER BY media_type ASC;"
+    )
+    moduleData$AC_sample_types <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT sample_type_id, sample_type, COALESCE(sample_type_fr, sample_type) AS sample_type_fr FROM sample_types WHERE sample_type_id IN (SELECT DISTINCT sample_type FROM samples) ORDER BY sample_type ASC;"
+    )
+    moduleData$AC_collection_methods <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT collection_method_id, collection_method FROM collection_methods WHERE collection_method_id IN (SELECT DISTINCT collection_method FROM samples) ORDER BY collection_method ASC;"
+    )
+    moduleData$AC_result_types <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT result_type_id, result_type FROM result_types WHERE result_type_id IN (SELECT DISTINCT result_type FROM results) ORDER BY result_type ASC;"
+    )
+    moduleData$AC_sample_fractions <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT sample_fraction_id, sample_fraction FROM sample_fractions WHERE sample_fraction_id IN (SELECT DISTINCT sample_fraction_id FROM results WHERE sample_fraction_id IS NOT NULL) ORDER BY sample_fraction ASC;"
+    )
+    moduleData$AC_result_value_types <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT result_value_type_id, result_value_type FROM result_value_types WHERE result_value_type_id IN (SELECT DISTINCT result_value_type FROM results WHERE result_value_type IS NOT NULL) ORDER BY result_value_type ASC;"
+    )
+    moduleData$AC_result_speciations <- DBI::dbGetQuery(
+      session$userData$AquaCache,
+      "SELECT result_speciation_id, result_speciation FROM result_speciations WHERE result_speciation_id IN (SELECT DISTINCT result_speciation_id FROM results WHERE result_speciation_id IS NOT NULL) ORDER BY result_speciation ASC;"
+    )
+
+    ac_option_rows <- function(scope, lookup, scope_col, lookup_col) {
+      if (is.null(scope) || nrow(scope) == 0 || nrow(lookup) == 0) {
+        return(lookup[0, , drop = FALSE])
+      }
+      ids <- unique(scope[[scope_col]])
+      ids <- ids[!is.na(ids)]
+      lookup[lookup[[lookup_col]] %in% ids, , drop = FALSE]
+    }
+
+    ac_keep_selection <- function(selected, choices) {
+      if (is.null(selected) || length(selected) == 0) {
+        return(NULL)
+      }
+      selected[selected %in% choices]
+    }
+
+    ac_selectize <- function(input_id, label, choices, selected = NULL) {
+      if (length(choices) <= 1) {
+        return(NULL)
+      }
+      selectizeInput(
+        ns(input_id),
+        label,
+        choices = choices,
+        selected = ac_keep_selection(selected, choices),
+        multiple = TRUE
+      )
+    }
+
+    ac_scope_for_options <- function(use_date_range = TRUE) {
+      samples <- moduleData$AC_samples
+      if (
+        isTRUE(use_date_range) &&
+          !is.null(input$date_range) &&
+          length(input$date_range) == 2
+      ) {
+        samples <- samples[
+          as.Date(samples$datetime) >= input$date_range[1] &
+            as.Date(samples$datetime) <= input$date_range[2],
+          ,
+          drop = FALSE
+        ]
+      }
+      if (!is.null(input$locations_AC) && length(input$locations_AC) > 0) {
+        samples <- samples[
+          samples$location_id %in% as.numeric(input$locations_AC),
+          ,
+          drop = FALSE
+        ]
+      }
+
+      scope <- merge(
+        moduleData$AC_results,
+        samples,
+        by = "sample_id",
+        all = FALSE
+      )
+
+      if (!is.null(input$parameters_AC) && length(input$parameters_AC) > 0) {
+        scope <- scope[
+          scope$parameter_id %in% as.numeric(input$parameters_AC),
+          ,
+          drop = FALSE
+        ]
+      }
+
+      scope
+    }
+
+    ac_scope <- reactive({
+      scope <- ac_scope_for_options(use_date_range = TRUE)
+      if (nrow(scope) == 0) {
+        scope <- ac_scope_for_options(use_date_range = FALSE)
+      }
+      scope
+    })
+
+    ensure_discrete_plot_function <- function() {
+      new_args <- c(
+        "sub_location_ids",
+        "media",
+        "sample_types",
+        "collection_methods",
+        "result_types",
+        "sample_fractions",
+        "result_value_types",
+        "result_speciations",
+        "include_blanks",
+        "duplicate_action"
+      )
+      if (all(new_args %in% names(formals(plotDiscrete)))) {
+        return(invisible(TRUE))
+      }
+
+      candidates <- unique(c(
+        file.path(getwd(), "R", "plotDiscrete.R"),
+        file.path(dirname(getwd()), "R", "plotDiscrete.R"),
+        "C:/Users/g_del/Documents/R/YGwater/R/plotDiscrete.R"
+      ))
+      candidates <- candidates[file.exists(candidates)]
+      for (path in candidates) {
+        root <- dirname(dirname(path))
+        for (helper in c("titleCase.R", "utils.R", "AquaConnect.R")) {
+          helper_path <- file.path(root, "R", helper)
+          if (file.exists(helper_path)) {
+            source(helper_path, local = .GlobalEnv)
+          }
+        }
+        source(path, local = .GlobalEnv)
+        if (all(new_args %in% names(formals(plotDiscrete)))) {
+          return(invisible(TRUE))
+        }
+      }
+
+      stop(
+        "The loaded plotDiscrete() function is older than the discrete plot ",
+        "module. Restart the app from the current YGwater source tree or ",
+        "reinstall/reload YGwater so R/plotDiscrete.R is current."
+      )
+    }
 
     output$banner <- renderUI({
       application_notifications_ui(
@@ -191,7 +352,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             tr("parameter(s)", language$language),
             choices = NULL,
             multiple = TRUE
-          )
+          ),
+          uiOutput(ns("AC_options_ui"))
         ),
         radioButtons(
           ns("facet_on"),
@@ -289,6 +451,234 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       ) # End of tagList
     }) %>% # End of renderUI for sidebar
       bindEvent(language$language) #TODO: bindEvent should also be on moduleData, but moduleData is not being used in the creation of lists yet
+
+    output$AC_options_ui <- renderUI({
+      req(input$data_source == "AC")
+
+      scope <- ac_scope()
+      if (is.null(scope) || nrow(scope) == 0) {
+        return(NULL)
+      }
+      plot_lang <- if (identical(language$language, "Français")) {
+        "fr"
+      } else {
+        "en"
+      }
+
+      sub_locs <- ac_option_rows(
+        scope,
+        moduleData$AC_sub_locs,
+        "sub_location_id",
+        "sub_location_id"
+      )
+      media <- ac_option_rows(
+        scope,
+        moduleData$AC_media,
+        "media_id",
+        "media_id"
+      )
+      sample_types <- ac_option_rows(
+        scope,
+        moduleData$AC_sample_types,
+        "sample_type",
+        "sample_type_id"
+      )
+      collection_methods <- ac_option_rows(
+        scope,
+        moduleData$AC_collection_methods,
+        "collection_method",
+        "collection_method_id"
+      )
+      result_types <- ac_option_rows(
+        scope,
+        moduleData$AC_result_types,
+        "result_type",
+        "result_type_id"
+      )
+      sample_fractions <- ac_option_rows(
+        scope,
+        moduleData$AC_sample_fractions,
+        "sample_fraction_id",
+        "sample_fraction_id"
+      )
+      result_value_types <- ac_option_rows(
+        scope,
+        moduleData$AC_result_value_types,
+        "result_value_type",
+        "result_value_type_id"
+      )
+      result_speciations <- ac_option_rows(
+        scope,
+        moduleData$AC_result_speciations,
+        "result_speciation_id",
+        "result_speciation_id"
+      )
+
+      sub_loc_choices <- stats::setNames(
+        sub_locs$sub_location_id,
+        sub_locs[, tr("sub_location_col", language$language)]
+      )
+      media_choices <- stats::setNames(
+        media$media_id,
+        media[, tr("media_type_col", language$language)]
+      )
+      sample_type_choices <- stats::setNames(
+        sample_types$sample_type_id,
+        sample_types[, tr("sample_type_col", language$language)]
+      )
+      collection_method_choices <- stats::setNames(
+        collection_methods$collection_method_id,
+        collection_methods$collection_method
+      )
+      result_type_choices <- stats::setNames(
+        result_types$result_type_id,
+        titleCase(result_types$result_type, plot_lang)
+      )
+      sample_fraction_choices <- stats::setNames(
+        sample_fractions$sample_fraction_id,
+        titleCase(sample_fractions$sample_fraction, plot_lang)
+      )
+      result_value_type_choices <- stats::setNames(
+        result_value_types$result_value_type_id,
+        titleCase(result_value_types$result_value_type, plot_lang)
+      )
+      result_speciation_choices <- stats::setNames(
+        result_speciations$result_speciation_id,
+        result_speciations$result_speciation
+      )
+
+      blank_available <- any(
+        grepl("blank", sample_types$sample_type, ignore.case = TRUE)
+      )
+      duplicate_available <- any(
+        grepl(
+          "duplicate|replicate",
+          sample_types$sample_type,
+          ignore.case = TRUE
+        )
+      )
+
+      advanced_inputs <- Filter(
+        Negate(is.null),
+        list(
+          ac_selectize(
+            "sub_locations_AC",
+            tr("sub_loc(s)", language$language),
+            sub_loc_choices,
+            input$sub_locations_AC
+          ),
+          ac_selectize(
+            "media_AC",
+            tr("media_type(s)", language$language),
+            media_choices,
+            input$media_AC
+          ),
+          ac_selectize(
+            "sample_types_AC",
+            tr("sample_type(s)", language$language),
+            sample_type_choices,
+            input$sample_types_AC
+          ),
+          ac_selectize(
+            "collection_methods_AC",
+            "Collection method(s)",
+            collection_method_choices,
+            input$collection_methods_AC
+          ),
+          ac_selectize(
+            "result_speciations_AC",
+            "Result speciation(s)",
+            result_speciation_choices,
+            input$result_speciations_AC
+          )
+        )
+      )
+      primary_inputs <- Filter(
+        Negate(is.null),
+        list(
+          ac_selectize(
+            "sample_fractions_AC",
+            "Sample fraction(s)",
+            sample_fraction_choices,
+            input$sample_fractions_AC
+          ),
+          ac_selectize(
+            "result_value_types_AC",
+            "Result value type(s)",
+            result_value_type_choices,
+            input$result_value_types_AC
+          ),
+          ac_selectize(
+            "result_types_AC",
+            "Result type(s)",
+            result_type_choices,
+            input$result_types_AC
+          )
+        )
+      )
+
+      tagList(
+        tags$hr(),
+        tags$h6("Sample/result filters"),
+        tagList(primary_inputs),
+        if (blank_available) {
+          checkboxInput(
+            ns("include_blanks"),
+            "Show blank samples",
+            value = if (is.null(input$include_blanks)) {
+              TRUE
+            } else {
+              isTRUE(input$include_blanks)
+            }
+          )
+        },
+        if (duplicate_available) {
+          radioButtons(
+            ns("duplicate_action"),
+            "Duplicate/replicate samples",
+            choices = c(
+              "Show individually" = "show",
+              "Average matching samples" = "average",
+              "Hide duplicate/replicate samples" = "hide"
+            ),
+            selected = if (!is.null(input$duplicate_action)) {
+              input$duplicate_action
+            } else {
+              "show"
+            }
+          )
+        },
+        if (
+          length(primary_inputs) == 0 &&
+            length(advanced_inputs) == 0 &&
+            !blank_available &&
+            !duplicate_available
+        ) {
+          tags$small(
+            class = "text-muted",
+            "No additional filters are available for the current selection."
+          )
+        },
+        if (length(advanced_inputs) > 0) {
+          accordion(
+            id = ns("AC_advanced_options"),
+            open = character(0),
+            accordion_panel(
+              title = "More sample/result filters",
+              tagList(advanced_inputs)
+            )
+          )
+        }
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$date_range,
+        input$locations_AC,
+        input$parameters_AC,
+        ignoreNULL = FALSE
+      )
 
     output$main <- renderUI({
       tagList(
@@ -676,6 +1066,16 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         legend_position,
         gridx,
         gridy,
+        sub_location_ids,
+        media,
+        sample_types,
+        collection_methods,
+        result_types,
+        sample_fractions,
+        result_value_types,
+        result_speciations,
+        include_blanks,
+        duplicate_action,
         dbSource,
         dbPath,
         config
@@ -696,6 +1096,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               } else {
                 con = NULL
               }
+
+              ensure_discrete_plot_function()
 
               plot <- plotDiscrete(
                 start = start,
@@ -721,6 +1123,16 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 legend_position = legend_position,
                 gridx = gridx,
                 gridy = gridy,
+                sub_location_ids = sub_location_ids,
+                media = media,
+                sample_types = sample_types,
+                collection_methods = collection_methods,
+                result_types = result_types,
+                sample_fractions = sample_fractions,
+                result_value_types = result_value_types,
+                result_speciations = result_speciations,
+                include_blanks = include_blanks,
+                duplicate_action = duplicate_action,
                 dbSource = dbSource,
                 dbPath = dbPath,
                 dbCon = con,
@@ -867,11 +1279,34 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             },
             gridx = plot_aes$showgridx,
             gridy = plot_aes$showgridy,
+            sub_location_ids = NULL,
+            media = NULL,
+            sample_types = NULL,
+            collection_methods = NULL,
+            result_types = NULL,
+            sample_fractions = NULL,
+            result_value_types = NULL,
+            result_speciations = NULL,
+            include_blanks = TRUE,
+            duplicate_action = "show",
             dbSource = input$data_source,
             dbPath = input$EQWin_source, # EQWin connection so no need to pass config
             config = NULL # EQWin connection so no need to pass config
           )
         } else if (input$data_source == "AC") {
+          scope <- isolate(ac_scope())
+          keep_ac_ids <- function(values, lookup, scope_col, lookup_col) {
+            allowed <- as.character(
+              ac_option_rows(scope, lookup, scope_col, lookup_col)[[lookup_col]]
+            )
+            values <- as.character(values)
+            values <- values[values %in% allowed]
+            if (length(values) == 0) {
+              return(NULL)
+            }
+            as.numeric(values)
+          }
+
           plot_output_discrete$invoke(
             start = input$date_range[1],
             end = input$date_range[2],
@@ -902,6 +1337,64 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             },
             gridx = plot_aes$showgridx,
             gridy = plot_aes$showgridy,
+            sub_location_ids = keep_ac_ids(
+              input$sub_locations_AC,
+              moduleData$AC_sub_locs,
+              "sub_location_id",
+              "sub_location_id"
+            ),
+            media = keep_ac_ids(
+              input$media_AC,
+              moduleData$AC_media,
+              "media_id",
+              "media_id"
+            ),
+            sample_types = keep_ac_ids(
+              input$sample_types_AC,
+              moduleData$AC_sample_types,
+              "sample_type",
+              "sample_type_id"
+            ),
+            collection_methods = keep_ac_ids(
+              input$collection_methods_AC,
+              moduleData$AC_collection_methods,
+              "collection_method",
+              "collection_method_id"
+            ),
+            result_types = keep_ac_ids(
+              input$result_types_AC,
+              moduleData$AC_result_types,
+              "result_type",
+              "result_type_id"
+            ),
+            sample_fractions = keep_ac_ids(
+              input$sample_fractions_AC,
+              moduleData$AC_sample_fractions,
+              "sample_fraction_id",
+              "sample_fraction_id"
+            ),
+            result_value_types = keep_ac_ids(
+              input$result_value_types_AC,
+              moduleData$AC_result_value_types,
+              "result_value_type",
+              "result_value_type_id"
+            ),
+            result_speciations = keep_ac_ids(
+              input$result_speciations_AC,
+              moduleData$AC_result_speciations,
+              "result_speciation_id",
+              "result_speciation_id"
+            ),
+            include_blanks = if (is.null(input$include_blanks)) {
+              TRUE
+            } else {
+              isTRUE(input$include_blanks)
+            },
+            duplicate_action = if (is.null(input$duplicate_action)) {
+              "show"
+            } else {
+              input$duplicate_action
+            },
             dbSource = input$data_source,
             dbPath = NULL, # AquaCache connection so no need to pass database path
             config = session$userData$config

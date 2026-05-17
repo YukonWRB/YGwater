@@ -40,6 +40,7 @@ plotTimeseries(
   raw = FALSE,
   imputed = FALSE,
   data = FALSE,
+  build_plot = TRUE,
   con = NULL,
   as_of = NULL
 )
@@ -114,6 +115,8 @@ plotTimeseries(
 \item{imputed}{Should imputed data be displayed differently? Default is FALSE.}
 
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
+
+\item{build_plot}{Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 

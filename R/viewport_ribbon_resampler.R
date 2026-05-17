@@ -45,12 +45,30 @@ viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {
     return(NULL)
   }
 
-  if (isTRUE(relayout[["xaxis.autorange"]])) {
+  autorange_keys <- grep("^xaxis[0-9]*\\.autorange$", names(relayout), value = TRUE)
+  if (length(autorange_keys) > 0 && any(vapply(
+    autorange_keys,
+    function(key) isTRUE(relayout[[key]]),
+    logical(1)
+  ))) {
     return(NULL)
   }
 
-  x0 <- relayout[["xaxis.range[0]"]]
-  x1 <- relayout[["xaxis.range[1]"]]
+  range0_keys <- grep("^xaxis[0-9]*\\.range\\[0\\]$", names(relayout), value = TRUE)
+  range1_keys <- grep("^xaxis[0-9]*\\.range\\[1\\]$", names(relayout), value = TRUE)
+
+  if (length(range0_keys) == 0 || length(range1_keys) == 0) {
+    return(NULL)
+  }
+
+  axis_prefix <- sub("\\.range\\[0\\]$", "", range0_keys[[1]])
+  range1_key <- paste0(axis_prefix, ".range[1]")
+  if (!(range1_key %in% range1_keys)) {
+    range1_key <- range1_keys[[1]]
+  }
+
+  x0 <- relayout[[range0_keys[[1]]]]
+  x1 <- relayout[[range1_key]]
 
   if (is.null(x0) || is.null(x1)) {
     return(NULL)
@@ -139,6 +157,32 @@ viewport_ribbon_resample <- function(
   }
 
   if (!nrow(visible)) {
+    if (!is.null(xlim_num)) {
+      return(list(
+        line = data.table::data.table(
+          x = dt[[x_col]][0],
+          y = numeric(0),
+          .run = integer(0),
+          .bin = integer(0),
+          .row_id = integer(0)
+        ),
+        bands = stats::setNames(
+          vector("list", length(if (is.null(bands)) list() else bands)),
+          names(bands)
+        ),
+        meta = list(
+          total_rows = nrow(dt),
+          window_rows = window_rows,
+          visible_rows = 0L,
+          line_rows = 0L,
+          band_rows = 0L,
+          n_bins = 0L,
+          x_window = sort(xlim),
+          x_visible = NULL
+        )
+      ))
+    }
+
     visible <- dt
   }
 
@@ -290,7 +334,14 @@ viewport_ribbon_trace_bundle <- function(
 
   for (band_name in names(summary$bands)) {
     band_dt <- summary$bands[[band_name]]
-    if (!nrow(band_dt)) {
+    if (is.null(band_dt)) {
+      next
+    }
+    band_dt <- data.table::as.data.table(band_dt)
+    if (
+      nrow(band_dt) == 0L ||
+        !all(c("x", "ymin", "ymax", ".run") %in% names(band_dt))
+    ) {
       next
     }
 
@@ -306,18 +357,6 @@ viewport_ribbon_trace_bundle <- function(
     showlegend <- TRUE
 
     for (seg in band_runs) {
-      hover_text <- paste0(
-        band_name,
-        "<br>",
-        format(seg$x, usetz = TRUE),
-        "<br>Lower: ",
-        signif(seg$ymin, 5),
-        "<br>Upper: ",
-        signif(seg$ymax, 5),
-        "<br>Rows aggregated: ",
-        prettyNum(seg$n_raw, big.mark = ",")
-      )
-
       x_poly <- c(seg$x, rev(seg$x))
       y_poly <- c(seg$ymin, rev(seg$ymax))
 
@@ -333,8 +372,8 @@ viewport_ribbon_trace_bundle <- function(
         name = band_name,
         legendgroup = band_name,
         showlegend = showlegend,
-        hoverinfo = if (hover) "text" else "skip",
-        text = c(hover_text, rev(hover_text))
+        hoverinfo = "skip",
+        hovertemplate = "<extra></extra>"
       )
 
       client_points <- client_points + length(x_poly)
@@ -427,6 +466,7 @@ viewport_ribbon_plot <- function(
       font = list(family = "Nunito Sans")
     ) |>
     plotly::config(displayModeBar = TRUE)
+  p <- viewport_event_register(p)
 
   list(
     plot = p,
@@ -566,6 +606,7 @@ viewport_timeseries_plot <- function(
     plotly::config,
     c(list(p = p), config_args)
   )
+  p <- viewport_event_register(p)
 
   list(
     plot = p,
@@ -578,5 +619,437 @@ viewport_timeseries_plot <- function(
       line = line_summary,
       bands = band_summary
     )
+  )
+}
+
+
+viewport_axis_ref <- function(prefix, index) {
+  if (is.null(index) || is.na(index) || index <= 1) {
+    return(prefix)
+  }
+
+  paste0(prefix, as.integer(index))
+}
+
+
+viewport_layout_axis_name <- function(prefix, index) {
+  if (is.null(index) || is.na(index) || index <= 1) {
+    return(paste0(prefix, "axis"))
+  }
+
+  paste0(prefix, "axis", as.integer(index))
+}
+
+
+viewport_trace_apply_axes <- function(trace, xaxis = NULL, yaxis = NULL) {
+  if (!is.null(xaxis)) {
+    trace$xaxis <- xaxis
+  }
+  if (!is.null(yaxis)) {
+    trace$yaxis <- yaxis
+  }
+  trace
+}
+
+
+viewport_event_register <- function(plot, events = "plotly_relayout") {
+  for (event in events) {
+    plot <- plotly::event_register(plot, event)
+  }
+  plot
+}
+
+
+viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
+  datetime <- y <- id <- starts_before_end <- ends_after_start <- NULL
+  empty_bundle <- list(
+    traces = list(),
+    trace_count = 0L,
+    client_points = 0L
+  )
+
+  if (is.null(status_bands)) {
+    return(empty_bundle)
+  }
+
+  if (is.null(status_bands$polygons) && length(status_bands) > 0) {
+    bundles <- lapply(status_bands, viewport_status_band_trace_bundle, xlim = xlim)
+    traces <- unlist(lapply(bundles, `[[`, "traces"), recursive = FALSE)
+    return(list(
+      traces = traces,
+      trace_count = length(traces),
+      client_points = sum(vapply(
+        bundles,
+        function(bundle) bundle$client_points,
+        integer(1)
+      ))
+    ))
+  }
+
+  if (is.null(status_bands$polygons)) {
+    return(empty_bundle)
+  }
+
+  polygons <- data.table::copy(data.table::as.data.table(
+    status_bands$polygons
+  ))
+  required_cols <- c("datetime", "y", "color", "text", "id")
+  if (!nrow(polygons) || !all(required_cols %in% names(polygons))) {
+    return(empty_bundle)
+  }
+
+  polygons[, datetime := viewport_ribbon_as_posixct(datetime, tz = "UTC")]
+  polygons <- polygons[!is.na(datetime) & !is.na(y)]
+  if (!nrow(polygons)) {
+    return(empty_bundle)
+  }
+
+  if (!is.null(xlim) && length(xlim) == 2 && all(!is.na(xlim))) {
+    xlim_num <- sort(as.numeric(xlim))
+    keep_ids <- polygons[
+      ,
+      .(
+        starts_before_end = min(as.numeric(datetime), na.rm = TRUE) <= xlim_num[2],
+        ends_after_start = max(as.numeric(datetime), na.rm = TRUE) >= xlim_num[1]
+      ),
+      by = id
+    ][starts_before_end & ends_after_start, id]
+    polygons <- polygons[id %in% keep_ids]
+    if (!nrow(polygons)) {
+      return(empty_bundle)
+    }
+  }
+
+  xaxis <- if (!is.null(status_bands$xaxis)) status_bands$xaxis else "x"
+  yaxis <- if (!is.null(status_bands$yaxis)) status_bands$yaxis else "y2"
+  hover <- if (!is.null(status_bands$hover)) {
+    isTRUE(status_bands$hover)
+  } else {
+    TRUE
+  }
+
+  traces <- list()
+  client_points <- 0L
+  for (status_id in unique(polygons$id)) {
+    seg <- polygons[id == status_id]
+    if (nrow(seg) < 3) {
+      next
+    }
+
+    traces[[length(traces) + 1L]] <- list(
+      x = seg$datetime,
+      y = seg$y,
+      type = "scatter",
+      mode = "lines",
+      fill = "toself",
+      hoveron = "fills",
+      fillcolor = as.character(seg$color[[1]]),
+      line = list(width = 1, color = "black"),
+      hoverinfo = if (hover) "text" else "skip",
+      text = rep(as.character(seg$text[[1]]), nrow(seg)),
+      showlegend = FALSE,
+      xaxis = xaxis,
+      yaxis = yaxis
+    )
+
+    client_points <- client_points + nrow(seg)
+  }
+
+  list(
+    traces = traces,
+    trace_count = length(traces),
+    client_points = client_points
+  )
+}
+
+
+viewport_layout_add_status_bands <- function(
+  layout,
+  status_bands,
+  main_xaxis_name = "xaxis",
+  main_yaxis_name = "yaxis",
+  status_xaxis_name = NULL,
+  status_yaxis_name = "yaxis2"
+) {
+  if (is.null(status_bands)) {
+    return(layout)
+  }
+
+  if (is.null(layout)) {
+    layout <- list()
+  }
+
+  status_height <- status_bands$height
+  if (
+    is.null(status_height) ||
+      length(status_height) != 1 ||
+      is.na(status_height)
+  ) {
+    status_height <- 0.04
+  }
+  status_height <- min(0.20, max(0.02, as.numeric(status_height)))
+
+  if (is.null(layout[[main_xaxis_name]])) {
+    layout[[main_xaxis_name]] <- list()
+  }
+  if (is.null(layout[[main_yaxis_name]])) {
+    layout[[main_yaxis_name]] <- list()
+  }
+
+  main_xaxis <- layout[[main_xaxis_name]]
+  main_yaxis <- layout[[main_yaxis_name]]
+  main_xaxis_ref <- sub("axis", "", main_xaxis_name, fixed = TRUE)
+  status_yaxis_ref <- sub("axis", "", status_yaxis_name, fixed = TRUE)
+  panel_domain <- main_yaxis$domain
+  if (is.null(panel_domain) || length(panel_domain) != 2 || any(is.na(panel_domain))) {
+    panel_domain <- c(0, 1)
+  }
+  panel_domain <- sort(as.numeric(panel_domain))
+  panel_span <- diff(panel_domain)
+  status_domain_height <- panel_span * status_height
+  status_domain_top <- panel_domain[1] + status_domain_height
+
+  original_showticklabels <- main_xaxis$showticklabels
+  if (is.null(original_showticklabels)) {
+    original_showticklabels <- TRUE
+  }
+
+  main_yaxis$domain <- c(status_domain_top, panel_domain[2])
+  main_yaxis$anchor <- main_xaxis_ref
+  layout[[main_yaxis_name]] <- main_yaxis
+
+  main_xaxis$anchor <- status_yaxis_ref
+  main_xaxis$showticklabels <- original_showticklabels
+  if (is.null(main_xaxis$type)) {
+    main_xaxis$type <- "date"
+  }
+  if (!is.null(main_xaxis$rangeslider)) {
+    main_xaxis$rangeslider$visible <- FALSE
+  }
+  layout[[main_xaxis_name]] <- main_xaxis
+
+  y_range <- status_bands$y_range
+  if (is.null(y_range) || length(y_range) != 2 || any(is.na(y_range))) {
+    y_range <- c(0, 1)
+  }
+
+  layout[[status_yaxis_name]] <- list(
+    domain = c(panel_domain[1], status_domain_top),
+    anchor = main_xaxis_ref,
+    range = y_range,
+    fixedrange = TRUE,
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    zeroline = FALSE
+  )
+
+  annotations <- status_bands$annotations
+  if (!is.null(annotations) && length(annotations) > 0) {
+    layout$annotations <- c(layout$annotations, annotations)
+  }
+
+  layout
+}
+
+
+viewport_layout_apply_xlim <- function(layout, xlim = NULL, xaxis_names = NULL) {
+  if (is.null(xlim) || length(xlim) != 2 || any(is.na(xlim))) {
+    return(layout)
+  }
+
+  if (is.null(xaxis_names) || length(xaxis_names) == 0) {
+    xaxis_names <- "xaxis"
+  }
+
+  for (axis_name in xaxis_names) {
+    if (is.null(layout[[axis_name]])) {
+      layout[[axis_name]] <- list()
+    }
+    layout[[axis_name]]$range <- xlim
+  }
+
+  layout
+}
+
+
+viewport_adaptive_plot <- function(
+  payload,
+  source = NULL,
+  xlim = NULL,
+  n_bins = 700L,
+  legend_orientation = NULL
+) {
+  series <- payload$series
+  if (is.null(series) || length(series) == 0) {
+    stop("`payload$series` must contain at least one series.")
+  }
+
+  traces <- list()
+  summaries <- vector("list", length(series))
+  client_points <- 0L
+
+  for (i in seq_along(series)) {
+    item <- series[[i]]
+    trace_dt <- data.table::as.data.table(item$trace_data)
+    range_dt <- data.table::as.data.table(item$range_data)
+    meta <- item$meta
+    if (is.null(meta)) {
+      meta <- list()
+    }
+    hover <- if (is.null(meta$hover)) TRUE else isTRUE(meta$hover)
+
+    x_col <- if (!is.null(item$x_col)) item$x_col else "datetime"
+    y_col <- if (!is.null(item$y_col)) item$y_col else "value"
+    range_x_col <- if (!is.null(item$range_x_col)) {
+      item$range_x_col
+    } else {
+      x_col
+    }
+
+    line_bundle <- list(
+      traces = list(),
+      trace_count = 0L,
+      client_points = 0L
+    )
+    line_summary <- NULL
+    if (
+      nrow(trace_dt) > 0 &&
+        all(c(x_col, y_col) %in% names(trace_dt))
+    ) {
+      line_summary <- viewport_ribbon_resample(
+        data = trace_dt,
+        x_col = x_col,
+        line_col = y_col,
+        xlim = xlim,
+        n_bins = n_bins
+      )
+      line_bundle <- viewport_ribbon_trace_bundle(
+        summary = line_summary,
+        line_name = if (!is.null(item$line_name)) {
+          item$line_name
+        } else if (!is.null(meta$line_name)) {
+          meta$line_name
+        } else {
+          paste("Series", i)
+        },
+        line_color = if (!is.null(item$line_color)) {
+          item$line_color
+        } else if (!is.null(meta$line_color)) {
+          meta$line_color
+        } else {
+          "#00454e"
+        },
+        line_width = if (!is.null(item$line_width)) {
+          item$line_width
+        } else if (!is.null(meta$line_width)) {
+          meta$line_width
+        } else {
+          1.4
+        },
+        band_styles = list(),
+        hover = hover
+      )
+    }
+
+    band_bundle <- list(
+      traces = list(),
+      trace_count = 0L,
+      client_points = 0L
+    )
+    band_summary <- NULL
+    if (
+      nrow(range_dt) > 0 &&
+        all(c(range_x_col, "min", "max", "q25", "q75") %in% names(range_dt))
+    ) {
+      band_names <- meta$band_names
+      if (is.null(band_names)) {
+        band_names <- list(historic = "Historic", typical = "Typical")
+      }
+
+      band_defs <- list()
+      band_defs[[band_names$historic]] <- c("min", "max")
+      band_defs[[band_names$typical]] <- c("q25", "q75")
+
+      band_summary <- viewport_ribbon_resample(
+        data = range_dt,
+        x_col = range_x_col,
+        line_col = NULL,
+        bands = band_defs,
+        xlim = xlim,
+        n_bins = n_bins
+      )
+      band_bundle <- viewport_ribbon_trace_bundle(
+        summary = band_summary,
+        line_name = NULL,
+        band_styles = meta$band_styles,
+        hover = hover
+      )
+    }
+
+    xaxis <- item$xaxis
+    yaxis <- item$yaxis
+    item_traces <- c(band_bundle$traces, line_bundle$traces)
+    item_traces <- lapply(
+      item_traces,
+      viewport_trace_apply_axes,
+      xaxis = xaxis,
+      yaxis = yaxis
+    )
+
+    traces <- c(traces, item_traces)
+    client_points <- client_points +
+      band_bundle$client_points +
+      line_bundle$client_points
+    summaries[[i]] <- list(line = line_summary, bands = band_summary)
+  }
+
+  status_bundle <- viewport_status_band_trace_bundle(
+    payload$status_bands,
+    xlim = xlim
+  )
+  if (status_bundle$trace_count > 0) {
+    traces <- c(traces, status_bundle$traces)
+    client_points <- client_points + status_bundle$client_points
+  }
+
+  layout_args <- payload$layout
+  if (is.null(layout_args)) {
+    layout_args <- list()
+  }
+  if (!is.null(legend_orientation)) {
+    if (is.null(layout_args$legend)) {
+      layout_args$legend <- list()
+    }
+    layout_args$legend$orientation <- legend_orientation
+  }
+  layout_args <- viewport_layout_apply_xlim(
+    layout_args,
+    xlim = xlim,
+    xaxis_names = payload$xaxis_names
+  )
+
+  p <- plotly::plot_ly(source = source)
+  for (trace in traces) {
+    p <- do.call(plotly::add_trace, c(list(p = p), trace))
+  }
+  if (length(layout_args) > 0) {
+    p <- do.call(plotly::layout, c(list(p = p), layout_args))
+  }
+
+  config_args <- payload$config
+  if (is.null(config_args)) {
+    config_args <- list()
+  }
+  p <- do.call(plotly::config, c(list(p = p), config_args))
+  p <- viewport_event_register(p)
+
+  list(
+    plot = p,
+    trace_bundle = list(
+      traces = traces,
+      trace_count = length(traces),
+      client_points = client_points
+    ),
+    summaries = summaries
   )
 }

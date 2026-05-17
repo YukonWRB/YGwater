@@ -705,33 +705,7 @@ contPlot <- function(id, language, windowDims, inputs) {
                         )
                       )
                     ),
-                    # Don't show the resolution if it's a histogram type plot
-                    conditionalPanel(
-                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
-                      ns = ns,
-                      selectInput(
-                        ns("plot_resolution"),
-                        label = tr("plot_resolution_lab", language$language),
-                        choices = stats::setNames(
-                          c("max", "hour", "day"),
-                          c(
-                            tr("plot_resolution_max", language$language),
-                            tr("plot_resolution_hourly", language$language),
-                            tr("plot_resolution_daily", language$language)
-                          )
-                        ),
-                        selected = "day"
-                      ) |>
-                        tooltip(
-                          id = ns("plot_resolution_tooltip"),
-                          div(
-                            class = "text-warning",
-                            shiny::icon("triangle-exclamation"),
-                            tr("plot_long_time_to_plot", language$language)
-                          ),
-                          placement = "right"
-                        )
-                    )
+                    NULL
                   ),
                   column(
                     width = 6,
@@ -1019,20 +993,7 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     current_plot_resolution <- reactive({
-      if (
-        is.null(input$plot_resolution) ||
-          length(input$plot_resolution) == 0 ||
-          is.na(input$plot_resolution[[1]])
-      ) {
-        return("day")
-      }
-
-      resolution <- tolower(as.character(input$plot_resolution[[1]]))
-      if (!(resolution %in% c("max", "hour", "day"))) {
-        return("day")
-      }
-
-      resolution
+      "max"
     })
 
     current_legend_position <- reactive({
@@ -1865,9 +1826,9 @@ contPlot <- function(id, language, windowDims, inputs) {
           input$historic_range_overlap[[1]]
         },
         unusable = isTRUE(input$show_unusable),
-        grades = isTRUE(input$show_grades),
-        approvals = isTRUE(input$show_approvals),
-        qualifiers = isTRUE(input$show_qualifiers),
+        grades = plot_type == "timeseries" && isTRUE(input$show_grades),
+        approvals = plot_type == "timeseries" && isTRUE(input$show_approvals),
+        qualifiers = plot_type == "timeseries" && isTRUE(input$show_qualifiers),
         hist_transformation = if (
           is.null(input$hist_transformation) ||
             length(input$hist_transformation) == 0
@@ -2269,12 +2230,14 @@ contPlot <- function(id, language, windowDims, inputs) {
 
     adaptiveState <- reactiveValues(
       active = FALSE,
+      mode = NULL,
       current_xlim = NULL,
       render_key = NULL,
       plot_ready = FALSE,
       last_trace_count = 0L,
       data = NULL,
-      meta = NULL
+      meta = NULL,
+      payload = NULL
     )
 
     adaptive_plot_width_px <- reactive({
@@ -2300,13 +2263,13 @@ contPlot <- function(id, language, windowDims, inputs) {
       "v"
     })
 
-    render_adaptive_timeseries <- function(
+    render_adaptive_plot <- function(
       xlim = NULL,
       full_render = FALSE,
       force = FALSE
     ) {
       req(isTRUE(adaptiveState$active))
-      req(!is.null(adaptiveState$data), !is.null(adaptiveState$meta))
+      req(!is.null(adaptiveState$payload))
 
       key_xlim <- if (is.null(xlim)) {
         "full"
@@ -2324,10 +2287,8 @@ contPlot <- function(id, language, windowDims, inputs) {
         return(invisible(NULL))
       }
 
-      built <- viewport_timeseries_plot(
-        trace_data = adaptiveState$data$trace_data,
-        range_data = adaptiveState$data$range_data,
-        meta = adaptiveState$meta,
+      built <- viewport_adaptive_plot(
+        payload = adaptiveState$payload,
         source = ns("plot"),
         xlim = xlim,
         n_bins = adaptive_target_bins(),
@@ -2415,10 +2376,11 @@ contPlot <- function(id, language, windowDims, inputs) {
               is.na(plot_resolution[[1]]) ||
               !(tolower(plot_resolution[[1]]) %in% c("max", "hour", "day"))
           ) {
-            plot_resolution <- "day"
+            plot_resolution <- "max"
           } else {
             plot_resolution <- tolower(plot_resolution[[1]])
           }
+          plot_resolution <- "max"
 
           normalize_plot_result <- function(result) {
             if (is.list(result) && !is.null(result$plot)) {
@@ -2508,80 +2470,181 @@ contPlot <- function(id, language, windowDims, inputs) {
             list(plot = combined_plot, data = combined_data)
           }
 
-          if (plot_type == "timeseries") {
-            if (length(timeseries_ids) > 1) {
-              plot <- plotMultiTimeseries(
-                type = "subplots",
-                timeseries_ids = timeseries_ids,
-                start_date = req$start_date,
-                end_date = req$end_date,
-                historic_range = req$historic_range,
-                datum = req$datum,
-                filter = req$filter,
-                unusable = req$unusable,
-                lang = req$lang,
-                webgl = session$userData$use_webgl,
-                con = con,
-                data = TRUE,
-                tzone = plot_timezone,
-                resolution = plot_resolution,
-                line_scale = req$line_scale,
-                axis_scale = req$axis_scale,
-                legend_scale = req$legend_scale,
-                legend_position = req$legend_position,
-                gridx = req$gridx,
-                gridy = req$gridy,
-                shareX = req$shareX,
-                shareY = req$shareY
+          date_range_xlim <- function(start_date, end_date, tz) {
+            start <- as.POSIXct(as.Date(start_date), tz = tz)
+            end <- as.POSIXct(as.Date(end_date), tz = tz) + 24 * 60 * 60
+            c(start, end)
+          }
+
+          fetch_timeseries_domain <- function(ids) {
+            ids_sql <- paste(as.integer(ids), collapse = ",")
+            domain <- DBI::dbGetQuery(
+              con,
+              paste0(
+                "SELECT MIN(start_datetime) AS start_datetime, ",
+                "MAX(end_datetime) AS end_datetime ",
+                "FROM timeseries WHERE timeseries_id IN (",
+                ids_sql,
+                ");"
               )
-            } else {
-              adaptive_eligible <- !isTRUE(req$grades) &&
-                !isTRUE(req$approvals) &&
-                !isTRUE(req$qualifiers)
+            )
+            if (
+              nrow(domain) == 0 ||
+                is.na(domain$start_datetime[[1]]) ||
+                is.na(domain$end_datetime[[1]])
+            ) {
+              return(list(
+                start = req$start_date,
+                end = req$end_date
+              ))
+            }
+            list(
+              start = as.POSIXct(domain$start_datetime[[1]], tz = "UTC"),
+              end = as.POSIXct(domain$end_datetime[[1]], tz = "UTC")
+            )
+          }
 
-              if (adaptive_eligible) {
-                adaptive_payload <- plotTimeseries(
-                  timeseries_id = req$timeseries_id,
-                  start_date = req$start_date,
-                  end_date = req$end_date,
-                  historic_range = req$historic_range,
-                  unusable = req$unusable,
-                  grades = req$grades,
-                  approvals = req$approvals,
-                  qualifiers = req$qualifiers,
-                  lang = req$lang,
-                  webgl = session$userData$use_webgl,
-                  con = con,
-                  data = TRUE,
-                  build_plot = FALSE,
-                  gridx = FALSE,
-                  gridy = FALSE,
-                  slider = FALSE,
-                  tzone = plot_timezone,
-                  resolution = plot_resolution
-                )
-                return(list(
-                  mode = "adaptive_timeseries",
-                  data = adaptive_payload$data,
-                  adaptive = list(meta = adaptive_payload$meta)
-                ))
-              }
+          fetch_timeseries_labels <- function(ids) {
+            ids_sql <- paste(as.integer(ids), collapse = ",")
+            labels <- DBI::dbGetQuery(
+              con,
+              paste0(
+                "SELECT ts.timeseries_id, ",
+                "COALESCE(p.param_name, ts.parameter_id::text) AS parameter ",
+                "FROM timeseries ts ",
+                "LEFT JOIN parameters p ON ts.parameter_id = p.parameter_id ",
+                "WHERE ts.timeseries_id IN (",
+                ids_sql,
+                ");"
+              )
+            )
+            stats::setNames(
+              lapply(ids, function(id) {
+                row <- labels[labels$timeseries_id == id, , drop = FALSE]
+                if (nrow(row) == 0) {
+                  return(paste("Timeseries", id))
+                }
+                titleCase(row$parameter[[1]], req$lang)
+              }),
+              as.character(ids)
+            )
+          }
 
-              plot <- plotTimeseries(
-                timeseries_id = req$timeseries_id,
-                start_date = req$start_date,
-                end_date = req$end_date,
+          palette_for_series <- function(n) {
+            grDevices::colorRampPalette(c(
+              "#00454e",
+              "#547f7a",
+              "#7A9A01",
+              "#FFA900",
+              "#DC4405"
+            ))(max(1L, n))
+          }
+
+          subplot_panel_domain <- function(index, n) {
+            top <- 1 - (index - 1) / n
+            bottom <- 1 - index / n
+            if (index < n) {
+              bottom <- bottom + 0.025
+            }
+            c(max(0, bottom), min(1, top))
+          }
+
+          subplot_layout <- function(series, selected_xlim) {
+            n <- length(series)
+            layout <- list(
+              title = NULL,
+              margin = list(b = 0, t = 25, l = 60, r = 35),
+              hovermode = "x unified",
+              legend = list(
+                font = list(size = req$legend_scale * 12),
+                orientation = req$legend_position
+              ),
+              font = list(family = "Nunito Sans")
+            )
+
+            for (i in seq_len(n)) {
+              panel_domain <- subplot_panel_domain(i, n)
+              xaxis_name <- viewport_layout_axis_name("x", i)
+              yaxis_name <- viewport_layout_axis_name("y", i)
+              xref <- viewport_axis_ref("x", i)
+              yref <- viewport_axis_ref("y", i)
+
+              layout[[xaxis_name]] <- list(
+                anchor = yref,
+                showgrid = req$gridx,
+                showline = TRUE,
+                tickformat = if (req$lang == "en") "%b %-d '%y" else "%-d %b '%y",
+                titlefont = list(size = req$axis_scale * 14),
+                tickfont = list(size = req$axis_scale * 12),
+                matches = if (isTRUE(req$shareX) && i > 1) "x" else NULL,
+                showticklabels = i == n
+              )
+              layout[[yaxis_name]] <- list(
+                domain = panel_domain,
+                anchor = xref,
+                title = list(
+                  text = series[[i]]$yaxis_title,
+                  standoff = 10
+                ),
+                showgrid = req$gridy,
+                showline = TRUE,
+                zeroline = FALSE,
+                titlefont = list(size = req$axis_scale * 13),
+                tickfont = list(size = req$axis_scale * 12),
+                autorange = if (isTRUE(series[[i]]$invert)) "reversed" else TRUE,
+                matches = if (isTRUE(req$shareY) && i > 1) "y" else NULL
+              )
+            }
+
+            viewport_layout_apply_xlim(
+              layout,
+              xlim = selected_xlim,
+              xaxis_names = vapply(
+                seq_len(n),
+                function(i) viewport_layout_axis_name("x", i),
+                character(1)
+              )
+            )
+          }
+
+          build_adaptive_timeseries <- function(
+            ids,
+            mode = c("single", "traces", "subplots")
+          ) {
+            mode <- match.arg(mode)
+            include_status_bands <- mode %in% c("single", "subplots") &&
+              (
+                isTRUE(req$grades) ||
+                  isTRUE(req$approvals) ||
+                  isTRUE(req$qualifiers)
+              )
+            domain <- fetch_timeseries_domain(ids)
+            selected_xlim <- date_range_xlim(
+              req$start_date,
+              req$end_date,
+              plot_timezone
+            )
+            labels <- fetch_timeseries_labels(ids)
+            colors <- palette_for_series(length(ids))
+
+            payloads <- lapply(seq_along(ids), function(i) {
+              ts_id <- ids[[i]]
+              plot_payload <- plotTimeseries(
+                timeseries_id = ts_id,
+                start_date = domain$start,
+                end_date = domain$end,
                 historic_range = req$historic_range,
                 datum = req$datum,
                 filter = req$filter,
                 unusable = req$unusable,
-                grades = req$grades,
-                approvals = req$approvals,
-                qualifiers = req$qualifiers,
+                grades = include_status_bands && isTRUE(req$grades),
+                approvals = include_status_bands && isTRUE(req$approvals),
+                qualifiers = include_status_bands && isTRUE(req$qualifiers),
                 lang = req$lang,
                 webgl = session$userData$use_webgl,
                 con = con,
                 data = TRUE,
+                build_plot = FALSE,
                 line_scale = req$line_scale,
                 axis_scale = req$axis_scale,
                 legend_scale = req$legend_scale,
@@ -2592,84 +2655,251 @@ contPlot <- function(id, language, windowDims, inputs) {
                 tzone = plot_timezone,
                 resolution = plot_resolution
               )
+              plot_payload$meta$line_name <- labels[[as.character(ts_id)]]
+              plot_payload$meta$line_color <- colors[[i]]
+              plot_payload
+            })
+
+            series <- lapply(seq_along(payloads), function(i) {
+              item <- payloads[[i]]
+              xaxis <- NULL
+              yaxis <- NULL
+              if (mode == "subplots") {
+                xaxis <- viewport_axis_ref("x", i)
+                yaxis <- viewport_axis_ref("y", i)
+              }
+              yaxis_title <- NULL
+              if (!is.null(item$meta$layout$yaxis$title$text)) {
+                yaxis_title <- item$meta$layout$yaxis$title$text
+              }
+              list(
+                trace_data = item$data$trace_data,
+                range_data = item$data$range_data,
+                meta = item$meta,
+                line_name = item$meta$line_name,
+                line_color = colors[[i]],
+                line_width = 2.5 * req$line_scale,
+                xaxis = xaxis,
+                yaxis = yaxis,
+                yaxis_title = yaxis_title,
+                invert = identical(
+                  item$meta$layout$yaxis$autorange,
+                  "reversed"
+                )
+              )
+            })
+
+            if (mode == "subplots") {
+              layout <- subplot_layout(series, selected_xlim)
+              xaxis_names <- vapply(
+                seq_along(series),
+                function(i) viewport_layout_axis_name("x", i),
+                character(1)
+              )
+            } else {
+              layout <- payloads[[1]]$meta$layout
+              layout$title <- if (length(ids) == 1) {
+                layout$title
+              } else {
+                NULL
+              }
+              xaxis_names <- "xaxis"
             }
-            return(normalize_plot_result(plot))
+
+            status_band_list <- list()
+            if (include_status_bands) {
+              base_axis_count <- length(series)
+              for (i in seq_along(payloads)) {
+                status_bands <- payloads[[i]]$meta$status_bands
+                if (is.null(status_bands)) {
+                  next
+                }
+
+                status_yaxis_index <- base_axis_count + i
+                main_xaxis_name <- viewport_layout_axis_name("x", i)
+                main_yaxis_name <- viewport_layout_axis_name("y", i)
+                status_yaxis_name <- viewport_layout_axis_name(
+                  "y",
+                  status_yaxis_index
+                )
+                main_xaxis_ref <- viewport_axis_ref("x", i)
+                status_yaxis_ref <- viewport_axis_ref("y", status_yaxis_index)
+
+                status_bands$xaxis <- main_xaxis_ref
+                status_bands$yaxis <- status_yaxis_ref
+                if (!is.null(status_bands$annotations)) {
+                  status_bands$annotations <- lapply(
+                    status_bands$annotations,
+                    function(annotation) {
+                      annotation$yref <- status_yaxis_ref
+                      annotation
+                    }
+                  )
+                }
+
+                layout <- viewport_layout_add_status_bands(
+                  layout,
+                  status_bands,
+                  main_xaxis_name = main_xaxis_name,
+                  main_yaxis_name = main_yaxis_name,
+                  status_yaxis_name = status_yaxis_name
+                )
+                series[[i]]$xaxis <- viewport_axis_ref("x", i)
+                series[[i]]$yaxis <- viewport_axis_ref("y", i)
+                status_band_list[[length(status_band_list) + 1L]] <- status_bands
+              }
+            }
+
+            data_names <- make.unique(as.character(ids))
+            list(
+              mode = "adaptive_plot",
+              data = if (length(payloads) == 1) {
+                payloads[[1]]$data
+              } else {
+                stats::setNames(lapply(payloads, `[[`, "data"), data_names)
+              },
+              adaptive = list(
+                mode = paste0("timeseries_", mode),
+                initial_xlim = selected_xlim,
+                meta = list(),
+                payload = list(
+                  series = series,
+                  layout = layout,
+                  config = payloads[[1]]$meta$config,
+                  xaxis_names = xaxis_names,
+                  status_bands = if (length(status_band_list) > 0L) {
+                    status_band_list
+                  } else {
+                    NULL
+                  }
+                )
+              )
+            )
+          }
+
+          overlap_xlim_from_days <- function(start_day, end_day, years, tz) {
+            if (is.null(years) || length(years) == 0 || all(is.na(years))) {
+              last_year <- lubridate::year(Sys.Date())
+            } else {
+              last_year <- max(as.numeric(years), na.rm = TRUE)
+            }
+            start_day <- as.numeric(start_day)
+            end_day <- as.numeric(end_day)
+            start <- as.POSIXct(
+              start_day * 24 * 60 * 60,
+              origin = paste0(last_year - 1, "-12-31"),
+              tz = "UTC"
+            )
+            end <- as.POSIXct(
+              end_day * 24 * 60 * 60,
+              origin = paste0(last_year - 1, "-12-31 23:59:59"),
+              tz = "UTC"
+            )
+            if (start > end) {
+              lubridate::year(start) <- lubridate::year(start) - 1
+            }
+            c(lubridate::force_tz(start, tz), lubridate::force_tz(end, tz))
+          }
+
+          build_adaptive_overlap <- function(ids) {
+            selected_xlim <- overlap_xlim_from_days(
+              req$start_day,
+              req$end_day,
+              req$years,
+              plot_timezone
+            )
+            colors <- palette_for_series(max(1L, length(req$years)))
+            overlap_payloads <- lapply(ids, function(ts_id) {
+              plotOverlap(
+                timeseries_id = ts_id,
+                startDay = 1,
+                endDay = 365,
+                years = req$years,
+                historic_range = req$historic_range_overlap,
+                datum = req$datum,
+                filter = req$filter,
+                unusable = req$unusable,
+                lang = req$lang,
+                webgl = session$userData$use_webgl,
+                slider = FALSE,
+                line_scale = req$line_scale,
+                axis_scale = req$axis_scale,
+                legend_scale = req$legend_scale,
+                legend_position = req$legend_position,
+                gridx = req$gridx,
+                gridy = req$gridy,
+                con = con,
+                data = TRUE,
+                build_plot = FALSE,
+                tzone = plot_timezone,
+                resolution = plot_resolution
+              )
+            })
+
+            series <- list()
+            for (payload_i in seq_along(overlap_payloads)) {
+              payload <- overlap_payloads[[payload_i]]
+              trace_data <- data.table::as.data.table(payload$data$trace_data)
+              range_data <- payload$data$range_data
+              years_i <- sort(unique(trace_data$plot_year))
+              for (year_i in seq_along(years_i)) {
+                plot_year_value <- years_i[[year_i]]
+                series[[length(series) + 1L]] <- list(
+                  trace_data = trace_data[
+                    trace_data[["plot_year"]] == plot_year_value
+                  ],
+                  range_data = if (payload_i == 1 && year_i == 1) {
+                    range_data
+                  } else {
+                    data.frame()
+                  },
+                  meta = payload$meta,
+                  x_col = "plot_datetime",
+                  range_x_col = "datetime",
+                  line_name = as.character(plot_year_value),
+                  line_color = colors[[((year_i - 1) %% length(colors)) + 1]],
+                  line_width = 2.5 * req$line_scale
+                )
+              }
+            }
+
+            list(
+              mode = "adaptive_plot",
+              data = if (length(overlap_payloads) == 1) {
+                overlap_payloads[[1]]$data
+              } else {
+                stats::setNames(
+                  lapply(overlap_payloads, `[[`, "data"),
+                  make.unique(as.character(ids))
+                )
+              },
+              adaptive = list(
+                mode = "overlap",
+                initial_xlim = selected_xlim,
+                meta = list(),
+                payload = list(
+                  series = series,
+                  layout = overlap_payloads[[1]]$meta$layout,
+                  config = overlap_payloads[[1]]$meta$config,
+                  xaxis_names = "xaxis"
+                )
+              )
+            )
+          }
+
+          if (plot_type == "timeseries") {
+            return(build_adaptive_timeseries(
+              timeseries_ids,
+              mode = if (length(timeseries_ids) > 1) "subplots" else "single"
+            ))
           }
 
           if (plot_type == "timeseries_all") {
-            plot <- plotMultiTimeseries(
-              type = "traces",
-              timeseries_ids = timeseries_ids,
-              start_date = req$start_date,
-              end_date = req$end_date,
-              historic_range = req$historic_range,
-              datum = req$datum,
-              filter = req$filter,
-              unusable = req$unusable,
-              lang = req$lang,
-              webgl = session$userData$use_webgl,
-              con = con,
-              data = TRUE,
-              line_scale = req$line_scale,
-              axis_scale = req$axis_scale,
-              legend_scale = req$legend_scale,
-              legend_position = req$legend_position,
-              gridx = req$gridx,
-              gridy = req$gridy,
-              shareX = req$shareX,
-              shareY = req$shareY,
-              tzone = plot_timezone,
-              resolution = plot_resolution
-            )
-            return(normalize_plot_result(plot))
+            return(build_adaptive_timeseries(timeseries_ids, mode = "traces"))
           }
 
           if (plot_type == "overlap_yrs") {
-            overlap_plots <- lapply(timeseries_ids, function(ts_id) {
-              tryCatch(
-                normalize_plot_result(
-                  plotOverlap(
-                    timeseries_id = ts_id,
-                    startDay = req$start_day,
-                    endDay = req$end_day,
-                    years = req$years,
-                    historic_range = req$historic_range_overlap,
-                    datum = req$datum,
-                    filter = req$filter,
-                    unusable = req$unusable,
-                    lang = req$lang,
-                    webgl = session$userData$use_webgl,
-                    slider = FALSE,
-                    line_scale = req$line_scale,
-                    axis_scale = req$axis_scale,
-                    legend_scale = req$legend_scale,
-                    legend_position = req$legend_position,
-                    gridx = req$gridx,
-                    gridy = req$gridy,
-                    con = con,
-                    data = TRUE,
-                    tzone = plot_timezone,
-                    resolution = plot_resolution
-                  )
-                ),
-                error = function(e) {
-                  stop(
-                    paste0(
-                      "Timeseries ",
-                      ts_id,
-                      " (overlap): ",
-                      e$message
-                    )
-                  )
-                }
-              )
-            })
-            return(combine_plot_results(
-              overlap_plots,
-              timeseries_ids,
-              shareX = req$shareX,
-              shareY = req$shareY
-            ))
+            return(build_adaptive_overlap(timeseries_ids))
           }
 
           if (plot_type == "histogram") {
@@ -2747,12 +2977,14 @@ contPlot <- function(id, language, windowDims, inputs) {
         shinyjs::hide("full_screen_ui")
       }
       adaptiveState$active <- FALSE
+      adaptiveState$mode <- NULL
       adaptiveState$current_xlim <- NULL
       adaptiveState$render_key <- NULL
       adaptiveState$plot_ready <- FALSE
       adaptiveState$last_trace_count <- 0L
       adaptiveState$data <- NULL
       adaptiveState$meta <- NULL
+      adaptiveState$payload <- NULL
       long_ts_plot$invoke(plot_request())
     })
 
@@ -2775,23 +3007,37 @@ contPlot <- function(id, language, windowDims, inputs) {
         return()
       }
 
-      if (identical(result$mode, "adaptive_timeseries")) {
+      if (identical(result$mode, "adaptive_plot")) {
+        if (!is.null(result$warning) && nzchar(result$warning)) {
+          showNotification(result$warning, type = "warning")
+        }
         adaptiveState$active <- TRUE
+        adaptiveState$mode <- result$adaptive$mode
         adaptiveState$current_xlim <- NULL
+        if (!is.null(result$adaptive$initial_xlim)) {
+          adaptiveState$current_xlim <- result$adaptive$initial_xlim
+        }
         adaptiveState$render_key <- NULL
         adaptiveState$plot_ready <- FALSE
         adaptiveState$last_trace_count <- 0L
         adaptiveState$data <- result$data
         adaptiveState$meta <- result$adaptive$meta
-        render_adaptive_timeseries(full_render = TRUE, force = TRUE)
+        adaptiveState$payload <- result$adaptive$payload
+        render_adaptive_plot(
+          xlim = adaptiveState$current_xlim,
+          full_render = TRUE,
+          force = TRUE
+        )
       } else {
         adaptiveState$active <- FALSE
+        adaptiveState$mode <- NULL
         adaptiveState$current_xlim <- NULL
         adaptiveState$render_key <- NULL
         adaptiveState$plot_ready <- FALSE
         adaptiveState$last_trace_count <- 0L
         adaptiveState$data <- NULL
         adaptiveState$meta <- NULL
+        adaptiveState$payload <- NULL
 
         output$plot <- plotly::renderPlotly({
           isolate(result$plot)
@@ -2985,29 +3231,39 @@ contPlot <- function(id, language, windowDims, inputs) {
     )
 
     relayout_event <- shiny::debounce(
-      reactive(plotly::event_data("plotly_relayout", source = ns("plot"))),
+      reactive({
+        if (!isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)) {
+          return(NULL)
+        }
+        plotly::event_data("plotly_relayout", source = ns("plot"))
+      }),
       millis = 150
     )
 
     observeEvent(relayout_event(), {
+      if (is.null(relayout_event())) {
+        return()
+      }
       if (!isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)) {
         return()
       }
       relayout <- relayout_event()
-      has_xlim <- !is.null(relayout[["xaxis.range[0]"]]) &&
-        !is.null(relayout[["xaxis.range[1]"]])
-      if (!has_xlim && !isTRUE(relayout[["xaxis.autorange"]])) {
+      has_xaxis_change <- any(grepl(
+        "^xaxis[0-9]*\\.(range\\[[01]\\]|autorange)$",
+        names(relayout)
+      ))
+      if (!has_xaxis_change) {
         return()
       }
       xlim <- viewport_ribbon_relayout_xlim(relayout, tz = "UTC")
-      render_adaptive_timeseries(xlim = xlim)
+      render_adaptive_plot(xlim = xlim)
     }, ignoreInit = TRUE)
 
     observeEvent(input$plot_container_dims, {
       if (!isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)) {
         return()
       }
-      render_adaptive_timeseries(xlim = adaptiveState$current_xlim)
+      render_adaptive_plot(xlim = adaptiveState$current_xlim)
     }, ignoreInit = TRUE)
 
     # Observe the full screen button and run the javascript function to make the plot full screen

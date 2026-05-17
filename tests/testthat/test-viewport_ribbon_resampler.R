@@ -125,3 +125,79 @@ test_that("viewport timeseries plot builds a compact line plus ribbon plot", {
   expect_gt(built$trace_bundle$trace_count, 0)
   expect_gt(built$trace_bundle$client_points, 0)
 })
+
+test_that("viewport adaptive plot includes status bands", {
+  x <- as.POSIXct("2024-01-01 00:00:00", tz = "UTC") + seq_len(5000) * 60
+  trace_dt <- data.table::data.table(
+    datetime = x,
+    value = sin(seq_len(5000) / 80)
+  )
+  range_dt <- data.table::data.table()
+  status_bands <- list(
+    polygons = data.table::data.table(
+      id = rep("grade_1", 4),
+      datetime = as.POSIXct(
+        c(
+          "2024-01-01 06:00:00",
+          "2024-01-01 06:00:00",
+          "2024-01-02 06:00:00",
+          "2024-01-02 06:00:00"
+        ),
+        tz = "UTC"
+      ),
+      y = c(0, 1, 1, 0),
+      color = "#4daf4a",
+      text = "Grade: A"
+    ),
+    annotations = list(list(
+      x = 0,
+      y = 0.5,
+      xref = "paper",
+      yref = "y2",
+      text = "Grade",
+      showarrow = FALSE
+    )),
+    height = 0.02,
+    y_range = c(0, 1),
+    xaxis = "x",
+    yaxis = "y2"
+  )
+  layout <- YGwater:::viewport_layout_add_status_bands(
+    list(xaxis = list(), yaxis = list()),
+    status_bands
+  )
+  expect_equal(layout$yaxis2$domain, c(0, 0.02))
+  expect_equal(layout$xaxis$type, "date")
+  expect_equal(layout$xaxis$anchor, "y2")
+
+  built <- YGwater:::viewport_adaptive_plot(
+    payload = list(
+      series = list(list(
+        trace_data = trace_dt,
+        range_data = range_dt,
+        meta = list(hover = TRUE),
+        xaxis = "x",
+        yaxis = "y"
+      )),
+      layout = layout,
+      config = list(locale = "en"),
+      xaxis_names = "xaxis",
+      status_bands = status_bands
+    ),
+    xlim = range(x),
+    n_bins = 120L
+  )
+
+  expect_s3_class(built$plot, "plotly")
+  expect_true(any(vapply(
+    built$trace_bundle$traces,
+    function(trace) identical(trace$yaxis, "y2"),
+    logical(1)
+  )))
+  expect_true(any(vapply(
+    built$trace_bundle$traces,
+    function(trace) identical(trace$xaxis, "x") && identical(trace$yaxis, "y2"),
+    logical(1)
+  )))
+  expect_null(plotly::plotly_build(built$plot)$x$layout$xaxis2)
+})

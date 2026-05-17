@@ -12,8 +12,8 @@ tabularReport(
   precip_locations = "default",
   report_datetime = Sys.time(),
   past = 28,
-  save_path = "choose",
-  archive_path = "choose",
+  save_path = NULL,
+  archive_path = NULL,
   con = NULL
 )
 }
@@ -42,7 +42,7 @@ tabularReport(
 The path to which the report was saved, and Excel workbook containing the report with one tab per timeseries type.
 }
 \description{
-Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.
+Creates a report of hydrometric, snow pack, precipitation, and air temperature conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.
 
 Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run AquaCache::getNewContinuous first.
 }

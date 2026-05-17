@@ -129,7 +129,7 @@ plotTimeseries <- function(
   # Checks and initial work ##########################################
 
   # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- NULL
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- color_code <- id <- NULL
 
   if (!build_plot && !data) {
     stop("`build_plot = FALSE` requires `data = TRUE`.")
@@ -1349,7 +1349,203 @@ plotTimeseries <- function(
     config = list(locale = lang)
   )
 
+  build_adaptive_status_bands <- function() {
+    status_count <- sum(c(grades, approvals, qualifiers))
+    if (status_count == 0L || nrow(trace_data) == 0L) {
+      return(NULL)
+    }
+
+    mindt <- min(trace_data$datetime, na.rm = TRUE)
+    maxdt <- max(trace_data$datetime, na.rm = TRUE)
+    if (
+      !is.finite(as.numeric(mindt)) ||
+        !is.finite(as.numeric(maxdt))
+    ) {
+      return(NULL)
+    }
+
+    poly_list <- list()
+    approvals_y_set <- if (grades & qualifiers) {
+      c(2.2, 3.2, 3.2, 2.2)
+    } else if (grades) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    grades_y_set <- if (qualifiers) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    qualifiers_y_set <- c(0, 1, 1, 0)
+
+    add_status_polygons <- function(
+      dt,
+      prefix,
+      y_set,
+      label_en,
+      label_fr,
+      desc_col_en,
+      desc_col_fr
+    ) {
+      if (is.null(dt) || nrow(dt) == 0L) {
+        return(NULL)
+      }
+
+      dt <- data.table::copy(data.table::as.data.table(dt))
+      dt[, start_dt := as.POSIXct(start_dt, tz = "UTC")]
+      dt[, end_dt := as.POSIXct(end_dt, tz = "UTC")]
+      dt[start_dt < mindt, start_dt := mindt]
+      dt[end_dt > maxdt, end_dt := maxdt]
+      dt <- dt[
+        !is.na(start_dt) &
+          !is.na(end_dt) &
+          start_dt <= maxdt &
+          end_dt >= mindt &
+          start_dt <= end_dt
+      ]
+      if (nrow(dt) == 0L) {
+        return(NULL)
+      }
+
+      dt[, id := paste0(prefix, "_", .I)]
+      dt[
+        ,
+        .(
+          datetime = c(start_dt[1L], start_dt[1L], end_dt[1L], end_dt[1L]),
+          y = y_set,
+          color = color_code[1L],
+          text = if (lang == "en") {
+            paste0(label_en, ": ", .SD[[desc_col_en]][1L])
+          } else {
+            paste0(label_fr, ": ", .SD[[desc_col_fr]][1L])
+          }
+        ),
+        by = id
+      ]
+    }
+
+    if (approvals && exists("approvals_dt", inherits = FALSE)) {
+      poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
+        approvals_dt,
+        "approval",
+        approvals_y_set,
+        "Approval",
+        "Approbation",
+        "approval_type_description",
+        "approval_type_description_fr"
+      )
+    }
+
+    if (grades && exists("grades_dt", inherits = FALSE)) {
+      poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
+        grades_dt,
+        "grade",
+        grades_y_set,
+        "Grade",
+        "Cote",
+        "grade_type_description",
+        "grade_type_description_fr"
+      )
+    }
+
+    if (qualifiers && exists("qualifiers_dt", inherits = FALSE)) {
+      poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
+        qualifiers_dt,
+        "qualifier",
+        qualifiers_y_set,
+        "Qualifier",
+        "Qualificatif",
+        "qualifier_type_description",
+        "qualifier_type_description_fr"
+      )
+    }
+
+    poly_list <- Filter(Negate(is.null), poly_list)
+    polygons_df <- if (length(poly_list) > 0L) {
+      data.table::rbindlist(poly_list, use.names = TRUE)
+    } else {
+      data.table::data.table(
+        id = character(),
+        datetime = as.POSIXct(character(), tz = "UTC"),
+        y = numeric(),
+        color = character(),
+        text = character()
+      )
+    }
+
+    annotation_list <- list()
+    add_status_annotation <- function(y_set, text) {
+      list(
+        x = 0.0,
+        y = (y_set[1] + y_set[2]) / 2,
+        xref = "paper",
+        yref = "y2",
+        text = text,
+        showarrow = FALSE,
+        xanchor = "right",
+        yanchor = "middle",
+        textangle = 0,
+        font = list(size = axis_scale * 10)
+      )
+    }
+
+    if (approvals) {
+      annotation_list <- c(
+        annotation_list,
+        list(add_status_annotation(
+          approvals_y_set,
+          if (lang == "en") "Approval" else "Approbation"
+        ))
+      )
+    }
+    if (grades) {
+      annotation_list <- c(
+        annotation_list,
+        list(add_status_annotation(
+          grades_y_set,
+          if (lang == "en") "Grade" else "Cote"
+        ))
+      )
+    }
+    if (qualifiers) {
+      annotation_list <- c(
+        annotation_list,
+        list(add_status_annotation(
+          qualifiers_y_set,
+          if (lang == "en") "Qualifier" else "Qualificatif"
+        ))
+      )
+    }
+
+    list(
+      polygons = polygons_df,
+      annotations = annotation_list,
+      height = if (status_count == 3L) {
+        0.06
+      } else if (status_count == 2L) {
+        0.04
+      } else {
+        0.02
+      },
+      y_range = c(
+        0,
+        if (status_count == 3L) {
+          3.2
+        } else if (status_count == 2L) {
+          2.1
+        } else {
+          1
+        }
+      ),
+      hover = hover,
+      xaxis = "x",
+      yaxis = "y2"
+    )
+  }
+
   if (data && !build_plot) {
+    adaptive_meta$status_bands <- build_adaptive_status_bands()
     datalist <- list(
       trace_data = trace_data,
       range_data = if (historic_range) {
@@ -1586,15 +1782,21 @@ plotTimeseries <- function(
     maxdt <- trace_data[, max(datetime)]
 
     poly_list <- list()
+    approvals_y_set <- if (grades & qualifiers) {
+      c(2.2, 3.2, 3.2, 2.2)
+    } else if (grades) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    grades_y_set <- if (qualifiers) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    qualifiers_y_set <- c(0, 1, 1, 0)
 
-    if (approvals) {
-      approvals_y_set <- if (grades & qualifiers) {
-        c(2.2, 3.2, 3.2, 2.2)
-      } else if (grades) {
-        c(1.1, 2.1, 2.1, 1.1)
-      } else {
-        c(0, 1, 1, 0)
-      }
+    if (approvals && exists("approvals_dt", inherits = FALSE)) {
       approvals_dt[approvals_dt$start_dt < mindt, "start_dt" := mindt]
       approvals_dt[approvals_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(approvals_dt) > 0) {
@@ -1622,8 +1824,7 @@ plotTimeseries <- function(
       }
     }
 
-    if (grades) {
-      grades_y_set <- if (qualifiers) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
+    if (grades && exists("grades_dt", inherits = FALSE)) {
       grades_dt[grades_dt$start_dt < mindt, "start_dt" := mindt]
       grades_dt[grades_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(grades_dt) > 0) {
@@ -1651,8 +1852,7 @@ plotTimeseries <- function(
       }
     }
 
-    if (qualifiers) {
-      qualifiers_y_set <- c(0, 1, 1, 0)
+    if (qualifiers && exists("qualifiers_dt", inherits = FALSE)) {
       qualifiers_dt[qualifiers_dt$start_dt < mindt, "start_dt" := mindt]
       qualifiers_dt[qualifiers_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(qualifiers_dt) > 0) {
