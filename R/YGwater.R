@@ -5,7 +5,7 @@
 #'
 #' @param host Host address. Leave default to run locally, set to "0.0.0.0" to enable others to connect. Depends on the port specified in `port` to be open on the host machine. Ignored if `server` is set to TRUE (Shiny Server takes care of that).
 #' @param port Port number (numeric) on which to serve the app. Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network. Ignored if `server` is set to TRUE (Shiny Server takes care of that).
-#' @param dbName Name of the aquacache database. Default is "aquacache".
+#' @param dbName Name of the aquacache database. Searches your environment variables for 'aquacacheName', default is "aquacache" if not found.
 #' @param dbHost Host address of the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPort Port number of the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbUser Username for the aquacache database. Default is pulled from the .Renviron file.
@@ -26,7 +26,7 @@
 YGwater <- function(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
-  dbName = Sys.getenv("aquacachenName", "aquacache"),
+  dbName = Sys.getenv("aquacacheName", "aquacache"),
   dbHost = Sys.getenv("aquacacheHost", "localhost"),
   dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
