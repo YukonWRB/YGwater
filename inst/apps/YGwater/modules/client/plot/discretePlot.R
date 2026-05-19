@@ -480,19 +480,20 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             ns("AC_selector_mode"),
             tooltip(
               trigger = list(
-                "Selection mode",
+                tr("disc_selector_mode", language$language),
                 bsicons::bs_icon("info-circle-fill")
               ),
-              paste(
-                "Guided selectors step through the common plotting filters.",
-                "Browse samples lets you search a sample table, keep selected",
-                "rows across pages and filters, then choose parameters from",
-                "those samples."
-              )
+              tr("disc_selector_mode_tooltip", language$language)
             ),
             choices = c(
-              "Guided selectors" = "guided",
-              "Browse samples" = "browse"
+              stats::setNames("guided", tr(
+                "disc_guided_selectors",
+                language$language
+              )),
+              stats::setNames("browse", tr(
+                "disc_browse_samples",
+                language$language
+              ))
             ),
             selected = "guided"
           )
@@ -607,7 +608,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           uiOutput(ns("AC_date_range_ui")),
           checkboxInput(
             ns("season_filter_enabled"),
-            "Restrict to season/day-of-year ranges",
+            tr("disc_season_filter", language$language),
             value = FALSE
           ),
           uiOutput(ns("AC_season_ranges_ui")),
@@ -623,11 +624,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         conditionalPanel(
           ns = ns,
           condition = "input.data_source == 'AC' && input.AC_selector_mode == 'browse'",
-          helpText(
-            "Use the table filters to find samples, then click rows to add",
-            "them to the selection. The parameter list beside the table is",
-            "based on the selected samples."
-          ),
+          helpText(tr("disc_browse_help", language$language)),
           dateRangeInput(
             ns("browse_date_range"),
             tr("date_range_lab", language$language),
@@ -640,7 +637,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           ),
           numericInput(
             ns("browse_sample_limit"),
-            "Maximum table rows",
+            tr("disc_max_table_rows", language$language),
             value = 5000,
             min = 100,
             max = 50000,
@@ -827,21 +824,24 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       count <- max(1L, min(count, 3L))
 
       tagList(
-        helpText(
-          "Only the month/day portion of these ranges is used. Use a",
-          "previous-year start and current-year end for seasons that cross",
-          "New Year, such as September 1 to June 1."
-        ),
+        helpText(tr("disc_doy_range_help", language$language)),
         selectInput(
           ns("season_range_count"),
-          "Number of season ranges",
-          choices = stats::setNames(1:3, c("One", "Two", "Three")),
+          tr("disc_season_range_count", language$language),
+          choices = stats::setNames(
+            1:3,
+            c(
+              tr("one", language$language),
+              tr("two", language$language),
+              tr("three", language$language)
+            )
+          ),
           selected = count
         ),
         lapply(seq_len(count), function(i) {
           dateRangeInput(
             ns(paste0("season_range_", i)),
-            paste("Season", i),
+            paste(tr("season", language$language), i),
             start = as.Date(sprintf("%d-01-01", current_year)),
             end = as.Date(sprintf("%d-12-31", current_year)),
             min = as.Date(sprintf("%d-01-01", current_year - 1L)),
@@ -974,13 +974,13 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           ),
           ac_selectize(
             "collection_methods_AC",
-            "Collection method(s)",
+            tr("collection_method(s)", language$language),
             collection_method_choices,
             input$collection_methods_AC
           ),
           ac_selectize(
             "result_speciations_AC",
-            "Result speciation(s)",
+            tr("result_speciation(s)", language$language),
             result_speciation_choices,
             input$result_speciations_AC
           )
@@ -991,19 +991,19 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         list(
           ac_selectize(
             "sample_fractions_AC",
-            "Sample fraction(s)",
+            tr("sample_fraction(s)", language$language),
             sample_fraction_choices,
             input$sample_fractions_AC
           ),
           ac_selectize(
             "result_value_types_AC",
-            "Result value type(s)",
+            tr("result_value_type(s)", language$language),
             result_value_type_choices,
             input$result_value_types_AC
           ),
           ac_selectize(
             "result_types_AC",
-            "Result type(s)",
+            tr("result_type(s)", language$language),
             result_type_choices,
             input$result_types_AC
           )
@@ -1012,12 +1012,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
       tagList(
         tags$hr(),
-        tags$h6("Sample/result filters"),
+        tags$h6(tr("disc_sample_result_filters", language$language)),
         tagList(primary_inputs),
         if (blank_available) {
           checkboxInput(
             ns("include_blanks"),
-            "Show blank samples",
+            tr("disc_show_blank_samples", language$language),
             value = if (is.null(input$include_blanks)) {
               TRUE
             } else {
@@ -1028,11 +1028,20 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         if (duplicate_available) {
           radioButtons(
             ns("duplicate_action"),
-            "Duplicate/replicate samples",
+            tr("disc_duplicate_samples", language$language),
             choices = c(
-              "Show individually" = "show",
-              "Average matching samples" = "average",
-              "Hide duplicate/replicate samples" = "hide"
+              stats::setNames("show", tr(
+                "disc_duplicates_show",
+                language$language
+              )),
+              stats::setNames("average", tr(
+                "disc_duplicates_average",
+                language$language
+              )),
+              stats::setNames("hide", tr(
+                "disc_duplicates_hide",
+                language$language
+              ))
             ),
             selected = if (!is.null(input$duplicate_action)) {
               input$duplicate_action
@@ -1049,7 +1058,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         ) {
           tags$small(
             class = "text-muted",
-            "No additional filters are available for the current selection."
+            tr("disc_no_additional_filters", language$language)
           )
         },
         if (length(advanced_inputs) > 0) {
@@ -1057,7 +1066,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             id = ns("AC_advanced_options"),
             open = character(0),
             accordion_panel(
-              title = "More sample/result filters",
+              title = tr("disc_more_sample_result_filters", language$language),
               tagList(advanced_inputs)
             )
           )
@@ -1118,11 +1127,14 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             col_widths = c(8, 4),
             card(
               full_screen = TRUE,
-              card_header("Samples"),
+              card_header(tr("samples", language$language)),
               DT::dataTableOutput(ns("AC_sample_table"))
             ),
             card(
-              card_header("Selected samples and parameters"),
+              card_header(tr(
+                "disc_selected_samples_parameters",
+                language$language
+              )),
               uiOutput(ns("AC_browse_parameter_ui")),
               tags$hr(),
               uiOutput(ns("AC_selected_samples_ui"))
@@ -1139,18 +1151,21 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
     output$AC_sample_table <- DT::renderDataTable({
       samples <- ac_browse_sample_table()
-      validate(need(nrow(samples) > 0, "No samples match the current filters."))
+      validate(need(
+        nrow(samples) > 0,
+        tr("disc_no_samples_match_filters", language$language)
+      ))
 
       column_labels <- c(
-        sample_id = "sample_id",
+        sample_id = tr("sample_id", language$language),
         location = tr("loc", language$language),
         location_code = tr("code", language$language),
         sub_location = tr("sub_loc", language$language),
         sample_date = tr("date", language$language),
         media = tr("media", language$language),
-        sample_type = "Sample type",
-        collection_method = "Collection method",
-        result_count = "Results",
+        sample_type = tr("sample_type", language$language),
+        collection_method = tr("collection_method", language$language),
+        result_count = tr("results", language$language),
         parameters = tr("parameters", language$language)
       )
 
@@ -1286,12 +1301,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         if (length(browse_selected_sample_ids()) == 0) {
           tags$small(
             class = "text-muted",
-            "Select sample rows to focus this parameter list."
+            tr("disc_select_rows_parameter_list", language$language)
           )
         },
         selectizeInput(
           ns("browse_parameters_AC"),
-          "Parameters",
+          tr("parameters", language$language),
           choices = c(
             stats::setNames("all", tr("all_m", language$language)),
             choices
@@ -1301,8 +1316,17 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         ),
         radioButtons(
           ns("browse_parameter_match"),
-          "Sample must include",
-          choices = c("Any selected parameter" = "any", "All selected parameters" = "all"),
+          tr("disc_sample_must_include", language$language),
+          choices = c(
+            stats::setNames("any", tr(
+              "disc_any_selected_parameter",
+              language$language
+            )),
+            stats::setNames("all", tr(
+              "disc_all_selected_parameters",
+              language$language
+            ))
+          ),
           selected = if (is.null(input$browse_parameter_match)) {
             "any"
           } else {
@@ -1324,17 +1348,23 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       rows <- ac_selected_sample_rows()
       count <- nrow(rows)
       if (count == 0) {
-        return(tags$small(class = "text-muted", "No samples selected."))
+        return(tags$small(
+          class = "text-muted",
+          tr("disc_no_samples_selected", language$language)
+        ))
       }
 
       shown <- utils::head(rows, 50)
       tagList(
         div(
           style = "display: flex; gap: 8px; align-items: center;",
-          tags$strong(paste(count, "sample(s) selected")),
+          tags$strong(paste(
+            count,
+            tr("disc_samples_selected", language$language)
+          )),
           actionButton(
             ns("clear_selected_samples"),
-            "Clear",
+            tr("clear", language$language),
             class = "btn btn-outline-danger btn-sm"
           )
         ),
@@ -1345,7 +1375,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               shown$location[[i]],
               shown$sample_date[[i]],
               shown$media[[i]],
-              paste0("ID: ", shown$sample_id[[i]]),
+              paste0(tr("id_label", language$language), ": ", shown$sample_id[[i]]),
               sep = " | "
             )
             fluidRow(
@@ -1355,7 +1385,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 width = 3,
                 actionButton(
                   ns(paste0("remove_selected_sample_", i)),
-                  "Remove",
+                  tr("remove", language$language),
                   class = "btn btn-outline-secondary btn-sm"
                 )
               )
@@ -1365,7 +1395,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         if (count > nrow(shown)) {
           tags$small(
             class = "text-muted",
-            paste("Showing first", nrow(shown), "selected samples.")
+            paste(
+              tr("showing_first", language$language),
+              nrow(shown),
+              tr("selected_samples_lc", language$language)
+            )
           )
         }
       )
@@ -1902,7 +1936,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           if (identical(ac_mode, "browse")) {
             if (length(browse_selected_sample_ids()) == 0) {
               showModal(modalDialog(
-                "Please select one or more samples from the table.",
+                tr("disc_select_samples_from_table", language$language),
                 footer = tagList(
                   actionButton(ns("cancel"), tr("cancel", language$language))
                 ),
