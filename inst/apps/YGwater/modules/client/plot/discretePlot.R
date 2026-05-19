@@ -24,71 +24,31 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
     EQWin_selector <- reactiveVal(FALSE) # flags whether the EQWin source UI is already rendered
 
-    # Get the data to populate drop-downs. Runs every time this module is loaded.
-    moduleData <- reactiveValues()
-
-    moduleData$AC_locs <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
-    )
-    moduleData$AC_params <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      paste(
-        "SELECT DISTINCT p.parameter_id, p.param_name,",
-        ac_parameter_unit_select_sql(
-          session$userData$AquaCache,
-          "p",
-          "unit"
-        ),
-        "FROM parameters p",
-        "INNER JOIN results AS r ON p.parameter_id = r.parameter_id",
-        "ORDER BY p.param_name ASC"
+    # Static lookup data is shared across sessions; availability is queried
+    # narrowly below as users choose location, media, date range, and parameters.
+    if (isTRUE(session$userData$user_logged_in)) {
+      cached <- disc_plot_module_data(
+        con = session$userData$AquaCache,
+        env = session$userData$app_cache
       )
+    } else {
+      cached <- disc_plot_module_data(con = session$userData$AquaCache)
+    }
+
+    moduleData <- reactiveValues(
+      AC_locs = cached$locs,
+      AC_params = cached$params,
+      AC_sub_locs = cached$sub_locs,
+      AC_media = cached$media,
+      AC_sample_types = cached$sample_types,
+      AC_collection_methods = cached$collection_methods,
+      AC_result_types = cached$result_types,
+      AC_sample_fractions = cached$sample_fractions,
+      AC_result_value_types = cached$result_value_types,
+      AC_result_speciations = cached$result_speciations
     )
-    moduleData$AC_loc_params <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT DISTINCT s.location_id, r.parameter_id FROM samples s INNER JOIN results r ON s.sample_id = r.sample_id"
-    )
-    moduleData$AC_samples <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type, collection_method FROM samples;"
-    )
-    moduleData$AC_results <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT sample_id, parameter_id, result_type, sample_fraction_id, result_value_type, result_speciation_id FROM results;"
-    )
-    moduleData$AC_sub_locs <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE sub_location_id IN (SELECT DISTINCT sub_location_id FROM samples WHERE sub_location_id IS NOT NULL) ORDER BY sub_location_name ASC;"
-    )
-    moduleData$AC_media <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT media_id, media_type, media_type_fr FROM media_types WHERE media_id IN (SELECT DISTINCT media_id FROM samples) ORDER BY media_type ASC;"
-    )
-    moduleData$AC_sample_types <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT sample_type_id, sample_type, COALESCE(sample_type_fr, sample_type) AS sample_type_fr FROM sample_types WHERE sample_type_id IN (SELECT DISTINCT sample_type FROM samples) ORDER BY sample_type ASC;"
-    )
-    moduleData$AC_collection_methods <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT collection_method_id, collection_method FROM collection_methods WHERE collection_method_id IN (SELECT DISTINCT collection_method FROM samples) ORDER BY collection_method ASC;"
-    )
-    moduleData$AC_result_types <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT result_type_id, result_type FROM result_types WHERE result_type_id IN (SELECT DISTINCT result_type FROM results) ORDER BY result_type ASC;"
-    )
-    moduleData$AC_sample_fractions <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT sample_fraction_id, sample_fraction FROM sample_fractions WHERE sample_fraction_id IN (SELECT DISTINCT sample_fraction_id FROM results WHERE sample_fraction_id IS NOT NULL) ORDER BY sample_fraction ASC;"
-    )
-    moduleData$AC_result_value_types <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT result_value_type_id, result_value_type FROM result_value_types WHERE result_value_type_id IN (SELECT DISTINCT result_value_type FROM results WHERE result_value_type IS NOT NULL) ORDER BY result_value_type ASC;"
-    )
-    moduleData$AC_result_speciations <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT result_speciation_id, result_speciation FROM result_speciations WHERE result_speciation_id IN (SELECT DISTINCT result_speciation_id FROM results WHERE result_speciation_id IS NOT NULL) ORDER BY result_speciation ASC;"
-    )
+
+    browse_selected_sample_ids <- reactiveVal(numeric(0))
 
     ac_option_rows <- function(scope, lookup, scope_col, lookup_col) {
       if (is.null(scope) || nrow(scope) == 0 || nrow(lookup) == 0) {
@@ -101,15 +61,27 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
     ac_keep_selection <- function(selected, choices) {
       if (is.null(selected) || length(selected) == 0) {
-        return(NULL)
+        return("all")
       }
-      selected[selected %in% choices]
+      selected <- as.character(selected)
+      if ("all" %in% selected) {
+        return("all")
+      }
+      kept <- selected[selected %in% as.character(choices)]
+      if (length(kept) == 0) {
+        return("all")
+      }
+      kept
     }
 
     ac_selectize <- function(input_id, label, choices, selected = NULL) {
       if (length(choices) <= 1) {
         return(NULL)
       }
+      choices <- c(
+        stats::setNames("all", tr("all_m", language$language)),
+        choices
+      )
       selectizeInput(
         ns(input_id),
         label,
@@ -119,52 +91,312 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       )
     }
 
-    ac_scope_for_options <- function(use_date_range = TRUE) {
-      samples <- moduleData$AC_samples
-      if (
-        isTRUE(use_date_range) &&
-          !is.null(input$date_range) &&
-          length(input$date_range) == 2
-      ) {
-        samples <- samples[
-          as.Date(samples$datetime) >= input$date_range[1] &
-            as.Date(samples$datetime) <= input$date_range[2],
-          ,
-          drop = FALSE
-        ]
+    ac_numeric_values <- function(values, include_all = FALSE) {
+      if (is.null(values) || length(values) == 0) {
+        return(numeric(0))
       }
-      if (!is.null(input$locations_AC) && length(input$locations_AC) > 0) {
-        samples <- samples[
-          samples$location_id %in% as.numeric(input$locations_AC),
-          ,
-          drop = FALSE
-        ]
+      values <- as.character(values)
+      if (!include_all) {
+        values <- values[values != "all"]
       }
-
-      scope <- merge(
-        moduleData$AC_results,
-        samples,
-        by = "sample_id",
-        all = FALSE
-      )
-
-      if (!is.null(input$parameters_AC) && length(input$parameters_AC) > 0) {
-        scope <- scope[
-          scope$parameter_id %in% as.numeric(input$parameters_AC),
-          ,
-          drop = FALSE
-        ]
-      }
-
-      scope
+      values <- suppressWarnings(as.numeric(values))
+      unique(values[!is.na(values)])
     }
 
-    ac_scope <- reactive({
-      scope <- ac_scope_for_options(use_date_range = TRUE)
-      if (nrow(scope) == 0) {
-        scope <- ac_scope_for_options(use_date_range = FALSE)
+    ac_in_clause <- function(column, values) {
+      values <- ac_numeric_values(values)
+      if (length(values) == 0) {
+        return(NULL)
       }
-      scope
+      paste0(column, " IN (", paste(values, collapse = ", "), ")")
+    }
+
+    ac_date_clause <- function(column, date_range) {
+      if (is.null(date_range) || length(date_range) != 2) {
+        return(NULL)
+      }
+      date_range <- as.Date(date_range)
+      if (any(is.na(date_range))) {
+        return(NULL)
+      }
+      paste0(
+        column,
+        " >= ",
+        DBI::dbQuoteLiteral(session$userData$AquaCache, date_range[1]),
+        "::date AND ",
+        column,
+        " < (",
+        DBI::dbQuoteLiteral(session$userData$AquaCache, date_range[2]),
+        "::date + INTERVAL '1 day')"
+      )
+    }
+
+    ac_where <- function(
+      locations = NULL,
+      media = NULL,
+      date_range = NULL,
+      parameters = NULL
+    ) {
+      clauses <- Filter(
+        Negate(is.null),
+        list(
+          ac_in_clause("s.location_id", locations),
+          ac_in_clause("s.media_id", media),
+          ac_date_clause("s.datetime", date_range),
+          ac_in_clause("r.parameter_id", parameters)
+        )
+      )
+      if (length(clauses) == 0) {
+        return("")
+      }
+      paste("WHERE", paste(clauses, collapse = " AND "))
+    }
+
+    ac_query <- function(sql, empty = data.frame()) {
+      tryCatch(
+        DBI::dbGetQuery(session$userData$AquaCache, sql),
+        error = function(e) {
+          warning(e$message, call. = FALSE)
+          empty
+        }
+      )
+    }
+
+    ac_available_media <- reactive({
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(moduleData$AC_media[0, , drop = FALSE])
+      }
+      sql <- paste(
+        "SELECT DISTINCT m.media_id, m.media_type, m.media_type_fr",
+        "FROM media_types AS m",
+        "INNER JOIN samples AS s ON m.media_id = s.media_id",
+        ac_where(locations = input$locations_AC),
+        "ORDER BY m.media_type ASC"
+      )
+      ac_query(sql, moduleData$AC_media[0, , drop = FALSE])
+    })
+
+    ac_available_date_range <- reactive({
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(NULL)
+      }
+      sql <- paste(
+        "SELECT MIN(s.datetime)::date AS start_date,",
+        "MAX(s.datetime)::date AS end_date",
+        "FROM samples AS s",
+        ac_where(
+          locations = input$locations_AC,
+          media = input$media_AC
+        )
+      )
+      range <- ac_query(
+        sql,
+        data.frame(start_date = as.Date(NA), end_date = as.Date(NA))
+      )
+      if (
+        nrow(range) == 0 ||
+          is.na(range$start_date[1]) ||
+          is.na(range$end_date[1])
+      ) {
+        return(NULL)
+      }
+      range
+    })
+
+    ac_available_parameters <- reactive({
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(moduleData$AC_params[0, , drop = FALSE])
+      }
+      sql <- paste(
+        "SELECT DISTINCT p.parameter_id, p.param_name",
+        "FROM parameters AS p",
+        "INNER JOIN results AS r ON p.parameter_id = r.parameter_id",
+        "INNER JOIN samples AS s ON r.sample_id = s.sample_id",
+        ac_where(
+          locations = input$locations_AC,
+          media = input$media_AC,
+          date_range = input$date_range_AC
+        ),
+        "ORDER BY p.param_name ASC"
+      )
+      ac_query(sql, moduleData$AC_params[0, , drop = FALSE])
+    })
+
+    ac_scope <- reactive({
+      if (
+        length(ac_numeric_values(input$locations_AC)) == 0 ||
+          is.null(input$date_range_AC) ||
+          length(ac_numeric_values(input$parameters_AC, include_all = TRUE)) == 0
+      ) {
+        return(data.frame())
+      }
+      sql <- paste(
+        "SELECT DISTINCT",
+        "s.sub_location_id, s.media_id, s.sample_type, s.collection_method,",
+        "r.result_type, r.sample_fraction_id, r.result_value_type,",
+        "r.result_speciation_id",
+        "FROM samples AS s",
+        "INNER JOIN results AS r ON s.sample_id = r.sample_id",
+        ac_where(
+          locations = input$locations_AC,
+          media = input$media_AC,
+          date_range = input$date_range_AC,
+          parameters = input$parameters_AC
+        )
+      )
+      ac_query(sql, data.frame())
+    })
+
+    ac_sample_id_clause <- function(values, column = "s.sample_id") {
+      values <- unique(suppressWarnings(as.numeric(values)))
+      values <- values[!is.na(values)]
+      if (length(values) == 0) {
+        return(NULL)
+      }
+      paste0(column, " IN (", paste(values, collapse = ", "), ")")
+    }
+
+    ac_browse_parameter_filter <- function() {
+      parameter_ids <- ac_numeric_values(input$browse_parameters_AC)
+      if (length(parameter_ids) == 0) {
+        return(NULL)
+      }
+      ids_sql <- paste(parameter_ids, collapse = ", ")
+      if (identical(input$browse_parameter_match, "all")) {
+        paste0(
+          "(SELECT COUNT(DISTINCT rpf.parameter_id)",
+          " FROM results AS rpf",
+          " WHERE rpf.sample_id = s.sample_id",
+          " AND rpf.parameter_id IN (",
+          ids_sql,
+          ")) = ",
+          length(parameter_ids)
+        )
+      } else {
+        paste0(
+          "EXISTS (SELECT 1 FROM results AS rpf",
+          " WHERE rpf.sample_id = s.sample_id",
+          " AND rpf.parameter_id IN (",
+          ids_sql,
+          "))"
+        )
+      }
+    }
+
+    ac_browse_where <- function(include_parameter_filter = TRUE) {
+      clauses <- Filter(
+        Negate(is.null),
+        list(
+          ac_date_clause("s.datetime", input$browse_date_range),
+          if (isTRUE(include_parameter_filter)) {
+            ac_browse_parameter_filter()
+          }
+        )
+      )
+      if (length(clauses) == 0) {
+        return("")
+      }
+      paste("WHERE", paste(clauses, collapse = " AND "))
+    }
+
+    ac_browse_sample_table <- reactive({
+      limit <- suppressWarnings(as.integer(input$browse_sample_limit))
+      if (length(limit) == 0 || is.na(limit) || limit < 100) {
+        limit <- 5000L
+      }
+      limit <- min(limit, 50000L)
+
+      sql <- paste(
+        "WITH base AS (",
+        "SELECT s.sample_id, s.location_id, l.name AS location,",
+        "l.location_code, sl.sub_location_name AS sub_location,",
+        "s.datetime::date AS sample_date, s.datetime,",
+        "s.media_id, mt.media_type AS media,",
+        "s.sample_type AS sample_type_id, st.sample_type,",
+        "s.collection_method AS collection_method_id, cm.collection_method",
+        "FROM samples AS s",
+        "INNER JOIN locations AS l ON s.location_id = l.location_id",
+        "LEFT JOIN sub_locations AS sl ON s.sub_location_id = sl.sub_location_id",
+        "LEFT JOIN media_types AS mt ON s.media_id = mt.media_id",
+        "LEFT JOIN sample_types AS st ON s.sample_type = st.sample_type_id",
+        "LEFT JOIN collection_methods AS cm ON",
+        "s.collection_method = cm.collection_method_id",
+        ac_browse_where(include_parameter_filter = TRUE),
+        "ORDER BY s.datetime DESC",
+        "LIMIT",
+        limit,
+        ")",
+        "SELECT base.sample_id, base.location, base.location_code,",
+        "base.sub_location, base.sample_date, base.media,",
+        "base.sample_type, base.collection_method,",
+        "COALESCE(params.result_count, 0) AS result_count,",
+        "COALESCE(params.parameters, '') AS parameters",
+        "FROM base",
+        "LEFT JOIN LATERAL (",
+        "SELECT COUNT(*) AS result_count,",
+        "STRING_AGG(DISTINCT p.param_name, ', ' ORDER BY p.param_name)",
+        "AS parameters",
+        "FROM results AS r",
+        "INNER JOIN parameters AS p ON r.parameter_id = p.parameter_id",
+        "WHERE r.sample_id = base.sample_id",
+        ") AS params ON TRUE",
+        "ORDER BY base.datetime DESC"
+      )
+      ac_query(sql, data.frame())
+    })
+
+    ac_browse_parameter_choices <- reactive({
+      selected <- browse_selected_sample_ids()
+      sample_clause <- ac_sample_id_clause(selected, "s.sample_id")
+
+      where <- if (!is.null(sample_clause)) {
+        paste("WHERE", sample_clause)
+      } else {
+        if (
+          is.null(input$browse_date_range) ||
+            length(input$browse_date_range) != 2
+        ) {
+          return(data.frame(
+            parameter_id = numeric(),
+            param_name = character(),
+            n = numeric()
+          ))
+        }
+        ac_browse_where(include_parameter_filter = FALSE)
+      }
+
+      sql <- paste(
+        "SELECT p.parameter_id, p.param_name, COUNT(DISTINCT s.sample_id) AS n",
+        "FROM samples AS s",
+        "INNER JOIN results AS r ON s.sample_id = r.sample_id",
+        "INNER JOIN parameters AS p ON r.parameter_id = p.parameter_id",
+        where,
+        "GROUP BY p.parameter_id, p.param_name",
+        "ORDER BY p.param_name ASC"
+      )
+      ac_query(
+        sql,
+        data.frame(parameter_id = numeric(), param_name = character(), n = numeric())
+      )
+    })
+
+    ac_selected_sample_rows <- reactive({
+      selected <- browse_selected_sample_ids()
+      sample_clause <- ac_sample_id_clause(selected, "s.sample_id")
+      if (is.null(sample_clause)) {
+        return(data.frame())
+      }
+      sql <- paste(
+        "SELECT s.sample_id, l.name AS location,",
+        "s.datetime::date AS sample_date, mt.media_type AS media",
+        "FROM samples AS s",
+        "INNER JOIN locations AS l ON s.location_id = l.location_id",
+        "LEFT JOIN media_types AS mt ON s.media_id = mt.media_id",
+        "WHERE",
+        sample_clause,
+        "ORDER BY s.datetime DESC"
+      )
+      ac_query(sql, data.frame())
     })
 
     ensure_discrete_plot_function <- function() {
@@ -178,7 +410,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "result_value_types",
         "result_speciations",
         "include_blanks",
-        "duplicate_action"
+        "duplicate_action",
+        "sample_ids",
+        "season_ranges"
       )
       if (all(new_args %in% names(formals(plotDiscrete)))) {
         return(invisible(TRUE))
@@ -239,20 +473,43 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           )
         },
         uiOutput(ns("EQWin_source_ui")),
-        # start and end datetime
-        dateRangeInput(
-          ns("date_range"),
-          tr("date_range_lab", language$language),
-          start = Sys.Date() - 30,
-          end = Sys.Date(),
-          max = Sys.Date() + 1,
-          format = "yyyy-mm-dd",
-          language = language$abbrev,
-          separator = tr("date_sep", language$language)
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'AC'",
+          radioButtons(
+            ns("AC_selector_mode"),
+            tooltip(
+              trigger = list(
+                "Selection mode",
+                bsicons::bs_icon("info-circle-fill")
+              ),
+              paste(
+                "Guided selectors step through the common plotting filters.",
+                "Browse samples lets you search a sample table, keep selected",
+                "rows across pages and filters, then choose parameters from",
+                "those samples."
+              )
+            ),
+            choices = c(
+              "Guided selectors" = "guided",
+              "Browse samples" = "browse"
+            ),
+            selected = "guided"
+          )
         ),
         conditionalPanel(
           ns = ns,
           condition = "input.data_source == 'EQ'",
+          dateRangeInput(
+            ns("date_range_EQ"),
+            tr("date_range_lab", language$language),
+            start = Sys.Date() - 30,
+            end = Sys.Date(),
+            max = Sys.Date() + 1,
+            format = "yyyy-mm-dd",
+            language = language$abbrev,
+            separator = tr("date_sep", language$language)
+          ),
           # Toggle button for locations or location groups (only show if data source == EQWin)
           radioButtons(
             ns("locs_groups"),
@@ -338,7 +595,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
         conditionalPanel(
           ns = ns,
-          condition = "input.data_source == 'AC'",
+          condition = "input.data_source == 'AC' && (input.AC_selector_mode == 'guided' || input.AC_selector_mode == null)",
           # Selectize input for locations, populated once connection is established
           selectizeInput(
             ns("locations_AC"),
@@ -346,6 +603,14 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             choices = NULL,
             multiple = TRUE
           ),
+          uiOutput(ns("AC_media_ui")),
+          uiOutput(ns("AC_date_range_ui")),
+          checkboxInput(
+            ns("season_filter_enabled"),
+            "Restrict to season/day-of-year ranges",
+            value = FALSE
+          ),
+          uiOutput(ns("AC_season_ranges_ui")),
           # Selectize input for parameters, populated once connection is established
           selectizeInput(
             ns("parameters_AC"),
@@ -354,6 +619,33 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             multiple = TRUE
           ),
           uiOutput(ns("AC_options_ui"))
+        ),
+        conditionalPanel(
+          ns = ns,
+          condition = "input.data_source == 'AC' && input.AC_selector_mode == 'browse'",
+          helpText(
+            "Use the table filters to find samples, then click rows to add",
+            "them to the selection. The parameter list beside the table is",
+            "based on the selected samples."
+          ),
+          dateRangeInput(
+            ns("browse_date_range"),
+            tr("date_range_lab", language$language),
+            start = Sys.Date() - 365,
+            end = Sys.Date() + 1,
+            max = Sys.Date() + 1,
+            format = "yyyy-mm-dd",
+            language = language$abbrev,
+            separator = tr("date_sep", language$language)
+          ),
+          numericInput(
+            ns("browse_sample_limit"),
+            "Maximum table rows",
+            value = 5000,
+            min = 100,
+            max = 50000,
+            step = 500
+          )
         ),
         radioButtons(
           ns("facet_on"),
@@ -452,6 +744,123 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     }) %>% # End of renderUI for sidebar
       bindEvent(language$language) #TODO: bindEvent should also be on moduleData, but moduleData is not being used in the creation of lists yet
 
+    output$AC_media_ui <- renderUI({
+      req(input$data_source == "AC")
+
+      media <- ac_available_media()
+      choices <- stats::setNames(
+        media$media_id,
+        media[, tr("media_type_col", language$language)]
+      )
+      ac_selectize(
+        "media_AC",
+        tr("media_type(s)", language$language),
+        choices,
+        input$media_AC
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$locations_AC,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_date_range_ui <- renderUI({
+      req(input$data_source == "AC")
+      if (length(ac_numeric_values(input$locations_AC)) == 0) {
+        return(NULL)
+      }
+
+      available <- ac_available_date_range()
+      if (is.null(available)) {
+        start_date <- Sys.Date() - 30
+        end_date <- Sys.Date()
+      } else {
+        start_date <- as.Date(available$start_date[1])
+        end_date <- as.Date(available$end_date[1])
+      }
+      current <- input$date_range_AC
+      if (!is.null(current) && length(current) == 2) {
+        current <- as.Date(current)
+        if (!any(is.na(current))) {
+          start_date <- max(start_date, current[1])
+          end_date <- min(end_date, current[2])
+          if (!is.null(available) && start_date > end_date) {
+            start_date <- as.Date(available$start_date[1])
+            end_date <- as.Date(available$end_date[1])
+          }
+        }
+      }
+
+      dateRangeInput(
+        ns("date_range_AC"),
+        tr("date_range_lab", language$language),
+        start = start_date,
+        end = end_date,
+        min = if (is.null(available)) NULL else as.Date(available$start_date[1]),
+        max = if (is.null(available)) Sys.Date() + 1 else as.Date(available$end_date[1]),
+        format = "yyyy-mm-dd",
+        language = language$abbrev,
+        separator = tr("date_sep", language$language)
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$locations_AC,
+        input$media_AC,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_season_ranges_ui <- renderUI({
+      req(input$data_source == "AC")
+      if (!isTRUE(input$season_filter_enabled)) {
+        return(NULL)
+      }
+
+      current_year <- lubridate::year(Sys.Date())
+      count <- suppressWarnings(as.integer(input$season_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 3L))
+
+      tagList(
+        helpText(
+          "Only the month/day portion of these ranges is used. Use a",
+          "previous-year start and current-year end for seasons that cross",
+          "New Year, such as September 1 to June 1."
+        ),
+        selectInput(
+          ns("season_range_count"),
+          "Number of season ranges",
+          choices = stats::setNames(1:3, c("One", "Two", "Three")),
+          selected = count
+        ),
+        lapply(seq_len(count), function(i) {
+          dateRangeInput(
+            ns(paste0("season_range_", i)),
+            paste("Season", i),
+            start = as.Date(sprintf("%d-01-01", current_year)),
+            end = as.Date(sprintf("%d-12-31", current_year)),
+            min = as.Date(sprintf("%d-01-01", current_year - 1L)),
+            max = as.Date(sprintf("%d-12-31", current_year)),
+            format = "yyyy-mm-dd",
+            language = language$abbrev,
+            separator = tr("date_sep", language$language)
+          )
+        })
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$season_filter_enabled,
+        input$season_range_count,
+        ignoreNULL = FALSE
+      )
+
     output$AC_options_ui <- renderUI({
       req(input$data_source == "AC")
 
@@ -470,12 +879,6 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         moduleData$AC_sub_locs,
         "sub_location_id",
         "sub_location_id"
-      )
-      media <- ac_option_rows(
-        scope,
-        moduleData$AC_media,
-        "media_id",
-        "media_id"
       )
       sample_types <- ac_option_rows(
         scope,
@@ -517,10 +920,6 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       sub_loc_choices <- stats::setNames(
         sub_locs$sub_location_id,
         sub_locs[, tr("sub_location_col", language$language)]
-      )
-      media_choices <- stats::setNames(
-        media$media_id,
-        media[, tr("media_type_col", language$language)]
       )
       sample_type_choices <- stats::setNames(
         sample_types$sample_type_id,
@@ -566,12 +965,6 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             tr("sub_loc(s)", language$language),
             sub_loc_choices,
             input$sub_locations_AC
-          ),
-          ac_selectize(
-            "media_AC",
-            tr("media_type(s)", language$language),
-            media_choices,
-            input$media_AC
           ),
           ac_selectize(
             "sample_types_AC",
@@ -674,18 +1067,26 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       bindEvent(
         language$language,
         input$data_source,
-        input$date_range,
         input$locations_AC,
+        input$media_AC,
+        input$date_range_AC,
         input$parameters_AC,
         ignoreNULL = FALSE
       )
 
     output$main <- renderUI({
-      tagList(
+      plot_outputs <- tagList(
         plotly::plotlyOutput(
           ns("plot"),
           width = "100%",
-          height = "800px",
+          height = if (
+            identical(input$data_source, "AC") &&
+              identical(input$AC_selector_mode, "browse")
+          ) {
+            "650px"
+          } else {
+            "800px"
+          },
           inline = TRUE
         ),
         page_fluid(
@@ -706,9 +1107,269 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             style = "display: none;"
           )
         )
-      ) # End of tagList
+      )
+
+      if (
+        identical(input$data_source, "AC") &&
+          identical(input$AC_selector_mode, "browse")
+      ) {
+        tagList(
+          layout_columns(
+            col_widths = c(8, 4),
+            card(
+              full_screen = TRUE,
+              card_header("Samples"),
+              DT::dataTableOutput(ns("AC_sample_table"))
+            ),
+            card(
+              card_header("Selected samples and parameters"),
+              uiOutput(ns("AC_browse_parameter_ui")),
+              tags$hr(),
+              uiOutput(ns("AC_selected_samples_ui"))
+            )
+          ),
+          tags$hr(),
+          plot_outputs
+        )
+      } else {
+        plot_outputs
+      }
     }) %>% # End renderUI
-      bindEvent(language$language)
+      bindEvent(language$language, input$data_source, input$AC_selector_mode)
+
+    output$AC_sample_table <- DT::renderDataTable({
+      samples <- ac_browse_sample_table()
+      validate(need(nrow(samples) > 0, "No samples match the current filters."))
+
+      column_labels <- c(
+        sample_id = "sample_id",
+        location = tr("loc", language$language),
+        location_code = tr("code", language$language),
+        sub_location = tr("sub_loc", language$language),
+        sample_date = tr("date", language$language),
+        media = tr("media", language$language),
+        sample_type = "Sample type",
+        collection_method = "Collection method",
+        result_count = "Results",
+        parameters = tr("parameters", language$language)
+      )
+
+      visible_cols <- names(samples)
+      DT::datatable(
+        samples,
+        rownames = FALSE,
+        selection = list(mode = "multiple", selected = NULL),
+        colnames = unname(column_labels[visible_cols]),
+        filter = "top",
+        options = list(
+          pageLength = 10,
+          lengthMenu = c(5, 10, 25, 50),
+          columnDefs = list(list(visible = FALSE, targets = 0)),
+          scrollX = TRUE,
+          order = list(list(match("sample_date", visible_cols) - 1, "desc")),
+          initComplete = htmlwidgets::JS(
+            sprintf(
+              "function(settings, json) {
+                 var api = this.api();
+                 $(api.table().header()).css({'font-size': '90%%'});
+                 $(api.table().body()).css({'font-size': '80%%'});
+                 setTimeout(function() {
+                   $(api.table().container())
+                     .find('thead input[type=\"search\"]')
+                     .attr('placeholder', '%s');
+                 }, 0);
+               }",
+              tr("all_m", language$language)
+            )
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          ),
+          stateSave = FALSE
+        )
+      )
+    })
+
+    observeEvent(input$AC_sample_table_rows_selected, {
+      samples <- ac_browse_sample_table()
+      rows <- input$AC_sample_table_rows_selected
+      if (is.null(rows) || length(rows) == 0 || nrow(samples) == 0) {
+        return()
+      }
+      rows <- rows[rows <= nrow(samples)]
+      sample_ids <- unique(c(
+        browse_selected_sample_ids(),
+        as.numeric(samples$sample_id[rows])
+      ))
+      browse_selected_sample_ids(sample_ids[!is.na(sample_ids)])
+    })
+
+    observeEvent(input$AC_selector_mode, {
+      if (!identical(input$AC_selector_mode, "browse")) {
+        return()
+      }
+      shinyjs::hide("full_screen")
+      shinyjs::hide("download_data")
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$clear_selected_samples, {
+      browse_selected_sample_ids(numeric(0))
+      DT::selectRows(DT::dataTableProxy("AC_sample_table"), NULL)
+    }, ignoreInit = TRUE)
+
+    lapply(seq_len(50), function(i) {
+      observeEvent(
+        input[[paste0("remove_selected_sample_", i)]],
+        {
+          rows <- ac_selected_sample_rows()
+          if (i > nrow(rows)) {
+            return()
+          }
+          keep <- setdiff(browse_selected_sample_ids(), rows$sample_id[[i]])
+          browse_selected_sample_ids(keep)
+        },
+        ignoreInit = TRUE
+      )
+    })
+
+    observeEvent(
+      list(browse_selected_sample_ids(), ac_browse_sample_table()),
+      {
+        samples <- ac_browse_sample_table()
+        selected <- browse_selected_sample_ids()
+        proxy <- DT::dataTableProxy("AC_sample_table")
+        if (nrow(samples) == 0 || length(selected) == 0) {
+          DT::selectRows(proxy, NULL)
+          return()
+        }
+        rows <- which(samples$sample_id %in% selected)
+        DT::selectRows(proxy, rows)
+      },
+      ignoreInit = TRUE
+    )
+
+    output$AC_browse_parameter_ui <- renderUI({
+      req(input$data_source == "AC", input$AC_selector_mode == "browse")
+
+      params <- ac_browse_parameter_choices()
+      if (
+        is.null(params) ||
+          nrow(params) == 0 ||
+          !all(c("parameter_id", "param_name", "n") %in% names(params))
+      ) {
+        params <- data.frame(
+          parameter_id = character(),
+          param_name = character(),
+          n = numeric(),
+          stringsAsFactors = FALSE
+        )
+      }
+      selected <- ac_keep_selection(
+        input$browse_parameters_AC,
+        as.character(params$parameter_id)
+      )
+      choices <- character(0)
+      if (nrow(params) > 0) {
+        choices <- stats::setNames(
+          as.character(params$parameter_id),
+          paste0(params$param_name, " (", params$n, ")")
+        )
+      }
+
+      tagList(
+        if (length(browse_selected_sample_ids()) == 0) {
+          tags$small(
+            class = "text-muted",
+            "Select sample rows to focus this parameter list."
+          )
+        },
+        selectizeInput(
+          ns("browse_parameters_AC"),
+          "Parameters",
+          choices = c(
+            stats::setNames("all", tr("all_m", language$language)),
+            choices
+          ),
+          selected = selected,
+          multiple = TRUE
+        ),
+        radioButtons(
+          ns("browse_parameter_match"),
+          "Sample must include",
+          choices = c("Any selected parameter" = "any", "All selected parameters" = "all"),
+          selected = if (is.null(input$browse_parameter_match)) {
+            "any"
+          } else {
+            input$browse_parameter_match
+          }
+        )
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$AC_selector_mode,
+        browse_selected_sample_ids(),
+        input$browse_date_range,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_selected_samples_ui <- renderUI({
+      rows <- ac_selected_sample_rows()
+      count <- nrow(rows)
+      if (count == 0) {
+        return(tags$small(class = "text-muted", "No samples selected."))
+      }
+
+      shown <- utils::head(rows, 50)
+      tagList(
+        div(
+          style = "display: flex; gap: 8px; align-items: center;",
+          tags$strong(paste(count, "sample(s) selected")),
+          actionButton(
+            ns("clear_selected_samples"),
+            "Clear",
+            class = "btn btn-outline-danger btn-sm"
+          )
+        ),
+        tags$div(
+          style = "max-height: 360px; overflow-y: auto; margin-top: 8px;",
+          lapply(seq_len(nrow(shown)), function(i) {
+            label <- paste(
+              shown$location[[i]],
+              shown$sample_date[[i]],
+              shown$media[[i]],
+              paste0("ID: ", shown$sample_id[[i]]),
+              sep = " | "
+            )
+            fluidRow(
+              style = "margin-bottom: 6px;",
+              column(width = 9, tags$small(label)),
+              column(
+                width = 3,
+                actionButton(
+                  ns(paste0("remove_selected_sample_", i)),
+                  "Remove",
+                  class = "btn btn-outline-secondary btn-sm"
+                )
+              )
+            )
+          })
+        ),
+        if (count > nrow(shown)) {
+          tags$small(
+            class = "text-muted",
+            paste("Showing first", nrow(shown), "selected samples.")
+          )
+        }
+      )
+    })
 
     observeEvent(
       input$data_source,
@@ -848,18 +1509,13 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
     # Helper function to update the list of available parameters based on selected locations
     update_parameters <- function() {
-      if (is.null(input$locations_AC) || length(input$locations_AC) == 0) {
-        params <- moduleData$AC_params
-      } else {
-        param_ids <- unique(moduleData$AC_loc_params$parameter_id[
-          moduleData$AC_loc_params$location_id %in% input$locations_AC
-        ])
-        params <- moduleData$AC_params[
-          moduleData$AC_params$parameter_id %in% param_ids,
-          ,
-          drop = FALSE
-        ]
+      if (
+        !identical(input$data_source, "AC") ||
+          identical(input$AC_selector_mode, "browse")
+      ) {
+        return(invisible(NULL))
       }
+      params <- ac_available_parameters()
       selected <- input$parameters_AC[
         input$parameters_AC %in% params$parameter_id
       ]
@@ -896,11 +1552,16 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       }
     })
 
-    # Update the list of available parameters in response to location selection
+    # Update parameters after the location, sample media, and date range scope is set.
     observeEvent(
-      input$locations_AC,
+      list(input$locations_AC, input$media_AC, input$date_range_AC),
       {
-        update_parameters()
+        if (
+          identical(input$data_source, "AC") &&
+            !identical(input$AC_selector_mode, "browse")
+        ) {
+          update_parameters()
+        }
       },
       ignoreNULL = FALSE
     )
@@ -1039,6 +1700,29 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       removeModal()
     })
 
+    ac_guided_season_ranges <- function() {
+      if (!isTRUE(input$season_filter_enabled)) {
+        return(NULL)
+      }
+      count <- suppressWarnings(as.integer(input$season_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 3L))
+      ranges <- lapply(seq_len(count), function(i) {
+        range <- input[[paste0("season_range_", i)]]
+        if (is.null(range) || length(range) != 2) {
+          return(NULL)
+        }
+        as.Date(range)
+      })
+      ranges <- Filter(Negate(is.null), ranges)
+      if (length(ranges) == 0) {
+        return(NULL)
+      }
+      ranges
+    }
+
     # Create and render the plot ############################################################
     ## ExtendedTask for plot generation ######################################################
     plot_output_discrete <- ExtendedTask$new(
@@ -1076,6 +1760,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         result_speciations,
         include_blanks,
         duplicate_action,
+        sample_ids,
+        season_ranges,
         dbSource,
         dbPath,
         config
@@ -1133,6 +1819,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 result_speciations = result_speciations,
                 include_blanks = include_blanks,
                 duplicate_action = duplicate_action,
+                sample_ids = sample_ids,
+                season_ranges = season_ranges,
                 dbSource = dbSource,
                 dbPath = dbPath,
                 dbCon = con,
@@ -1206,32 +1894,63 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             }
           }
         } else if (input$data_source == "AC") {
-          if (is.null(input$locations_AC)) {
-            showModal(modalDialog(
-              tr("pl_select_loc", language$language),
-              footer = tagList(
-                actionButton(ns("cancel"), tr("cancel", language$language))
-              ),
-              easyClose = TRUE
-            ))
-            return()
+          ac_mode <- if (is.null(input$AC_selector_mode)) {
+            "guided"
+          } else {
+            input$AC_selector_mode
           }
-          if (is.null(input$parameters_AC)) {
-            showModal(modalDialog(
-              tr("pl_select_param", language$language),
-              footer = tagList(
-                actionButton(ns("cancel"), tr("cancel", language$language))
-              ),
-              easyClose = TRUE
-            ))
-            return()
+          if (identical(ac_mode, "browse")) {
+            if (length(browse_selected_sample_ids()) == 0) {
+              showModal(modalDialog(
+                "Please select one or more samples from the table.",
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+          } else {
+            if (is.null(input$locations_AC)) {
+              showModal(modalDialog(
+                tr("pl_select_loc", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+            if (
+              is.null(input$date_range_AC) ||
+                length(input$date_range_AC) != 2
+            ) {
+              showModal(modalDialog(
+                tr("date_range_lab", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
+            if (is.null(input$parameters_AC)) {
+              showModal(modalDialog(
+                tr("pl_select_param", language$language),
+                footer = tagList(
+                  actionButton(ns("cancel"), tr("cancel", language$language))
+                ),
+                easyClose = TRUE
+              ))
+              return()
+            }
           }
         }
 
         if (input$data_source == "EQ") {
           plot_output_discrete$invoke(
-            start = input$date_range[1],
-            end = input$date_range[2],
+            start = input$date_range_EQ[1],
+            end = input$date_range_EQ[2],
             locations = if (input$locs_groups == "locations") {
               input$locations_EQ
             } else {
@@ -1289,17 +2008,30 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             result_speciations = NULL,
             include_blanks = TRUE,
             duplicate_action = "show",
+            sample_ids = NULL,
+            season_ranges = NULL,
             dbSource = input$data_source,
             dbPath = input$EQWin_source, # EQWin connection so no need to pass config
             config = NULL # EQWin connection so no need to pass config
           )
         } else if (input$data_source == "AC") {
+          ac_mode <- if (is.null(input$AC_selector_mode)) {
+            "guided"
+          } else {
+            input$AC_selector_mode
+          }
           scope <- isolate(ac_scope())
           keep_ac_ids <- function(values, lookup, scope_col, lookup_col) {
+            if (is.null(values) || length(values) == 0) {
+              return(NULL)
+            }
+            values <- as.character(values)
+            if ("all" %in% values) {
+              return(NULL)
+            }
             allowed <- as.character(
               ac_option_rows(scope, lookup, scope_col, lookup_col)[[lookup_col]]
             )
-            values <- as.character(values)
             values <- values[values %in% allowed]
             if (length(values) == 0) {
               return(NULL)
@@ -1307,12 +2039,50 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             as.numeric(values)
           }
 
+          browse_sample_ids <- NULL
+          browse_parameters <- NULL
+          browse_start <- input$date_range_AC[1]
+          browse_end <- input$date_range_AC[2]
+          if (identical(ac_mode, "browse")) {
+            selected_rows <- ac_selected_sample_rows()
+            browse_sample_ids <- browse_selected_sample_ids()
+            browse_parameters <- ac_numeric_values(input$browse_parameters_AC)
+            if (length(browse_parameters) == 0) {
+              browse_parameters <- NULL
+            }
+            if (nrow(selected_rows) > 0) {
+              selected_dates <- as.Date(selected_rows$sample_date)
+              browse_start <- min(selected_dates, na.rm = TRUE) - 1
+              browse_end <- max(selected_dates, na.rm = TRUE) + 1
+            } else {
+              browse_start <- input$browse_date_range[1]
+              browse_end <- input$browse_date_range[2]
+            }
+          }
+          use_guided_filters <- !identical(ac_mode, "browse")
+
           plot_output_discrete$invoke(
-            start = input$date_range[1],
-            end = input$date_range[2],
-            locations = as.numeric(input$locations_AC),
+            start = if (identical(ac_mode, "browse")) {
+              browse_start
+            } else {
+              input$date_range_AC[1]
+            },
+            end = if (identical(ac_mode, "browse")) {
+              browse_end
+            } else {
+              input$date_range_AC[2]
+            },
+            locations = if (identical(ac_mode, "browse")) {
+              NULL
+            } else {
+              as.numeric(input$locations_AC)
+            },
             locGrp = NULL,
-            parameters = as.numeric(input$parameters_AC),
+            parameters = if (identical(ac_mode, "browse")) {
+              browse_parameters
+            } else {
+              as.numeric(input$parameters_AC)
+            },
             paramGrp = NULL,
             standard = NULL, # No standards in AquaCache yet
             log = input$log_scale,
@@ -1337,63 +2107,69 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             },
             gridx = plot_aes$showgridx,
             gridy = plot_aes$showgridy,
-            sub_location_ids = keep_ac_ids(
+            sub_location_ids = if (use_guided_filters) keep_ac_ids(
               input$sub_locations_AC,
               moduleData$AC_sub_locs,
               "sub_location_id",
               "sub_location_id"
-            ),
-            media = keep_ac_ids(
+            ) else NULL,
+            media = if (use_guided_filters) keep_ac_ids(
               input$media_AC,
               moduleData$AC_media,
               "media_id",
               "media_id"
-            ),
-            sample_types = keep_ac_ids(
+            ) else NULL,
+            sample_types = if (use_guided_filters) keep_ac_ids(
               input$sample_types_AC,
               moduleData$AC_sample_types,
               "sample_type",
               "sample_type_id"
-            ),
-            collection_methods = keep_ac_ids(
+            ) else NULL,
+            collection_methods = if (use_guided_filters) keep_ac_ids(
               input$collection_methods_AC,
               moduleData$AC_collection_methods,
               "collection_method",
               "collection_method_id"
-            ),
-            result_types = keep_ac_ids(
+            ) else NULL,
+            result_types = if (use_guided_filters) keep_ac_ids(
               input$result_types_AC,
               moduleData$AC_result_types,
               "result_type",
               "result_type_id"
-            ),
-            sample_fractions = keep_ac_ids(
+            ) else NULL,
+            sample_fractions = if (use_guided_filters) keep_ac_ids(
               input$sample_fractions_AC,
               moduleData$AC_sample_fractions,
               "sample_fraction_id",
               "sample_fraction_id"
-            ),
-            result_value_types = keep_ac_ids(
+            ) else NULL,
+            result_value_types = if (use_guided_filters) keep_ac_ids(
               input$result_value_types_AC,
               moduleData$AC_result_value_types,
               "result_value_type",
               "result_value_type_id"
-            ),
-            result_speciations = keep_ac_ids(
+            ) else NULL,
+            result_speciations = if (use_guided_filters) keep_ac_ids(
               input$result_speciations_AC,
               moduleData$AC_result_speciations,
               "result_speciation_id",
               "result_speciation_id"
-            ),
-            include_blanks = if (is.null(input$include_blanks)) {
+            ) else NULL,
+            include_blanks = if (!use_guided_filters || is.null(input$include_blanks)) {
               TRUE
             } else {
               isTRUE(input$include_blanks)
             },
-            duplicate_action = if (is.null(input$duplicate_action)) {
+            duplicate_action = if (!use_guided_filters || is.null(input$duplicate_action)) {
               "show"
             } else {
               input$duplicate_action
+            },
+            sample_ids = browse_sample_ids,
+            season_ranges = if (use_guided_filters) {
+              ac_guided_season_ranges()
+            } else {
+              NULL
             },
             dbSource = input$data_source,
             dbPath = NULL, # AquaCache connection so no need to pass database path

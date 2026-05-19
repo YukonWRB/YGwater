@@ -256,7 +256,7 @@ map_target_date,target date for historical range map,Target date,Date ciblée
 map_actual_values,,Actual values,Valeurs actuelles
 value,,Value,Valeur
 map_relative,,% historic range,% plage historique
-map_actual_date,,Date,Date
+date,,Date,Date
 map_actual_yrs,,Years of record,Années de mesures
 map_actual_hist_range,,Historic range,Plage historique
 map_one_parameter,,One parameter,Un paramètre

@@ -36,6 +36,8 @@
 #' @param result_speciations Optional AquaCache result speciation ids or names to include.
 #' @param include_blanks Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.
 #' @param duplicate_action How AquaCache duplicate/replicate samples should be handled. One of "show", "hide", or "average".
+#' @param sample_ids Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.
+#' @param season_ranges Optional AquaCache seasonal date ranges to include. Dates are accepted, but only the day-of-year is used; ranges may cross New Year.
 #' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbCon A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`.
@@ -80,6 +82,8 @@ plotDiscrete <- function(
   result_speciations = NULL,
   include_blanks = TRUE,
   duplicate_action = c("show", "hide", "average"),
+  sample_ids = NULL,
+  season_ranges = NULL,
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
@@ -174,10 +178,10 @@ plotDiscrete <- function(
   }
 
   if (dbSource == 'AC') {
-    if (is.null(locations)) {
+    if (is.null(locations) && is.null(sample_ids)) {
       stop("You must specify locations when 'dbSource' is 'AC'")
     }
-    if (is.null(parameters)) {
+    if (is.null(parameters) && is.null(sample_ids)) {
       stop("You must specify parameters when 'dbSource' is 'AC'")
     }
 
@@ -314,6 +318,48 @@ plotDiscrete <- function(
       return(NA_character_)
     }
     paste(x, collapse = "; ")
+  }
+
+  filter_discrete_seasons <- function(df, ranges, datetime_col = "datetime") {
+    if (
+      is.null(ranges) ||
+        length(ranges) == 0 ||
+        nrow(df) == 0 ||
+        !(datetime_col %in% names(df))
+    ) {
+      return(df)
+    }
+
+    if (is.data.frame(ranges)) {
+      ranges <- split(ranges, seq_len(nrow(ranges)))
+    }
+    ranges <- lapply(ranges, function(range) {
+      dates <- suppressWarnings(as.Date(unlist(range)))
+      dates <- dates[!is.na(dates)]
+      if (length(dates) < 2) {
+        return(NULL)
+      }
+      as.integer(lubridate::yday(dates[seq_len(2)]))
+    })
+    ranges <- Filter(Negate(is.null), ranges)
+    if (length(ranges) == 0) {
+      return(df)
+    }
+
+    sample_dates <- suppressWarnings(as.Date(df[[datetime_col]]))
+    sample_doy <- as.integer(lubridate::yday(sample_dates))
+    keep <- rep(FALSE, nrow(df))
+    for (range in ranges) {
+      start_doy <- range[[1]]
+      end_doy <- range[[2]]
+      if (start_doy <= end_doy) {
+        keep <- keep | (sample_doy >= start_doy & sample_doy <= end_doy)
+      } else {
+        keep <- keep | (sample_doy >= start_doy | sample_doy <= end_doy)
+      }
+    }
+
+    df[keep & !is.na(keep), , drop = FALSE]
   }
 
   average_discrete_duplicates <- function(df) {
@@ -859,6 +905,14 @@ plotDiscrete <- function(
       }
     }
 
+    if (!is.null(sample_ids)) {
+      sample_ids <- unique(suppressWarnings(as.numeric(sample_ids)))
+      sample_ids <- sample_ids[!is.na(sample_ids)]
+      if (length(sample_ids) == 0) {
+        stop("No valid AquaCache sample_ids were supplied.")
+      }
+    }
+
     # Validate existence of parameters and/or locations
     if (!is.null(locations)) {
       if (inherits(locations, "character")) {
@@ -924,6 +978,22 @@ plotDiscrete <- function(
             ". Moving on without that location (and sub-location if applicable)"
           )
         }
+      }
+    } else if (!is.null(sample_ids)) {
+      locIds <- DBI::dbGetQuery(
+        AC,
+        paste0(
+          "SELECT DISTINCT l.location_id, l.location_code AS location,",
+          " l.alias, l.name, l.name_fr",
+          " FROM locations AS l",
+          " INNER JOIN samples AS s ON l.location_id = s.location_id",
+          " WHERE s.sample_id IN (",
+          paste0(sample_ids, collapse = ", "),
+          ");"
+        )
+      )
+      if (nrow(locIds) == 0) {
+        stop("No locations were found for the supplied AquaCache sample_ids.")
       }
     }
 
@@ -1025,6 +1095,34 @@ plotDiscrete <- function(
           )
         }
       }
+    } else if (!is.null(sample_ids)) {
+      unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
+      paramIds <- DBI::dbGetQuery(
+        AC,
+        paste0(
+          "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, ",
+          unit_sql,
+          " FROM parameters AS p",
+          " INNER JOIN results AS r ON p.parameter_id = r.parameter_id",
+          " WHERE r.sample_id IN (",
+          paste0(sample_ids, collapse = ", "),
+          ");"
+        )
+      )
+      if (nrow(paramIds) == 0) {
+        stop("No parameters were found for the supplied AquaCache sample_ids.")
+      }
+    }
+
+    sample_id_clause <- if (!is.null(sample_ids)) {
+      paste0(
+        "
+    AND s.sample_id IN (",
+        paste0(sample_ids, collapse = ", "),
+        ")"
+      )
+    } else {
+      ""
     }
 
     if (is.null(sub_locations) | nrow(subLocIds) == 0) {
@@ -1076,7 +1174,9 @@ plotDiscrete <- function(
         start,
         "' AND s.datetime < '",
         end,
-        "';
+        "'",
+        sample_id_clause,
+        ";
         "
       )
     } else {
@@ -1142,7 +1242,9 @@ AND s.datetime > '",
         start,
         "' AND s.datetime < '",
         end,
-        "';
+        "'",
+        sample_id_clause,
+        ";
 "
       )
     }
@@ -1172,6 +1274,18 @@ AND s.datetime > '",
         samples$name_fr,
         paste0(samples$name_fr, " - ", samples$sub_location_name_fr)
       )
+    }
+
+    #Swap the datetime columns if target_datetime is TRUE
+    if (target_datetime) {
+      names(samples)[names(samples) == "datetime"] <- "actual_datetime"
+      names(samples)[names(samples) == "target_datetime"] <- "datetime"
+      names(samples)[names(samples) == "actual_datetime"] <- "target_datetime"
+    }
+
+    samples <- filter_discrete_seasons(samples, season_ranges, "datetime")
+    if (nrow(samples) == 0) {
+      stop("No samples were found within the requested seasonal day-of-year ranges.")
     }
 
     # Get the measurements from table results
@@ -1226,13 +1340,6 @@ AND s.datetime > '",
       stop(
         "No results were found for the date range locations/parameter combinations specified."
       )
-    }
-
-    #Swap the datetime columns if target_datetime is TRUE
-    if (target_datetime) {
-      names(samples)[names(samples) == "datetime"] <- "actual_datetime"
-      names(samples)[names(samples) == "target_datetime"] <- "datetime"
-      names(samples)[names(samples) == "actual_datetime"] <- "target_datetime"
     }
 
     # Merge the results with the samples and paramIds data.frames

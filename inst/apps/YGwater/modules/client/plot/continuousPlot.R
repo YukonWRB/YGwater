@@ -2711,21 +2711,29 @@ contPlot <- function(id, language, windowDims, inputs) {
               base_axis_count <- length(series)
               for (i in seq_along(payloads)) {
                 status_bands <- payloads[[i]]$meta$status_bands
-                if (is.null(status_bands)) {
+                if (
+                  is.null(status_bands) ||
+                    is.null(status_bands$polygons) ||
+                    nrow(status_bands$polygons) == 0L
+                ) {
                   next
                 }
 
-                status_yaxis_index <- base_axis_count + i
+                status_axis_index <- base_axis_count + i
                 main_xaxis_name <- viewport_layout_axis_name("x", i)
                 main_yaxis_name <- viewport_layout_axis_name("y", i)
+                status_xaxis_name <- viewport_layout_axis_name(
+                  "x",
+                  status_axis_index
+                )
                 status_yaxis_name <- viewport_layout_axis_name(
                   "y",
-                  status_yaxis_index
+                  status_axis_index
                 )
-                main_xaxis_ref <- viewport_axis_ref("x", i)
-                status_yaxis_ref <- viewport_axis_ref("y", status_yaxis_index)
+                status_xaxis_ref <- viewport_axis_ref("x", status_axis_index)
+                status_yaxis_ref <- viewport_axis_ref("y", status_axis_index)
 
-                status_bands$xaxis <- main_xaxis_ref
+                status_bands$xaxis <- status_xaxis_ref
                 status_bands$yaxis <- status_yaxis_ref
                 if (!is.null(status_bands$annotations)) {
                   status_bands$annotations <- lapply(
@@ -2742,10 +2750,12 @@ contPlot <- function(id, language, windowDims, inputs) {
                   status_bands,
                   main_xaxis_name = main_xaxis_name,
                   main_yaxis_name = main_yaxis_name,
+                  status_xaxis_name = status_xaxis_name,
                   status_yaxis_name = status_yaxis_name
                 )
                 series[[i]]$xaxis <- viewport_axis_ref("x", i)
                 series[[i]]$yaxis <- viewport_axis_ref("y", i)
+                xaxis_names <- c(xaxis_names, status_xaxis_name)
                 status_band_list[[length(status_band_list) + 1L]] <- status_bands
               }
             }

@@ -159,16 +159,20 @@ test_that("viewport adaptive plot includes status bands", {
     )),
     height = 0.02,
     y_range = c(0, 1),
-    xaxis = "x",
+    xaxis = "x2",
     yaxis = "y2"
   )
   layout <- YGwater:::viewport_layout_add_status_bands(
     list(xaxis = list(), yaxis = list()),
-    status_bands
+    status_bands,
+    status_xaxis_name = "xaxis2"
   )
   expect_equal(layout$yaxis2$domain, c(0, 0.02))
   expect_equal(layout$xaxis$type, "date")
-  expect_equal(layout$xaxis$anchor, "y2")
+  expect_false(layout$xaxis$showticklabels)
+  expect_equal(layout$xaxis2$type, "date")
+  expect_equal(layout$xaxis2$anchor, "y2")
+  expect_true(layout$xaxis2$fixedrange)
 
   built <- YGwater:::viewport_adaptive_plot(
     payload = list(
@@ -181,7 +185,7 @@ test_that("viewport adaptive plot includes status bands", {
       )),
       layout = layout,
       config = list(locale = "en"),
-      xaxis_names = "xaxis",
+      xaxis_names = c("xaxis", "xaxis2"),
       status_bands = status_bands
     ),
     xlim = range(x),
@@ -196,8 +200,48 @@ test_that("viewport adaptive plot includes status bands", {
   )))
   expect_true(any(vapply(
     built$trace_bundle$traces,
-    function(trace) identical(trace$xaxis, "x") && identical(trace$yaxis, "y2"),
+    function(trace) identical(trace$xaxis, "x2") && identical(trace$yaxis, "y2"),
     logical(1)
   )))
-  expect_null(plotly::plotly_build(built$plot)$x$layout$xaxis2)
+  status_trace <- Filter(
+    function(trace) identical(trace$xaxis, "x2") && identical(trace$yaxis, "y2"),
+    built$trace_bundle$traces
+  )[[1]]
+  expect_equal(status_trace$name, "Grade: A")
+  expect_equal(status_trace$hovertemplate, "%{text}<extra></extra>")
+  expect_equal(plotly::plotly_build(built$plot)$x$layout$xaxis2$type, "date")
+})
+
+test_that("viewport status bands are clipped to the visible x window", {
+  xlim <- as.POSIXct(
+    c("2024-01-01 00:00:00", "2024-01-02 00:00:00"),
+    tz = "UTC"
+  )
+  status_bands <- list(
+    polygons = data.table::data.table(
+      id = rep("grade_1", 4),
+      datetime = as.POSIXct(
+        c(
+          "2023-12-01 00:00:00",
+          "2023-12-01 00:00:00",
+          "2024-02-01 00:00:00",
+          "2024-02-01 00:00:00"
+        ),
+        tz = "UTC"
+      ),
+      y = c(0, 1, 1, 0),
+      color = "#4daf4a",
+      text = "Grade: A"
+    ),
+    xaxis = "x",
+    yaxis = "y2"
+  )
+
+  bundle <- YGwater:::viewport_status_band_trace_bundle(
+    status_bands,
+    xlim = xlim
+  )
+
+  expect_equal(bundle$trace_count, 1L)
+  expect_equal(range(bundle$traces[[1]]$x), xlim)
 })

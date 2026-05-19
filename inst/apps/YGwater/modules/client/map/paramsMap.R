@@ -834,7 +834,7 @@ mapParams <- function(id, language) {
               "",
               paste0("Matrix state: ", matrix_state, "<br>")
             ),
-            tr("map_actual_date", language$language),
+            tr("date", language$language),
             ": ",
             if (map_params$latest) {
               paste0(datetime, " UTC")

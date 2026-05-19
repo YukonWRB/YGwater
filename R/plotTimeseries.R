@@ -1425,7 +1425,7 @@ plotTimeseries <- function(
       ]
     }
 
-    if (approvals && exists("approvals_dt", inherits = FALSE)) {
+    if (approvals && exists("approvals_dt", inherits = TRUE)) {
       poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
         approvals_dt,
         "approval",
@@ -1437,7 +1437,7 @@ plotTimeseries <- function(
       )
     }
 
-    if (grades && exists("grades_dt", inherits = FALSE)) {
+    if (grades && exists("grades_dt", inherits = TRUE)) {
       poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
         grades_dt,
         "grade",
@@ -1449,7 +1449,7 @@ plotTimeseries <- function(
       )
     }
 
-    if (qualifiers && exists("qualifiers_dt", inherits = FALSE)) {
+    if (qualifiers && exists("qualifiers_dt", inherits = TRUE)) {
       poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
         qualifiers_dt,
         "qualifier",

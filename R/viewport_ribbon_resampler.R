@@ -45,17 +45,32 @@ viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {
     return(NULL)
   }
 
-  autorange_keys <- grep("^xaxis[0-9]*\\.autorange$", names(relayout), value = TRUE)
-  if (length(autorange_keys) > 0 && any(vapply(
-    autorange_keys,
-    function(key) isTRUE(relayout[[key]]),
-    logical(1)
-  ))) {
+  autorange_keys <- grep(
+    "^xaxis[0-9]*\\.autorange$",
+    names(relayout),
+    value = TRUE
+  )
+  if (
+    length(autorange_keys) > 0 &&
+      any(vapply(
+        autorange_keys,
+        function(key) isTRUE(relayout[[key]]),
+        logical(1)
+      ))
+  ) {
     return(NULL)
   }
 
-  range0_keys <- grep("^xaxis[0-9]*\\.range\\[0\\]$", names(relayout), value = TRUE)
-  range1_keys <- grep("^xaxis[0-9]*\\.range\\[1\\]$", names(relayout), value = TRUE)
+  range0_keys <- grep(
+    "^xaxis[0-9]*\\.range\\[0\\]$",
+    names(relayout),
+    value = TRUE
+  )
+  range1_keys <- grep(
+    "^xaxis[0-9]*\\.range\\[1\\]$",
+    names(relayout),
+    value = TRUE
+  )
 
   if (length(range0_keys) == 0 || length(range1_keys) == 0) {
     return(NULL)
@@ -201,10 +216,12 @@ viewport_ribbon_resample <- function(
 
   visible[, .run := 1L]
   if (nrow(visible) > 1) {
-    visible[, .run := cumsum(c(
-      1L,
-      diff(as.numeric(get(x_col))) > raw_gap_threshold
-    ))]
+    visible[,
+      .run := cumsum(c(
+        1L,
+        diff(as.numeric(get(x_col))) > raw_gap_threshold
+      ))
+    ]
   }
 
   span_visible <- diff(range(visible_x_num, na.rm = TRUE))
@@ -214,13 +231,15 @@ viewport_ribbon_resample <- function(
     n_bins <- max(1L, as.integer(n_bins))
     bin_width <- span_visible / n_bins
     x_min <- min(visible_x_num, na.rm = TRUE)
-    visible[, .bin := pmin(
-      n_bins,
-      pmax(
-        1L,
-        as.integer(floor((as.numeric(get(x_col)) - x_min) / bin_width)) + 1L
+    visible[,
+      .bin := pmin(
+        n_bins,
+        pmax(
+          1L,
+          as.integer(floor((as.numeric(get(x_col)) - x_min) / bin_width)) + 1L
+        )
       )
-    )]
+    ]
   }
 
   line_dt <- data.table::data.table(
@@ -235,18 +254,21 @@ viewport_ribbon_resample <- function(
       stop("`line_col` was not found in `data`.")
     }
 
-    line_dt <- visible[!is.na(get(line_col)), {
-      local <- .SD
-      idx <- unique(c(
-        1L,
-        which.min(local[[line_col]]),
-        which.max(local[[line_col]]),
-        .N
-      ))
-      local[idx]
-    },
-    by = .(.run, .bin),
-    .SDcols = c(x_col, line_col, ".row_id")]
+    line_dt <- visible[
+      !is.na(get(line_col)),
+      {
+        local <- .SD
+        idx <- unique(c(
+          1L,
+          which.min(local[[line_col]]),
+          which.max(local[[line_col]]),
+          .N
+        ))
+        local[idx]
+      },
+      by = .(.run, .bin),
+      .SDcols = c(x_col, line_col, ".row_id")
+    ]
 
     if (nrow(line_dt) > 0) {
       data.table::setorderv(line_dt, c(".row_id"))
@@ -673,7 +695,11 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
   }
 
   if (is.null(status_bands$polygons) && length(status_bands) > 0) {
-    bundles <- lapply(status_bands, viewport_status_band_trace_bundle, xlim = xlim)
+    bundles <- lapply(
+      status_bands,
+      viewport_status_band_trace_bundle,
+      xlim = xlim
+    )
     traces <- unlist(lapply(bundles, `[[`, "traces"), recursive = FALSE)
     return(list(
       traces = traces,
@@ -706,11 +732,12 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
 
   if (!is.null(xlim) && length(xlim) == 2 && all(!is.na(xlim))) {
     xlim_num <- sort(as.numeric(xlim))
-    keep_ids <- polygons[
-      ,
+    keep_ids <- polygons[,
       .(
-        starts_before_end = min(as.numeric(datetime), na.rm = TRUE) <= xlim_num[2],
-        ends_after_start = max(as.numeric(datetime), na.rm = TRUE) >= xlim_num[1]
+        starts_before_end = min(as.numeric(datetime), na.rm = TRUE) <=
+          xlim_num[2],
+        ends_after_start = max(as.numeric(datetime), na.rm = TRUE) >=
+          xlim_num[1]
       ),
       by = id
     ][starts_before_end & ends_after_start, id]
@@ -718,6 +745,13 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
     if (!nrow(polygons)) {
       return(empty_bundle)
     }
+    polygons[,
+      datetime := as.POSIXct(
+        pmin(pmax(as.numeric(datetime), xlim_num[1]), xlim_num[2]),
+        origin = "1970-01-01",
+        tz = "UTC"
+      )
+    ]
   }
 
   xaxis <- if (!is.null(status_bands$xaxis)) status_bands$xaxis else "x"
@@ -735,6 +769,7 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
     if (nrow(seg) < 3) {
       next
     }
+    status_text <- as.character(seg$text[[1]])
 
     traces[[length(traces) + 1L]] <- list(
       x = seg$datetime,
@@ -745,8 +780,11 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
       hoveron = "fills",
       fillcolor = as.character(seg$color[[1]]),
       line = list(width = 1, color = "black"),
+      name = status_text,
+      legendgroup = status_text,
       hoverinfo = if (hover) "text" else "skip",
-      text = rep(as.character(seg$text[[1]]), nrow(seg)),
+      hovertemplate = if (hover) "%{text}<extra></extra>" else NULL,
+      text = rep(status_text, nrow(seg)),
       showlegend = FALSE,
       xaxis = xaxis,
       yaxis = yaxis
@@ -799,9 +837,19 @@ viewport_layout_add_status_bands <- function(
   main_xaxis <- layout[[main_xaxis_name]]
   main_yaxis <- layout[[main_yaxis_name]]
   main_xaxis_ref <- sub("axis", "", main_xaxis_name, fixed = TRUE)
+  main_yaxis_ref <- sub("axis", "", main_yaxis_name, fixed = TRUE)
+  status_xaxis_ref <- if (!is.null(status_xaxis_name)) {
+    sub("axis", "", status_xaxis_name, fixed = TRUE)
+  } else {
+    main_xaxis_ref
+  }
   status_yaxis_ref <- sub("axis", "", status_yaxis_name, fixed = TRUE)
   panel_domain <- main_yaxis$domain
-  if (is.null(panel_domain) || length(panel_domain) != 2 || any(is.na(panel_domain))) {
+  if (
+    is.null(panel_domain) ||
+      length(panel_domain) != 2 ||
+      any(is.na(panel_domain))
+  ) {
     panel_domain <- c(0, 1)
   }
   panel_domain <- sort(as.numeric(panel_domain))
@@ -818,15 +866,35 @@ viewport_layout_add_status_bands <- function(
   main_yaxis$anchor <- main_xaxis_ref
   layout[[main_yaxis_name]] <- main_yaxis
 
-  main_xaxis$anchor <- status_yaxis_ref
-  main_xaxis$showticklabels <- original_showticklabels
   if (is.null(main_xaxis$type)) {
     main_xaxis$type <- "date"
   }
   if (!is.null(main_xaxis$rangeslider)) {
     main_xaxis$rangeslider$visible <- FALSE
   }
-  layout[[main_xaxis_name]] <- main_xaxis
+
+  if (!is.null(status_xaxis_name)) {
+    main_xaxis$anchor <- main_yaxis_ref
+    main_xaxis$showticklabels <- FALSE
+    layout[[main_xaxis_name]] <- main_xaxis
+
+    status_xaxis <- main_xaxis
+    status_xaxis$anchor <- status_yaxis_ref
+    status_xaxis$matches <- main_xaxis_ref
+    status_xaxis$showticklabels <- original_showticklabels
+    status_xaxis$showgrid <- FALSE
+    status_xaxis$type <- "date"
+    status_xaxis$fixedrange <- FALSE
+    status_xaxis$title <- list(standoff = 0)
+    if (!is.null(status_xaxis$rangeslider)) {
+      status_xaxis$rangeslider$visible <- FALSE
+    }
+    layout[[status_xaxis_name]] <- status_xaxis
+  } else {
+    main_xaxis$anchor <- status_yaxis_ref
+    main_xaxis$showticklabels <- original_showticklabels
+    layout[[main_xaxis_name]] <- main_xaxis
+  }
 
   y_range <- status_bands$y_range
   if (is.null(y_range) || length(y_range) != 2 || any(is.na(y_range))) {
@@ -835,9 +903,9 @@ viewport_layout_add_status_bands <- function(
 
   layout[[status_yaxis_name]] <- list(
     domain = c(panel_domain[1], status_domain_top),
-    anchor = main_xaxis_ref,
+    anchor = status_xaxis_ref,
     range = y_range,
-    fixedrange = TRUE,
+    fixedrange = FALSE,
     showticklabels = FALSE,
     showgrid = FALSE,
     zeroline = FALSE
@@ -852,7 +920,11 @@ viewport_layout_add_status_bands <- function(
 }
 
 
-viewport_layout_apply_xlim <- function(layout, xlim = NULL, xaxis_names = NULL) {
+viewport_layout_apply_xlim <- function(
+  layout,
+  xlim = NULL,
+  xaxis_names = NULL
+) {
   if (is.null(xlim) || length(xlim) != 2 || any(is.na(xlim))) {
     return(layout)
   }
