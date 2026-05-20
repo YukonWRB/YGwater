@@ -5,9 +5,9 @@
 <!-- badges: end -->
 
 
-#### Welcome to the Yukon Water Resources Branch's YGwater GitHub repository!
+#### Welcome to the Yukon Water Science and Stewardship Branch's YGwater GitHub repository!
 
-This repository holds many of the R functions that we use on a day-to-day basis at the Water Resources Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application deployed at https://service.yukon.ca/water-data/shiny, and an API that's deployed at https://service.yukon.ca/water-data/api.
+This repository holds many of the R functions that we use on a day-to-day basis at the Water Science and Stewardship Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application deployed at https://service.yukon.ca/water-data/shiny, and an API that's deployed at https://service.yukon.ca/water-data/api/V1 or (for the in development version) at https://service.yukon.ca/water-data/api/V2.
 
 You'll also find a host of other interesting R functions, some more hydrology/climate specific than others:
 
@@ -21,4 +21,4 @@ You'll also find a host of other interesting R functions, some more hydrology/cl
 
 -   Plotting functions, which are mostly designed to work directly with our internal database. That said, some have ways of bypassing the database connection by passing a data.frame as an argument.
 
-Other functions are more specific to our work here at the Water Resources Branch, but may still be useful to other governments, academia, or the private sector with similar needs. If this describes you or your organization, please reach out to use and we can discuss how we can help you get set up with the AquaCache database back-end necessary for these functions to work.
+Other functions are more specific to our work here at the Water Resources Branch, but may still be useful to other governments, academia, or the private sector with similar needs. If this describes you or your organization, please reach out and we can discuss how to help you get set up with the AquaCache database back-end necessary for these functions to work.
