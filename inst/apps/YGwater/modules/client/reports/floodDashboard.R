@@ -95,6 +95,11 @@ floodDashboardUIMod <- function(id) {
             paste0(
                 "#",
                 ns("controls"),
+                " .dashboard-controls-row .checkbox label { font-size: 0.62rem; line-height: 1.05; }"
+            ),
+            paste0(
+                "#",
+                ns("controls"),
                 " .dashboard-controls-row .form-control { min-height: calc(1.05rem + 2px); padding: 0.02rem 0.2rem; font-size: 0.68rem; line-height: 1.05; }"
             ),
             paste0(
