@@ -2690,7 +2690,7 @@
         "location_id": 338,
         "location_name": "Antimony Creek",
         "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 1,
+        "encoding": 2,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
