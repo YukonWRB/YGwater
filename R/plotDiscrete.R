@@ -2,11 +2,11 @@
 #'
 #' Plots data directly from EQWin or from the aquacache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles).
 #'
-#' @param start The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime.
-#' @param end The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime. Default is the current date.
+#' @param start The date or datetime to fetch data from, passed as a Date, POSIXct, or character vector. If date or date-like character object, hours/minutes will be set to 00:00. Uses the actual sample datetime, not the target datetime.
+#' @param end The end date or datetime to fetch data up to, passed as a Date, POSIXct, or character vector. If date or date-like character object, hours/minutes will be set to 23:59:59. Uses the actual sample datetime, not the target datetime. Default is the current date.
 #' @param locations A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location_code', 'alias', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use `locGrp` instead.
 #' @param locGrp Only used if `dbSource` is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use `locations` instead.
-#' @param sub_locations A vector of sub-location names or codes, only used if dbSource == 'AC' and table 'sub_locations'. Default is NULL; if there are sub-locations applicable, these will all be fetched and displayed as distinct traces. Must match the length of 'locations', use NA for locations without sub-locations.
+#' @param sub_locations A vector of sub-location names or codes, only used if dbSource == 'AC'. Default is NULL; if there are sub-locations applicable, these will all be fetched and displayed as distinct traces. Must match the length of 'locations', use NA for locations without sub-locations.
 #' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
 #' @param standard A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
@@ -49,7 +49,7 @@
 
 plotDiscrete <- function(
   start,
-  end = Sys.Date() + 1,
+  end = .POSIXct(Sys.time(), tz = "UTC"),
   locations = NULL,
   locGrp = NULL,
   sub_locations = NULL,
@@ -89,83 +89,9 @@ plotDiscrete <- function(
   dbPath = eqwin_db_path(),
   data = FALSE
 ) {
-  # testing parameters for EQWIN direct
-  # start <- "2005-06-24"
-  # end <- "2025-03-13"
-  # locations <- c("(AGS)MW-10", "(AGS)MW-5")
-  # parameters <- c("Al-T", "Cd-T")
-  # locGrp <- NULL
-  # paramGrp <- NULL
-  # standard = "CCME_LT"
-  # loc_code = 'name'
-  # shareX = TRUE
-  # shareY = FALSE
-  # log = FALSE
-  # facet_on = 'params'
-  # rows = 'auto'
-  # colorblind = FALSE
-  # target_datetime = FALSE
-  # point_scale = 1
-  # axis_scale = 1
-  # legend_scale = 1
-  # legend_position = 'v'
-  # guideline_scale = 1
-  # gridx = FALSE
-  # gridy = FALSE
-  # dbSource = "EQ"
-  # lang = "en"
-  # dbCon = NULL
-  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"
-  # dbPath = "X:\\EQWin\\WaterResources.mdb"
-
-  # start <- "2024-06-09"
-  # end <- "2024-10-09"
-  # locations <- "(EG)W4-mix"
-  # parameters <- "HG-D"
-  # locGrp <- NULL
-  # paramGrp <- NULL
-  # standard = "CSR_s3_fAL"
-  # loc_code = 'name'
-  # log = FALSE
-  # facet_on = 'locs'
-  # rows = 'auto'
-  # colorblind = FALSE
-  # target_datetime = FALSE
-  # point_scale = 1
-  # axis_scale = 1
-  # legend_scale = 1
-  # guideline_scale = 1
-  # dbSource = "EQ"
-  # lang = "en"
-  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
-
-  # testing parameters for aquacache
-  # start <- "2020-01-01"
-  # end <- "2024-05-05"
-  # locations <- 155
-  # sub_locations <- NULL
-  # parameters <- 21
-  # locGrp <- NULL
-  # paramGrp <- NULL
-  # standard = NULL
-  # log = FALSE
-  # loc_code= 'name'
-  # facet_on = 'locs'
-  # rows = 'auto'
-  # colorblind = FALSE
-  # lang = "en"
-  # point_scale = 1
-  # axis_scale = 1
-  # legend_scale = 1
-  # target_datetime = FALSE
-  # guideline_scale = 1
-  # dbSource = "AC"
-  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResources.mdb"
-  # target_datetime = TRUE
-
   # initial checks, connection, and validations #######################################################################################
 
-  return_data <- data # data is used in this function, but keeping the function argument as 'data' keeps things consistent with other functions
+  return_data <- data # data is used as an object in this function, but keeping the function argument as 'data' keeps things consistent with other functions for calling purposes.
   duplicate_action <- match.arg(duplicate_action)
 
   if (!dbSource %in% c("AC", "EQ")) {
@@ -179,10 +105,12 @@ plotDiscrete <- function(
 
   if (dbSource == 'AC') {
     if (is.null(locations) && is.null(sample_ids)) {
-      stop("You must specify locations when 'dbSource' is 'AC'")
+      stop("You must specify locations or sample IDs when 'dbSource' is 'AC'")
     }
     if (is.null(parameters) && is.null(sample_ids)) {
-      stop("You must specify parameters when 'dbSource' is 'AC'")
+      stop(
+        "You must specify parameters and locations OR sample IDs when 'dbSource' is 'AC'"
+      )
     }
 
     if (!is.null(locGrp)) {
@@ -241,7 +169,9 @@ plotDiscrete <- function(
       result_speciations = result_speciations
     )
     if (any(vapply(ac_args, Negate(is.null), logical(1)))) {
-      warning("AquaCache result/sample filters are ignored when 'dbSource' is 'EQ'")
+      warning(
+        "AquaCache result/sample filters are ignored when 'dbSource' is 'EQ'"
+      )
     }
   }
 
@@ -268,17 +198,47 @@ plotDiscrete <- function(
     if (!is.numeric(rows)) stop("rows must be a numeric value or 'auto'")
   }
 
+  # If character or date, convert to POSIXct
   if (inherits(start, "character")) {
-    start <- as.Date(start)
+    if (nchar(start) == 10) {
+      start <- as.POSIXct(paste0(start, " 00:00"), tz = "UTC")
+    } else {
+      tryCatch(
+        {
+          start <- as.POSIXct(start, tz = "UTC")
+        },
+        error = function(e) {
+          stop(
+            "Could not convert the character string for 'start' to date or POSIXct."
+          )
+        }
+      )
+    }
+  } else if (inherits(start, "Date")) {
+    start <- as.POSIXct(paste0(start, " 00:00"), tz = "UTC")
+  } else if (!inherits(start, "POSIXct")) {
+    stop("Argument 'start' must be coercible to POSIXct.")
   }
-  if (inherits(start, "Date")) {
-    start <- as.POSIXct(start, tz = "MST")
-  }
+
   if (inherits(end, "character")) {
-    end <- as.Date(end)
-  }
-  if (inherits(end, "Date")) {
-    end <- as.POSIXct(end, tz = "MST")
+    if (nchar(end) == 10) {
+      end <- as.POSIXct(paste0(end, " 23:59:59.9999"), tz = "UTC")
+    } else {
+      tryCatch(
+        {
+          end <- as.POSIXct(end, tz = "UTC")
+        },
+        error = function(e) {
+          stop(
+            "Could not convert the character string for 'end' to date or POSIXct."
+          )
+        }
+      )
+    }
+  } else if (inherits(end, "Date")) {
+    end <- as.POSIXct(paste0(end, " 23:59:59.9999"), tz = "UTC")
+  } else if (!inherits(end, "POSIXct")) {
+    stop("Argument 'end' must be coercible to POSIXct.")
   }
 
   # Create a data.frame to hold the plotting data. EQWin and aquacache fill this list in differently, but the end result is the same to pass on to the plotting portion.
@@ -1014,7 +974,7 @@ plotDiscrete <- function(
       subLocIds <- DBI::dbGetQuery(AC, query)
       if (nrow(subLocIds) == 0) {
         warning(
-          "You specified sub_locations but none were found in the aquacache. Ignoring sub_locations."
+          "You specified sub_locations but none were found in the aquacache database. Ignoring sub_locations."
         )
       }
       if (nrow(subLocIds) < length(sub_locations)) {
@@ -1285,7 +1245,9 @@ AND s.datetime > '",
 
     samples <- filter_discrete_seasons(samples, season_ranges, "datetime")
     if (nrow(samples) == 0) {
-      stop("No samples were found within the requested seasonal day-of-year ranges.")
+      stop(
+        "No samples were found within the requested seasonal day-of-year ranges."
+      )
     }
 
     # Get the measurements from table results
@@ -1365,7 +1327,12 @@ AND s.datetime > '",
       "collection_method_id",
       "collection_method"
     )
-    data <- filter_ac_values(data, result_types, "result_type_id", "result_type")
+    data <- filter_ac_values(
+      data,
+      result_types,
+      "result_type_id",
+      "result_type"
+    )
     data <- filter_ac_values(
       data,
       sample_fractions,
@@ -1404,7 +1371,9 @@ AND s.datetime > '",
     }
 
     if (nrow(data) == 0) {
-      stop("No results were found after applying the requested sample/result filters.")
+      stop(
+        "No results were found after applying the requested sample/result filters."
+      )
     }
 
     # Now make result_condition column understandable
@@ -1788,7 +1757,9 @@ AND s.datetime > '",
           if (has_result_type) paste("<br>Result type:", result_type),
           if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
           if (speciation) paste("<br>Result speciation:", result_speciation), # Result speciation if provided
-          if (has_result_value_type) paste("<br>Result value type:", result_value_type),
+          if (has_result_value_type) {
+            paste("<br>Result value type:", result_value_type)
+          },
           if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
           if (grade) paste("<br>Grade:", grade_type_description),
           if (approval) paste("<br>Approval:", approval_type_description),
@@ -1855,7 +1826,9 @@ AND s.datetime > '",
             if (has_result_type) paste("<br>Result type:", result_type),
             if (fraction) paste("<br>Sample fraction:", sample_fraction), # Sample fraction if provided
             if (speciation) paste("<br>Result speciation:", result_speciation), # Result speciation if provided
-            if (has_result_value_type) paste("<br>Result value type:", result_value_type),
+            if (has_result_value_type) {
+              paste("<br>Result value type:", result_value_type)
+            },
             if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
             if (grade) paste("<br>Grade:", grade_type_description),
             if (approval) paste("<br>Approval:", approval_type_description),

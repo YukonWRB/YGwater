@@ -490,8 +490,8 @@ snowbull_normal,,Normal,Normal
 snowbull_average,,Average,Moyenne
 snowbull_median,,Median,Médiane
 snowbull_reference_period,,reference period,période de référence
-snowbull_communities,,Communities,Communautés
-snowbull_roads,,Roads,Routes
+communities,,Communities,Communautés
+roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles
 snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
@@ -504,11 +504,11 @@ snowbull_to,,to,à
 disc_selector_mode,Discrete plot selector mode,Selection mode,Mode de sélection
 disc_selector_mode_tooltip,Discrete plot selector mode tooltip,"Guided selectors step through the common plotting filters. Browse samples lets you search a sample table, keep selected rows across pages and filters, then choose parameters from those samples.","Les sélecteurs guidés présentent les filtres courants du graphique étape par étape. Le mode Parcourir les échantillons permet de chercher dans un tableau d'échantillons, de conserver les lignes sélectionnées entre les pages et les filtres, puis de choisir les paramètres mesurés dans ces échantillons."
 disc_guided_selectors,Discrete plot guided selector mode,Guided selectors,Sélecteurs guidés
-disc_browse_samples,Discrete plot browse selector mode,Browse samples,Parcourir les échantillons
+disc_browse_samples,Discrete plot browse selector mode,Table selection,Sélection par tableau
 disc_season_filter,Discrete plot seasonal filter toggle,Restrict to season/day-of-year ranges,Limiter aux saisons ou aux jours de l'année
 disc_browse_help,Discrete plot browse mode help,"Use the table filters to find samples, then click rows to add them to the selection. The parameter list beside the table is based on the selected samples.","Utilisez les filtres du tableau pour trouver des échantillons, puis cliquez sur les lignes pour les ajouter à la sélection. La liste des paramètres à côté du tableau est basée sur les échantillons sélectionnés."
 disc_max_table_rows,Discrete plot browse row limit,Maximum table rows,Nombre maximal de lignes du tableau
-disc_doy_range_help,Discrete plot day-of-year range help,"Only the month/day portion of these ranges is used. Use a previous-year start and current-year end for seasons that cross New Year, such as September 1 to June 1.","Seuls le mois et le jour de ces intervalles sont utilisés. Pour les saisons qui traversent le nouvel an, indiquez une date de début dans l'année précédente et une date de fin dans l'année courante, par exemple du 1 septembre au 1 juin."
+disc_doy_range_help,Discrete plot day-of-year range help,"Only the month/day portion of these ranges is used. Use a previous-year start and next-year end for seasons that cross New Year, such as September 1 2000 to June 1 2001.","Seuls le mois et le jour de ces intervalles sont utilisés. Pour les saisons qui traversent le nouvel an, indiquez une date de début dans l'année précédente et une date de fin dans l'année suivante, par exemple du 1 septembre 2000 au 1 juin 2001."
 disc_season_range_count,Discrete plot season range count,Number of season ranges,Nombre d'intervalles saisonniers
 one,Number word one,One,Un
 two,Number word two,Two,Deux

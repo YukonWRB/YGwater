@@ -7,7 +7,7 @@
 YGwater(
   host = getOption("shiny.host", "127.0.0.1"),
   port = getOption("shiny.port"),
-  dbName = Sys.getenv("aquacachenName", "aquacache"),
+  dbName = Sys.getenv("aquacacheName", "aquacache"),
   dbHost = Sys.getenv("aquacacheHost", "localhost"),
   dbPort = Sys.getenv("aquacachePort", "5432"),
   dbUser = Sys.getenv("aquacacheUser"),
@@ -28,7 +28,7 @@ YGwater(
 
 \item{port}{Port number (numeric) on which to serve the app. Leave default to use the default port specified in your user options. The port you specify must be open on the host machine for it to broadcast to the network. Ignored if \code{server} is set to TRUE (Shiny Server takes care of that).}
 
-\item{dbName}{Name of the aquacache database. Default is "aquacache".}
+\item{dbName}{Name of the aquacache database. Searches your environment variables for 'aquacacheName', default is "aquacache" if not found.}
 
 \item{dbHost}{Host address of the aquacache database. Default is pulled from the .Renviron file.}
 
