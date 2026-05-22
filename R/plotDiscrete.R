@@ -38,6 +38,7 @@
 #' @param duplicate_action How AquaCache duplicate/replicate samples should be handled. One of "show", "hide", or "average".
 #' @param sample_ids Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.
 #' @param season_ranges Optional AquaCache seasonal date ranges to include. Dates are accepted, but only the day-of-year is used; ranges may cross New Year.
+#' @param season_highlight_ranges Optional date ranges to highlight on the plot background. Dates are accepted, but only month/day is used; ranges may cross New Year.
 #' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbCon A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`.
@@ -84,6 +85,7 @@ plotDiscrete <- function(
   duplicate_action = c("show", "hide", "average"),
   sample_ids = NULL,
   season_ranges = NULL,
+  season_highlight_ranges = NULL,
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
@@ -320,6 +322,172 @@ plotDiscrete <- function(
     }
 
     df[keep & !is.na(keep), , drop = FALSE]
+  }
+
+  normalize_discrete_season_ranges <- function(ranges) {
+    if (is.null(ranges) || length(ranges) == 0) {
+      return(list())
+    }
+    if (is.data.frame(ranges)) {
+      ranges <- split(ranges, seq_len(nrow(ranges)))
+    }
+
+    ranges <- lapply(ranges, function(range) {
+      dates <- suppressWarnings(as.Date(unlist(range)))
+      dates <- dates[!is.na(dates)]
+      if (length(dates) < 2) {
+        return(NULL)
+      }
+      dates <- dates[seq_len(2)]
+      start_md <- as.integer(format(dates[[1]], "%m%d"))
+      end_md <- as.integer(format(dates[[2]], "%m%d"))
+      list(
+        start_month = lubridate::month(dates[[1]]),
+        start_day = lubridate::day(dates[[1]]),
+        end_month = lubridate::month(dates[[2]]),
+        end_day = lubridate::day(dates[[2]]),
+        crosses_year = start_md > end_md
+      )
+    })
+    Filter(Negate(is.null), ranges)
+  }
+
+  season_highlight_spans <- function(df, ranges) {
+    ranges <- normalize_discrete_season_ranges(ranges)
+    if (length(ranges) == 0 || nrow(df) == 0) {
+      return(list())
+    }
+
+    dates <- suppressWarnings(as.Date(df$datetime))
+    dates <- dates[!is.na(dates)]
+    if (length(dates) == 0) {
+      return(list())
+    }
+
+    min_date <- min(dates)
+    max_date <- max(dates)
+    years <- seq(
+      lubridate::year(min_date) - 1L,
+      lubridate::year(max_date) + 1L
+    )
+    colors <- c(
+      "rgba(102, 194, 165, 0.11)",
+      "rgba(252, 141, 98, 0.10)",
+      "rgba(141, 160, 203, 0.11)",
+      "rgba(231, 138, 195, 0.10)"
+    )
+
+    spans <- list()
+    for (i in seq_along(ranges)) {
+      range <- ranges[[i]]
+      for (year in years) {
+        start_date <- suppressWarnings(as.Date(sprintf(
+          "%04d-%02d-%02d",
+          year,
+          range$start_month,
+          range$start_day
+        )))
+        end_date <- suppressWarnings(as.Date(sprintf(
+          "%04d-%02d-%02d",
+          year + as.integer(range$crosses_year),
+          range$end_month,
+          range$end_day
+        )))
+        if (is.na(start_date) || is.na(end_date)) {
+          next
+        }
+        if (end_date < min_date || start_date > max_date) {
+          next
+        }
+        spans[[length(spans) + 1L]] <- list(
+          x0 = max(start_date, min_date),
+          x1 = min(end_date + 1L, max_date + 1L),
+          color = colors[((i - 1L) %% length(colors)) + 1L]
+        )
+      }
+    }
+    if (length(spans) == 0) {
+      return(list())
+    }
+    spans
+  }
+
+  season_highlight_shapes <- function(df, ranges, n_panels) {
+    spans <- season_highlight_spans(df, ranges)
+    if (length(spans) == 0 || n_panels == 0) {
+      return(list())
+    }
+    shapes <- vector("list", length(spans) * n_panels)
+    index <- 0L
+    for (panel in seq_len(n_panels)) {
+      axis_suffix <- if (panel == 1L) "" else as.character(panel)
+      for (span in spans) {
+        index <- index + 1L
+        shapes[[index]] <- list(
+          type = "rect",
+          xref = paste0("x", axis_suffix),
+          yref = "paper",
+          x0 = as.character(span$x0),
+          x1 = as.character(span$x1),
+          y0 = 0,
+          y1 = 1,
+          fillcolor = span$color,
+          line = list(width = 0),
+          layer = "above"
+        )
+      }
+    }
+    shapes
+  }
+
+  add_season_highlight_traces <- function(p, df, conditions, ranges, log_axis) {
+    spans <- season_highlight_spans(df, ranges)
+    if (length(spans) == 0) {
+      return(p)
+    }
+
+    y_values <- c(df$result, conditions$result_condition_value)
+    y_values <- y_values[is.finite(y_values)]
+    if (isTRUE(log_axis)) {
+      y_values <- y_values[y_values > 0]
+    }
+    if (length(y_values) == 0) {
+      return(p)
+    }
+
+    y_range <- range(y_values, na.rm = TRUE)
+    if (diff(y_range) == 0) {
+      pad <- abs(y_range[[1]]) * 0.05
+      if (!is.finite(pad) || pad == 0) {
+        pad <- 1
+      }
+      y_range <- y_range + c(-pad, pad)
+    }
+
+    for (span in spans) {
+      polygon <- data.frame(
+        x = as.POSIXct(
+          c(span$x0, span$x1, span$x1, span$x0, span$x0),
+          tz = "UTC"
+        ),
+        y = c(y_range[[1]], y_range[[1]], y_range[[2]], y_range[[2]], y_range[[1]])
+      )
+      p <- plotly::add_trace(
+        p,
+        data = polygon,
+        x = ~x,
+        y = ~y,
+        type = "scatter",
+        mode = "lines",
+        fill = "toself",
+        fillcolor = span$color,
+        line = list(width = 0),
+        hoverinfo = "skip",
+        showlegend = FALSE,
+        inherit = FALSE
+      )
+    }
+    p
   }
 
   average_discrete_duplicates <- function(df) {
@@ -1726,8 +1894,17 @@ AND s.datetime > '",
         }
       }
 
-      p <- plotly::plot_ly(
+      p <- plotly::plot_ly()
+      p <- add_season_highlight_traces(
+        p,
         df,
+        conditions,
+        season_highlight_ranges,
+        log
+      )
+      p <- plotly::add_trace(
+        p,
+        data = df,
         x = ~datetime,
         y = ~result,
         type = 'scatter',
@@ -1952,6 +2129,15 @@ AND s.datetime > '",
         plotly::layout,
         c(list(final_plot), layout_settings)
       )
+    }
+
+    highlight_shapes <- season_highlight_shapes(
+      data,
+      season_highlight_ranges,
+      length(plots)
+    )
+    if (length(highlight_shapes) > 0) {
+      final_plot <- plotly::layout(final_plot, shapes = highlight_shapes)
     }
 
     return(final_plot)

@@ -2264,7 +2264,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
     })
 
     adaptive_target_bins <- reactive({
-      viewport_ribbon_target_bins(width_px = adaptive_plot_width_px())
+      YGwater:::viewport_ribbon_target_bins(width_px = adaptive_plot_width_px())
     })
 
     current_legend_orientation <- reactive({
@@ -2298,7 +2298,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         return(invisible(NULL))
       }
 
-      built <- viewport_adaptive_plot(
+      built <- YGwater:::viewport_adaptive_plot(
         payload = adaptiveState$payload,
         source = ns("plot"),
         xlim = xlim,
@@ -2549,10 +2549,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
               for (i in seq_len(n)) {
                 panel_domain <- subplot_panel_domain(i, n)
-                xaxis_name <- viewport_layout_axis_name("x", i)
-                yaxis_name <- viewport_layout_axis_name("y", i)
-                xref <- viewport_axis_ref("x", i)
-                yref <- viewport_axis_ref("y", i)
+                xaxis_name <- YGwater:::viewport_layout_axis_name("x", i)
+                yaxis_name <- YGwater:::viewport_layout_axis_name("y", i)
+                xref <- YGwater:::viewport_axis_ref("x", i)
+                yref <- YGwater:::viewport_axis_ref("y", i)
 
                 layout[[xaxis_name]] <- list(
                   anchor = yref,
@@ -2589,12 +2589,12 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 )
               }
 
-              viewport_layout_apply_xlim(
+              YGwater:::viewport_layout_apply_xlim(
                 layout,
                 xlim = selected_xlim,
                 xaxis_names = vapply(
                   seq_len(n),
-                  function(i) viewport_layout_axis_name("x", i),
+                  function(i) YGwater:::viewport_layout_axis_name("x", i),
                   character(1)
                 )
               )
@@ -2950,8 +2950,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 xaxis <- NULL
                 yaxis <- NULL
                 if (mode == "subplots") {
-                  xaxis <- viewport_axis_ref("x", i)
-                  yaxis <- viewport_axis_ref("y", i)
+                  xaxis <- YGwater:::viewport_axis_ref("x", i)
+                  yaxis <- YGwater:::viewport_axis_ref("y", i)
                 }
                 yaxis_title <- NULL
                 if (!is.null(item$meta$layout$yaxis$title$text)) {
@@ -2978,7 +2978,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 layout <- subplot_layout(series, selected_xlim)
                 xaxis_names <- vapply(
                   seq_along(series),
-                  function(i) viewport_layout_axis_name("x", i),
+                  function(i) YGwater:::viewport_layout_axis_name("x", i),
                   character(1)
                 )
               } else {
@@ -3005,18 +3005,24 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   }
 
                   status_axis_index <- base_axis_count + i
-                  main_xaxis_name <- viewport_layout_axis_name("x", i)
-                  main_yaxis_name <- viewport_layout_axis_name("y", i)
-                  status_xaxis_name <- viewport_layout_axis_name(
+                  main_xaxis_name <- YGwater:::viewport_layout_axis_name("x", i)
+                  main_yaxis_name <- YGwater:::viewport_layout_axis_name("y", i)
+                  status_xaxis_name <- YGwater:::viewport_layout_axis_name(
                     "x",
                     status_axis_index
                   )
-                  status_yaxis_name <- viewport_layout_axis_name(
+                  status_yaxis_name <- YGwater:::viewport_layout_axis_name(
                     "y",
                     status_axis_index
                   )
-                  status_xaxis_ref <- viewport_axis_ref("x", status_axis_index)
-                  status_yaxis_ref <- viewport_axis_ref("y", status_axis_index)
+                  status_xaxis_ref <- YGwater:::viewport_axis_ref(
+                    "x",
+                    status_axis_index
+                  )
+                  status_yaxis_ref <- YGwater:::viewport_axis_ref(
+                    "y",
+                    status_axis_index
+                  )
 
                   status_bands$xaxis <- status_xaxis_ref
                   status_bands$yaxis <- status_yaxis_ref
@@ -3030,7 +3036,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                     )
                   }
 
-                  layout <- viewport_layout_add_status_bands(
+                  layout <- YGwater:::viewport_layout_add_status_bands(
                     layout,
                     status_bands,
                     main_xaxis_name = main_xaxis_name,
@@ -3038,8 +3044,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                     status_xaxis_name = status_xaxis_name,
                     status_yaxis_name = status_yaxis_name
                   )
-                  series[[i]]$xaxis <- viewport_axis_ref("x", i)
-                  series[[i]]$yaxis <- viewport_axis_ref("y", i)
+                  series[[i]]$xaxis <- YGwater:::viewport_axis_ref("x", i)
+                  series[[i]]$yaxis <- YGwater:::viewport_axis_ref("y", i)
                   xaxis_names <- c(xaxis_names, status_xaxis_name)
                   status_band_list[[
                     length(status_band_list) + 1L
@@ -3559,7 +3565,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         if (!has_xaxis_change) {
           return()
         }
-        xlim <- viewport_ribbon_relayout_xlim(relayout, tz = "UTC")
+        xlim <- YGwater:::viewport_ribbon_relayout_xlim(relayout, tz = "UTC")
         render_adaptive_plot(xlim = xlim)
       },
       ignoreInit = TRUE

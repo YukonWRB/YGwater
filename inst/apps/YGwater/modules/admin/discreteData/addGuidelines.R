@@ -8,32 +8,36 @@ addGuidelinesUI <- function(id) {
       tags$script(HTML(
         "
 Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
-      const ta = document.getElementById(msg.target);
+      const el = document.getElementById(msg.target);
+      if (!el) return;
+
+      const isCodeEditor = el.tagName.toLowerCase() === 'bslib-code-editor';
+      const ta = isCodeEditor ? el.querySelector('textarea') : el;
       if (!ta) return;
+
       ta.focus();
 
+      const currentValue = isCodeEditor ? el.value : ta.value;
       const start = ta.selectionStart ?? 0;
       const end   = ta.selectionEnd   ?? 0;
 
       // 1) Insert main text at caret
-      const before = ta.value.slice(0, start);
-      const after  = ta.value.slice(end);
+      const before = currentValue.slice(0, start);
+      const after  = currentValue.slice(end);
       const insert = msg.text || '';
-      ta.value = before + insert + after;
+      let newValue = before + insert + after;
 
       // Caret after the inserted text (we keep it here)
       const caret = start + insert.length;
 
       // 2) Append/merge end-of-line comment
       if (msg.eolComment && msg.eolComment.trim().length > 0) {
-        let val = ta.value;
-
         // Identify line containing the caret (post-insert)
-        const lineStart = val.lastIndexOf('\\n', caret - 1) + 1;
-        const lineEndIdx = val.indexOf('\\n', caret);
-        const lineEnd = (lineEndIdx === -1) ? val.length : lineEndIdx;
+        const lineStart = newValue.lastIndexOf('\\n', caret - 1) + 1;
+        const lineEndIdx = newValue.indexOf('\\n', caret);
+        const lineEnd = (lineEndIdx === -1) ? newValue.length : lineEndIdx;
 
-        const lineText = val.slice(lineStart, lineEnd);
+        const lineText = newValue.slice(lineStart, lineEnd);
         const commentIdx = lineText.indexOf('--');
 
         // Normalized helper
@@ -41,10 +45,10 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
 
         if (commentIdx === -1) {
           // No existing comment -> add one
-          const left  = val.slice(0, lineEnd).replace(/[ \\t]+$/, ''); // trim right
-          const right = val.slice(lineEnd);
+          const left  = newValue.slice(0, lineEnd).replace(/[ \\t]+$/, ''); // trim right
+          const right = newValue.slice(lineEnd);
           const comment = '  -- ' + msg.eolComment.trim();
-          ta.value = left + comment + right;
+          newValue = left + comment + right;
         } else {
           // Existing comment -> append if not present
           const codePart    = lineText.slice(0, commentIdx).replace(/[ \\t]+$/, '');
@@ -61,16 +65,45 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
           const newLine = codePart + '  -- ' + newTokens.join(sep);
 
           // Rebuild textarea value
-          ta.value = val.slice(0, lineStart) + newLine + val.slice(lineEnd);
+          newValue = newValue.slice(0, lineStart) + newLine + newValue.slice(lineEnd);
         }
+      }
+
+      if (isCodeEditor) {
+        el.value = newValue;
+      } else {
+        ta.value = newValue;
       }
 
       // Keep caret after inserted SQL snippet
       ta.setSelectionRange(caret, caret);
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
+      if (isCodeEditor) {
+        el.dispatchEvent(new CustomEvent('bslibCodeEditorUpdate', { bubbles: true }));
+      } else {
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     });
   "
       ))
+    ),
+    tags$style(HTML(
+      "
+.guideline-sql-editor .code-editor,
+.guideline-sql-editor .code-editor .prism-code-editor,
+.guideline-sql-editor .code-editor textarea,
+.guideline-sql-editor .code-editor pre,
+.guideline-sql-editor .code-editor code {
+  font-family: Consolas, 'Courier New', monospace !important;
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+  letter-spacing: 0 !important;
+}
+
+.guideline-sql-editor .code-editor textarea {
+  resize: none;
+}
+"
+    )
     ),
 
     uiOutput(ns("banner")),
@@ -203,13 +236,16 @@ Shiny.addCustomMessageHandler('insertAtCursor', function(msg) {
         fluidRow(
           column(
             width = 9,
-            textAreaInput(
+            bslib::input_code_editor(
               ns("guideline_sql"),
               "Guideline SQL",
               width = "100%",
-              height = "400px"
+              height = "400px",
+              language = "sql",
+              line_numbers = TRUE,
+              word_wrap = TRUE
             ) |>
-              tagAppendAttributes(spellcheck = "false") |>
+              tagAppendAttributes(class = "guideline-sql-editor") |>
               tooltip(
                 "The SQL code that defines how the guideline value is calculated. See the help file for details and examples."
               ),
@@ -318,6 +354,36 @@ addGuidelines <- function(id, language) {
       } else {
         as.character(x)
       }
+    }
+
+    text_value <- function(x) {
+      vals <- ensure_character(x)
+      if (!length(vals) || is.na(vals[[1]])) {
+        return("")
+      }
+
+      vals[[1]]
+    }
+
+    clean_guideline_sql <- function(x) {
+      gsub("(?m)[[:blank:]]+$", "", text_value(x), perl = TRUE)
+    }
+
+    empty_text_to_na <- function(x) {
+      val <- clean_guideline_sql(x)
+      if (nzchar(trimws(val))) {
+        val
+      } else {
+        NA_character_
+      }
+    }
+
+    update_guideline_sql <- function(value = "") {
+      bslib::update_code_editor(
+        "guideline_sql",
+        value = clean_guideline_sql(value),
+        session = session
+      )
     }
 
     parse_id_csv <- function(x) {
@@ -944,7 +1010,7 @@ LEFT JOIN (
           updateTextAreaInput(session, "applicability_notes", value = "")
           updateSelectizeInput(session, "parameter_id", selected = NULL)
           updateSelectizeInput(session, "result_speciation", selected = NULL)
-          updateTextAreaInput(session, "guideline_sql", value = "")
+          update_guideline_sql()
           shinyjs::hide("save_guideline")
           return()
         }
@@ -1000,11 +1066,7 @@ LEFT JOIN (
           "result_speciation",
           selected = guideline$result_speciation_id
         )
-        updateTextAreaInput(
-          session,
-          "guideline_sql",
-          value = guideline$guideline_sql
-        )
+        update_guideline_sql(guideline$guideline_sql)
 
         shinyjs::show("save_guideline")
       },
@@ -1093,13 +1155,8 @@ LEFT JOIN (
       } else {
         as.integer(input$result_speciation)
       }
-      moduleData$guidelines_temp[selected_row, "guideline_sql"] <- if (
-        nchar(input$guideline_sql) == 0
-      ) {
-        NA
-      } else {
-        input$guideline_sql
-      }
+      moduleData$guidelines_temp[selected_row, "guideline_sql"] <-
+        empty_text_to_na(input$guideline_sql)
 
       # Keep display column in sync for datatable
       moduleData$guidelines_temp[selected_row, "publisher"] <- if (
@@ -1648,11 +1705,9 @@ LEFT JOIN (
       removeModal()
       req(input$templates)
       if (input$templates == "fixed") {
-        updateTextAreaInput(
-          session,
-          "guideline_sql",
-          value = "-- Replace ***!value!*** with the fixed guideline value in the database's units for your target parameter
-SELECT ***!value!***::INT"
+        update_guideline_sql(
+          "-- Replace ***!value!*** with the fixed guideline value in the database's units for your target parameter
+SELECT ***!value!***::numeric"
         )
         showModal(modalDialog(
           "Template inserted with placeholder denoted by ***!value!***. Replace this with the fixed guideline value in the database's units for your target parameter.",
@@ -1660,20 +1715,18 @@ SELECT ***!value!***::INT"
           footer = modalButton("Close")
         ))
       } else if (input$templates == "calc") {
-        updateTextAreaInput(
-          session,
-          "guideline_sql",
-          value = "WITH vals AS (  -- create a CTE of relevant parameters
-  SELECT 
-  discrete.get_sample_val(
+        update_guideline_sql(
+          "WITH vals AS (  -- create a CTE of relevant parameters
+  SELECT
+    discrete.get_sample_val(
     sample_id := $1::INT, -- sample_id placeholder, leave
     ***!parameter_id := xxx::INT!***,
     ***!sample_fraction_id := xxx::INT!***, -- remove if not required
     ***!result_speciation_id := xxx::INT!*** --remove if not required
-  ) AS v1 -- change 'v1' (optional)
-      
+  ) AS v1, -- change 'v1' (optional)
+
   -- repeat get_sample_val for other parameters if needed
-  -- delete block if not needed
+  -- delete this block and the comma after v1 if not needed
   discrete.get_sample_val(
     sample_id := $1::INT, -- sample_id placeholder, leave
     ***!parameter_id := xxx::INT!***,
@@ -1686,9 +1739,9 @@ SELECT CASE
 -- Replace with your logic
 -- use value names from the vals CTE
     WHEN ***! enter condition here !*** THEN
-      ***! value or equation !*** END
+      ***! value or equation !***
     WHEN ***! enter second condition here !*** THEN
-      ***! value or equation !*** END
+      ***! value or equation !***
     ELSE
       ***! fallback value !***
 END
@@ -1700,24 +1753,21 @@ FROM vals -- from the 'vals' CTE"
           footer = modalButton("Close")
         ))
       } else if (input$templates == "calc_hard") {
-        updateTextAreaInput(
-          session,
-          "guideline_sql",
-          value = "WITH vals AS ( -- create a CTE of relevant parameters
+        update_guideline_sql(
+          "WITH vals AS ( -- create a CTE of relevant parameters
   -- special function for calculating hardness
-  SELECT 
-  discrete.get_sample_hardness($1::INTEGER) -- sample_id placeholder, leave
-  AS h  -- value name 'h'
-  
+  SELECT
+    discrete.get_sample_hardness($1::INTEGER) AS h, -- sample_id placeholder, leave
+
   -- add other parameters as needed
-  -- delete block if no other params needed
+  -- delete this block and the comma after h if no other params needed
   discrete.get_sample_val(
     sample_id := $1, -- sample_id placeholder, leave
     ***!parameter_id := xxx!***,
     ***!sample_fraction_id := xxx!***, -- remove if not required
     ***!result_speciation_id := xxx!*** --remove if not required
   ) AS v1 -- change 'v1' (optional)
-      
+
   -- repeat for other parameters
 )
   -- Calculate guideline value
@@ -1725,11 +1775,11 @@ SELECT CASE
 -- Replace with your logic
 -- use value names from the vals CTE
   WHEN h IS NULL OR h < ***!value!*** THEN
-    ***!value!***::numeric END
-  WHEN h <= ***!value!** THEN
-    ***!value or equation!***::numeric END
+    ***!value!***::numeric
+  WHEN h <= ***!value!*** THEN
+    ***!value or equation!***::numeric
   ELSE
-  ***!fallback value!***::numeric
+    ***!fallback value!***::numeric
 END
 FROM vals -- from the 'vals' CTE"
         )
@@ -2365,7 +2415,7 @@ FROM vals -- from the 'vals' CTE"
           updateSelectizeInput(session, "parameter_id", selected = NULL)
           updateSelectizeInput(session, "sample_fraction", selected = NULL)
           updateSelectizeInput(session, "result_speciation", selected = NULL)
-          updateTextAreaInput(session, "guideline_sql", value = "")
+          update_guideline_sql()
 
           showModal(modalDialog(
             title = "Success",

@@ -91,6 +91,59 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       )
     }
 
+    season_highlight_colors <- c(
+      "rgba(102, 194, 165, 0.11)",
+      "rgba(252, 141, 98, 0.10)",
+      "rgba(141, 160, 203, 0.11)",
+      "rgba(231, 138, 195, 0.10)"
+    )
+
+    season_date_range_input <- function(input_id, label, current_year) {
+      selected <- input[[input_id]]
+      if (!is.null(selected) && length(selected) == 2) {
+        selected <- suppressWarnings(as.Date(selected))
+      }
+      if (
+        is.null(selected) ||
+          length(selected) != 2 ||
+          any(is.na(selected))
+      ) {
+        selected <- as.Date(c(
+          sprintf("%d-01-01", current_year),
+          sprintf("%d-12-31", current_year)
+        ))
+      }
+
+      dateRangeInput(
+        ns(input_id),
+        label,
+        start = selected[[1]],
+        end = selected[[2]],
+        min = as.Date(sprintf("%d-01-01", current_year - 1L)),
+        max = as.Date(sprintf("%d-12-31", current_year)),
+        format = "yyyy-mm-dd",
+        language = language$abbrev,
+        separator = tr("date_sep", language$language)
+      )
+    }
+
+    format_season_range <- function(range) {
+      dates <- suppressWarnings(as.Date(range))
+      if (length(dates) != 2 || any(is.na(dates))) {
+        return("")
+      }
+      paste(
+        format(dates[[1]], "%m-%d"),
+        tr("to", language$language),
+        format(dates[[2]], "%m-%d")
+      )
+    }
+
+    format_season_ranges <- function(ranges) {
+      labels <- vapply(ranges, format_season_range, character(1))
+      paste(labels[nzchar(labels)], collapse = "; ")
+    }
+
     observe_all_selectize <- function(input_id) {
       observeEvent(
         input[[input_id]],
@@ -479,7 +532,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "include_blanks",
         "duplicate_action",
         "sample_ids",
-        "season_ranges"
+        "season_ranges",
+        "season_highlight_ranges"
       )
       if (all(new_args %in% names(formals(plotDiscrete)))) {
         return(invisible(TRUE))
@@ -679,6 +733,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           ),
           uiOutput(ns("AC_media_ui")),
           uiOutput(ns("AC_date_range_ui")),
+          checkboxInput(
+            ns("season_highlight_enabled"),
+            tr("disc_season_highlight", language$language),
+            value = FALSE
+          ),
+          uiOutput(ns("AC_season_highlight_ranges_ui")),
           checkboxInput(
             ns("season_filter_enabled"),
             tr("disc_season_filter", language$language),
@@ -895,7 +955,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       if (length(count) == 0 || is.na(count)) {
         count <- 1L
       }
-      count <- max(1L, min(count, 3L))
+      count <- max(1L, min(count, 4L))
 
       tagList(
         helpText(tr("disc_doy_range_help", language$language)),
@@ -903,26 +963,21 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           ns("season_range_count"),
           tr("disc_season_range_count", language$language),
           choices = stats::setNames(
-            1:3,
+            1:4,
             c(
               tr("one", language$language),
               tr("two", language$language),
-              tr("three", language$language)
+              tr("three", language$language),
+              tr("four", language$language)
             )
           ),
           selected = count
         ),
         lapply(seq_len(count), function(i) {
-          dateRangeInput(
-            ns(paste0("season_range_", i)),
+          season_date_range_input(
+            paste0("season_range_", i),
             paste(tr("season", language$language), i),
-            start = as.Date(sprintf("%d-01-01", current_year)),
-            end = as.Date(sprintf("%d-12-31", current_year)),
-            min = as.Date(sprintf("%d-01-01", current_year - 1L)),
-            max = as.Date(sprintf("%d-12-31", current_year)),
-            format = "yyyy-mm-dd",
-            language = language$abbrev,
-            separator = tr("date_sep", language$language)
+            current_year
           )
         })
       )
@@ -932,6 +987,52 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         input$data_source,
         input$season_filter_enabled,
         input$season_range_count,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_season_highlight_ranges_ui <- renderUI({
+      req(input$data_source == "AC")
+      if (!isTRUE(input$season_highlight_enabled)) {
+        return(NULL)
+      }
+
+      current_year <- lubridate::year(Sys.Date())
+      count <- suppressWarnings(as.integer(input$season_highlight_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 4L))
+
+      tagList(
+        helpText(tr("disc_doy_range_help", language$language)),
+        selectInput(
+          ns("season_highlight_range_count"),
+          tr("disc_season_highlight_range_count", language$language),
+          choices = stats::setNames(
+            1:4,
+            c(
+              tr("one", language$language),
+              tr("two", language$language),
+              tr("three", language$language),
+              tr("four", language$language)
+            )
+          ),
+          selected = count
+        ),
+        lapply(seq_len(count), function(i) {
+          season_date_range_input(
+            paste0("season_highlight_range_", i),
+            paste(tr("season", language$language), i),
+            current_year
+          )
+        })
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$season_highlight_enabled,
+        input$season_highlight_range_count,
         ignoreNULL = FALSE
       )
 
@@ -1181,6 +1282,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           },
           inline = TRUE
         ),
+        uiOutput(ns("season_plot_metadata_ui")),
         page_fluid(
           div(
             class = "d-inline-block",
@@ -1900,9 +2002,32 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       if (length(count) == 0 || is.na(count)) {
         count <- 1L
       }
-      count <- max(1L, min(count, 3L))
+      count <- max(1L, min(count, 4L))
       ranges <- lapply(seq_len(count), function(i) {
         range <- input[[paste0("season_range_", i)]]
+        if (is.null(range) || length(range) != 2) {
+          return(NULL)
+        }
+        as.Date(range)
+      })
+      ranges <- Filter(Negate(is.null), ranges)
+      if (length(ranges) == 0) {
+        return(NULL)
+      }
+      ranges
+    }
+
+    ac_guided_season_highlight_ranges <- function() {
+      if (!isTRUE(input$season_highlight_enabled)) {
+        return(NULL)
+      }
+      count <- suppressWarnings(as.integer(input$season_highlight_range_count))
+      if (length(count) == 0 || is.na(count)) {
+        count <- 1L
+      }
+      count <- max(1L, min(count, 4L))
+      ranges <- lapply(seq_len(count), function(i) {
+        range <- input[[paste0("season_highlight_range_", i)]]
         if (is.null(range) || length(range) != 2) {
           return(NULL)
         }
@@ -1954,6 +2079,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         duplicate_action,
         sample_ids,
         season_ranges,
+        season_highlight_ranges,
         dbSource,
         dbPath,
         config
@@ -2013,6 +2139,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 duplicate_action = duplicate_action,
                 sample_ids = sample_ids,
                 season_ranges = season_ranges,
+                season_highlight_ranges = season_highlight_ranges,
                 dbSource = dbSource,
                 dbPath = dbPath,
                 dbCon = con,
@@ -2035,6 +2162,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       {
         shinyjs::hide("full_screen")
         shinyjs::hide("download_data")
+        plot_created(FALSE)
+        plotSeasonMetadata(NULL)
 
         # Validate required inputs based on data source
         if (input$data_source == "EQ") {
@@ -2140,6 +2269,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         }
 
         if (input$data_source == "EQ") {
+          pendingSeasonMetadata(NULL)
           plot_output_discrete$invoke(
             start = input$date_range_EQ[1],
             end = input$date_range_EQ[2],
@@ -2202,6 +2332,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             duplicate_action = "show",
             sample_ids = NULL,
             season_ranges = NULL,
+            season_highlight_ranges = NULL,
             dbSource = input$data_source,
             dbPath = input$EQWin_source, # EQWin connection so no need to pass config
             config = NULL # EQWin connection so no need to pass config
@@ -2254,6 +2385,20 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             }
           }
           use_guided_filters <- !identical(ac_mode, "browse")
+          season_ranges <- if (use_guided_filters) {
+            ac_guided_season_ranges()
+          } else {
+            NULL
+          }
+          season_highlight_ranges <- if (use_guided_filters) {
+            ac_guided_season_highlight_ranges()
+          } else {
+            NULL
+          }
+          pendingSeasonMetadata(list(
+            season_ranges = season_ranges,
+            season_highlight_ranges = season_highlight_ranges
+          ))
 
           plot_output_discrete$invoke(
             start = if (identical(ac_mode, "browse")) {
@@ -2396,11 +2541,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               input$duplicate_action
             },
             sample_ids = browse_sample_ids,
-            season_ranges = if (use_guided_filters) {
-              ac_guided_season_ranges()
-            } else {
-              NULL
-            },
+            season_ranges = season_ranges,
+            season_highlight_ranges = season_highlight_ranges,
             dbSource = input$data_source,
             dbPath = NULL, # AquaCache connection so no need to pass database path
             config = session$userData$config
@@ -2415,6 +2557,65 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     first_plot <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session, in which case a modal is shown
     first_plot_with_standards <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session with standards, in which case a modal is shown
     plotData <- reactiveVal() # Holds the data for the plot in case the user wants to download it
+    pendingSeasonMetadata <- reactiveVal(NULL)
+    plotSeasonMetadata <- reactiveVal(NULL)
+
+    output$season_plot_metadata_ui <- renderUI({
+      metadata <- plotSeasonMetadata()
+      if (is.null(metadata)) {
+        return(NULL)
+      }
+
+      highlight_ranges <- metadata$season_highlight_ranges
+      restrict_ranges <- metadata$season_ranges
+      if (length(highlight_ranges) == 0 && length(restrict_ranges) == 0) {
+        return(NULL)
+      }
+
+      blocks <- list()
+      if (length(highlight_ranges) > 0) {
+        blocks[[length(blocks) + 1L]] <- tags$div(
+          class = "d-flex flex-wrap align-items-center gap-2",
+          tags$strong(tr("disc_highlighted_ranges", language$language)),
+          lapply(seq_along(highlight_ranges), function(i) {
+            color <- season_highlight_colors[
+              ((i - 1L) %% length(season_highlight_colors)) + 1L
+            ]
+            tags$span(
+              class = "d-inline-flex align-items-center gap-1",
+              tags$span(
+                style = paste0(
+                  "display:inline-block;width:1.6em;height:0.9em;",
+                  "border:1px solid rgba(0,0,0,0.18);",
+                  "background-color:",
+                  color,
+                  ";"
+                )
+              ),
+              format_season_range(highlight_ranges[[i]])
+            )
+          })
+        )
+      }
+      if (length(restrict_ranges) > 0) {
+        blocks[[length(blocks) + 1L]] <- tags$div(
+          tags$strong(tr("disc_restricted_ranges", language$language)),
+          ": ",
+          format_season_ranges(restrict_ranges)
+        )
+      }
+
+      tags$div(
+        class = "small text-muted",
+        style = paste(
+          "margin: 0.35rem 0 0.75rem 0;",
+          "padding: 0.5rem 0.75rem;",
+          "border-left: 3px solid #6c757d;",
+          "background-color: rgba(108,117,125,0.06);"
+        ),
+        blocks
+      )
+    })
 
     observeEvent(plot_output_discrete$result(), {
       if (inherits(plot_output_discrete$result(), "character")) {
@@ -2432,6 +2633,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         isolate(plot_output_discrete$result()$plot)
       })
       plotData(plot_output_discrete$result()$data)
+      plotSeasonMetadata(pendingSeasonMetadata())
+      plot_created(TRUE)
 
       shinyjs::show("full_screen")
       shinyjs::show("download_data")

@@ -506,14 +506,19 @@ disc_selector_mode_tooltip,Discrete plot selector mode tooltip,"Guided selectors
 disc_guided_selectors,Discrete plot guided selector mode,Guided selectors,Sélecteurs guidés
 disc_browse_samples,Discrete plot browse selector mode,Table selection,Sélection par tableau
 disc_season_filter,Discrete plot seasonal filter toggle,Restrict to season/day-of-year ranges,Limiter aux saisons ou aux jours de l'année
+disc_season_highlight,Discrete plot seasonal highlight toggle,Highlight season/day-of-year ranges,Mettre en évidence les saisons ou les jours de l'année
+disc_highlighted_ranges,Discrete plot highlighted season metadata label,Highlighted ranges,Intervalles mis en évidence
+disc_restricted_ranges,Discrete plot restricted season metadata label,Results restricted to season/day-of-year ranges,Résultats limités aux saisons ou aux jours de l'année
 disc_browse_help,Discrete plot browse mode help,"Use the table filters to find samples, then click rows to add them to the selection. Choose the parameters to plot in the sidebar before creating the plot.","Utilisez les filtres du tableau pour trouver des échantillons, puis cliquez sur les lignes pour les ajouter à la sélection. Choisissez les paramètres à tracer dans la barre latérale avant de créer le graphique."
 disc_filter_samples_by_parameter,Discrete plot browse sample parameter filter,Show samples with parameter(s),Afficher les échantillons ayant les paramètres
 disc_plot_parameters,Discrete plot browse plot parameter selector,Parameters to plot,Paramètres à tracer
 disc_doy_range_help,Discrete plot day-of-year range help,"Only the month/day portion of these ranges is used. Use a previous-year start and next-year end for seasons that cross New Year, such as September 1 2000 to June 1 2001.","Seuls le mois et le jour de ces intervalles sont utilisés. Pour les saisons qui traversent le nouvel an, indiquez une date de début dans l'année précédente et une date de fin dans l'année suivante, par exemple du 1 septembre 2000 au 1 juin 2001."
 disc_season_range_count,Discrete plot season range count,Number of season ranges,Nombre d'intervalles saisonniers
+disc_season_highlight_range_count,Discrete plot highlighted season range count,Number of highlighted season ranges,Nombre d'intervalles saisonniers à mettre en évidence
 one,Number word one,One,Un
 two,Number word two,Two,Deux
 three,Number word three,Three,Trois
+four,Number word four,Four,Quatre
 season,Season label,Season,Saison
 collection_method(s),Collection method selector,Collection method(s),Méthode(s) de prélèvement
 result_speciation(s),Result speciation selector,Result speciation(s),Spéciation(s) du résultat

@@ -41,6 +41,7 @@ plotDiscrete(
   duplicate_action = c("show", "hide", "average"),
   sample_ids = NULL,
   season_ranges = NULL,
+  season_highlight_ranges = NULL,
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
@@ -119,6 +120,8 @@ plotDiscrete(
 \item{sample_ids}{Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.}
 
 \item{season_ranges}{Optional AquaCache seasonal date ranges to include. Dates are accepted, but only the day-of-year is used; ranges may cross New Year.}
+
+\item{season_highlight_ranges}{Optional date ranges to highlight on the plot background. Dates are accepted, but only month/day is used; ranges may cross New Year.}
 
 \item{dbSource}{The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
 

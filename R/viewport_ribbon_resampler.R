@@ -6,6 +6,11 @@
 # uncertainty bands need to stay responsive at very large row counts.
 
 #' Calculate target number of bins for viewport resampling based on viewport width
+#' @param width_px Numeric viewport width in pixels, used to estimate appropriate bin count for resampling
+#' @param density Numeric multiplier for bin count based on pixel width, allowing for finer or coarser resampling
+#' @param min_bins Integer minimum number of bins to return, ensuring a baseline level of detail even for narrow viewports
+#' @param max_bins Integer maximum number of bins to return, preventing excessive points for very wide viewports
+#' @param fallback Integer fallback number of bins to return if `width_px` is invalid or not provided, ensuring a reasonable default for resampling
 #' @keywords internal
 #' @noRd
 
