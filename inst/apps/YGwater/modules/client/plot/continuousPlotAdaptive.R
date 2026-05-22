@@ -444,7 +444,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         ns = ns,
         lang = language$language,
         con = session$userData$AquaCache,
-        module_id = "contPlot"
+        module_id = "contPlotAdaptive"
       )
     })
 
