@@ -170,6 +170,153 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
 } # End cont_data.plot_module_data
 
 
+# discrete plot module ######
+disc_plot_table_signature <- function(con, table, id_col) {
+  max_id <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT MAX(",
+      DBI::dbQuoteIdentifier(con, id_col),
+      ")::text AS max_id",
+      "FROM",
+      DBI::dbQuoteIdentifier(con, table)
+    )
+  )
+
+  stats <- DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT n_tup_ins::text, n_tup_upd::text, n_tup_del::text",
+      "FROM pg_stat_all_tables",
+      "WHERE relid = to_regclass(",
+      DBI::dbQuoteLiteral(con, table),
+      ")"
+    )
+  )
+  if (nrow(stats) == 0) {
+    stats <- data.frame(
+      n_tup_ins = "0",
+      n_tup_upd = "0",
+      n_tup_del = "0"
+    )
+  }
+
+  data.frame(
+    table_name = table,
+    max_id = max_id$max_id[1],
+    n_tup_ins = stats$n_tup_ins[1],
+    n_tup_upd = stats$n_tup_upd[1],
+    n_tup_del = stats$n_tup_del[1],
+    stringsAsFactors = FALSE
+  )
+}
+
+
+disc_plot_cache_signature <- function(con) {
+  sig <- rbind(
+    disc_plot_table_signature(con, "samples", "sample_id"),
+    disc_plot_table_signature(con, "results", "result_id")
+  )
+  paste(
+    apply(sig, 1, function(row) paste(row, collapse = "=")),
+    collapse = ";"
+  )
+}
+
+
+disc_plot_module_data <- function(con, env = .GlobalEnv) {
+  key <- "disc_plot_module_data"
+  get_cached(
+    key = key,
+    env = env,
+    fetch_fun = function() {
+      list(
+        cache_signature = disc_plot_cache_signature(con),
+        locs = DBI::dbGetQuery(
+          con,
+          "SELECT loc.location_id, loc.name, loc.name_fr
+           FROM locations AS loc
+           WHERE EXISTS (
+             SELECT 1 FROM samples AS s WHERE s.location_id = loc.location_id
+           )
+           ORDER BY loc.name ASC"
+        ),
+        params = DBI::dbGetQuery(
+          con,
+          paste(
+            "SELECT p.parameter_id, p.param_name,",
+            ac_parameter_unit_select_sql(con, "p", "unit"),
+            "FROM parameters p",
+            "ORDER BY p.param_name ASC"
+          )
+        ),
+        sub_locs = DBI::dbGetQuery(
+          con,
+          "SELECT sub_location_id, sub_location_name, sub_location_name_fr
+           FROM sub_locations
+           ORDER BY sub_location_name ASC;"
+        ),
+        media = DBI::dbGetQuery(
+          con,
+          "SELECT media_id, media_type, media_type_fr
+           FROM media_types
+           ORDER BY media_type ASC;"
+        ),
+        sample_types = DBI::dbGetQuery(
+          con,
+          "SELECT sample_type_id, sample_type,
+                  COALESCE(sample_type_fr, sample_type) AS sample_type_fr
+           FROM sample_types
+           ORDER BY sample_type ASC;"
+        ),
+        collection_methods = DBI::dbGetQuery(
+          con,
+          "SELECT collection_method_id, collection_method
+           FROM collection_methods
+           ORDER BY collection_method ASC;"
+        ),
+        result_types = DBI::dbGetQuery(
+          con,
+          "SELECT result_type_id, result_type
+           FROM result_types
+           ORDER BY result_type ASC;"
+        ),
+        sample_fractions = DBI::dbGetQuery(
+          con,
+          "SELECT sample_fraction_id, sample_fraction
+           FROM sample_fractions
+           ORDER BY sample_fraction ASC;"
+        ),
+        result_value_types = DBI::dbGetQuery(
+          con,
+          "SELECT result_value_type_id, result_value_type
+           FROM result_value_types
+           ORDER BY result_value_type ASC;"
+        ),
+        result_speciations = DBI::dbGetQuery(
+          con,
+          "SELECT result_speciation_id, result_speciation
+           FROM result_speciations
+           ORDER BY result_speciation ASC;"
+        )
+      )
+    },
+    check_fun = function() {
+      if (!exists("app_cache", envir = env)) {
+        return(FALSE)
+      }
+      cache_env <- get("app_cache", envir = env)
+      if (!exists(key, envir = cache_env, inherits = FALSE)) {
+        return(FALSE)
+      }
+      entry <- get(key, envir = cache_env, inherits = FALSE)
+      identical(entry$value$cache_signature, disc_plot_cache_signature(con))
+    },
+    ttl = 60 * 60 * 2
+  )
+}
+
+
 # discrete data module #####
 disc_data_module_data <- function(con, env = .GlobalEnv) {
   get_cached(

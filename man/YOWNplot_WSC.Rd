@@ -36,5 +36,5 @@ Writes .pdf plot of WSC and YOWN data
 Plots YOWN data alongside WSC stations, in m asl. Only works for stations that have values in the "Elevation" field in their Aquarius information page.
 }
 \details{
-To store login credentials in your .renviron profile, call \code{\link[usethis:edit]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".
+To store login credentials in your .renviron profile, call \code{\link[usethis:edit_r_environ]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".
 }

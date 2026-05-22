@@ -37,7 +37,8 @@ plotOverlap(
   lang = "en",
   data = FALSE,
   con = NULL,
-  as_of = NULL
+  as_of = NULL,
+  build_plot = TRUE
 )
 }
 \arguments{
@@ -110,6 +111,8 @@ to FALSE to force standard scatter traces.}
 stored daily summaries should be reconstructed. Character, Date, and
 POSIXct inputs are supported. Date-like inputs are interpreted as the end
 of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
+
+\item{build_plot}{Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.}
 }
 \value{
 An html plot.

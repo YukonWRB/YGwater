@@ -36,5 +36,5 @@ Writes .pdf plot of WSC and YOWN data
 Plots multiple YOWN stations on the same chart
 }
 \details{
-To store login credentials in your .renviron profile, call \code{\link[usethis:edit]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".
+To store login credentials in your .renviron profile, call \code{\link[usethis:edit_r_environ]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".
 }

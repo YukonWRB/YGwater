@@ -6,7 +6,7 @@
 \usage{
 plotDiscrete(
   start,
-  end = Sys.Date() + 1,
+  end = .POSIXct(Sys.time(), tz = "UTC"),
   locations = NULL,
   locGrp = NULL,
   sub_locations = NULL,
@@ -29,6 +29,18 @@ plotDiscrete(
   legend_position = "v",
   gridx = FALSE,
   gridy = FALSE,
+  sub_location_ids = NULL,
+  media = NULL,
+  sample_types = NULL,
+  collection_methods = NULL,
+  result_types = NULL,
+  sample_fractions = NULL,
+  result_value_types = NULL,
+  result_speciations = NULL,
+  include_blanks = TRUE,
+  duplicate_action = c("show", "hide", "average"),
+  sample_ids = NULL,
+  season_ranges = NULL,
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
@@ -36,15 +48,15 @@ plotDiscrete(
 )
 }
 \arguments{
-\item{start}{The date to fetch data from, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime.}
+\item{start}{The date or datetime to fetch data from, passed as a Date, POSIXct, or character vector. If date or date-like character object, hours/minutes will be set to 00:00. Uses the actual sample datetime, not the target datetime.}
 
-\item{end}{The end date to fetch data up to, passed as a Date, POSIXct, or character vector of form 'yyyy-mm-dd HH:MM'. Dates and character vectors are converted to POSIXct with timezone 'MST'. Uses the actual sample datetime, not the target datetime. Default is the current date.}
+\item{end}{The end date or datetime to fetch data up to, passed as a Date, POSIXct, or character vector. If date or date-like character object, hours/minutes will be set to 23:59:59. Uses the actual sample datetime, not the target datetime. Default is the current date.}
 
 \item{locations}{A vector of station names or codes. If dbSource == 'AC': from aquacache 'locations' table use column 'location_code', 'alias', 'name', or 'name_fr' (character vector) or 'location_id' (numeric vector). If dbSource == 'EQ' use EQWiN 'eqstns' table, column 'StnCode' or leave NULL to use \code{locGrp} instead.}
 
 \item{locGrp}{Only used if \code{dbSource} is 'EQ'. A station group as listed in the EWQin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{locations} instead.}
 
-\item{sub_locations}{A vector of sub-location names or codes, only used if dbSource == 'AC' and table 'sub_locations'. Default is NULL; if there are sub-locations applicable, these will all be fetched and displayed as distinct traces. Must match the length of 'locations', use NA for locations without sub-locations.}
+\item{sub_locations}{A vector of sub-location names or codes, only used if dbSource == 'AC'. Default is NULL; if there are sub-locations applicable, these will all be fetched and displayed as distinct traces. Must match the length of 'locations', use NA for locations without sub-locations.}
 
 \item{parameters}{A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use \code{paramGrp} instead.}
 
@@ -83,6 +95,30 @@ plotDiscrete(
 \item{gridx}{Should gridlines be drawn on the x-axis? Default is FALSE}
 
 \item{gridy}{Should gridlines be drawn on the y-axis? Default is FALSE}
+
+\item{sub_location_ids}{Optional AquaCache sub-location ids to include.}
+
+\item{media}{Optional AquaCache media type ids or names to include.}
+
+\item{sample_types}{Optional AquaCache sample type ids or names to include.}
+
+\item{collection_methods}{Optional AquaCache collection method ids or names to include.}
+
+\item{result_types}{Optional AquaCache result type ids or names to include.}
+
+\item{sample_fractions}{Optional AquaCache sample fraction ids or names to include, for example total or dissolved.}
+
+\item{result_value_types}{Optional AquaCache result value type ids or names to include, for example Actual or Calculated.}
+
+\item{result_speciations}{Optional AquaCache result speciation ids or names to include.}
+
+\item{include_blanks}{Should blank samples be included? Only applies to AquaCache and defaults to TRUE for backward compatibility.}
+
+\item{duplicate_action}{How AquaCache duplicate/replicate samples should be handled. One of "show", "hide", or "average".}
+
+\item{sample_ids}{Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.}
+
+\item{season_ranges}{Optional AquaCache seasonal date ranges to include. Dates are accepted, but only the day-of-year is used; ranges may cross New Year.}
 
 \item{dbSource}{The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function \code{\link[=AquaConnect]{AquaConnect()}} while EQWin connections use \code{\link[=AccessConnect]{AccessConnect()}}.}
 

@@ -5333,10 +5333,10 @@ make_leaflet_map <- function(
                         static_style_elements$roads$color,
                         static_style_elements$roads$weight
                     ),
-                    tr("snowbull_roads", language),
+                    tr("roads", language),
                     "<br>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><polygon points='9,2 16,9 9,16 2,9' fill='black' stroke='white' stroke-width='2'/></svg> ",
-                    tr("snowbull_communities", language),
+                    tr("communities", language),
                     "</div>"
                 ),
                 position = "bottomright",
