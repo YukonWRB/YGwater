@@ -1971,9 +1971,9 @@ app_server <- function(input, output, session) {
     })
     output$plotsNavContAdaptiveTitle <- renderUI({
       if (identical(languageSelection$language, "Français")) {
-        "Continues (démo ruban adaptatif)"
+        "Continues (expérimental)"
       } else {
-        "Continuous (adaptive ribbon demo)"
+        "Continuous (experimental)"
       }
     })
 

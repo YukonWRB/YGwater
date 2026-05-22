@@ -10,7 +10,7 @@
 #' @param dbPort Port number of the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbUser Username for the aquacache database. Default is pulled from the .Renviron file.
 #' @param dbPass Password for the aquacache database. Default is pulled from the .Renviron file.
-#' @param network_check Optional: a path to a network location to check if the app is run internally or externally. If the app can see the path, some additional functionality is enabled, such as log in by admin roles. Default is FALSE, which means no check is performed and the app assumes it's running internally with access to all features.
+#' @param network_check Optional: a path to a network location to check if the app is run internally or externally. If the app can see the path, some additional functionality is enabled, such as log in by admin roles. Default is FALSE, which means no check is performed and the app assumes it's running internally without access to all features.
 #' @param accessPath1 to the folder where EQWin databases are stored. Default is "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options.
 #' @param accessPath2 Path to the folder where EQWin databases are stored. Default is "//carver/infosys/EQWin". The function will search for all *.mdb files in this folder (but not its sub-folders) and list them as options, combined with the files in accessPath1.
 #' @param logout_timer_min Auto logout timer, in minutes.

@@ -506,8 +506,9 @@ disc_selector_mode_tooltip,Discrete plot selector mode tooltip,"Guided selectors
 disc_guided_selectors,Discrete plot guided selector mode,Guided selectors,Sélecteurs guidés
 disc_browse_samples,Discrete plot browse selector mode,Table selection,Sélection par tableau
 disc_season_filter,Discrete plot seasonal filter toggle,Restrict to season/day-of-year ranges,Limiter aux saisons ou aux jours de l'année
-disc_browse_help,Discrete plot browse mode help,"Use the table filters to find samples, then click rows to add them to the selection. The parameter list beside the table is based on the selected samples.","Utilisez les filtres du tableau pour trouver des échantillons, puis cliquez sur les lignes pour les ajouter à la sélection. La liste des paramètres à côté du tableau est basée sur les échantillons sélectionnés."
-disc_max_table_rows,Discrete plot browse row limit,Maximum table rows,Nombre maximal de lignes du tableau
+disc_browse_help,Discrete plot browse mode help,"Use the table filters to find samples, then click rows to add them to the selection. Choose the parameters to plot in the sidebar before creating the plot.","Utilisez les filtres du tableau pour trouver des échantillons, puis cliquez sur les lignes pour les ajouter à la sélection. Choisissez les paramètres à tracer dans la barre latérale avant de créer le graphique."
+disc_filter_samples_by_parameter,Discrete plot browse sample parameter filter,Show samples with parameter(s),Afficher les échantillons ayant les paramètres
+disc_plot_parameters,Discrete plot browse plot parameter selector,Parameters to plot,Paramètres à tracer
 disc_doy_range_help,Discrete plot day-of-year range help,"Only the month/day portion of these ranges is used. Use a previous-year start and next-year end for seasons that cross New Year, such as September 1 2000 to June 1 2001.","Seuls le mois et le jour de ces intervalles sont utilisés. Pour les saisons qui traversent le nouvel an, indiquez une date de début dans l'année précédente et une date de fin dans l'année suivante, par exemple du 1 septembre 2000 au 1 juin 2001."
 disc_season_range_count,Discrete plot season range count,Number of season ranges,Nombre d'intervalles saisonniers
 one,Number word one,One,Un

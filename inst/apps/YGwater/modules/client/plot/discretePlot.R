@@ -91,6 +91,45 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       )
     }
 
+    observe_all_selectize <- function(input_id) {
+      observeEvent(
+        input[[input_id]],
+        {
+          values <- input[[input_id]]
+          if (is.null(values) || length(values) == 0) {
+            updateSelectizeInput(session, input_id, selected = "all")
+            return()
+          }
+          values <- as.character(values)
+          if (length(values) > 1 && "all" %in% values) {
+            selected <- if (identical(values[[length(values)]], "all")) {
+              "all"
+            } else {
+              setdiff(values, "all")
+            }
+            updateSelectizeInput(session, input_id, selected = selected)
+          }
+        },
+        ignoreNULL = FALSE
+      )
+    }
+
+    lapply(
+      c(
+        "media_AC",
+        "sub_locations_AC",
+        "sample_types_AC",
+        "collection_methods_AC",
+        "result_speciations_AC",
+        "sample_fractions_AC",
+        "result_value_types_AC",
+        "result_types_AC",
+        "browse_sample_parameters_AC",
+        "browse_plot_parameters_AC"
+      ),
+      observe_all_selectize
+    )
+
     ac_numeric_values <- function(values, include_all = FALSE) {
       if (is.null(values) || length(values) == 0) {
         return(numeric(0))
@@ -226,7 +265,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       if (
         length(ac_numeric_values(input$locations_AC)) == 0 ||
           is.null(input$date_range_AC) ||
-          length(ac_numeric_values(input$parameters_AC, include_all = TRUE)) == 0
+          length(ac_numeric_values(input$parameters_AC, include_all = TRUE)) ==
+            0
       ) {
         return(data.frame())
       }
@@ -257,12 +297,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     }
 
     ac_browse_parameter_filter <- function() {
-      parameter_ids <- ac_numeric_values(input$browse_parameters_AC)
+      parameter_ids <- ac_numeric_values(input$browse_sample_parameters_AC)
       if (length(parameter_ids) == 0) {
         return(NULL)
       }
       ids_sql <- paste(parameter_ids, collapse = ", ")
-      if (identical(input$browse_parameter_match, "all")) {
+      if (identical(input$browse_sample_parameter_match, "all")) {
         paste0(
           "(SELECT COUNT(DISTINCT rpf.parameter_id)",
           " FROM results AS rpf",
@@ -300,12 +340,6 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     }
 
     ac_browse_sample_table <- reactive({
-      limit <- suppressWarnings(as.integer(input$browse_sample_limit))
-      if (length(limit) == 0 || is.na(limit) || limit < 100) {
-        limit <- 5000L
-      }
-      limit <- min(limit, 50000L)
-
       sql <- paste(
         "WITH base AS (",
         "SELECT s.sample_id, s.location_id, l.name AS location,",
@@ -323,8 +357,6 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "s.collection_method = cm.collection_method_id",
         ac_browse_where(include_parameter_filter = TRUE),
         "ORDER BY s.datetime DESC",
-        "LIMIT",
-        limit,
         ")",
         "SELECT base.sample_id, base.location, base.location_code,",
         "base.sub_location, base.sample_date, base.media,",
@@ -345,7 +377,38 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       ac_query(sql, data.frame())
     })
 
-    ac_browse_parameter_choices <- reactive({
+    ac_browse_sample_parameter_choices <- reactive({
+      if (
+        is.null(input$browse_date_range) ||
+          length(input$browse_date_range) != 2
+      ) {
+        return(data.frame(
+          parameter_id = numeric(),
+          param_name = character(),
+          n = numeric()
+        ))
+      }
+
+      sql <- paste(
+        "SELECT p.parameter_id, p.param_name, COUNT(DISTINCT s.sample_id) AS n",
+        "FROM samples AS s",
+        "INNER JOIN results AS r ON s.sample_id = r.sample_id",
+        "INNER JOIN parameters AS p ON r.parameter_id = p.parameter_id",
+        ac_browse_where(include_parameter_filter = FALSE),
+        "GROUP BY p.parameter_id, p.param_name",
+        "ORDER BY p.param_name ASC"
+      )
+      ac_query(
+        sql,
+        data.frame(
+          parameter_id = numeric(),
+          param_name = character(),
+          n = numeric()
+        )
+      )
+    })
+
+    ac_browse_plot_parameter_choices <- reactive({
       selected <- browse_selected_sample_ids()
       sample_clause <- ac_sample_id_clause(selected, "s.sample_id")
 
@@ -362,7 +425,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             n = numeric()
           ))
         }
-        ac_browse_where(include_parameter_filter = FALSE)
+        ac_browse_where(include_parameter_filter = TRUE)
       }
 
       sql <- paste(
@@ -376,7 +439,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       )
       ac_query(
         sql,
-        data.frame(parameter_id = numeric(), param_name = character(), n = numeric())
+        data.frame(
+          parameter_id = numeric(),
+          param_name = character(),
+          n = numeric()
+        )
       )
     })
 
@@ -486,14 +553,20 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               tr("disc_selector_mode_tooltip", language$language)
             ),
             choices = c(
-              stats::setNames("guided", tr(
-                "disc_guided_selectors",
-                language$language
-              )),
-              stats::setNames("browse", tr(
-                "disc_browse_samples",
-                language$language
-              ))
+              stats::setNames(
+                "guided",
+                tr(
+                  "disc_guided_selectors",
+                  language$language
+                )
+              ),
+              stats::setNames(
+                "browse",
+                tr(
+                  "disc_browse_samples",
+                  language$language
+                )
+              )
             ),
             selected = "guided"
           )
@@ -635,14 +708,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             language = language$abbrev,
             separator = tr("date_sep", language$language)
           ),
-          numericInput(
-            ns("browse_sample_limit"),
-            tr("disc_max_table_rows", language$language),
-            value = 5000,
-            min = 100,
-            max = 50000,
-            step = 500
-          )
+          uiOutput(ns("AC_browse_plot_parameter_ui"))
         ),
         radioButtons(
           ns("facet_on"),
@@ -795,8 +861,16 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         tr("date_range_lab", language$language),
         start = start_date,
         end = end_date,
-        min = if (is.null(available)) NULL else as.Date(available$start_date[1]),
-        max = if (is.null(available)) Sys.Date() + 1 else as.Date(available$end_date[1]),
+        min = if (is.null(available)) {
+          NULL
+        } else {
+          as.Date(available$start_date[1])
+        },
+        max = if (is.null(available)) {
+          Sys.Date() + 1
+        } else {
+          as.Date(available$end_date[1])
+        },
         format = "yyyy-mm-dd",
         language = language$abbrev,
         separator = tr("date_sep", language$language)
@@ -1030,18 +1104,27 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             ns("duplicate_action"),
             tr("disc_duplicate_samples", language$language),
             choices = c(
-              stats::setNames("show", tr(
-                "disc_duplicates_show",
-                language$language
-              )),
-              stats::setNames("average", tr(
-                "disc_duplicates_average",
-                language$language
-              )),
-              stats::setNames("hide", tr(
-                "disc_duplicates_hide",
-                language$language
-              ))
+              stats::setNames(
+                "show",
+                tr(
+                  "disc_duplicates_show",
+                  language$language
+                )
+              ),
+              stats::setNames(
+                "average",
+                tr(
+                  "disc_duplicates_average",
+                  language$language
+                )
+              ),
+              stats::setNames(
+                "hide",
+                tr(
+                  "disc_duplicates_hide",
+                  language$language
+                )
+              )
             ),
             selected = if (!is.null(input$duplicate_action)) {
               input$duplicate_action
@@ -1123,19 +1206,14 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           identical(input$AC_selector_mode, "browse")
       ) {
         tagList(
-          layout_columns(
-            col_widths = c(8, 4),
-            card(
-              full_screen = TRUE,
-              card_header(tr("samples", language$language)),
-              DT::dataTableOutput(ns("AC_sample_table"))
-            ),
-            card(
-              card_header(tr(
-                "disc_selected_samples_parameters",
-                language$language
-              )),
-              uiOutput(ns("AC_browse_parameter_ui")),
+          accordion(
+            id = ns("AC_browse_samples_accordion"),
+            accordion_panel(
+              title = tr("samples", language$language),
+              value = "samples_panel",
+              uiOutput(ns("AC_browse_sample_filter_ui")),
+              tags$hr(),
+              DT::dataTableOutput(ns("AC_sample_table")),
               tags$hr(),
               uiOutput(ns("AC_selected_samples_ui"))
             )
@@ -1155,6 +1233,16 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         nrow(samples) > 0,
         tr("disc_no_samples_match_filters", language$language)
       ))
+
+      # Make columns factors for filtering and display
+      samples$location <- factor(samples$location)
+      samples$location_code <- factor(samples$location_code)
+      samples$sub_location <- factor(samples$sub_location)
+      samples$media <- factor(samples$media)
+      samples$sample_type <- factor(samples$sample_type)
+      samples$collection_method <- factor(samples$collection_method)
+
+      samples$result_count <- as.integer(samples$result_count)
 
       column_labels <- c(
         sample_id = tr("sample_id", language$language),
@@ -1225,18 +1313,26 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       browse_selected_sample_ids(sample_ids[!is.na(sample_ids)])
     })
 
-    observeEvent(input$AC_selector_mode, {
-      if (!identical(input$AC_selector_mode, "browse")) {
-        return()
-      }
-      shinyjs::hide("full_screen")
-      shinyjs::hide("download_data")
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$AC_selector_mode,
+      {
+        if (!identical(input$AC_selector_mode, "browse")) {
+          return()
+        }
+        shinyjs::hide("full_screen")
+        shinyjs::hide("download_data")
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(input$clear_selected_samples, {
-      browse_selected_sample_ids(numeric(0))
-      DT::selectRows(DT::dataTableProxy("AC_sample_table"), NULL)
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$clear_selected_samples,
+      {
+        browse_selected_sample_ids(numeric(0))
+        DT::selectRows(DT::dataTableProxy("AC_sample_table"), NULL)
+      },
+      ignoreInit = TRUE
+    )
 
     lapply(seq_len(50), function(i) {
       observeEvent(
@@ -1269,10 +1365,10 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       ignoreInit = TRUE
     )
 
-    output$AC_browse_parameter_ui <- renderUI({
+    output$AC_browse_sample_filter_ui <- renderUI({
       req(input$data_source == "AC", input$AC_selector_mode == "browse")
 
-      params <- ac_browse_parameter_choices()
+      params <- ac_browse_sample_parameter_choices()
       if (
         is.null(params) ||
           nrow(params) == 0 ||
@@ -1286,7 +1382,82 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         )
       }
       selected <- ac_keep_selection(
-        input$browse_parameters_AC,
+        input$browse_sample_parameters_AC,
+        as.character(params$parameter_id)
+      )
+      choices <- character(0)
+      if (nrow(params) > 0) {
+        choices <- stats::setNames(
+          as.character(params$parameter_id),
+          paste0(params$param_name, " (", params$n, ")")
+        )
+      }
+
+      tagList(
+        selectizeInput(
+          ns("browse_sample_parameters_AC"),
+          tr("disc_filter_samples_by_parameter", language$language),
+          choices = c(
+            stats::setNames("all", tr("all_m", language$language)),
+            choices
+          ),
+          selected = selected,
+          multiple = TRUE,
+          width = "100%"
+        ),
+        radioButtons(
+          ns("browse_sample_parameter_match"),
+          tr("disc_sample_must_include", language$language),
+          choices = c(
+            stats::setNames(
+              "any",
+              tr(
+                "disc_any_selected_parameter",
+                language$language
+              )
+            ),
+            stats::setNames(
+              "all",
+              tr(
+                "disc_all_selected_parameters",
+                language$language
+              )
+            )
+          ),
+          selected = if (is.null(input$browse_sample_parameter_match)) {
+            "any"
+          } else {
+            input$browse_sample_parameter_match
+          }
+        )
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$AC_selector_mode,
+        input$browse_date_range,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_browse_plot_parameter_ui <- renderUI({
+      req(input$data_source == "AC", input$AC_selector_mode == "browse")
+
+      params <- ac_browse_plot_parameter_choices()
+      if (
+        is.null(params) ||
+          nrow(params) == 0 ||
+          !all(c("parameter_id", "param_name", "n") %in% names(params))
+      ) {
+        params <- data.frame(
+          parameter_id = character(),
+          param_name = character(),
+          n = numeric(),
+          stringsAsFactors = FALSE
+        )
+      }
+      selected <- ac_keep_selection(
+        input$browse_plot_parameters_AC,
         as.character(params$parameter_id)
       )
       choices <- character(0)
@@ -1305,33 +1476,14 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           )
         },
         selectizeInput(
-          ns("browse_parameters_AC"),
-          tr("parameters", language$language),
+          ns("browse_plot_parameters_AC"),
+          tr("disc_plot_parameters", language$language),
           choices = c(
             stats::setNames("all", tr("all_m", language$language)),
             choices
           ),
           selected = selected,
           multiple = TRUE
-        ),
-        radioButtons(
-          ns("browse_parameter_match"),
-          tr("disc_sample_must_include", language$language),
-          choices = c(
-            stats::setNames("any", tr(
-              "disc_any_selected_parameter",
-              language$language
-            )),
-            stats::setNames("all", tr(
-              "disc_all_selected_parameters",
-              language$language
-            ))
-          ),
-          selected = if (is.null(input$browse_parameter_match)) {
-            "any"
-          } else {
-            input$browse_parameter_match
-          }
         )
       )
     }) %>%
@@ -1341,6 +1493,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         input$AC_selector_mode,
         browse_selected_sample_ids(),
         input$browse_date_range,
+        input$browse_sample_parameters_AC,
+        input$browse_sample_parameter_match,
         ignoreNULL = FALSE
       )
 
@@ -1375,7 +1529,11 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               shown$location[[i]],
               shown$sample_date[[i]],
               shown$media[[i]],
-              paste0(tr("id_label", language$language), ": ", shown$sample_id[[i]]),
+              paste0(
+                tr("id_label", language$language),
+                ": ",
+                shown$sample_id[[i]]
+              ),
               sep = " | "
             )
             fluidRow(
@@ -2080,7 +2238,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           if (identical(ac_mode, "browse")) {
             selected_rows <- ac_selected_sample_rows()
             browse_sample_ids <- browse_selected_sample_ids()
-            browse_parameters <- ac_numeric_values(input$browse_parameters_AC)
+            browse_parameters <- ac_numeric_values(
+              input$browse_plot_parameters_AC
+            )
             if (length(browse_parameters) == 0) {
               browse_parameters <- NULL
             }
@@ -2141,60 +2301,96 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             },
             gridx = plot_aes$showgridx,
             gridy = plot_aes$showgridy,
-            sub_location_ids = if (use_guided_filters) keep_ac_ids(
-              input$sub_locations_AC,
-              moduleData$AC_sub_locs,
-              "sub_location_id",
-              "sub_location_id"
-            ) else NULL,
-            media = if (use_guided_filters) keep_ac_ids(
-              input$media_AC,
-              moduleData$AC_media,
-              "media_id",
-              "media_id"
-            ) else NULL,
-            sample_types = if (use_guided_filters) keep_ac_ids(
-              input$sample_types_AC,
-              moduleData$AC_sample_types,
-              "sample_type",
-              "sample_type_id"
-            ) else NULL,
-            collection_methods = if (use_guided_filters) keep_ac_ids(
-              input$collection_methods_AC,
-              moduleData$AC_collection_methods,
-              "collection_method",
-              "collection_method_id"
-            ) else NULL,
-            result_types = if (use_guided_filters) keep_ac_ids(
-              input$result_types_AC,
-              moduleData$AC_result_types,
-              "result_type",
-              "result_type_id"
-            ) else NULL,
-            sample_fractions = if (use_guided_filters) keep_ac_ids(
-              input$sample_fractions_AC,
-              moduleData$AC_sample_fractions,
-              "sample_fraction_id",
-              "sample_fraction_id"
-            ) else NULL,
-            result_value_types = if (use_guided_filters) keep_ac_ids(
-              input$result_value_types_AC,
-              moduleData$AC_result_value_types,
-              "result_value_type",
-              "result_value_type_id"
-            ) else NULL,
-            result_speciations = if (use_guided_filters) keep_ac_ids(
-              input$result_speciations_AC,
-              moduleData$AC_result_speciations,
-              "result_speciation_id",
-              "result_speciation_id"
-            ) else NULL,
-            include_blanks = if (!use_guided_filters || is.null(input$include_blanks)) {
+            sub_location_ids = if (use_guided_filters) {
+              keep_ac_ids(
+                input$sub_locations_AC,
+                moduleData$AC_sub_locs,
+                "sub_location_id",
+                "sub_location_id"
+              )
+            } else {
+              NULL
+            },
+            media = if (use_guided_filters) {
+              keep_ac_ids(
+                input$media_AC,
+                moduleData$AC_media,
+                "media_id",
+                "media_id"
+              )
+            } else {
+              NULL
+            },
+            sample_types = if (use_guided_filters) {
+              keep_ac_ids(
+                input$sample_types_AC,
+                moduleData$AC_sample_types,
+                "sample_type",
+                "sample_type_id"
+              )
+            } else {
+              NULL
+            },
+            collection_methods = if (use_guided_filters) {
+              keep_ac_ids(
+                input$collection_methods_AC,
+                moduleData$AC_collection_methods,
+                "collection_method",
+                "collection_method_id"
+              )
+            } else {
+              NULL
+            },
+            result_types = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_types_AC,
+                moduleData$AC_result_types,
+                "result_type",
+                "result_type_id"
+              )
+            } else {
+              NULL
+            },
+            sample_fractions = if (use_guided_filters) {
+              keep_ac_ids(
+                input$sample_fractions_AC,
+                moduleData$AC_sample_fractions,
+                "sample_fraction_id",
+                "sample_fraction_id"
+              )
+            } else {
+              NULL
+            },
+            result_value_types = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_value_types_AC,
+                moduleData$AC_result_value_types,
+                "result_value_type",
+                "result_value_type_id"
+              )
+            } else {
+              NULL
+            },
+            result_speciations = if (use_guided_filters) {
+              keep_ac_ids(
+                input$result_speciations_AC,
+                moduleData$AC_result_speciations,
+                "result_speciation_id",
+                "result_speciation_id"
+              )
+            } else {
+              NULL
+            },
+            include_blanks = if (
+              !use_guided_filters || is.null(input$include_blanks)
+            ) {
               TRUE
             } else {
               isTRUE(input$include_blanks)
             },
-            duplicate_action = if (!use_guided_filters || is.null(input$duplicate_action)) {
+            duplicate_action = if (
+              !use_guided_filters || is.null(input$duplicate_action)
+            ) {
               "show"
             } else {
               input$duplicate_action
@@ -2239,6 +2435,16 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
       shinyjs::show("full_screen")
       shinyjs::show("download_data")
+
+      if (
+        identical(input$data_source, "AC") &&
+          identical(input$AC_selector_mode, "browse")
+      ) {
+        bslib::accordion_panel_close(
+          "AC_browse_samples_accordion",
+          "samples_panel"
+        )
+      }
 
       # If this is the first plot generated by the user in this session show them a modal
       if (first_plot()) {

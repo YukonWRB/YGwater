@@ -1,10 +1,11 @@
-#' Viewport-aware resampling helpers for ribbon plots
-#'
-#' These helpers keep the full-resolution data on the server and reduce the
-#' number of points sent to the browser based on the current x-axis viewport.
-#' They are intended for Shiny + plotly integrations where line traces and
-#' uncertainty bands need to stay responsive at very large row counts.
-#'
+# Viewport-aware resampling helpers for ribbon plots
+#
+# These helpers keep the full-resolution data on the server and reduce the
+# number of points sent to the browser based on the current x-axis viewport.
+# They are intended for Shiny + plotly integrations where line traces and
+# uncertainty bands need to stay responsive at very large row counts.
+
+#' Calculate target number of bins for viewport resampling based on viewport width
 #' @keywords internal
 #' @noRd
 
@@ -25,7 +26,9 @@ viewport_ribbon_target_bins <- function(
   bins
 }
 
-
+#' Convert various x-axis inputs to POSIXct for viewport calculations
+#' @keywords internal
+#' @noRd
 viewport_ribbon_as_posixct <- function(x, tz = "UTC") {
   if (inherits(x, "POSIXt")) {
     return(as.POSIXct(x, tz = tz))
@@ -39,7 +42,9 @@ viewport_ribbon_as_posixct <- function(x, tz = "UTC") {
   as.POSIXct(x, tz = tz)
 }
 
-
+#' Extract x-axis limits from plotly relayout data for viewport resampling
+#' @keywords internal
+#' @noRd
 viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {
   if (is.null(relayout) || length(relayout) == 0) {
     return(NULL)
@@ -102,6 +107,9 @@ viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {
 }
 
 
+#' Resample line and band data for a given x-axis viewport
+#' @keywords internal
+#' @noRd
 viewport_ribbon_resample <- function(
   data,
   x_col = "x",
@@ -112,7 +120,7 @@ viewport_ribbon_resample <- function(
   pad_fraction = 0.02,
   gap_multiplier = 20
 ) {
-  dt <- data.table::copy(data.table::as.data.table(data))
+  dt <- data.table::as.data.table(data)
 
   if (!nrow(dt)) {
     return(list(
@@ -131,24 +139,51 @@ viewport_ribbon_resample <- function(
     ))
   }
 
-  data.table::setorderv(dt, x_col)
-  dt[, .row_id := .I]
-
   x_all_num <- as.numeric(dt[[x_col]])
   if (!any(is.finite(x_all_num))) {
     stop("`data` must contain finite x values.")
   }
+  if (is.unsorted(x_all_num, na.rm = TRUE)) {
+    dt <- data.table::copy(dt)
+    data.table::setorderv(dt, x_col)
+    x_all_num <- as.numeric(dt[[x_col]])
+  }
 
   xlim_num <- NULL
   window_rows <- nrow(dt)
-  visible <- dt
+  visible <- NULL
+  lower_bound <- function(x, value) {
+    lo <- 1L
+    hi <- length(x) + 1L
+    while (lo < hi) {
+      mid <- floor((lo + hi) / 2L)
+      if (x[[mid]] < value) {
+        lo <- mid + 1L
+      } else {
+        hi <- mid
+      }
+    }
+    lo
+  }
+  upper_bound <- function(x, value) {
+    lo <- 1L
+    hi <- length(x) + 1L
+    while (lo < hi) {
+      mid <- floor((lo + hi) / 2L)
+      if (x[[mid]] <= value) {
+        lo <- mid + 1L
+      } else {
+        hi <- mid
+      }
+    }
+    lo - 1L
+  }
 
   if (!is.null(xlim) && length(xlim) == 2 && all(!is.na(xlim))) {
     xlim_num <- sort(as.numeric(xlim))
-    window_rows <- sum(
-      x_all_num >= xlim_num[1] & x_all_num <= xlim_num[2],
-      na.rm = TRUE
-    )
+    window_first_idx <- lower_bound(x_all_num, xlim_num[1])
+    window_last_idx <- upper_bound(x_all_num, xlim_num[2])
+    window_rows <- max(0L, window_last_idx - window_first_idx + 1L)
 
     span <- diff(xlim_num)
     if (!is.finite(span) || span <= 0) {
@@ -159,16 +194,23 @@ viewport_ribbon_resample <- function(
     }
 
     pad <- span * pad_fraction
-    keep <- x_all_num >= (xlim_num[1] - pad) & x_all_num <= (xlim_num[2] + pad)
+    keep_first_idx <- lower_bound(x_all_num, xlim_num[1] - pad)
+    keep_last_idx <- upper_bound(x_all_num, xlim_num[2] + pad)
 
-    if (any(keep)) {
-      keep_idx <- which(keep)
-      first_idx <- max(1L, keep_idx[1] - 1L)
-      last_idx <- min(nrow(dt), keep_idx[length(keep_idx)] + 1L)
-      visible <- dt[first_idx:last_idx]
+    if (keep_first_idx <= keep_last_idx) {
+      first_idx <- max(1L, keep_first_idx - 1L)
+      last_idx <- min(nrow(dt), keep_last_idx + 1L)
+      visible <- data.table::copy(dt[first_idx:last_idx])
+      visible[, .row_id := first_idx:last_idx]
     } else {
-      visible <- dt[0]
+      visible <- data.table::copy(dt[0])
+      visible[, .row_id := integer(0)]
     }
+  }
+
+  if (is.null(visible)) {
+    visible <- data.table::copy(dt)
+    visible[, .row_id := .I]
   }
 
   if (!nrow(visible)) {
@@ -254,7 +296,20 @@ viewport_ribbon_resample <- function(
       stop("`line_col` was not found in `data`.")
     }
 
-    line_dt <- visible[
+    line_visible <- data.table::copy(visible)
+    if (nrow(line_visible) > 1) {
+      line_visible[,
+        .line_run := cumsum(c(
+          1L,
+          diff(.run) != 0L |
+            head(is.na(get(line_col)), -1L)
+        ))
+      ]
+    } else {
+      line_visible[, .line_run := 1L]
+    }
+
+    line_dt <- line_visible[
       !is.na(get(line_col)),
       {
         local <- .SD
@@ -266,7 +321,7 @@ viewport_ribbon_resample <- function(
         ))
         local[idx]
       },
-      by = .(.run, .bin),
+      by = .(.run = .line_run, .bin),
       .SDcols = c(x_col, line_col, ".row_id")
     ]
 
@@ -330,6 +385,9 @@ viewport_ribbon_resample <- function(
 }
 
 
+#' Generate plotly trace bundle for line and band data from viewport resampling
+#' @keywords internal
+#' @noRd
 viewport_ribbon_trace_bundle <- function(
   summary,
   line_name = "Observed",
@@ -439,7 +497,10 @@ viewport_ribbon_trace_bundle <- function(
   )
 }
 
-
+#' Generate plotly trace bundle for line and band data from viewport resampling
+#' and create a plotly plot with appropriate layout and configuration for viewport-aware ribbon plots
+#' @keywords internal
+#' @noRd
 viewport_ribbon_plot <- function(
   summary,
   title = NULL,
@@ -496,7 +557,9 @@ viewport_ribbon_plot <- function(
   )
 }
 
-
+#' Generate plotly trace bundle for line and band data from viewport resampling and create a plotly plot with appropriate layout and configuration for viewport-aware ribbon plots, using raw input data and resampling within the function, with additional helper functions for axis naming and event registration
+#' @keywords internal
+#' @noRd
 viewport_timeseries_plot <- function(
   trace_data,
   range_data = NULL,
@@ -644,7 +707,9 @@ viewport_timeseries_plot <- function(
   )
 }
 
-
+#' Safe helper for generating plotly axis references based on index, returning base prefix for index 1 or NULL/NA, and appending index for higher values, used for dynamic axis assignment in viewport-aware ribbon plots
+#' @keywords internal
+#' @noRd
 viewport_axis_ref <- function(prefix, index) {
   if (is.null(index) || is.na(index) || index <= 1) {
     return(prefix)
@@ -653,7 +718,9 @@ viewport_axis_ref <- function(prefix, index) {
   paste0(prefix, as.integer(index))
 }
 
-
+#' Safe helper for generating plotly axis names based on index, returning base prefix for index 1 or NULL/NA, and appending index for higher values, used for dynamic axis assignment in viewport-aware ribbon plots
+#' @keywords internal
+#' @noRd
 viewport_layout_axis_name <- function(prefix, index) {
   if (is.null(index) || is.na(index) || index <= 1) {
     return(paste0(prefix, "axis"))
@@ -662,7 +729,9 @@ viewport_layout_axis_name <- function(prefix, index) {
   paste0(prefix, "axis", as.integer(index))
 }
 
-
+#' Helper for applying x-axis and y-axis references to plotly trace definitions, used for dynamic axis assignment in viewport-aware ribbon plots
+#' @keywords internal
+#' @noRd
 viewport_trace_apply_axes <- function(trace, xaxis = NULL, yaxis = NULL) {
   if (!is.null(xaxis)) {
     trace$xaxis <- xaxis
@@ -673,7 +742,9 @@ viewport_trace_apply_axes <- function(trace, xaxis = NULL, yaxis = NULL) {
   trace
 }
 
-
+#' Helper for registering plotly events on a plot, used for enabling viewport-aware resampling in Shiny + plotly integrations
+#' @keywords internal
+#' @noRd
 viewport_event_register <- function(plot, events = "plotly_relayout") {
   for (event in events) {
     plot <- plotly::event_register(plot, event)
@@ -681,7 +752,9 @@ viewport_event_register <- function(plot, events = "plotly_relayout") {
   plot
 }
 
-
+#' Generate plotly trace bundle for status bands based on input data, with optional x-axis limits for filtering and clipping, used for adding status bands to viewport-aware ribbon plots
+#' @keywords internal
+#' @noRd
 viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
   datetime <- y <- id <- starts_before_end <- ends_after_start <- NULL
   empty_bundle <- list(
@@ -800,7 +873,9 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
   )
 }
 
-
+#' Add status band traces and corresponding layout adjustments to a plotly layout, based on input status band definitions and optional axis naming, used for integrating status bands into viewport-aware ribbon plots
+#' @keywords internal
+#' @noRd
 viewport_layout_add_status_bands <- function(
   layout,
   status_bands,
@@ -919,7 +994,9 @@ viewport_layout_add_status_bands <- function(
   layout
 }
 
-
+#' Apply x-axis limits to plotly layout for specified axis names, used for ensuring consistent axis ranges in viewport-aware ribbon plots when x-axis limits are updated
+#' @keywords internal
+#' @noRd
 viewport_layout_apply_xlim <- function(
   layout,
   xlim = NULL,
@@ -943,7 +1020,9 @@ viewport_layout_apply_xlim <- function(
   layout
 }
 
-
+#' Generate plotly trace bundle for line and band data from viewport resampling and create a plotly plot with appropriate layout and configuration for viewport-aware ribbon plots, using raw input data and resampling within the function, with additional helper functions for axis naming and event registration, and support for multiple series with individual metadata and trace definitions, used for creating complex viewport-aware ribbon plots with multiple series and status bands in Shiny + plotly integrations
+#' @keywords internal
+#' @noRd
 viewport_adaptive_plot <- function(
   payload,
   source = NULL,
