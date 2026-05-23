@@ -77,19 +77,21 @@ addContDataUI <- function(id) {
               accept = c(".csv", ".xlsx")
             )
           ),
-          div(
-            actionButton(ns("add_row"), "Add row to end"),
-            actionButton(ns("add_row_above"), "Add row above selection"),
-            actionButton(ns("add_row_below"), "Add row below selection"),
-            actionButton(ns("delete_rows_table"), "Delete selected rows")
+          conditionalPanel(
+            condition = "input.entry_mode == 'manual'",
+            ns = ns,
+            div(
+              actionButton(ns("add_row"), "Add row to end"),
+              actionButton(ns("add_row_above"), "Add row above selection"),
+              actionButton(ns("add_row_below"), "Add row below selection"),
+              actionButton(ns("delete_rows_table"), "Delete selected rows")
+            ),
+            tags$br()
           ),
-          tags$br(),
 
           DT::DTOutput(ns("data_table")),
 
-          tags$div(
-            "Hint: type directly in the table cells. Press Enter or leave the cell to save."
-          ),
+          uiOutput(ns("data_table_note")),
           tags$br(),
           splitLayout(
             cellWidths = c("70%", "30%"),
@@ -227,7 +229,11 @@ addContDataUI <- function(id) {
             )
           ),
           div(
-            actionButton(ns("delete_rows_accordion"), "Delete selected rows"),
+            conditionalPanel(
+              condition = "input.entry_mode == 'manual'",
+              ns = ns,
+              actionButton(ns("delete_rows_accordion"), "Delete selected rows")
+            ),
             actionButton(
               ns("delete_before_datetime"),
               "Delete rows before datetime"
@@ -2260,6 +2266,9 @@ addContData <- function(id, language) {
     }
 
     observeEvent(input$add_row, {
+      if (!identical(input$entry_mode, "manual")) {
+        return()
+      }
       data$df <- rbind(data$df, new_data_row())
       refresh_data_table()
     })
@@ -2275,6 +2284,13 @@ addContData <- function(id, language) {
     observeEvent(
       list(input$delete_rows_table, input$delete_rows_accordion),
       {
+        if (!identical(input$entry_mode, "manual")) {
+          showNotification(
+            "Selected row deletion is available for manual entry only.",
+            type = "message"
+          )
+          return()
+        }
         req(input$data_table_rows_selected)
         data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
         refresh_data_table()
@@ -2401,7 +2417,40 @@ addContData <- function(id, language) {
       table_render_tick()
       df <- isolate(data$df)
       if (nrow(df) == 0) {
-        return(df)
+        return(list(
+          data = df,
+          editable = identical(input$entry_mode, "manual"),
+          preview = FALSE
+        ))
+      }
+
+      if (!identical(input$entry_mode, "manual")) {
+        preview_rows_per_end <- 10L
+        total_rows <- nrow(df)
+        row_idx <- if (total_rows <= preview_rows_per_end * 2L) {
+          seq_len(total_rows)
+        } else {
+          c(
+            seq_len(preview_rows_per_end),
+            seq.int(total_rows - preview_rows_per_end + 1L, total_rows)
+          )
+        }
+
+        preview_df <- df[row_idx, , drop = FALSE]
+        preview_df <- data.frame(
+          row = row_idx,
+          preview_df,
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+
+        return(list(
+          data = preview_df,
+          editable = FALSE,
+          preview = total_rows > nrow(preview_df),
+          total_rows = total_rows,
+          displayed_rows = nrow(preview_df)
+        ))
       }
 
       for (col in names(df)) {
@@ -2411,52 +2460,93 @@ addContData <- function(id, language) {
           character(1)
         )
       }
-      df
+      list(
+        data = df,
+        editable = TRUE,
+        preview = FALSE
+      )
+    })
+
+    output$data_table_note <- renderUI({
+      table_state <- display_table_data()
+      if (isTRUE(table_state$editable)) {
+        return(tags$div(
+          "Hint: type directly in the table cells. Press Enter or leave the cell to save."
+        ))
+      }
+      if (nrow(table_state$data) == 0) {
+        return(NULL)
+      }
+
+      if (isTRUE(table_state$preview)) {
+        return(tags$div(
+          class = "text-muted small",
+          sprintf(
+            "Showing the first and last %s rows of %s uploaded rows. Use the preview plot for full-data review.",
+            table_state$displayed_rows / 2L,
+            format(table_state$total_rows, big.mark = ",")
+          )
+        ))
+      }
+
+      tags$div(
+        class = "text-muted small",
+        "Uploaded data are shown read-only. Use the preview plot for review."
+      )
     })
 
     output$data_table <- DT::renderDT(
       {
+        table_state <- display_table_data()
         DT::datatable(
-          display_table_data(),
-          escape = FALSE,
-          selection = list(
-            mode = "multiple",
-            target = "row",
-            selector = "td:first-child"
-          ),
+          table_state$data,
+          escape = !isTRUE(table_state$editable),
+          selection = if (isTRUE(table_state$editable)) {
+            list(
+              mode = "multiple",
+              target = "row",
+              selector = "td:first-child"
+            )
+          } else {
+            "none"
+          },
           options = list(
             scrollX = TRUE,
             ordering = FALSE,
             columnDefs = list(list(targets = "_all", orderable = FALSE))
           ),
-          callback = htmlwidgets::JS(
-            sprintf(
-              "var ns = '%s';
-              table.on('change', '.cont-data-cell', function() {
-                Shiny.setInputValue(ns + 'data_table_cell_update', {
-                  row: parseInt(this.dataset.row, 10),
-                  col: this.dataset.col,
-                  value: this.value,
-                  nonce: Math.random()
-                }, {priority: 'event'});
-              });
-              table.on('keydown', '.cont-data-cell', function(e) {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  $(this).trigger('change');
-                  this.blur();
-                }
-              });",
-              ns("")
-            ),
-            "table.on('draw.dt', function() {",
-            "  table.$('.cont-data-cell').css({",
-            "    'width': '100%',",
-            "    'min-width': '110px',",
-            "    'box-sizing': 'border-box'",
-            "  });",
-            "});"
-          ),
+          callback = if (isTRUE(table_state$editable)) {
+            htmlwidgets::JS(
+              sprintf(
+                "var ns = '%s';
+                table.on('change', '.cont-data-cell', function() {
+                  Shiny.setInputValue(ns + 'data_table_cell_update', {
+                    row: parseInt(this.dataset.row, 10),
+                    col: this.dataset.col,
+                    value: this.value,
+                    nonce: Math.random()
+                  }, {priority: 'event'});
+                });
+                table.on('keydown', '.cont-data-cell', function(e) {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    $(this).trigger('change');
+                    this.blur();
+                  }
+                });",
+                ns("")
+              ),
+              "table.on('draw.dt', function() {",
+              "  table.$('.cont-data-cell').css({",
+              "    'width': '100%',",
+              "    'min-width': '110px',",
+              "    'box-sizing': 'border-box'",
+              "  });",
+              "});"
+            )
+          } else {
+            htmlwidgets::JS("")
+          },
           rownames = FALSE
         )
       },
@@ -2464,6 +2554,10 @@ addContData <- function(id, language) {
     )
 
     observeEvent(input$data_table_cell_update, {
+      if (!identical(input$entry_mode, "manual")) {
+        return()
+      }
+
       info <- input$data_table_cell_update
       row <- as.integer(info$row)
       col <- as.character(info$col)
