@@ -1669,6 +1669,7 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
+    ui_loaded$contPlotAdaptive <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -1761,6 +1762,7 @@ app_server <- function(input, output, session) {
     "home",
     "discPlot",
     "contPlot",
+    "contPlotAdaptive",
     "mapLocs",
     "mapParams",
     "mapRaster",
@@ -1966,6 +1968,13 @@ app_server <- function(input, output, session) {
         ),
         tr("tooltip_continuous", languageSelection$language)
       )
+    })
+    output$plotsNavContAdaptiveTitle <- renderUI({
+      if (identical(languageSelection$language, "Français")) {
+        "Continues (expérimental)"
+      } else {
+        "Continuous (experimental)"
+      }
     })
 
     output$reportsNavMenuTitle <- renderUI({
@@ -3602,6 +3611,20 @@ app_server <- function(input, output, session) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
+      }
+    }
+    if (input$navbar == "contPlotAdaptive") {
+      if (!ui_loaded$contPlotAdaptive) {
+        output$plotContinuousAdaptive_ui <- renderUI(
+          contPlotAdaptiveUI("contPlotAdaptive")
+        )
+        ui_loaded$contPlotAdaptive <- TRUE
+        contPlotAdaptive(
+          "contPlotAdaptive",
+          language = languageSelection,
+          windowDims = windowDims,
+          inputs = NULL
+        )
       }
     }
 

@@ -343,7 +343,14 @@ app_ui <- function(request) {
             title = uiOutput("plotsNavContTitle"),
             value = "contPlot",
             uiOutput("plotContinuous_ui")
-          )
+          ),
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("plotsNavContAdaptiveTitle"),
+              value = "contPlotAdaptive",
+              uiOutput("plotContinuousAdaptive_ui")
+            )
+          }
         ), # End plot nav_menu
 
         # Reports nav menu

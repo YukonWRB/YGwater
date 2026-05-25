@@ -370,12 +370,20 @@ manageNotifications <- function(id, module_choices, language) {
     })
 
     observeEvent(input$target_module, {
-      if (!length(input$target_module)) {
+      values <- input$target_module
+      if (is.null(values) || length(values) == 0) {
+        updateSelectizeInput(session, "target_module", selected = "all")
         return()
       }
-      if (length(input$target_module) > 1 && "all" %in% input$target_module) {
-        updateSelectizeInput(session, "target_module", selected = "all")
+      values <- as.character(values)
+      if (length(values) > 1 && "all" %in% values) {
+        selected <- if (identical(values[[length(values)]], "all")) {
+          "all"
+        } else {
+          setdiff(values, "all")
+        }
+        updateSelectizeInput(session, "target_module", selected = selected)
       }
-    })
+    }, ignoreNULL = FALSE)
   })
 }

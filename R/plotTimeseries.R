@@ -42,6 +42,7 @@
 #'   of that day in `tzone`. When `NULL` (default), current data are used.
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
+#' @param build_plot Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
@@ -84,6 +85,7 @@ plotTimeseries <- function(
   raw = FALSE,
   imputed = FALSE,
   data = FALSE,
+  build_plot = TRUE,
   con = NULL,
   as_of = NULL
 ) {
@@ -127,7 +129,11 @@ plotTimeseries <- function(
   # Checks and initial work ##########################################
 
   # Deal with non-standard evaluations from data.table to silence check() notes
-  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- NULL
+  period_secs <- period <- expected <- datetime <- gap_exists <- start_dt <- end_dt <- has_stats <- run <- q25 <- q75 <- color_code <- id <- NULL
+
+  if (!build_plot && !data) {
+    stop("`build_plot = FALSE` requires `data = TRUE`.")
+  }
 
   if (!is.null(resolution)) {
     if (resolution == "day" && raw) {
@@ -1243,6 +1249,314 @@ plotTimeseries <- function(
     ")"
   )
 
+  corrected_name <- parameter_name
+  if (raw) {
+    corrected_name <- if (lang == "fr") {
+      paste(parameter_name, "(corrig\u00E9)")
+    } else {
+      paste(parameter_name, "(corrected)")
+    }
+  }
+
+  raw_label <- NULL
+  if (raw) {
+    raw_label <- if (lang == "fr") {
+      paste(parameter_name, "(brut)")
+    } else {
+      paste(parameter_name, "(raw)")
+    }
+  }
+
+  adaptive_meta <- list(
+    hover = hover,
+    line_name = corrected_name,
+    line_color = "#00454e",
+    line_width = 2.5 * line_scale,
+    band_names = list(
+      historic = if (lang == "en") "Historic" else "Historique",
+      typical = if (lang == "en") "Typical" else "Typique"
+    ),
+    band_styles = list(
+      Historic = list(
+        fillcolor = "rgba(212, 236, 239, 0.85)",
+        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+      ),
+      Historique = list(
+        fillcolor = "rgba(212, 236, 239, 0.85)",
+        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+      ),
+      Typical = list(
+        fillcolor = "rgba(95, 157, 166, 0.45)",
+        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+      ),
+      Typique = list(
+        fillcolor = "rgba(95, 157, 166, 0.45)",
+        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+      )
+    ),
+    layout = list(
+      title = if (title) {
+        list(
+          text = stn_name,
+          x = 0.05,
+          xref = "container",
+          font = list(
+            size = axis_scale * 18,
+            family = "Nunito Sans",
+            color = "#000000"
+          )
+        )
+      } else {
+        NULL
+      },
+      xaxis = list(
+        title = list(standoff = 0),
+        showgrid = gridx,
+        showline = TRUE,
+        tickformat = if (lang == "en") "%b %-d '%y" else "%d %-b '%y",
+        titlefont = list(size = axis_scale * 14),
+        tickfont = list(size = axis_scale * 12),
+        nticks = 10,
+        rangeslider = list(
+          visible = if (slider & legend_position == "v") TRUE else FALSE
+        ),
+        ticks = "outside",
+        ticklen = 5,
+        tickwidth = 1,
+        tickcolor = "black"
+      ),
+      yaxis = list(
+        title = list(text = y_title, standoff = 10),
+        showgrid = gridy,
+        showline = TRUE,
+        zeroline = FALSE,
+        titlefont = list(size = axis_scale * 14),
+        tickfont = list(size = axis_scale * 12),
+        autorange = if (invert) "reversed" else TRUE,
+        ticks = "outside",
+        ticklen = 5,
+        tickwidth = 1,
+        tickcolor = "black"
+      ),
+      margin = list(b = 0, t = 40 * axis_scale, l = 50 * axis_scale),
+      hovermode = if (hover) "x unified" else "none",
+      legend = list(
+        font = list(size = legend_scale * 12),
+        orientation = legend_position
+      ),
+      font = list(family = "Nunito Sans")
+    ),
+    config = list(locale = lang)
+  )
+
+  build_adaptive_status_bands <- function() {
+    status_count <- sum(c(grades, approvals, qualifiers))
+    if (status_count == 0L || nrow(trace_data) == 0L) {
+      return(NULL)
+    }
+
+    mindt <- min(trace_data$datetime, na.rm = TRUE)
+    maxdt <- max(trace_data$datetime, na.rm = TRUE)
+    if (
+      !is.finite(as.numeric(mindt)) ||
+        !is.finite(as.numeric(maxdt))
+    ) {
+      return(NULL)
+    }
+
+    poly_list <- list()
+    approvals_y_set <- if (grades & qualifiers) {
+      c(2.2, 3.2, 3.2, 2.2)
+    } else if (grades) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    grades_y_set <- if (qualifiers) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    qualifiers_y_set <- c(0, 1, 1, 0)
+
+    add_status_polygons <- function(
+      dt,
+      prefix,
+      y_set,
+      label_en,
+      label_fr,
+      desc_col_en,
+      desc_col_fr
+    ) {
+      if (is.null(dt) || nrow(dt) == 0L) {
+        return(NULL)
+      }
+
+      dt <- data.table::copy(data.table::as.data.table(dt))
+      dt[, start_dt := as.POSIXct(start_dt, tz = "UTC")]
+      dt[, end_dt := as.POSIXct(end_dt, tz = "UTC")]
+      dt[start_dt < mindt, start_dt := mindt]
+      dt[end_dt > maxdt, end_dt := maxdt]
+      dt <- dt[
+        !is.na(start_dt) &
+          !is.na(end_dt) &
+          start_dt <= maxdt &
+          end_dt >= mindt &
+          start_dt <= end_dt
+      ]
+      if (nrow(dt) == 0L) {
+        return(NULL)
+      }
+
+      dt[, id := paste0(prefix, "_", .I)]
+      dt[
+        ,
+        .(
+          datetime = c(start_dt[1L], start_dt[1L], end_dt[1L], end_dt[1L]),
+          y = y_set,
+          color = color_code[1L],
+          text = if (lang == "en") {
+            paste0(label_en, ": ", .SD[[desc_col_en]][1L])
+          } else {
+            paste0(label_fr, ": ", .SD[[desc_col_fr]][1L])
+          }
+        ),
+        by = id
+      ]
+    }
+
+    if (approvals && exists("approvals_dt", inherits = TRUE)) {
+      poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
+        approvals_dt,
+        "approval",
+        approvals_y_set,
+        "Approval",
+        "Approbation",
+        "approval_type_description",
+        "approval_type_description_fr"
+      )
+    }
+
+    if (grades && exists("grades_dt", inherits = TRUE)) {
+      poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
+        grades_dt,
+        "grade",
+        grades_y_set,
+        "Grade",
+        "Cote",
+        "grade_type_description",
+        "grade_type_description_fr"
+      )
+    }
+
+    if (qualifiers && exists("qualifiers_dt", inherits = TRUE)) {
+      poly_list[[length(poly_list) + 1L]] <- add_status_polygons(
+        qualifiers_dt,
+        "qualifier",
+        qualifiers_y_set,
+        "Qualifier",
+        "Qualificatif",
+        "qualifier_type_description",
+        "qualifier_type_description_fr"
+      )
+    }
+
+    poly_list <- Filter(Negate(is.null), poly_list)
+    polygons_df <- if (length(poly_list) > 0L) {
+      data.table::rbindlist(poly_list, use.names = TRUE)
+    } else {
+      data.table::data.table(
+        id = character(),
+        datetime = as.POSIXct(character(), tz = "UTC"),
+        y = numeric(),
+        color = character(),
+        text = character()
+      )
+    }
+
+    annotation_list <- list()
+    add_status_annotation <- function(y_set, text) {
+      list(
+        x = 0.0,
+        y = (y_set[1] + y_set[2]) / 2,
+        xref = "paper",
+        yref = "y2",
+        text = text,
+        showarrow = FALSE,
+        xanchor = "right",
+        yanchor = "middle",
+        textangle = 0,
+        font = list(size = axis_scale * 10)
+      )
+    }
+
+    if (approvals) {
+      annotation_list <- c(
+        annotation_list,
+        list(add_status_annotation(
+          approvals_y_set,
+          if (lang == "en") "Approval" else "Approbation"
+        ))
+      )
+    }
+    if (grades) {
+      annotation_list <- c(
+        annotation_list,
+        list(add_status_annotation(
+          grades_y_set,
+          if (lang == "en") "Grade" else "Cote"
+        ))
+      )
+    }
+    if (qualifiers) {
+      annotation_list <- c(
+        annotation_list,
+        list(add_status_annotation(
+          qualifiers_y_set,
+          if (lang == "en") "Qualifier" else "Qualificatif"
+        ))
+      )
+    }
+
+    list(
+      polygons = polygons_df,
+      annotations = annotation_list,
+      height = if (status_count == 3L) {
+        0.06
+      } else if (status_count == 2L) {
+        0.04
+      } else {
+        0.02
+      },
+      y_range = c(
+        0,
+        if (status_count == 3L) {
+          3.2
+        } else if (status_count == 2L) {
+          2.1
+        } else {
+          1
+        }
+      ),
+      hover = hover,
+      xaxis = "x",
+      yaxis = "y2"
+    )
+  }
+
+  if (data && !build_plot) {
+    adaptive_meta$status_bands <- build_adaptive_status_bands()
+    datalist <- list(
+      trace_data = trace_data,
+      range_data = if (historic_range) {
+        range_data[, c("datetime", "min", "max", "q75", "q25")]
+      } else {
+        data.frame()
+      }
+    )
+    return(list(data = datalist, meta = adaptive_meta))
+  }
+
   plot <- plotly::plot_ly()
   if (historic_range) {
     # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
@@ -1358,26 +1672,11 @@ plotTimeseries <- function(
       )
   }
 
-  corrected_name <- parameter_name
-  if (raw) {
-    corrected_name <- if (lang == "fr") {
-      paste(parameter_name, "(corrig\u00E9)")
-    } else {
-      paste(parameter_name, "(corrected)")
-    }
-  }
-
   if (
     raw &&
       "value_raw" %in% names(trace_data) &&
       any(!is.na(trace_data$value_raw))
   ) {
-    raw_label <- if (lang == "fr") {
-      paste(parameter_name, "(brut)")
-    } else {
-      paste(parameter_name, "(raw)")
-    }
-
     # Add the raw data first so it's below the corrected data
     plot <- plot |>
       plotly::add_trace(
@@ -1483,15 +1782,21 @@ plotTimeseries <- function(
     maxdt <- trace_data[, max(datetime)]
 
     poly_list <- list()
+    approvals_y_set <- if (grades & qualifiers) {
+      c(2.2, 3.2, 3.2, 2.2)
+    } else if (grades) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    grades_y_set <- if (qualifiers) {
+      c(1.1, 2.1, 2.1, 1.1)
+    } else {
+      c(0, 1, 1, 0)
+    }
+    qualifiers_y_set <- c(0, 1, 1, 0)
 
-    if (approvals) {
-      approvals_y_set <- if (grades & qualifiers) {
-        c(2.2, 3.2, 3.2, 2.2)
-      } else if (grades) {
-        c(1.1, 2.1, 2.1, 1.1)
-      } else {
-        c(0, 1, 1, 0)
-      }
+    if (approvals && exists("approvals_dt", inherits = FALSE)) {
       approvals_dt[approvals_dt$start_dt < mindt, "start_dt" := mindt]
       approvals_dt[approvals_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(approvals_dt) > 0) {
@@ -1519,8 +1824,7 @@ plotTimeseries <- function(
       }
     }
 
-    if (grades) {
-      grades_y_set <- if (qualifiers) c(1.1, 2.1, 2.1, 1.1) else c(0, 1, 1, 0)
+    if (grades && exists("grades_dt", inherits = FALSE)) {
       grades_dt[grades_dt$start_dt < mindt, "start_dt" := mindt]
       grades_dt[grades_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(grades_dt) > 0) {
@@ -1548,8 +1852,7 @@ plotTimeseries <- function(
       }
     }
 
-    if (qualifiers) {
-      qualifiers_y_set <- c(0, 1, 1, 0)
+    if (qualifiers && exists("qualifiers_dt", inherits = FALSE)) {
       qualifiers_dt[qualifiers_dt$start_dt < mindt, "start_dt" := mindt]
       qualifiers_dt[qualifiers_dt$end_dt > maxdt, "end_dt" := maxdt]
       if (nrow(qualifiers_dt) > 0) {

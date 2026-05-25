@@ -14,6 +14,7 @@ api(
   dbPort = Sys.getenv("aquacachePort"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
+  workers = parallel::detectCores(-2),
   run = TRUE
 )
 }
@@ -40,6 +41,8 @@ and behind a reverse proxy.}
 \item{dbUser}{The username for the PostgreSQL database. Default is taken from the environment variable 'aquacacheUser'.}
 
 \item{dbPass}{The password for the PostgreSQL database. Default is taken from the environment variable 'aquacachePass'.}
+
+\item{workers}{The number of worker processes to use for the API server. Default is parallel::detectCores(-2). This parameter is only applicable when using plumber2, as plumber v1 does not support multiple workers.}
 
 \item{run}{Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.}
 }

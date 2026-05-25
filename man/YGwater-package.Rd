@@ -22,6 +22,7 @@ Useful links:
 
 Authors:
 \itemize{
+  \item Ghislain de Laplante \email{ghislaindel@gmail.com} (\href{https://orcid.org/0000-0002-5093-9185}{ORCID})
   \item Everett Snieder \email{everett.snieder@gmail.com} (\href{https://orcid.org/0000-0003-4997-3404}{ORCID})
 }
 

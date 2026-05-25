@@ -28,11 +28,12 @@ imgMapViewUI <- function(id) {
         sidebar = sidebar(
           title = NULL,
           width = 600,
-          leaflet::leafletOutput(ns("map"), width = "100%", height = "300px"),
+          leaflet::leafletOutput(ns("map"), width = "100%", height = "400px"),
           div(
             style = "margin-top: 10px;",
             verbatimTextOutput(ns("img_info"))
-          )
+          ),
+          htmlOutput(ns("missing_layers"))
         ),
         div(
           style = "display: flex; justify-content: stretch; align-items: left; margin-bottom: 10px; gap: 10px; width: 100%;",
@@ -143,7 +144,24 @@ imgMapView <- function(id, language) {
               selectInput(
                 ns("months"),
                 label = tr("month", language$language),
-                choices = month.name,
+                # choices = month.name,
+                choices = stats::setNames(
+                  c(1:12),
+                  c(
+                    tr("jan", language$language),
+                    tr("feb", language$language),
+                    tr("mar", language$language),
+                    tr("apr", language$language),
+                    tr("may", language$language),
+                    tr("jun", language$language),
+                    tr("jul", language$language),
+                    tr("aug", language$language),
+                    tr("sep", language$language),
+                    tr("oct", language$language),
+                    tr("nov", language$language),
+                    tr("dec", language$language)
+                  )
+                ),
                 selected = NULL,
                 multiple = TRUE
               )
@@ -424,7 +442,10 @@ imgMapView <- function(id, language) {
         images$images$datetime <= end_date
 
       if (!is.null(input$months) && length(input$months) > 0) {
-        month_filter <- format(as.Date(images$images$datetime), "%B") %in%
+        month_filter <- as.integer(format(
+          as.Date(images$images$datetime),
+          "%m"
+        )) %in%
           input$months
       } else {
         month_filter <- TRUE
@@ -593,18 +614,42 @@ imgMapView <- function(id, language) {
       ignoreInit = TRUE
     )
 
+    layers_found <- reactiveValues(
+      communities = TRUE,
+      roads = TRUE,
+      basins = TRUE,
+      watercourses = TRUE
+    )
+
     observeEvent(
       input$map_bounds,
       {
-        # basins <- getVector(layer_name = "Drainage basins")
-        communities <- getVector(
-          layer_name = "Communities",
-          con = session$userData$AquaCache
+        tryCatch(
+          {
+            communities <- getVector(
+              layer_name = "Communities",
+              con = session$userData$AquaCache
+            )
+          },
+          error = function(e) {
+            layers_found$communities <<- FALSE
+            communities <<- NULL
+          }
         )
-        roads <- getVector(
-          layer_name = "Roads",
-          con = session$userData$AquaCache
+
+        tryCatch(
+          {
+            roads <- getVector(
+              layer_name = "Roads",
+              con = session$userData$AquaCache
+            )
+          },
+          error = function(e) {
+            layers_found$roads <<- FALSE
+            roads <<- NULL
+          }
         )
+        # basins <- getVector(layer_name = "Drainage basins", con = session$userData$AquaCache)
         # watercourses <- getVector(layer_name = "Watercourses", con = session$userData$AquaCache)
 
         m <- leaflet::leafletProxy("map", session)
@@ -626,20 +671,6 @@ imgMapView <- function(id, language) {
         #   }
         # }
 
-        # if (!is.null(locations)) {
-        #   m <- m %>%
-        #     leaflet::addCircleMarkers(
-        #       data = locations,
-        #       color = "#444444",
-        #       weight = 2,
-        #       opacity = 1,
-        #       fillOpacity = 0.2,
-        #       group = "Locations",
-        #       label = ~as.character(feature_name),
-        #       options = leaflet::markerOptions(interactive = FALSE, keyboard = FALSE, riseOnHover = TRUE)
-        #     )
-        # }
-
         if (!is.null(roads)) {
           m <- leaflet::leafletProxy("map", session)
           m <- m %>%
@@ -648,7 +679,7 @@ imgMapView <- function(id, language) {
               color = "red",
               weight = 1,
               opacity = 0.5,
-              group = "Roads",
+              group = tr("communities", language$language),
               label = ~ as.character(feature_name)
             )
         }
@@ -665,7 +696,7 @@ imgMapView <- function(id, language) {
               fillColor = "black",
               fillOpacity = 0.5,
               radius = 5,
-              group = "Communities",
+              group = tr("communities", language$language),
               label = ~ as.character(feature_name),
               labelOptions = leaflet::labelOptions(
                 permanent = TRUE,
@@ -693,16 +724,50 @@ imgMapView <- function(id, language) {
         #     )
         # }
 
-        m <- m %>%
-          leaflet::addLayersControl(
-            baseGroups = c("Satellite", "USGS", "Terrain"),
-            overlayGroups = c("Communities", "Roads"),
-            options = leaflet::layersControlOptions(collapsed = FALSE)
-          )
+        overlay_gps <- c(
+          if (!is.null(communities)) {
+            tr("communities", language$language)
+          } else {
+            NULL
+          },
+          if (!is.null(roads)) {
+            tr("roads", language$language)
+          } else {
+            NULL
+          }
+        )
+
+        if (!is.null(overlay_gps)) {
+          m <- m %>%
+            leaflet::addLayersControl(
+              baseGroups = c("Satellite", "USGS", "Terrain"),
+              overlayGroups = overlay_gps,
+              options = leaflet::layersControlOptions(collapsed = FALSE)
+            )
+        } else {
+          m <- m %>%
+            leaflet::addLayersControl(
+              baseGroups = c("Satellite", "USGS", "Terrain"),
+              options = leaflet::layersControlOptions(collapsed = FALSE)
+            )
+        }
       },
       once = TRUE,
       ignoreNULL = TRUE
     )
+
+    output$missing_layers <- renderUI({
+      values <- suppressWarnings(reactiveValuesToList(layers_found))
+      if (!any(values)) {
+        return()
+      } else {
+        HTML(
+          "Some database geospatial layers could not be found: ",
+          paste(names(values[values == FALSE]), collapse = ", "),
+          "."
+        )
+      }
+    })
 
     observeEvent(input$reset_view, {
       leaflet::leafletProxy("map", session) %>%

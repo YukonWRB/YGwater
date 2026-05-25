@@ -256,7 +256,7 @@ map_target_date,target date for historical range map,Target date,Date ciblée
 map_actual_values,,Actual values,Valeurs actuelles
 value,,Value,Valeur
 map_relative,,% historic range,% plage historique
-map_actual_date,,Date,Date
+date,,Date,Date
 map_actual_yrs,,Years of record,Années de mesures
 map_actual_hist_range,,Historic range,Plage historique
 map_one_parameter,,One parameter,Un paramètre
@@ -490,8 +490,8 @@ snowbull_normal,,Normal,Normal
 snowbull_average,,Average,Moyenne
 snowbull_median,,Median,Médiane
 snowbull_reference_period,,reference period,période de référence
-snowbull_communities,,Communities,Communautés
-snowbull_roads,,Roads,Routes
+communities,,Communities,Communautés
+roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles
 snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
@@ -501,3 +501,54 @@ isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (ÉEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche ÉEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
 snowbull_to,,to,à
+disc_selector_mode,Discrete plot selector mode,Selection mode,Mode de sélection
+disc_selector_mode_tooltip,Discrete plot selector mode tooltip,"Guided selectors step through the common plotting filters. Browse samples lets you search a sample table, keep selected rows across pages and filters, then choose parameters from those samples.","Les sélecteurs guidés présentent les filtres courants du graphique étape par étape. Le mode Parcourir les échantillons permet de chercher dans un tableau d'échantillons, de conserver les lignes sélectionnées entre les pages et les filtres, puis de choisir les paramètres mesurés dans ces échantillons."
+disc_guided_selectors,Discrete plot guided selector mode,Guided selectors,Sélecteurs guidés
+disc_browse_samples,Discrete plot browse selector mode,Table selection,Sélection par tableau
+disc_season_filter,Discrete plot seasonal filter toggle,Restrict to season/day-of-year ranges,Limiter aux saisons ou aux jours de l'année
+disc_season_highlight,Discrete plot seasonal highlight toggle,Highlight season/day-of-year ranges,Mettre en évidence les saisons ou les jours de l'année
+disc_highlighted_ranges,Discrete plot highlighted season metadata label,Highlighted ranges,Intervalles mis en évidence
+disc_restricted_ranges,Discrete plot restricted season metadata label,Results restricted to season/day-of-year ranges,Résultats limités aux saisons ou aux jours de l'année
+disc_browse_help,Discrete plot browse mode help,"Use the table filters to find samples, then click rows to add them to the selection. Choose the parameters to plot in the sidebar before creating the plot.","Utilisez les filtres du tableau pour trouver des échantillons, puis cliquez sur les lignes pour les ajouter à la sélection. Choisissez les paramètres à tracer dans la barre latérale avant de créer le graphique."
+disc_filter_samples_by_parameter,Discrete plot browse sample parameter filter,Show samples with parameter(s),Afficher les échantillons ayant les paramètres
+disc_plot_parameters,Discrete plot browse plot parameter selector,Parameters to plot,Paramètres à tracer
+disc_doy_range_help,Discrete plot day-of-year range help,"Only the month/day portion of these ranges is used. Use a previous-year start and next-year end for seasons that cross New Year, such as September 1 2000 to June 1 2001.","Seuls le mois et le jour de ces intervalles sont utilisés. Pour les saisons qui traversent le nouvel an, indiquez une date de début dans l'année précédente et une date de fin dans l'année suivante, par exemple du 1 septembre 2000 au 1 juin 2001."
+disc_season_range_count,Discrete plot season range count,Number of season ranges,Nombre d'intervalles saisonniers
+disc_season_highlight_range_count,Discrete plot highlighted season range count,Number of highlighted season ranges,Nombre d'intervalles saisonniers à mettre en évidence
+one,Number word one,One,Un
+two,Number word two,Two,Deux
+three,Number word three,Three,Trois
+four,Number word four,Four,Quatre
+season,Season label,Season,Saison
+collection_method(s),Collection method selector,Collection method(s),Méthode(s) de prélèvement
+result_speciation(s),Result speciation selector,Result speciation(s),Spéciation(s) du résultat
+sample_fraction(s),Sample fraction selector,Sample fraction(s),Fraction(s) de l'échantillon
+result_value_type(s),Result value type selector,Result value type(s),Type(s) de valeur du résultat
+result_type(s),Result type selector,Result type(s),Type(s) de résultat
+disc_sample_result_filters,Discrete plot sample/result filter heading,Sample/result filters,Filtres des échantillons/résultats
+disc_show_blank_samples,Discrete plot blank sample toggle,Show blank samples,Afficher les blancs
+disc_duplicate_samples,Discrete plot duplicate sample control,Duplicate/replicate samples,Échantillons en double/réplicats
+disc_duplicates_show,Discrete plot duplicate show option,Show individually,Afficher individuellement
+disc_duplicates_average,Discrete plot duplicate average option,Average matching samples,Calculer la moyenne des échantillons correspondants
+disc_duplicates_hide,Discrete plot duplicate hide option,Hide duplicate/replicate samples,Masquer les échantillons en double/réplicats
+disc_no_additional_filters,Discrete plot no additional filters message,No additional filters are available for the current selection.,Aucun filtre supplémentaire n'est disponible pour la sélection actuelle.
+disc_more_sample_result_filters,Discrete plot advanced filters accordion,More sample/result filters,Autres filtres des échantillons/résultats
+samples,Generic samples label,Samples,Échantillons
+disc_selected_samples_parameters,Discrete plot browse selected panel heading,Selected samples and parameters,Échantillons et paramètres sélectionnés
+disc_no_samples_match_filters,Discrete plot browse no samples message,No samples match the current filters.,Aucun échantillon ne correspond aux filtres actuels.
+sample_id,Sample ID label,Sample ID,ID d'échantillon
+id_label,ID label,ID,ID
+sample_type,Sample type label,Sample type,Type d'échantillon
+collection_method,Collection method label,Collection method,Méthode de prélèvement
+results,Results label,Results,Résultats
+disc_select_rows_parameter_list,Discrete plot browse parameter hint,Select sample rows to focus this parameter list.,Sélectionnez des lignes d'échantillons pour cibler cette liste de paramètres.
+disc_sample_must_include,Discrete plot browse parameter match label,Sample must include,L'échantillon doit inclure
+disc_any_selected_parameter,Discrete plot browse any parameter option,Any selected parameter,N'importe quel paramètre sélectionné
+disc_all_selected_parameters,Discrete plot browse all parameters option,All selected parameters,Tous les paramètres sélectionnés
+disc_no_samples_selected,Discrete plot browse no selected samples,No samples selected.,Aucun échantillon sélectionné.
+disc_samples_selected,Discrete plot browse selected sample count,sample(s) selected,échantillon(s) sélectionné(s)
+clear,Clear button,Clear,Effacer
+remove,Remove button,Remove,Retirer
+showing_first,Showing first label,Showing first,Affichage des premiers
+selected_samples_lc,Selected samples lowercase,selected samples,échantillons sélectionnés
+disc_select_samples_from_table,Discrete plot browse plot validation,Please select one or more samples from the table.,Sélectionnez un ou plusieurs échantillons du tableau.

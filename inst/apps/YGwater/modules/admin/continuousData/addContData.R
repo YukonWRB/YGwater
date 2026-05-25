@@ -77,19 +77,21 @@ addContDataUI <- function(id) {
               accept = c(".csv", ".xlsx")
             )
           ),
-          div(
-            actionButton(ns("add_row"), "Add row to end"),
-            actionButton(ns("add_row_above"), "Add row above selection"),
-            actionButton(ns("add_row_below"), "Add row below selection"),
-            actionButton(ns("delete_rows_table"), "Delete selected rows")
+          conditionalPanel(
+            condition = "input.entry_mode == 'manual'",
+            ns = ns,
+            div(
+              actionButton(ns("add_row"), "Add row to end"),
+              actionButton(ns("add_row_above"), "Add row above selection"),
+              actionButton(ns("add_row_below"), "Add row below selection"),
+              actionButton(ns("delete_rows_table"), "Delete selected rows")
+            ),
+            tags$br()
           ),
-          tags$br(),
 
           DT::DTOutput(ns("data_table")),
 
-          tags$div(
-            "Hint: type directly in the table cells. Press Enter or leave the cell to save."
-          ),
+          uiOutput(ns("data_table_note")),
           tags$br(),
           splitLayout(
             cellWidths = c("70%", "30%"),
@@ -227,7 +229,11 @@ addContDataUI <- function(id) {
             )
           ),
           div(
-            actionButton(ns("delete_rows_accordion"), "Delete selected rows"),
+            conditionalPanel(
+              condition = "input.entry_mode == 'manual'",
+              ns = ns,
+              actionButton(ns("delete_rows_accordion"), "Delete selected rows")
+            ),
             actionButton(
               ns("delete_before_datetime"),
               "Delete rows before datetime"
@@ -864,22 +870,26 @@ addContData <- function(id, language) {
       }
 
       choices_df <- unit_conversion_choices()
-      choices <- stats::setNames(
-        as.character(choices_df$conversion_id),
-        paste0(
-          choices_df$from_unit,
-          " to ",
-          choices_df$to_unit,
-          " (value * ",
-          signif(as.numeric(choices_df$scale_a), 8),
-          ifelse(
-            as.numeric(choices_df$scale_b) == 0,
-            "",
-            paste0(" + ", signif(as.numeric(choices_df$scale_b), 8))
-          ),
-          ")"
+      choices <- character()
+      if (nrow(choices_df) > 0) {
+        choices <- stats::setNames(
+          as.character(choices_df$conversion_id),
+          paste0(
+            choices_df$from_unit,
+            " to ",
+            choices_df$to_unit,
+            " (value * ",
+            signif(as.numeric(choices_df$scale_a), 8),
+            ifelse(
+              as.numeric(choices_df$scale_b) == 0,
+              "",
+              paste0(" + ", signif(as.numeric(choices_df$scale_b), 8))
+            ),
+            ")"
+          )
         )
-      )
+      }
+      default_mode <- if (length(choices) > 0) "database" else "custom"
 
       tagList(
         div(
@@ -901,19 +911,26 @@ addContData <- function(id, language) {
               "Database conversion" = "database",
               "Custom factor" = "custom"
             ),
-            selected = "database",
+            selected = default_mode,
             inline = TRUE
           ),
           conditionalPanel(
             condition = "input.unit_conversion_mode == 'database'",
             ns = ns,
-            selectizeInput(
-              ns("unit_conversion_id"),
-              "Convert from",
-              choices = choices,
-              selected = if (length(choices)) choices[[1]] else NULL,
-              options = list(placeholder = "No database conversion listed")
-            )
+            if (length(choices) > 0) {
+              selectizeInput(
+                ns("unit_conversion_id"),
+                "Convert from",
+                choices = choices,
+                selected = choices[[1]],
+                options = list(placeholder = "No database conversion listed")
+              )
+            } else {
+              div(
+                class = "text-muted small",
+                "No database conversions are listed for this unit. Use a custom factor."
+              )
+            }
           ),
           conditionalPanel(
             condition = "input.unit_conversion_mode == 'custom'",
@@ -1329,9 +1346,16 @@ addContData <- function(id, language) {
       if (inherits(x, "Date")) {
         return(as.POSIXct(x, tz = "UTC"))
       }
-      x <- as.character(x)
+      if (is.list(x) && !is.null(x$date)) {
+        x <- unlist(x$date, use.names = FALSE)
+      }
+      x <- trimws(as.character(x))
       # Switch T character with space for ISO like formats
-      x <- x <- gsub("T", " ", x)
+      x <- gsub("T", " ", x)
+      x <- gsub("(\\d{2}:\\d{2}:\\d{2})\\.\\d+", "\\1", x)
+      x <- gsub("Z$", " +0000", x)
+      x <- gsub("\\s+UTC([+-]\\d{2}:?\\d{2})$", " \\1", x)
+      x <- gsub("([+-]\\d{2}):(\\d{2})$", "\\1\\2", x)
 
       lubridate::parse_date_time(
         x,
@@ -1340,6 +1364,10 @@ addContData <- function(id, language) {
           "Ymd HM",
           "mdY HMS",
           "mdY HM",
+          "Ymd HMS z",
+          "Ymd HM z",
+          "mdY HMS z",
+          "mdY HM z",
           "Ymd IMS p",
           "mdY IMS p",
           "Ymd IM p",
@@ -1402,8 +1430,71 @@ addContData <- function(id, language) {
       out
     }
 
+    parse_utc_datetime_value <- function(datetime_value) {
+      if (is.null(datetime_value) || length(datetime_value) == 0) {
+        return(empty_utc_datetime())
+      }
+
+      out <- tryCatch(
+        suppressWarnings(coerce_utc_datetime(datetime_value)),
+        error = function(e) empty_utc_datetime(length(datetime_value))
+      )
+      needs_parse <- is.na(out)
+      if (any(needs_parse)) {
+        parsed <- parse_datetime(datetime_value[needs_parse])
+        out[needs_parse] <- parsed
+      }
+      attr(out, "tzone") <- "UTC"
+      out
+    }
+
+    scalar_utc_datetime_value <- function(datetime_value) {
+      out <- parse_utc_datetime_value(datetime_value)
+      if (!length(out) || is.na(out[1])) {
+        return(empty_utc_datetime())
+      }
+      out[1]
+    }
+
+    input_datetime_has_timezone <- function(datetime_value) {
+      if (is.null(datetime_value) || inherits(datetime_value, "POSIXct")) {
+        return(TRUE)
+      }
+      if (is.list(datetime_value) && !is.null(datetime_value$tz)) {
+        return(TRUE)
+      }
+      x <- trimws(as.character(datetime_value))
+      any(grepl("(Z|UTC|GMT|[+-]\\d{2}:?\\d{2})$", x))
+    }
+
+    scalar_display_datetime_to_utc <- function(datetime_value, tz_name) {
+      if (is.list(datetime_value) && !is.null(datetime_value$date)) {
+        input_tz <- if (!is.null(datetime_value$tz)) {
+          selected_offset_tz(datetime_value$tz[[1]], default = tz_name)
+        } else {
+          tz_name
+        }
+        out <- table_datetimes_to_utc(
+          unlist(datetime_value$date, use.names = FALSE),
+          input_tz
+        )
+        if (!length(out) || is.na(out[1])) {
+          return(empty_utc_datetime())
+        }
+        return(out[1])
+      }
+      if (input_datetime_has_timezone(datetime_value)) {
+        return(scalar_utc_datetime_value(datetime_value))
+      }
+      out <- table_datetimes_to_utc(datetime_value, tz_name)
+      if (!length(out) || is.na(out[1])) {
+        return(empty_utc_datetime())
+      }
+      out[1]
+    }
+
     format_utc_datetimes_for_display <- function(datetime_value, tz_name) {
-      utc_values <- coerce_utc_datetime(datetime_value)
+      utc_values <- parse_utc_datetime_value(datetime_value)
       out <- rep(NA_character_, length(utc_values))
       valid_idx <- !is.na(utc_values)
       if (any(valid_idx)) {
@@ -1453,6 +1544,55 @@ addContData <- function(id, language) {
         end_display = format_utc_datetimes_for_display(end_utc, tz_name),
         tz = tz_name
       )
+    }
+
+    last_preview_bounds_signature <- reactiveVal(NULL)
+
+    update_preview_datetime_bounds <- function() {
+      bounds <- uploaded_data_bounds(input$preview_utc_offset)
+      if (is.null(bounds)) {
+        last_preview_bounds_signature(NULL)
+        for (input_id in c("preview_start_datetime", "preview_end_datetime")) {
+          shinyWidgets::updateAirDateInput(
+            session,
+            inputId = input_id,
+            clear = TRUE,
+            options = list(minDate = FALSE, maxDate = FALSE)
+          )
+        }
+        return(invisible(NULL))
+      }
+
+      bounds_signature <- paste(
+        as.numeric(bounds$start_utc),
+        as.numeric(bounds$end_utc),
+        bounds$tz,
+        sep = "|"
+      )
+      if (identical(last_preview_bounds_signature(), bounds_signature)) {
+        return(invisible(NULL))
+      }
+
+      date_options <- list(
+        minDate = bounds$start_utc,
+        maxDate = bounds$end_utc
+      )
+      shinyWidgets::updateAirDateInput(
+        session,
+        inputId = "preview_start_datetime",
+        value = bounds$start_utc,
+        tz = air_datetime_widget_timezone(bounds$tz),
+        options = date_options
+      )
+      shinyWidgets::updateAirDateInput(
+        session,
+        inputId = "preview_end_datetime",
+        value = bounds$end_utc,
+        tz = air_datetime_widget_timezone(bounds$tz),
+        options = date_options
+      )
+      last_preview_bounds_signature(bounds_signature)
+      invisible(NULL)
     }
 
     uploaded_data_bounds_ui <- function(class_name) {
@@ -1508,10 +1648,15 @@ addContData <- function(id, language) {
     observeEvent(
       input$preview_utc_offset,
       {
-        shift_datetime_inputs(
-          c("preview_start_datetime", "preview_end_datetime"),
-          selected_offset_tz(input$preview_utc_offset)
-        )
+        update_preview_datetime_bounds()
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      data$df,
+      {
+        update_preview_datetime_bounds()
       },
       ignoreInit = TRUE
     )
@@ -1533,10 +1678,7 @@ addContData <- function(id, language) {
     observeEvent(
       input$approval_utc_offset,
       {
-        shift_class_modal_inputs(
-          "approval",
-          class_offset_tz("approval")
-        )
+        update_class_modal_datetime_limits("approval")
       },
       ignoreInit = TRUE
     )
@@ -1544,10 +1686,7 @@ addContData <- function(id, language) {
     observeEvent(
       input$grade_utc_offset,
       {
-        shift_class_modal_inputs(
-          "grade",
-          class_offset_tz("grade")
-        )
+        update_class_modal_datetime_limits("grade")
       },
       ignoreInit = TRUE
     )
@@ -1555,10 +1694,7 @@ addContData <- function(id, language) {
     observeEvent(
       input$qualifier_utc_offset,
       {
-        shift_class_modal_inputs(
-          "qualifier",
-          class_offset_tz("qualifier")
-        )
+        update_class_modal_datetime_limits("qualifier")
       },
       ignoreInit = TRUE
     )
@@ -1631,8 +1767,8 @@ addContData <- function(id, language) {
       if (nrow(df) == 0) {
         return(character())
       }
-      sdt <- parse_datetime(df$start_datetime)
-      edt <- parse_datetime(df$end_datetime)
+      sdt <- parse_utc_datetime_value(df$start_datetime)
+      edt <- parse_utc_datetime_value(df$end_datetime)
       msgs <- character()
       bad <- which(is.na(sdt) | is.na(edt) | edt < sdt)
       if (length(bad) > 0) {
@@ -1649,39 +1785,16 @@ addContData <- function(id, language) {
         o <- order(sdt[valid], edt[valid])
         v <- valid[o]
         for (i in seq_along(v)[-1]) {
-          if (sdt[v[i]] < edt[v[i - 1]]) {
+          if (sdt[v[i]] <= edt[v[i - 1]]) {
             msgs <- c(
               msgs,
               sprintf(
-                "Overlapping %s ranges in rows %s and %s.",
+                "Overlapping or touching %s ranges in rows %s and %s.",
                 class_name,
                 v[i - 1],
                 v[i]
               )
             )
-          }
-        }
-      }
-      if (length(valid) > 1 && class_name == "qualifier") {
-        for (i in seq_along(valid)) {
-          for (j in seq_along(valid)) {
-            if (j <= i) {
-              next
-            }
-            a <- valid[i]
-            b <- valid[j]
-            same <- trimws(df$code[a]) == trimws(df$code[b])
-            overlaps <- sdt[a] < edt[b] && sdt[b] < edt[a]
-            if (same && overlaps) {
-              msgs <- c(
-                msgs,
-                sprintf(
-                  "Qualifier row %s overlaps with same qualifier in row %s.",
-                  a,
-                  b
-                )
-              )
-            }
           }
         }
       }
@@ -1760,8 +1873,8 @@ addContData <- function(id, language) {
         if (nrow(rr) == 0) {
           next
         }
-        sdt <- parse_datetime(rr$start_datetime)
-        edt <- parse_datetime(rr$end_datetime)
+        sdt <- parse_utc_datetime_value(rr$start_datetime)
+        edt <- parse_utc_datetime_value(rr$end_datetime)
         for (i in seq_len(nrow(rr))) {
           if (is.na(sdt[i]) || is.na(edt[i])) {
             next
@@ -1839,6 +1952,66 @@ addContData <- function(id, language) {
       server = FALSE
     )
 
+    class_modal_bounds <- function(class_name) {
+      uploaded_data_bounds(class_offset_tz(class_name))
+    }
+
+    class_modal_date_options <- function(bounds) {
+      if (is.null(bounds)) {
+        return(list())
+      }
+      list(
+        minDate = bounds$start_utc,
+        maxDate = bounds$end_utc
+      )
+    }
+
+    class_modal_datetime_value <- function(class_name, input_id) {
+      scalar_display_datetime_to_utc(
+        input[[input_id]],
+        class_offset_tz(class_name)
+      )
+    }
+
+    update_class_modal_datetime_limits <- function(class_name) {
+      bounds <- class_modal_bounds(class_name)
+      if (is.null(bounds)) {
+        return(invisible(NULL))
+      }
+
+      update_one <- function(input_id, fallback) {
+        current_value <- class_modal_datetime_value(class_name, input_id)
+        if (is.na(current_value)) {
+          current_value <- fallback
+        }
+        current_value <- min(
+          max(current_value, bounds$start_utc),
+          bounds$end_utc
+        )
+        shinyWidgets::updateAirDateInput(
+          session,
+          inputId = input_id,
+          value = current_value,
+          tz = air_datetime_widget_timezone(bounds$tz),
+          options = class_modal_date_options(bounds)
+        )
+      }
+
+      update_one(paste0(class_name, "_modal_start"), bounds$start_utc)
+      update_one(paste0(class_name, "_modal_end"), bounds$end_utc)
+      invisible(NULL)
+    }
+
+    range_inside_data_bounds <- function(st, en, bounds) {
+      if (is.null(bounds)) {
+        return(FALSE)
+      }
+      !is.na(st) &&
+        !is.na(en) &&
+        st >= bounds$start_utc &&
+        en <= bounds$end_utc
+    }
+
     open_range_modal <- function(
       class_name,
       mode = c("add", "edit"),
@@ -1852,6 +2025,21 @@ addContData <- function(id, language) {
         rows[row_idx, ]
       } else {
         data.frame(code = "", start_datetime = "", end_datetime = "")
+      }
+      bounds <- class_modal_bounds(class_name)
+      start_value <- if (nzchar(edit_row$start_datetime)) {
+        scalar_utc_datetime_value(edit_row$start_datetime)
+      } else if (!is.null(bounds)) {
+        bounds$start_utc
+      } else {
+        NULL
+      }
+      end_value <- if (nzchar(edit_row$end_datetime)) {
+        scalar_utc_datetime_value(edit_row$end_datetime)
+      } else if (!is.null(bounds)) {
+        bounds$end_utc
+      } else {
+        NULL
       }
       types <- class_type_choices()[[class_name]]
       showModal(modalDialog(
@@ -1873,11 +2061,7 @@ addContData <- function(id, language) {
         shinyWidgets::airDatepickerInput(
           ns(paste0(class_name, "_modal_start")),
           "Start datetime",
-          value = if (nzchar(edit_row$start_datetime)) {
-            coerce_utc_datetime(edit_row$start_datetime)
-          } else {
-            NULL
-          },
+          value = start_value,
           range = FALSE,
           multiple = FALSE,
           timepicker = TRUE,
@@ -1885,6 +2069,8 @@ addContData <- function(id, language) {
           tz = air_datetime_widget_timezone(isolate(class_offset_tz(
             class_name
           ))),
+          minDate = if (!is.null(bounds)) bounds$start_utc else NULL,
+          maxDate = if (!is.null(bounds)) bounds$end_utc else NULL,
           timepickerOpts = shinyWidgets::timepickerOptions(
             minutesStep = 15,
             timeFormat = "HH:mm"
@@ -1893,11 +2079,7 @@ addContData <- function(id, language) {
         shinyWidgets::airDatepickerInput(
           ns(paste0(class_name, "_modal_end")),
           "End datetime",
-          value = if (nzchar(edit_row$end_datetime)) {
-            coerce_utc_datetime(edit_row$end_datetime)
-          } else {
-            NULL
-          },
+          value = end_value,
           range = FALSE,
           multiple = FALSE,
           timepicker = TRUE,
@@ -1905,6 +2087,8 @@ addContData <- function(id, language) {
           tz = air_datetime_widget_timezone(isolate(class_offset_tz(
             class_name
           ))),
+          minDate = if (!is.null(bounds)) bounds$start_utc else NULL,
+          maxDate = if (!is.null(bounds)) bounds$end_utc else NULL,
           timepickerOpts = shinyWidgets::timepickerOptions(
             minutesStep = 15,
             timeFormat = "HH:mm"
@@ -1960,7 +2144,8 @@ addContData <- function(id, language) {
             session,
             inputId = paste0(class_name, "_modal_start"),
             value = bounds$start_utc,
-            tz = air_datetime_widget_timezone(bounds$tz)
+            tz = air_datetime_widget_timezone(bounds$tz),
+            options = class_modal_date_options(bounds)
           )
         })
         observeEvent(input[[paste0(class_name, "_modal_use_data_end")]], {
@@ -1972,17 +2157,48 @@ addContData <- function(id, language) {
             session,
             inputId = paste0(class_name, "_modal_end"),
             value = bounds$end_utc,
-            tz = air_datetime_widget_timezone(bounds$tz)
+            tz = air_datetime_widget_timezone(bounds$tz),
+            options = class_modal_date_options(bounds)
           )
         })
         observeEvent(input[[paste0("save_", class_name, "_modal")]], {
           code <- as.character(input[[paste0(class_name, "_modal_code")]])
-          st_value <- coerce_utc_datetime(
-            input[[paste0(class_name, "_modal_start")]]
+          st_value <- class_modal_datetime_value(
+            class_name,
+            paste0(class_name, "_modal_start")
           )
-          en_value <- coerce_utc_datetime(
-            input[[paste0(class_name, "_modal_end")]]
+          en_value <- class_modal_datetime_value(
+            class_name,
+            paste0(class_name, "_modal_end")
           )
+          bounds <- class_modal_bounds(class_name)
+
+          if (
+            is.na(st_value) ||
+              is.na(en_value) ||
+              en_value < st_value
+          ) {
+            showNotification(
+              paste("Invalid", class_name, "start/end datetime."),
+              type = "error",
+              duration = 8
+            )
+            return()
+          }
+
+          if (!range_inside_data_bounds(st_value, en_value, bounds)) {
+            showNotification(
+              paste(
+                "The",
+                class_name,
+                "range must stay within the uploaded/entered data range."
+              ),
+              type = "error",
+              duration = 8
+            )
+            return()
+          }
+
           st <- if (length(st_value) && !is.na(st_value[[1]])) {
             format(st_value[[1]], "%Y-%m-%d %H:%M:%S", tz = "UTC")
           } else {
@@ -2009,6 +2225,17 @@ addContData <- function(id, language) {
           } else {
             rows <- rbind(rows, new_row)
           }
+
+          range_msgs <- validate_ranges(rows, class_name)
+          if (length(range_msgs) > 0) {
+            showNotification(
+              paste(range_msgs, collapse = " "),
+              type = "error",
+              duration = 10
+            )
+            return()
+          }
+
           class_ranges[[class_name]] <- rows
           removeModal()
           sync_table_classes_from_ranges()
@@ -2260,6 +2487,9 @@ addContData <- function(id, language) {
     }
 
     observeEvent(input$add_row, {
+      if (!identical(input$entry_mode, "manual")) {
+        return()
+      }
       data$df <- rbind(data$df, new_data_row())
       refresh_data_table()
     })
@@ -2275,10 +2505,26 @@ addContData <- function(id, language) {
     observeEvent(
       list(input$delete_rows_table, input$delete_rows_accordion),
       {
+        click_count <- sum(
+          as.numeric(c(input$delete_rows_table, input$delete_rows_accordion)),
+          na.rm = TRUE
+        )
+        if (click_count < 1) {
+          return()
+        }
+
+        if (!identical(input$entry_mode, "manual")) {
+          showNotification(
+            "Selected row deletion is available for manual entry only.",
+            type = "message"
+          )
+          return()
+        }
         req(input$data_table_rows_selected)
         data$df <- data$df[-input$data_table_rows_selected, , drop = FALSE]
         refresh_data_table()
-      }
+      },
+      ignoreInit = TRUE
     )
 
     apply_datetime_cutoff <- function(mode = c("before", "after")) {
@@ -2401,7 +2647,40 @@ addContData <- function(id, language) {
       table_render_tick()
       df <- isolate(data$df)
       if (nrow(df) == 0) {
-        return(df)
+        return(list(
+          data = df,
+          editable = identical(input$entry_mode, "manual"),
+          preview = FALSE
+        ))
+      }
+
+      if (!identical(input$entry_mode, "manual")) {
+        preview_rows_per_end <- 10L
+        total_rows <- nrow(df)
+        row_idx <- if (total_rows <= preview_rows_per_end * 2L) {
+          seq_len(total_rows)
+        } else {
+          c(
+            seq_len(preview_rows_per_end),
+            seq.int(total_rows - preview_rows_per_end + 1L, total_rows)
+          )
+        }
+
+        preview_df <- df[row_idx, , drop = FALSE]
+        preview_df <- data.frame(
+          row = row_idx,
+          preview_df,
+          check.names = FALSE,
+          stringsAsFactors = FALSE
+        )
+
+        return(list(
+          data = preview_df,
+          editable = FALSE,
+          preview = total_rows > nrow(preview_df),
+          total_rows = total_rows,
+          displayed_rows = nrow(preview_df)
+        ))
       }
 
       for (col in names(df)) {
@@ -2411,52 +2690,93 @@ addContData <- function(id, language) {
           character(1)
         )
       }
-      df
+      list(
+        data = df,
+        editable = TRUE,
+        preview = FALSE
+      )
+    })
+
+    output$data_table_note <- renderUI({
+      table_state <- display_table_data()
+      if (isTRUE(table_state$editable)) {
+        return(tags$div(
+          "Hint: type directly in the table cells. Press Enter or leave the cell to save."
+        ))
+      }
+      if (nrow(table_state$data) == 0) {
+        return(NULL)
+      }
+
+      if (isTRUE(table_state$preview)) {
+        return(tags$div(
+          class = "text-muted small",
+          sprintf(
+            "Showing the first and last %s rows of %s uploaded rows. Use the preview plot for full-data review.",
+            table_state$displayed_rows / 2L,
+            format(table_state$total_rows, big.mark = ",")
+          )
+        ))
+      }
+
+      tags$div(
+        class = "text-muted small",
+        "Uploaded data are shown read-only. Use the preview plot for review."
+      )
     })
 
     output$data_table <- DT::renderDT(
       {
+        table_state <- display_table_data()
         DT::datatable(
-          display_table_data(),
-          escape = FALSE,
-          selection = list(
-            mode = "multiple",
-            target = "row",
-            selector = "td:first-child"
-          ),
+          table_state$data,
+          escape = !isTRUE(table_state$editable),
+          selection = if (isTRUE(table_state$editable)) {
+            list(
+              mode = "multiple",
+              target = "row",
+              selector = "td:first-child"
+            )
+          } else {
+            "none"
+          },
           options = list(
             scrollX = TRUE,
             ordering = FALSE,
             columnDefs = list(list(targets = "_all", orderable = FALSE))
           ),
-          callback = htmlwidgets::JS(
-            sprintf(
-              "var ns = '%s';
-              table.on('change', '.cont-data-cell', function() {
-                Shiny.setInputValue(ns + 'data_table_cell_update', {
-                  row: parseInt(this.dataset.row, 10),
-                  col: this.dataset.col,
-                  value: this.value,
-                  nonce: Math.random()
-                }, {priority: 'event'});
-              });
-              table.on('keydown', '.cont-data-cell', function(e) {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  $(this).trigger('change');
-                  this.blur();
-                }
-              });",
-              ns("")
-            ),
-            "table.on('draw.dt', function() {",
-            "  table.$('.cont-data-cell').css({",
-            "    'width': '100%',",
-            "    'min-width': '110px',",
-            "    'box-sizing': 'border-box'",
-            "  });",
-            "});"
-          ),
+          callback = if (isTRUE(table_state$editable)) {
+            htmlwidgets::JS(
+              sprintf(
+                "var ns = '%s';
+                table.on('change', '.cont-data-cell', function() {
+                  Shiny.setInputValue(ns + 'data_table_cell_update', {
+                    row: parseInt(this.dataset.row, 10),
+                    col: this.dataset.col,
+                    value: this.value,
+                    nonce: Math.random()
+                  }, {priority: 'event'});
+                });
+                table.on('keydown', '.cont-data-cell', function(e) {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    $(this).trigger('change');
+                    this.blur();
+                  }
+                });",
+                ns("")
+              ),
+              "table.on('draw.dt', function() {",
+              "  table.$('.cont-data-cell').css({",
+              "    'width': '100%',",
+              "    'min-width': '110px',",
+              "    'box-sizing': 'border-box'",
+              "  });",
+              "});"
+            )
+          } else {
+            htmlwidgets::JS("")
+          },
           rownames = FALSE
         )
       },
@@ -2464,6 +2784,10 @@ addContData <- function(id, language) {
     )
 
     observeEvent(input$data_table_cell_update, {
+      if (!identical(input$entry_mode, "manual")) {
+        return()
+      }
+
       info <- input$data_table_cell_update
       row <- as.integer(info$row)
       col <- as.character(info$col)
@@ -2538,17 +2862,28 @@ addContData <- function(id, language) {
         df_new$qualifier <- as.character(df_new$qualifier)
       }
 
-      range_start <- min(df_new$datetime, na.rm = TRUE)
-      range_end <- max(df_new$datetime, na.rm = TRUE)
+      data_start <- min(df_new$datetime, na.rm = TRUE)
+      data_end <- max(df_new$datetime, na.rm = TRUE)
+      range_start <- data_start
+      range_end <- data_end
 
-      custom_start <- scalar_utc_datetime(input$preview_start_datetime)
+      custom_start <- scalar_utc_datetime_value(input$preview_start_datetime)
       if (!is.na(custom_start)) {
-        range_start <- min(range_start, custom_start)
+        range_start <- min(max(custom_start, data_start), data_end)
       }
-      custom_end <- scalar_utc_datetime(input$preview_end_datetime)
+      custom_end <- scalar_utc_datetime_value(input$preview_end_datetime)
       if (!is.na(custom_end)) {
-        range_end <- max(range_end, custom_end)
+        range_end <- min(max(custom_end, data_start), data_end)
       }
+      if (range_end < range_start) {
+        range_start <- data_start
+        range_end <- data_end
+      }
+
+      in_preview_range <- df_new$datetime >= range_start &
+        df_new$datetime <= range_end
+      df_new <- df_new[in_preview_range, , drop = FALSE]
+      req(nrow(df_new) > 0)
 
       list(
         timeseries_id = timeseries(),
@@ -2661,9 +2996,6 @@ addContData <- function(id, language) {
       pv$historic <- hist_out
       pv$parameter <- parameter
       class_ranges <- pv$class_ranges
-
-      DBI::dbDisconnect(con)
-      con <- NULL
 
       # Start with the range ribbons. Like in plotTimeseries, create ranges within the historic range data so that discontinuous range data doesn't connect across gaps.
       historic_range <- FALSE
@@ -2826,9 +3158,9 @@ addContData <- function(id, language) {
           if (nrow(rr) == 0) {
             return(invisible(NULL))
           }
-          sdt <- coerce_utc_datetime(rr$start_datetime) +
+          sdt <- parse_utc_datetime_value(rr$start_datetime) +
             pv$display_offset_seconds
-          edt <- coerce_utc_datetime(rr$end_datetime) +
+          edt <- parse_utc_datetime_value(rr$end_datetime) +
             pv$display_offset_seconds
           rr$start_dt <- pmax(sdt, mindt)
           rr$end_dt <- pmin(edt, maxdt)
@@ -3005,7 +3337,7 @@ addContData <- function(id, language) {
             tickfont = list(size = 12),
             nticks = 10,
             rangeslider = list(
-              visible = TRUE
+              visible = FALSE
             ),
             ticks = "outside",
             ticklen = 5,
@@ -3234,7 +3566,6 @@ addContData <- function(id, language) {
                 tsid = req$timeseries_id,
                 df = req$data,
                 con = con,
-                target = "realtime",
                 overwrite = req$overwrite
               ),
               warning = function(w) {

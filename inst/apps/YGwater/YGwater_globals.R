@@ -65,6 +65,14 @@ YGwater_globals <- function(
     package = "YGwater"
   ))
 
+  # Non-public plot module used for huge plot experiments.
+  if (!public) {
+    source(system.file(
+      "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+      package = "YGwater"
+    ))
+  }
+
   # Map modules
   source(system.file(
     "apps/YGwater/modules/client/map/paramsMap.R",
