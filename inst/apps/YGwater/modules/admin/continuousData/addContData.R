@@ -3566,7 +3566,6 @@ addContData <- function(id, language) {
                 tsid = req$timeseries_id,
                 df = req$data,
                 con = con,
-                target = "realtime",
                 overwrite = req$overwrite
               ),
               warning = function(w) {

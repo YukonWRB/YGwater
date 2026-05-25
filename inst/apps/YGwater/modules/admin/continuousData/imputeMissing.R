@@ -309,14 +309,17 @@ imputeMissing <- function(id, language) {
       df[, media := as.factor(media)]
       df[, aggregation := as.factor(aggregation)]
       df[, parameter := as.factor(parameter)]
-      display_cols <- setdiff(names(df), c(
-        "location_id",
-        "latitude",
-        "longitude",
-        "start_datetime",
-        "end_datetime",
-        "timeseries_type_code"
-      ))
+      display_cols <- setdiff(
+        names(df),
+        c(
+          "location_id",
+          "latitude",
+          "longitude",
+          "start_datetime",
+          "end_datetime",
+          "timeseries_type_code"
+        )
+      )
       display <- as.data.frame(df[, ..display_cols])
 
       DT::datatable(
@@ -781,9 +784,12 @@ imputeMissing <- function(id, language) {
         return(out)
       }
 
-      summary <- joined[, .(
-        reference_value = aggregate_values(value, aggregation)
-      ), by = datetime]
+      summary <- joined[,
+        .(
+          reference_value = aggregate_values(value, aggregation)
+        ),
+        by = datetime
+      ]
       out <- merge(out[, .(datetime)], summary, by = "datetime", all.x = TRUE)
       data.table::setorder(out, datetime)
       out
@@ -808,13 +814,15 @@ imputeMissing <- function(id, language) {
         return(meta)
       }
 
-      meta[, distance_km := mapply(
-        haversine_km,
-        target$latitude[[1]],
-        target$longitude[[1]],
-        latitude,
-        longitude
-      )]
+      meta[,
+        distance_km := mapply(
+          haversine_km,
+          target$latitude[[1]],
+          target$longitude[[1]],
+          latitude,
+          longitude
+        )
+      ]
       radius <- suppressWarnings(as.numeric(radius))
       if (!length(radius) || is.na(radius) || radius < 0) {
         radius <- 0
@@ -826,11 +834,13 @@ imputeMissing <- function(id, language) {
 
       target_step <- interval_seconds(target$recording_rate)
       if (!is.na(target_step) && target_step > 0) {
-        meta[, candidate_step := vapply(
-          recording_rate,
-          interval_seconds,
-          numeric(1)
-        )]
+        meta[,
+          candidate_step := vapply(
+            recording_rate,
+            interval_seconds,
+            numeric(1)
+          )
+        ]
         meta <- meta[
           is.na(candidate_step) |
             candidate_step <= target_step
@@ -947,7 +957,9 @@ imputeMissing <- function(id, language) {
           merged$target_value[overlap] - merged$reference_value[overlap],
           na.rm = TRUE
         )
-        missing_candidate <- sum(is.na(reference_grid$reference_value[fill_idx]))
+        missing_candidate <- sum(is.na(reference_grid$reference_value[
+          fill_idx
+        ]))
 
         rows[[length(rows) + 1L]] <- data.table::data.table(
           timeseries_id = candidate$timeseries_id[[1]],
@@ -1000,12 +1012,19 @@ imputeMissing <- function(id, language) {
     }
 
     task_signature <- function(...) {
-      paste(vapply(list(...), function(value) {
-        if (is.null(value)) {
-          return("")
-        }
-        paste(as.character(value), collapse = "|")
-      }, character(1)), collapse = "\r")
+      paste(
+        vapply(
+          list(...),
+          function(value) {
+            if (is.null(value)) {
+              return("")
+            }
+            paste(as.character(value), collapse = "|")
+          },
+          character(1)
+        ),
+        collapse = "\r"
+      )
     }
 
     load_task_signature <- reactiveVal(NULL)
@@ -1272,7 +1291,9 @@ imputeMissing <- function(id, language) {
     output$direct_impute_selection <- renderText({
       req(input$method == "direct")
       if (is.null(candidates()) || nrow(candidates()) == 0) {
-        return("No suitable nearby timeseries were found for the current radius, parameters, and gap limits.")
+        return(
+          "No suitable nearby timeseries were found for the current radius, parameters, and gap limits."
+        )
       }
       "Select a candidate timeseries below for direct imputation."
     })
@@ -1459,7 +1480,6 @@ imputeMissing <- function(id, language) {
                 tsid = req$timeseries_id,
                 df = req$data,
                 con = con,
-                target = "realtime",
                 overwrite = "conflict"
               ),
               warning = function(w) {
