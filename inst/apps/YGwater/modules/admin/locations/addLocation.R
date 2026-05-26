@@ -259,6 +259,7 @@ addLocation <- function(id, inputs, language) {
             ns("wsc_location"),
             "Is this a Water Survey of Canada location?",
             choices = c("Yes" = "yes", "No" = "no"),
+            selected = "no",
             inline = TRUE
           )
         ),
@@ -492,6 +493,7 @@ addLocation <- function(id, inputs, language) {
               options = list(maxItems = 1),
               width = "100%"
             ),
+            uiOutput(ns("nearby_location_warning")),
             splitLayout(
               cellWidths = c("40%", "40%", "20%"),
               numericInput(
@@ -569,6 +571,7 @@ addLocation <- function(id, inputs, language) {
               options = list(maxItems = 1),
               width = "100%"
             ),
+            uiOutput(ns("nearby_location_warning")),
             splitLayout(
               cellWidths = c("40%", "40%", "20%"),
               numericInput(
@@ -671,6 +674,13 @@ addLocation <- function(id, inputs, language) {
         datum_details <- moduleData$datum_conversions[
           moduleData$datum_conversions$location_id == loc_id,
         ]
+        if (nrow(datum_details) == 0) {
+          datum_details <- data.frame(
+            datum_id_from = 10,
+            datum_id_to = 10,
+            conversion_m = 0
+          )
+        }
 
         if (nrow(details) > 0) {
           updateTextInput(session, "loc_code", value = details$location_code)
@@ -1192,13 +1202,173 @@ addLocation <- function(id, inputs, language) {
       }
     })
 
+    distance_meters <- function(lat1, lon1, lat2, lon2) {
+      earth_radius <- 6371000
+      to_rad <- pi / 180
+      lat1 <- lat1 * to_rad
+      lon1 <- lon1 * to_rad
+      lat2 <- lat2 * to_rad
+      lon2 <- lon2 * to_rad
+      delta_lat <- lat2 - lat1
+      delta_lon <- lon2 - lon1
+      a <- sin(delta_lat / 2)^2 +
+        cos(lat1) * cos(lat2) * sin(delta_lon / 2)^2
+      c <- 2 * atan2(sqrt(a), sqrt(1 - a))
+      earth_radius * c
+    }
+
+    nearby_existing_location <- reactive({
+      lat <- suppressWarnings(as.numeric(input$lat))
+      lon <- suppressWarnings(as.numeric(input$lon))
+      if (
+        length(lat) == 0 ||
+          length(lon) == 0 ||
+          is.na(lat) ||
+          is.na(lon) ||
+          lat < -90 ||
+          lat > 90 ||
+          lon < -180 ||
+          lon > 180
+      ) {
+        return(NULL)
+      }
+
+      locs <- moduleData$exist_locs
+      if (is.null(locs) || nrow(locs) == 0) {
+        return(NULL)
+      }
+
+      locs$latitude <- as.numeric(locs$latitude)
+      locs$longitude <- as.numeric(locs$longitude)
+      locs <- locs[
+        is.finite(locs$latitude) &
+          is.finite(locs$longitude) &
+          locs$latitude >= -90 &
+          locs$latitude <= 90 &
+          locs$longitude >= -180 &
+          locs$longitude <= 180,
+      ]
+
+      current_location_id <- selected_loc()
+      if (!is.null(current_location_id)) {
+        locs <- locs[locs$location_id != current_location_id, ]
+      }
+      if (nrow(locs) == 0) {
+        return(NULL)
+      }
+
+      locs$distance_m <- distance_meters(
+        lat,
+        lon,
+        locs$latitude,
+        locs$longitude
+      )
+      locs <- locs[order(locs$distance_m), ]
+      if (nrow(locs) == 0 || locs$distance_m[1] > 100) {
+        return(NULL)
+      }
+
+      locs[1, ]
+    })
+
+    output$nearby_location_warning <- renderUI({
+      loc <- nearby_existing_location()
+      if (is.null(loc)) {
+        return(NULL)
+      }
+
+      location_label <- sprintf(
+        "%s (%s)",
+        as.character(loc$name),
+        as.character(loc$location_code)
+      )
+      msg <- sprintf(
+        "Existing location nearby: %s is %.0f meters from these coordinates.",
+        location_label,
+        loc$distance_m
+      )
+
+      if (loc$distance_m <= 50) {
+        return(div(
+          style = paste(
+            "color: #842029;",
+            "background-color: #f8d7da;",
+            "border: 1px solid #f5c2c7;",
+            "border-radius: 4px;",
+            "padding: 8px;",
+            "margin-bottom: 8px;",
+            "font-weight: 600;"
+          ),
+          paste(
+            msg,
+            "Consider using an existing nearby location instead of creating a new one."
+          )
+        ))
+      }
+
+      div(
+        style = paste(
+          "color: #8a4b00;",
+          "background-color: #fff4e5;",
+          "border: 1px solid #ffcc80;",
+          "border-radius: 4px;",
+          "padding: 8px;",
+          "margin-bottom: 8px;"
+        ),
+        msg
+      )
+    })
+
     ## Map picker ##############################################################
     map_center <- reactiveVal(list(lat = 64.0, lon = -135.0, zoom = 4))
     map_selection <- reactiveVal(NULL)
 
+    existing_location_map_data <- function() {
+      locs <- moduleData$exist_locs
+      if (is.null(locs) || nrow(locs) == 0) {
+        return(data.frame())
+      }
+
+      locs$latitude <- as.numeric(locs$latitude)
+      locs$longitude <- as.numeric(locs$longitude)
+      locs <- locs[
+        is.finite(locs$latitude) &
+          is.finite(locs$longitude) &
+          locs$latitude >= -90 &
+          locs$latitude <= 90 &
+          locs$longitude >= -180 &
+          locs$longitude <= 180,
+      ]
+      if (nrow(locs) == 0) {
+        return(locs)
+      }
+
+      clean_text <- function(x) {
+        x <- as.character(x)
+        x[is.na(x)] <- ""
+        x
+      }
+
+      locs$map_label <- sprintf(
+        "%s (%s)",
+        clean_text(locs$name),
+        clean_text(locs$location_code)
+      )
+      locs$map_popup <- sprintf(
+        "<strong>%s</strong><br/>Code: %s<br/>Type: %s<br/>Network: %s",
+        htmltools::htmlEscape(clean_text(locs$name)),
+        htmltools::htmlEscape(clean_text(locs$location_code)),
+        htmltools::htmlEscape(clean_text(locs$location_type)),
+        htmltools::htmlEscape(clean_text(locs$network))
+      )
+
+      locs
+    }
+
     output$location_map <- leaflet::renderLeaflet({
       center <- map_center()
       sel <- isolate(map_selection())
+      existing_locs <- existing_location_map_data()
 
       m <- leaflet::leaflet(options = leaflet::leafletOptions(maxZoom = 19)) %>%
         leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>%
@@ -1208,12 +1378,33 @@ addLocation <- function(id, inputs, language) {
         ) %>%
         leaflet::addLayersControl(
           baseGroups = c("Esri.WorldTopoMap", "Satellite"),
+          overlayGroups = "Existing locations",
           options = leaflet::layersControlOptions(collapsed = FALSE)
         ) %>%
         leaflet::addScaleBar(
           options = leaflet::scaleBarOptions(imperial = FALSE)
         ) %>%
         leaflet::setView(lng = center$lon, lat = center$lat, zoom = center$zoom)
+
+      if (nrow(existing_locs) > 0) {
+        m <- m %>%
+          leaflet::addCircleMarkers(
+            data = existing_locs,
+            lng = ~longitude,
+            lat = ~latitude,
+            radius = 5,
+            color = "#DC4405",
+            weight = 2,
+            opacity = 0.9,
+            fillColor = "#F2A900",
+            fillOpacity = 0.65,
+            group = "Existing locations",
+            label = ~map_label,
+            popup = ~map_popup,
+            layerId = ~ paste0("existing_location_", location_id),
+            labelOptions = leaflet::labelOptions(direction = "auto")
+          )
+      }
 
       if (!is.null(sel)) {
         m <- m %>%
@@ -1227,7 +1418,13 @@ addLocation <- function(id, inputs, language) {
           )
       }
 
-      m
+      m %>%
+        leaflet::addLegend(
+          position = "bottomright",
+          colors = c("#DC4405", "#007B8A"),
+          labels = c("Existing locations", "Selected location"),
+          opacity = 1
+        )
     }) %>%
       bindEvent(input$open_map)
 
@@ -1978,9 +2175,11 @@ addLocation <- function(id, inputs, language) {
         nm <- input[[paste0("fn_location_name_", i)]]
         list(language_id = lang, name = nm)
       })
-      
+
       # If single language provided with no name flage, such that user may go back to having no additional names
-      all_empty <- if(length(parsed_rows) == 1 && parsed_rows[[1]]$name == ""){
+      all_empty <- if (
+        length(parsed_rows) == 1 && parsed_rows[[1]]$name == ""
+      ) {
         TRUE
       } else {
         FALSE
@@ -1993,7 +2192,7 @@ addLocation <- function(id, inputs, language) {
         },
         logical(1)
       )
-      
+
       if (!any(has_any_value) || all_empty) {
         empty_df <- data.frame(language_id = integer(0), name = character(0))
         fn_names(empty_df)
@@ -2362,56 +2561,35 @@ addLocation <- function(id, inputs, language) {
             }
 
             # datum and elevation changes
-            if (
-              input$datum_id_from !=
-                moduleData$datum_conversions[
-                  which(
-                    moduleData$datum_conversions$location_id == selected_loc()
-                  ),
-                  "datum_id_from"
-                ]
-            ) {
+            datum_id_from <- as.numeric(input$datum_id_from)
+            datum_id_to <- as.numeric(input$datum_id_to)
+            conversion_m <- as.numeric(input$elev)
+            existing_datum <- moduleData$datum_conversions[
+              moduleData$datum_conversions$location_id == selected_loc(),
+            ]
+            if (nrow(existing_datum) == 0) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                sprintf(
-                  "UPDATE datum_conversions SET datum_id_from = %d WHERE location_id = %d",
-                  as.numeric(input$datum_id_from),
-                  selected_loc()
+                "INSERT INTO datum_conversions (location_id, datum_id_from, datum_id_to, conversion_m, current) VALUES ($1, $2, $3, $4, TRUE);",
+                params = list(
+                  selected_loc(),
+                  datum_id_from,
+                  datum_id_to,
+                  conversion_m
                 )
               )
-            }
-            if (
-              input$datum_id_to !=
-                moduleData$datum_conversions[
-                  which(
-                    moduleData$datum_conversions$location_id == selected_loc()
-                  ),
-                  "datum_id_to"
-                ]
+            } else if (
+              !identical(datum_id_from, as.numeric(existing_datum$datum_id_from[[1]])) ||
+                !identical(datum_id_to, as.numeric(existing_datum$datum_id_to[[1]])) ||
+                !identical(conversion_m, as.numeric(existing_datum$conversion_m[[1]]))
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                sprintf(
-                  "UPDATE datum_conversions SET datum_id_to = %d WHERE location_id = %d",
-                  as.numeric(input$datum_id_to),
-                  selected_loc()
-                )
-              )
-            }
-            if (
-              input$elev !=
-                moduleData$datum_conversions[
-                  which(
-                    moduleData$datum_conversions$location_id == selected_loc()
-                  ),
-                  "conversion_m"
-                ]
-            ) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                sprintf(
-                  "UPDATE datum_conversions SET conversion_m = %f WHERE location_id = %d",
-                  input$elev,
+                "UPDATE datum_conversions SET datum_id_from = $1, datum_id_to = $2, conversion_m = $3 WHERE location_id = $4 AND current IS TRUE;",
+                params = list(
+                  datum_id_from,
+                  datum_id_to,
+                  conversion_m,
                   selected_loc()
                 )
               )
