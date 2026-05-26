@@ -196,7 +196,7 @@ get_monitoring_locations_as_sf <- function(con) {
 }
 
 get_monitoring_location_parameter_ids <- function(con) {
-    YGwater::dbGetQueryDT(
+    location_parameter_ids <- YGwater::dbGetQueryDT(
         paste(
             "WITH location_params AS (",
             "    SELECT l.location_id, l.location_code, p.parameter_id",
@@ -227,6 +227,48 @@ get_monitoring_location_parameter_ids <- function(con) {
         ),
         con = con
     )
+
+    # Represent image series as synthetic parameter_id 0 so image-capable
+    # locations are carried through the same JSON filtering/encoding workflow.
+    image_series_parameter_ids <- tryCatch(
+        YGwater::dbGetQueryDT(
+            paste(
+                "SELECT DISTINCT l.location_id, l.location_code, 0::integer AS parameter_id",
+                "FROM image_series s",
+                "JOIN locations l ON l.location_id = s.location_id",
+                "WHERE s.location_id IS NOT NULL",
+                "ORDER BY l.location_code"
+            ),
+            con = con
+        ),
+        error = function(e) {
+            data.frame(
+                location_id = integer(),
+                location_code = character(),
+                parameter_id = integer(),
+                stringsAsFactors = FALSE
+            )
+        }
+    )
+
+    if (nrow(image_series_parameter_ids) == 0) {
+        return(location_parameter_ids)
+    }
+
+    combined <- rbind(
+        location_parameter_ids,
+        image_series_parameter_ids
+    )
+    combined$location_id <- as.integer(combined$location_id)
+    combined$location_code <- as.character(combined$location_code)
+    combined$parameter_id <- as.integer(combined$parameter_id)
+
+    combined <- unique(combined[, c(
+        "location_id",
+        "location_code",
+        "parameter_id"
+    )])
+    combined[order(combined$location_code, combined$parameter_id), ]
 }
 
 get_stations_by_basin <- function(location_codes, poly, monitoring_stations) {

@@ -1,4 +1,4 @@
-{
+﻿{
   "Teslin": {
     "Teslin Lake At Teslin": [
       {
@@ -15,7 +15,7 @@
         "location_code": "09AD002",
         "location_id": 68,
         "location_name": "Sidney Creek At Kilometre 46 South Canol Road",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": 70,
         "route_to_location_code": "09AE002",
@@ -52,10 +52,20 @@
         "route_to_name": null
       },
       {
+        "location_code": "09AE002",
+        "location_id": 70,
+        "location_name": "Teslin Lake At Teslin",
+        "parameter_ids": [1165, 1252],
+        "encoding": 0,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
         "location_code": "09AE003",
         "location_id": 71,
         "location_name": "Swift River Near Swift River",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": 70,
         "route_to_location_code": "09AE002",
@@ -92,11 +102,21 @@
         "route_to_name": null
       },
       {
-        "location_code": "09AE002",
-        "location_id": 70,
-        "location_name": "Teslin Lake At Teslin",
-        "parameter_ids": [1165, 1252],
-        "encoding": 0,
+        "location_code": "YOWN-1302",
+        "location_id": 216,
+        "location_name": "Swift River HPW Camp Monitoring Well",
+        "parameter_ids": [1166],
+        "encoding": 1,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
+        "location_code": "YOWN-1916",
+        "location_id": 246,
+        "location_name": "Swift River SWDF Monitoring Well",
+        "parameter_ids": [1166],
+        "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -209,21 +229,11 @@
         "location_code": "09AA012",
         "location_id": 50,
         "location_name": "Wheaton River Near Carcross",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 2,
         "route_to_location_id": 49,
         "route_to_location_code": "09AA004",
         "route_to_name": "Bennett Lake At Carcross"
-      },
-      {
-        "location_code": "09AA013",
-        "location_id": 51,
-        "location_name": "Tutshi River At Outlet Of Tutshi Lake",
-        "parameter_ids": [1150],
-        "encoding": 2,
-        "route_to_location_id": 52,
-        "route_to_location_code": "09AA017",
-        "route_to_name": "Tagish Lake At 10 Mile Road"
       },
       {
         "location_code": "09AA017",
@@ -329,7 +339,7 @@
         "location_code": "09AB-MET-00002",
         "location_id": 212,
         "location_name": "Whitehorse ECCC Met",
-        "parameter_ids": [34, 1154, 1202, 1250, 1267],
+        "parameter_ids": [1154, 1202, 1250, 1267],
         "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -433,7 +443,7 @@
         "encoding": 1,
         "route_to_location_id": 191,
         "route_to_location_code": "29AB009",
-        "route_to_name": "Wolf Creek – Highway #2"
+        "route_to_name": "Wolf Creek â€“ Highway #2"
       },
       {
         "location_code": "29AB007",
@@ -443,12 +453,12 @@
         "encoding": 1,
         "route_to_location_id": 191,
         "route_to_location_code": "29AB009",
-        "route_to_name": "Wolf Creek – Highway #2"
+        "route_to_name": "Wolf Creek â€“ Highway #2"
       },
       {
         "location_code": "29AB009",
         "location_id": 191,
-        "location_name": "Wolf Creek – Highway #2",
+        "location_name": "Wolf Creek â€“ Highway #2",
         "parameter_ids": [1150, 1165],
         "encoding": 1,
         "route_to_location_id": null,
@@ -476,39 +486,9 @@
         "route_to_name": null
       },
       {
-        "location_code": "YOWN-1901",
-        "location_id": 232,
-        "location_name": "Tagish SWDF Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-1903",
-        "location_id": 234,
-        "location_name": "Mt. Lorne SWDF Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
         "location_code": "YOWN-2201S",
         "location_id": 267,
         "location_name": "Army Beach Monitoring Well 1 Shallow",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2202",
-        "location_id": 268,
-        "location_name": "Army Beach Monitoring Well 2",
         "parameter_ids": [1166],
         "encoding": 2,
         "route_to_location_id": null,
@@ -521,36 +501,6 @@
         "location_name": "Bennet Beach Monitoring Well 1",
         "parameter_ids": [1166],
         "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2302",
-        "location_id": 279,
-        "location_name": "Bennet Beach Monitoring Well 2",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2303",
-        "location_id": 280,
-        "location_name": "Bennet Beach Monitoring Well 3",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2309",
-        "location_id": 286,
-        "location_name": "McConnell Lake Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -673,21 +623,11 @@
         "location_code": "09AA012",
         "location_id": 50,
         "location_name": "Wheaton River Near Carcross",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": 49,
         "route_to_location_code": "09AA004",
         "route_to_name": "Bennett Lake At Carcross"
-      },
-      {
-        "location_code": "09AA013",
-        "location_id": 51,
-        "location_name": "Tutshi River At Outlet Of Tutshi Lake",
-        "parameter_ids": [1150],
-        "encoding": 1,
-        "route_to_location_id": 52,
-        "route_to_location_code": "09AA017",
-        "route_to_name": "Tagish Lake At 10 Mile Road"
       },
       {
         "location_code": "09AA017",
@@ -790,20 +730,20 @@
         "route_to_name": null
       },
       {
-        "location_code": "29AB010",
-        "location_id": 192,
-        "location_name": "McClintock River Bridge",
-        "parameter_ids": [1160],
-        "encoding": 1,
+        "location_code": "09AB004",
+        "location_id": 62,
+        "location_name": "Marsh Lake Near Whitehorse",
+        "parameter_ids": [1165, 1251],
+        "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
       },
       {
-        "location_code": "YOWN-1901",
-        "location_id": 232,
-        "location_name": "Tagish SWDF Monitoring Well",
-        "parameter_ids": [1166],
+        "location_code": "29AB010",
+        "location_id": 192,
+        "location_name": "McClintock River Bridge",
+        "parameter_ids": [1160],
         "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -820,51 +760,11 @@
         "route_to_name": null
       },
       {
-        "location_code": "YOWN-2202",
-        "location_id": 268,
-        "location_name": "Army Beach Monitoring Well 2",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
         "location_code": "YOWN-2301",
         "location_id": 278,
         "location_name": "Bennet Beach Monitoring Well 1",
         "parameter_ids": [1166],
         "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2302",
-        "location_id": 279,
-        "location_name": "Bennet Beach Monitoring Well 2",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2303",
-        "location_id": 280,
-        "location_name": "Bennet Beach Monitoring Well 3",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB004",
-        "location_id": 62,
-        "location_name": "Marsh Lake Near Whitehorse",
-        "parameter_ids": [1165, 1251],
-        "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -924,6 +824,16 @@
         "route_to_name": null
       },
       {
+        "location_code": "08AA003",
+        "location_id": 24,
+        "location_name": "Dezadeash River At Haines Junction",
+        "parameter_ids": [19, 90, 92, 100, 538, 1034, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1150, 1160, 1165, 1183, 1190, 1227, 1250, 1251, 1262, 1263],
+        "encoding": 0,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
         "location_code": "08AA005",
         "location_id": 25,
         "location_name": "Aishihik Lake Near Whitehorse",
@@ -954,16 +864,6 @@
         "route_to_name": "Aishihik Lake Near Aishihik"
       },
       {
-        "location_code": "08AA009",
-        "location_id": 28,
-        "location_name": "Giltana Creek Near The Mouth",
-        "parameter_ids": [1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 29,
-        "route_to_location_code": "08AA010",
-        "route_to_name": "Aishihik River Below Aishihik Lake"
-      },
-      {
         "location_code": "08AA010",
         "location_id": 29,
         "location_name": "Aishihik River Below Aishihik Lake",
@@ -992,16 +892,6 @@
         "route_to_location_id": 25,
         "route_to_location_code": "08AA005",
         "route_to_name": "Aishihik Lake Near Whitehorse"
-      },
-      {
-        "location_code": "08AA003",
-        "location_id": 24,
-        "location_name": "Dezadeash River At Haines Junction",
-        "parameter_ids": [19, 90, 92, 100, 538, 1034, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1150, 1160, 1165, 1183, 1190, 1227, 1250, 1251, 1262, 1263],
-        "encoding": 0,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
       }
     ]
   },
@@ -1038,6 +928,36 @@
         "route_to_name": "Aishihik Lake Near Aishihik"
       },
       {
+        "location_code": "08AA009",
+        "location_id": null,
+        "location_name": "Giltana Creek Near The Mouth",
+        "parameter_ids": [1150, 1165],
+        "encoding": 1,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
+        "location_code": "08AA010",
+        "location_id": 29,
+        "location_name": "Aishihik River Below Aishihik Lake",
+        "parameter_ids": [1150, 1165, 1251],
+        "encoding": 1,
+        "route_to_location_id": 24,
+        "route_to_location_code": "08AA003",
+        "route_to_name": "Dezadeash River At Haines Junction"
+      },
+      {
+        "location_code": "08AA011",
+        "location_id": 30,
+        "location_name": "West Aishihik River Near The Mouth",
+        "parameter_ids": [1150, 1165, 1251],
+        "encoding": 1,
+        "route_to_location_id": 24,
+        "route_to_location_code": "08AA003",
+        "route_to_name": "Dezadeash River At Haines Junction"
+      },
+      {
         "location_code": "08AA012",
         "location_id": 31,
         "location_name": "Aishihik Lake Near Aishihik",
@@ -1052,1460 +972,30 @@
   "Dawson": {
     "Yukon River At Dawson": [
       {
-        "location_code": "09AA-M1",
-        "location_id": 43,
-        "location_name": "Tagish Meteorological",
-        "parameter_ids": [21, 34, 1220, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA-M2",
-        "location_id": 17,
-        "location_name": "Log Cabin Meteorological",
-        "parameter_ids": [21, 34, 1220, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA-M3",
-        "location_id": 294,
-        "location_name": "Montana Mountain Meteorological",
-        "parameter_ids": [21, 34, 1154, 1202, 1220, 1250, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA-SC01",
-        "location_id": 44,
-        "location_name": "Tagish Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA-SC02",
-        "location_id": 45,
-        "location_name": "Montana Mountain Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA-SC03",
-        "location_id": 46,
-        "location_name": "Log Cabin (B.C.) Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA-SC04",
-        "location_id": 47,
-        "location_name": "Atlin (B.C.) Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA001",
-        "location_id": 48,
-        "location_name": "Atlin Lake At Atlin",
-        "parameter_ids": [1165, 1251],
-        "encoding": 2,
-        "route_to_location_id": 52,
-        "route_to_location_code": "09AA017",
-        "route_to_name": "Tagish Lake At 10 Mile Road"
-      },
-      {
-        "location_code": "09AA004",
-        "location_id": 49,
-        "location_name": "Bennett Lake At Carcross",
-        "parameter_ids": [1165, 1251],
-        "encoding": 2,
-        "route_to_location_id": 52,
-        "route_to_location_code": "09AA017",
-        "route_to_name": "Tagish Lake At 10 Mile Road"
-      },
-      {
-        "location_code": "09AA006",
-        "location_id": 312,
-        "location_name": "Atlin River Near Atlin",
-        "parameter_ids": [1150],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AA012",
-        "location_id": 50,
-        "location_name": "Wheaton River Near Carcross",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 49,
-        "route_to_location_code": "09AA004",
-        "route_to_name": "Bennett Lake At Carcross"
-      },
-      {
-        "location_code": "09AA013",
-        "location_id": 51,
-        "location_name": "Tutshi River At Outlet Of Tutshi Lake",
-        "parameter_ids": [1150],
-        "encoding": 2,
-        "route_to_location_id": 52,
-        "route_to_location_code": "09AA017",
-        "route_to_name": "Tagish Lake At 10 Mile Road"
-      },
-      {
-        "location_code": "09AA017",
-        "location_id": 52,
-        "location_name": "Tagish Lake At 10 Mile Road",
-        "parameter_ids": [1165, 1252],
-        "encoding": 2,
-        "route_to_location_id": 62,
-        "route_to_location_code": "09AB004",
-        "route_to_name": "Marsh Lake Near Whitehorse"
-      },
-      {
-        "location_code": "09AAA-MET-00001",
-        "location_id": 342,
-        "location_name": "Bennett historic townsite",
-        "parameter_ids": [35, 1154, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AAB-MET-00001",
-        "location_id": 344,
-        "location_name": "Carcross (hwy maintenance compound)",
-        "parameter_ids": [34, 35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AAB-MET-00002",
-        "location_id": 353,
-        "location_name": "Fraser (Avalanche Canada)",
-        "parameter_ids": [35, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AAB-MET-00005",
-        "location_id": 363,
-        "location_name": "Mount Racine",
-        "parameter_ids": [1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AAB-MET-00006",
-        "location_id": 368,
-        "location_name": "Pooley Canyon",
-        "parameter_ids": [1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AAB-MET-00007",
-        "location_id": 375,
-        "location_name": "Summit Creek near Fraser",
-        "parameter_ids": [1154, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AAC-MET-00002",
-        "location_id": 358,
-        "location_name": "Jakes Corner",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AAC-MET-00003",
-        "location_id": 339,
-        "location_name": "Atlin airport (fire base)",
-        "parameter_ids": [34, 35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-MET-00001",
-        "location_id": 364,
-        "location_name": "Mount Sima",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-MET-00002",
-        "location_id": 212,
-        "location_name": "Whitehorse ECCC Met",
-        "parameter_ids": [34, 1154, 1202, 1250, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC01A",
-        "location_id": 53,
-        "location_name": "Mt McIntyre A Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC01B",
-        "location_id": 54,
-        "location_name": "Mt McIntyre B Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC01C",
-        "location_id": 55,
-        "location_name": "Mt McIntyre C Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC01D",
-        "location_id": 56,
-        "location_name": "Mt McIntyre D Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC02",
-        "location_id": 393,
-        "location_name": "Whitehorse Airport Snow Course (composite)",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC02A",
-        "location_id": 57,
-        "location_name": "Whitehorse Airport A Snow Course ",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC02B",
-        "location_id": 317,
-        "location_name": "Whitehorse Airport B (Ice Lake) Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC03",
-        "location_id": 58,
-        "location_name": "McClintock Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC04",
-        "location_id": 59,
-        "location_name": "Chadburn Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SC05",
-        "location_id": 60,
-        "location_name": "Long Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SW-00001",
-        "location_id": 330,
-        "location_name": "Yukon River Above Takhini River",
-        "parameter_ids": [19, 90, 92, 97, 100, 538, 1034, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1183, 1190, 1211, 1227, 1250, 1251, 1262, 1263],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB-SW-00002",
-        "location_id": 329,
-        "location_name": "Yukon River Below Marsh Lake",
-        "parameter_ids": [19, 90, 92, 97, 100, 538, 1034, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1183, 1190, 1211, 1227, 1250, 1251, 1262, 1263],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AB001",
-        "location_id": 61,
-        "location_name": "Yukon River At Whitehorse",
-        "parameter_ids": [1165, 1251],
-        "encoding": 2,
-        "route_to_location_id": 63,
-        "route_to_location_code": "09AB010",
-        "route_to_name": "Lake Laberge Near Whitehorse"
-      },
-      {
-        "location_code": "09AB004",
-        "location_id": 62,
-        "location_name": "Marsh Lake Near Whitehorse",
-        "parameter_ids": [1165, 1251],
-        "encoding": 2,
-        "route_to_location_id": 61,
-        "route_to_location_code": "09AB001",
-        "route_to_name": "Yukon River At Whitehorse"
-      },
-      {
-        "location_code": "09AB010",
-        "location_id": 63,
-        "location_name": "Lake Laberge Near Whitehorse",
-        "parameter_ids": [1165, 1250],
-        "encoding": 2,
-        "route_to_location_id": 80,
-        "route_to_location_code": "09AH001",
-        "route_to_name": "Yukon River At Carmacks"
-      },
-      {
-        "location_code": "09AC-MET-00002",
-        "location_id": 346,
-        "location_name": "Champagne (Alaska Hwy)",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AC-MET-00003",
-        "location_id": 361,
-        "location_name": "Kusawa Ridge",
-        "parameter_ids": [34, 35, 1154, 1202],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AC-MET-00004",
-        "location_id": 365,
-        "location_name": "Gunnar Nilson & Mickey Lammers Research Forest",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AC001",
-        "location_id": 64,
-        "location_name": "Takhini River Near Whitehorse",
-        "parameter_ids": [1150, 1165, 1250],
-        "encoding": 2,
-        "route_to_location_id": 63,
-        "route_to_location_code": "09AB010",
-        "route_to_name": "Lake Laberge Near Whitehorse"
-      },
-      {
-        "location_code": "09AC007",
-        "location_id": 65,
-        "location_name": "Ibex River Near Whitehorse",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 64,
-        "route_to_location_code": "09AC001",
-        "route_to_name": "Takhini River Near Whitehorse"
-      },
-      {
-        "location_code": "09AD-SC01",
-        "location_id": 66,
-        "location_name": "Meadow Creek Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AD-SC02",
-        "location_id": 67,
-        "location_name": "Jordan Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AD002",
-        "location_id": 68,
-        "location_name": "Sidney Creek At Kilometre 46 South Canol Road",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 70,
-        "route_to_location_code": "09AE002",
-        "route_to_name": "Teslin Lake At Teslin"
-      },
-      {
-        "location_code": "09AE-MET-00001",
-        "location_id": 19,
-        "location_name": "Teslin ECCC Met",
-        "parameter_ids": [34, 1154, 1202, 1250, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AE-MET-00002",
-        "location_id": 376,
-        "location_name": "Swift River highway maintenance camp",
-        "parameter_ids": [34, 35, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AE-SC01",
-        "location_id": 69,
-        "location_name": "Morley Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AE002",
-        "location_id": 70,
-        "location_name": "Teslin Lake At Teslin",
-        "parameter_ids": [1165, 1252],
-        "encoding": 2,
-        "route_to_location_id": 80,
-        "route_to_location_code": "09AH001",
-        "route_to_name": "Yukon River At Carmacks"
-      },
-      {
-        "location_code": "09AE003",
-        "location_id": 71,
-        "location_name": "Swift River Near Swift River",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 70,
-        "route_to_location_code": "09AE002",
-        "route_to_name": "Teslin Lake At Teslin"
-      },
-      {
-        "location_code": "09AE006",
-        "location_id": 72,
-        "location_name": "Morely River At Km 1251 Alaska Highway",
-        "parameter_ids": [1150, 1165, 1251],
-        "encoding": 2,
-        "route_to_location_id": 70,
-        "route_to_location_code": "09AE002",
-        "route_to_name": "Teslin Lake At Teslin"
-      },
-      {
-        "location_code": "09AG-MET-00001",
-        "location_id": 369,
-        "location_name": "Quiet Lake",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AG-SC01",
-        "location_id": 73,
-        "location_name": "Mt Peters Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AG-SC02",
-        "location_id": 74,
-        "location_name": "Northern Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AG001",
-        "location_id": 75,
-        "location_name": "Big Salmon River Near Carmacks",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 80,
-        "route_to_location_code": "09AH001",
-        "route_to_name": "Yukon River At Carmacks"
-      },
-      {
-        "location_code": "09AH-MET-00001",
-        "location_id": 345,
-        "location_name": "Carmacks (south of town)",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AH-MET-00002",
-        "location_id": 343,
-        "location_name": "Braeburn",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AH-MET-00003",
-        "location_id": 350,
-        "location_name": "Drury Creek (hwy maintenance compound)",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AH-MET-00004",
-        "location_id": 210,
-        "location_name": "Carmacks Airport",
-        "parameter_ids": [34, 1154, 1202, 1250, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AH-SC01",
-        "location_id": 77,
-        "location_name": "Mount Berdoe Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AH-SC03",
-        "location_id": 78,
-        "location_name": "Satasha Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AH-SC04",
-        "location_id": 79,
-        "location_name": "Williams Creek Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09AH001",
-        "location_id": 80,
-        "location_name": "Yukon River At Carmacks",
-        "parameter_ids": [0, 1150, 1165, 1252],
-        "encoding": 1,
-        "route_to_location_id": 117,
-        "route_to_location_code": "09CD001",
-        "route_to_name": "Yukon River Above White River"
-      },
-      {
-        "location_code": "09AH003",
-        "location_id": 81,
-        "location_name": "Big Creek Near the Mouth",
-        "parameter_ids": [1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 117,
-        "route_to_location_code": "09CD001",
-        "route_to_name": "Yukon River Above White River"
-      },
-      {
-        "location_code": "09AH004",
-        "location_id": 82,
-        "location_name": "Nordenskiold River Below Rowlinson Creek",
-        "parameter_ids": [1150, 1165, 1250],
-        "encoding": 2,
-        "route_to_location_id": 196,
-        "route_to_location_code": "29AH001",
-        "route_to_name": "Nordenskiold River at River Drive"
-      },
-      {
-        "location_code": "09AH005",
-        "location_id": 83,
-        "location_name": "Drury Creek at km 469 Robert Campbell Hwy",
-        "parameter_ids": [1150, 1160, 1165, 1250, 1251],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-M7",
-        "location_id": 84,
-        "location_name": "Twin Creeks North Meteorological",
-        "parameter_ids": [21, 34, 1220, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-MET-00001",
-        "location_id": 371,
-        "location_name": "Ross River Airport",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-SC01",
-        "location_id": 85,
-        "location_name": "Ross River Hill Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-SC02",
-        "location_id": 392,
-        "location_name": "Twin Creeks Snow Course (composite)",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-SC02A",
-        "location_id": 319,
-        "location_name": "Twin Creeks A Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-SC02B",
-        "location_id": 86,
-        "location_name": "Twin Creeks B Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-SC03",
-        "location_id": 87,
-        "location_name": "Hoole River Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-SC04",
-        "location_id": 88,
-        "location_name": "Burns Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA-SC05",
-        "location_id": 89,
-        "location_name": "Finlayson Airstrip Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BA001",
-        "location_id": 90,
-        "location_name": "Ross River At Ross River",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 98,
-        "route_to_location_code": "09BC002",
-        "route_to_name": "Pelly River At Ross River"
-      },
-      {
-        "location_code": "09BB-MET-00001",
-        "location_id": 389,
-        "location_name": "Macmillan Pass metrological station",
-        "parameter_ids": [34, 1154, 1202, 1250, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BB-SC01",
-        "location_id": 91,
-        "location_name": "Clearwater Creek Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BB-SC02",
-        "location_id": 92,
-        "location_name": "Macmillan Pass Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BB-SC03",
-        "location_id": 93,
-        "location_name": "Fuller Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BB-SC04",
-        "location_id": 94,
-        "location_name": "Russell Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BB001",
-        "location_id": 95,
-        "location_name": "South Macmillan River At Kilometre 407 Canol Road",
-        "parameter_ids": [1150, 1165, 1250, 1251],
-        "encoding": 2,
-        "route_to_location_id": 97,
-        "route_to_location_code": "09BC001",
-        "route_to_name": "Pelly River At Pelly Crossing"
-      },
-      {
-        "location_code": "09BC-MET-00001",
-        "location_id": 13,
-        "location_name": "Faro ECCC Met",
-        "parameter_ids": [34, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BC-MET-00004",
-        "location_id": 380,
-        "location_name": "North Klondike Hwy near Willow Creek",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BC-MET-00005",
-        "location_id": 381,
-        "location_name": "Pelly Ranch (Fort Selkirk)",
-        "parameter_ids": [34, 1154, 1202, 1220, 1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BC-SC01",
-        "location_id": 96,
-        "location_name": "Rose Creek Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BC-SW-00001",
-        "location_id": 335,
-        "location_name": "Rose Creek Above Anvil Creek",
-        "parameter_ids": [19, 90, 92, 97, 100, 538, 1036, 1037, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1077, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1183, 1190, 1227, 1250, 1251, 1262, 1263],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BC001",
-        "location_id": 97,
-        "location_name": "Pelly River At Pelly Crossing",
-        "parameter_ids": [0, 1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 117,
-        "route_to_location_code": "09CD001",
-        "route_to_name": "Yukon River Above White River"
-      },
-      {
-        "location_code": "09BC002",
-        "location_id": 98,
-        "location_name": "Pelly River At Ross River",
-        "parameter_ids": [0, 1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 99,
-        "route_to_location_code": "09BC004",
-        "route_to_name": "Pelly River Below Vangorda Creek"
-      },
-      {
-        "location_code": "09BC004",
-        "location_id": 99,
-        "location_name": "Pelly River Below Vangorda Creek",
-        "parameter_ids": [1150, 1165, 1252],
-        "encoding": 2,
-        "route_to_location_id": 97,
-        "route_to_location_code": "09BC001",
-        "route_to_name": "Pelly River At Pelly Crossing"
-      },
-      {
-        "location_code": "09CA-MET-00001",
-        "location_id": 337,
-        "location_name": "Alaska Hwy km 1715.4",
-        "parameter_ids": [1154, 1202, 1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA-MET-00002",
-        "location_id": 388,
-        "location_name": "Burwash Landing Airport",
-        "parameter_ids": [34, 1154, 1202, 1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA-SC01",
-        "location_id": 100,
-        "location_name": "Mount Nansen Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA-SC02",
-        "location_id": 101,
-        "location_name": "MacIntosh Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA-SC03",
-        "location_id": 102,
-        "location_name": "Burwash Airstrip Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA-SC04",
-        "location_id": 103,
-        "location_name": "Duke River A Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA-SC05",
-        "location_id": 104,
-        "location_name": "Duke River Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA-SC06",
-        "location_id": 105,
-        "location_name": "Burwash Uplands Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CA001",
-        "location_id": 106,
-        "location_name": "Kluane Lake Near Burwash Landing",
-        "parameter_ids": [1165, 1250],
-        "encoding": 1,
-        "route_to_location_id": 143,
-        "route_to_location_code": "09EB001",
-        "route_to_name": "Yukon River At Dawson"
-      },
-      {
-        "location_code": "09CA002",
-        "location_id": 107,
-        "location_name": "Kluane River At Outlet Of Kluane Lake",
-        "parameter_ids": [1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 106,
-        "route_to_location_code": "09CA001",
-        "route_to_name": "Kluane Lake Near Burwash Landing"
-      },
-      {
-        "location_code": "09CA004",
-        "location_id": 108,
-        "location_name": "Duke River Near The Mouth",
-        "parameter_ids": [1150, 1165, 1250],
-        "encoding": 1,
-        "route_to_location_id": 143,
-        "route_to_location_code": "09EB001",
-        "route_to_name": "Yukon River At Dawson"
-      },
-      {
-        "location_code": "09CA006",
-        "location_id": 109,
-        "location_name": "Nisling River Below Onion Creek",
-        "parameter_ids": [1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 143,
-        "route_to_location_code": "09EB001",
-        "route_to_name": "Yukon River At Dawson"
-      },
-      {
-        "location_code": "09CB-MET-00001",
-        "location_id": 341,
-        "location_name": "Beaver Creek",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CB-MET-00002",
-        "location_id": 18,
-        "location_name": "Beaver Creek ECCC Met",
-        "parameter_ids": [1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CB-SC01",
-        "location_id": 110,
-        "location_name": "Beaver Creek Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CB-SC02",
-        "location_id": 111,
-        "location_name": "Chair Mountain Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CB-SC03",
-        "location_id": 112,
-        "location_name": "White River Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CB001",
-        "location_id": 113,
-        "location_name": "White River At Km 1881.6 Alaska Highway",
-        "parameter_ids": [0, 1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 143,
-        "route_to_location_code": "09EB001",
-        "route_to_name": "Yukon River At Dawson"
-      },
-      {
-        "location_code": "09CD-SC01",
-        "location_id": 114,
-        "location_name": "Casino Creek Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CD-SC02",
-        "location_id": 115,
-        "location_name": "Fort Selkirk Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CD-SC03",
-        "location_id": 116,
-        "location_name": "Pelly Farm Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09CD001",
-        "location_id": 117,
-        "location_name": "Yukon River Above White River",
-        "parameter_ids": [0, 1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 143,
-        "route_to_location_code": "09EB001",
-        "route_to_name": "Yukon River At Dawson"
-      },
-      {
-        "location_code": "09DA-SC01",
-        "location_id": 118,
-        "location_name": "Plata Airstrip Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DA-SC02",
-        "location_id": 119,
-        "location_name": "Arrowhead Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DA001",
-        "location_id": 120,
-        "location_name": "Hess River Above Emerald Creek",
-        "parameter_ids": [0, 1150, 1165, 1250, 1251],
-        "encoding": 2,
-        "route_to_location_id": 129,
-        "route_to_location_code": "09DC006",
-        "route_to_name": "Stewart River Near Mayo"
-      },
-      {
-        "location_code": "09DB-M1",
-        "location_id": 121,
-        "location_name": "Withers Lake Meteorological",
-        "parameter_ids": [21, 34, 1220, 1256, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DB-SC01",
-        "location_id": 122,
-        "location_name": "Withers Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DB-SC02",
-        "location_id": 123,
-        "location_name": "Rackla Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DB001",
-        "location_id": 124,
-        "location_name": "Beaver River Below Matson Creek",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 129,
-        "route_to_location_code": "09DC006",
-        "route_to_name": "Stewart River Near Mayo"
-      },
-      {
-        "location_code": "09DC-MET-00002",
-        "location_id": 211,
-        "location_name": "Mayo ECCC Met",
-        "parameter_ids": [34, 35, 1154, 1202, 1221, 1250, 1267],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DC-SC01",
-        "location_id": 394,
-        "location_name": "Mayo Airport Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DC-SC01A",
-        "location_id": 125,
-        "location_name": "Mayo Airport A Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DC-SC01B",
-        "location_id": 126,
-        "location_name": "Mayo Airport B Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DC-SC02",
-        "location_id": 127,
-        "location_name": "Edwards Lake Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DC005",
-        "location_id": 128,
-        "location_name": "Mayo Lake near the outlet",
-        "parameter_ids": [1165, 1251],
-        "encoding": 2,
-        "route_to_location_id": 297,
-        "route_to_location_code": "09DC007",
-        "route_to_name": "Mayo River at Highway No. 11"
-      },
-      {
-        "location_code": "09DC006",
-        "location_id": 129,
-        "location_name": "Stewart River Near Mayo",
-        "parameter_ids": [0, 1165],
-        "encoding": 1,
-        "route_to_location_id": 133,
-        "route_to_location_code": "09DD003",
-        "route_to_name": "Stewart River At The Mouth"
-      },
-      {
-        "location_code": "09DC007",
-        "location_id": 297,
-        "location_name": "Mayo River at Highway No. 11",
-        "parameter_ids": [0, 1165],
-        "encoding": 2,
-        "route_to_location_id": 133,
-        "route_to_location_code": "09DD003",
-        "route_to_name": "Stewart River At The Mouth"
-      },
-      {
-        "location_code": "09DD-MET-00001",
-        "location_id": 340,
-        "location_name": "Barlow (Clear Creek)",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DD-MET-00002",
-        "location_id": 374,
-        "location_name": "Stewart Crossing",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DD-SC01",
-        "location_id": 130,
-        "location_name": "Calumet Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DD-SC02",
-        "location_id": 131,
-        "location_name": "Keno Hill Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DD-SC03",
-        "location_id": 132,
-        "location_name": "Stewart Crossing A Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DD-SW-00001",
-        "location_id": 331,
-        "location_name": "South McQuesten River Below Flat Creek",
-        "parameter_ids": [19, 90, 92, 97, 100, 104, 386, 538, 1008, 1030, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1077, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1183, 1190, 1227, 1250, 1251, 1262, 1263],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DD-SW-00002",
-        "location_id": 332,
-        "location_name": "Haggart Creek Above South McQuesten River",
-        "parameter_ids": [19, 90, 92, 97, 100, 104, 386, 538, 1008, 1030, 1036, 1037, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1077, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1105, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1183, 1190, 1227, 1250, 1251, 1262, 1263],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09DD003",
-        "location_id": 133,
-        "location_name": "Stewart River At The Mouth",
-        "parameter_ids": [0, 1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 143,
-        "route_to_location_code": "09EB001",
-        "route_to_name": "Yukon River At Dawson"
-      },
-      {
-        "location_code": "09DD004",
-        "location_id": 134,
-        "location_name": "Mcquesten River Near The Mouth",
-        "parameter_ids": [1150, 1165],
-        "encoding": 1,
-        "route_to_location_id": 133,
-        "route_to_location_code": "09DD003",
-        "route_to_name": "Stewart River At The Mouth"
-      },
-      {
-        "location_code": "09EA-M1",
-        "location_id": 135,
-        "location_name": "King Solomon Dome Meteorological",
-        "parameter_ids": [21, 34, 35, 1220, 1250, 1256, 1267],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09EA-MET-00001",
-        "location_id": 338,
-        "location_name": "Antimony Creek",
-        "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09EA-MET-00002",
-        "location_id": 360,
-        "location_name": "Dawson Airport (fire base)",
-        "parameter_ids": [35, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09EA-MET-00004",
-        "location_id": 15,
-        "location_name": "Dawson City ECCC Met",
-        "parameter_ids": [34, 1154, 1202, 1250, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09EA-MET-00005",
-        "location_id": 359,
-        "location_name": "Dempster Hwy km 67",
-        "parameter_ids": [34, 1154, 1250],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09EA-SC01",
-        "location_id": 136,
-        "location_name": "King Solomon Dome Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09EA-SC02",
-        "location_id": 137,
-        "location_name": "Grizzly Creek Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
         "location_code": "09EA003",
         "location_id": 138,
         "location_name": "Klondike River Above Bonanza Creek",
-        "parameter_ids": [0, 19, 90, 92, 97, 100, 538, 1034, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1077, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1150, 1165, 1183, 1190, 1211, 1227, 1250, 1251, 1262, 1263],
+        "parameter_ids": [1150, 1165],
         "encoding": 1,
         "route_to_location_id": 143,
         "route_to_location_code": "09EB001",
         "route_to_name": "Yukon River At Dawson"
+      },
+      {
+        "location_code": "09EA006",
+        "location_id": 141,
+        "location_name": "Klondike River At Rock Creek",
+        "parameter_ids": [1165],
+        "encoding": 2,
+        "route_to_location_id": 138,
+        "route_to_location_code": "09EA003",
+        "route_to_name": "Klondike River Above Bonanza Creek"
       },
       {
         "location_code": "09EA004",
         "location_id": 139,
-        "location_name": "North Klondike River Near the Mouth",
-        "parameter_ids": [1150, 1165, 1252],
+        "location_name": "North Klondike River Near The Mouth",
+        "parameter_ids": [1150, 1165],
         "encoding": 2,
         "route_to_location_id": 141,
         "route_to_location_code": "09EA006",
@@ -2515,28 +1005,18 @@
         "location_code": "09EA005",
         "location_id": 140,
         "location_name": "Little South Klondike River Below Ross Creek",
-        "parameter_ids": [1150, 1165, 1250, 1251],
+        "parameter_ids": [1150, 1165],
         "encoding": 2,
         "route_to_location_id": 141,
         "route_to_location_code": "09EA006",
         "route_to_name": "Klondike River At Rock Creek"
       },
       {
-        "location_code": "09EA006",
-        "location_id": 141,
-        "location_name": "Klondike River At Rock Creek",
-        "parameter_ids": [0, 1165, 1252],
-        "encoding": 2,
-        "route_to_location_id": 138,
-        "route_to_location_code": "09EA003",
-        "route_to_name": "Klondike River Above Bonanza Creek"
-      },
-      {
-        "location_code": "09EB-SC01",
-        "location_id": 142,
-        "location_name": "Midnight Dome Snow Course",
-        "parameter_ids": [21, 1220],
-        "encoding": 1,
+        "location_code": "09EB001",
+        "location_id": 143,
+        "location_name": "Yukon River At Dawson",
+        "parameter_ids": [1150, 1165],
+        "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -2555,331 +1035,41 @@
         "location_code": "09EB004",
         "location_id": 145,
         "location_name": "Sixty Mile River Near The Mouth",
-        "parameter_ids": [1150, 1165, 1252],
+        "parameter_ids": [1150, 1165],
         "encoding": 1,
         "route_to_location_id": 143,
         "route_to_location_code": "09EB001",
         "route_to_name": "Yukon River At Dawson"
       },
       {
-        "location_code": "29AB-M3",
-        "location_id": 187,
-        "location_name": "Wolf Creek Buckbrush Taiga Meteorological",
-        "parameter_ids": [21, 34, 1250, 1267],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "29AB005",
-        "location_id": 189,
-        "location_name": "Wolf Creek - Coal Lake",
+        "location_code": "09DD003",
+        "location_id": 133,
+        "location_name": "Stewart River At The Mouth",
         "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 191,
-        "route_to_location_code": "29AB009",
-        "route_to_name": "Wolf Creek – Highway #2"
-      },
-      {
-        "location_code": "29AB007",
-        "location_id": 190,
-        "location_name": "Granger Creek",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 191,
-        "route_to_location_code": "29AB009",
-        "route_to_name": "Wolf Creek – Highway #2"
-      },
-      {
-        "location_code": "29AB009",
-        "location_id": 191,
-        "location_name": "Wolf Creek – Highway #2",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 61,
-        "route_to_location_code": "09AB001",
-        "route_to_name": "Yukon River At Whitehorse"
-      },
-      {
-        "location_code": "29AB010",
-        "location_id": 192,
-        "location_name": "McClintock River Bridge",
-        "parameter_ids": [1160],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "29AB011",
-        "location_id": 193,
-        "location_name": "Lewes River Bridge",
-        "parameter_ids": [1160],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "29AD003",
-        "location_id": 194,
-        "location_name": "Rose River",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 70,
-        "route_to_location_code": "09AE002",
-        "route_to_name": "Teslin Lake At Teslin"
-      },
-      {
-        "location_code": "29AE007",
-        "location_id": 195,
-        "location_name": "Nisutlin Bay Bridge",
-        "parameter_ids": [1160],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "29AH001",
-        "location_id": 196,
-        "location_name": "Nordenskiold River at River Drive",
-        "parameter_ids": [1160, 1165],
-        "encoding": 1,
-        "route_to_location_id": 117,
-        "route_to_location_code": "09CD001",
-        "route_to_name": "Yukon River Above White River"
-      },
-      {
-        "location_code": "29BA005",
-        "location_id": 198,
-        "location_name": "Tay Creek",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 90,
-        "route_to_location_code": "09BA001",
-        "route_to_name": "Ross River At Ross River"
-      },
-      {
-        "location_code": "29BB001",
-        "location_id": 199,
-        "location_name": "Boulder Creek",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 97,
-        "route_to_location_code": "09BC001",
-        "route_to_name": "Pelly River At Pelly Crossing"
-      },
-      {
-        "location_code": "29BC005",
-        "location_id": 202,
-        "location_name": "Blind Creek - Upper",
-        "parameter_ids": [1150, 1165],
-        "encoding": 2,
-        "route_to_location_id": 99,
-        "route_to_location_code": "09BC004",
-        "route_to_name": "Pelly River Below Vangorda Creek"
-      },
-      {
-        "location_code": "29CA004",
-        "location_id": 203,
-        "location_name": "Quill Creek",
-        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": 143,
         "route_to_location_code": "09EB001",
         "route_to_name": "Yukon River At Dawson"
       },
       {
-        "location_code": "29CB007",
-        "location_id": 205,
-        "location_name": "Koidern River",
-        "parameter_ids": [1150, 1165, 1251],
+        "location_code": "09CD001",
+        "location_id": 117,
+        "location_name": "Yukon River Above White River",
+        "parameter_ids": [1150, 1165],
         "encoding": 1,
         "route_to_location_id": 143,
         "route_to_location_code": "09EB001",
         "route_to_name": "Yukon River At Dawson"
       },
       {
-        "location_code": "29DC002",
-        "location_id": 7,
-        "location_name": "Mayo River Bridge at Silver Trail",
-        "parameter_ids": [1160],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "29DD001",
-        "location_id": 8,
-        "location_name": "Clear Creek at Klondike Highway",
-        "parameter_ids": [1160],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "29DD002",
-        "location_id": 206,
-        "location_name": "Clear Creek",
+        "location_code": "09CB001",
+        "location_id": 113,
+        "location_name": "White River At Kilometre 1881.6 Alaska Highway",
         "parameter_ids": [1150, 1165],
         "encoding": 1,
-        "route_to_location_id": 133,
-        "route_to_location_code": "09DD003",
-        "route_to_name": "Stewart River At The Mouth"
-      },
-      {
-        "location_code": "29EA004",
-        "location_id": 11,
-        "location_name": "Klondike River at Dempster Hwy",
-        "parameter_ids": [1160],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-1603",
-        "location_id": 223,
-        "location_name": "Johnson Lake CG Monitoring Well 1",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-1901",
-        "location_id": 232,
-        "location_name": "Tagish SWDF Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-1903",
-        "location_id": 234,
-        "location_name": "Mt. Lorne SWDF Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-1921",
-        "location_id": 249,
-        "location_name": "Drury Creek SWDF Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2006S",
-        "location_id": 265,
-        "location_name": "Carmacks Playground Monitoring Well Shallow",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2201S",
-        "location_id": 267,
-        "location_name": "Army Beach Monitoring Well 1 Shallow",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2202",
-        "location_id": 268,
-        "location_name": "Army Beach Monitoring Well 2",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2301",
-        "location_id": 278,
-        "location_name": "Bennet Beach Monitoring Well 1",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2302",
-        "location_id": 279,
-        "location_name": "Bennet Beach Monitoring Well 2",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2303",
-        "location_id": 280,
-        "location_name": "Bennet Beach Monitoring Well 3",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2305",
-        "location_id": 282,
-        "location_name": "Dawson City Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2306",
-        "location_id": 283,
-        "location_name": "Mayo Village Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2309",
-        "location_id": 286,
-        "location_name": "McConnell Lake Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09EB001",
-        "location_id": 143,
-        "location_name": "Yukon River At Dawson",
-        "parameter_ids": [0, 1150, 1165],
-        "encoding": 0,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
+        "route_to_location_id": 143,
+        "route_to_location_code": "09EB001",
+        "route_to_name": "Yukon River At Dawson"
       }
     ]
   },
@@ -2890,7 +1080,7 @@
         "location_id": 338,
         "location_name": "Antimony Creek",
         "parameter_ids": [35, 1154, 1202, 1250],
-        "encoding": 1,
+        "encoding": 2,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -2959,7 +1149,7 @@
         "location_code": "09EA006",
         "location_id": 141,
         "location_name": "Klondike River At Rock Creek",
-        "parameter_ids": [0, 1165, 1252],
+        "parameter_ids": [1165, 1252],
         "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -2979,7 +1169,7 @@
         "location_code": "09EA003",
         "location_id": 138,
         "location_name": "Klondike River Above Bonanza Creek",
-        "parameter_ids": [0, 19, 90, 92, 97, 100, 538, 1034, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1077, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1150, 1165, 1183, 1190, 1211, 1227, 1250, 1251, 1262, 1263],
+        "parameter_ids": [19, 90, 92, 97, 100, 538, 1034, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1077, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1150, 1165, 1183, 1190, 1211, 1227, 1250, 1251, 1262, 1263],
         "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -2989,6 +1179,16 @@
   },
   "Old Crow": {
     "Porcupine River Below Old Crow River": [
+      {
+        "location_code": "09FA-M1",
+        "location_id": 328,
+        "location_name": "Fishing Branch River",
+        "parameter_ids": [21, 34, 1170, 1202, 1220, 1250, 1267],
+        "encoding": 1,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
       {
         "location_code": "09FA-SC01",
         "location_id": 148,
@@ -3003,7 +1203,7 @@
         "location_code": "09FA001",
         "location_id": 149,
         "location_name": "Whitestone River Near The Mouth",
-        "parameter_ids": [0, 1150, 1165, 1250, 1251],
+        "parameter_ids": [1150, 1165, 1250, 1251],
         "encoding": 1,
         "route_to_location_id": 157,
         "route_to_location_code": "09FD003",
@@ -3100,6 +1300,16 @@
         "route_to_name": null
       },
       {
+        "location_code": "09FD003",
+        "location_id": 157,
+        "location_name": "Porcupine River Below Old Crow River",
+        "parameter_ids": [1165],
+        "encoding": 0,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
         "location_code": "09FDA-MET-00001",
         "location_id": 9,
         "location_name": "Old Crow ECCC met",
@@ -3128,16 +1338,6 @@
         "route_to_location_id": 149,
         "route_to_location_code": "09FA001",
         "route_to_name": "Whitestone River Near The Mouth"
-      },
-      {
-        "location_code": "09FD003",
-        "location_id": 157,
-        "location_name": "Porcupine River Below Old Crow River",
-        "parameter_ids": [0, 1165],
-        "encoding": 0,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
       }
     ]
   },
@@ -3297,7 +1497,7 @@
         "location_code": "09BB001",
         "location_id": 95,
         "location_name": "South Macmillan River At Kilometre 407 Canol Road",
-        "parameter_ids": [1150, 1165, 1250, 1251],
+        "parameter_ids": [1165, 1250, 1251],
         "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -3337,7 +1537,7 @@
         "location_code": "09BC002",
         "location_id": 98,
         "location_name": "Pelly River At Ross River",
-        "parameter_ids": [0, 1150, 1165],
+        "parameter_ids": [1150, 1165],
         "encoding": 2,
         "route_to_location_id": 99,
         "route_to_location_code": "09BC004",
@@ -3384,20 +1584,10 @@
         "route_to_name": "Pelly River Below Vangorda Creek"
       },
       {
-        "location_code": "YOWN-1603",
-        "location_id": 223,
-        "location_name": "Johnson Lake CG Monitoring Well 1",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
         "location_code": "09BC001",
         "location_id": 97,
         "location_name": "Pelly River At Pelly Crossing",
-        "parameter_ids": [0, 1150, 1165],
+        "parameter_ids": [1150, 1165],
         "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -3573,21 +1763,11 @@
         "location_code": "09AA012",
         "location_id": 50,
         "location_name": "Wheaton River Near Carcross",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 2,
         "route_to_location_id": 49,
         "route_to_location_code": "09AA004",
         "route_to_name": "Bennett Lake At Carcross"
-      },
-      {
-        "location_code": "09AA013",
-        "location_id": 51,
-        "location_name": "Tutshi River At Outlet Of Tutshi Lake",
-        "parameter_ids": [1150],
-        "encoding": 2,
-        "route_to_location_id": 52,
-        "route_to_location_code": "09AA017",
-        "route_to_name": "Tagish Lake At 10 Mile Road"
       },
       {
         "location_code": "09AA017",
@@ -3693,7 +1873,7 @@
         "location_code": "09AB-MET-00002",
         "location_id": 212,
         "location_name": "Whitehorse ECCC Met",
-        "parameter_ids": [34, 1154, 1202, 1250, 1267],
+        "parameter_ids": [1154, 1202, 1250, 1267],
         "encoding": 2,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -3883,7 +2063,7 @@
         "location_code": "09AC001",
         "location_id": 64,
         "location_name": "Takhini River Near Whitehorse",
-        "parameter_ids": [1150, 1165, 1250],
+        "parameter_ids": [1165, 1250],
         "encoding": 1,
         "route_to_location_id": 63,
         "route_to_location_code": "09AB010",
@@ -3893,7 +2073,7 @@
         "location_code": "09AC007",
         "location_id": 65,
         "location_name": "Ibex River Near Whitehorse",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": 64,
         "route_to_location_code": "09AC001",
@@ -3923,7 +2103,7 @@
         "location_code": "09AD002",
         "location_id": 68,
         "location_name": "Sidney Creek At Kilometre 46 South Canol Road",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 2,
         "route_to_location_id": 70,
         "route_to_location_code": "09AE002",
@@ -3973,7 +2153,7 @@
         "location_code": "09AE003",
         "location_id": 71,
         "location_name": "Swift River Near Swift River",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 2,
         "route_to_location_id": 70,
         "route_to_location_code": "09AE002",
@@ -4023,7 +2203,7 @@
         "location_code": "09AG001",
         "location_id": 75,
         "location_name": "Big Salmon River Near Carmacks",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -4077,7 +2257,7 @@
         "encoding": 2,
         "route_to_location_id": 191,
         "route_to_location_code": "29AB009",
-        "route_to_name": "Wolf Creek – Highway #2"
+        "route_to_name": "Wolf Creek â€“ Highway #2"
       },
       {
         "location_code": "29AB007",
@@ -4087,12 +2267,12 @@
         "encoding": 2,
         "route_to_location_id": 191,
         "route_to_location_code": "29AB009",
-        "route_to_name": "Wolf Creek – Highway #2"
+        "route_to_name": "Wolf Creek â€“ Highway #2"
       },
       {
         "location_code": "29AB009",
         "location_id": 191,
-        "location_name": "Wolf Creek – Highway #2",
+        "location_name": "Wolf Creek â€“ Highway #2",
         "parameter_ids": [1150, 1165],
         "encoding": 2,
         "route_to_location_id": 61,
@@ -4140,9 +2320,9 @@
         "route_to_name": null
       },
       {
-        "location_code": "YOWN-1901",
-        "location_id": 232,
-        "location_name": "Tagish SWDF Monitoring Well",
+        "location_code": "YOWN-1302",
+        "location_id": 216,
+        "location_name": "Swift River HPW Camp Monitoring Well",
         "parameter_ids": [1166],
         "encoding": 2,
         "route_to_location_id": null,
@@ -4150,21 +2330,11 @@
         "route_to_name": null
       },
       {
-        "location_code": "YOWN-1903",
-        "location_id": 234,
-        "location_name": "Mt. Lorne SWDF Monitoring Well",
+        "location_code": "YOWN-1916",
+        "location_id": 246,
+        "location_name": "Swift River SWDF Monitoring Well",
         "parameter_ids": [1166],
         "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-1921",
-        "location_id": 249,
-        "location_name": "Drury Creek SWDF Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -4173,16 +2343,6 @@
         "location_code": "YOWN-2201S",
         "location_id": 267,
         "location_name": "Army Beach Monitoring Well 1 Shallow",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2202",
-        "location_id": 268,
-        "location_name": "Army Beach Monitoring Well 2",
         "parameter_ids": [1166],
         "encoding": 2,
         "route_to_location_id": null,
@@ -4200,40 +2360,10 @@
         "route_to_name": null
       },
       {
-        "location_code": "YOWN-2302",
-        "location_id": 279,
-        "location_name": "Bennet Beach Monitoring Well 2",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2303",
-        "location_id": 280,
-        "location_name": "Bennet Beach Monitoring Well 3",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "YOWN-2309",
-        "location_id": 286,
-        "location_name": "McConnell Lake Monitoring Well",
-        "parameter_ids": [1166],
-        "encoding": 2,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
         "location_code": "09AH001",
         "location_id": 80,
         "location_name": "Yukon River At Carmacks",
-        "parameter_ids": [0, 1150, 1165, 1252],
+        "parameter_ids": [1150, 1165, 1252],
         "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -4357,11 +2487,21 @@
         "location_code": "09BC002",
         "location_id": 98,
         "location_name": "Pelly River At Ross River",
-        "parameter_ids": [0, 1150, 1165],
+        "parameter_ids": [1150, 1165],
         "encoding": 2,
         "route_to_location_id": 99,
         "route_to_location_code": "09BC004",
         "route_to_name": "Pelly River Below Vangorda Creek"
+      },
+      {
+        "location_code": "09BC004",
+        "location_id": 99,
+        "location_name": "Pelly River Below Vangorda Creek",
+        "parameter_ids": [1150, 1165, 1252],
+        "encoding": 0,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
       },
       {
         "location_code": "29BA005",
@@ -4382,26 +2522,6 @@
         "route_to_location_id": 99,
         "route_to_location_code": "09BC004",
         "route_to_name": "Pelly River Below Vangorda Creek"
-      },
-      {
-        "location_code": "YOWN-1603",
-        "location_id": 223,
-        "location_name": "Johnson Lake CG Monitoring Well 1",
-        "parameter_ids": [1166],
-        "encoding": 1,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
-      },
-      {
-        "location_code": "09BC004",
-        "location_id": 99,
-        "location_name": "Pelly River Below Vangorda Creek",
-        "parameter_ids": [1150, 1165, 1252],
-        "encoding": 0,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
       }
     ]
   },
@@ -4428,21 +2548,21 @@
         "route_to_name": "Mayo River at Highway No. 11"
       },
       {
-        "location_code": "29DC002",
-        "location_id": 7,
-        "location_name": "Mayo River Bridge at Silver Trail",
-        "parameter_ids": [1160],
-        "encoding": 1,
+        "location_code": "09DC007",
+        "location_id": 297,
+        "location_name": "Mayo River at Highway No. 11",
+        "parameter_ids": [1165],
+        "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
       },
       {
-        "location_code": "09DC007",
-        "location_id": 297,
-        "location_name": "Mayo River at Highway No. 11",
-        "parameter_ids": [0, 1165],
-        "encoding": 0,
+        "location_code": "29DC002",
+        "location_id": 7,
+        "location_name": "Mayo River Bridge at Silver Trail",
+        "parameter_ids": [1160],
+        "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -4473,7 +2593,7 @@
         "location_code": "09DA001",
         "location_id": 120,
         "location_name": "Hess River Above Emerald Creek",
-        "parameter_ids": [0, 1150, 1165, 1250, 1251],
+        "parameter_ids": [1165, 1250, 1251],
         "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -4513,7 +2633,7 @@
         "location_code": "09DB001",
         "location_id": 124,
         "location_name": "Beaver River Below Matson Creek",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -4523,7 +2643,7 @@
         "location_code": "09DC006",
         "location_id": 129,
         "location_name": "Stewart River Near Mayo",
-        "parameter_ids": [0, 1165],
+        "parameter_ids": [1165],
         "encoding": 0,
         "route_to_location_id": null,
         "route_to_location_code": null,
@@ -4594,6 +2714,16 @@
         "route_to_name": null
       },
       {
+        "location_code": "10AA001",
+        "location_id": 162,
+        "location_name": "Liard River At Upper Crossing",
+        "parameter_ids": [19, 90, 92, 100, 538, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1133, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1150, 1165, 1183, 1190, 1227, 1250, 1251, 1262, 1263],
+        "encoding": 0,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
         "location_code": "10AA004",
         "location_id": 163,
         "location_name": "Rancheria River Near The Mouth",
@@ -4617,7 +2747,7 @@
         "location_code": "10AA006",
         "location_id": 165,
         "location_name": "Liard River Below Scurvy Creek",
-        "parameter_ids": [1150, 1165],
+        "parameter_ids": [1165],
         "encoding": 1,
         "route_to_location_id": 162,
         "route_to_location_code": "10AA001",
@@ -4664,11 +2794,31 @@
         "route_to_name": "Liard River At Upper Crossing"
       },
       {
-        "location_code": "10AA001",
-        "location_id": 162,
-        "location_name": "Liard River At Upper Crossing",
-        "parameter_ids": [0, 19, 90, 92, 100, 538, 1036, 1037, 1041, 1046, 1047, 1049, 1052, 1053, 1055, 1056, 1058, 1060, 1061, 1066, 1067, 1069, 1072, 1075, 1076, 1079, 1082, 1084, 1085, 1086, 1088, 1090, 1095, 1096, 1097, 1098, 1099, 1100, 1101, 1102, 1103, 1104, 1107, 1108, 1109, 1110, 1111, 1112, 1113, 1114, 1117, 1118, 1119, 1120, 1123, 1127, 1128, 1129, 1130, 1131, 1133, 1136, 1137, 1138, 1140, 1141, 1142, 1143, 1144, 1145, 1146, 1147, 1150, 1165, 1183, 1190, 1227, 1250, 1251, 1262, 1263],
-        "encoding": 0,
+        "location_code": "YOWN-1923",
+        "location_id": 251,
+        "location_name": "Watson Lake SWDF Monitoring Well",
+        "parameter_ids": [1166],
+        "encoding": 1,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
+        "location_code": "YOWN-2001",
+        "location_id": 259,
+        "location_name": "Upper Liard SWDF Monitoring Well 2",
+        "parameter_ids": [1166],
+        "encoding": 1,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
+        "location_code": "YOWN-2208",
+        "location_id": 275,
+        "location_name": "Watson Lake Hwy Pullout Monitoring Well",
+        "parameter_ids": [1166],
+        "encoding": 1,
         "route_to_location_id": null,
         "route_to_location_code": null,
         "route_to_name": null
@@ -4830,6 +2980,16 @@
         "route_to_name": "Pelly River At Ross River"
       },
       {
+        "location_code": "09BC002",
+        "location_id": 98,
+        "location_name": "Pelly River At Ross River",
+        "parameter_ids": [1150, 1165],
+        "encoding": 0,
+        "route_to_location_id": null,
+        "route_to_location_code": null,
+        "route_to_name": null
+      },
+      {
         "location_code": "29BA005",
         "location_id": 198,
         "location_name": "Tay Creek",
@@ -4838,17 +2998,8 @@
         "route_to_location_id": 90,
         "route_to_location_code": "09BA001",
         "route_to_name": "Ross River At Ross River"
-      },
-      {
-        "location_code": "09BC002",
-        "location_id": 98,
-        "location_name": "Pelly River At Ross River",
-        "parameter_ids": [0, 1150, 1165],
-        "encoding": 0,
-        "route_to_location_id": null,
-        "route_to_location_code": null,
-        "route_to_name": null
       }
     ]
   }
 }
+

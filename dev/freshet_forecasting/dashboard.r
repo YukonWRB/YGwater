@@ -2510,27 +2510,12 @@ plot_continuous_with_percentiles_and_return_periods <- function(
             ref_year <- as.integer(format(Sys.time(), "%Y", tz = plot_timezone))
         }
 
-        historical_start_date <- as.Date(sprintf(
+        # Only show percentile envelope for 1 year before to 1 year after the reference year
+        percentile_cycle_start_date <- as.Date(sprintf(
             "%d-01-01",
-            historical_start_year
+            ref_year - 1L
         ))
-        historical_end_date <- as.Date(sprintf("%d-12-31", ref_year + 1L))
-        padded_view_start <- as.Date(view_start, tz = plot_timezone) - 366
-        padded_view_end <- as.Date(view_end, tz = plot_timezone) + 366
-
-        percentile_cycle_start_date <- max(
-            historical_start_date,
-            padded_view_start
-        )
-        percentile_cycle_end_date <- min(historical_end_date, padded_view_end)
-        if (percentile_cycle_end_date < percentile_cycle_start_date) {
-            percentile_cycle_start_date <- historical_start_date
-            percentile_cycle_end_date <- min(
-                historical_end_date,
-                historical_start_date + 366
-            )
-        }
-
+        percentile_cycle_end_date <- as.Date(sprintf("%d-12-31", ref_year + 1L))
         percentile_dates <- seq(
             percentile_cycle_start_date,
             percentile_cycle_end_date,
@@ -2550,24 +2535,31 @@ plot_continuous_with_percentiles_and_return_periods <- function(
             stringsAsFactors = FALSE
         )
         pct_plot$doy[pct_months == 2 & pct_days == 29] <- NA_integer_
-        pct_lookup <- pct[, c(
-            "location_code",
-            "doy",
-            "p0",
-            "p10",
-            "p25",
-            "p50",
-            "p75",
-            "p90",
-            "p100"
-        )]
+        pct_bands <- c("p0", "p10", "p25", "p50", "p75", "p90", "p100")
+        pct_lookup <- pct[,
+            intersect(c("location_code", "doy", pct_bands), names(pct)),
+            drop = FALSE
+        ]
+        for (col in setdiff(
+            c("location_code", "doy", pct_bands),
+            names(pct_lookup)
+        )) {
+            pct_lookup[[col]] <- if (col == "location_code") {
+                rep(location_code, nrow(pct_lookup))
+            } else {
+                rep(NA_real_, nrow(pct_lookup))
+            }
+        }
         pct_key <- paste(pct_lookup$location_code, pct_lookup$doy)
         plot_key <- paste(pct_plot$location_code, pct_plot$doy)
         match_idx <- match(plot_key, pct_key)
-        for (col in c("p0", "p10", "p25", "p50", "p75", "p90", "p100")) {
+        for (col in pct_bands) {
             pct_plot[[col]] <- pct_lookup[[col]][match_idx]
         }
         pct_plot <- pct_plot[order(pct_plot$datetime), ]
+        for (col in setdiff(c("datetime", pct_bands), names(pct_plot))) {
+            pct_plot[[col]] <- rep(NA_real_, nrow(pct_plot))
+        }
 
         # Prevent ribbon self-clipping caused by NA gaps in percentile bands.
         pct_plot <- pct_plot[
@@ -2954,10 +2946,32 @@ build_station_plot <- function(
     con,
     snow_survey_parameters,
     load_entire_record = FALSE,
+    relative_view_weeks_before = 52L,
+    relative_view_weeks_after = 52L,
     continuous_data = NULL,
     percentiles = NULL,
     return_periods = NULL
 ) {
+    normalize_relative_view_weeks <- function(value, default_value) {
+        parsed <- suppressWarnings(as.integer(value))
+        if (length(parsed) == 0 || is.na(parsed) || parsed < 0) {
+            return(as.integer(default_value))
+        }
+        parsed
+    }
+
+    relative_view_weeks_before <- normalize_relative_view_weeks(
+        relative_view_weeks_before,
+        52L
+    )
+    relative_view_weeks_after <- normalize_relative_view_weeks(
+        relative_view_weeks_after,
+        52L
+    )
+
+    view_start_ago <- sprintf("%d weeks", relative_view_weeks_before)
+    view_end_ahead <- sprintf("%d weeks", relative_view_weeks_after)
+
     tryCatch(
         suppressWarnings({
             if (parameter %in% snow_survey_parameters) {
@@ -3000,6 +3014,8 @@ build_station_plot <- function(
                     percentiles = percentiles,
                     return_periods = return_periods,
                     parameter = parameter,
+                    view_start_ago = view_start_ago,
+                    view_end_ahead = view_end_ahead,
                     reference_time = as.character(reference_time),
                     load_entire_record = load_entire_record,
                     con = con,
@@ -3013,6 +3029,8 @@ build_station_plot <- function(
                             percentiles = percentiles,
                             return_periods = data.frame(),
                             parameter = parameter,
+                            view_start_ago = view_start_ago,
+                            view_end_ahead = view_end_ahead,
                             reference_time = as.character(reference_time),
                             load_entire_record = load_entire_record,
                             con = con,
@@ -3421,23 +3439,30 @@ plot_continuous_static_with_percentiles_and_return_periods <- function(
                 stringsAsFactors = FALSE
             )
             pct_plot$doy[pct_months == 2 & pct_days == 29] <- NA_integer_
-            pct_lookup <- pct[, c(
-                "location_code",
-                "doy",
-                "p0",
-                "p10",
-                "p25",
-                "p50",
-                "p75",
-                "p90",
-                "p100"
-            )]
+            pct_bands <- c("p0", "p10", "p25", "p50", "p75", "p90", "p100")
+            pct_lookup <- pct[,
+                intersect(c("location_code", "doy", pct_bands), names(pct)),
+                drop = FALSE
+            ]
+            for (col in setdiff(
+                c("location_code", "doy", pct_bands),
+                names(pct_lookup)
+            )) {
+                pct_lookup[[col]] <- if (col == "location_code") {
+                    rep(location_code, nrow(pct_lookup))
+                } else {
+                    rep(NA_real_, nrow(pct_lookup))
+                }
+            }
             match_idx <- match(
                 paste(pct_plot$location_code, pct_plot$doy),
                 paste(pct_lookup$location_code, pct_lookup$doy)
             )
-            for (col in c("p0", "p10", "p25", "p50", "p75", "p90", "p100")) {
+            for (col in pct_bands) {
                 pct_plot[[col]] <- pct_lookup[[col]][match_idx]
+            }
+            for (col in setdiff(c("datetime", pct_bands), names(pct_plot))) {
+                pct_plot[[col]] <- rep(NA_real_, nrow(pct_plot))
             }
             pct_plot <- pct_plot[
                 stats::complete.cases(pct_plot[, c(
@@ -5746,7 +5771,7 @@ launch_freshet_dashboard <- function(con) {
             "#dashboard-panels.comfortable { grid-template-columns: 1fr; }",
             "#controls .dashboard-controls-wrap { display:flex; flex-direction:column; gap:0.3rem; }",
             "#controls .dashboard-controls-row { display:grid; gap:0.35rem; align-items:start; justify-items:stretch; }",
-            "#controls .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 7rem 9rem; justify-content:start; align-items:end; }",
+            "#controls .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 8rem 8rem 12rem 7rem 9rem; justify-content:start; align-items:end; }",
             "#controls .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(6, minmax(0, 1fr)); }",
             "#controls .dashboard-controls-cell { min-width:0; display:flex; flex-direction:column; justify-content:flex-start; }",
             "#controls .dashboard-controls-cell > * { width:100%; }",
@@ -5801,6 +5826,18 @@ launch_freshet_dashboard <- function(con) {
                         ),
                         shiny::tags$div(
                             class = "dashboard-controls-cell",
+                            shiny::numericInput(
+                                "relative_view_weeks_before",
+                                "Rel view before (weeks)",
+                                value = 52,
+                                min = 0,
+                                max = 520,
+                                step = 1,
+                                width = "100%"
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
                             shiny::tags$div(
                                 class = "form-group shiny-input-container",
                                 style = "margin-bottom:0;",
@@ -5820,6 +5857,18 @@ launch_freshet_dashboard <- function(con) {
                                     max = format(Sys.time(), "%Y-%m-%dT%H:%M"),
                                     oninput = "if(this.max && this.value > this.max){ this.value = this.max; } Shiny.setInputValue('time0', this.value, {priority: 'event'});"
                                 )
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::numericInput(
+                                "relative_view_weeks_after",
+                                "Rel view after (weeks)",
+                                value = 52,
+                                min = 0,
+                                max = 520,
+                                step = 1,
+                                width = "100%"
                             )
                         ),
                         shiny::tags$div(
@@ -8173,6 +8222,17 @@ launch_freshet_dashboard <- function(con) {
         }
 
         normalize_plot_request <- function(request) {
+            normalize_relative_view_weeks <- function(
+                value,
+                default_value = 52L
+            ) {
+                parsed <- suppressWarnings(as.integer(value))
+                if (length(parsed) == 0 || is.na(parsed) || parsed < 0) {
+                    return(as.integer(default_value))
+                }
+                parsed
+            }
+
             list(
                 station = request$station %||% "",
                 parameter = request$parameter %||% "",
@@ -8183,6 +8243,14 @@ launch_freshet_dashboard <- function(con) {
                 secondary_parameter = request$secondary_parameter %||% "",
                 secondary_historical_years = normalize_selected_historical_years(
                     request$secondary_historical_years
+                ),
+                relative_view_weeks_before = normalize_relative_view_weeks(
+                    request$relative_view_weeks_before,
+                    52L
+                ),
+                relative_view_weeks_after = normalize_relative_view_weeks(
+                    request$relative_view_weeks_after,
+                    52L
                 ),
                 reference_time = request$reference_time %||% ""
             )
@@ -8196,6 +8264,8 @@ launch_freshet_dashboard <- function(con) {
                 secondary_station = secondary_plot_key()$station,
                 secondary_parameter = secondary_plot_key()$parameter,
                 secondary_historical_years = input$secondary_historical_years,
+                relative_view_weeks_before = input$relative_view_weeks_before,
+                relative_view_weeks_after = input$relative_view_weeks_after,
                 reference_time = input$time0 %||% ""
             ))
         })
@@ -8253,6 +8323,8 @@ launch_freshet_dashboard <- function(con) {
                 secondary_historical_years = normalize_selected_historical_years(
                     input$secondary_historical_years
                 ),
+                relative_view_weeks_before = input$relative_view_weeks_before,
+                relative_view_weeks_after = input$relative_view_weeks_after,
                 reference_time = time_zero(),
                 request_signature = current_station_plot_signature()
             )
@@ -8509,6 +8581,8 @@ launch_freshet_dashboard <- function(con) {
                 con = con,
                 snow_survey_parameters = snow_survey_parameters,
                 load_entire_record = FALSE,
+                relative_view_weeks_before = request$relative_view_weeks_before,
+                relative_view_weeks_after = request$relative_view_weeks_after,
                 continuous_data = bundle$continuous,
                 percentiles = bundle$percentiles,
                 return_periods = bundle$return_periods
