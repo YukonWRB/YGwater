@@ -1869,6 +1869,15 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         },
         plot_resolution = plot_resolution,
         plot_timezone = timezone_name,
+        as_of = if (
+          is.null(input$as_of) ||
+            length(input$as_of) == 0 ||
+            is.na(input$as_of[[1]])
+        ) {
+          NULL
+        } else {
+          input$as_of[[1]]
+        },
         datum = isTRUE(input$apply_datum),
         filter = if (isTRUE(input$plot_filter)) {
           20
@@ -2246,6 +2255,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       render_key = NULL,
       plot_ready = FALSE,
       last_trace_count = 0L,
+      ignore_relayout_key = NULL,
       data = NULL,
       meta = NULL,
       payload = NULL
@@ -2267,6 +2277,22 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       YGwater:::viewport_ribbon_target_bins(width_px = adaptive_plot_width_px())
     })
 
+    relayout_key <- function(relayout) {
+      if (is.null(relayout) || length(relayout) == 0L) {
+        return(NULL)
+      }
+      paste(
+        names(relayout),
+        vapply(
+          relayout,
+          function(value) paste(as.character(value), collapse = ","),
+          character(1)
+        ),
+        sep = "=",
+        collapse = "|"
+      )
+    }
+
     current_legend_orientation <- reactive({
       if (!is.null(windowDims()) && windowDims()$width <= windowDims()$height) {
         return("h")
@@ -2287,10 +2313,12 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       } else {
         paste(format(xlim, tz = "UTC", usetz = TRUE), collapse = "|")
       }
+      target_bins <- adaptive_target_bins()
+      legend_orientation <- current_legend_orientation()
       render_key <- paste(
         key_xlim,
-        adaptive_target_bins(),
-        current_legend_orientation(),
+        target_bins,
+        legend_orientation,
         sep = "::"
       )
 
@@ -2298,12 +2326,15 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         return(invisible(NULL))
       }
 
+      needs_full_plot <- full_render || !isTRUE(adaptiveState$plot_ready)
+
       built <- YGwater:::viewport_adaptive_plot(
         payload = adaptiveState$payload,
         source = ns("plot"),
         xlim = xlim,
-        n_bins = adaptive_target_bins(),
-        legend_orientation = current_legend_orientation()
+        n_bins = target_bins,
+        legend_orientation = legend_orientation,
+        build_plot = needs_full_plot
       )
 
       old_trace_count <- adaptiveState$last_trace_count
@@ -2311,7 +2342,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$render_key <- render_key
       adaptiveState$last_trace_count <- built$trace_bundle$trace_count
 
-      if (full_render || !isTRUE(adaptiveState$plot_ready)) {
+      if (needs_full_plot) {
         output$plot <- plotly::renderPlotly({
           built$plot
         })
@@ -2729,9 +2760,21 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 return(trace_data)
               }
 
+              datum_m <- trace_datum_offset(ts_id)
+              if (!is.na(datum_m) && datum_m != 0) {
+                trace_data[, value := value + datum_m]
+              }
+              trace_data
+            }
+
+            trace_datum_offset <- function(ts_id) {
+              if (!isTRUE(req$datum)) {
+                return(0)
+              }
+
               units <- ac_get_timeseries_unit(con, ts_id)
               if (is.na(units) || units != "m") {
-                return(trace_data)
+                return(0)
               }
 
               location_id <- DBI::dbGetQuery(
@@ -2745,14 +2788,14 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 con,
                 "SELECT conversion_m
                  FROM public.datum_conversions
-                 WHERE location_id = $1
-                   AND current = TRUE;",
+                  WHERE location_id = $1
+                    AND current = TRUE;",
                 params = list(location_id)
               )[1, 1]
-              if (!is.na(datum_m)) {
-                trace_data[, value := value + datum_m]
+              if (is.na(datum_m)) {
+                return(0)
               }
-              trace_data
+              as.numeric(datum_m)
             }
 
             apply_adaptive_trace_filter <- function(
@@ -2931,8 +2974,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   gridy = req$gridy,
                   slider = FALSE,
                   tzone = plot_timezone,
-                  resolution = "day"
+                  resolution = "day",
+                  as_of = req$as_of
                 )
+
                 fast_trace <- fetch_fast_basic_trace(
                   ts_id,
                   tolower(parameter_label)
@@ -3286,6 +3331,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$render_key <- NULL
       adaptiveState$plot_ready <- FALSE
       adaptiveState$last_trace_count <- 0L
+      adaptiveState$ignore_relayout_key <- relayout_key(isolate(
+        plotly::event_data("plotly_relayout", source = ns("plot"))
+      ))
       adaptiveState$data <- NULL
       adaptiveState$meta <- NULL
       adaptiveState$payload <- NULL
@@ -3324,6 +3372,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         adaptiveState$render_key <- NULL
         adaptiveState$plot_ready <- FALSE
         adaptiveState$last_trace_count <- 0L
+        adaptiveState$ignore_relayout_key <- relayout_key(isolate(
+          plotly::event_data("plotly_relayout", source = ns("plot"))
+        ))
         adaptiveState$data <- result$data
         adaptiveState$meta <- result$adaptive$meta
         adaptiveState$payload <- result$adaptive$payload
@@ -3339,6 +3390,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         adaptiveState$render_key <- NULL
         adaptiveState$plot_ready <- FALSE
         adaptiveState$last_trace_count <- 0L
+        adaptiveState$ignore_relayout_key <- NULL
         adaptiveState$data <- NULL
         adaptiveState$meta <- NULL
         adaptiveState$payload <- NULL
@@ -3558,6 +3610,14 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           return()
         }
         relayout <- relayout_event()
+        event_key <- relayout_key(relayout)
+        if (
+          !is.null(event_key) &&
+            identical(event_key, adaptiveState$ignore_relayout_key)
+        ) {
+          adaptiveState$ignore_relayout_key <- NULL
+          return()
+        }
         has_xaxis_change <- any(grepl(
           "^xaxis[0-9]*\\.(range\\[[01]\\]|autorange)$",
           names(relayout)
