@@ -111,6 +111,137 @@ viewport_ribbon_relayout_xlim <- function(relayout, tz = "UTC") {
   sort(out)
 }
 
+#' Infer typical cadence in seconds from a vector of x-axis values, used for identifying gaps in time series data for viewport resampling
+#' @keywords internal
+#' @noRd
+viewport_infer_cadence_seconds <- function(
+  x,
+  min_run_length = 3L,
+  max_cadence_seconds = 25 * 60 * 60
+) {
+  x_num <- as.numeric(x)
+  cadence <- rep(NA_real_, length(x_num))
+  if (length(x_num) < 4L) {
+    return(cadence)
+  }
+
+  diffs <- diff(x_num)
+  diffs[!is.finite(diffs) | diffs <= 0] <- NA_real_
+  n_diffs <- length(diffs)
+  smoothed <- rep(NA_real_, n_diffs)
+  if (n_diffs >= 3L) {
+    prev_diff <- diffs[seq_len(n_diffs - 2L)]
+    mid_diff <- diffs[2L:(n_diffs - 1L)]
+    next_diff <- diffs[3L:n_diffs]
+    valid <- is.finite(prev_diff) &
+      is.finite(mid_diff) &
+      is.finite(next_diff)
+    smooth_idx <- 2L:(n_diffs - 1L)
+    smoothed[smooth_idx[valid]] <- prev_diff[valid] +
+      mid_diff[valid] +
+      next_diff[valid] -
+      pmin(prev_diff[valid], mid_diff[valid], next_diff[valid]) -
+      pmax(prev_diff[valid], mid_diff[valid], next_diff[valid])
+  }
+  if (!any(!is.na(smoothed))) {
+    return(cadence)
+  }
+
+  if (length(smoothed) == 1L) {
+    run_start <- 1L
+  } else {
+    prev_na <- is.na(smoothed[-length(smoothed)])
+    curr_na <- is.na(smoothed[-1L])
+    value_changed <- smoothed[-1L] != smoothed[-length(smoothed)]
+    value_changed[prev_na | curr_na] <- FALSE
+    run_start <- which(c(TRUE, value_changed | (prev_na != curr_na)))
+  }
+  run_end <- c(run_start[-1L] - 1L, length(smoothed))
+  run_len <- run_end - run_start + 1L
+  run_diff <- smoothed[run_start]
+  keep <- !is.na(run_diff) &
+    run_diff > 0 &
+    run_diff < max_cadence_seconds &
+    run_len >= min_run_length
+  if (!any(keep)) {
+    return(cadence)
+  }
+
+  cadence[run_start[keep]] <- run_diff[keep]
+  cadence_idx <- which(!is.na(cadence))
+  fill_idx <- findInterval(seq_along(cadence), cadence_idx)
+  fill_idx[fill_idx == 0L] <- 1L
+  cadence[cadence_idx[fill_idx]]
+}
+
+#' Add inferred gap markers to a data table based on x-axis values and inferred cadence, used for splitting line segments in viewport resampling when gaps are detected
+#' @keywords internal
+#' @noRd
+viewport_add_inferred_gap_markers <- function(
+  dt,
+  x_col,
+  line_col,
+  row_id_col = ".row_id"
+) {
+  if (
+    is.null(line_col) ||
+      !(line_col %in% names(dt)) ||
+      !(x_col %in% names(dt)) ||
+      nrow(dt) < 4L
+  ) {
+    return(dt)
+  }
+
+  cadence <- viewport_infer_cadence_seconds(dt[[x_col]])
+  cadence_available <- any(is.finite(cadence))
+  x_num <- as.numeric(dt[[x_col]])
+  next_x <- data.table::shift(x_num, type = "lead")
+  gap_idx <- which(
+    is.finite(cadence) &
+      is.finite(next_x) &
+      next_x > x_num + cadence
+  )
+  if (length(gap_idx) == 0L) {
+    data.table::setattr(
+      dt,
+      "viewport_inferred_cadence_available",
+      cadence_available
+    )
+    return(dt)
+  }
+
+  gap_rows <- data.table::copy(dt[gap_idx])
+  gap_rows[, (x_col) := get(x_col) + 1]
+  gap_rows[, (line_col) := NA_real_]
+  if (row_id_col %in% names(gap_rows)) {
+    gap_rows[, (row_id_col) := as.numeric(get(row_id_col)) + 0.5]
+  }
+
+  for (col in setdiff(names(gap_rows), c(x_col, line_col, row_id_col))) {
+    data.table::set(
+      gap_rows,
+      j = col,
+      value = gap_rows[[col]][NA_integer_]
+    )
+  }
+  if ("imputed" %in% names(gap_rows)) {
+    gap_rows[, imputed := FALSE]
+  }
+
+  out <- data.table::rbindlist(
+    list(dt, gap_rows),
+    use.names = TRUE,
+    fill = TRUE
+  )
+  if (row_id_col %in% names(out)) {
+    data.table::setorderv(out, row_id_col)
+  } else {
+    data.table::setorderv(out, x_col)
+  }
+  data.table::setattr(out, "viewport_inferred_cadence_available", TRUE)
+  out
+}
+
 
 #' Resample line and band data for a given x-axis viewport
 #' @keywords internal
@@ -218,6 +349,17 @@ viewport_ribbon_resample <- function(
     visible[, .row_id := .I]
   }
 
+  visible <- viewport_add_inferred_gap_markers(
+    dt = visible,
+    x_col = x_col,
+    line_col = line_col,
+    row_id_col = ".row_id"
+  )
+  inferred_cadence_available <- isTRUE(attr(
+    visible,
+    "viewport_inferred_cadence_available"
+  ))
+
   if (!nrow(visible)) {
     if (!is.null(xlim_num)) {
       return(list(
@@ -262,7 +404,10 @@ viewport_ribbon_resample <- function(
   }
 
   visible[, .run := 1L]
-  if (nrow(visible) > 1) {
+  if (
+    nrow(visible) > 1 &&
+      !isTRUE(inferred_cadence_available)
+  ) {
     visible[,
       .run := cumsum(c(
         1L,
@@ -301,9 +446,8 @@ viewport_ribbon_resample <- function(
       stop("`line_col` was not found in `data`.")
     }
 
-    line_visible <- data.table::copy(visible)
-    if (nrow(line_visible) > 1) {
-      line_visible[,
+    if (nrow(visible) > 1) {
+      visible[,
         .line_run := cumsum(c(
           1L,
           diff(.run) != 0L |
@@ -311,10 +455,10 @@ viewport_ribbon_resample <- function(
         ))
       ]
     } else {
-      line_visible[, .line_run := 1L]
+      visible[, .line_run := 1L]
     }
 
-    line_dt <- line_visible[
+    line_dt <- visible[
       !is.na(get(line_col)),
       {
         local <- .SD
@@ -353,6 +497,20 @@ viewport_ribbon_resample <- function(
       lower_col <- cols[[1]]
       upper_col <- cols[[2]]
 
+      if (nrow(visible) > 1) {
+        band_missing <- is.na(visible[[lower_col]]) |
+          is.na(visible[[upper_col]])
+        visible[
+          ,
+          .band_run := cumsum(c(
+            1L,
+            diff(.run) != 0L | head(band_missing, -1L)
+          ))
+        ]
+      } else {
+        visible[, .band_run := 1L]
+      }
+
       band_dt <- visible[
         !is.na(get(lower_col)) & !is.na(get(upper_col)),
         .(
@@ -361,7 +519,7 @@ viewport_ribbon_resample <- function(
           ymax = max(get(upper_col), na.rm = TRUE),
           n_raw = .N
         ),
-        by = .(.run, .bin)
+        by = .(.run = .band_run, .bin)
       ]
 
       if (nrow(band_dt) > 0) {
@@ -388,7 +546,6 @@ viewport_ribbon_resample <- function(
     )
   )
 }
-
 
 #' Generate plotly trace bundle for line and band data from viewport resampling
 #' @keywords internal
@@ -438,12 +595,35 @@ viewport_ribbon_trace_bundle <- function(
       )
     }
 
+    lower_label <- if (grepl("typical|typique", band_name, ignore.case = TRUE)) {
+      "Q25"
+    } else {
+      "Min"
+    }
+    upper_label <- if (grepl("typical|typique", band_name, ignore.case = TRUE)) {
+      "Q75"
+    } else {
+      "Max"
+    }
     band_runs <- split(band_dt, by = ".run", keep.by = FALSE)
     showlegend <- TRUE
 
     for (seg in band_runs) {
       x_poly <- c(seg$x, rev(seg$x))
       y_poly <- c(seg$ymin, rev(seg$ymax))
+      hover_text <- paste0(
+        band_name,
+        "<br>",
+        format(seg$x, usetz = TRUE),
+        "<br>",
+        lower_label,
+        ": ",
+        signif(seg$ymin, 5),
+        "<br>",
+        upper_label,
+        ": ",
+        signif(seg$ymax, 5)
+      )
 
       traces[[length(traces) + 1L]] <- list(
         x = x_poly,
@@ -451,14 +631,15 @@ viewport_ribbon_trace_bundle <- function(
         type = "scatter",
         mode = "lines",
         fill = "toself",
-        hoveron = "fills",
+        hoveron = if (hover) "points" else NULL,
         fillcolor = style$fillcolor,
         line = style$line,
         name = band_name,
         legendgroup = band_name,
         showlegend = showlegend,
-        hoverinfo = "skip",
-        hovertemplate = "<extra></extra>"
+        hoverinfo = if (hover) "text" else "skip",
+        hovertemplate = if (hover) "%{text}<extra></extra>" else NULL,
+        text = if (hover) c(hover_text, rev(hover_text)) else NULL
       )
 
       client_points <- client_points + length(x_poly)
@@ -467,32 +648,48 @@ viewport_ribbon_trace_bundle <- function(
   }
 
   if (nrow(summary$line) > 0) {
-    line_runs <- split(summary$line, by = ".run", keep.by = FALSE)
-    showlegend <- TRUE
-
-    for (seg in line_runs) {
-      traces[[length(traces) + 1L]] <- list(
-        x = seg$x,
-        y = seg$y,
-        type = "scatter",
-        mode = "lines",
-        line = list(color = line_color, width = line_width),
-        name = line_name,
-        legendgroup = line_name,
-        showlegend = showlegend,
-        hoverinfo = if (hover) "text" else "skip",
-        text = paste0(
-          line_name,
-          "<br>",
-          format(seg$x, usetz = TRUE),
-          "<br>Value: ",
-          signif(seg$y, 5)
-        )
-      )
-
-      client_points <- client_points + length(seg$x)
-      showlegend <- FALSE
+    line_dt <- data.table::as.data.table(summary$line)
+    run_id <- if (".run" %in% names(line_dt)) {
+      line_dt$.run
+    } else {
+      rep(1L, nrow(line_dt))
     }
+    run_change <- c(FALSE, diff(run_id) != 0L)
+    run_change[is.na(run_change)] <- FALSE
+    out_len <- nrow(line_dt) + sum(run_change)
+    out_pos <- seq_len(nrow(line_dt)) + cumsum(run_change)
+    x_out <- rep(line_dt$x[NA_integer_], out_len)
+    y_out <- rep(NA_real_, out_len)
+    text_out <- rep(NA_character_, out_len)
+
+    x_out[out_pos] <- line_dt$x
+    y_out[out_pos] <- line_dt$y
+    if (hover) {
+      text_out[out_pos] <- paste0(
+        line_name,
+        "<br>",
+        format(line_dt$x, usetz = TRUE),
+        "<br>Value: ",
+        signif(line_dt$y, 5)
+      )
+    }
+
+    traces[[length(traces) + 1L]] <- list(
+      x = x_out,
+      y = y_out,
+      type = "scatter",
+      mode = "lines",
+      connectgaps = FALSE,
+      line = list(color = line_color, width = line_width),
+      name = line_name,
+      legendgroup = line_name,
+      showlegend = TRUE,
+      hoverinfo = if (hover) "text" else "skip",
+      hovertemplate = if (hover) "%{text}<extra></extra>" else NULL,
+      text = if (hover) text_out else NULL
+    )
+
+    client_points <- client_points + out_len
   }
 
   list(
@@ -611,24 +808,11 @@ viewport_timeseries_plot <- function(
     xlim = xlim,
     n_bins = n_bins
   )
-  line_bundle <- viewport_ribbon_trace_bundle(
-    summary = line_summary,
-    line_name = line_name,
-    line_color = line_color,
-    line_width = line_width,
-    band_styles = list(),
-    hover = hover
-  )
 
   band_summary <- list(
     line = data.table::data.table(),
     bands = list(),
     meta = NULL
-  )
-  band_bundle <- list(
-    traces = list(),
-    trace_count = 0L,
-    client_points = 0L
   )
 
   if (nrow(range_dt) > 0) {
@@ -652,15 +836,22 @@ viewport_timeseries_plot <- function(
       xlim = xlim,
       n_bins = n_bins
     )
-    band_bundle <- viewport_ribbon_trace_bundle(
-      summary = band_summary,
-      line_name = NULL,
-      band_styles = meta$band_styles,
-      hover = hover
-    )
   }
 
-  traces <- c(band_bundle$traces, line_bundle$traces)
+  combined_summary <- list(
+    line = line_summary$line,
+    bands = band_summary$bands,
+    meta = NULL
+  )
+  trace_bundle <- viewport_ribbon_trace_bundle(
+    summary = combined_summary,
+    line_name = line_name,
+    line_color = line_color,
+    line_width = line_width,
+    band_styles = meta$band_styles,
+    hover = hover
+  )
+  traces <- trace_bundle$traces
 
   p <- plotly::plot_ly(source = source)
   for (trace in traces) {
@@ -679,6 +870,12 @@ viewport_timeseries_plot <- function(
       layout_args$legend <- list()
     }
     layout_args$legend$orientation <- legend_orientation
+  }
+  if (is.null(layout_args$legend)) {
+    layout_args$legend <- list()
+  }
+  if (is.null(layout_args$legend$groupclick)) {
+    layout_args$legend$groupclick <- "togglegroup"
   }
 
   if (length(layout_args) > 0) {
@@ -703,7 +900,7 @@ viewport_timeseries_plot <- function(
     trace_bundle = list(
       traces = traces,
       trace_count = length(traces),
-      client_points = band_bundle$client_points + line_bundle$client_points
+      client_points = trace_bundle$client_points
     ),
     summaries = list(
       line = line_summary,
@@ -956,6 +1153,7 @@ viewport_layout_add_status_bands <- function(
   if (!is.null(status_xaxis_name)) {
     main_xaxis$anchor <- main_yaxis_ref
     main_xaxis$showticklabels <- FALSE
+    main_xaxis$automargin <- TRUE
     layout[[main_xaxis_name]] <- main_xaxis
 
     status_xaxis <- main_xaxis
@@ -965,6 +1163,13 @@ viewport_layout_add_status_bands <- function(
     status_xaxis$showgrid <- FALSE
     status_xaxis$type <- "date"
     status_xaxis$fixedrange <- FALSE
+    status_xaxis$side <- "bottom"
+    status_xaxis$ticks <- if (!is.null(status_xaxis$ticks)) {
+      status_xaxis$ticks
+    } else {
+      "outside"
+    }
+    status_xaxis$automargin <- TRUE
     status_xaxis$title <- list(standoff = 0)
     if (!is.null(status_xaxis$rangeslider)) {
       status_xaxis$rangeslider$visible <- FALSE
@@ -973,7 +1178,22 @@ viewport_layout_add_status_bands <- function(
   } else {
     main_xaxis$anchor <- status_yaxis_ref
     main_xaxis$showticklabels <- original_showticklabels
+    main_xaxis$automargin <- TRUE
     layout[[main_xaxis_name]] <- main_xaxis
+  }
+
+  if (isTRUE(original_showticklabels)) {
+    if (is.null(layout$margin)) {
+      layout$margin <- list()
+    }
+    current_bottom_margin <- suppressWarnings(as.numeric(layout$margin$b))
+    if (
+      length(current_bottom_margin) != 1L ||
+        is.na(current_bottom_margin) ||
+        current_bottom_margin < 35
+    ) {
+      layout$margin$b <- 35
+    }
   }
 
   y_range <- status_bands$y_range
@@ -1033,7 +1253,8 @@ viewport_adaptive_plot <- function(
   source = NULL,
   xlim = NULL,
   n_bins = 700L,
-  legend_orientation = NULL
+  legend_orientation = NULL,
+  build_plot = TRUE
 ) {
   series <- payload$series
   if (is.null(series) || length(series) == 0) {
@@ -1062,11 +1283,28 @@ viewport_adaptive_plot <- function(
       x_col
     }
 
-    line_bundle <- list(
-      traces = list(),
-      trace_count = 0L,
-      client_points = 0L
-    )
+    line_name <- if (!is.null(item$line_name)) {
+      item$line_name
+    } else if (!is.null(meta$line_name)) {
+      meta$line_name
+    } else {
+      paste("Series", i)
+    }
+    line_color <- if (!is.null(item$line_color)) {
+      item$line_color
+    } else if (!is.null(meta$line_color)) {
+      meta$line_color
+    } else {
+      "#00454e"
+    }
+    line_width <- if (!is.null(item$line_width)) {
+      item$line_width
+    } else if (!is.null(meta$line_width)) {
+      meta$line_width
+    } else {
+      1.4
+    }
+
     line_summary <- NULL
     if (
       nrow(trace_dt) > 0 &&
@@ -1079,39 +1317,8 @@ viewport_adaptive_plot <- function(
         xlim = xlim,
         n_bins = n_bins
       )
-      line_bundle <- viewport_ribbon_trace_bundle(
-        summary = line_summary,
-        line_name = if (!is.null(item$line_name)) {
-          item$line_name
-        } else if (!is.null(meta$line_name)) {
-          meta$line_name
-        } else {
-          paste("Series", i)
-        },
-        line_color = if (!is.null(item$line_color)) {
-          item$line_color
-        } else if (!is.null(meta$line_color)) {
-          meta$line_color
-        } else {
-          "#00454e"
-        },
-        line_width = if (!is.null(item$line_width)) {
-          item$line_width
-        } else if (!is.null(meta$line_width)) {
-          meta$line_width
-        } else {
-          1.4
-        },
-        band_styles = list(),
-        hover = hover
-      )
     }
 
-    band_bundle <- list(
-      traces = list(),
-      trace_count = 0L,
-      client_points = 0L
-    )
     band_summary <- NULL
     if (
       nrow(range_dt) > 0 &&
@@ -1134,17 +1341,31 @@ viewport_adaptive_plot <- function(
         xlim = xlim,
         n_bins = n_bins
       )
-      band_bundle <- viewport_ribbon_trace_bundle(
-        summary = band_summary,
-        line_name = NULL,
-        band_styles = meta$band_styles,
-        hover = hover
-      )
     }
 
     xaxis <- item$xaxis
     yaxis <- item$yaxis
-    item_traces <- c(band_bundle$traces, line_bundle$traces)
+    item_bundle <- viewport_ribbon_trace_bundle(
+      summary = list(
+        line = if (!is.null(line_summary)) {
+          line_summary$line
+        } else {
+          data.table::data.table()
+        },
+        bands = if (!is.null(band_summary)) {
+          band_summary$bands
+        } else {
+          list()
+        },
+        meta = NULL
+      ),
+      line_name = line_name,
+      line_color = line_color,
+      line_width = line_width,
+      band_styles = meta$band_styles,
+      hover = hover
+    )
+    item_traces <- item_bundle$traces
     item_traces <- lapply(
       item_traces,
       viewport_trace_apply_axes,
@@ -1153,9 +1374,7 @@ viewport_adaptive_plot <- function(
     )
 
     traces <- c(traces, item_traces)
-    client_points <- client_points +
-      band_bundle$client_points +
-      line_bundle$client_points
+    client_points <- client_points + item_bundle$client_points
     summaries[[i]] <- list(line = line_summary, bands = band_summary)
   }
 
@@ -1178,26 +1397,35 @@ viewport_adaptive_plot <- function(
     }
     layout_args$legend$orientation <- legend_orientation
   }
+  if (is.null(layout_args$legend)) {
+    layout_args$legend <- list()
+  }
+  if (is.null(layout_args$legend$groupclick)) {
+    layout_args$legend$groupclick <- "togglegroup"
+  }
   layout_args <- viewport_layout_apply_xlim(
     layout_args,
     xlim = xlim,
     xaxis_names = payload$xaxis_names
   )
 
-  p <- plotly::plot_ly(source = source)
-  for (trace in traces) {
-    p <- do.call(plotly::add_trace, c(list(p = p), trace))
-  }
-  if (length(layout_args) > 0) {
-    p <- do.call(plotly::layout, c(list(p = p), layout_args))
-  }
+  p <- NULL
+  if (isTRUE(build_plot)) {
+    p <- plotly::plot_ly(source = source)
+    for (trace in traces) {
+      p <- do.call(plotly::add_trace, c(list(p = p), trace))
+    }
+    if (length(layout_args) > 0) {
+      p <- do.call(plotly::layout, c(list(p = p), layout_args))
+    }
 
-  config_args <- payload$config
-  if (is.null(config_args)) {
-    config_args <- list()
+    config_args <- payload$config
+    if (is.null(config_args)) {
+      config_args <- list()
+    }
+    p <- do.call(plotly::config, c(list(p = p), config_args))
+    p <- viewport_event_register(p)
   }
-  p <- do.call(plotly::config, c(list(p = p), config_args))
-  p <- viewport_event_register(p)
 
   list(
     plot = p,
