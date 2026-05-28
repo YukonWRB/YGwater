@@ -122,7 +122,6 @@ addGuidelinesUI <- function(id) {
             "Lookup by sample input" = "lookup_range",
             "Multi-input lookup table" = "lookup_grid",
             "One-input formula" = "single_input_formula",
-            "Database function" = "db_function",
             "External model result" = "model_result_cache",
             "Narrative/site-specific" = "narrative",
             "Advanced SQL scalar" = "sql_scalar"
@@ -234,7 +233,7 @@ addGuidelinesUI <- function(id) {
               tags$summary(
                 bslib::tooltip(
                   tags$span("Rule inputs"),
-                  "Rows identify sample results used to derive a guideline. One-input lookup and formula rules require one input row; multi-input lookup, function, and model rules can require several chemistry inputs."
+                  "Rows identify sample results used to derive a guideline. One-input lookup and formula rules require one input row; multi-input lookup and model rules can require several chemistry inputs."
                 )
               ),
               uiOutput(ns("rule_inputs_ui")),
@@ -334,7 +333,7 @@ addGuidelinesUI <- function(id) {
               tags$summary(
                 bslib::tooltip(
                   tags$span("Derivation output metadata"),
-                  "Stable database keys for the function or external model output that produces this guideline value."
+                  "Stable database keys for the external model output that produces this guideline value."
                 )
               ),
               fluidRow(
@@ -342,22 +341,6 @@ addGuidelinesUI <- function(id) {
                 column(6, textInput(ns("model_output_code"), "Output code", width = "100%"))
               ),
               textInput(ns("model_name"), "Display name", width = "100%")
-            )
-          )
-        ),
-        shinyjs::hidden(
-          div(
-            id = ns("function_fields_section"),
-            tags$details(
-              open = TRUE,
-              tags$summary("Database function"),
-              fluidRow(
-                column(
-                  6,
-                  textInput(ns("function_schema"), "Function schema", value = "discrete")
-                ),
-                column(6, textInput(ns("function_name"), "Function name"))
-              )
             )
           )
         ),
@@ -558,7 +541,6 @@ addGuidelines <- function(id, language) {
           "Lookup by sample input" = "lookup_range",
           "Multi-input lookup table" = "lookup_grid",
           "One-input formula" = "single_input_formula",
-          "Database function" = "db_function",
           "External model result" = "model_result_cache",
           "Advanced SQL scalar" = "sql_scalar"
         ),
@@ -567,7 +549,6 @@ addGuidelines <- function(id, language) {
           "Lookup by sample input" = "lookup_range",
           "Multi-input lookup table" = "lookup_grid",
           "One-input formula" = "single_input_formula",
-          "Database function" = "db_function",
           "External model result" = "model_result_cache",
           "Advanced SQL scalar" = "sql_scalar"
         ),
@@ -1025,7 +1006,6 @@ addGuidelines <- function(id, language) {
         lookup_range = "Add one sample input row, then map input ranges to the upper or lower limit chosen by Comparison.",
         lookup_grid = "Add two or more sample input rows, then map combinations of input ranges to the upper or lower limit chosen by Comparison.",
         single_input_formula = "Add one sample input row, then provide coefficients for the limit chosen by Comparison.",
-        db_function = "Add sample input rows and the database function that returns the limit chosen by Comparison.",
         model_result_cache = "Add sample input rows used to match a stored external model result for the limit chosen by Comparison.",
         narrative = "Use the note fields when the guideline does not produce a numeric value.",
         sql_scalar = "Enter a database-owned scalar SQL expression for the selected bound.",
@@ -1065,7 +1045,6 @@ addGuidelines <- function(id, language) {
           lookup_range = "lookup_range",
           lookup_grid = "lookup_grid",
           single_input_formula = input$formula_algorithm %||% "linear",
-          db_function = "db_function",
           model_result_cache = "model_result_cache",
           narrative = "narrative",
           sql_scalar = "sql_scalar",
@@ -1083,7 +1062,6 @@ addGuidelines <- function(id, language) {
         linear = "The selected sample input and coefficients are evaluated by the database formula rule.",
         log_linear = "The selected sample input and coefficients are evaluated by the database formula rule.",
         power = "The selected sample input and coefficients are evaluated by the database formula rule.",
-        db_function = "The database resolves the sample inputs and passes them to the registered database function.",
         model_result_cache = "The database resolves the sample inputs, computes an input hash, and reads the matching stored model result.",
         narrative = "This guideline is stored as narrative or site-specific guidance, without a numeric calculation.",
         sql_scalar = "The database executes the stored scalar SQL expression for this rule.",
@@ -1131,14 +1109,6 @@ addGuidelines <- function(id, language) {
             )
           )
         }
-      } else if (algorithm == "db_function") {
-        details <- c(
-          details,
-          list(
-            item("Function", paste(value_text(if (!is.null(primary)) primary$function_schema[[1]] else input$function_schema), value_text(if (!is.null(primary)) primary$function_name[[1]] else input$function_name), sep = ".")),
-            item("Inputs passed as", "JSONB from Rule inputs")
-          )
-        )
       } else if (algorithm %in% c("linear", "log_linear", "power")) {
         coef_count <- if (!is.null(primary)) nrow(load_coefficients(primary$rule_id[[1]])) else NA_integer_
         details <- c(
@@ -1370,8 +1340,7 @@ addGuidelines <- function(id, language) {
         "fixed_value_section", "range_value_section", "bound_section",
         "formula_algorithm_section", "advanced_rule_options_section",
         "rule_inputs_section", "lookup_values_section", "lookup_grid_values_section",
-        "coefficients_section", "model_fields_section", "function_fields_section",
-        "sql_scalar_section"
+        "coefficients_section", "model_fields_section", "sql_scalar_section"
       )
       invisible(lapply(sections, function(id) shinyjs::hide(id = id, anim = FALSE)))
 
@@ -1381,7 +1350,7 @@ addGuidelines <- function(id, language) {
       if (identical(type, "constant_range")) {
         shinyjs::show(id = "range_value_section", anim = FALSE)
       }
-      if (type %in% c("lookup_range", "lookup_grid", "single_input_formula", "db_function", "model_result_cache", "sql_scalar")) {
+      if (type %in% c("lookup_range", "lookup_grid", "single_input_formula", "model_result_cache", "sql_scalar")) {
         shinyjs::show(id = "advanced_rule_options_section", anim = FALSE)
       }
       if (identical(type, "single_input_formula")) {
@@ -1397,12 +1366,9 @@ addGuidelines <- function(id, language) {
         shinyjs::show(id = "rule_inputs_section", anim = FALSE)
         shinyjs::show(id = "lookup_grid_values_section", anim = FALSE)
       }
-      if (type %in% c("db_function", "model_result_cache")) {
+      if (identical(type, "model_result_cache")) {
         shinyjs::show(id = "rule_inputs_section", anim = FALSE)
         shinyjs::show(id = "model_fields_section", anim = FALSE)
-      }
-      if (identical(type, "db_function")) {
-        shinyjs::show(id = "function_fields_section", anim = FALSE)
       }
       if (identical(type, "sql_scalar")) {
         shinyjs::show(id = "sql_scalar_section", anim = FALSE)
@@ -1676,8 +1642,6 @@ addGuidelines <- function(id, language) {
       updateTextInput(session, "model_code", value = "")
       updateTextInput(session, "model_output_code", value = "")
       updateTextInput(session, "model_name", value = "")
-      updateTextInput(session, "function_schema", value = "discrete")
-      updateTextInput(session, "function_name", value = "")
       updateTextAreaInput(session, "formula_sql", value = "")
       update_result_speciation_visibility(character(0))
     }
@@ -1692,22 +1656,82 @@ addGuidelines <- function(id, language) {
 
       updateTextInput(session, "guideline_code", value = g$guideline_code[[1]])
       updateTextInput(session, "guideline_name", value = g$guideline_name[[1]])
-      updateSelectizeInput(session, "publisher", selected = as.character(g$publisher_id[[1]]))
-      updateSelectizeInput(session, "series", selected = if (is.na(g$series_id[[1]])) character(0) else as.character(g$series_id[[1]]))
-      updateSelectizeInput(session, "parameter_id", selected = as.character(g$parameter_id[[1]]))
-      updateSelectizeInput(session, "matrix_state", selected = as.character(g$matrix_state_id[[1]]))
-      updateSelectizeInput(session, "result_speciation", selected = if (is.na(g$result_speciation_id[[1]])) character(0) else as.character(g$result_speciation_id[[1]]))
+      updateSelectizeInput(
+        session, "publisher",
+        choices = choice_values(moduleData$publishers, "publisher_id", "publisher_name"),
+        selected = as.character(g$publisher_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "series",
+        choices = choice_values(moduleData$series, "series_id", "series_name"),
+        selected = if (is.na(g$series_id[[1]])) character(0) else as.character(g$series_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "parameter_id",
+        choices = parameter_choices(),
+        selected = as.character(g$parameter_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "matrix_state",
+        choices = choice_values(moduleData$matrix_states, "matrix_state_id", "matrix_state_name"),
+        selected = as.character(g$matrix_state_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "result_speciation",
+        choices = choice_values(moduleData$result_speciations, "result_speciation_id", "result_speciation"),
+        selected = if (is.na(g$result_speciation_id[[1]])) character(0) else as.character(g$result_speciation_id[[1]]),
+        server = TRUE
+      )
       update_result_speciation_visibility(g$parameter_id[[1]])
-      updateSelectizeInput(session, "sample_fraction", selected = if (is.na(g$fraction_ids[[1]])) character(0) else strsplit(g$fraction_ids[[1]], ",", fixed = TRUE)[[1]])
-      updateSelectizeInput(session, "media_type", selected = if (is.na(g$media_ids[[1]])) character(0) else strsplit(g$media_ids[[1]], ",", fixed = TRUE)[[1]])
+      updateSelectizeInput(
+        session, "sample_fraction",
+        choices = choice_values(moduleData$sample_fractions, "sample_fraction_id", "sample_fraction"),
+        selected = if (is.na(g$fraction_ids[[1]])) character(0) else strsplit(g$fraction_ids[[1]], ",", fixed = TRUE)[[1]],
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "media_type",
+        choices = choice_values(moduleData$media_types, "media_id", "media_type"),
+        selected = if (is.na(g$media_ids[[1]])) character(0) else strsplit(g$media_ids[[1]], ",", fixed = TRUE)[[1]],
+        server = TRUE
+      )
       updateSelectInput(session, "comparison_operator", selected = g$comparison_operator_code[[1]])
       update_guideline_type_choices(g$comparison_operator_code[[1]], type)
       last_comparison_operator(g$comparison_operator_code[[1]])
-      updateSelectizeInput(session, "jurisdiction", selected = if (is.na(g$jurisdiction_id[[1]])) character(0) else as.character(g$jurisdiction_id[[1]]))
-      updateSelectizeInput(session, "jurisdiction_level", selected = if (is.na(g$jurisdiction_level_id[[1]])) character(0) else as.character(g$jurisdiction_level_id[[1]]))
-      updateSelectizeInput(session, "protection_goal", selected = if (is.na(g$protection_goal_id[[1]])) character(0) else as.character(g$protection_goal_id[[1]]))
-      updateSelectizeInput(session, "exposure_duration", selected = if (is.na(g$exposure_duration_id[[1]])) character(0) else as.character(g$exposure_duration_id[[1]]))
-      updateSelectizeInput(session, "averaging_period", selected = if (is.na(g$averaging_period_id[[1]])) character(0) else as.character(g$averaging_period_id[[1]]))
+      updateSelectizeInput(
+        session, "jurisdiction",
+        choices = choice_values(moduleData$jurisdictions, "jurisdiction_id", "jurisdiction_name"),
+        selected = if (is.na(g$jurisdiction_id[[1]])) character(0) else as.character(g$jurisdiction_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "jurisdiction_level",
+        choices = choice_values(moduleData$jurisdiction_levels, "jurisdiction_level_id", "jurisdiction_level_name"),
+        selected = if (is.na(g$jurisdiction_level_id[[1]])) character(0) else as.character(g$jurisdiction_level_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "protection_goal",
+        choices = choice_values(moduleData$protection_goals, "protection_goal_id", "protection_goal_name"),
+        selected = if (is.na(g$protection_goal_id[[1]])) character(0) else as.character(g$protection_goal_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "exposure_duration",
+        choices = choice_values(moduleData$exposure_durations, "exposure_duration_id", "exposure_duration_name"),
+        selected = if (is.na(g$exposure_duration_id[[1]])) character(0) else as.character(g$exposure_duration_id[[1]]),
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session, "averaging_period",
+        choices = choice_values(moduleData$averaging_periods, "averaging_period_id", "averaging_period_name"),
+        selected = if (is.na(g$averaging_period_id[[1]])) character(0) else as.character(g$averaging_period_id[[1]]),
+        server = TRUE
+      )
       updateDateInput(session, "valid_from", value = as.Date(g$valid_from[[1]]))
       updateDateInput(session, "valid_to", value = if (is.na(g$valid_to[[1]])) NA else as.Date(g$valid_to[[1]]))
       updateSelectInput(session, "review_status", selected = g$review_status[[1]])
@@ -1747,8 +1771,6 @@ addGuidelines <- function(id, language) {
         updateTextAreaInput(session, "rule_note", value = primary$note[[1]] %||% "")
         updateTextInput(session, "model_code", value = primary$model_code[[1]] %||% "")
         updateTextInput(session, "model_output_code", value = primary$model_output_code[[1]] %||% "")
-        updateTextInput(session, "function_schema", value = primary$function_schema[[1]] %||% "discrete")
-        updateTextInput(session, "function_name", value = primary$function_name[[1]] %||% "")
         updateTextAreaInput(session, "formula_sql", value = primary$formula_sql[[1]] %||% "")
         set_rule_input_rows(load_inputs(primary$rule_id[[1]]))
         updateTextAreaInput(session, "lookup_values_text", value = format_table_text(load_lookup(primary$rule_id[[1]]), lookup_cols))
@@ -1906,24 +1928,22 @@ addGuidelines <- function(id, language) {
     insert_rule <- function(
       guideline_id, bound_code, algorithm_code, fixed_value = NA_real_,
       formula_sql = NA_character_, model_code = NA_character_,
-      model_output_code = NA_character_, function_schema = NA_character_,
-      function_name = NA_character_, priority = 100L
+      model_output_code = NA_character_, priority = 100L
     ) {
       DBI::dbGetQuery(
         con,
         "INSERT INTO discrete.guideline_value_rules (
-           guideline_id, model_code, model_output_code, function_schema,
-           function_name, bound_code, algorithm_code, fixed_value,
+           guideline_id, model_code, model_output_code,
+           bound_code, algorithm_code, fixed_value,
            formula_sql, min_output_value, max_output_value, rounding_digits,
            rounding_method, missing_input_policy, rule_priority,
            precision_note, note
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING rule_id",
         params = list(
           guideline_id, text_or_na(model_code), text_or_na(model_output_code),
-          text_or_na(function_schema), text_or_na(function_name), text_or_na(bound_code),
-          algorithm_code, fixed_value, text_or_na(formula_sql),
+          text_or_na(bound_code), algorithm_code, fixed_value, text_or_na(formula_sql),
           numeric_or_na(input$min_output_value), numeric_or_na(input$max_output_value),
           integer_or_na(input$rounding_digits), input$rounding_method %||% "none",
           input$missing_input_policy %||% "no_value",
@@ -2260,14 +2280,6 @@ addGuidelines <- function(id, language) {
           stop("Multi-input lookup tables require at least two inputs.", call. = FALSE)
         }
         save_lookup_grid_values(rule_id, inputs)
-      } else if (type == "db_function") {
-        model <- ensure_model_output("database_function", publisher_id, parameter_id, matrix_state_id, operator)
-        rule_id <- insert_rule(
-          guideline_id, rule_bound, "db_function",
-          model_code = model$model_code, model_output_code = model$output_code,
-          function_schema = input$function_schema, function_name = input$function_name
-        )
-        save_rule_inputs(rule_id, model_code = model$model_code, require_inputs = TRUE)
       } else if (type == "model_result_cache") {
         model <- ensure_model_output("external_software", publisher_id, parameter_id, matrix_state_id, operator)
         rule_id <- insert_rule(
