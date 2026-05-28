@@ -9,24 +9,14 @@
 floodDashboardUIMod <- function(id) {
     ns <- shiny::NS(id)
 
-    placeholder_block <- function(text, height = "240px") {
-        shiny::tags$div(
-            style = paste(
-                "height:",
-                height,
-                ";",
-                "border: 1px dashed #94a3b8;",
-                "border-radius: 0.5rem;",
-                "background: #f8fafc;",
-                "display: flex;",
-                "align-items: center;",
-                "justify-content: center;",
-                "color: #475569;",
-                "font-size: 0.95rem;",
-                "padding: 0.75rem;",
-                "text-align: center;"
+    tooltip_label <- function(text, tip) {
+        bslib::tooltip(
+            shiny::tags$span(
+                class = "input-help-trigger",
+                text
             ),
-            text
+            tip,
+            placement = "right"
         )
     }
 
@@ -45,27 +35,37 @@ floodDashboardUIMod <- function(id) {
             paste0(
                 "#",
                 ns("dashboard-panels"),
-                ".comfortable { grid-template-columns: 1fr; }"
+                ".single-column { grid-template-columns: 1fr; }"
             ),
             paste0(
                 "#",
                 ns("controls"),
-                " .dashboard-controls-wrap { display:flex; flex-direction:column; gap:0.3rem; }"
+                " .dashboard-controls-wrap { display:flex; flex-direction:column; gap:0.2rem; }"
             ),
             paste0(
                 "#",
                 ns("controls"),
-                " .dashboard-controls-row { display:grid; gap:0.35rem; align-items:start; justify-items:stretch; }"
+                " .dashboard-controls-row { display:grid; gap:0.25rem; align-items:start; justify-items:stretch; }"
             ),
             paste0(
                 "#",
                 ns("controls"),
-                " .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 12rem 7rem 9rem; justify-content:start; align-items:end; }"
+                " .dashboard-controls-row.dashboard-controls-top { grid-template-columns: repeat(6, minmax(0, 1fr)); justify-content:start; align-items:end; }"
             ),
             paste0(
                 "#",
                 ns("controls"),
-                " .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(6, minmax(0, 1fr)); }"
+                " .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(3, minmax(0, 1fr)); }"
+            ),
+            paste0(
+                "#",
+                ns("controls"),
+                " .dashboard-controls-row.dashboard-controls-detailed-toggles { grid-template-columns: repeat(5, minmax(0, 1fr)); }"
+            ),
+            paste0(
+                "#",
+                ns("controls"),
+                " .dashboard-controls-row.dashboard-controls-detailed-secondary { grid-template-columns: repeat(3, minmax(0, 1fr)); }"
             ),
             paste0(
                 "#",
@@ -127,6 +127,15 @@ floodDashboardUIMod <- function(id) {
             paste0(
                 "#",
                 ns("controls"),
+                " .dashboard-controls-row .selectize-control.single .selectize-input, #",
+                ns("controls"),
+                " .dashboard-controls-row .selectize-input .item, #",
+                ns("controls"),
+                " .dashboard-controls-row .selectize-dropdown .option { text-align: left !important; }"
+            ),
+            paste0(
+                "#",
+                ns("controls"),
                 " .dashboard-controls-row .selectize-dropdown { font-size: 0.68rem; }"
             ),
             paste0(
@@ -139,13 +148,18 @@ floodDashboardUIMod <- function(id) {
                 ns("controls"),
                 " .dashboard-controls-row .form-group { margin-bottom: 0; }"
             ),
-            ".station-plot-header { display:flex; flex-direction:column; align-items:stretch; gap:0.5rem; width:100%; }",
-            ".station-plot-title { width:100%; min-width:24rem; }",
-            ".station-plot-actions { display:flex; align-items:center; flex-wrap:wrap; gap:0.75rem; width:100%; }",
+            ".input-help-trigger { cursor: help; }",
+            ".station-plot-header { display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:0.75rem; width:100%; }",
+            ".station-plot-title { flex:1 1 auto; min-width:0; }",
+            ".station-plot-actions { display:flex; align-items:center; justify-content:flex-end; flex:0 0 auto; gap:0.75rem; width:auto; }",
             ".station-plot-actions .shiny-input-container { margin-bottom:0; }",
             ".station-plot-actions .checkbox { margin:0; }",
             ".station-plot-actions .btn { white-space:nowrap; }",
+            ".station-plot-card { display:flex; flex-direction:column; }",
+            ".station-plot-card > .card-header { flex: 0 0 auto; }",
+            ".station-plot-card > .card-body { flex: 1 1 auto; min-height: 0; overflow: hidden; }",
             ".station-plot-shell { position: relative; }",
+            ".station-plot-card .station-plot-shell { height: 100%; min-height: 0; overflow: hidden; }",
             paste0(
                 ".station-plot-shell.is-stale .js-plotly-plot { opacity: 0.45; filter: grayscale(1); }"
             ),
@@ -157,14 +171,22 @@ floodDashboardUIMod <- function(id) {
                 ns("controls"),
                 " .dashboard-controls-row.dashboard-controls-top, #",
                 ns("controls"),
-                " .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(2, minmax(0, 1fr)); } }"
+                " .dashboard-controls-row.dashboard-controls-plot, #",
+                ns("controls"),
+                " .dashboard-controls-row.dashboard-controls-detailed-toggles, #",
+                ns("controls"),
+                " .dashboard-controls-row.dashboard-controls-detailed-secondary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }"
             ),
             paste0(
                 "@media (max-width: 700px) { #",
                 ns("controls"),
                 " .dashboard-controls-row.dashboard-controls-top, #",
                 ns("controls"),
-                " .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: 1fr; } }"
+                " .dashboard-controls-row.dashboard-controls-plot, #",
+                ns("controls"),
+                " .dashboard-controls-row.dashboard-controls-detailed-toggles, #",
+                ns("controls"),
+                " .dashboard-controls-row.dashboard-controls-detailed-secondary { grid-template-columns: 1fr; } }"
             ),
             paste0(
                 "@media (max-width: 992px) { #",
@@ -175,7 +197,7 @@ floodDashboardUIMod <- function(id) {
         ))),
         shiny::tags$script(shiny::HTML(paste(
             sprintf(
-                "Shiny.addCustomMessageHandler('%s', function(mode) { var el = document.getElementById('%s'); if (!el) return; el.classList.remove('compact', 'comfortable'); el.classList.add(mode === 'comfortable' ? 'comfortable' : 'compact'); });",
+                "Shiny.addCustomMessageHandler('%s', function(mode) { var el = document.getElementById('%s'); if (!el) return; el.classList.remove('compact', 'single-column'); el.classList.add(mode === 'single-column' ? 'single-column' : 'compact'); });",
                 ns("set-dashboard-mode"),
                 ns("dashboard-panels")
             ),
@@ -188,9 +210,9 @@ floodDashboardUIMod <- function(id) {
         ))),
         bslib::accordion(
             id = ns("controls"),
-            open = TRUE,
+            open = c("Main"),
             bslib::accordion_panel(
-                "",
+                "Main",
                 shiny::tags$div(
                     class = "dashboard-controls-wrap",
                     shiny::tags$div(
@@ -199,18 +221,42 @@ floodDashboardUIMod <- function(id) {
                             class = "dashboard-controls-cell",
                             shiny::selectInput(
                                 inputId = ns("community"),
-                                label = "Community",
+                                label = tooltip_label(
+                                    "Community",
+                                    "Select the community used to filter stations, map features, and summaries."
+                                ),
                                 choices = character(0),
                                 selected = NULL
                             )
                         ),
                         shiny::tags$div(
                             class = "dashboard-controls-cell",
-                            shiny::checkboxInput(
-                                inputId = ns("filter_upstream_gauges"),
-                                label = "Filter upstream gauges",
-                                value = FALSE,
-                                width = NULL
+                            shiny::selectInput(
+                                inputId = ns("view_mode"),
+                                label = tooltip_label(
+                                    "Layout",
+                                    "Choose compact or single-column dashboard layout."
+                                ),
+                                choices = c(
+                                    "Compact" = "compact",
+                                    "Single column" = "single-column"
+                                ),
+                                selected = "compact"
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::numericInput(
+                                inputId = ns("relative_view_weeks_before"),
+                                label = tooltip_label(
+                                    "Past weeks",
+                                    "Number of weeks to display before the reference time in relative view."
+                                ),
+                                value = 2,
+                                min = 0,
+                                max = 520,
+                                step = 1,
+                                width = "100%"
                             )
                         ),
                         shiny::tags$div(
@@ -220,7 +266,10 @@ floodDashboardUIMod <- function(id) {
                                 style = "margin-bottom:0;",
                                 shiny::tags$label(
                                     `for` = ns("time0"),
-                                    "Time 0",
+                                    tooltip_label(
+                                        "Current time",
+                                        "Reference date/time used for summaries and plot windows."
+                                    ),
                                     class = "control-label"
                                 ),
                                 shiny::tags$input(
@@ -243,14 +292,17 @@ floodDashboardUIMod <- function(id) {
                         ),
                         shiny::tags$div(
                             class = "dashboard-controls-cell",
-                            shiny::selectInput(
-                                inputId = ns("view_mode"),
-                                label = "View",
-                                choices = c(
-                                    "Compact" = "compact",
-                                    "Detailed" = "comfortable"
+                            shiny::numericInput(
+                                inputId = ns("relative_view_weeks_after"),
+                                label = tooltip_label(
+                                    "Future weeks",
+                                    "Number of weeks to display after the reference time in relative view."
                                 ),
-                                selected = "compact"
+                                value = 4,
+                                min = 0,
+                                max = 520,
+                                step = 1,
+                                width = "100%"
                             )
                         ),
                         shiny::tags$div(
@@ -260,7 +312,10 @@ floodDashboardUIMod <- function(id) {
                                 style = "margin-bottom:0;",
                                 shiny::tags$label(
                                     `for` = ns("export_html_report"),
-                                    "Export",
+                                    tooltip_label(
+                                        "Export",
+                                        "Download the current dashboard view as an HTML report."
+                                    ),
                                     class = "control-label"
                                 ),
                                 shiny::downloadButton(
@@ -277,12 +332,14 @@ floodDashboardUIMod <- function(id) {
                             class = "dashboard-controls-cell",
                             shiny::selectizeInput(
                                 inputId = ns("parameter"),
-                                label = "Primary",
+                                label = tooltip_label(
+                                    "Parameter",
+                                    "Primary parameter used in the summary table and station plot."
+                                ),
                                 choices = c(
                                     "water level",
                                     "water flow",
                                     "precipitation (1wk)",
-                                    "precipitation (24hr)",
                                     "temperature, air",
                                     "FDD",
                                     "DDT",
@@ -299,7 +356,10 @@ floodDashboardUIMod <- function(id) {
                             class = "dashboard-controls-cell",
                             shiny::selectizeInput(
                                 inputId = ns("primary_historical_years"),
-                                label = "Hist years",
+                                label = tooltip_label(
+                                    "Historical traces",
+                                    "Optional historical years to overlay for the primary series."
+                                ),
                                 choices = character(0),
                                 selected = character(0),
                                 multiple = TRUE,
@@ -313,18 +373,105 @@ floodDashboardUIMod <- function(id) {
                             class = "dashboard-controls-cell",
                             shiny::selectizeInput(
                                 inputId = ns("station"),
-                                label = "Station",
+                                label = tooltip_label(
+                                    "Station",
+                                    "Primary station shown in the station plot."
+                                ),
                                 choices = character(0),
                                 selected = character(0),
                                 multiple = FALSE,
                                 options = list(placeholder = "Station")
                             )
+                        )
+                    )
+                )
+            ),
+            bslib::accordion_panel(
+                "Advanced",
+                shiny::tags$div(
+                    class = "dashboard-controls-wrap",
+                    shiny::tags$div(
+                        class = "dashboard-controls-row dashboard-controls-detailed-toggles",
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::checkboxInput(
+                                inputId = ns("summary_relative"),
+                                label = tooltip_label(
+                                    "Relative changes",
+                                    "Show summary metrics as changes over 24h, 48h, and 1 week."
+                                ),
+                                value = FALSE,
+                                width = NULL
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::checkboxInput(
+                                inputId = ns("station_plot_show_legend"),
+                                label = tooltip_label(
+                                    "Show legend",
+                                    "Toggle trace and envelope legend visibility on the station plot."
+                                ),
+                                value = FALSE,
+                                width = NULL
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::checkboxInput(
+                                inputId = ns("station_plot_label_traces"),
+                                label = tooltip_label(
+                                    "Label traces",
+                                    "Add inline labels to plot traces where supported."
+                                ),
+                                value = TRUE,
+                                width = NULL
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::checkboxInput(
+                                inputId = ns("filter_upstream_gauges"),
+                                label = tooltip_label(
+                                    "Filter upstream gauges",
+                                    "Hide upstream gauge stations from summaries and selection lists."
+                                ),
+                                value = TRUE,
+                                width = NULL
+                            )
                         ),
                         shiny::tags$div(
                             class = "dashboard-controls-cell",
                             shiny::selectizeInput(
+                                inputId = ns("precip_accumulation"),
+                                label = tooltip_label(
+                                    "Precip. accumulation",
+                                    "Precipitation accumulation window applied to both primary and secondary precipitation traces, when selected."
+                                ),
+                                choices = c(
+                                    "1 week",
+                                    "48h",
+                                    "24h",
+                                    "12h",
+                                    "6h",
+                                    "1h"
+                                ),
+                                selected = "1 week",
+                                multiple = FALSE,
+                                options = list(placeholder = "Accumulation")
+                            )
+                        )
+                    ),
+                    shiny::tags$div(
+                        class = "dashboard-controls-row dashboard-controls-detailed-secondary",
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::selectizeInput(
                                 inputId = ns("secondary_parameter"),
-                                label = "Secondary",
+                                label = tooltip_label(
+                                    "Secondary",
+                                    "Optional secondary parameter for comparison in the station plot."
+                                ),
                                 choices = character(0),
                                 selected = character(0),
                                 options = list(placeholder = "Param")
@@ -334,7 +481,10 @@ floodDashboardUIMod <- function(id) {
                             class = "dashboard-controls-cell",
                             shiny::selectizeInput(
                                 inputId = ns("secondary_historical_years"),
-                                label = "Hist years",
+                                label = tooltip_label(
+                                    "Historical traces",
+                                    "Optional historical years to overlay for the secondary series."
+                                ),
                                 choices = character(0),
                                 selected = character(0),
                                 multiple = TRUE,
@@ -348,7 +498,10 @@ floodDashboardUIMod <- function(id) {
                             class = "dashboard-controls-cell",
                             shiny::selectizeInput(
                                 inputId = ns("secondary_station"),
-                                label = "Station",
+                                label = tooltip_label(
+                                    "Station",
+                                    "Secondary station used for comparison against the primary station."
+                                ),
                                 choices = character(0),
                                 selected = character(0),
                                 options = list(placeholder = "Station")
@@ -362,26 +515,16 @@ floodDashboardUIMod <- function(id) {
             id = ns("dashboard-panels"),
             class = "compact",
             bslib::card(
-                style = "height:450px;",
-                bslib::card_header(
-                    shiny::tags$div(
-                        style = "display:flex; align-items:center; justify-content:space-between; gap:1rem; width:100%;",
-                        shiny::tags$span("Summary"),
-                        shiny::checkboxInput(
-                            inputId = ns("summary_relative"),
-                            label = "Relative changes",
-                            value = FALSE,
-                            width = NULL
-                        )
-                    )
-                ),
+                style = "min-height:520px;",
+                bslib::card_header("Summary"),
                 bslib::card_body(
-                    style = "height:390px; overflow:auto;",
+                    style = "height:460px; overflow:auto;",
                     DT::DTOutput(ns("summary_table"))
                 )
             ),
             bslib::card(
-                style = "height:450px;",
+                class = "station-plot-card",
+                style = "height:520px;",
                 bslib::card_header(
                     shiny::tags$div(
                         class = "station-plot-header",
@@ -394,32 +537,26 @@ floodDashboardUIMod <- function(id) {
                         ),
                         shiny::tags$div(
                             class = "station-plot-actions",
-                            shiny::checkboxInput(
-                                inputId = ns("station_plot_show_legend"),
-                                label = "Show legend",
-                                value = FALSE,
-                                width = NULL
-                            ),
-                            shiny::checkboxInput(
-                                inputId = ns("station_plot_label_traces"),
-                                label = "Label traces",
-                                value = TRUE,
-                                width = NULL
-                            ),
                             shiny::actionButton(
                                 inputId = ns("create_plot"),
-                                label = "Create plot",
+                                label = "Render plot",
                                 class = "btn btn-primary btn-sm"
                             )
                         )
                     )
                 ),
-                shiny::tags$div(
-                    id = ns("station-plot-shell"),
-                    class = "station-plot-shell",
-                    style = "height:390px; overflow:hidden;",
-                    plotly::plotlyOutput(ns("station_plot")),
-                    shiny::uiOutput(ns("station_plot_stale_banner"))
+                bslib::card_body(
+                    style = "padding:0.5rem;",
+                    shiny::tags$div(
+                        id = ns("station-plot-shell"),
+                        class = "station-plot-shell",
+                        style = "height:100%;",
+                        plotly::plotlyOutput(
+                            ns("station_plot"),
+                            height = "100%"
+                        ),
+                        shiny::uiOutput(ns("station_plot_stale_banner"))
+                    )
                 )
             ),
             bslib::card(
@@ -495,7 +632,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             "FDD" = "temperature, air",
             "DDT" = "temperature, air",
             "precipitation (1wk)" = "precipitation, total",
-            "precipitation (24hr)" = "precipitation, total",
             "snow water eq (pillow)" = "snow water equivalent",
             "snow depth (pillow)" = "snow depth",
             "snow water eq (survey)" = "snow water equivalent",
@@ -679,8 +815,28 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ) {
                     next
                 }
-                # Preserve the instant and only change display timezone.
-                x <- dat[[col_name]]
+                # Preserve wall-clock values and reinterpret as fixed UTC-7.
+                source_tz <- if (
+                    length(existing_tz) > 0 &&
+                        is.character(existing_tz[[1]]) &&
+                        nzchar(existing_tz[[1]])
+                ) {
+                    existing_tz[[1]]
+                } else {
+                    fixed_timezone
+                }
+                x <- suppressWarnings(as.POSIXct(
+                    format(
+                        dat[[col_name]],
+                        "%Y-%m-%d %H:%M:%S",
+                        tz = source_tz
+                    ),
+                    tz = fixed_timezone,
+                    format = "%Y-%m-%d %H:%M:%S"
+                ))
+                if (all(is.na(x))) {
+                    next
+                }
                 attr(x, "tzone") <- fixed_timezone
                 dat[[col_name]] <- x
                 next
@@ -1950,16 +2106,61 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         historical_start_year
     }
 
+    normalize_precip_accumulation <- function(value) {
+        allowed <- c("1 week", "48h", "24h", "12h", "6h", "1h")
+        selected <- as.character(value[[1]] %||% "1 week")
+        if (!selected %in% allowed) {
+            return("1 week")
+        }
+        selected
+    }
+
+    precip_accumulation_hours <- function(value) {
+        selected <- normalize_precip_accumulation(value)
+        switch(
+            selected,
+            "1 week" = 168L,
+            "48h" = 48L,
+            "24h" = 24L,
+            "12h" = 12L,
+            "6h" = 6L,
+            "1h" = 1L,
+            168L
+        )
+    }
+
+    precip_accumulation_display <- function(value) {
+        selected <- normalize_precip_accumulation(value)
+        if (identical(selected, "1 week")) {
+            return("1-week")
+        }
+        selected
+    }
+
+    parameter_display_label <- function(
+        parameter,
+        precip_accumulation = "1 week"
+    ) {
+        if (identical(parameter, "precipitation (1wk)")) {
+            return(sprintf(
+                "precipitation (%s accumulation)",
+                precip_accumulation_display(precip_accumulation)
+            ))
+        }
+        parameter
+    }
+
     #' Get y-axis title for a parameter
     #'
     #' @param parameter Character parameter label.
     #' @return Character axis title.
     #' @keywords internal
     #' @noRd
-    parameter_axis_title <- function(parameter) {
+    parameter_axis_title <- function(
+        parameter,
+        precip_accumulation = "1 week"
+    ) {
         axis_titles <- c(
-            "precipitation (1wk)" = "Precipitation (1wk accumulation, mm)",
-            "precipitation (24hr)" = "Precipitation (24hr, mm)",
             "FDD" = "Freezing Degree Days (FDD)",
             "DDT" = "Thawing Degree Days (DDT)",
             "snow water eq (pillow)" = "Snow Water Equivalent (Pillow)",
@@ -1967,6 +2168,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             "snow water eq (survey)" = "Snow Water Equivalent (Survey)",
             "snow depth (survey)" = "Snow Depth (Survey)"
         )
+        if (identical(parameter, "precipitation (1wk)")) {
+            return(sprintf(
+                "Precipitation (%s accumulation, mm)",
+                precip_accumulation_display(precip_accumulation)
+            ))
+        }
         if (parameter %in% names(axis_titles)) {
             axis_titles[[parameter]]
         } else {
@@ -2051,7 +2258,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         location_codes,
         parameter = "water flow",
         con,
-        historical_start_year = 2020
+        historical_start_year = 2020,
+        precip_accumulation = "1 week"
     ) {
         query_parameter <- parameter_query_name(parameter)
         location_codes_str <- paste(
@@ -2198,6 +2406,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         }
 
         if (identical(parameter, "precipitation (1wk)")) {
+            accumulation_hours <- precip_accumulation_hours(
+                precip_accumulation
+            )
+            if ((accumulation_hours %% 24L) != 0L) {
+                return(data.frame())
+            }
+            lookback_days <- max((accumulation_hours %/% 24L) - 1L, 0L)
             return(YGwater::dbGetQueryDT(
                 sprintf(
                     paste(
@@ -2218,14 +2433,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "),",
                         "rolling_week AS (",
                         "    SELECT location_code, date,",
-                        "        SUM(value) OVER (PARTITION BY location_code ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS weekly_accumulation",
+                        "        SUM(value) OVER (PARTITION BY location_code ORDER BY date ROWS BETWEEN %d PRECEDING AND CURRENT ROW) AS rolling_accumulation",
                         "    FROM daily_values",
                         "),",
                         "daily_weekly AS (",
                         "    SELECT location_code,",
                         "        CASE WHEN EXTRACT(MONTH FROM date) > 2 AND ((EXTRACT(YEAR FROM date)::int %% 4 = 0 AND EXTRACT(YEAR FROM date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM date)::int %% 400 = 0)",
                         "            THEN EXTRACT(DOY FROM date)::int - 1 ELSE EXTRACT(DOY FROM date)::int END AS doy,",
-                        "        weekly_accumulation AS value FROM rolling_week",
+                        "        rolling_accumulation AS value FROM rolling_week",
                         "),",
                         "by_doy AS (",
                         "    SELECT location_code, doy, COUNT(*) AS n_values,",
@@ -2244,7 +2459,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
                         "ORDER BY lc.location_code, gs.doy"
                     ),
-                    location_codes_str
+                    location_codes_str,
+                    lookback_days
                 ),
                 con = con
             ))
@@ -2365,7 +2581,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         con,
         reference_time = NULL,
         load_entire_record = FALSE,
-        historical_start_year = 2020
+        historical_start_year = 2020,
+        precip_accumulation = "1 week"
     ) {
         if (is.na(location_code) || length(location_code) == 0) {
             return(data.frame(
@@ -2430,9 +2647,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
         recent_parameter_sql <- if (parameter %in% c("FDD", "DDT")) {
             DBI::dbQuoteString(con, "temperature, air")
-        } else if (
-            parameter %in% c("precipitation (1wk)", "precipitation (24hr)")
-        ) {
+        } else if (identical(parameter, "precipitation (1wk)")) {
             DBI::dbQuoteString(con, "precipitation, total")
         } else {
             parameter_sql
@@ -2480,7 +2695,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     c(
                         "temperature, air",
                         "precipitation (1wk)",
-                        "precipitation (24hr)",
                         "FDD",
                         "DDT"
                     )
@@ -2644,25 +2858,65 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             return(finalize_series(ddt))
         }
 
-        if (parameter %in% c("precipitation (1wk)", "precipitation (24hr)")) {
-            precip_db_sql <- DBI::dbQuoteString(con, "precipitation, total")
-
-            if (identical(parameter, "precipitation (1wk)")) {
-                precip_sql <- paste(
-                    "SELECT mcd.date::timestamp AS datetime,",
-                    "    SUM(mcd.value) OVER (ORDER BY mcd.date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS value",
-                    "FROM measurements_calculated_daily mcd",
-                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
-                    "JOIN locations l ON l.location_id = ts.location_id",
-                    "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
-                    precip_start_filter_sql,
-                    paste0("  AND mcd.date <= ", ref_date_sql),
-                    "ORDER BY mcd.date"
+        if (identical(parameter, "precipitation (1wk)")) {
+            accumulation_hours <- precip_accumulation_hours(
+                precip_accumulation
+            )
+            accumulation_days <- accumulation_hours %/% 24L
+            continuous_precip_start_filter_sql <- if (
+                isTRUE(load_entire_record)
+            ) {
+                paste0(
+                    "  AND mc.datetime >= ",
+                    historical_daily_min_date_sql,
+                    "::timestamp"
                 )
             } else {
+                paste0(
+                    "  AND mc.datetime >= ",
+                    ref_ts_sql,
+                    " - INTERVAL '2 months'"
+                )
+            }
+            precip_db_sql <- DBI::dbQuoteString(con, "precipitation, total")
+            precipitation_continuous <- tryCatch(
+                YGwater::dbGetQueryDT(
+                    sprintf(
+                        paste(
+                            "SELECT mc.datetime AS datetime,",
+                            "    SUM(mc.value) OVER (ORDER BY mc.datetime RANGE BETWEEN INTERVAL '%s hours' PRECEDING AND CURRENT ROW) AS value",
+                            "FROM measurements_continuous mc",
+                            "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                            "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "JOIN locations l ON l.location_id = ts.location_id",
+                            "WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
+                            continuous_precip_start_filter_sql,
+                            paste0("  AND mc.datetime <= ", ref_ts_sql),
+                            "ORDER BY mc.datetime"
+                        ),
+                        accumulation_hours,
+                        location_sql,
+                        precip_db_sql
+                    ),
+                    con = con
+                ),
+                error = function(e) data.frame()
+            )
+            precipitation_continuous <- sanitize_loaded_series_values(
+                precipitation_continuous,
+                parameter
+            )
+            precipitation_continuous$trace_source <- "realtime_continuous"
+
+            precipitation_daily <- data.frame()
+            if ((accumulation_hours %% 24L) == 0L) {
+                lookback_days <- max(accumulation_days - 1L, 0L)
                 precip_sql <- paste(
-                    "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
+                    "SELECT mcd.date::timestamp AS datetime,",
+                    sprintf(
+                        "    SUM(mcd.value) OVER (ORDER BY mcd.date ROWS BETWEEN %d PRECEDING AND CURRENT ROW) AS value",
+                        lookback_days
+                    ),
                     "FROM measurements_calculated_daily mcd",
                     "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
                     "JOIN parameters p ON p.parameter_id = ts.parameter_id",
@@ -2672,18 +2926,84 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     paste0("  AND mcd.date <= ", ref_date_sql),
                     "ORDER BY mcd.date"
                 )
+
+                precipitation_daily <- tryCatch(
+                    YGwater::dbGetQueryDT(
+                        sprintf(precip_sql, location_sql, precip_db_sql),
+                        con = con
+                    ),
+                    error = function(e) data.frame()
+                )
+                precipitation_daily <- sanitize_loaded_series_values(
+                    precipitation_daily,
+                    parameter
+                )
+                precipitation_daily$trace_source <- "historical_daily"
             }
 
-            precipitation <- YGwater::dbGetQueryDT(
-                sprintf(precip_sql, location_sql, precip_db_sql),
-                con = con
+            if (isTRUE(load_entire_record)) {
+                if (nrow(precipitation_continuous) == 0) {
+                    if (nrow(precipitation_daily) > 0) {
+                        precipitation_daily$trace_source <- "observed"
+                    }
+                    return(finalize_series(precipitation_daily))
+                }
+                if (nrow(precipitation_daily) == 0) {
+                    precipitation_continuous$trace_source <- "observed"
+                    return(finalize_series(precipitation_continuous))
+                }
+
+                first_continuous_time <- min(
+                    precipitation_continuous$datetime,
+                    na.rm = TRUE
+                )
+                first_continuous_date <- as.POSIXct(
+                    format(first_continuous_time, "%Y-%m-%d"),
+                    tz = attr(first_continuous_time, "tzone") %||% "Etc/GMT+7"
+                )
+                daily_history <- precipitation_daily[
+                    precipitation_daily$datetime <= first_continuous_date,
+                ]
+                merged_series <- rbind(
+                    daily_history[, c("datetime", "value", "trace_source")],
+                    precipitation_continuous[, c(
+                        "datetime",
+                        "value",
+                        "trace_source"
+                    )]
+                )
+                merged_series <- merged_series[order(merged_series$datetime), ]
+                return(finalize_series(merged_series))
+            }
+
+            if (nrow(precipitation_continuous) == 0) {
+                precipitation_daily$trace_source <- "observed"
+                return(finalize_series(precipitation_daily))
+            }
+
+            if (nrow(precipitation_daily) == 0) {
+                precipitation_continuous$trace_source <- "observed"
+                return(finalize_series(precipitation_continuous))
+            }
+
+            latest_continuous <- max(
+                precipitation_continuous$datetime,
+                na.rm = TRUE
             )
-            precipitation <- sanitize_loaded_series_values(
-                precipitation,
-                parameter
-            )
-            precipitation$trace_source <- "observed"
-            return(finalize_series(precipitation))
+            latest_daily <- max(precipitation_daily$datetime, na.rm = TRUE)
+
+            selected_series <- if (
+                is.finite(latest_daily) &&
+                    (!is.finite(latest_continuous) ||
+                        latest_daily > latest_continuous)
+            ) {
+                precipitation_daily
+            } else {
+                precipitation_continuous
+            }
+
+            selected_series$trace_source <- "observed"
+            return(finalize_series(selected_series))
         }
 
         continuous <- tryCatch(
@@ -2749,7 +3069,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             first_continuous_date <- as.POSIXct(
                 format(first_continuous_time, "%Y-%m-%d"),
                 tz = attr(first_continuous_time, "tzone") %||%
-                    "America/Whitehorse"
+                    "Etc/GMT+7"
             )
             daily_history <- daily_fallback[
                 daily_fallback$datetime <= first_continuous_date,
@@ -2792,7 +3112,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
     empty_historical_overlay_data <- function() {
         data.frame(
             location_code = character(),
-            datetime = as.POSIXct(character(), tz = "America/Whitehorse"),
+            datetime = as.POSIXct(character(), tz = "Etc/GMT+7"),
             value = numeric(),
             overlay_year = integer(),
             trace_source = character(),
@@ -2820,7 +3140,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         parameter,
         years,
         con,
-        reference_time = NULL
+        reference_time = NULL,
+        precip_accumulation = "1 week"
     ) {
         if (
             is.na(location_code) ||
@@ -3020,9 +3341,17 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     con = con
                 )
             } else if (identical(parameter, "precipitation (1wk)")) {
+                accumulation_hours <- precip_accumulation_hours(
+                    precip_accumulation
+                )
+                if ((accumulation_hours %% 24L) != 0L) {
+                    return(empty_historical_overlay_data())
+                }
+                lookback_days <- max((accumulation_hours %/% 24L) - 1L, 0L)
                 lookback_start_sql <- sprintf(
-                    "MAKE_DATE(%d, 1, 1) - INTERVAL '6 days'",
-                    overlay_year
+                    "MAKE_DATE(%d, 1, 1) - INTERVAL '%d days'",
+                    overlay_year,
+                    lookback_days
                 )
                 precip_sql_q <- DBI::dbQuoteString(con, "precipitation, total")
                 YGwater::dbGetQueryDT(
@@ -3043,7 +3372,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             "),",
                             "rolling_week AS (",
                             "    SELECT date::timestamp AS datetime,",
-                            "        SUM(value) OVER (ORDER BY date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS value",
+                            "        SUM(value) OVER (ORDER BY date ROWS BETWEEN %d PRECEDING AND CURRENT ROW) AS value",
                             "    FROM daily_values",
                             ")",
                             "SELECT datetime, value FROM rolling_week",
@@ -3051,19 +3380,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             paste0("  AND datetime::date <= ", year_end_sql),
                             "ORDER BY datetime"
                         ),
+                        lookback_days,
                         location_sql,
                         precip_sql_q
                     ),
                     con = con
                 )
             } else {
-                q_param_sql <- if (
-                    identical(parameter, "precipitation (24hr)")
-                ) {
-                    DBI::dbQuoteString(con, "precipitation, total")
-                } else {
-                    parameter_sql
-                }
+                q_param_sql <- parameter_sql
                 YGwater::dbGetQueryDT(
                     sprintf(
                         paste(
@@ -3116,7 +3440,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         location_code,
         parameter,
         continuous_data,
-        title_prefix = NULL
+        title_prefix = NULL,
+        precip_accumulation = "1 week"
     ) {
         if (is.null(continuous_data) || nrow(continuous_data) == 0) {
             return(empty_plotly_widget(
@@ -3155,7 +3480,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             ))
         }
         plot_timezone <- attr(series$datetime, "tzone") %||%
-            "America/Whitehorse"
+            "Etc/GMT+7"
         series$datetime <- suppressWarnings(as.POSIXct(
             series$datetime,
             tz = plot_timezone
@@ -3188,7 +3513,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             plotly::layout(
                 title = title_text,
                 xaxis = list(title = "Date"),
-                yaxis = list(title = parameter_axis_title(parameter)),
+                yaxis = list(
+                    title = parameter_axis_title(
+                        parameter,
+                        precip_accumulation = precip_accumulation
+                    )
+                ),
                 hovermode = "x unified",
                 showlegend = FALSE
             )
@@ -3223,7 +3553,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         reference_time = NULL,
         load_entire_record = FALSE,
         con = NULL,
-        historical_start_year = 2020
+        historical_start_year = 2020,
+        precip_accumulation = "1 week"
     ) {
         include_return_periods <- parameter %in% c("water flow", "water level")
         include_percentiles <- parameter %in%
@@ -3231,7 +3562,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "water flow",
                 "water level",
                 "precipitation (1wk)",
-                "precipitation (24hr)",
                 "temperature, air",
                 "FDD",
                 "DDT",
@@ -3253,7 +3583,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
         }
 
-        plot_timezone <- "America/Whitehorse"
+        plot_timezone <- "Etc/GMT+7"
         now_ts <- if (is.null(reference_time)) {
             Sys.time()
         } else {
@@ -3290,7 +3620,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 reference_time = now_ts,
                 load_entire_record = load_entire_record,
                 con = con,
-                historical_start_year = historical_start_year
+                historical_start_year = historical_start_year,
+                precip_accumulation = precip_accumulation
             )
         }
         if (!"location_code" %in% names(continuous_data)) {
@@ -3310,7 +3641,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         if (
             length(tz_attr) == 0 || is.na(tz_attr[[1]]) || !nzchar(tz_attr[[1]])
         ) {
-            plot_timezone <- "America/Whitehorse"
+            plot_timezone <- "Etc/GMT+7"
         } else {
             plot_timezone <- tz_attr[[1]]
         }
@@ -3344,7 +3675,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     location_codes = c(location_code),
                     parameter = parameter,
                     con = con,
-                    historical_start_year = historical_start_year
+                    historical_start_year = historical_start_year,
+                    precip_accumulation = precip_accumulation
                 )
             }
             if (!is.null(percentiles) && nrow(percentiles) > 0) {
@@ -3367,26 +3699,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     tz = plot_timezone
                 ))
             }
-            # Build a padded envelope around the visible window, but keep it
-            # bounded to the configured historical period to avoid oversized
-            # ribbon polygons that can trigger plot clipping artifacts.
-            historical_start_date <- as.Date(sprintf(
-                "%d-01-01",
-                historical_start_year
-            ))
-            historical_end_date <- as.Date(sprintf("%d-12-31", ref_year + 1L))
-            padded_view_start <- as.Date(view_start, tz = plot_timezone) - 366
-            padded_view_end <- as.Date(view_end, tz = plot_timezone) + 366
-
-            pct_cycle_start <- max(historical_start_date, padded_view_start)
-            pct_cycle_end <- min(historical_end_date, padded_view_end)
-            if (pct_cycle_end < pct_cycle_start) {
-                pct_cycle_start <- historical_start_date
-                pct_cycle_end <- min(
-                    historical_end_date,
-                    historical_start_date + 366
-                )
-            }
+            # Show percentile envelope for a fixed 3-year cycle:
+            # one year before to one year after the reference year.
+            pct_cycle_start <- as.Date(sprintf("%d-01-01", ref_year - 1L))
+            pct_cycle_end <- as.Date(sprintf("%d-12-31", ref_year + 1L))
             pct_dates <- seq(pct_cycle_start, pct_cycle_end, by = "day")
             pct_years <- as.integer(format(pct_dates, "%Y"))
             pct_months <- as.integer(format(pct_dates, "%m"))
@@ -3544,9 +3860,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         }
 
         observed_name <- if (identical(parameter, "precipitation (1wk)")) {
-            "Observed 1-week accumulation"
-        } else if (identical(parameter, "precipitation (24hr)")) {
-            "Observed 24-hour"
+            sprintf(
+                "Observed %s accumulation",
+                precip_accumulation_display(precip_accumulation)
+            )
         } else {
             "Observed"
         }
@@ -3699,7 +4016,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     ),
                     hoverformat = "%Y-%m-%d"
                 ),
-                yaxis = list(title = parameter_axis_title(parameter)),
+                yaxis = list(
+                    title = parameter_axis_title(
+                        parameter,
+                        precip_accumulation = precip_accumulation
+                    )
+                ),
                 hovermode = "x unified",
                 showlegend = FALSE,
                 shapes = c(list(now_line), rp_shapes),
@@ -3732,7 +4054,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         load_entire_record = FALSE,
         continuous_data = NULL,
         percentiles = NULL,
-        return_periods = NULL
+        return_periods = NULL,
+        precip_accumulation = "1 week"
     ) {
         tryCatch(
             suppressWarnings({
@@ -3743,7 +4066,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         reference_time = reference_time,
                         load_entire_record = load_entire_record,
                         con = con,
-                        historical_start_year = 2020L
+                        historical_start_year = 2020L,
+                        precip_accumulation = precip_accumulation
                     )
                 }
                 if (is.null(continuous_data) || nrow(continuous_data) == 0) {
@@ -3754,8 +4078,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         title_prefix = sprintf(
                             "%s [%s]",
                             location_code,
-                            parameter
-                        )
+                            parameter_display_label(
+                                parameter,
+                                precip_accumulation = precip_accumulation
+                            )
+                        ),
+                        precip_accumulation = precip_accumulation
                     ))
                 }
                 if (!"location_code" %in% names(continuous_data)) {
@@ -3771,7 +4099,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         reference_time = as.character(reference_time),
                         load_entire_record = load_entire_record,
                         con = con,
-                        historical_start_year = 2020L
+                        historical_start_year = 2020L,
+                        precip_accumulation = precip_accumulation
                     ),
                     error = function(e) {
                         simple_continuous_plotly_widget(
@@ -3781,8 +4110,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             title_prefix = sprintf(
                                 "%s [%s]",
                                 location_code,
-                                parameter
-                            )
+                                parameter_display_label(
+                                    parameter,
+                                    precip_accumulation = precip_accumulation
+                                )
+                            ),
+                            precip_accumulation = precip_accumulation
                         )
                     }
                 )
@@ -3792,7 +4125,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     location_code = location_code,
                     parameter = parameter,
                     continuous_data = NULL,
-                    title_prefix = sprintf("%s [%s]", location_code, parameter)
+                    title_prefix = sprintf(
+                        "%s [%s]",
+                        location_code,
+                        parameter_display_label(
+                            parameter,
+                            precip_accumulation = precip_accumulation
+                        )
+                    ),
+                    precip_accumulation = precip_accumulation
                 )
             }
         )
@@ -3813,6 +4154,24 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     error = function(e) FALSE
                 ))
         }
+
+        # Toggle dashboard panel layout between compact (2-column) and
+        # single-column (full-width cards).
+        shiny::observe({
+            selected_mode <- input$view_mode
+            if (is.null(selected_mode) || !nzchar(selected_mode)) {
+                selected_mode <- "compact"
+            }
+            selected_mode <- if (selected_mode %in% c("single-column")) {
+                "single-column"
+            } else {
+                "compact"
+            }
+            session$sendCustomMessage(
+                type = session$ns("set-dashboard-mode"),
+                message = selected_mode
+            )
+        })
 
         fva <- read_fva_json()
         communities <- names(fva)
@@ -3902,9 +4261,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             "snow water eq (survey)",
             "snow depth (survey)"
         )
+        none_select_value <- "__none__"
         precipitation_parameters <- c(
-            "precipitation (1wk)",
-            "precipitation (24hr)"
+            "precipitation (1wk)"
         )
 
         summary_data <- shiny::reactive({
@@ -4147,7 +4506,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "water level",
                 "water flow",
                 "precipitation (1wk)",
-                "precipitation (24hr)",
                 "temperature, air",
                 "FDD",
                 "DDT",
@@ -4161,8 +4519,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "secondary_parameter",
-                    choices = character(0),
-                    selected = character(0),
+                    choices = c("None" = none_select_value),
+                    selected = none_select_value,
                     server = TRUE
                 )
                 return()
@@ -4171,47 +4529,38 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             current <- shiny::isolate(input$secondary_parameter)
             new_selected <- if (
                 !is.null(current) &&
-                    nzchar(current) &&
-                    current %in% parameter_candidates
+                    (identical(current, none_select_value) ||
+                        (nzchar(current) &&
+                            current %in% parameter_candidates))
             ) {
                 current
             } else {
-                character(0)
+                none_select_value
             }
 
             shiny::updateSelectizeInput(
                 session,
                 inputId = "secondary_parameter",
-                choices = parameter_candidates,
+                choices = c("None" = none_select_value, parameter_candidates),
                 selected = new_selected,
                 server = TRUE
             )
         })
 
-        # Update secondary_station choices when secondary_parameter changes.
-        shiny::observe({
-            sec_param <- input$secondary_parameter
-            all_locs <- community_locations()
-            primary <- input$station %||% ""
-
+        eligible_secondary_locations <- function(
+            sec_param,
+            all_locs,
+            primary_station_code = ""
+        ) {
             if (
                 is.null(sec_param) ||
                     !nzchar(sec_param) ||
                     is.null(all_locs) ||
                     nrow(all_locs) == 0
             ) {
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "secondary_station",
-                    choices = c("No stations available" = ""),
-                    selected = "",
-                    server = TRUE
-                )
-                return()
+                return(all_locs[integer(0), , drop = FALSE])
             }
 
-            # Filter to stations that actually have this parameter.
-            # Snow survey data is in discrete tables, not timeseries.
             eligible <- if (sec_param %in% snow_survey_parameters) {
                 sd <- tryCatch(
                     get_snow_survey_summary(
@@ -4246,19 +4595,50 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ]
             }
 
-            # Exclude the currently selected primary station.
-            eligible <- eligible[
-                eligible$location_code != primary,
+            eligible[
+                eligible$location_code != (primary_station_code %||% ""),
                 ,
                 drop = FALSE
             ]
+        }
+
+        # Update secondary_station choices when secondary_parameter changes.
+        shiny::observe({
+            sec_param <- input$secondary_parameter
+            if (identical(sec_param, none_select_value)) {
+                sec_param <- ""
+            }
+            all_locs <- community_locations()
+            primary <- input$station %||% ""
+
+            if (
+                is.null(sec_param) ||
+                    !nzchar(sec_param) ||
+                    is.null(all_locs) ||
+                    nrow(all_locs) == 0
+            ) {
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "secondary_station",
+                    choices = c("None" = none_select_value),
+                    selected = none_select_value,
+                    server = TRUE
+                )
+                return()
+            }
+
+            eligible <- eligible_secondary_locations(
+                sec_param = sec_param,
+                all_locs = all_locs,
+                primary_station_code = primary
+            )
 
             if (nrow(eligible) == 0) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "secondary_station",
-                    choices = c("No stations available" = ""),
-                    selected = "",
+                    choices = c("None" = none_select_value),
+                    selected = none_select_value,
                     server = TRUE
                 )
                 return()
@@ -4276,18 +4656,19 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             current <- shiny::isolate(input$secondary_station)
             new_selected <- if (
                 !is.null(current) &&
-                    nzchar(current) &&
-                    current %in% eligible$location_code
+                    (identical(current, none_select_value) ||
+                        (nzchar(current) &&
+                            current %in% eligible$location_code))
             ) {
                 current
             } else {
-                character(0)
+                none_select_value
             }
 
             shiny::updateSelectizeInput(
                 session,
                 inputId = "secondary_station",
-                choices = sec_choices,
+                choices = c("None" = none_select_value, sec_choices),
                 selected = new_selected,
                 server = TRUE
             )
@@ -4755,18 +5136,26 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
             shiny::tags$div(
                 style = "display:flex; align-items:center; gap:0.4rem; flex-wrap:wrap;",
-                shiny::selectInput(
-                    inputId = session$ns("image_location_select"),
-                    label = NULL,
-                    choices = choices,
-                    selected = selected_val,
-                    width = "auto",
-                    selectize = FALSE
+                bslib::tooltip(
+                    shiny::selectInput(
+                        inputId = session$ns("image_location_select"),
+                        label = NULL,
+                        choices = choices,
+                        selected = selected_val,
+                        width = "auto",
+                        selectize = FALSE
+                    ),
+                    "Choose which image series location to display.",
+                    placement = "top"
                 ),
-                shiny::actionButton(
-                    inputId = session$ns("previous_image_series"),
-                    label = "\u25c0",
-                    style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+                bslib::tooltip(
+                    shiny::actionButton(
+                        inputId = session$ns("previous_image_series"),
+                        label = "\u25c0",
+                        style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+                    ),
+                    "Show previous image timestamp.",
+                    placement = "top"
                 ),
                 shiny::tags$span(
                     if (!is.null(timestamps) && nrow(timestamps) > 0) {
@@ -4781,10 +5170,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     },
                     style = "font-size:0.85rem; min-width:2.5rem; text-align:center; white-space:nowrap;"
                 ),
-                shiny::actionButton(
-                    inputId = session$ns("next_image_series"),
-                    label = "\u25b6",
-                    style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+                bslib::tooltip(
+                    shiny::actionButton(
+                        inputId = session$ns("next_image_series"),
+                        label = "\u25b6",
+                        style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+                    ),
+                    "Show next image timestamp.",
+                    placement = "top"
                 ),
                 shiny::tags$span(
                     ts_str,
@@ -4916,7 +5309,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "water level",
                 "water flow",
                 "precipitation (1wk)",
-                "precipitation (24hr)",
                 "temperature, air",
                 "snow water eq (survey)",
                 "snow depth (survey)"
@@ -5005,14 +5397,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         ),
                         error = function(e) integer(0)
                     ),
-                    "precipitation (24hr)" = tryCatch(
-                        get_location_ids_with_parameter(
-                            location_ids = location_ids_all,
-                            parameter = "precipitation (24hr)",
-                            con = con
-                        ),
-                        error = function(e) integer(0)
-                    ),
                     "temperature, air" = tryCatch(
                         get_location_ids_with_parameter(
                             location_ids = location_ids_all,
@@ -5054,7 +5438,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 met_ids <- unique(unlist(
                     parameter_location_id_map[c(
                         "precipitation (1wk)",
-                        "precipitation (24hr)",
                         "temperature, air"
                     )],
                     use.names = FALSE
@@ -5653,7 +6036,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 suppressWarnings(as.POSIXct(
                     input$time0,
                     format = "%Y-%m-%dT%H:%M",
-                    tz = "America/Whitehorse"
+                    tz = "Etc/GMT+7"
                 ))
             } else {
                 Sys.time()
@@ -5682,6 +6065,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             if (!is.na(nm) && nzchar(nm)) nm else code
         }
 
+        normalize_relative_view_weeks <- function(value, default_value) {
+            parsed <- suppressWarnings(as.integer(value[[1]]))
+            if (length(parsed) == 0 || is.na(parsed) || parsed < 0) {
+                return(as.integer(default_value))
+            }
+            parsed
+        }
+
         current_station_plot_request <- shiny::reactive({
             dat <- available_primary_stations()
             if (is.null(dat) || nrow(dat) == 0) {
@@ -5699,16 +6090,30 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
             secondary_station_code <- input$secondary_station
             secondary_parameter <- input$secondary_parameter
+            if (identical(secondary_station_code, none_select_value)) {
+                secondary_station_code <- ""
+            }
+            if (identical(secondary_parameter, none_select_value)) {
+                secondary_parameter <- ""
+            }
             all_locations <- community_locations()
-            if (
-                is.null(secondary_station_code) ||
-                    !nzchar(secondary_station_code) ||
-                    identical(secondary_station_code, primary_station_code) ||
-                    is.null(all_locations) ||
-                    nrow(all_locations) == 0 ||
-                    !secondary_station_code %in% all_locations$location_code
-            ) {
+            eligible_secondary <- eligible_secondary_locations(
+                sec_param = secondary_parameter,
+                all_locs = all_locations,
+                primary_station_code = primary_station_code
+            )
+            has_valid_secondary_selection <-
+                !is.null(secondary_station_code) &&
+                nzchar(secondary_station_code) &&
+                !is.null(secondary_parameter) &&
+                nzchar(secondary_parameter) &&
+                !is.null(eligible_secondary) &&
+                nrow(eligible_secondary) > 0 &&
+                secondary_station_code %in% eligible_secondary$location_code
+
+            if (!isTRUE(has_valid_secondary_selection)) {
                 secondary_station_code <- NULL
+                secondary_parameter <- NULL
             }
 
             selected_parameter <- input$parameter
@@ -5721,6 +6126,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 secondary_station_code = secondary_station_code,
                 secondary_parameter = secondary_parameter,
                 parameter = selected_parameter,
+                precip_accumulation = normalize_precip_accumulation(
+                    input$precip_accumulation
+                ),
                 primary_historical_years = normalize_selected_historical_years(
                     input$primary_historical_years
                 ),
@@ -5729,6 +6137,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ),
                 show_legend = isTRUE(input$station_plot_show_legend),
                 label_traces = isTRUE(input$station_plot_label_traces),
+                relative_view_weeks_before = normalize_relative_view_weeks(
+                    input$relative_view_weeks_before,
+                    2L
+                ),
+                relative_view_weeks_after = normalize_relative_view_weeks(
+                    input$relative_view_weeks_after,
+                    4L
+                ),
                 reference_time = time_zero(),
                 historical_start_year = 2020L,
                 primary_station_label = station_label_for_code(
@@ -5736,6 +6152,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ),
                 secondary_station_label = station_label_for_code(
                     secondary_station_code
+                ),
+                has_valid_secondary_selection = isTRUE(
+                    has_valid_secondary_selection
                 )
             )
         })
@@ -5762,10 +6181,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 format(
                     as.POSIXct(
                         request$reference_time,
-                        tz = "America/Whitehorse"
+                        tz = "Etc/GMT+7"
                     ),
                     "%Y-%m-%d %H:%M:%S",
-                    tz = "America/Whitehorse"
+                    tz = "Etc/GMT+7"
                 )
             }
             # Exclude display-only fields from staleness comparison so
@@ -5774,15 +6193,33 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             request$label_traces <- NULL
             request$primary_historical_years <- NULL
             request$secondary_historical_years <- NULL
+            # relative_view_weeks_after only shifts the right edge of the
+            # x-axis and is applied via plotlyProxy, so it must not cause
+            # the plot to be marked stale.
+            request$relative_view_weeks_after <- NULL
+            request$has_valid_secondary_selection <- NULL
+            request
+        }
+
+        strip_secondary_selection_from_request <- function(request) {
+            if (is.null(request)) {
+                return(NULL)
+            }
+            request$secondary_station_code <- NULL
+            request$secondary_parameter <- NULL
+            request$secondary_station_label <- NULL
+            request$secondary_historical_years <- NULL
             request
         }
 
         create_plot_pending <- shiny::reactiveVal(FALSE)
         station_plot_request <- shiny::reactiveVal(NULL)
+        station_plot_trace_label_annotations <- shiny::reactiveVal(NULL)
 
         shiny::observeEvent(
             input$create_plot,
             {
+                station_plot_trace_label_annotations(NULL)
                 create_plot_pending(TRUE)
             },
             ignoreInit = TRUE
@@ -5816,7 +6253,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         # because the legend is toggled.
         shiny::observe({
             # Take a reactive dependency on each soft input.
-            lbl <- input$station_plot_label_traces
             prim_yrs <- input$primary_historical_years
             sec_yrs <- input$secondary_historical_years
 
@@ -5826,7 +6262,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
 
             updated <- stored
-            updated$label_traces <- isTRUE(lbl)
             updated$primary_historical_years <-
                 normalize_selected_historical_years(prim_yrs)
             updated$secondary_historical_years <-
@@ -5835,9 +6270,44 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             station_plot_request(updated)
         })
 
+        # Toggle trace labels in-place without rebuilding the plot.
+        shiny::observeEvent(
+            input$station_plot_label_traces,
+            {
+                shiny::req(!is.null(station_plot_request()))
+                show_labels <- isTRUE(input$station_plot_label_traces)
+                annotations <- station_plot_trace_label_annotations()
+                payload <- if (show_labels && !is.null(annotations)) {
+                    annotations
+                } else {
+                    list()
+                }
+
+                plotly::plotlyProxy("station_plot", session) %>%
+                    plotly::plotlyProxyInvoke(
+                        "relayout",
+                        list(annotations = payload)
+                    )
+            },
+            ignoreInit = TRUE
+        )
+
         station_plot_is_stale <- shiny::reactive({
-            current_request <- normalize_plot_request(current_station_plot_request())
-            stored_request <- normalize_plot_request(station_plot_request())
+            raw_current_request <- current_station_plot_request()
+            raw_stored_request <- station_plot_request()
+            current_request <- normalize_plot_request(raw_current_request)
+            stored_request <- normalize_plot_request(raw_stored_request)
+
+            # Secondary choices only make the plot stale once a complete,
+            # eligible parameter-station pair has been selected.
+            if (!isTRUE(raw_current_request$has_valid_secondary_selection)) {
+                current_request <- strip_secondary_selection_from_request(
+                    current_request
+                )
+                stored_request <- strip_secondary_selection_from_request(
+                    stored_request
+                )
+            }
 
             !is.null(current_request) &&
                 !is.null(stored_request) &&
@@ -5856,7 +6326,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             ) {
                 sprintf(
                     "%s: %s vs %s",
-                    request$parameter,
+                    parameter_display_label(
+                        request$parameter,
+                        request$precip_accumulation
+                    ),
                     request$primary_station_label %||%
                         request$primary_station_code,
                     request$secondary_station_label
@@ -5864,7 +6337,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             } else {
                 sprintf(
                     "%s: %s",
-                    request$parameter,
+                    parameter_display_label(
+                        request$parameter,
+                        request$precip_accumulation
+                    ),
                     request$primary_station_label %||%
                         request$primary_station_code
                 )
@@ -5879,6 +6355,46 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 plotly::plotlyProxyInvoke(
                     "relayout",
                     list(showlegend = show)
+                )
+        })
+
+        # Push x-axis right limit dynamically when relative_view_weeks_after
+        # changes, without triggering a full plot re-render.
+        shiny::observe({
+            request <- station_plot_request()
+            shiny::req(!is.null(request))
+            after_weeks <- normalize_relative_view_weeks(
+                input$relative_view_weeks_after,
+                4L
+            )
+            plot_tz_label <- "Etc/GMT+7"
+            plot_ref_ts <- suppressWarnings(as.POSIXct(
+                request$reference_time,
+                tz = plot_tz_label
+            ))
+            if (is.null(plot_ref_ts) || is.na(plot_ref_ts)) {
+                plot_ref_ts <- as.POSIXct(
+                    format(Sys.time(), tz = plot_tz_label),
+                    tz = plot_tz_label
+                )
+            }
+            attr(plot_ref_ts, "tzone") <- plot_tz_label
+            before_weeks <- normalize_relative_view_weeks(
+                request$relative_view_weeks_before,
+                2L
+            )
+            new_x_min <- format(
+                plot_ref_ts - as.difftime(before_weeks * 7, units = "days"),
+                "%Y-%m-%d %H:%M:%S"
+            )
+            new_x_max <- format(
+                plot_ref_ts + as.difftime(after_weeks * 7, units = "days"),
+                "%Y-%m-%d %H:%M:%S"
+            )
+            plotly::plotlyProxy("station_plot", session) %>%
+                plotly::plotlyProxyInvoke(
+                    "relayout",
+                    list(xaxis = list(range = list(new_x_min, new_x_max)))
                 )
         })
 
@@ -5923,13 +6439,20 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 "FDD",
                 "DDT",
                 "temperature, air",
-                "precipitation (1wk)",
-                "precipitation (24hr)"
+                "precipitation (1wk)"
             )
 
             snow_survey_params_local <- c(
                 "snow water eq (survey)",
                 "snow depth (survey)"
+            )
+
+            # Compute before the fetch so fetch_plot_series can use it as a
+            # closure variable.  The later assignment (used for view_x_min)
+            # will produce the same value.
+            rel_weeks_before <- normalize_relative_view_weeks(
+                request$relative_view_weeks_before,
+                2L
             )
 
             fetch_plot_series <- function(location_code, parameter_name) {
@@ -5940,7 +6463,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             parameter = parameter_name,
                             reference_time = request$reference_time,
                             load_entire_record = FALSE,
-                            con = con
+                            con = con,
+                            precip_accumulation = request$precip_accumulation
                         ),
                         error = function(e) NULL
                     ))
@@ -6002,6 +6526,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     183L
                 } else {
                     30L
+                }
+                # Override with the user-selected lookback window.
+                history_days_load <- rel_weeks_before * 7L
+                if (history_days_load > 0L) {
+                    history_interval <- paste(history_days_load, "days")
+                    history_days <- history_days_load
                 }
 
                 d <- tryCatch(
@@ -6089,7 +6619,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 )
             }
 
-            y_title <- parameter_axis_title(param)
+            y_title <- parameter_axis_title(
+                param,
+                precip_accumulation = request$precip_accumulation
+            )
 
             is_survey_param <- param %in%
                 c(
@@ -6102,7 +6635,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "water flow",
                     "water level",
                     "precipitation (1wk)",
-                    "precipitation (24hr)",
                     "temperature, air",
                     "FDD",
                     "DDT",
@@ -6123,7 +6655,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         parameter = param,
                         con = con,
                         historical_start_year = request$historical_start_year %||%
-                            2020L
+                            2020L,
+                        precip_accumulation = request$precip_accumulation
                     ),
                     error = function(e) data.frame()
                 )
@@ -6142,7 +6675,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             is.na(plot_timezone[[1]]) ||
                             !nzchar(plot_timezone[[1]])
                     ) {
-                        plot_timezone <- "America/Whitehorse"
+                        plot_timezone <- "Etc/GMT+7"
                     } else {
                         plot_timezone <- plot_timezone[[1]]
                     }
@@ -6158,9 +6691,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         )
                     }
 
-                    historical_start_year <- normalize_historical_start_year(
-                        request$historical_start_year %||% 2020L
-                    )
                     ref_year <- suppressWarnings(as.integer(format(
                         reference_ts,
                         "%Y",
@@ -6219,6 +6749,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             c("datetime"),
                             drop = FALSE
                         ]
+                        survey_points$datetime <- as.POSIXct(
+                            as.Date(survey_points$datetime, tz = plot_timezone),
+                            tz = plot_timezone
+                        )
                         survey_points <- rbind(
                             survey_points,
                             data.frame(
@@ -6236,7 +6770,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             drop = FALSE
                         ]
                         survey_points <- survey_points[
-                            !duplicated(survey_points$datetime),
+                            !duplicated(as.Date(
+                                survey_points$datetime,
+                                tz = plot_timezone
+                            )),
                             ,
                             drop = FALSE
                         ]
@@ -6311,7 +6848,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         }
                     } else {
                         pct_dates <- seq(
-                            as.Date(sprintf("%d-01-01", historical_start_year)),
+                            as.Date(sprintf("%d-01-01", ref_year - 1L)),
                             as.Date(sprintf("%d-12-31", ref_year + 1L)),
                             by = "day"
                         )
@@ -6720,13 +7257,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     parameter = param,
                     years = request$primary_historical_years,
                     con = con,
-                    reference_time = request$reference_time
+                    reference_time = request$reference_time,
+                    precip_accumulation = request$precip_accumulation
                 ),
                 error = function(e) list()
             )
 
             show_legend <- FALSE
-            label_traces <- isTRUE(request$label_traces)
             trace_label_annotations <- list()
 
             # Compute view bounds now so label positions can be clamped.
@@ -6745,12 +7282,22 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 )
             }
             attr(plot_ref_ts, "tzone") <- plot_tz_label
+
+            rel_weeks_before <- normalize_relative_view_weeks(
+                request$relative_view_weeks_before,
+                2L
+            )
+            rel_weeks_after <- normalize_relative_view_weeks(
+                request$relative_view_weeks_after,
+                4L
+            )
+
             view_x_min <- structure(
-                plot_ref_ts - as.difftime(14, units = "days"),
+                plot_ref_ts - as.difftime(rel_weeks_before * 7, units = "days"),
                 tzone = plot_tz_label
             )
             view_x_max <- structure(
-                plot_ref_ts + as.difftime(28, units = "days"),
+                plot_ref_ts + as.difftime(rel_weeks_after * 7, units = "days"),
                 tzone = plot_tz_label
             )
 
@@ -6828,51 +7375,49 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                 inherit = FALSE
                             )
                     }
-                    if (label_traces) {
-                        # Use the last point that falls within the visible
-                        # window; fall back to the last point in the series.
-                        in_view <- overlay_series$datetime >= view_x_min &
-                            overlay_series$datetime <= view_x_max
-                        cand_series <- if (any(in_view)) {
-                            overlay_series[in_view, , drop = FALSE]
-                        } else {
-                            overlay_series
-                        }
-                        latest_idx <- which.max(cand_series$datetime)
-                        label_x <- cand_series$datetime[[latest_idx]]
-                        label_y <- cand_series$value[[latest_idx]]
-                        # Clamp x to just inside the right edge of the window.
-                        label_x <- min(label_x, view_x_max)
-                        if (
-                            length(label_x) == 1 &&
-                                is.finite(label_x) &&
-                                is.finite(label_y)
-                        ) {
-                            trace_label_annotations <- c(
-                                trace_label_annotations,
-                                list(list(
-                                    x = format(
-                                        label_x,
-                                        "%Y-%m-%d %H:%M:%S"
-                                    ),
-                                    y = label_y,
-                                    xref = "x",
-                                    yref = "y",
-                                    text = as.character(overlay_year),
-                                    showarrow = FALSE,
-                                    xanchor = "right",
-                                    yanchor = "middle",
-                                    font = list(
-                                        size = 11,
-                                        color = overlay_colors[[index]]
-                                    ),
-                                    bgcolor = "rgba(255,255,255,0.7)",
-                                    bordercolor = overlay_colors[[index]],
-                                    borderwidth = 1,
-                                    borderpad = 3
-                                ))
-                            )
-                        }
+                    # Use the last point that falls within the visible
+                    # window; fall back to the last point in the series.
+                    in_view <- overlay_series$datetime >= view_x_min &
+                        overlay_series$datetime <= view_x_max
+                    cand_series <- if (any(in_view)) {
+                        overlay_series[in_view, , drop = FALSE]
+                    } else {
+                        overlay_series
+                    }
+                    latest_idx <- which.max(cand_series$datetime)
+                    label_x <- cand_series$datetime[[latest_idx]]
+                    label_y <- cand_series$value[[latest_idx]]
+                    # Clamp x to just inside the right edge of the window.
+                    label_x <- min(label_x, view_x_max)
+                    if (
+                        length(label_x) == 1 &&
+                            is.finite(label_x) &&
+                            is.finite(label_y)
+                    ) {
+                        trace_label_annotations <- c(
+                            trace_label_annotations,
+                            list(list(
+                                x = format(
+                                    label_x,
+                                    "%Y-%m-%d %H:%M:%S"
+                                ),
+                                y = label_y,
+                                xref = "x",
+                                yref = "y",
+                                text = as.character(overlay_year),
+                                showarrow = FALSE,
+                                xanchor = "right",
+                                yanchor = "middle",
+                                font = list(
+                                    size = 11,
+                                    color = overlay_colors[[index]]
+                                ),
+                                bgcolor = "rgba(255,255,255,0.7)",
+                                bordercolor = overlay_colors[[index]],
+                                borderwidth = 1,
+                                borderpad = 3
+                            ))
+                        )
                     }
                 }
             }
@@ -6970,7 +7515,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         parameter = sec_param,
                         years = request$secondary_historical_years,
                         con = con,
-                        reference_time = request$reference_time
+                        reference_time = request$reference_time,
+                        precip_accumulation = request$precip_accumulation
                     ),
                     error = function(e) list()
                 )
@@ -7057,8 +7603,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
 
             # ------------------------------------------------------------------
-            # X-axis: start at earliest real-time data, end at now + 4 weeks.
-            # Percentile ribbons span many years but are clipped to this window.
+            # X-axis: relative window around Time 0 from user-selected weeks
+            # before/after. Percentile ribbons are clipped to this window.
             # ------------------------------------------------------------------
             ref_ts <- plot_ref_ts
 
@@ -7071,37 +7617,18 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 x_min <- min(x_min, min(sec_dat$datetime, na.rm = TRUE))
             }
             x_range <- if (is.finite(x_min)) {
-                if (is_survey_param) {
-                    survey_start <- as.POSIXct(
-                        sprintf(
-                            "%04d-02-15 00:00:00",
-                            as.integer(format(ref_ts, "%Y", tz = plot_tz_label))
-                        ),
-                        tz = plot_tz_label
+                list(
+                    format(
+                        ref_ts -
+                            as.difftime(rel_weeks_before * 7, units = "days"),
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
+                    format(
+                        ref_ts +
+                            as.difftime(rel_weeks_after * 7, units = "days"),
+                        "%Y-%m-%d %H:%M:%S"
                     )
-
-                    list(
-                        format(
-                            survey_start,
-                            "%Y-%m-%d %H:%M:%S"
-                        ),
-                        format(
-                            ref_ts + as.difftime(28, units = "days"),
-                            "%Y-%m-%d %H:%M:%S"
-                        )
-                    )
-                } else {
-                    list(
-                        format(
-                            ref_ts - as.difftime(14, units = "days"),
-                            "%Y-%m-%d %H:%M:%S"
-                        ),
-                        format(
-                            ref_ts + as.difftime(28, units = "days"),
-                            "%Y-%m-%d %H:%M:%S"
-                        )
-                    )
-                }
+                )
             } else {
                 NULL
             }
@@ -7121,16 +7648,192 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 )
             )
 
+            view_x_min <- ref_ts -
+                as.difftime(rel_weeks_before * 7, units = "days")
+            view_x_max <- ref_ts +
+                as.difftime(rel_weeks_after * 7, units = "days")
+
+            visible_y <- dat$value[
+                dat$datetime >= view_x_min & dat$datetime <= view_x_max
+            ]
+            if (
+                exists("pct_plot") &&
+                    is.data.frame(pct_plot) &&
+                    nrow(pct_plot) > 0
+            ) {
+                pct_view <- if (isTRUE(is_survey_param)) {
+                    pct_plot[
+                        pct_plot$datetime <= view_x_max &
+                            (pct_plot$datetime +
+                                as.difftime(28, units = "days")) >=
+                                view_x_min,
+                        ,
+                        drop = FALSE
+                    ]
+                } else {
+                    pct_plot[
+                        pct_plot$datetime >= view_x_min &
+                            pct_plot$datetime <= view_x_max,
+                        ,
+                        drop = FALSE
+                    ]
+                }
+                if (nrow(pct_view) > 0) {
+                    pct_y_cols <- intersect(
+                        c("p0", "p10", "p25", "p50", "p75", "p90", "p100"),
+                        names(pct_view)
+                    )
+                    if (length(pct_y_cols) > 0) {
+                        visible_y <- c(
+                            visible_y,
+                            unlist(
+                                pct_view[, pct_y_cols, drop = FALSE],
+                                use.names = FALSE
+                            )
+                        )
+                    }
+                }
+            }
+            visible_y <- visible_y[is.finite(visible_y)]
+            if (length(visible_y) > 0) {
+                y_min <- min(visible_y, na.rm = TRUE)
+                y_max <- max(visible_y, na.rm = TRUE)
+                if (!is.finite(y_min) || !is.finite(y_max)) {
+                    y_range <- NULL
+                } else if (y_max <= y_min) {
+                    y_pad <- if (is.finite(y_min) && y_min != 0) {
+                        abs(y_min) * 0.05
+                    } else {
+                        0.5
+                    }
+                    y_range <- c(y_min - y_pad, y_max + y_pad)
+                } else {
+                    y_range <- c(y_min, y_max)
+                }
+            } else {
+                y_range <- NULL
+            }
+
+            secondary_y_range <- NULL
+            if (isTRUE(has_secondary_trace)) {
+                sec_visible_y <- numeric(0)
+
+                if (!is.null(sec_dat) && nrow(sec_dat) > 0) {
+                    sec_visible_y <- c(
+                        sec_visible_y,
+                        sec_dat$value[
+                            sec_dat$datetime >= view_x_min &
+                                sec_dat$datetime <= view_x_max
+                        ]
+                    )
+                }
+
+                if (length(secondary_overlays) > 0) {
+                    for (sec_ov_series in secondary_overlays) {
+                        if (
+                            is.null(sec_ov_series) || nrow(sec_ov_series) == 0
+                        ) {
+                            next
+                        }
+                        sec_visible_y <- c(
+                            sec_visible_y,
+                            sec_ov_series$value[
+                                sec_ov_series$datetime >= view_x_min &
+                                    sec_ov_series$datetime <= view_x_max
+                            ]
+                        )
+                    }
+                }
+
+                sec_visible_y <- suppressWarnings(as.numeric(sec_visible_y))
+                sec_visible_y <- sec_visible_y[is.finite(sec_visible_y)]
+
+                if (length(sec_visible_y) > 0) {
+                    sec_min <- min(sec_visible_y, na.rm = TRUE)
+                    sec_max <- max(sec_visible_y, na.rm = TRUE)
+                    if (is.finite(sec_min) && is.finite(sec_max)) {
+                        if (sec_max <= sec_min) {
+                            sec_pad <- if (sec_min != 0) {
+                                abs(sec_min) * 0.05
+                            } else {
+                                0.5
+                            }
+                            secondary_y_range <- c(
+                                sec_min - sec_pad,
+                                sec_max + sec_pad
+                            )
+                        } else {
+                            sec_pad <- max((sec_max - sec_min) * 0.05, 0.1)
+                            secondary_y_range <- c(
+                                sec_min - sec_pad,
+                                sec_max + sec_pad
+                            )
+                        }
+                    }
+                }
+            }
+
+            # Keep user zoom/pan state stable across display-only updates.
+            uirevision_key <- paste(
+                request$primary_station_code %||% "",
+                request$parameter %||% "",
+                request$precip_accumulation %||% "",
+                request$secondary_station_code %||% "",
+                request$secondary_parameter %||% "",
+                format(
+                    as.POSIXct(request$reference_time, tz = "Etc/GMT+7"),
+                    "%Y-%m-%d %H:%M:%S",
+                    tz = "Etc/GMT+7"
+                ),
+                paste(
+                    normalize_selected_historical_years(
+                        request$primary_historical_years
+                    ),
+                    collapse = ","
+                ),
+                paste(
+                    normalize_selected_historical_years(
+                        request$secondary_historical_years
+                    ),
+                    collapse = ","
+                ),
+                normalize_relative_view_weeks(
+                    request$relative_view_weeks_before,
+                    2L
+                ),
+                normalize_relative_view_weeks(
+                    request$relative_view_weeks_after,
+                    4L
+                ),
+                sep = "|"
+            )
+
+            station_plot_trace_label_annotations(
+                if (length(trace_label_annotations) > 0) {
+                    trace_label_annotations
+                } else {
+                    NULL
+                }
+            )
+
             p %>%
                 plotly::layout(
                     xaxis = list(
                         title = "",
                         range = x_range
                     ),
-                    yaxis = list(title = y_title),
+                    yaxis = if (!is.null(y_range)) {
+                        list(title = y_title, range = y_range)
+                    } else {
+                        list(title = y_title)
+                    },
                     yaxis2 = if (has_secondary_trace) {
                         list(
-                            title = parameter_axis_title(sec_param),
+                            title = parameter_axis_title(
+                                sec_param,
+                                precip_accumulation = request$precip_accumulation
+                            ),
+                            range = secondary_y_range,
                             overlaying = "y",
                             side = "right",
                             showgrid = FALSE
@@ -7138,9 +7841,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     } else {
                         NULL
                     },
+                    uirevision = uirevision_key,
                     showlegend = show_legend,
                     shapes = list(t0_line),
-                    annotations = if (length(trace_label_annotations) > 0) {
+                    annotations = if (
+                        isTRUE(request$label_traces) &&
+                            length(trace_label_annotations) > 0
+                    ) {
                         trace_label_annotations
                     } else {
                         NULL
