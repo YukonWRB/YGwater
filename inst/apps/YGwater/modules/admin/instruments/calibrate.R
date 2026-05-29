@@ -128,36 +128,57 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("ph1_std"),
                   label = "Low pH solution value",
-                  value = 4
+                  value = 4,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph2_std"),
                   label = "Neutral pH solution value",
-                  value = 7
+                  value = 7,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph3_std"),
                   label = "High pH solution value",
-                  value = 10
+                  value = 10,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph1_pre_val"),
                   label = "pH 4 Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph2_pre_val"),
                   label = "pH 7 Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph3_pre_val"),
                   label = "pH 10 Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
-                numericInput(ns("ph1_mv"), label = "pH 4 mV", value = NA),
-                numericInput(ns("ph2_mv"), label = "pH 7 mV", value = NA),
-                numericInput(ns("ph3_mv"), label = "pH 10 mV", value = NA),
+                numericInput(
+                  ns("ph1_mv"),
+                  label = "pH 4 mV",
+                  value = NA,
+                  step = 0.1
+                ),
+                numericInput(
+                  ns("ph2_mv"),
+                  label = "pH 7 mV",
+                  value = NA,
+                  step = 0.1
+                ),
+                numericInput(
+                  ns("ph3_mv"),
+                  label = "pH 10 mV",
+                  value = NA,
+                  step = 0.1
+                ),
                 actionButton(
                   ns("show_post_ph"),
                   "Show as-left fields",
@@ -166,17 +187,20 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("ph1_post_val"),
                   label = "pH 4 As-left value",
-                  value = 4
+                  value = 4,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph2_post_val"),
                   label = "pH 7 As-left value",
-                  value = 7
+                  value = 7,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph3_post_val"),
                   label = "pH 10 As-left value",
-                  value = 10
+                  value = 10,
+                  step = 0.01
                 ),
                 actionButton(ns("save_cal_ph"), "Save this section"),
                 actionButton(ns("delete_ph"), "Delete this section")
@@ -192,12 +216,14 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("temp_reference"),
                   label = "Reference Temp",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("temp_observed"),
                   label = "Sensor Temp",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 actionButton(ns("save_cal_temp"), "Save this section"),
                 actionButton(ns("delete_temp"), "Delete this section")
@@ -217,7 +243,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("spc1_std"),
                   label = "SpC Low-Range Standard",
-                  value = 0
+                  value = 0,
+                  step = 1
                 ),
                 conditionalPanel(
                   ns = ns,
@@ -225,7 +252,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc2_std"),
                     label = "SpC High-Range Standard",
-                    value = 1413
+                    value = 1413,
+                    step = 1
                   )
                 ),
                 conditionalPanel(
@@ -234,7 +262,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc3_std"),
                     label = "SpC High-Range Standard",
-                    value = 12880
+                    value = 12880,
+                    step = 1
                   )
                 ),
                 checkboxInput(
@@ -245,7 +274,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("spc1_pre"),
                   label = "SpC Low-Range Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 conditionalPanel(
                   ns = ns,
@@ -253,7 +283,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc2_pre"),
                     label = "SpC High-Range Observed / as-found value",
-                    value = NA
+                    value = NA,
+                    step = 0.1
                   )
                 ),
                 conditionalPanel(
@@ -262,7 +293,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc3_pre"),
                     label = "SpC High-Range Observed / as-found value",
-                    value = NA
+                    value = NA,
+                    step = 0.1
                   )
                 ),
                 actionButton(
@@ -273,7 +305,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("spc1_post"),
                   label = "SpC Low-Range As-left value",
-                  value = 0
+                  value = 0,
+                  step = 0.1
                 ),
                 conditionalPanel(
                   ns = ns,
@@ -281,7 +314,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc2_post"),
                     label = "SpC High-Range As-left value",
-                    value = 1413
+                    value = 1413,
+                    step = 0.1
                   )
                 ),
                 conditionalPanel(
@@ -290,7 +324,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc3_post"),
                     label = "SpC High-Range As-left value",
-                    value = 12880
+                    value = 12880,
+                    step = 0.1
                   )
                 ),
                 actionButton(ns("save_cal_spc"), "Save this section"),
@@ -303,12 +338,14 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("orp_std"),
                   label = "ORP Standard solution mV",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("orp_pre_mv"),
                   label = "ORP Observed / as-found mV",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(
                   ns("show_post_orp"),
@@ -318,7 +355,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("orp_post_mv"),
                   label = "ORP As-left mV",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(ns("save_cal_orp"), "Save this section"),
                 actionButton(ns("delete_orp"), "Delete this section")
@@ -330,22 +368,26 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("turb1_std"),
                   label = "Low Turb Standard Value",
-                  value = 0
+                  value = 0,
+                  step = 1
                 ),
                 numericInput(
                   ns("turb2_std"),
                   label = "High Turb Standard Value",
-                  value = 124
+                  value = 124,
+                  step = 1
                 ),
                 numericInput(
                   ns("turb1_pre"),
                   label = "Low Turb Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("turb2_pre"),
                   label = "High Turb Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(
                   ns("show_post_turb"),
@@ -355,12 +397,14 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("turb1_post"),
                   label = "Low Turb As-left value",
-                  value = 0
+                  value = 0,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("turb2_post"),
                   label = "High Turb As-left value",
-                  value = 124
+                  value = 124,
+                  step = 0.1
                 ),
                 actionButton(ns("save_cal_turb"), "Save this section"),
                 actionButton(ns("delete_turb"), "Delete this section")
@@ -372,34 +416,40 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("baro_press_pre"),
                   label = "Baro Pressure Observed / as-found (mmHg)",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("baro_press_post"),
                   label = "Baro Pressure As-left (mmHg)",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("do_pre_prct"),
                   label = "DO Observed / as-found % LOCAL",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("do_post_prct"),
                   label = "DO As-left % LOCAL",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(ns("calc_abs_do"), "Calculate mg/l values"),
                 actionButton(ns("calc_prct_do"), "Calculate % values"),
                 numericInput(
                   ns("do_pre"),
                   label = "DO Observed / as-found mg/l",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("do_post"),
                   label = "DO As-left mg/l",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(
                   ns("show_post_do"),
