@@ -98,11 +98,9 @@ app_server <- function(input, output, session) {
     "addContData",
     "continuousCorrections",
     "imputeMissing",
-    "editContData",
     "grades_approvals_qualifiers",
     "addDiscData",
     "addSamples",
-    "editDiscData",
     "addGuidelines",
     "addSampleSeries",
     "addDocs",
@@ -177,9 +175,7 @@ app_server <- function(input, output, session) {
     "editBoreholesWells",
     "manageBoreholeDocuments",
     "addDiscData",
-    "editDiscData",
     "addContData",
-    "editContData",
     "manageInstruments",
     "manageSensors",
     "instrumentMaintenance",
@@ -1031,7 +1027,6 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addContData,
-          session$userData$admin_privs$editContData,
           session$userData$admin_privs$continuousCorrections,
           session$userData$admin_privs$imputeMissing,
           session$userData$admin_privs$grades_approvals_qualifiers,
@@ -1042,9 +1037,6 @@ app_server <- function(input, output, session) {
         nav_show(id = "navbar", target = "continuousDataTasks")
         if (!isTRUE(session$userData$admin_privs$addContData)) {
           nav_hide(id = "navbar", target = "addContData")
-        }
-        if (!isTRUE(session$userData$admin_privs$editContData)) {
-          nav_hide(id = "navbar", target = "editContData")
         }
         if (!isTRUE(session$userData$admin_privs$continuousCorrections)) {
           nav_hide(id = "navbar", target = "continuousCorrections")
@@ -1070,7 +1062,6 @@ app_server <- function(input, output, session) {
         any(
           session$userData$admin_privs$addDiscData,
           session$userData$admin_privs$addSamples,
-          session$userData$admin_privs$editDiscData,
           session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
           session$userData$admin_privs$addGuidelines
@@ -1082,9 +1073,6 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$addSamples)) {
           nav_hide(id = "navbar", target = "addSamples")
-        }
-        if (!isTRUE(session$userData$admin_privs$editDiscData)) {
-          nav_hide(id = "navbar", target = "editDiscData")
         }
         if (!isTRUE(session$userData$admin_privs$addSampleSeries)) {
           nav_hide(id = "navbar", target = "addSampleSeries")
@@ -1703,14 +1691,12 @@ app_server <- function(input, output, session) {
     ui_loaded$addContData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
     ui_loaded$imputeMissing <- FALSE
-    ui_loaded$editContData <- FALSE
     ui_loaded$grades_approvals_qualifiers <- FALSE
     ui_loaded$syncCont <- FALSE
     ui_loaded$addTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
     ui_loaded$addSamples <- FALSE
-    ui_loaded$editDiscData <- FALSE
     ui_loaded$addGuidelines <- FALSE
     ui_loaded$addSampleSeries <- FALSE
     ui_loaded$syncDisc <- FALSE
@@ -1795,12 +1781,10 @@ app_server <- function(input, output, session) {
     "addContData",
     "continuousCorrections",
     "imputeMissing",
-    "editContData",
     "grades_approvals_qualifiers",
     "addDiscData",
     "addSamples",
     "addSampleSeries",
-    "editDiscData",
     "addGuidelines",
     "addDocs",
     "addImgs",
@@ -2881,14 +2865,6 @@ app_server <- function(input, output, session) {
                 "UPDATE"
               ))
             ),
-            editContData = has_priv(
-              tbl = session$userData$table_privs,
-              "continuous.measurements_continuous",
-              list(c(
-                "UPDATE",
-                "DELETE"
-              ))
-            ),
             continuousCorrections = has_priv(
               tbl = session$userData$table_privs,
               "continuous.corrections",
@@ -2969,20 +2945,6 @@ app_server <- function(input, output, session) {
                 "INSERT",
                 "UPDATE"
               ))
-            ),
-            editDiscData = has_priv(
-              tbl = session$userData$table_privs,
-              c("discrete.samples", "discrete.results"),
-              list(
-                c(
-                  "UPDATE",
-                  "DELETE"
-                ),
-                c(
-                  "UPDATE",
-                  "DELETE"
-                )
-              )
             ),
             addSampleSeries = has_priv(
               tbl = session$userData$table_privs,
@@ -3982,13 +3944,6 @@ app_server <- function(input, output, session) {
         imputeMissing("imputeMissing", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "editContData") {
-      if (!ui_loaded$editContData) {
-        output$editContData_ui <- renderUI(editContDataUI("editContData")) # Render the UI
-        ui_loaded$editContData <- TRUE
-        editContData("editContData", language = languageSelection) # Call the server
-      }
-    }
     if (input$navbar == "grades_approvals_qualifiers") {
       if (!ui_loaded$grades_approvals_qualifiers) {
         output$grades_approvals_qualifiers_ui <- renderUI(grades_approvals_qualifiersUI(
@@ -4027,13 +3982,6 @@ app_server <- function(input, output, session) {
         output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
         ui_loaded$addSamples <- TRUE
         addSamples("addSamples", language = languageSelection)
-      }
-    }
-    if (input$navbar == "editDiscData") {
-      if (!ui_loaded$editDiscData) {
-        output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData")) # Render the UI
-        ui_loaded$editDiscData <- TRUE
-        editDiscData("editDiscData", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addGuidelines") {

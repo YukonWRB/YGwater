@@ -486,11 +486,6 @@ app_ui <- function(request) {
               uiOutput("addContData_ui")
             ),
             nav_panel(
-              title = "Edit / delete continuous data",
-              value = "editContData",
-              uiOutput("editContData_ui")
-            ),
-            nav_panel(
               title = "Add / modify timeseries corrections",
               value = "continuousCorrections",
               uiOutput("continuousCorrections_ui")
@@ -531,11 +526,6 @@ app_ui <- function(request) {
               title = "Add / edit samples",
               value = "addSamples",
               uiOutput("addSamples_ui")
-            ),
-            nav_panel(
-              title = "Edit / delete discrete data",
-              value = "editDiscData",
-              uiOutput("editDiscData_ui")
             ),
             nav_panel(
               title = "Add / modify guidelines",

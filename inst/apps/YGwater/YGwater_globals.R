@@ -223,10 +223,6 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/editContData.R",
-      package = "YGwater"
-    ))
-    source(system.file(
       "apps/YGwater/modules/admin/continuousData/grades_approvals_qualifiers.R",
       package = "YGwater"
     ))
@@ -246,10 +242,6 @@ YGwater_globals <- function(
     ))
     source(system.file(
       "apps/YGwater/modules/admin/discreteData/addSamples.R",
-      package = "YGwater"
-    ))
-    source(system.file(
-      "apps/YGwater/modules/admin/discreteData/editDiscData.R",
       package = "YGwater"
     ))
     source(system.file(
