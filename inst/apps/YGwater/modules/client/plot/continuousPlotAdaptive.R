@@ -3131,22 +3131,60 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               } else {
                 last_year <- max(as.numeric(years), na.rm = TRUE)
               }
-              start_day <- as.numeric(start_day)
-              end_day <- as.numeric(end_day)
-              start <- as.POSIXct(
-                start_day * 24 * 60 * 60,
-                origin = paste0(last_year - 1, "-12-31"),
-                tz = "UTC"
-              )
-              end <- as.POSIXct(
-                end_day * 24 * 60 * 60,
-                origin = paste0(last_year - 1, "-12-31 23:59:59"),
-                tz = "UTC"
-              )
+
+              overlap_bound <- function(value, end_of_day = FALSE) {
+                if (is.null(value) || length(value) == 0 || is.na(value[[1]])) {
+                  return(NA_real_)
+                }
+
+                if (inherits(value, "Date") || inherits(value, "POSIXt")) {
+                  out <- as.POSIXct(value[[1]], tz = tz)
+                  lubridate::year(out) <- last_year
+                  if (end_of_day && inherits(value, "Date")) {
+                    out <- out + 24 * 60 * 60 - 1
+                  }
+                  return(out)
+                }
+
+                parsed <- suppressWarnings(as.POSIXct(
+                  as.character(value[[1]]),
+                  tz = tz
+                ))
+                if (!is.na(parsed)) {
+                  lubridate::year(parsed) <- last_year
+                  if (
+                    end_of_day &&
+                      !grepl(" [0-9]{1,2}:", as.character(value[[1]]))
+                  ) {
+                    parsed <- parsed + 24 * 60 * 60 - 1
+                  }
+                  return(parsed)
+                }
+
+                day_value <- suppressWarnings(as.numeric(value[[1]]))
+                if (!is.finite(day_value)) {
+                  return(NA_real_)
+                }
+                origin <- if (end_of_day) {
+                  paste0(last_year - 1, "-12-31 23:59:59")
+                } else {
+                  paste0(last_year - 1, "-12-31")
+                }
+                lubridate::force_tz(
+                  as.POSIXct(day_value * 24 * 60 * 60, origin = origin, tz = "UTC"),
+                  tz
+                )
+              }
+
+              start <- overlap_bound(start_day)
+              end <- overlap_bound(end_day, end_of_day = TRUE)
+              if (any(is.na(c(start, end)))) {
+                return(NULL)
+              }
               if (start > end) {
                 lubridate::year(start) <- lubridate::year(start) - 1
               }
-              c(lubridate::force_tz(start, tz), lubridate::force_tz(end, tz))
+              c(start, end)
             }
 
             build_adaptive_overlap <- function(ids) {
@@ -3156,33 +3194,60 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 req$years,
                 plot_timezone
               )
-              colors <- palette_for_series(max(1L, length(req$years)))
+              overlap_resolution <- if (is.null(plot_resolution)) {
+                "max"
+              } else {
+                plot_resolution
+              }
               overlap_payloads <- lapply(ids, function(ts_id) {
-                plotOverlap(
-                  timeseries_id = ts_id,
-                  startDay = 1,
-                  endDay = 365,
-                  years = req$years,
-                  historic_range = req$historic_range_overlap,
-                  datum = req$datum,
-                  filter = req$filter,
-                  unusable = req$unusable,
-                  lang = req$lang,
-                  webgl = use_webgl,
-                  slider = FALSE,
-                  line_scale = req$line_scale,
-                  axis_scale = req$axis_scale,
-                  legend_scale = req$legend_scale,
-                  legend_position = req$legend_position,
-                  gridx = req$gridx,
-                  gridy = req$gridy,
-                  con = con,
-                  data = TRUE,
-                  build_plot = FALSE,
-                  tzone = plot_timezone,
-                  resolution = plot_resolution
+                tryCatch(
+                  plotOverlap(
+                    timeseries_id = ts_id,
+                    startDay = req$start_day,
+                    endDay = req$end_day,
+                    years = req$years,
+                    historic_range = req$historic_range_overlap,
+                    datum = req$datum,
+                    filter = req$filter,
+                    unusable = req$unusable,
+                    lang = req$lang,
+                    webgl = use_webgl,
+                    slider = FALSE,
+                    line_scale = req$line_scale,
+                    axis_scale = req$axis_scale,
+                    legend_scale = req$legend_scale,
+                    legend_position = req$legend_position,
+                    gridx = req$gridx,
+                    gridy = req$gridy,
+                    con = con,
+                    data = TRUE,
+                    build_plot = FALSE,
+                    tzone = plot_timezone,
+                    resolution = overlap_resolution
+                  ),
+                  error = function(e) {
+                    stop(
+                      paste0(
+                        "Timeseries ",
+                        ts_id,
+                        " (overlap): ",
+                        e$message
+                      )
+                    )
+                  }
                 )
               })
+              plot_year_levels <- sort(unique(unlist(lapply(
+                overlap_payloads,
+                function(payload) payload$data$trace_data$plot_year
+              ))))
+              colors <- rev(grDevices::colorRampPalette(c(
+                "#00454e",
+                "#7A9A01",
+                "#FFA900",
+                "#DC4405"
+              ))(max(1L, length(plot_year_levels))))
+              colors <- stats::setNames(colors, as.character(plot_year_levels))
 
               series <- list()
               for (payload_i in seq_along(overlap_payloads)) {
@@ -3205,10 +3270,20 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                     x_col = "plot_datetime",
                     range_x_col = "datetime",
                     line_name = as.character(plot_year_value),
-                    line_color = colors[[((year_i - 1) %% length(colors)) + 1]],
+                    line_color = colors[[as.character(plot_year_value)]],
                     line_width = 2.5 * req$line_scale
                   )
                 }
+              }
+
+              trace_x_values <- do.call(c, lapply(series, function(item) {
+                item$trace_data[[item$x_col]]
+              }))
+              if (
+                length(trace_x_values) > 0 &&
+                  any(!is.na(trace_x_values))
+              ) {
+                selected_xlim <- range(trace_x_values, na.rm = TRUE)
               }
 
               list(
