@@ -1,7 +1,7 @@
 #' Tabular output of hydrometric data
 #'
 #' @description
-#' Creates a report of hydrometric, snow pack, and precipitation conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.
+#' Creates a report of hydrometric, snow pack, precipitation, and air temperature conditions in Excel format, each table on a separate tab. List of stations/locations can be user-defined if desired. Connection is established using AquaConnect by default and MUST connect to a database created and maintained by the package AquaCache.
 #'
 #' Note that data can only be as recent as the last incorporation to the database. If you need the most up to date data possible, run AquaCache::getNewContinuous first.
 #'
@@ -30,8 +30,8 @@ tabularReport <- function(
   precip_locations = "default",
   report_datetime = Sys.time(),
   past = 28,
-  save_path = "choose",
-  archive_path = "choose",
+  save_path = NULL,
+  archive_path = NULL,
   con = NULL
 ) {
   # level_locations = "all"
@@ -41,9 +41,20 @@ tabularReport <- function(
   # precip_locations = "default"
   # report_datetime = as.POSIXct("2024-06-01 12:00", tz = "UTC")
   # past = 7
-  # save_path = "choose"
+  # save_path = NULL
   # archive_path = NULL
   # con = NULL
+
+  if (is.null(save_path)) {
+    stop("save_path must be provided")
+  }
+
+  if (is.null(archive_path)) {
+    yesterday_comments <- FALSE
+    warning(
+      "No archive_path provided, yesterday's comments will not be included in the report."
+    )
+  }
 
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
@@ -311,32 +322,6 @@ tabularReport <- function(
     }
   }
 
-  if (save_path == "choose") {
-    if (!interactive()) {
-      stop("You must specify a save path when running in non-interactive mode.")
-    }
-    message("Select the path to the folder where you want this report saved.")
-    save_path <- rstudioapi::selectDirectory(
-      caption = "Select Save Folder",
-      path = file.path(Sys.getenv("USERPROFILE"), "Desktop")
-    )
-  }
-  if (!is.null(archive_path)) {
-    if (archive_path == "choose") {
-      if (!interactive()) {
-        stop(
-          "You must specify a a path to the old file when running in non-interactive mode."
-        )
-      }
-      message("Select the path to yesterday's file (refer to function help).")
-      archive_path <- rstudioapi::selectFile(
-        caption = "Select Yesterday's File",
-        path = save_path,
-        filter = "Excel files  (*.xlsx)"
-      )
-    }
-  }
-
   #Set the days for which to generate tables
   if (past < 8) {
     past <- 7
@@ -582,6 +567,137 @@ tabularReport <- function(
     #End of precip fetch loop
   } else {
     yesterday_comment_precip <- NA
+  }
+
+  ## Air temperature (ECCC Meteorology Network) -----------------------
+  temperature <- data.frame()
+  param_name <- "temperature, air"
+  query_24h <- "
+WITH temperature_values AS (
+  SELECT
+    l.location_code,
+    l.name AS location_name,
+    ts.timeseries_id,
+    td.datetime,
+    td.value
+  FROM locations l
+  INNER JOIN timeseries ts
+    ON ts.location_id = l.location_id
+  INNER JOIN parameters p
+    ON p.parameter_id = ts.parameter_id
+  INNER JOIN locations_networks ln
+    ON ln.location_id = l.location_id
+  INNER JOIN networks n
+    ON n.network_id = ln.network_id
+  INNER JOIN measurements_continuous td
+    ON td.timeseries_id = ts.timeseries_id
+  WHERE l.name ILIKE $1
+    AND p.param_name ILIKE $2
+    AND n.name ILIKE $3
+    AND ts.record_rate = '01:00:00'
+    AND td.datetime >= CURRENT_DATE - INTERVAL '7 day'
+    AND td.datetime < CURRENT_DATE
+),
+week_history AS (
+  SELECT
+    l.location_code,
+    l.name AS location_name,
+    ts.timeseries_id,
+    AVG(md.q50) AS week_hist_mean
+  FROM locations l
+  INNER JOIN timeseries ts
+    ON ts.location_id = l.location_id
+  INNER JOIN parameters p
+    ON p.parameter_id = ts.parameter_id
+  INNER JOIN locations_networks ln
+    ON ln.location_id = l.location_id
+  INNER JOIN networks n
+    ON n.network_id = ln.network_id
+  INNER JOIN measurements_calculated_daily md
+    ON md.timeseries_id = ts.timeseries_id
+  WHERE l.name ILIKE $1
+    AND p.param_name ILIKE $2
+    AND n.name ILIKE $3
+    AND ts.record_rate = '01:00:00'
+    AND md.date >= CURRENT_DATE - INTERVAL '7 day'
+    AND md.date < CURRENT_DATE
+  GROUP BY l.location_id, l.location_code, l.name, ts.timeseries_id
+)
+SELECT
+  v.location_code,
+  v.location_name,
+  MIN(v.value) FILTER (
+    WHERE v.datetime >= CURRENT_DATE - INTERVAL '1 day'
+      AND v.datetime < CURRENT_DATE
+  ) AS min_value,
+  ROUND(
+    AVG(v.value) FILTER (
+      WHERE v.datetime >= CURRENT_DATE - INTERVAL '1 day'
+        AND v.datetime < CURRENT_DATE
+    )::numeric,
+    1
+  ) AS mean_value,
+  MAX(v.value) FILTER (
+    WHERE v.datetime >= CURRENT_DATE - INTERVAL '1 day'
+      AND v.datetime < CURRENT_DATE
+  ) AS max_value,
+  ROUND(MIN(v.value)::numeric, 1) AS week_min,
+  ROUND(MAX(v.value)::numeric, 1) AS week_max,
+  ROUND(AVG(v.value)::numeric, 1) AS week_mean,
+  ROUND(
+    ROUND(AVG(v.value)::numeric, 1) - wh.week_hist_mean,
+    1
+  ) AS week_difference_historical_mean
+FROM temperature_values v
+LEFT JOIN week_history wh
+  ON wh.location_code = v.location_code
+  AND wh.timeseries_id = v.timeseries_id
+GROUP BY
+  v.location_code,
+  v.location_name,
+  wh.week_hist_mean,
+  v.timeseries_id
+ORDER BY v.location_name, v.timeseries_id;
+"
+
+  temperature <- DBI::dbGetQuery(
+    con,
+    query_24h,
+    params = list(
+      "%",
+      paste0("%", param_name, "%"),
+      "ECCC Meteorology Network"
+    )
+  )
+
+  if (nrow(temperature) > 0) {
+    names(temperature)[names(temperature) == "location_code"] <- "Location"
+    names(temperature)[names(temperature) == "location_name"] <- "Name"
+    names(temperature)[names(temperature) == "min_value"] <- "y'day Tmin (°C)"
+    names(temperature)[names(temperature) == "mean_value"] <- "y'day Tmean (°C)"
+    names(temperature)[names(temperature) == "max_value"] <- "y'day Tmax (°C)"
+    names(temperature)[names(temperature) == "week_min"] <- "1 wk Tmin (°C)"
+    names(temperature)[names(temperature) == "week_max"] <- "1 wk Tmax (°C)"
+    names(temperature)[names(temperature) == "week_mean"] <- "1 wk Tmean (°C)"
+    names(temperature)[
+      names(temperature) == "week_difference_historical_mean"
+    ] <- "diff. from 1 wk historical mean (°C)"
+
+    temperature$`Location specific comments` <- NA
+    temperature$`Yesterday's comments` <- NA
+
+    if (yesterday_comments && !is.null(yesterday$yesterday_locs$temperature)) {
+      idx <- match(
+        temperature$Location,
+        yesterday$yesterday_locs$temperature$Location
+      )
+      temperature$`Yesterday's comments` <- yesterday$yesterday_locs$temperature[
+        idx,
+        "Location.specific.comments"
+      ]
+    }
+
+    tables$temperature <- inf_to_na(temperature)
   }
 
   ## Water level ------------------------
@@ -2881,7 +2997,9 @@ tabularReport <- function(
     widths = c(15, 25, 14, 14, 14, 14, 100)
   )
 
-  for (i in names(tables)[!(names(tables) %in% "precipitation")]) {
+  for (i in names(tables)[
+    !(names(tables) %in% c("precipitation", "temperature"))
+  ]) {
     openxlsx::addWorksheet(wb, i)
     #Create/format the header
     openxlsx::writeData(
@@ -3209,6 +3327,139 @@ tabularReport <- function(
       },
       rows = 1:nrow(tables[[i]]) + 6,
       style = missingDataStyle
+    )
+  }
+
+  if ("temperature" %in% names(tables)) {
+    openxlsx::addWorksheet(wb, "temperature")
+    #Create/format the header
+    openxlsx::writeData(
+      wb,
+      "temperature",
+      head,
+      startCol = 1,
+      startRow = 1,
+      colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb,
+      "temperature",
+      NA,
+      startCol = 1,
+      startRow = 2,
+      colNames = FALSE
+    )
+    openxlsx::mergeCells(wb, "temperature", cols = c(1:2), rows = 1)
+    openxlsx::mergeCells(wb, "temperature", cols = c(3:4), rows = 1)
+    openxlsx::mergeCells(wb, "temperature", cols = c(5:6), rows = 1)
+    openxlsx::mergeCells(wb, "temperature", cols = c(7:11), rows = 1)
+    openxlsx::addStyle(
+      wb,
+      "temperature",
+      style = fodNameStyle,
+      rows = 1,
+      cols = c(5:6)
+    )
+    #add a line for general and yesterday comments
+    openxlsx::writeData(
+      wb,
+      "temperature",
+      "General comment",
+      startCol = 1,
+      startRow = 3,
+      colNames = FALSE
+    )
+    openxlsx::writeData(
+      wb,
+      "temperature",
+      "Yesterday's comment",
+      startCol = 1,
+      startRow = 4,
+      colNames = FALSE
+    )
+    #add yesterday's comments
+    openxlsx::writeData(
+      wb,
+      "temperature",
+      yesterday[["yesterday_general"]][["temperature"]],
+      startCol = 2,
+      startRow = 4,
+      colNames = FALSE
+    )
+    openxlsx::addStyle(
+      wb,
+      "temperature",
+      style = generalCommentStyle2,
+      cols = 1,
+      rows = 3
+    )
+    openxlsx::addStyle(
+      wb,
+      "temperature",
+      style = yesterdayGeneralCommentStyle2,
+      cols = 1,
+      rows = 4
+    )
+    openxlsx::mergeCells(wb, "temperature", cols = c(2:11), rows = 3)
+    openxlsx::mergeCells(wb, "temperature", cols = c(2:11), rows = 4)
+    openxlsx::addStyle(
+      wb,
+      "temperature",
+      style = generalCommentStyle,
+      cols = c(2:11),
+      rows = 3,
+      gridExpand = TRUE
+    )
+    openxlsx::addStyle(
+      wb,
+      "temperature",
+      style = yesterdayGeneralCommentStyle,
+      cols = c(2:11),
+      rows = 4,
+      gridExpand = TRUE
+    )
+    openxlsx::writeData(
+      wb,
+      "temperature",
+      NA,
+      startCol = 1,
+      startRow = 5,
+      colNames = FALSE
+    )
+
+    openxlsx::writeData(
+      wb,
+      "temperature",
+      tables[["temperature"]],
+      startRow = 6
+    )
+
+    openxlsx::freezePane(
+      wb,
+      sheet = "temperature",
+      firstActiveRow = 7,
+      firstActiveCol = 3
+    )
+    openxlsx::setColWidths(
+      wb,
+      "temperature",
+      cols = c(1:11),
+      widths = c(10, 30, 14, 14, 14, 12, 12, 12, 24, 60, 60)
+    )
+    openxlsx::addStyle(wb, "temperature", headStyle, rows = 6, cols = c(1:11))
+    openxlsx::addStyle(
+      wb,
+      "temperature",
+      fodCommentStyle,
+      rows = 1:nrow(tables[["temperature"]]) + 6,
+      cols = 10
+    )
+    openxlsx::addStyle(
+      wb,
+      "temperature",
+      yesterdayFodCommentStyle,
+      rows = 1:nrow(tables[["temperature"]]) + 6,
+      cols = 11
     )
   }
 

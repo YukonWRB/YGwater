@@ -79,7 +79,8 @@ app_server <- function(input, output, session) {
     "wellTasks",
     "metadataTasks",
     "acquisitionTelemetryTasks",
-    "adminTasks"
+    "adminTasks",
+    "adminHelpTasks"
   )
 
   admin_leaf_pages <- c(
@@ -92,14 +93,14 @@ app_server <- function(input, output, session) {
     "deploy_recover",
     "calibrate",
     "manageInstruments",
+    "manageSensors",
+    "instrumentMaintenance",
     "addContData",
     "continuousCorrections",
     "imputeMissing",
-    "editContData",
     "grades_approvals_qualifiers",
     "addDiscData",
     "addSamples",
-    "editDiscData",
     "addGuidelines",
     "addSampleSeries",
     "addDocs",
@@ -174,10 +175,10 @@ app_server <- function(input, output, session) {
     "editBoreholesWells",
     "manageBoreholeDocuments",
     "addDiscData",
-    "editDiscData",
     "addContData",
-    "editContData",
     "manageInstruments",
+    "manageSensors",
+    "instrumentMaintenance",
     "addSamples",
     "addSampleSeries",
     "syncCont",
@@ -221,11 +222,14 @@ app_server <- function(input, output, session) {
     if (page_id == "manageUsers") {
       return("can_create_role")
     }
-    if (page_id %in% c(
-      "simplerIndex",
-      "editBoreholesWells",
-      "manageBoreholeDocuments"
-    )) {
+    if (
+      page_id %in%
+        c(
+          "simplerIndex",
+          "editBoreholesWells",
+          "manageBoreholeDocuments"
+        )
+    ) {
       return("boreholes_wells")
     }
     page_id
@@ -423,17 +427,18 @@ app_server <- function(input, output, session) {
     }
 
     if (
-      input_id %in% c(
-        "feedback_text",
-        "submit_feedback",
-        "thumbs_up",
-        "thumbs_down",
-        "user_last_activity",
-        "userLang",
-        "window_dimensions",
-        "usage_download_click",
-        "usage_input_changed"
-      )
+      input_id %in%
+        c(
+          "feedback_text",
+          "submit_feedback",
+          "thumbs_up",
+          "thumbs_down",
+          "user_last_activity",
+          "userLang",
+          "window_dimensions",
+          "usage_download_click",
+          "usage_input_changed"
+        )
     ) {
       return(FALSE)
     }
@@ -993,8 +998,27 @@ app_server <- function(input, output, session) {
       }
 
       # Equipment tasks -----------------------------------------------------
-      if (isTRUE(session$userData$admin_privs$calibrate)) {
+      if (
+        any(
+          session$userData$admin_privs$calibrate,
+          session$userData$admin_privs$manageInstruments,
+          session$userData$admin_privs$manageSensors,
+          session$userData$admin_privs$instrumentMaintenance
+        )
+      ) {
         nav_show(id = "navbar", target = "equipTasks")
+        if (!isTRUE(session$userData$admin_privs$calibrate)) {
+          nav_hide(id = "navbar", target = "calibrate")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageInstruments)) {
+          nav_hide(id = "navbar", target = "manageInstruments")
+        }
+        if (!isTRUE(session$userData$admin_privs$manageSensors)) {
+          nav_hide(id = "navbar", target = "manageSensors")
+        }
+        if (!isTRUE(session$userData$admin_privs$instrumentMaintenance)) {
+          nav_hide(id = "navbar", target = "instrumentMaintenance")
+        }
       } else {
         nav_hide(id = "navbar", target = "equipTasks")
       }
@@ -1003,7 +1027,6 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addContData,
-          session$userData$admin_privs$editContData,
           session$userData$admin_privs$continuousCorrections,
           session$userData$admin_privs$imputeMissing,
           session$userData$admin_privs$grades_approvals_qualifiers,
@@ -1014,9 +1037,6 @@ app_server <- function(input, output, session) {
         nav_show(id = "navbar", target = "continuousDataTasks")
         if (!isTRUE(session$userData$admin_privs$addContData)) {
           nav_hide(id = "navbar", target = "addContData")
-        }
-        if (!isTRUE(session$userData$admin_privs$editContData)) {
-          nav_hide(id = "navbar", target = "editContData")
         }
         if (!isTRUE(session$userData$admin_privs$continuousCorrections)) {
           nav_hide(id = "navbar", target = "continuousCorrections")
@@ -1042,7 +1062,6 @@ app_server <- function(input, output, session) {
         any(
           session$userData$admin_privs$addDiscData,
           session$userData$admin_privs$addSamples,
-          session$userData$admin_privs$editDiscData,
           session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
           session$userData$admin_privs$addGuidelines
@@ -1054,9 +1073,6 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$addSamples)) {
           nav_hide(id = "navbar", target = "addSamples")
-        }
-        if (!isTRUE(session$userData$admin_privs$editDiscData)) {
-          nav_hide(id = "navbar", target = "editDiscData")
         }
         if (!isTRUE(session$userData$admin_privs$addSampleSeries)) {
           nav_hide(id = "navbar", target = "addSampleSeries")
@@ -1329,6 +1345,7 @@ app_server <- function(input, output, session) {
       # Admin menu ----------------------------------------------------------
       # Admin menu is always shown because every logged in user can change their own password
       nav_show(id = "navbar", target = "adminTasks")
+      nav_show(id = "navbar", target = "adminHelpTasks")
       nav_show(id = "navbar", target = "adminHome")
       nav_show(id = "navbar", target = "changePwd")
       if (!isTRUE(session$userData$can_create_role)) {
@@ -1356,6 +1373,7 @@ app_server <- function(input, output, session) {
         "visit",
         "deploy_recover",
         "adminTasks",
+        "adminHelpTasks",
         "metadataTasks",
         "acquisitionTelemetryTasks",
         "wellTasks"
@@ -1639,6 +1657,7 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
+    ui_loaded$contPlotAdaptive <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -1666,18 +1685,18 @@ app_server <- function(input, output, session) {
     ui_loaded$deploy_recover <- FALSE
     ui_loaded$calibrate <- FALSE
     ui_loaded$manageInstruments <- FALSE
+    ui_loaded$manageSensors <- FALSE
+    ui_loaded$instrumentMaintenance <- FALSE
 
     ui_loaded$addContData <- FALSE
     ui_loaded$continuousCorrections <- FALSE
     ui_loaded$imputeMissing <- FALSE
-    ui_loaded$editContData <- FALSE
     ui_loaded$grades_approvals_qualifiers <- FALSE
     ui_loaded$syncCont <- FALSE
     ui_loaded$addTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
     ui_loaded$addSamples <- FALSE
-    ui_loaded$editDiscData <- FALSE
     ui_loaded$addGuidelines <- FALSE
     ui_loaded$addSampleSeries <- FALSE
     ui_loaded$syncDisc <- FALSE
@@ -1729,6 +1748,7 @@ app_server <- function(input, output, session) {
     "home",
     "discPlot",
     "contPlot",
+    "contPlotAdaptive",
     "mapLocs",
     "mapParams",
     "mapRaster",
@@ -1756,15 +1776,15 @@ app_server <- function(input, output, session) {
     "deploy_recover",
     "calibrate",
     "manageInstruments",
+    "manageSensors",
+    "instrumentMaintenance",
     "addContData",
     "continuousCorrections",
     "imputeMissing",
-    "editContData",
     "grades_approvals_qualifiers",
     "addDiscData",
     "addSamples",
     "addSampleSeries",
-    "editDiscData",
     "addGuidelines",
     "addDocs",
     "addImgs",
@@ -1806,24 +1826,6 @@ app_server <- function(input, output, session) {
   # Language selection reactives and observers based on the user's selected language (which is automatically set to the browser's language on load)
   languageSelection <- reactiveValues(language = NULL, abbrev = NULL) # holds language and abbreviation
   language_override <- reactiveVal(FALSE)
-
-  app_seo_description <- function(language = NULL) {
-    if (identical(language, "Français")) {
-      return(
-        "Explorez les donnees yukonnaises sur l'eau de surface, les eaux souterraines, l'hydrometrie, la neige et la qualite de l'eau au moyen de cartes, graphiques, tableaux et telechargements interactifs."
-      )
-    }
-
-    "Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads."
-  }
-
-  app_brand_title <- function(language = NULL) {
-    if (identical(language, "Français")) {
-      return("Explorateur des donnees sur l'eau")
-    }
-
-    "Water Data Explorer"
-  }
 
   set_language_selection <- function(lang_code) {
     lang_code <- tolower(if (is.null(lang_code)) "en" else lang_code)
@@ -1951,6 +1953,13 @@ app_server <- function(input, output, session) {
         tr("tooltip_continuous", languageSelection$language)
       )
     })
+    output$plotsNavContAdaptiveTitle <- renderUI({
+      if (identical(languageSelection$language, "Français")) {
+        "Continues (expérimental)"
+      } else {
+        "Continuous (experimental)"
+      }
+    })
 
     output$reportsNavMenuTitle <- renderUI({
       tr("reports", languageSelection$language)
@@ -2038,17 +2047,17 @@ app_server <- function(input, output, session) {
 
     session$sendCustomMessage(
       "updateTitle",
-      tr("title", languageSelection$language)
+      tr(config$brand$text$app_title, languageSelection$language)
     ) # Update the browser title of the app based on the selected language
     session$sendCustomMessage(
       "updateBrandTitle",
-      app_brand_title(languageSelection$language)
+      tr(config$brand$text$app_title, languageSelection$language)
     )
     session$sendCustomMessage(
       "updateSeo",
       list(
-        title = tr("title", languageSelection$language),
-        description = app_seo_description(languageSelection$language)
+        title = tr(config$brand$text$app_title, languageSelection$language),
+        description = tr(config$brand$text$SEO_desc, languageSelection$language)
       )
     )
 
@@ -2523,15 +2532,14 @@ app_server <- function(input, output, session) {
                string_agg(p.priv, ', ' ORDER BY p.priv) AS extra_privileges
         FROM tbls t
         CROSS JOIN LATERAL unnest(ARRAY['SELECT', 'INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER']) AS p(priv)
-        WHERE has_table_privilege($1, t.tbl_oid, p.priv)
+        WHERE has_table_privilege(current_user, t.tbl_oid, p.priv)
         GROUP BY t.schema, t.table_name
         ORDER BY t.schema, t.table_name;"
 
           # Store the table privileges in the session for use in other modules or to show/hide certain UI elements
           session$userData$table_privs <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            sql,
-            params = list(session$userData$config$dbUser)
+            sql
           )
           # Create a qualified name column for easier filtering
           session$userData$table_privs$qual_name <- paste0(
@@ -2687,13 +2695,9 @@ app_server <- function(input, output, session) {
                 "instruments.calibrate_dissolved_oxygen",
                 "instruments.calibrate_depth",
                 "instruments.instruments",
-                "instruments.instrument_maintenance",
-                "instruments.array_maintenance_changes",
-                "instruments.sensors",
-                "instruments.sensor_types",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
                 "instruments.observers",
                 "public.organizations"
               ),
@@ -2742,21 +2746,88 @@ app_server <- function(input, output, session) {
                   "INSERT",
                   "UPDATE"
                 ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT"),
-                c("INSERT"),
                 c("INSERT"),
                 c("INSERT"),
                 c("INSERT"),
                 c("INSERT"),
                 c("INSERT")
+              )
+            ),
+            manageInstruments = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.instruments",
+                "instruments.observers",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
+                "public.organizations",
+                "instruments.suppliers"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT")
+              )
+            ),
+            manageSensors = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.sensors",
+                "instruments.sensor_types",
+                "instruments.sensor_makes",
+                "instruments.sensor_models",
+                "public.organizations",
+                "instruments.suppliers"
+              ),
+              list(
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT"),
+                c("SELECT")
+              )
+            ),
+            instrumentMaintenance = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "instruments.instruments",
+                "instruments.instrument_maintenance",
+                "instruments.instrument_maintenance_due",
+                "instruments.instrument_sensor_events",
+                "instruments.instrument_sensor_event_slots",
+                "instruments.sensors",
+                "instruments.sensor_types",
+                "instruments.sensor_makes",
+                "instruments.sensor_models",
+                "instruments.observers",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
+                "public.organizations",
+                "instruments.suppliers"
+              ),
+              list(
+                c("SELECT"),
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT", "INSERT", "UPDATE", "DELETE"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT", "UPDATE"),
+                c("SELECT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT", "INSERT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT")
               )
             ),
             deploy_recover = has_priv(
@@ -2767,9 +2838,9 @@ app_server <- function(input, output, session) {
                 "public.sub_locations",
                 "public.locations_z",
                 "instruments.instruments",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type"
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types"
               ),
               list(
                 c(
@@ -2792,14 +2863,6 @@ app_server <- function(input, output, session) {
               list(c(
                 "INSERT",
                 "UPDATE"
-              ))
-            ),
-            editContData = has_priv(
-              tbl = session$userData$table_privs,
-              "continuous.measurements_continuous",
-              list(c(
-                "UPDATE",
-                "DELETE"
               ))
             ),
             continuousCorrections = has_priv(
@@ -2862,7 +2925,6 @@ app_server <- function(input, output, session) {
             addDiscData = has_priv(
               tbl = session$userData$table_privs,
               c(
-                "application.discrete_mappings",
                 "files.documents",
                 "discrete.samples",
                 "discrete.results"
@@ -2872,7 +2934,6 @@ app_server <- function(input, output, session) {
                   "INSERT",
                   "UPDATE"
                 ),
-                c("INSERT"),
                 c("INSERT"),
                 c("INSERT")
               )
@@ -2884,20 +2945,6 @@ app_server <- function(input, output, session) {
                 "INSERT",
                 "UPDATE"
               ))
-            ),
-            editDiscData = has_priv(
-              tbl = session$userData$table_privs,
-              c("discrete.samples", "discrete.results"),
-              list(
-                c(
-                  "UPDATE",
-                  "DELETE"
-                ),
-                c(
-                  "UPDATE",
-                  "DELETE"
-                )
-              )
             ),
             addSampleSeries = has_priv(
               tbl = session$userData$table_privs,
@@ -3034,9 +3081,9 @@ app_server <- function(input, output, session) {
                 "public.locations_metadata_instruments",
                 "public.locations",
                 "instruments.instruments",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
                 "instruments.communication_protocols"
               ),
               list(
@@ -3119,9 +3166,9 @@ app_server <- function(input, output, session) {
                 "public.locations_metadata_instruments",
                 "public.locations",
                 "instruments.instruments",
-                "instruments.instrument_make",
-                "instruments.instrument_model",
-                "instruments.instrument_type",
+                "instruments.instrument_makes",
+                "instruments.instrument_models",
+                "instruments.instrument_types",
                 "instruments.transmission_methods",
                 "instruments.transmission_component_roles"
               ),
@@ -3324,6 +3371,61 @@ app_server <- function(input, output, session) {
   last_viz_tab <- reactiveVal("home") # Default tab for viz mode
   last_admin_tab <- reactiveVal("adminHome") # Default tab for admin mode
 
+  open_help_file <- function(path) {
+    shinyjs::runjs(sprintf(
+      "window.open(%s, '_blank');",
+      jsonlite::toJSON(path, auto_unbox = TRUE)
+    ))
+  }
+
+  app_www_file_exists <- function(path) {
+    candidates <- c(
+      file.path("www", path),
+      file.path("inst", "apps", "YGwater", "www", path),
+      system.file("apps", "YGwater", "www", path, package = "YGwater")
+    )
+    any(file.exists(candidates[nzchar(candidates)]))
+  }
+
+  aquacache_doc_path <- system.file("doc", package = "AquaCache")
+  aquacache_vignette_file <- file.path(
+    aquacache_doc_path,
+    "AquaCache_DB_documentation.html"
+  )
+  if (nzchar(aquacache_doc_path) && file.exists(aquacache_vignette_file)) {
+    shiny::addResourcePath("aquacache-doc", aquacache_doc_path)
+  }
+
+  observeEvent(input$open_admin_page_help, {
+    page_id <- last_admin_tab()
+    if (
+      is.null(page_id) ||
+        !nzchar(page_id) ||
+        !page_id %in% admin_leaf_pages
+    ) {
+      page_id <- "adminHome"
+    }
+
+    page_help_path <- paste0("html/admin_help/pages/", page_id, ".html")
+
+    if (!app_www_file_exists(page_help_path)) {
+      page_help_path <- paste0(
+        "html/admin_help/page_help_placeholder.html?page=",
+        utils::URLencode(page_id, reserved = TRUE)
+      )
+    }
+
+    open_help_file(page_help_path)
+  })
+
+  observeEvent(input$open_aquacache_vignette, {
+    if (nzchar(aquacache_doc_path) && file.exists(aquacache_vignette_file)) {
+      open_help_file("aquacache-doc/AquaCache_DB_documentation.html")
+    } else {
+      open_help_file("html/admin_help/aquacache_vignette.html")
+    }
+  })
+
   # Move between admin/visualize modes
   admin_vis_flag <- reactiveVal("admin")
   observeEvent(input$admin, {
@@ -3411,38 +3513,7 @@ app_server <- function(input, output, session) {
     ) {
       # User is in viz mode
       last_viz_tab(input$navbar)
-    } else if (
-      input$navbar %in%
-        c(
-          "adminHome",
-          "syncCont",
-          "syncDisc",
-          "addLocation",
-          "addSubLocation",
-          "addTimeseries",
-          "deploy_recover",
-          "calibrate",
-          "manageInstruments",
-          "addContData",
-          "continuousCorrections",
-          "imputeMissing",
-          "editContData",
-          "grades_approvals_qualifiers",
-          "addDiscData",
-          "editDiscData",
-          "addGuidelines",
-          "addDocs",
-          "addImgs",
-          "addImgSeries",
-          "manageNewsContent",
-          "manageNotifications",
-          "viewFeedback",
-          "visit",
-          "changePwd",
-          "manageUsers",
-          "simplerIndex"
-        )
-    ) {
+    } else if (input$navbar %in% admin_leaf_pages) {
       # User is in admin mode
       last_admin_tab(input$navbar)
     }
@@ -3502,6 +3573,20 @@ app_server <- function(input, output, session) {
           moduleOutputs$mapLocs$location_id <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
+      }
+    }
+    if (input$navbar == "contPlotAdaptive") {
+      if (!ui_loaded$contPlotAdaptive) {
+        output$plotContinuousAdaptive_ui <- renderUI(
+          contPlotAdaptiveUI("contPlotAdaptive")
+        )
+        ui_loaded$contPlotAdaptive <- TRUE
+        contPlotAdaptive(
+          "contPlotAdaptive",
+          language = languageSelection,
+          windowDims = windowDims,
+          inputs = NULL
+        )
       }
     }
 
@@ -3800,6 +3885,25 @@ app_server <- function(input, output, session) {
         manageInstruments("manageInstruments", language = languageSelection)
       }
     }
+    if (input$navbar == "manageSensors") {
+      if (!ui_loaded$manageSensors) {
+        output$manageSensors_ui <- renderUI(manageSensorsUI("manageSensors"))
+        ui_loaded$manageSensors <- TRUE
+        manageSensors("manageSensors", language = languageSelection)
+      }
+    }
+    if (input$navbar == "instrumentMaintenance") {
+      if (!ui_loaded$instrumentMaintenance) {
+        output$instrumentMaintenance_ui <- renderUI(instrumentMaintenanceUI(
+          "instrumentMaintenance"
+        ))
+        ui_loaded$instrumentMaintenance <- TRUE
+        instrumentMaintenance(
+          "instrumentMaintenance",
+          language = languageSelection
+        )
+      }
+    }
     if (input$navbar == "addContData") {
       if (!ui_loaded$addContData) {
         output$addContData_ui <- renderUI(addContDataUI("addContData")) # Render the UI
@@ -3840,13 +3944,6 @@ app_server <- function(input, output, session) {
         imputeMissing("imputeMissing", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "editContData") {
-      if (!ui_loaded$editContData) {
-        output$editContData_ui <- renderUI(editContDataUI("editContData")) # Render the UI
-        ui_loaded$editContData <- TRUE
-        editContData("editContData", language = languageSelection) # Call the server
-      }
-    }
     if (input$navbar == "grades_approvals_qualifiers") {
       if (!ui_loaded$grades_approvals_qualifiers) {
         output$grades_approvals_qualifiers_ui <- renderUI(grades_approvals_qualifiersUI(
@@ -3885,13 +3982,6 @@ app_server <- function(input, output, session) {
         output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
         ui_loaded$addSamples <- TRUE
         addSamples("addSamples", language = languageSelection)
-      }
-    }
-    if (input$navbar == "editDiscData") {
-      if (!ui_loaded$editDiscData) {
-        output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData")) # Render the UI
-        ui_loaded$editDiscData <- TRUE
-        editDiscData("editDiscData", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addGuidelines") {

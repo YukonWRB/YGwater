@@ -459,6 +459,39 @@ test_that("plotTimeseries can show data in the past", {
   start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
   end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
 
+  yes <- FALSE
+  tryCatch(
+    {
+      DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT date, value, max, min, q75, q25",
+          "FROM continuous.measurements_calculated_daily_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER by date ASC;"
+        ),
+        params = list(as_of, tsid, start_dt, end_dt)
+      )
+      yes <- TRUE
+    },
+    error = function(e) {
+      message(
+        "Cannot access measurements_calculated_daily_at function: ",
+        e$message
+      )
+    }
+  )
+
+  if (!yes) {
+    skip(
+      "Connection cannot access measurements_calculated_daily_at function, which is required for historical queries."
+    )
+  }
+
   out_max <- plotTimeseries(
     timeseries_id = tsid,
     start_date = start_dt,

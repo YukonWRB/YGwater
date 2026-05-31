@@ -31,19 +31,6 @@ calibrateUI <- function(id) {
         ),
         tags$style(
           HTML(
-            ".load_sensors_btn .btn {
-              display: block !important;
-              margin-bottom: 10px;
-            }"
-          )
-        ),
-        tags$style(
-          HTML(
-            ".show_sensors_btns .btn:not(.hidden) {
-              display: block !important;
-            }"
-          ),
-          HTML(
             "/* Make the notifications stand out more */
         .shiny-notification {
           font-size: 24px;
@@ -141,36 +128,57 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("ph1_std"),
                   label = "Low pH solution value",
-                  value = 4
+                  value = 4,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph2_std"),
                   label = "Neutral pH solution value",
-                  value = 7
+                  value = 7,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph3_std"),
                   label = "High pH solution value",
-                  value = 10
+                  value = 10,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph1_pre_val"),
                   label = "pH 4 Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph2_pre_val"),
                   label = "pH 7 Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph3_pre_val"),
                   label = "pH 10 Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
-                numericInput(ns("ph1_mv"), label = "pH 4 mV", value = NA),
-                numericInput(ns("ph2_mv"), label = "pH 7 mV", value = NA),
-                numericInput(ns("ph3_mv"), label = "pH 10 mV", value = NA),
+                numericInput(
+                  ns("ph1_mv"),
+                  label = "pH 4 mV",
+                  value = NA,
+                  step = 0.1
+                ),
+                numericInput(
+                  ns("ph2_mv"),
+                  label = "pH 7 mV",
+                  value = NA,
+                  step = 0.1
+                ),
+                numericInput(
+                  ns("ph3_mv"),
+                  label = "pH 10 mV",
+                  value = NA,
+                  step = 0.1
+                ),
                 actionButton(
                   ns("show_post_ph"),
                   "Show as-left fields",
@@ -179,17 +187,20 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("ph1_post_val"),
                   label = "pH 4 As-left value",
-                  value = 4
+                  value = 4,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph2_post_val"),
                   label = "pH 7 As-left value",
-                  value = 7
+                  value = 7,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("ph3_post_val"),
                   label = "pH 10 As-left value",
-                  value = 10
+                  value = 10,
+                  step = 0.01
                 ),
                 actionButton(ns("save_cal_ph"), "Save this section"),
                 actionButton(ns("delete_ph"), "Delete this section")
@@ -205,12 +216,14 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("temp_reference"),
                   label = "Reference Temp",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 numericInput(
                   ns("temp_observed"),
                   label = "Sensor Temp",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 actionButton(ns("save_cal_temp"), "Save this section"),
                 actionButton(ns("delete_temp"), "Delete this section")
@@ -230,7 +243,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("spc1_std"),
                   label = "SpC Low-Range Standard",
-                  value = 0
+                  value = 0,
+                  step = 1
                 ),
                 conditionalPanel(
                   ns = ns,
@@ -238,7 +252,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc2_std"),
                     label = "SpC High-Range Standard",
-                    value = 1413
+                    value = 1413,
+                    step = 1
                   )
                 ),
                 conditionalPanel(
@@ -247,7 +262,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc3_std"),
                     label = "SpC High-Range Standard",
-                    value = 12880
+                    value = 12880,
+                    step = 1
                   )
                 ),
                 checkboxInput(
@@ -258,7 +274,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("spc1_pre"),
                   label = "SpC Low-Range Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.01
                 ),
                 conditionalPanel(
                   ns = ns,
@@ -266,7 +283,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc2_pre"),
                     label = "SpC High-Range Observed / as-found value",
-                    value = NA
+                    value = NA,
+                    step = 0.1
                   )
                 ),
                 conditionalPanel(
@@ -275,7 +293,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc3_pre"),
                     label = "SpC High-Range Observed / as-found value",
-                    value = NA
+                    value = NA,
+                    step = 0.1
                   )
                 ),
                 actionButton(
@@ -286,7 +305,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("spc1_post"),
                   label = "SpC Low-Range As-left value",
-                  value = 0
+                  value = 0,
+                  step = 0.1
                 ),
                 conditionalPanel(
                   ns = ns,
@@ -294,7 +314,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc2_post"),
                     label = "SpC High-Range As-left value",
-                    value = 1413
+                    value = 1413,
+                    step = 0.1
                   )
                 ),
                 conditionalPanel(
@@ -303,7 +324,8 @@ calibrateUI <- function(id) {
                   numericInput(
                     ns("spc3_post"),
                     label = "SpC High-Range As-left value",
-                    value = 12880
+                    value = 12880,
+                    step = 0.1
                   )
                 ),
                 actionButton(ns("save_cal_spc"), "Save this section"),
@@ -316,12 +338,14 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("orp_std"),
                   label = "ORP Standard solution mV",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("orp_pre_mv"),
                   label = "ORP Observed / as-found mV",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(
                   ns("show_post_orp"),
@@ -331,7 +355,8 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("orp_post_mv"),
                   label = "ORP As-left mV",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(ns("save_cal_orp"), "Save this section"),
                 actionButton(ns("delete_orp"), "Delete this section")
@@ -343,22 +368,26 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("turb1_std"),
                   label = "Low Turb Standard Value",
-                  value = 0
+                  value = 0,
+                  step = 1
                 ),
                 numericInput(
                   ns("turb2_std"),
                   label = "High Turb Standard Value",
-                  value = 124
+                  value = 124,
+                  step = 1
                 ),
                 numericInput(
                   ns("turb1_pre"),
                   label = "Low Turb Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("turb2_pre"),
                   label = "High Turb Observed / as-found value",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(
                   ns("show_post_turb"),
@@ -368,12 +397,14 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("turb1_post"),
                   label = "Low Turb As-left value",
-                  value = 0
+                  value = 0,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("turb2_post"),
                   label = "High Turb As-left value",
-                  value = 124
+                  value = 124,
+                  step = 0.1
                 ),
                 actionButton(ns("save_cal_turb"), "Save this section"),
                 actionButton(ns("delete_turb"), "Delete this section")
@@ -385,34 +416,40 @@ calibrateUI <- function(id) {
                 numericInput(
                   ns("baro_press_pre"),
                   label = "Baro Pressure Observed / as-found (mmHg)",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("baro_press_post"),
                   label = "Baro Pressure As-left (mmHg)",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("do_pre_prct"),
                   label = "DO Observed / as-found % LOCAL",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("do_post_prct"),
                   label = "DO As-left % LOCAL",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(ns("calc_abs_do"), "Calculate mg/l values"),
                 actionButton(ns("calc_prct_do"), "Calculate % values"),
                 numericInput(
                   ns("do_pre"),
                   label = "DO Observed / as-found mg/l",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 numericInput(
                   ns("do_post"),
                   label = "DO As-left mg/l",
-                  value = NA
+                  value = NA,
+                  step = 0.1
                 ),
                 actionButton(
                   ns("show_post_do"),
@@ -452,153 +489,6 @@ calibrateUI <- function(id) {
               tableOutput(ns("saved")),
               htmlOutput(ns("ph_mv_note")),
               htmlOutput(ns("ORP_molarity_note"))
-            )
-          )
-        ),
-        tabPanel(
-          "Maintain instruments",
-          sidebarLayout(
-            sidebarPanel(
-              DT::dataTableOutput(ns("maintain_instr_table"))
-            ),
-            mainPanel(
-              DT::dataTableOutput(ns("past_instr_maintenance")),
-              actionButton(ns("clear_selection"), "Clear selection"),
-              textAreaInput(
-                ns("maintain_comment"),
-                "Describe the new maintenance performed",
-                "",
-                height = "100px",
-                width = "800px"
-              ),
-              uiOutput(ns("maintain_recorder")),
-              actionButton(
-                ns("submit_instr_maintain"),
-                "Save new maintenance event"
-              )
-            )
-          )
-        ),
-        tabPanel(
-          "Change/maintain sensors",
-          sidebarLayout(
-            sidebarPanel(
-              textOutput(ns("sensors_reminder")),
-              selectizeInput(
-                ns("maintain_serial"),
-                "Select your instrument",
-                choices = "loading choices..."
-              ),
-              div(
-                class = "load_sensors_btn",
-                actionButton(ns("load_sensors"), "Show sensors")
-              ),
-              div(
-                class = "show_sensors_btns",
-                actionButton(
-                  ns("sensor1_show"),
-                  "Slot 1",
-                  style = c("margin-bottom: 5px;")
-                ),
-                actionButton(
-                  ns("sensor2_show"),
-                  "Slot 2",
-                  style = c("margin-bottom: 5px;")
-                ),
-                actionButton(
-                  ns("sensor3_show"),
-                  "Slot 3",
-                  style = c("margin-bottom: 5px;")
-                ),
-                actionButton(
-                  ns("sensor4_show"),
-                  "Slot 4",
-                  style = c("margin-bottom: 5px;")
-                ),
-                actionButton(
-                  ns("sensor5_show"),
-                  "Slot 5",
-                  style = c("margin-bottom: 5px;")
-                ),
-                actionButton(
-                  ns("sensor6_show"),
-                  "Slot 6",
-                  style = c("margin-bottom: 5px;")
-                ),
-                actionButton(
-                  ns("sensor7_show"),
-                  "Slot 7",
-                  style = c("margin-bottom: 5px;")
-                ),
-                actionButton(
-                  ns("sensor8_show"),
-                  "Slot 8",
-                  style = c("margin-bottom: 5px;")
-                )
-              ),
-              selectizeInput(
-                ns("add_sensor_type_dropdown"),
-                "ADD a slot w/ sensor (CHANGE assigned sensor to the right)",
-                choices = "placeholder",
-                options = list(
-                  placeholder = "Not specified",
-                  onInitialize = I('function() { this.setValue(""); }')
-                )
-              ),
-              selectizeInput(
-                ns("new_sensor_serial"),
-                "Serial number (type your own if not in yet)",
-                choices = NULL,
-                options = list(create = TRUE)
-              ),
-              actionButton(
-                ns("add_new_sensor_serial"),
-                "Add new sensor to database"
-              ),
-              uiOutput(ns("add_sensor_name")),
-              textOutput(ns("add_sensor_note")),
-              actionButton(ns("add_sensor_slot"), "Submit")
-            ),
-            mainPanel(
-              DT::dataTableOutput(ns("manage_sensors_table")),
-              DT::dataTableOutput(ns("sensor1_details")),
-              DT::dataTableOutput(ns("sensor2_details")),
-              DT::dataTableOutput(ns("sensor3_details")),
-              DT::dataTableOutput(ns("sensor4_details")),
-              DT::dataTableOutput(ns("sensor5_details")),
-              DT::dataTableOutput(ns("sensor6_details")),
-              DT::dataTableOutput(ns("sensor7_details")),
-              DT::dataTableOutput(ns("sensor8_details")),
-              htmlOutput(ns("sensor_change_note")),
-              selectizeInput(
-                ns("change_sensor"),
-                "Assign a new sensor or leave as-is to log only maintenance note",
-                choices = "placeholder",
-                width = "500px",
-                options = list(
-                  placeholder = "Not specified",
-                  onInitialize = I('function() { this.setValue(""); }')
-                )
-              ),
-              selectizeInput(
-                ns("add_sensor_serial"),
-                "Serial number (type your own if not in yet)",
-                choices = NULL,
-                options = list(create = TRUE)
-              ),
-              actionButton(
-                ns("add_new_sensor_serial2"),
-                "Add new sensor to database"
-              ),
-              textAreaInput(
-                ns("add_comment"),
-                "Add a note (date is already captured)",
-                "",
-                height = "100px",
-                width = "800px"
-              ),
-              uiOutput(ns("sensor_change_name")),
-              actionButton(ns("submit_sensor_change"), "Submit new record")
             )
           )
         ),
@@ -699,7 +589,88 @@ table.on("click", "tr", function() {
     restarted <- reactiveValues(initialized = FALSE, restarted = FALSE)
     instruments_data <- reactiveValues()
     select_data <- reactiveValues() # Holds data to populate select menus
-    sensors_data <- reactiveValues(datetime = .POSIXct(Sys.time(), tz = "UTC")) #get the time here so that multiple maintenance events are on same line
+    observer_select_value <- function(observer_id) {
+      observer_id <- unlist(observer_id, use.names = FALSE)
+      if (length(observer_id) == 0 || is.null(observer_id) || is.na(observer_id[1])) {
+        return(character(0))
+      }
+      as.character(observer_id[1])
+    }
+    refresh_observer_choices <- function() {
+      instruments_data$observers <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM observers"
+      )
+      instruments_data$observers$observer_string <- paste0(
+        instruments_data$observers$observer_first,
+        " ",
+        instruments_data$observers$observer_last,
+        " (",
+        instruments_data$observers$organization,
+        ")"
+      )
+      select_data$recorder <- stats::setNames(
+        c("new", instruments_data$observers$observer_id),
+        c("Add new observer", instruments_data$observers$observer_string)
+      )
+    }
+    restarted_observer_value <- function() {
+      restart_observer <- observer_select_value(calibration_data$restart_observer)
+      if (length(restart_observer) > 0) {
+        return(restart_observer)
+      }
+
+      restarted_id <- calibration_data$restarted_id
+      if (
+        length(restarted_id) == 0 ||
+          is.null(restarted_id) ||
+          is.na(restarted_id) ||
+          restarted_id == 0
+      ) {
+        return(character(0))
+      }
+
+      row_num <- match(
+        restarted_id,
+        calibrations$incomplete_calibrations$calibration_id
+      )
+      if (is.na(row_num)) {
+        return(character(0))
+      }
+
+      observer_select_value(
+        calibrations$incomplete_calibrations[row_num, "observer"]
+      )
+    }
+    update_observer_input <- function(selected = character(0), clear = TRUE) {
+      selected <- observer_select_value(selected)
+      choices <- isolate(select_data$recorder)
+      session$onFlushed(
+        function() {
+          updateSelectizeInput(
+            session,
+            "observer",
+            choices = choices,
+            selected = selected
+          )
+        },
+        once = TRUE
+      )
+    }
+    render_observer_input <- function(selected = character(0), clear = TRUE) {
+      selected <- observer_select_value(selected)
+      clear <- isTRUE(clear) && length(selected) == 0
+      output$observer <- renderUI({
+        selectizeInput(
+          ns("observer"),
+          label = "Calibrator name",
+          choices = select_data$recorder,
+          options = selectize_empty_options(clear = clear),
+          selected = selected
+        )
+      })
+      update_observer_input(selected = selected, clear = clear)
+    }
     default_obs_datetime <- function() {
       .POSIXct(Sys.time(), tz = "UTC")
     }
@@ -965,9 +936,9 @@ table.on("click", "tr", function() {
                   i.retired_by,
                   i.date_retired,
                   i.date_end_of_life,
-                  instrument_make.make,
-                  instrument_model.model,
-                  instrument_type.type,
+                  instrument_makes.make,
+                  instrument_models.model,
+                  instrument_types.type,
                   i.owner AS owner_id,
                   organizations.name AS owner,
                   ",
@@ -977,9 +948,9 @@ table.on("click", "tr", function() {
           supplier_name_select,
           "
            FROM instruments.instruments AS i
-           LEFT JOIN instruments.instrument_make ON i.make = instrument_make.make_id
-           LEFT JOIN instruments.instrument_model ON i.model = instrument_model.model_id
-           LEFT JOIN instruments.instrument_type ON i.type = instrument_type.type_id
+           LEFT JOIN instruments.instrument_makes ON i.make = instrument_makes.make_id
+           LEFT JOIN instruments.instrument_models ON i.model = instrument_models.model_id
+           LEFT JOIN instruments.instrument_types ON i.type = instrument_types.type_id
            LEFT JOIN public.organizations ON i.owner = organizations.organization_id
            LEFT JOIN instruments.observers ON i.observer = observers.observer_id",
           supplier_join,
@@ -999,12 +970,6 @@ table.on("click", "tr", function() {
       instruments_data$others <- instruments_data$sheet[
         instruments_data$sheet$type != "Handheld" &
           is.na(instruments_data$sheet$date_retired),
-        ,
-        drop = FALSE
-      ]
-      instruments_data$maintainable_sensors <- instruments_data$sheet[
-        !is.na(instruments_data$sheet$holds_replaceable_sensors) &
-          instruments_data$sheet$holds_replaceable_sensors,
         ,
         drop = FALSE
       ]
@@ -1124,43 +1089,6 @@ table.on("click", "tr", function() {
     shinyjs::hide("delete_orp")
     shinyjs::hide("delete_do")
     shinyjs::hide("delete_depth")
-    # Buttons to show sensor information
-    shinyjs::hide("sensor1_show")
-    shinyjs::addClass("sensor1_show", "hidden")
-    shinyjs::hide("sensor2_show")
-    shinyjs::addClass("sensor2_show", "hidden")
-    shinyjs::hide("sensor3_show")
-    shinyjs::addClass("sensor3_show", "hidden")
-    shinyjs::hide("sensor4_show")
-    shinyjs::addClass("sensor4_show", "hidden")
-    shinyjs::hide("sensor5_show")
-    shinyjs::addClass("sensor5_show", "hidden")
-    shinyjs::hide("sensor6_show")
-    shinyjs::addClass("sensor6_show", "hidden")
-    shinyjs::hide("sensor7_show")
-    shinyjs::addClass("sensor7_show", "hidden")
-    shinyjs::hide("sensor8_show")
-    shinyjs::addClass("sensor8_show", "hidden")
-    shinyjs::hide("add_sensor_slot")
-    shinyjs::hide("new_sensor_serial")
-    shinyjs::hide("add_sensor_note")
-    shinyjs::hide("sensor_change_note")
-    shinyjs::hide("add_sensor_type_dropdown")
-    shinyjs::hide("add_sensor_name")
-    shinyjs::hide("load_sensors")
-    shinyjs::hide("sensor1_details")
-    shinyjs::hide("sensor2_details")
-    shinyjs::hide("sensor3_details")
-    shinyjs::hide("sensor4_details")
-    shinyjs::hide("sensor5_details")
-    shinyjs::hide("sensor6_details")
-    shinyjs::hide("sensor7_details")
-    shinyjs::hide("sensor8_details")
-    shinyjs::hide("add_sensor_serial")
-    shinyjs::hide("change_sensor")
-    shinyjs::hide("add_comment")
-    shinyjs::hide("sensor_change_name")
-    shinyjs::hide("submit_sensor_change")
     shinyjs::hide("restart_table")
 
     # Hide optional as-left fields until a calibration mode explicitly asks for them.
@@ -1248,23 +1176,7 @@ table.on("click", "tr", function() {
       "SELECT * FROM calibrations"
     ) # This will be used to check if there are any incomplete calibrations
 
-    instruments_data$observers <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT * FROM observers"
-    )
-    instruments_data$instrument_maintenance <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT * FROM instrument_maintenance"
-    )
-
-    sensors_data$sensors <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      paste0("SELECT * FROM sensors")
-    )
-    sensors_data$sensor_types <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      paste0("SELECT * FROM sensor_types")
-    )
+    refresh_observer_choices()
 
     output$calibration_instruments_table <- DT::renderDT(
       {
@@ -1283,59 +1195,16 @@ table.on("click", "tr", function() {
     observeEvent(input$last_observer_id, {
       # This is used to set the last observer ID to the last observer selected, recovered from cookies
       try({
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = input$last_observer_id
-          )
-        })
-        output$add_sensor_name <- renderUI({
-          selectizeInput(
-            ns("add_sensor_name"),
-            label = "What's your name?",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = input$last_observer_id
-          )
-        })
-        output$sensor_change_name <- renderUI({
-          selectizeInput(
-            ns("sensor_change_name"),
-            label = "Observer name",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = input$last_observer_id
-          )
-        })
-        output$maintain_recorder <- renderUI({
-          selectizeInput(
-            ns("maintain_recorder"),
-            label = "Maintenance recorder",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = input$last_observer_id
-          )
-        })
+        render_observer_input(
+          selected = input$last_observer_id,
+          clear = FALSE
+        )
       })
     })
 
     observe({
       if (!restarted$initialized) {
-        instruments_data$observers$observer_string <- paste0(
-          instruments_data$observers$observer_first,
-          " ",
-          instruments_data$observers$observer_last,
-          " (",
-          instruments_data$observers$organization,
-          ")"
-        )
-        select_data$recorder <- stats::setNames(
-          c("new", instruments_data$observers$observer_id),
-          c("Add new observer", instruments_data$observers$observer_string)
-        )
+        refresh_observer_choices()
 
         # look for a cookie with the last observer ID
         shinyjs::runjs(sprintf(
@@ -1344,38 +1213,7 @@ table.on("click", "tr", function() {
           ns('last_observer_id')
         ))
 
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
-        output$add_sensor_name <- renderUI({
-          selectizeInput(
-            ns("add_sensor_name"),
-            label = "What's your name?",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
-        output$sensor_change_name <- renderUI({
-          selectizeInput(
-            ns("sensor_change_name"),
-            label = "Observer name",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
-        output$maintain_recorder <- renderUI({
-          selectizeInput(
-            ns("maintain_recorder"),
-            label = "Maintenance recorder",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
+        render_observer_input()
         output$ID_sensor_holder <- renderUI({
           div(
             selectizeInput(
@@ -1396,23 +1234,6 @@ table.on("click", "tr", function() {
             style = "color: white; background-color: green;"
           )
         })
-
-        tmp <- stats::setNames(
-          c("new", sensors_data$sensor_types$sensor_type_id),
-          c("Add new type", sensors_data$sensor_types$sensor_type)
-        )
-        updateSelectizeInput(
-          session,
-          "change_sensor",
-          choices = tmp,
-          selected = character(0)
-        )
-        updateSelectizeInput(
-          session,
-          "add_sensor_type_dropdown",
-          choices = tmp,
-          selected = character(0)
-        )
 
         # Create initial tables for managing incomplete calibrations
         incomplete_calibrations <- calibrations$calibrations[
@@ -1450,13 +1271,9 @@ table.on("click", "tr", function() {
       }
     })
 
-    # Modals and observers to add new observers and sensor types ########################################
+    # Modals and observers to add new observers ########################################
     ## Add new observers  ################################################
-    observer_inputs <- c(
-      "observer",
-      "sensor_change_name",
-      "add_sensor_name"
-    )
+    observer_inputs <- c("observer")
     lapply(observer_inputs, function(inp) {
       observeEvent(
         input[[inp]],
@@ -1511,105 +1328,16 @@ table.on("click", "tr", function() {
           )
         )
         # Update the observers data.frame and selectizeInputs
-        instruments_data$observers <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT * FROM observers"
-        )
-        instruments_data$observers$observer_string <- paste0(
-          instruments_data$observers$observer_first,
-          " ",
-          instruments_data$observers$observer_last,
-          " (",
-          instruments_data$observers$organization,
-          ")"
-        )
-        select_data$recorder <- stats::setNames(
-          c("new", instruments_data$observers$observer_id),
-          c("Add new observer", instruments_data$observers$observer_string)
-        )
+        refresh_observer_choices()
 
         selected_id <- max(instruments_data$observers$observer_id)
 
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = selected_id
-          )
-        })
-        output$add_sensor_name <- renderUI({
-          selectizeInput(
-            ns("add_sensor_name"),
-            label = "What's your name?",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = selected_id
-          )
-        })
-        output$sensor_change_name <- renderUI({
-          selectizeInput(
-            ns("sensor_change_name"),
-            label = "Observer name",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = selected_id
-          )
-        })
+        render_observer_input(selected = selected_id, clear = FALSE)
         shinyjs::runjs(paste0(
           "Cookies.set('last_observer_id', '",
           selected_id,
           "', { expires: 30 });"
         ))
-        removeModal()
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    ## Add new sensor type ################################################
-    observeEvent(
-      input$add_new_sensor_type,
-      {
-        # Ensure that a sensor type is entered
-        if (input$new_sensor_type == "") {
-          alert(
-            title = "Error",
-            text = "Please enter a sensor type, description optional.",
-            type = "error",
-            timer = 4000
-          )
-          return()
-        }
-        DBI::dbExecute(
-          session$userData$AquaCache,
-          "INSERT INTO sensor_types (sensor_type, sensor_type_description) VALUES ($1, $2)",
-          params = list(
-            input$new_sensor_type,
-            if (input$new_sensor_desc == "") NA else input$new_sensor_desc
-          )
-        )
-        sensors_data$sensor_types <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT * FROM sensor_types"
-        )
-        tmp <- stats::setNames(
-          c("new", sensors_data$sensor_types$sensor_type_id),
-          c("Add new type", sensors_data$sensor_types$sensor_type)
-        )
-        updateSelectizeInput(
-          session,
-          "change_sensor",
-          choices = tmp,
-          selected = unname(tmp[names(tmp) == input$new_sensor_type])
-        )
-        updateSelectizeInput(
-          session,
-          "add_sensor_type_dropdown",
-          choices = tmp,
-          selected = unname(tmp[names(tmp) == input$new_sensor_type])
-        )
         removeModal()
       },
       ignoreInit = TRUE,
@@ -1671,22 +1399,6 @@ table.on("click", "tr", function() {
         return(tbl)
       }
       tbl[tbl[, 1] != label, , drop = FALSE]
-    }
-    latest_sensor_event_matches <- function(
-      obs_datetimes,
-      reference_datetime,
-      tolerance_secs = 5
-    ) {
-      if (length(obs_datetimes) == 0 || all(is.na(obs_datetimes))) {
-        return(FALSE)
-      }
-      latest_obs_datetime <- max(obs_datetimes, na.rm = TRUE)
-      abs(
-        as.numeric(
-          difftime(latest_obs_datetime, reference_datetime, units = "secs")
-        )
-      ) <=
-        tolerance_secs
     }
     current_temp_reference <- function() {
       if (
@@ -2080,36 +1792,12 @@ table.on("click", "tr", function() {
       check.names = FALSE
     ) #Title is modified later for clarity if user want to restart a cal
     send_table$restarted_cal <- empty_restarted_cal_table()
-    # Initiate data.frame for instrument details when maintaining
-    sensors_data$instrument_table <- data.frame(
-      "Select an instrument first" = NA,
-      check.names = FALSE
-    )
-    sensors_data$sensor1_details <- data.frame(
-      "Nothing to show yet!" = NA,
-      check.names = FALSE
-    )
-    output$sensor1_details <- renderTable({
-      sensors_data$sensor1_details
-    })
-
     messages$instrument_reminder <- paste(
       "Add your instrument in the separate",
       "'Create/modify instruments' module if it is not listed here."
     )
     output$instrument_reminder <- renderText({
       messages$instrument_reminder
-    })
-    output$sensors_reminder <- renderText({
-      messages$instrument_reminder
-    })
-    messages$add_sensor_note <- "Caution: ADDS new sensor slot. To CHANGE sensor type, click on the sensor button for new options."
-    output$add_sensor_note <- renderText({
-      messages$add_sensor_note
-    })
-    messages$sensor_change_note <- "<br>Only modify the fields required:<br>If logging maintenance without changing a sensor, only add a descriptive note.<br>If changing sensors while keeping same type, change serial number and add a note only.<br>If changing sensor type, edit all three fields.<br><br>"
-    output$sensor_change_note <- renderUI({
-      HTML(messages$sensor_change_note)
     })
     messages$ph_mV_note <- "<b><br><br>pH mV standards:&nbsp;&nbsp;&nbsp;pH7 = +- 50;&nbsp;&nbsp;&nbsp;pH4 = pH 7 value + 165 to 180;&nbsp;&nbsp;&nbsp;pH 10 = pH 7 value - 165 to 180</b>"
     output$ph_mV_note <- renderUI({
@@ -2210,14 +1898,7 @@ table.on("click", "tr", function() {
     # Create reset functions for each calibration type ################################################
     reset_basic <- function(keep_observer = FALSE) {
       if (!keep_observer) {
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
+        render_observer_input()
       }
       shinyWidgets::updateAirDateInput(
         session,
@@ -2582,203 +2263,6 @@ table.on("click", "tr", function() {
       invisible(selected_incomplete_row())
     })
 
-    ## Sensor/array maintenance and changes instrument selection table
-    observeEvent(input$manage_sensors_table_rows_selected, {
-      updateSelectizeInput(
-        session,
-        "maintain_serial",
-        selected = instruments_data$maintainable_sensors[
-          input$manage_sensors_table_rows_selected[1],
-          "serial_no"
-        ]
-      )
-    })
-
-    ## Instrument maintenance table
-    observeEvent(
-      input$maintain_instr_table_rows_selected,
-      {
-        # Get the maintenance data for that instrument and render the table
-        instr_id <- instruments_data$maintain_instruments[
-          input$maintain_instr_table_rows_selected[1],
-          "instrument_id"
-        ]
-        instruments_data$instrument_maintenance_selected_id <- instr_id
-        temp <- instruments_data$instrument_maintenance[
-          instruments_data$instrument_maintenance$instrument_id == instr_id,
-          !colnames(instruments_data$instrument_maintenance) %in%
-            c("instrument_id", "event_id")
-        ]
-        names(temp) <- c("Observer", "Date/Time", "Maintenance note")
-        output$past_instr_maintenance <- DT::renderDT(
-          temp,
-          rownames = FALSE,
-          selection = "single"
-        ) #Table is in the main panel, for maintenance history
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    # Events for recording instrument maintenance (not sensors) ########################################
-    instruments_data$instrument_maintenance_update <- FALSE
-    observeEvent(
-      input$past_instr_maintenance_rows_selected,
-      {
-        instruments_data$instrument_maintenance_update <- TRUE
-        # Load the past maintenance note into the "maintain_comment" textAreaInput, the observer to "maintain_recorder", and the date/time to "maintain_datetime". Modify the "submit_instr_maintain" button to "Update maintenance note".
-        temp <- instruments_data$instrument_maintenance[
-          instruments_data$instrument_maintenance$instrument_id == instr_id,
-        ]
-        obs_datetime <- temp[
-          input$past_instr_maintenance_rows_selected[1],
-          "obs_datetime"
-        ]
-        instruments_data$instrument_maintenance_update_datetime <- obs_datetime
-        observer <- temp[
-          input$past_instr_maintenance_rows_selected[1],
-          "observer"
-        ]
-        instrument_id <- temp[
-          input$past_instr_maintenance_rows_selected[1],
-          "instrument_id"
-        ]
-        selected_event <- temp[
-          temp$obs_datetime == obs_datetime &
-            temp$observer == observer &
-            temp$instrument_id == instrument_id,
-        ]
-        updateTextAreaInput(
-          session,
-          "maintain_comment",
-          value = selected_event$note
-        )
-        updateSelectizeInput(
-          session,
-          "maintain_recorder",
-          selected = selected_event$observer
-        )
-        updateActionButton(
-          session,
-          "submit_instr_maintain",
-          label = "UPDATE maintenance event (use 'Clear selection' button above to cancel changes)"
-        )
-        shinyjs::show("clear_selection")
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$clear_selection,
-      {
-        updateTextAreaInput(session, "maintain_comment", value = "")
-        updateSelectizeInput(
-          session,
-          "maintain_recorder",
-          selected = input$last_observer_id
-        )
-        updateActionButton(
-          session,
-          "submit_instr_maintain",
-          label = "Save new maintenance event"
-        )
-        shinyjs::hide("clear_selection")
-        instruments_data$instrument_maintenance_update <- FALSE
-
-        # Re-render the table to clear the selection
-        temp <- instruments_data$instrument_maintenance[
-          instruments_data$instrument_maintenance$instrument_id ==
-            instruments_data$instrument_maintenance_selected_id,
-          !colnames(instruments_data$instrument_maintenance) %in%
-            c("instrument_id", "event_id")
-        ]
-        names(temp) <- c("Observer", "Date/Time", "Maintenance note")
-        output$past_instr_maintenance <- DT::renderDT(
-          temp,
-          rownames = FALSE,
-          selection = "single"
-        )
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$submit_instr_maintain,
-      {
-        if (instruments_data$instrument_maintenance_update) {
-          #Edit an existing record
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            paste0(
-              "UPDATE instrument_maintenance SET observer = '",
-              input$maintain_recorder,
-              "', note = '",
-              input$maintain_comment,
-              "' WHERE instrument_id = ",
-              instruments_data$instrument_maintenance_selected_id,
-              " AND obs_datetime = '",
-              instruments_data$instrument_maintenance_update_datetime,
-              "'"
-            )
-          )
-          alert(
-            title = "Success",
-            text = "Maintenance record updated successfully.",
-            timer = 2000,
-            type = "success"
-          )
-        } else {
-          # Create a new record
-          temp <- data.frame(
-            instrument_id = instruments_data$instrument_maintenance_selected_id,
-            obs_datetime = .POSIXct(Sys.time(), tz = "UTC"),
-            observer = input$maintain_recorder,
-            note = input$maintain_comment
-          )
-          DBI::dbWriteTable(
-            session$userData$AquaCache,
-            "instrument_maintenance",
-            temp,
-            append = TRUE
-          )
-          alert(
-            title = "Success",
-            text = "Maintenance record saved successfully.",
-            timer = 2000,
-            type = "success"
-          )
-        }
-        updateTextAreaInput(session, "maintain_comment", value = "")
-        instruments_data$instrument_maintenance <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT * FROM instrument_maintenance"
-        )
-        temp <- instruments_data$instrument_maintenance[
-          instruments_data$instrument_maintenance$instrument_id ==
-            instruments_data$instrument_maintenance_selected_id,
-          !colnames(instruments_data$instrument_maintenance) %in%
-            c("instrument_id", "event_id")
-        ]
-        names(temp) <- c("Observer", "Date/Time", "Maintenance note")
-        output$past_instr_maintenance <- DT::renderDT(
-          temp,
-          rownames = FALSE,
-          selection = "single"
-        )
-        shinyjs::hide("clear_selection")
-        updateActionButton(
-          session,
-          "submit_instr_maintain",
-          label = "Save new maintenance event"
-        )
-        instruments_data$instrument_maintenance_update <- FALSE
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
     # Update pH and ORP fields based on standard solution selected ###################################
     observeEvent(
       input$ph1_std,
@@ -2945,1133 +2429,22 @@ table.on("click", "tr", function() {
       if (input$tab_panel == "Checks / calibrations") {
         shinyjs::show("calibration_instruments_table")
         shinyjs::show("submit_btn")
-        shinyjs::hide("load_sensors")
-        shinyjs::hide("sensor1_show")
-        shinyjs::addClass("sensor1_show", "hidden")
-        shinyjs::hide("sensor2_show")
-        shinyjs::addClass("sensor2_show", "hidden")
-        shinyjs::hide("sensor3_show")
-        shinyjs::addClass("sensor3_show", "hidden")
-        shinyjs::hide("sensor4_show")
-        shinyjs::addClass("sensor4_show", "hidden")
-        shinyjs::hide("sensor5_show")
-        shinyjs::addClass("sensor5_show", "hidden")
-        shinyjs::hide("sensor6_show")
-        shinyjs::addClass("sensor6_show", "hidden")
-        shinyjs::hide("sensor7_show")
-        shinyjs::addClass("sensor7_show", "hidden")
-        shinyjs::hide("sensor8_show")
-        shinyjs::addClass("sensor8_show", "hidden")
-        shinyjs::hide("add_sensor_slot")
-        shinyjs::hide("add_sensor_note")
-        shinyjs::hide("sensor_change_note")
-        shinyjs::hide("add_sensor_type_dropdown")
-        shinyjs::hide("add_sensor_name")
-        shinyjs::hide("sensor1_details")
-        shinyjs::hide("sensor2_details")
-        shinyjs::hide("sensor3_details")
-        shinyjs::hide("sensor4_details")
-        shinyjs::hide("sensor5_details")
-        shinyjs::hide("sensor6_details")
-        shinyjs::hide("sensor7_details")
-        shinyjs::hide("sensor8_details")
-        shinyjs::hide("change_sensor")
-        shinyjs::hide("add_sensor_serial")
-        shinyjs::hide("new_sensor_serial")
-        shinyjs::hide("add_comment")
-        shinyjs::hide("sensor_change_name")
-        shinyjs::hide("submit_sensor_change")
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
-      } else if (input$tab_panel == "Maintain instruments") {
-        instruments_data$maintain_instruments <- instruments_data$sheet[,
-          !colnames(instruments_data$sheet) %in%
-            c(
-              "observer",
-              "obs_datetime",
-              "retired_by",
-              "date_retired",
-              "asset_tag",
-              "date_in_service",
-              "date_purchased",
-              "holds_replaceable_sensors",
-              "date_end_of_life",
-              "purchase_price",
-              "takes_measurements",
-              "supplier_id",
-              "supplier"
-            ),
-          drop = FALSE
-        ]
-        temp_maintain <- instruments_data$maintain_instruments[, c(
-          "make",
-          "model",
-          "type",
-          "serial_no",
-          "owner"
-        )]
-        output$maintain_instr_table <- DT::renderDT(
-          DT::datatable(
-            format_owner_column_for_dt(temp_maintain),
-            rownames = FALSE,
-            selection = "single",
-            escape = FALSE
-          )
-        ) #Table is in the sidebar, for instrument selection
-        temp <- data.frame(
-          "Observer" = "No one",
-          "Date/Time" = "Never",
-          "Maintenance note" = "Select an instrument first",
-          check.names = FALSE
-        )
-        output$past_instr_maintenance <- DT::renderDT(
-          temp,
-          rownames = FALSE,
-          selection = "none"
-        ) #Table is in the main panel, for maintenance history
-        shinyjs::hide("clear_selection")
-      } else if (input$tab_panel == "Change/maintain sensors") {
-        #reload instruments_data$sheet to mitigate conflicts
-        refresh_instruments_sheet()
-        temp_table <- instruments_data$maintainable_sensors[, c(
-          "make",
-          "model",
-          "type",
-          "serial_no",
-          "owner"
-        )]
-        output$manage_sensors_table <- DT::renderDT(
-          DT::datatable(
-            format_owner_column_for_dt(temp_table),
-            rownames = FALSE,
-            selection = "single",
-            escape = FALSE
-          )
-        )
-        updateSelectizeInput(
-          session,
-          "maintain_serial",
-          choices = c("", instruments_data$maintainable_sensors$serial_no)
-        )
-        shinyjs::hide("submit_btn")
-        shinyjs::hide("add_sensor_slot")
-        shinyjs::hide("add_sensor_name")
-        shinyjs::hide("add_sensor_note")
-        shinyjs::hide("sensor_change_note")
-        shinyjs::hide("new_sensor_serial")
-        shinyjs::hide("submit_sensor_change")
-        shinyjs::show("load_sensors")
-        shinyjs::show("manage_sensors_table")
-        updateSelectizeInput(
-          session,
-          "add_sensor_name",
-          choices = select_data$observer
-        )
+        refresh_observer_choices()
+        if (isTRUE(restarted$restarted)) {
+          render_observer_input(selected = restarted_observer_value())
+        } else {
+          render_observer_input(selected = isolate(input$observer))
+        }
       } else if (input$tab_panel == "View unfinished calibrations") {
+        refresh_observer_choices()
         output$incomplete_table <- DT::renderDT(
           complete$incomplete,
           rownames = FALSE,
           selection = "single"
         )
         shinyjs::hide("submit_btn")
-        shinyjs::hide("load_sensors")
-        shinyjs::hide("sensor1_show")
-        shinyjs::addClass("sensor1_show", "hidden")
-        shinyjs::hide("sensor2_show")
-        shinyjs::addClass("sensor2_show", "hidden")
-        shinyjs::hide("sensor3_show")
-        shinyjs::addClass("sensor3_show", "hidden")
-        shinyjs::hide("sensor4_show")
-        shinyjs::addClass("sensor4_show", "hidden")
-        shinyjs::hide("sensor5_show")
-        shinyjs::addClass("sensor5_show", "hidden")
-        shinyjs::hide("sensor6_show")
-        shinyjs::addClass("sensor6_show", "hidden")
-        shinyjs::hide("sensor7_show")
-        shinyjs::addClass("sensor7_show", "hidden")
-        shinyjs::hide("sensor8_show")
-        shinyjs::addClass("sensor8_show", "hidden")
-        shinyjs::hide("add_sensor_slot")
-        shinyjs::hide("add_sensor_note")
-        shinyjs::hide("sensor_change_note")
-        shinyjs::hide("add_sensor_type_dropdown")
-        shinyjs::hide("add_sensor_name")
-        shinyjs::hide("sensor1_details")
-        shinyjs::hide("sensor2_details")
-        shinyjs::hide("sensor3_details")
-        shinyjs::hide("sensor4_details")
-        shinyjs::hide("sensor5_details")
-        shinyjs::hide("sensor6_details")
-        shinyjs::hide("sensor7_details")
-        shinyjs::hide("sensor8_details")
-        shinyjs::hide("change_sensor")
-        shinyjs::hide("add_sensor_serial")
-        shinyjs::hide("new_sensor_serial")
-        shinyjs::hide("add_comment")
-        shinyjs::hide("sensor_change_name")
-        shinyjs::hide("submit_sensor_change")
       }
     })
-
-    # observeEvents related to maintenance of instruments ################################################
-    observeEvent(
-      input$maintain_serial,
-      {
-        shinyjs::show("load_sensors")
-        shinyjs::hide("sensor1_show")
-        shinyjs::addClass("sensor1_show", "hidden")
-        shinyjs::hide("sensor2_show")
-        shinyjs::addClass("sensor2_show", "hidden")
-        shinyjs::hide("sensor3_show")
-        shinyjs::addClass("sensor3_show", "hidden")
-        shinyjs::hide("sensor4_show")
-        shinyjs::addClass("sensor4_show", "hidden")
-        shinyjs::hide("sensor5_show")
-        shinyjs::addClass("sensor5_show", "hidden")
-        shinyjs::hide("sensor6_show")
-        shinyjs::addClass("sensor6_show", "hidden")
-        shinyjs::hide("sensor7_show")
-        shinyjs::addClass("sensor7_show", "hidden")
-        shinyjs::hide("sensor8_show")
-        shinyjs::addClass("sensor8_show", "hidden")
-        shinyjs::hide("add_sensor_slot")
-        shinyjs::hide("add_sensor_note")
-        shinyjs::hide("sensor_change_note")
-        shinyjs::hide("add_sensor_type_dropdown")
-        shinyjs::hide("add_sensor_name")
-        shinyjs::hide("sensor1_details")
-        shinyjs::hide("sensor2_details")
-        shinyjs::hide("sensor3_details")
-        shinyjs::hide("sensor4_details")
-        shinyjs::hide("sensor5_details")
-        shinyjs::hide("sensor6_details")
-        shinyjs::hide("sensor7_details")
-        shinyjs::hide("sensor8_details")
-        shinyjs::hide("change_sensor")
-        shinyjs::hide("add_sensor_serial")
-        shinyjs::hide("new_sensor_serial")
-        shinyjs::hide("add_comment")
-        shinyjs::hide("sensor_change_name")
-        shinyjs::hide("submit_sensor_change")
-      },
-      ignoreInit = TRUE
-    )
-
-    ## Load sensors table and buttons #############
-    observeEvent(
-      input$load_sensors,
-      {
-        if ((input$load_sensors %% 2) == 0) {
-          # this part runs on second and subsequent even numbered clicks
-          shinyjs::show("manage_sensors_table")
-          #Hide the extra buttons
-          shinyjs::hide("sensor1_show")
-          shinyjs::addClass("sensor1_show", "hidden")
-          shinyjs::hide("sensor2_show")
-          shinyjs::addClass("sensor2_show", "hidden")
-          shinyjs::hide("sensor3_show")
-          shinyjs::addClass("sensor3_show", "hidden")
-          shinyjs::hide("sensor4_show")
-          shinyjs::addClass("sensor4_show", "hidden")
-          shinyjs::hide("sensor5_show")
-          shinyjs::addClass("sensor5_show", "hidden")
-          shinyjs::hide("sensor6_show")
-          shinyjs::addClass("sensor6_show", "hidden")
-          shinyjs::hide("sensor7_show")
-          shinyjs::addClass("sensor7_show", "hidden")
-          shinyjs::hide("sensor8_show")
-          shinyjs::addClass("sensor8_show", "hidden")
-          shinyjs::hide("add_sensor_slot")
-          shinyjs::hide("add_sensor_note")
-          shinyjs::hide("add_sensor_type_dropdown")
-          shinyjs::hide("sensor_change_note")
-          shinyjs::hide("add_sensor_name")
-          #Hide the sensor-specific tables in case any were opened
-          shinyjs::hide("sensor1_details")
-          shinyjs::hide("sensor2_details")
-          shinyjs::hide("sensor3_details")
-          shinyjs::hide("sensor4_details")
-          shinyjs::hide("sensor5_details")
-          shinyjs::hide("sensor6_details")
-          shinyjs::hide("sensor7_details")
-          shinyjs::hide("sensor8_details")
-          #Hide the extra buttons related to sensor changes/maintenance
-          shinyjs::hide("change_sensor")
-          shinyjs::hide("add_sensor_serial")
-          shinyjs::hide("new_sensor_serial")
-          shinyjs::hide("add_comment")
-          shinyjs::hide("sensor_change_name")
-          shinyjs::hide("submit_sensor_change")
-          updateActionButton(session, "load_sensors", label = "Show sensors")
-        } else {
-          # This part runs on first and subsequent odd numbered clicks
-          if (input$maintain_serial != "loading choices...") {
-            shinyjs::hide("manage_sensors_table")
-            # Reset the button colors
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor1_show")
-            ))
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor2_show")
-            ))
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor3_show")
-            ))
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor4_show")
-            ))
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor5_show")
-            ))
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor6_show")
-            ))
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor7_show")
-            ))
-            shinyjs::runjs(sprintf(
-              'document.getElementById("%s").style.color = "#000000";',
-              ns("sensor8_show")
-            ))
-            updateActionButton(
-              session,
-              "load_sensors",
-              label = "Show instruments table again"
-            )
-
-            #Find the instrument_id associated with this instrument
-            sensors_data$instrument_id <- instruments_data$maintainable_sensors[
-              instruments_data$maintainable_sensors$serial_no ==
-                input$maintain_serial,
-              "instrument_id"
-            ]
-
-            #Load the array_maintenance_changes table subset for that instrument
-            sensors_data$instrument <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              paste0(
-                "SELECT * FROM array_maintenance_changes WHERE instrument_id = ",
-                sensors_data$instrument_id
-              )
-            )
-
-            shinyjs::show("add_sensor_type_dropdown")
-            #Find out the max number of sensors ever assigned to the instrument and what they currently are
-            sensor_columns <- grep(
-              "sensor\\d+_id$",
-              names(sensors_data$instrument),
-              value = TRUE
-            )
-            sensors_data$number <- sum(
-              !is.na(sensors_data$instrument[
-                nrow(sensors_data$instrument),
-                sensor_columns
-              ])
-            )
-
-            if (sensors_data$number > 0) {
-              for (i in 1:sensors_data$number) {
-                #show the right number of sensors
-                shinyjs::show(paste0("sensor", i, "_show"))
-                shinyjs::removeClass(ns(paste0("sensor", i, "_show")), "hidden")
-                sensor_id <- sensors_data$sensors[
-                  sensors_data$sensors$sensor_id ==
-                    sensors_data$instrument[
-                      nrow(sensors_data$instrument),
-                      paste0("sensor", i, "_id")
-                    ],
-                  "sensor_id"
-                ]
-                type_id <- sensors_data$sensors[
-                  sensors_data$sensors$sensor_id == sensor_id,
-                  "sensor_type"
-                ]
-                sensor_type <- sensors_data$sensor_types[
-                  sensors_data$sensor_types$sensor_type_id == type_id,
-                  "sensor_type"
-                ]
-
-                updateActionButton(
-                  session,
-                  paste0("sensor", i, "_show"),
-                  label = HTML(paste0("Slot ", i, "<br>", sensor_type))
-                )
-                if (i == 8) {
-                  shinyjs::hide("add_sensor_type_dropdown")
-                }
-              }
-            } else {
-              shinyjs::show("add_sensor_slot")
-              shinyjs::show("new_sensor_serial")
-              shinyjs::show("add_sensor_note")
-              shinyjs::show("add_sensor_name")
-            }
-          }
-        }
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(
-      input$add_sensor_type_dropdown,
-      {
-        if (input$tab_panel != "Change/maintain sensors") {
-          return()
-        }
-        if (input$add_sensor_type_dropdown == "new") {
-          showModal(modalDialog(
-            title = "Add new sensor type",
-            textInput(ns("new_sensor_type"), "Sensor type"),
-            textInput(ns("new_sensor_desc"), "Description"),
-            actionButton(ns("add_new_sensor_type"), "Add new sensor type")
-          ))
-        }
-        shinyjs::show("add_sensor_slot")
-        shinyjs::show("new_sensor_serial")
-        shinyjs::show("add_sensor_note")
-        shinyjs::show("add_sensor_name")
-        serial_choices <- sensors_data$sensors[
-          sensors_data$sensors$sensor_type == input$add_sensor_type_dropdown,
-          "sensor_serial"
-        ]
-        updateSelectizeInput(
-          session,
-          "new_sensor_serial",
-          choices = serial_choices
-        )
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$change_sensor,
-      {
-        if (input$tab_panel != "Change/maintain sensors") {
-          return()
-        }
-        if (input$change_sensor == "new") {
-          showModal(modalDialog(
-            title = "Add new sensor type",
-            textInput(ns("new_sensor_type"), "Sensor type"),
-            textInput(ns("new_sensor_desc"), "Description"),
-            actionButton(ns("add_new_sensor_type"), "Add new sensor type")
-          ))
-        } else {
-          serial_choices <- sensors_data$sensors[
-            sensors_data$sensors$sensor_type == input$change_sensor,
-            "sensor_serial"
-          ]
-          updateSelectizeInput(
-            session,
-            "add_sensor_serial",
-            choices = serial_choices
-          )
-        }
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    ## If the user inputs a non-existent sensor, add it ############################
-    observeEvent(
-      input$new_sensor_serial,
-      {
-        if (input$new_sensor_serial %in% sensors_data$sensors$sensor_serial) {
-          shinyjs::hide("add_new_sensor_serial")
-        } else {
-          shinyjs::show("add_new_sensor_serial")
-        }
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$add_sensor_serial,
-      {
-        if (input$add_sensor_serial %in% sensors_data$sensors$sensor_serial) {
-          shinyjs::hide("add_new_sensor_serial2")
-        } else {
-          shinyjs::show("add_new_sensor_serial2")
-        }
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$add_new_sensor_serial,
-      {
-        # adding sensor via left hand side menu
-        # Add the sensor to the sensors table
-        # Show a modal so the user can input the make, model, date in service, date purchased, asset tag, and notes
-        showModal(modalDialog(
-          title = "Add a new sensor",
-          selectizeInput(
-            ns("new_sensor_make"),
-            "Make (type your own if not in yet)",
-            choices = unique(sensors_data$sensors$sensor_make),
-            options = list(create = TRUE)
-          ),
-          selectizeInput(
-            ns("new_sensor_model"),
-            "Model (type your own if not in yet)",
-            choices = unique(sensors_data$sensors$sensor_model),
-            options = list(create = TRUE)
-          ),
-          textInput(ns("new_sensor_asset_tag"), "Asset tag (optional)"),
-          dateInput(
-            ns("new_sensor_date_purchased"),
-            "Date purchased (if known)",
-            value = ""
-          ),
-          dateInput(
-            ns("new_sensor_date_in_service"),
-            "Date in service (if known)",
-            value = ""
-          ),
-          textAreaInput(ns("new_sensor_notes"), "Notes (optional)"),
-          actionButton(ns("add_sensor_to_db"), "Add sensor")
-        ))
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$add_new_sensor_serial2,
-      {
-        # adding sensor via instrument maintenance view table
-        # Add the sensor to the sensors table
-        # Show a modal so the user can input the make, model, date in service, date purchased, asset tag, and notes
-        showModal(modalDialog(
-          title = "Add a new sensor",
-          selectizeInput(
-            ns("new_sensor_make"),
-            "Make (type your own if not in yet)",
-            choices = unique(sensors_data$sensors$sensor_make),
-            options = list(create = TRUE)
-          ),
-          selectizeInput(
-            ns("new_sensor_model"),
-            "Model (type your own if not in yet)",
-            choices = unique(sensors_data$sensors$sensor_model),
-            options = list(create = TRUE)
-          ),
-          textInput(ns("new_sensor_asset_tag"), "Asset tag (optional)"),
-          dateInput(
-            ns("new_sensor_date_purchased"),
-            "Date purchased",
-            value = ""
-          ),
-          dateInput(
-            ns("new_sensor_date_in_service"),
-            "Date in service",
-            value = ""
-          ),
-          textAreaInput(ns("new_sensor_notes"), "Notes (optional)"),
-          actionButton(ns("add_sensor_to_db2"), "Add sensor")
-        ))
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$add_sensor_to_db,
-      {
-        # adding sensor via left hand side menu
-        if (input$new_sensor_make == "" || input$new_sensor_model == "") {
-          showNotification(
-            "Make and Model are required fields.",
-            type = "error"
-          )
-          return()
-        }
-
-        tbl <- data.frame(
-          "sensor_type" = input$add_sensor_type_dropdown,
-          "sensor_serial" = input$new_sensor_serial,
-          "sensor_make" = input$new_sensor_make,
-          "sensor_model" = input$new_sensor_model,
-          "sensor_asset_tag" = if (nchar(input$new_sensor_asset_tag) > 0) {
-            input$new_sensor_asset_tag
-          } else {
-            NA
-          },
-          "date_purchased" = if (length(input$new_sensor_date_purchased) > 0) {
-            input$new_sensor_date_purchased
-          } else {
-            NA
-          },
-          "date_in_service" = if (
-            length(input$new_sensor_date_in_service) > 0
-          ) {
-            input$new_sensor_date_in_service
-          } else {
-            NA
-          },
-          "sensor_notes" = if (nchar(input$new_sensor_notes) > 0) {
-            input$new_sensor_notes
-          } else {
-            NA
-          }
-        )
-        DBI::dbAppendTable(session$userData$AquaCache, "sensors", tbl)
-
-        removeModal()
-        shinyjs::hide("add_new_sensor_serial")
-
-        # load the sensors table again
-        sensors_data$sensors <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT * FROM sensors"
-        )
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    observeEvent(
-      input$add_sensor_to_db2,
-      {
-        # adding sensor via instrument maintenance view table
-        if (input$new_sensor_make == "" || input$new_sensor_model == "") {
-          showNotification(
-            "Make and Model are required fields.",
-            type = "error"
-          )
-          return()
-        }
-
-        tbl <- data.frame(
-          "sensor_type" = input$change_sensor,
-          "sensor_serial" = input$add_sensor_serial,
-          "sensor_make" = input$new_sensor_make,
-          "sensor_model" = input$new_sensor_model,
-          "sensor_asset_tag" = if (nchar(input$new_sensor_asset_tag) > 0) {
-            input$new_sensor_asset_tag
-          } else {
-            NA
-          },
-          "date_purchased" = if (length(input$new_sensor_date_purchased) > 0) {
-            input$new_sensor_date_purchased
-          } else {
-            NA
-          },
-          "date_in_service" = if (
-            length(input$new_sensor_date_in_service) > 0
-          ) {
-            input$new_sensor_date_in_service
-          } else {
-            NA
-          },
-          "sensor_notes" = if (nchar(input$new_sensor_notes) > 0) {
-            input$new_sensor_notes
-          } else {
-            NA
-          }
-        )
-        DBI::dbAppendTable(session$userData$AquaCache, "sensors", tbl)
-
-        removeModal()
-        shinyjs::hide("add_new_sensor_serial2")
-
-        # load the sensors table again
-        sensors_data$sensors <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT * FROM sensors"
-        )
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    ## Add a sensor to a new slot, or modify a sensor added in this same session ############################
-    observeEvent(
-      input$add_sensor_slot,
-      {
-        #find out if an entry already has the timestamp sensors_data$datetime for this same instrument (sensors_data$instrument is already subset to the instrument_id)
-        if (length(sensors_data$instrument$obs_datetime) == 0) {
-          sensors_data$datetime_exists <- FALSE
-        } else {
-          sensors_data$datetime_exists <- latest_sensor_event_matches(
-            sensors_data$instrument$obs_datetime,
-            sensors_data$datetime
-          )
-        }
-
-        sensor_id <- sensors_data$sensors[
-          sensors_data$sensors$sensor_serial == input$new_sensor_serial,
-          "sensor_id"
-        ]
-        type_id <- sensors_data$sensors[
-          sensors_data$sensors$sensor_id == sensor_id,
-          "sensor_type"
-        ]
-        type <- sensors_data$sensor_types[
-          sensors_data$sensor_types$sensor_type_id == type_id,
-          "sensor_type"
-        ]
-
-        comment <- paste0(
-          "Added a new sensor via app: ",
-          type,
-          ", serial no ",
-          input$new_sensor_serial,
-          " added."
-        )
-
-        col_id <- paste0("sensor", sensors_data$number + 1, "_id")
-        col_comment <- paste0("sensor", sensors_data$number + 1, "_notes")
-
-        if (sensors_data$datetime_exists) {
-          #modifying an existing entry
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            paste0(
-              "UPDATE array_maintenance_changes SET ",
-              col_id,
-              " = ",
-              sensor_id,
-              ", ",
-              col_comment,
-              " = '",
-              comment,
-              "' WHERE obs_datetime BETWEEN '",
-              sensors_data$datetime - 5,
-              "' AND '",
-              sensors_data$datetime + 5,
-              "' AND instrument_id = ",
-              sensors_data$instrument_id,
-              ";"
-            )
-          )
-        } else {
-          # Creating a new entry, starting out with the last entry in the array_maintenance_changes table so that sensor changes are noted
-          # Take the final row of the array_maintenance_changes table and replace fields
-          if (nrow(sensors_data$instrument) == 0) {
-            # Nothing to go off of, so make a new df to append
-            df <- data.frame(instrument_id = sensors_data$instrument_id)
-          } else {
-            df <- sensors_data$instrument[
-              nrow(sensors_data$instrument),
-              c(
-                "instrument_id",
-                "sensor1_id",
-                "sensor2_id",
-                "sensor3_id",
-                "sensor4_id",
-                "sensor5_id",
-                "sensor6_id",
-                "sensor7_id",
-                "sensor8_id"
-              )
-            ]
-          }
-          df$obs_datetime <- sensors_data$datetime
-          df$observer <- input$add_sensor_name
-
-          df[[col_id]] <- sensor_id
-          df[[col_comment]] <- comment
-
-          DBI::dbAppendTable(
-            session$userData$AquaCache,
-            "array_maintenance_changes",
-            df
-          )
-        }
-        #Load the array_maintenance_changes table again
-        sensors_data$instrument <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          paste0(
-            "SELECT * FROM array_maintenance_changes WHERE instrument_id = ",
-            sensors_data$instrument_id
-          )
-        )
-        # Increment the number of sensors
-        sensors_data$number <- sensors_data$number + 1
-
-        shinyjs::show(paste0("sensor", sensors_data$number, "_show")) # show the new sensor button
-        shinyjs::removeClass(
-          ns(paste0("sensor", sensors_data$number, "_show")),
-          "hidden"
-        )
-        shinyjs::hide("add_sensor_name")
-        shinyjs::hide("add_sensor_slot")
-        shinyjs::hide("new_sensor_serial")
-        shinyjs::hide("add_sensor_note")
-
-        lab <- paste0("Slot ", sensors_data$number, "<br>", type)
-        updateActionButton(
-          session,
-          paste0("sensor", sensors_data$number, "_show"),
-          label = HTML(lab)
-        )
-        sensors_data$datetime_exists <- TRUE
-      },
-      ignoreInit = TRUE,
-      ignoreNULL = TRUE
-    )
-
-    ## Show table for individual sensors when user clicks on _show button ########################################
-    # Make a function to reduce repetitive code
-    showSensorDetails <- function(sensor_index) {
-      sensor_id_col <- paste0("sensor", sensor_index, "_id")
-      sensor_notes_col <- paste0("sensor", sensor_index, "_notes")
-      sensor_details_name <- paste0("sensor", sensor_index, "_details")
-      sensors_data$selected <- paste0("sensor", sensor_index)
-
-      sub <- merge(
-        sensors_data$sensors[
-          sensors_data$sensors$sensor_id ==
-            sensors_data$instrument[, sensor_id_col],
-          c("sensor_type", "sensor_id", "sensor_serial")
-        ],
-        sensors_data$sensor_types[, c("sensor_type_id", "sensor_type")],
-        by.x = "sensor_type",
-        by.y = "sensor_type_id",
-        sort = FALSE
-      )
-      sub <- merge(
-        sub,
-        sensors_data$instrument[, c(
-          "obs_datetime",
-          sensor_notes_col,
-          sensor_id_col,
-          "observer"
-        )],
-        by.x = "sensor_id",
-        by.y = sensor_id_col,
-        sort = FALSE
-      )
-      sub <- merge(
-        sub,
-        instruments_data$observers[, c("observer_id", "observer_string")],
-        by.x = "observer",
-        by.y = "observer_id",
-        sort = FALSE
-      )
-
-      sensors_data$datetime_exists <- latest_sensor_event_matches(
-        sensors_data$instrument$obs_datetime,
-        sensors_data$datetime
-      )
-
-      df <- data.frame(
-        "Date/time" = substr(sub$obs_datetime, 1, 16),
-        "Type" = sub$sensor_type.y,
-        "Serial" = sub$sensor_serial,
-        "Notes" = sub[, sensor_notes_col],
-        "Observer" = sub$observer_string,
-        check.names = FALSE
-      )
-      df <- df[!is.na(df$Notes), ]
-
-      sensors_data[[sensor_details_name]] <- df
-
-      output[[sensor_details_name]] <- DT::renderDT(df, rownames = FALSE)
-
-      # Update inputs with the sensor's *current* details
-      updateSelectizeInput(
-        session,
-        "change_sensor",
-        selected = sub[nrow(sub), "sensor_type"]
-      )
-      serial_choices <- sensors_data$sensors[
-        sensors_data$sensors$sensor_type == input$change_sensor,
-        "sensor_serial"
-      ]
-
-      if (sensors_data$datetime_exists) {
-        # Determine if the user is making an edit (i.e. they visited this sensor already in this session) or if they're saving anew
-        if (
-          sensors_data$instrument[
-            sensors_data$instrument$obs_datetime == sensors_data$datetime,
-            "instrument_id"
-          ] ==
-            sensors_data$instrument_id
-        ) {
-          updateSelectizeInput(
-            session,
-            "add_sensor_serial",
-            choices = serial_choices,
-            selected = sub[nrow(sub), "sensor_serial"]
-          )
-          updateTextAreaInput(
-            session,
-            "add_comment",
-            value = sensors_data$instrument[
-              nrow(sensors_data$instrument),
-              sensor_notes_col
-            ]
-          )
-          output$sensor_change_name <- renderUI({
-            selectizeInput(
-              ns("sensor_change_name"),
-              label = "Observer name",
-              choices = select_data$recorder,
-              selected = sensors_data$instrument[
-                nrow(sensors_data$instrument),
-                "observer"
-              ]
-            )
-          })
-          updateActionButton(
-            session,
-            "submit_sensor_change",
-            label = "Save edits"
-          )
-        }
-      } else {
-        updateSelectizeInput(
-          session,
-          "add_sensor_serial",
-          choices = serial_choices,
-          selected = ""
-        )
-        updateTextAreaInput(session, "add_comment", value = "")
-        updateActionButton(
-          session,
-          "submit_sensor_change",
-          label = "Submit New Record"
-        )
-      }
-      # Hide other sensor details and show the current sensor details
-      for (i in 1:8) {
-        if (i == sensor_index) {
-          shinyjs::show(paste0("sensor", i, "_details"))
-          shinyjs::runjs(sprintf(
-            'document.getElementById("%s").style.color = "#00BFFF";',
-            ns(paste0("sensor", i, "_show"))
-          ))
-        } else {
-          shinyjs::hide(paste0("sensor", i, "_details"))
-          shinyjs::runjs(sprintf(
-            'document.getElementById("%s").style.color = "#000000";',
-            ns(paste0("sensor", i, "_show"))
-          ))
-        }
-      }
-      shinyjs::show("change_sensor")
-      shinyjs::show("add_comment")
-      shinyjs::show("sensor_change_name")
-      shinyjs::show("add_sensor_serial")
-      shinyjs::hide("manage_sensors_table")
-      shinyjs::show("submit_sensor_change")
-      shinyjs::show("sensor_change_note")
-    }
-
-    # Apply function to each sensor button
-    observeEvent(
-      input$sensor1_show,
-      {
-        showSensorDetails(1)
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$sensor2_show,
-      {
-        showSensorDetails(2)
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$sensor3_show,
-      {
-        showSensorDetails(3)
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$sensor4_show,
-      {
-        showSensorDetails(4)
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$sensor5_show,
-      {
-        showSensorDetails(5)
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$sensor6_show,
-      {
-        showSensorDetails(6)
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$sensor7_show,
-      {
-        showSensorDetails(7)
-      },
-      ignoreInit = TRUE
-    )
-    observeEvent(
-      input$sensor8_show,
-      {
-        showSensorDetails(8)
-      },
-      ignoreInit = TRUE
-    )
-
-    ## Save changes to a sensor's details ########################################
-    observeEvent(
-      input$submit_sensor_change,
-      {
-        comment_text <- trimws(
-          if (is.null(input$add_comment)) "" else input$add_comment
-        )
-        sensor_serial_text <- trimws(
-          if (is.null(input$add_sensor_serial)) "" else input$add_sensor_serial
-        )
-        if (is.null(input$sensor_change_name)) {
-          alert(
-            "Please fill in all fields!",
-            "You need a few more characters if you've already written something. Come on, make us a useful note!",
-            type = "error",
-            timer = 3000
-          )
-          return()
-        } else if (
-          input$sensor_change_name == "" ||
-            nchar(comment_text) < 5 ||
-            nchar(sensor_serial_text) < 2
-        ) {
-          alert(
-            "Please fill in all fields!",
-            "You need a few more characters if you've already written something. Come on, make us a useful note!",
-            type = "error",
-            timer = 3000
-          )
-          return()
-        } else {
-          #add the data to the array_maintenance_changes table
-          # Check if the datetime exists in the instrument table, which means we're editing an entry from this same session
-          sensors_data$datetime_exists <- latest_sensor_event_matches(
-            sensors_data$instrument$obs_datetime,
-            sensors_data$datetime
-          )
-
-          sensor_id <- sensors_data$sensors[
-            sensors_data$sensors$sensor_serial == input$add_sensor_serial,
-            "sensor_id"
-          ]
-
-          col_id <- paste0(sensors_data$selected, "_id")
-          col_comment <- paste0(sensors_data$selected, "_notes")
-
-          if (sensors_data$datetime_exists) {
-            # Update the existing row
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              paste0(
-                "UPDATE array_maintenance_changes SET ",
-                col_id,
-                " = ",
-                sensor_id,
-                ", ",
-                col_comment,
-                " = ",
-                sql_string_or_null(comment_text),
-                " WHERE obs_datetime = ",
-                sql_string_or_null(as.character(sensors_data$datetime)),
-                " AND instrument_id = ",
-                sensors_data$instrument_id,
-                ";"
-              )
-            )
-            run_else <- FALSE
-          } else {
-            #append to array_maintenance_changes with a new row
-            # Take the final row of the array_maintenance_changes table and replace fields. Remove notes from all other sensors; they don't share a datetime with the current session.
-            df <- sensors_data$instrument[
-              nrow(sensors_data$instrument),
-              c(
-                "instrument_id",
-                "sensor1_id",
-                "sensor2_id",
-                "sensor3_id",
-                "sensor4_id",
-                "sensor5_id",
-                "sensor6_id",
-                "sensor7_id",
-                "sensor8_id"
-              )
-            ]
-            df$obs_datetime <- sensors_data$datetime
-            df$observer <- input$sensor_change_name
-
-            df[[col_id]] <- sensor_id
-            df[[col_comment]] <- input$add_comment
-
-            DBI::dbAppendTable(
-              session$userData$AquaCache,
-              "array_maintenance_changes",
-              df
-            )
-          }
-          #Load the array_maintenance_changes table again
-          sensors_data$instrument <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            paste0(
-              "SELECT * FROM array_maintenance_changes WHERE instrument_id = ",
-              sensors_data$instrument_id
-            )
-          )
-
-          #render table again and update buttons
-          showSensorDetails(gsub("\\D", "", sensors_data$selected))
-
-          type_id <- sensors_data$sensors[
-            sensors_data$sensors$sensor_id == sensor_id,
-            "sensor_type"
-          ]
-          type <- sensors_data$sensor_types[
-            sensors_data$sensor_types$sensor_type_id == type_id,
-            "sensor_type"
-          ]
-          lab <- paste0(
-            "Slot ",
-            gsub("\\D", "", sensors_data$selected),
-            "<br>",
-            type
-          )
-
-          updateActionButton(
-            session,
-            paste0("sensor", gsub("\\D", "", sensors_data$selected), "_show"),
-            label = HTML(lab)
-          )
-
-          updateActionButton(
-            session,
-            "submit_sensor_change",
-            label = "Save edits"
-          )
-        }
-      },
-      ignoreInit = TRUE
-    )
 
     # Restart a calibration ##############################################################################
     observeEvent(
@@ -4085,6 +2458,7 @@ table.on("click", "tr", function() {
             timer = 3000
           )
         } else {
+          refresh_observer_choices()
           shinyjs::show("restart_table")
           send_table$restarted_cal <- data.frame(
             "Saved records (recovered session)" = entry_display_labels$basic,
@@ -4097,6 +2471,12 @@ table.on("click", "tr", function() {
           ])
           calibration_data$next_id <- incomplete_ID
           calibration_data$restarted_id <- incomplete_ID
+          calibration_data$restart_observer <- observer_select_value(
+            calibrations$incomplete_calibrations[
+              restart_value,
+              "observer"
+            ]
+          )
 
           # Search for entries in parameter-specific sheets with the same calibration_id and update the fields
           all_sheets <- DBI::dbListTables(session$userData$AquaCache)
@@ -4414,17 +2794,9 @@ table.on("click", "tr", function() {
             }
           }
           # Reset the basic fields according to recovered info
-          output$observer <- renderUI({
-            selectizeInput(
-              ns("observer"),
-              label = "Calibrator name",
-              choices = select_data$recorder,
-              selected = select_data$recorder[calibrations$incomplete_calibrations[
-                restart_value,
-                "observer"
-              ]]
-            )
-          })
+          render_observer_input(
+            selected = calibration_data$restart_observer
+          )
           shinyWidgets::updateAirDateInput(
             session,
             "obs_datetime",
@@ -4624,6 +2996,7 @@ table.on("click", "tr", function() {
             shinyjs::hide("restart_table")
             restarted$restarted <- FALSE
             calibration_data$restarted_id <- 0
+            calibration_data$restart_observer <- NULL
             calibration_data$next_id <- NULL
           }
           alert("Deleted", type = "success", timer = 2000)
@@ -4672,6 +3045,33 @@ table.on("click", "tr", function() {
       },
       ignoreInit = TRUE
     )
+
+    do_saturation_mgl <- function(temp_c, pressure_bar) {
+      temp_k <- temp_c + 273.15
+      vapor <- exp(
+        24.4543 -
+          67.4509 * (100 / temp_k) -
+          4.8489 * log(temp_k / 100)
+      )
+      solubility <- exp(
+        -58.3877 +
+          85.8079 * (100 / temp_k) +
+          23.8439 * log(temp_k / 100)
+      ) /
+        22.4136 *
+        1e6 /
+        1.013253
+      solubility * pressure_bar * 0.20946 * (1 - vapor) * 31.9988 / 1000
+    }
+
+    convert_do <- function(value, from, temp_c, pressure_bar) {
+      saturation_mgl <- do_saturation_mgl(temp_c, pressure_bar)
+      if (identical(from, "percent_air")) {
+        value * saturation_mgl / 100
+      } else {
+        value / saturation_mgl * 100
+      }
+    }
 
     #Function to simplify DO calculated fields later on
     DO_calc <- function(pre_post, prct_abs, messages = TRUE) {
@@ -4770,14 +3170,16 @@ table.on("click", "tr", function() {
         }
       }
       if (!is.na(meas) & meas > 0 & go_baro & go_temp) {
-        res <- suppressWarnings(respR::convert_DO(
+        res <- convert_do(
           meas,
-          from = if (grepl("prct", trigger_name)) "%Air" else "mg/l",
-          to = if (grepl("prct", trigger_name)) "mg/l" else "%Air",
-          S = 0,
-          t = temp,
-          P = baro_press / 750.06156130264
-        ))
+          from = if (grepl("prct", trigger_name)) {
+            "percent_air"
+          } else {
+            "mg_l"
+          },
+          temp_c = temp,
+          pressure_bar = baro_press / 750.06156130264
+        )
         updateNumericInput(session, update_name, value = round(res, 2))
         if (messages) {
           alert(
@@ -5113,15 +3515,7 @@ table.on("click", "tr", function() {
                   ""
                 },
                 if (warn_mv_post) {
-                  paste(
-                    if (ph_check_only) {
-                      "Observed"
-                    } else {
-                      "As-left"
-                    },
-                    "mV values are outside of the valid range;",
-                    "consider replacing the electrode or sensor."
-                  )
+                  "mV values are outside of the valid range (pH 7 = -50 to +50; pH 4 = pH 7 value + 165 to 180; pH 10 = pH 7 value -165 to 180); consider replacing the sensor cap."
                 }
               )
               # Show a modal to the user to confirm that they are sure about their entries
@@ -6759,6 +5153,7 @@ table.on("click", "tr", function() {
         calibration_data$do <- NULL
         calibration_data$depth <- NULL
         calibration_data$restarted_id <- 0
+        calibration_data$restart_observer <- NULL
         # Reset tables
         send_table$saved <- data.frame(
           "Saved records" = "Nothing saved yet",

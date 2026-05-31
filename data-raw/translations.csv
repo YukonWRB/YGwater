@@ -1,6 +1,9 @@
 id,description,English,Français
 titleCase,Sets language to use in titleCase function,en,fr
-title,the page/website title,Yukon Water Data Explorer,Explorateur des données sur l’eau du Yukon
+title_yg,the page/website title,Water Data Explorer,Explorateur des données sur l’eau
+title_public,the page/website title for public deployment,Water Data Explorer - Public,Explorateur des données sur l’eau - public
+SEO_desc_yg,search engine description for Yukon Gov deployment,"Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads.","Explorez les donnees yukonnaises sur l'eau de surface, les eaux souterraines, l'hydrometrie, la neige et la qualite de l'eau au moyen de cartes, graphiques, tableaux et telechargements interactifs."
+SEO_desc_public,search engine description for public deployment,"Explore water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads. This is a public adaptation of the Yukon's Water Data Explorer","Explorez les données sur l'eau de surface, les eaux souterraines, l'hydrométrie, la neige et la qualité de l'eau au moyen de cartes, graphiques, tableaux et téléchargements interactifs. Il s'agit d'une adaptation publique de l'explorateur de données sur l'eau du Yukon."
 home,homeNavTitle,Home,Accueil
 maps,mapsNavMenuTitle,Maps,Cartes
 maps_locs,mapsNavLocsTitle,Monitoring locations,Points de surveillance
@@ -40,8 +43,10 @@ info_about,infoNavAboutTitle,About,À propos
 info_news,infoNavNewsTitle,Updates and changes,Mises à jour
 fod_comments,FODNavTitle,Forecaster comments,Commentaires du prévisionniste
 wwr_title,Well Registry title,Water Well Registry,Registre des puits d'eau
-homeTitle,Home page welcome message heading,Welcome to the Yukon Water Data Explorer,Bienvenue sur l'explorateur de données sur l'eau du Yukon
-homeText,Home page welcome message,"This application hosts real-time and historic water and climate data for the Yukon and surrounding regions gathered by the Government of Yukon and partners. You'll find data related to water quality (temperature, chemistry) and quantity (level/flow) along with snowpack measurements, precipitation, temperature data - and more.","Cette application donne accès à des données hydrologiques et climatiques passées et en temps réel pour le Yukon et les régions environnantes. Ces données sont recueillies par le gouvernement du Yukon et ses partenaires. Elle réunit des données sur la qualité de l’eau (température, composition chimique) et la quantité d’eau (niveaux, débits), ainsi que sur l’enneigement, les précipitations et la température, entre autres mesures."
+homeTitle_yg,Home page welcome message heading,Welcome to the Yukon Water Data Explorer,Bienvenue sur l'explorateur de données sur l'eau du Yukon
+homeTitle_public,Home page welcome message heading,Welcome to the Water Data Explorer (public adaptation),Bienvenue sur l'explorateur de données sur l'eau (adaptation publique)
+homeText_yg,Home page welcome message,"This application hosts real-time and historic water and climate data for the Yukon and surrounding regions gathered by the Government of Yukon and partners. You'll find data related to water quality (temperature, chemistry) and quantity (level/flow) along with snowpack measurements, precipitation, temperature data - and more.","Cette application donne accès à des données hydrologiques et climatiques passées et en temps réel pour le Yukon et les régions environnantes. Ces données sont recueillies par le gouvernement du Yukon et ses partenaires. Elle réunit des données sur la qualité de l’eau (température, composition chimique) et la quantité d’eau (niveaux, débits), ainsi que sur l’enneigement, les précipitations et la température, entre autres mesures."
+homeText_public,Home page welcome message,"This application hosts real-time and historic water and climate data. This is a public, free-to-use adaptation of the Yukon's Water Data Explorer, an application developed to share data with the public. You'll find data related to water quality (temperature, chemistry) and quantity (level/flow) along with snowpack measurements, precipitation, temperature data - and more.","Cette application donne accès à des données hydrologiques et climatiques passées et en temps réel. Il s'agit d'une adaptation publique et gratuite de l'explorateur de données sur l'eau du Yukon, une application développée pour partager les données avec le public. Elle réunit des données sur la qualité de l’eau (température, composition chimique) et la quantité d’eau (niveaux, débits), ainsi que sur l’enneigement, les précipitations et la température, entre autres mesures."
 home_discrete_continuous_title,Explainer for discrete vs continuous,How we organize our data,Au sujet de l'organisation des données
 home_discrete_continuous,Explainer for discrete vs continuous,"We sort data as <b>discrete</b> or <b>continuous</b>. This depends on:<ul><li>measurement frequency</li><li>how the measurement was made</li><li>other relevant metadata</li></ul><br><b>What is discrete data?</b><br> Discrete data are snapshot observations collected manually (e.g.&nbspsnow depth) or by laboratory analysis. This data must have a description of how it was acquired, the analysis method, etc.<br><br><b>What is continuous data?</b><br>Continuous data is collected at regular, frequent intervals (e.g.&nbsphourly), mostly using automated instruments. Metadata include the instrument type and recording conditions.<br><br>","Les données sont classées en deux catégories : <b>discrètes</b> ou <b>continues</b>. Leur classement dépend de plusieurs facteurs :<ul><li>la fréquence des mesures;</li><li>la méthode de mesure;</li><li>d'autres métadonnées pertinentes.</li></ul><br><b>Que sont les données discrètes ?</b><br>Les données discrètes sont des observations ponctuelles recueillies manuellement (ex.&nbspprofondeur de neige) ou par analyse en laboratoire. Elles doivent être accompagnées d’une description de leur acquisition, de la méthode d’analyse, etc.<br><br><b>Que sont les données continues?</b><br>Les données continues sont collectées à intervalles réguliers et fréquents (ex.&nbspfréquence horaire), principalement à l’aide d’instruments automatisés. Les métadonnées incluent le type d’instrument utilisé et les conditions d’enregistrement.<br><br>"
 home_map_locs_btn,button text,See a map of monitoring locations,Consulter la carte des points de surveillance
@@ -251,7 +256,7 @@ map_target_date,target date for historical range map,Target date,Date ciblée
 map_actual_values,,Actual values,Valeurs actuelles
 value,,Value,Valeur
 map_relative,,% historic range,% plage historique
-map_actual_date,,Date,Date
+date,,Date,Date
 map_actual_yrs,,Years of record,Années de mesures
 map_actual_hist_range,,Historic range,Plage historique
 map_one_parameter,,One parameter,Un paramètre
@@ -315,9 +320,11 @@ add_subplot_trace_tooltip,,"Click 'Add trace' to overlay a new timeseries on the
 well_purpose,,Well purpose,Usage des puits
 well_name_contains,,Well name contains,Le nom du puits contient
 well_name_contains_placeholder,,e.g. YOWN,ex. YOWN
-well_name_starts,,Starts with,Commence par
-well_name_ends,,Ends with,Se termine par
-well_name_case_sensitive,,Case sensitive,Respect de la casse
+starts_with,,Starts with,Commence par
+ends_with,,Ends with,Se termine par
+case_sensitive,,Case sensitive,Respect de la casse
+location_name_contains,,Location name contains,Le nom du point contient
+location_name_contains_placeholder,,e.g. Yukon,ex. Yukon
 well_completion_yr,,Well completion year,Année d'achèvement
 include_unknown_well_completion,,Include wells with unknown completion year,Inclure les puits ou l'année d'achèvement est inconnue
 include_missing_well_depth,,Include wells with missing depth,Inclure les puits où la profondeur est manquante
@@ -337,7 +344,8 @@ about_fun_fact_samples,content,"We have %s samples with about %s associated resu
 about_fun_fact_wells,content,"The Water Well Registry includes %s water wells.","Le registre des puits d'eau compte %s puits d'eau."
 about_content2,content,"This web site was built using R Shiny, allowing us to take advantage of the R programming language's strengths in data handling and visualization. The application code is packaged with many other useful functions beyond those shown here, and is publicly viewable at ","Le site Web a été créé avec R Shiny, ce qui nous permet de tirer parti des points forts du langage de programmation R pour le traitement et la visualisation des données. Le progiciel qui contient le code de l’application regroupe de nombreuses autres fonctions utiles, au-delà de celles présentées ici. Il est accessible publiquement au "
 about_content3,content,"The data is stored in a database that is maintained and updated mostly through automated workflows, powered by another R package available at ","Les données sont stockées dans une base maintenue et mise à jour principalement par des flux de travail automatisés, propulsés par un autre progiciel R, disponible au "
-about_content4,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time."," Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
+about_content4_yg,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions across Yukon in real time."," Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques au Yukon."
+about_content4_public,content," This database contains continuous (timeseries) data, water chemistry data, spatial data, various types of metadata, and more, helping us paint a complete picture of water and climate conditions for the public. It is a public adaptation of the Yukon Government's AquaCache database schema."," Cette base de données contient, entre autres, des données continues (séries temporelles), des données de chimie de l’eau, des données spatiales et divers types de métadonnées qui nous aident à brosser en temps réel un portrait complet des conditions hydrologiques et climatiques dont nous disposons pour le public. Il s’agit d’une adaptation publique du schéma de base de données AquaCache du gouvernement du Yukon."
 about_content5,content,"We welcome collaborations with academic institutions and other government partners. Both R packages are licensed under AGPLv3 so that others can use and adapt these tools while ensuring that improvements remain available to the public.","Nous accueillons avec plaisir les collaborations avec des établissements universitaires et d’autres partenaires gouvernementaux. Les deux progiciels R sont distribués sous licence AGPLv3, ce qui permet à d’autres de les utiliser et de les adapter tout en veillant à ce que les améliorations demeurent accessibles au public."
 about_url_ygwater,url,https://github.com/YukonWRB/YGwater,https://github.com/YukonWRB/YGwater
 about_url_aquacache,url,https://github.com/YukonWRB/AquaCache,https://github.com/YukonWRB/AquaCache
@@ -482,8 +490,8 @@ snowbull_normal,,Normal,Normal
 snowbull_average,,Average,Moyenne
 snowbull_median,,Median,Médiane
 snowbull_reference_period,,reference period,période de référence
-snowbull_communities,,Communities,Communautés
-snowbull_roads,,Roads,Routes
+communities,,Communities,Communautés
+roads,,Roads,Routes
 snowbull_symbols,,Symbols,Symboles
 snowbull_generate_plot,,Generate plot,Générer le graphique
 snowbull_mean_elevation,,Mean elevation,Altitude moyenne
@@ -493,3 +501,54 @@ isocontours,,Isocontours,Isocontours
 snowbull_raster,,Gridded Snow Water Equivalent (SWE), Équivalent en eau de neige (ÉEN) en grille
 snowbull_raster_disclaimer,, <i>Disclaimer:</i> The gridded SWE layer is created from ERA5 reanalysis data and may differ point measurements.,<i>Avertissement :</i> La couche ÉEN en grille est créée à partir des données de réanalyse ERA5 et peut différer des mesures ponctuelles.
 snowbull_to,,to,à
+disc_selector_mode,Discrete plot selector mode,Selection mode,Mode de sélection
+disc_selector_mode_tooltip,Discrete plot selector mode tooltip,"Guided selectors step through the common plotting filters. Browse samples lets you search a sample table, keep selected rows across pages and filters, then choose parameters from those samples.","Les sélecteurs guidés présentent les filtres courants du graphique étape par étape. Le mode Parcourir les échantillons permet de chercher dans un tableau d'échantillons, de conserver les lignes sélectionnées entre les pages et les filtres, puis de choisir les paramètres mesurés dans ces échantillons."
+disc_guided_selectors,Discrete plot guided selector mode,Guided selectors,Sélecteurs guidés
+disc_browse_samples,Discrete plot browse selector mode,Table selection,Sélection par tableau
+disc_season_filter,Discrete plot seasonal filter toggle,Restrict to season/day-of-year ranges,Limiter aux saisons ou aux jours de l'année
+disc_season_highlight,Discrete plot seasonal highlight toggle,Highlight season/day-of-year ranges,Mettre en évidence les saisons ou les jours de l'année
+disc_highlighted_ranges,Discrete plot highlighted season metadata label,Highlighted ranges,Intervalles mis en évidence
+disc_restricted_ranges,Discrete plot restricted season metadata label,Results restricted to season/day-of-year ranges,Résultats limités aux saisons ou aux jours de l'année
+disc_browse_help,Discrete plot browse mode help,"Use the table filters to find samples, then click rows to add them to the selection. Choose the parameters to plot in the sidebar before creating the plot.","Utilisez les filtres du tableau pour trouver des échantillons, puis cliquez sur les lignes pour les ajouter à la sélection. Choisissez les paramètres à tracer dans la barre latérale avant de créer le graphique."
+disc_filter_samples_by_parameter,Discrete plot browse sample parameter filter,Show samples with parameter(s),Afficher les échantillons ayant les paramètres
+disc_plot_parameters,Discrete plot browse plot parameter selector,Parameters to plot,Paramètres à tracer
+disc_doy_range_help,Discrete plot day-of-year range help,"Only the month/day portion of these ranges is used. Use a previous-year start and next-year end for seasons that cross New Year, such as September 1 2000 to June 1 2001.","Seuls le mois et le jour de ces intervalles sont utilisés. Pour les saisons qui traversent le nouvel an, indiquez une date de début dans l'année précédente et une date de fin dans l'année suivante, par exemple du 1 septembre 2000 au 1 juin 2001."
+disc_season_range_count,Discrete plot season range count,Number of season ranges,Nombre d'intervalles saisonniers
+disc_season_highlight_range_count,Discrete plot highlighted season range count,Number of highlighted season ranges,Nombre d'intervalles saisonniers à mettre en évidence
+one,Number word one,One,Un
+two,Number word two,Two,Deux
+three,Number word three,Three,Trois
+four,Number word four,Four,Quatre
+season,Season label,Season,Saison
+collection_method(s),Collection method selector,Collection method(s),Méthode(s) de prélèvement
+result_speciation(s),Result speciation selector,Result speciation(s),Spéciation(s) du résultat
+sample_fraction(s),Sample fraction selector,Sample fraction(s),Fraction(s) de l'échantillon
+result_value_type(s),Result value type selector,Result value type(s),Type(s) de valeur du résultat
+result_type(s),Result type selector,Result type(s),Type(s) de résultat
+disc_sample_result_filters,Discrete plot sample/result filter heading,Sample/result filters,Filtres des échantillons/résultats
+disc_show_blank_samples,Discrete plot blank sample toggle,Show blank samples,Afficher les blancs
+disc_duplicate_samples,Discrete plot duplicate sample control,Duplicate/replicate samples,Échantillons en double/réplicats
+disc_duplicates_show,Discrete plot duplicate show option,Show individually,Afficher individuellement
+disc_duplicates_average,Discrete plot duplicate average option,Average matching samples,Calculer la moyenne des échantillons correspondants
+disc_duplicates_hide,Discrete plot duplicate hide option,Hide duplicate/replicate samples,Masquer les échantillons en double/réplicats
+disc_no_additional_filters,Discrete plot no additional filters message,No additional filters are available for the current selection.,Aucun filtre supplémentaire n'est disponible pour la sélection actuelle.
+disc_more_sample_result_filters,Discrete plot advanced filters accordion,More sample/result filters,Autres filtres des échantillons/résultats
+samples,Generic samples label,Samples,Échantillons
+disc_selected_samples_parameters,Discrete plot browse selected panel heading,Selected samples and parameters,Échantillons et paramètres sélectionnés
+disc_no_samples_match_filters,Discrete plot browse no samples message,No samples match the current filters.,Aucun échantillon ne correspond aux filtres actuels.
+sample_id,Sample ID label,Sample ID,ID d'échantillon
+id_label,ID label,ID,ID
+sample_type,Sample type label,Sample type,Type d'échantillon
+collection_method,Collection method label,Collection method,Méthode de prélèvement
+results,Results label,Results,Résultats
+disc_select_rows_parameter_list,Discrete plot browse parameter hint,Select sample rows to focus this parameter list.,Sélectionnez des lignes d'échantillons pour cibler cette liste de paramètres.
+disc_sample_must_include,Discrete plot browse parameter match label,Sample must include,L'échantillon doit inclure
+disc_any_selected_parameter,Discrete plot browse any parameter option,Any selected parameter,N'importe quel paramètre sélectionné
+disc_all_selected_parameters,Discrete plot browse all parameters option,All selected parameters,Tous les paramètres sélectionnés
+disc_no_samples_selected,Discrete plot browse no selected samples,No samples selected.,Aucun échantillon sélectionné.
+disc_samples_selected,Discrete plot browse selected sample count,sample(s) selected,échantillon(s) sélectionné(s)
+clear,Clear button,Clear,Effacer
+remove,Remove button,Remove,Retirer
+showing_first,Showing first label,Showing first,Affichage des premiers
+selected_samples_lc,Selected samples lowercase,selected samples,échantillons sélectionnés
+disc_select_samples_from_table,Discrete plot browse plot validation,Please select one or more samples from the table.,Sélectionnez un ou plusieurs échantillons du tableau.

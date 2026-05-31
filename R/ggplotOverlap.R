@@ -273,7 +273,7 @@ ggplotOverlap <- function(
   )
 
   if (startDay > endDay) {
-    #if the user is wanting a range overlapping the new year
+    # if the user is wanting a range overlapping the new year
     overlaps <- TRUE
     if (null_years) {
       years <- lubridate::year(Sys.Date()) - 1
@@ -492,6 +492,9 @@ ggplotOverlap <- function(
             " AND current = TRUE"
           )
         )
+        if (nrow(datum) == 0) {
+          datum <- data.frame(conversion_m = 0)
+        }
       }
     } else {
       datum <- data.frame(conversion_m = 0)

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add / edit timeseries help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+    code { background: #f3f4f5; padding: 0.1rem 0.25rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Add / edit timeseries</h1>
+  <p>Use this page to create or update continuous-data timeseries metadata in AquaCache. A timeseries defines what a continuous measurement means: where it is measured, what parameter it measures, the media and matrix state, how values are aggregated, who owns the data, who can see it, and how it may be downloaded or corrected.</p>
+
+  <h2>Add or modify mode</h2>
+  <p>Choose <strong>Add new timeseries</strong> to create a new record in <code>continuous.timeseries</code>. Choose <strong>Modify existing timeseries</strong> to select a timeseries from the table and update its metadata. In modify mode, review the selected record carefully before changing fields that affect existing data interpretation.</p>
+
+  <h2>Location and sub-location</h2>
+  <p>Select the parent location first. If the data are tied to a specific point within that location, select the sub-location as well. Missing locations and sub-locations must be created in the location tools before the timeseries is created.</p>
+
+  <h2>Timezone for daily aggregation</h2>
+  <p>The timezone field controls how AquaCache groups raw timestamps into daily statistics. It should normally match the standard local timezone for the site. This setting does not change raw timestamps; it affects daily summary boundaries. Changing it on an existing timeseries may require recalculating statistics from the beginning of the record.</p>
+
+  <h2>Elevation or depth</h2>
+  <p>Use elevation or depth when measurement height matters for interpretation, such as air temperature height, wind sensor height, water level reference point, or sensor depth. Existing values for the selected location or sub-location are shown; type a new numeric value if needed.</p>
+
+  <h2>Parameter, media, and matrix state</h2>
+  <p>Select the parameter, media, and matrix state together. Matrix states are only available when the parameter has units configured for that state. If the expected matrix state is missing, update the parameter reference data first, then reload this module.</p>
+
+  <h2>Aggregation type and record rate</h2>
+  <p>The aggregation type describes how values represent time, such as instantaneous values or means over an interval. The record rate should describe the recent collection interval, such as 5 minutes, 1 hour, or 1 day. Use a reasonably accurate rate because it affects expectations for gaps, summaries, and historical range calculations.</p>
+
+  <h2>Sensor priority</h2>
+  <p>Sensor priority distinguishes primary, secondary, and tertiary sources for the same parameter or site. Use primary for the preferred operational record and lower priorities for backups or alternate sensors.</p>
+
+  <h2>Owner, sharing agreement, and access</h2>
+  <p>The default owner is applied to uploaded data when no owner is specified at upload time. If the owner has an associated data sharing agreement, select the relevant agreement so compliance can be tracked. Use <strong>Share with groups</strong> to control which database roles can see the timeseries; <code>public_reader</code> makes it broadly visible.</p>
+
+  <h2>Instrument association</h2>
+  <p>Use the optional instrument association when the timeseries is produced by a currently deployed instrument. The list is filtered to deployments for the selected location and sub-location. Linking the timeseries to the deployment preserves which instrument produced the measurements and connects the data to deployment, recovery, calibration, maintenance, and telemetry context.</p>
+  <p>If a deployment uses connection-signal metadata, manage the timeseries link under the Acquisition / telemetry tools. Those links are stored at the signal level and should not be replaced by a direct deployment-timeseries link.</p>
+
+  <h2>Auto-download options</h2>
+  <p>Use a source function when AquaCache should fetch data automatically from an external source. Source functions are AquaCache functions whose names begin with <code>download</code>. Leave this section blank for manually uploaded data or data loaded through other workflows. Source function arguments must be entered as key-value pairs that can be converted to JSON.</p>
+
+  <h2>Automatic corrections and filters</h2>
+  <p>When creating a new timeseries, you can add broad default corrections such as trim or linear offset corrections. These corrections are inserted with broad UTC bounds. Use them only when the correction should apply generally to the timeseries. Existing corrections are shown in modify mode to help avoid duplicates.</p>
+
+  <h2>Before saving</h2>
+  <p>Confirm the location, sub-location, parameter, media, matrix state, unit, aggregation type, record rate, timezone, owner, sharing agreement, access groups, and instrument association. After creating the timeseries, use <strong>Add continuous data</strong> to append measurements.</p>
+</body>
+</html>

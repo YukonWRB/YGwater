@@ -292,8 +292,8 @@ get_dynamic_style_elements <- function(
     relative_bins <- c(-Inf, -2, -1, 0, 50, 70, 90, 110, 130, 150, Inf)
     relative_colors <- c(
         "gray", # Gray (NA/NaN values)
-        "#d04900", # Green (much below normal)
-        "#307e0c", # Purple (below normal)
+        "#27A62C", # Green (No snow present where historical median is zero)
+        "#B200DD", # Purple (Snow present where historical median is zero)
         "#EBB966", # Orange (near normal)
         "#EEE383", # Yellow (normal)
         "#C1FB80", # Light green (above normal)
@@ -622,31 +622,135 @@ get_latest_bulletin_month_year <- function(
 #' @return Character string containing the full self-contained HTML of the widget
 #' @noRd
 render_leaflet_widget_html <- function(widget) {
-    requireNamespace("pandoc")
-
-    tryCatch(
-        {
-            loc <- pandoc::pandoc_locate()
-        },
-        error = function(e) {
-            loc <<- pandoc::pandoc_bin()
-        }
-    )
-    if (is.null(loc)) {
-        message("Installing pandoc...")
-        pandoc::pandoc_install(force = TRUE)
+    if (!requireNamespace("base64enc", quietly = TRUE)) {
+        stop("Package 'base64enc' is required to render leaflet map HTML.")
+    }
+    if (!requireNamespace("htmlwidgets", quietly = TRUE)) {
+        stop("Package 'htmlwidgets' is required to render leaflet map HTML.")
     }
 
-    tmp_file <- tempfile(fileext = ".html")
-    on.exit(unlink(tmp_file), add = TRUE)
+    mime_type <- function(path) {
+        switch(
+            tolower(tools::file_ext(path)),
+            css = "text/css",
+            js = "application/javascript",
+            json = "application/json",
+            png = "image/png",
+            gif = "image/gif",
+            jpg = "image/jpeg",
+            jpeg = "image/jpeg",
+            svg = "image/svg+xml",
+            woff = "font/woff",
+            woff2 = "font/woff2",
+            ttf = "font/ttf",
+            eot = "application/vnd.ms-fontobject",
+            "application/octet-stream"
+        )
+    }
+
+    data_uri <- function(path, text = NULL) {
+        if (is.null(text)) {
+            return(base64enc::dataURI(file = path, mime = mime_type(path)))
+        }
+
+        paste0(
+            "data:",
+            mime_type(path),
+            ";base64,",
+            base64enc::base64encode(charToRaw(text), newline = FALSE)
+        )
+    }
+
+    inline_css_urls <- function(css, css_file) {
+        matches <- gregexpr("url\\(([^)]+)\\)", css, perl = TRUE)
+        matched_results <- regmatches(css, matches)
+
+        if (
+            length(matched_results) == 0L || length(matched_results[[1]]) == 0L
+        ) {
+            return(css)
+        }
+
+        css_urls <- matched_results[[1]]
+
+        for (css_url in unique(css_urls)) {
+            path <- sub("^url\\((.*)\\)$", "\\1", css_url)
+            path <- trimws(path)
+            path <- sub("^['\"]", "", path)
+            path <- sub("['\"]$", "", path)
+
+            if (grepl("^(data:|https?:|//|#)", path, ignore.case = TRUE)) {
+                next
+            }
+
+            path_no_fragment <- sub("[?#].*$", "", path)
+            local_path <- file.path(
+                dirname(css_file),
+                utils::URLdecode(path_no_fragment)
+            )
+
+            if (!file.exists(local_path)) {
+                next
+            }
+
+            css <- gsub(
+                css_url,
+                paste0("url(\"", data_uri(local_path), "\")"),
+                css,
+                fixed = TRUE
+            )
+        }
+
+        css
+    }
+
+    tmp_dir <- tempfile("leaflet-widget-")
+    dir.create(tmp_dir)
+    on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+    tmp_file <- file.path(tmp_dir, "index.html")
+    lib_dir <- file.path(tmp_dir, "lib")
 
     htmlwidgets::saveWidget(
         widget,
         file = tmp_file,
-        selfcontained = TRUE
+        selfcontained = FALSE,
+        libdir = "lib"
     )
 
-    paste(readLines(tmp_file, warn = FALSE), collapse = "\n")
+    html <- paste(readLines(tmp_file, warn = FALSE), collapse = "\n")
+
+    if (!dir.exists(lib_dir)) {
+        return(html)
+    }
+
+    root <- normalizePath(tmp_dir, winslash = "/", mustWork = TRUE)
+    files <- list.files(lib_dir, recursive = TRUE, full.names = TRUE)
+
+    for (path in files) {
+        if (!file.exists(path)) {
+            next
+        }
+
+        normalized_path <- normalizePath(path, winslash = "/", mustWork = TRUE)
+        relative_path <- substring(normalized_path, nchar(root) + 2L)
+
+        uri <- if (tolower(tools::file_ext(path)) == "css") {
+            css <- paste(readLines(path, warn = FALSE), collapse = "\n")
+            data_uri(path, inline_css_urls(css, path))
+        } else {
+            data_uri(path)
+        }
+
+        html <- gsub(relative_path, uri, html, fixed = TRUE)
+
+        encoded_path <- utils::URLencode(relative_path, reserved = FALSE)
+        if (!identical(encoded_path, relative_path)) {
+            html <- gsub(encoded_path, uri, html, fixed = TRUE)
+        }
+    }
+
+    html
 }
 
 #' Create a self-contained HTML string for the snow bulletin leaflet map
@@ -1705,6 +1809,8 @@ download_discrete_ts <- function(
             )
         }
 
+        # ts_query <- paste0(ts_query, " LIMIT 1")
+
         ts <- DBI::dbGetQuery(con, ts_query)
 
         if (nrow(ts) == 0) {
@@ -2038,6 +2144,7 @@ get_norms <- function(
             for (station in station_names) {
                 # check data completeness (for an individual year; eg Oct-Feb for March bulletin, or March for April bulletin)
                 vals <- ts[idx, station]
+
                 if (
                     sum(!is.na(vals)) >=
                         completeness_per_aggr_period * length(vals)
@@ -2133,6 +2240,17 @@ get_bulletin_value <- function(
         vals <- ts[idx, station]
         if (sum(!is.na(vals)) < completeness_per_aggr_period * length(vals)) {
             station_current[station] <- NA
+        }
+
+        # For water level or water flow, if val is NA, try previous day (often data is entered only until the last day of the month)
+        if (param_name %in% c("water level", "water flow")) {
+            if (is.na(station_current[station])) {
+                prev_day_idx <- idx - 1
+                station_current[station] <- aggr_fun(
+                    ts[prev_day_idx, station],
+                    na.rm = TRUE
+                )
+            }
         }
     }
 
@@ -4632,30 +4750,43 @@ get_display_data <- function(
         "anomaly"
     )
     dataset_state <- to_numeric_cols(dataset_state, numeric_cols)
-
     # update the annotations to display the value for the selected type
+    # Determine the unit suffix based on statistic
+    unit_suffix <- switch(
+        statistic,
+        "relative_to_med" = "%",
+        "value" = "mm",
+        "percentile" = "th",
+        "anomalies" = "mm",
+        "%"
+    )
+
     dataset_state$annotation_fr <- paste0(
         dataset_state$annotation_fr,
         "<br>(",
         round(dataset_state[[statistic]], 0),
-        " %)"
+        " ",
+        unit_suffix,
+        ")"
     )
 
     dataset_state$annotation_en <- paste0(
         dataset_state$annotation_en,
         "<br>(",
         round(dataset_state[[statistic]], 0),
-        "%)"
+        " ",
+        unit_suffix,
+        ")"
     )
 
     dataset_state$annotation_en <- gsub(
-        "\\(NA %\\)",
+        "\\(NA [^)]*\\)",
         "(N/A)",
         dataset_state$annotation_en
     )
 
     dataset_state$annotation_fr <- gsub(
-        "\\(NA %\\)",
+        "\\(NA [^)]*\\)",
         "(s. o.)",
         dataset_state$annotation_fr
     )
@@ -5202,10 +5333,10 @@ make_leaflet_map <- function(
                         static_style_elements$roads$color,
                         static_style_elements$roads$weight
                     ),
-                    tr("snowbull_roads", language),
+                    tr("roads", language),
                     "<br>",
                     "<svg width='18' height='18' style='vertical-align:middle;'><polygon points='9,2 16,9 9,16 2,9' fill='black' stroke='white' stroke-width='2'/></svg> ",
-                    tr("snowbull_communities", language),
+                    tr("communities", language),
                     "</div>"
                 ),
                 position = "bottomright",

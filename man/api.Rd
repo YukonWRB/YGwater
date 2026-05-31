@@ -14,6 +14,7 @@ api(
   dbPort = Sys.getenv("aquacachePort"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
+  workers = parallel::detectCores(-2),
   run = TRUE
 )
 }
@@ -26,7 +27,10 @@ which uses the latest complete file-based API version.}
 
 \item{port}{The port number to listen on. Default is 8000.}
 
-\item{server}{The server path for the API. Default is '/water-data/api'.}
+\item{server}{The public server path or URL to write into the OpenAPI
+document. Version 2 leaves this unset by default so plumber2 can infer the
+correct base path from the documentation request, which works both locally
+and behind a reverse proxy.}
 
 \item{dbName}{The name of the PostgreSQL database. Default is taken from the environment variable 'aquacacheName'.}
 
@@ -37,6 +41,8 @@ which uses the latest complete file-based API version.}
 \item{dbUser}{The username for the PostgreSQL database. Default is taken from the environment variable 'aquacacheUser'.}
 
 \item{dbPass}{The password for the PostgreSQL database. Default is taken from the environment variable 'aquacachePass'.}
+
+\item{workers}{The number of worker processes to use for the API server. Default is parallel::detectCores(-2). This parameter is only applicable when using plumber2, as plumber v1 does not support multiple workers.}
 
 \item{run}{Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.}
 }
@@ -51,6 +57,12 @@ without replacing the existing surface unintentionally.
 }
 \examples{
 \dontrun{
+# Latest version by default
 api()
+
+# Specify version with integer or "v"-prefixed string
+api(version = 1)
+api(version = "v1")
 }
+
 }

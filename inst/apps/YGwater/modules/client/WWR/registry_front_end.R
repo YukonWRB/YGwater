@@ -128,22 +128,26 @@ wellRegistry <- function(id, language) {
 
     # Adjust filter selections based on if 'all' is selected (remove selections other than 'all')
     observeFilterInput <- function(inputId) {
-      observeEvent(input[[inputId]], {
-        # Check if 'all' is selected and adjust accordingly
-        if (length(input[[inputId]]) > 1) {
-          # If 'all' was selected last, remove all other selections
-          if (input[[inputId]][length(input[[inputId]])] == "all") {
+      observeEvent(
+        input[[inputId]],
+        {
+          values <- input[[inputId]]
+          if (is.null(values) || length(values) == 0) {
             updateSelectizeInput(session, inputId, selected = "all")
-          } else if ("all" %in% input[[inputId]]) {
-            # If 'all' is already selected and another option is selected, remove 'all'
-            updateSelectizeInput(
-              session,
-              inputId,
-              selected = input[[inputId]][length(input[[inputId]])]
-            )
+            return()
           }
-        }
-      })
+          values <- as.character(values)
+          if (length(values) > 1 && "all" %in% values) {
+            selected <- if (identical(values[[length(values)]], "all")) {
+              "all"
+            } else {
+              setdiff(values, "all")
+            }
+            updateSelectizeInput(session, inputId, selected = selected)
+          }
+        },
+        ignoreNULL = FALSE
+      )
     }
     observeFilterInput("purpose")
 
@@ -163,114 +167,125 @@ wellRegistry <- function(id, language) {
       purposes_sorted <- moduleData$purposes[order(get(
         tr("borehole_well_purpose_col", language$language)
       ))]
+
+      # If there are no wells, return a message instead of the filters
+      if (nrow(moduleData$wells) == 0) {
+        return(
+          div(
+            class = "p-3",
+            "There are no wells in the database yet!"
+          )
+        )
+      }
       tagList(
-            checkboxInput(
-              ns("cluster_points"),
-              label = tr("cluster_points_label", language$language),
-              value = TRUE
-            ),
-            selectizeInput(
-              ns("purpose"),
-              label = tr("well_purpose", language$language),
-              choices = stats::setNames(
-                c("all", purposes_sorted$borehole_well_purpose_id),
-                c(
-                  tr("all_m", language$language),
-                  purposes_sorted[[tr(
-                    "borehole_well_purpose_col",
-                    language$language
-                  )]]
-                )
-              ),
-              multiple = TRUE,
-              selected = "all"
-            ),
-            textInput(
-              ns("well_name_search"),
-              label = tr("well_name_contains", language$language),
-              value = "",
-              placeholder = tr(
-                "well_name_contains_placeholder",
+        checkboxInput(
+          ns("cluster_points"),
+          label = tr("cluster_points_label", language$language),
+          value = TRUE
+        ),
+        selectizeInput(
+          ns("purpose"),
+          label = tr("well_purpose", language$language),
+          choices = stats::setNames(
+            c("all", purposes_sorted$borehole_well_purpose_id),
+            c(
+              tr("all_m", language$language),
+              purposes_sorted[[tr(
+                "borehole_well_purpose_col",
                 language$language
-              )
-            ),
-            div(
-              class = "compact-checkboxes",
-              checkboxInput(
-                ns("well_name_starts_with"),
-                label = tr("well_name_starts", language$language),
-                value = FALSE
-              ),
-              checkboxInput(
-                ns("well_name_ends_with"),
-                label = tr("well_name_ends", language$language),
-                value = FALSE
-              ),
-              checkboxInput(
-                ns("well_name_case_sensitive"),
-                label = tr("well_name_case_sensitive", language$language),
-                value = FALSE
-              )
-            ),
-            sliderInput(
-              ns("yrs"),
-              label = tr("well_completion_yr", language$language),
-              min = lubridate::year(min(
-                moduleData$wells$completion_date,
-                na.rm = TRUE
-              )),
-              max = lubridate::year(max(
-                moduleData$wells$completion_date,
-                na.rm = TRUE
-              )),
-              value = lubridate::year(c(
-                min(moduleData$wells$completion_date, na.rm = TRUE),
-                max(moduleData$wells$completion_date, na.rm = TRUE)
-              )),
-              step = 1,
-              sep = ""
-            ),
-            div(
-              class = "compact-checkboxes",
-              # Add checkboxInput for wells with no known completion date
-              checkboxInput(
-                ns("include_unknown_completion"),
-                label = tr(
-                  "include_unknown_well_completion",
-                  language$language
-                ),
-                value = TRUE
-              ),
-              # Checkbox for missing well depth
-              checkboxInput(
-                ns("include_missing_depth"),
-                label = tr("include_missing_well_depth", language$language),
-                value = TRUE
-              ),
-              # Checkbox for wells with missing depth to water
-              checkboxInput(
-                ns("include_missing_depth_to_water"),
-                label = tr(
-                  "include_missing_well_depth_to_water",
-                  language$language
-                ),
-                value = TRUE
-              )
-            ),
-            # # Checkbox for wells with missing depth to bedrock
-            # checkboxInput(
-            #   ns("include_missing_depth_to_bedrock"),
-            #   label = tr(
-            #     "include_missing_well_depth_to_bedrock",
-            #     language$language
-            #   ),
-            #   value = TRUE
-            # ),
-            actionButton(
-              ns("reset"),
-              tr("reset", language$language),
-              class = "btn btn-primary"
+              )]]
             )
+          ),
+          multiple = TRUE,
+          selected = "all"
+        ),
+        textInput(
+          ns("well_name_search"),
+          label = tr("well_name_contains", language$language),
+          value = "",
+          placeholder = tr(
+            "well_name_contains_placeholder",
+            language$language
+          )
+        ),
+        div(
+          class = "compact-checkboxes",
+          style = "margin-top: 10px;", # Tiny space to separate the text input from the checkboxes
+          checkboxInput(
+            ns("well_name_starts_with"),
+            label = tr("starts_with", language$language),
+            value = FALSE
+          ),
+          checkboxInput(
+            ns("well_name_ends_with"),
+            label = tr("ends_with", language$language),
+            value = FALSE
+          ),
+          checkboxInput(
+            ns("well_name_case_sensitive"),
+            label = tr("case_sensitive", language$language),
+            value = FALSE
+          )
+        ),
+        sliderInput(
+          ns("yrs"),
+          label = tr("well_completion_yr", language$language),
+          min = lubridate::year(min(
+            moduleData$wells$completion_date,
+            na.rm = TRUE
+          )),
+          max = lubridate::year(max(
+            moduleData$wells$completion_date,
+            na.rm = TRUE
+          )),
+          value = lubridate::year(c(
+            min(moduleData$wells$completion_date, na.rm = TRUE),
+            max(moduleData$wells$completion_date, na.rm = TRUE)
+          )),
+          step = 1,
+          sep = ""
+        ),
+        div(
+          class = "compact-checkboxes",
+          # Add checkboxInput for wells with no known completion date
+          checkboxInput(
+            ns("include_unknown_completion"),
+            label = tr(
+              "include_unknown_well_completion",
+              language$language
+            ),
+            value = TRUE
+          ),
+          # Checkbox for missing well depth
+          checkboxInput(
+            ns("include_missing_depth"),
+            label = tr("include_missing_well_depth", language$language),
+            value = TRUE
+          ),
+          # Checkbox for wells with missing depth to water
+          checkboxInput(
+            ns("include_missing_depth_to_water"),
+            label = tr(
+              "include_missing_well_depth_to_water",
+              language$language
+            ),
+            value = TRUE
+          )
+        ),
+        # # Checkbox for wells with missing depth to bedrock
+        # checkboxInput(
+        #   ns("include_missing_depth_to_bedrock"),
+        #   label = tr(
+        #     "include_missing_well_depth_to_bedrock",
+        #     language$language
+        #   ),
+        #   value = TRUE
+        # ),
+        actionButton(
+          ns("reset"),
+          tr("reset", language$language),
+          class = "btn btn-primary"
+        )
       )
     }) |>
       bindEvent(moduleData, language$language)

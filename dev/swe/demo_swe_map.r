@@ -9,6 +9,54 @@ con <- YGwater::AquaConnect(
 )
 
 
+i <- "08AA003"
+ok <- basinPrecip(
+    location = i,
+    start = Sys.time() - 60 * 60 * 24 * 7,
+    end = Sys.time(),
+    silent = TRUE,
+    map = FALSE,
+    con = con
+)
+
+tabularReport(
+    save_path = "C:\\Users\\esniede\\Documents",
+    archive_path = NULL,
+    precip_locations = NULL,
+    snow_locations = NULL,
+    flow_locations = NULL
+)
+
+
+rid <- DBI::dbGetQuery(
+    con,
+    paste0(
+        "SELECT reference_id, valid_from, valid_to FROM rasters_reference WHERE model = 'HRDPA' ORDER BY ABS(EXTRACT(EPOCH FROM valid_to) - EXTRACT(EPOCH FROM '",
+        Sys.time(),
+        "'::timestamp with time zone)) LIMIT 1"
+    )
+)
+
+
+# load_all()
+
+snowBulletin(
+    year = 2026,
+    month = 5,
+    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
+    con = con,
+    language = "english",
+)
+
+snowBulletin(
+    year = 2026,
+    month = 5,
+    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
+    con = con,
+    language = "french",
+)
+
+
 # load_all()
 dat <- load_bulletin_timeseries(
     con = con,
@@ -32,15 +80,6 @@ make_snowbull_map(
     snowbull_timeseries = dat,
     con = con,
     filename = "map.png"
-)
-
-load_all()
-snowBulletin(
-    year = 2026,
-    month = 5,
-    save_path = "C:\\Users\\esniede\\Documents\\github\\YGwater\\dev\\swe",
-    con = con,
-    language = "english",
 )
 
 # ggplotOverlap(
@@ -69,8 +108,7 @@ df <- DBI::dbGetQuery(
     )
 )
 
-
-bulletin_month <- 4
+bulletin_month <- 5
 bulletin_year <- 2026
 bulletin_scale <- 1
 language <- list(language = "English", abbrev = "en")
@@ -156,6 +194,7 @@ df$description <- description
 # on.exit(DBI::dbDisconnect(con), add = TRUE)
 
 query <- "SELECT locations.name AS location_name, locations.location AS location_id, datetime, value_corrected AS value FROM measurements_continuous_corrected INNER JOIN timeseries ON measurements_continuous_corrected.timeseries_id = timeseries.timeseries_id INNER JOIN locations ON timeseries.location = locations.location\n                                           WHERE measurements_continuous_corrected.timeseries_id IN ('663', '665', '666', '668', '664', '671', '667')"
+
 
 DBI::dbGetQuery(con, query)
 
@@ -630,3 +669,104 @@ ggplot2::ggsave(
     height = 12,
     dpi = 300
 )
+
+
+param_name <- "temperature, air"
+
+# 24-hour timespan
+query_24h <- "
+SELECT
+  l.location_code,
+  l.name AS location_name,
+  MIN(td.value) AS min_value,
+  AVG(td.value) AS mean_value,
+  MAX(td.value) AS max_value
+FROM locations l
+INNER JOIN timeseries ts
+  ON ts.location_id = l.location_id
+INNER JOIN parameters p
+  ON p.parameter_id = ts.parameter_id
+INNER JOIN locations_networks ln
+  ON ln.location_id = l.location_id
+INNER JOIN networks n
+  ON n.network_id = ln.network_id
+INNER JOIN measurements_continuous td
+  ON td.timeseries_id = ts.timeseries_id
+WHERE l.name ILIKE $1
+  AND p.param_name ILIKE $2
+  AND n.name ILIKE $3
+  AND ts.record_rate = '01:00:00'
+  AND td.datetime >= CURRENT_DATE - INTERVAL '1 day'
+  AND td.datetime < CURRENT_DATE
+GROUP BY l.location_id, l.location_code, l.name, ts.timeseries_id,
+  ts.record_rate, p.param_name, n.name
+ORDER BY l.name, ts.timeseries_id;
+"
+
+res_24h <- DBI::dbGetQuery(
+    con,
+    query_24h,
+    params = list(
+        "%",
+        paste0("%", param_name, "%"),
+        "ECCC Meteorology Network"
+    )
+)
+
+names(res_24h)[names(res_24h) == "location_code"] <- "Location"
+names(res_24h)[names(res_24h) == "location_name"] <- "Name"
+names(res_24h)[names(res_24h) == "min_value"] <- "yesterday Tmin"
+names(res_24h)[names(res_24h) == "mean_value"] <- "yesterday Tmean"
+names(res_24h)[names(res_24h) == "max_value"] <- "yesterday Tmax"
+View(res_24h)
+
+# 1-week timespan
+query_1week <- "
+SELECT
+  l.location_id,
+  l.location_code,
+  l.name AS location_name,
+  ts.timeseries_id,
+  ts.record_rate,
+  p.param_name,
+  n.name,
+  MIN(td.value) AS min_value,
+  AVG(td.value) AS mean_value,
+  MAX(td.value) AS max_value
+FROM locations l
+INNER JOIN timeseries ts
+  ON ts.location_id = l.location_id
+INNER JOIN parameters p
+  ON p.parameter_id = ts.parameter_id
+INNER JOIN locations_networks ln
+  ON ln.location_id = l.location_id
+INNER JOIN networks n
+  ON n.network_id = ln.network_id
+INNER JOIN measurements_continuous td
+  ON td.timeseries_id = ts.timeseries_id
+WHERE l.name ILIKE $1
+  AND p.param_name ILIKE $2
+  AND n.name ILIKE $3
+  AND ts.record_rate = '01:00:00'
+  AND td.datetime >= CURRENT_DATE - INTERVAL '7 day'
+  AND td.datetime < CURRENT_DATE
+GROUP BY l.location_id, l.location_code, l.name, ts.timeseries_id,
+  ts.record_rate, p.param_name, n.name
+ORDER BY l.name, ts.timeseries_id;
+"
+
+res_1week <- DBI::dbGetQuery(
+    con,
+    query_1week,
+    params = list(
+        "%",
+        paste0("%", param_name, "%"),
+        "ECCC Meteorology Network"
+    )
+)
+
+names(res_1week)[names(res_1week) == "min_value"] <- "week Tmin"
+names(res_1week)[names(res_1week) == "mean_value"] <- "week Tmean"
+names(res_1week)[names(res_1week) == "max_value"] <- "week Tmax"
+
+View(res_1week)

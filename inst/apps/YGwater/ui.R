@@ -9,9 +9,8 @@
 #' @noRd
 
 app_ui <- function(request) {
-  default_app_title <- tr("title", "English")
-  default_app_brand_title <- "Water Data Explorer"
-  default_app_description <- "Explore Yukon water, groundwater, hydrometric, snow, and water quality monitoring data through interactive maps, plots, tables, and downloads."
+  default_app_title <- tr(config$brand$text$app_title, "English")
+  default_app_description <- tr(config$brand$text$SEO_desc, "English")
 
   tagList(
     shinyjs::useShinyjs(),
@@ -233,7 +232,7 @@ app_ui <- function(request) {
               tags$span(
                 id = "app-header-title",
                 class = "app-title-text",
-                default_app_brand_title
+                default_app_title
               )
             ),
             div(
@@ -278,7 +277,7 @@ app_ui <- function(request) {
           tags$span(
             id = "app-mobile-title",
             class = "app-navbar-title",
-            default_app_brand_title
+            default_app_title
           )
         ),
         id = "navbar",
@@ -321,11 +320,14 @@ app_ui <- function(request) {
               uiOutput("mapRaster_ui")
             )
           },
-          nav_panel(
-            title = uiOutput("mapsNavSnowbullTitle"),
-            value = "snowBulletinMap",
-            uiOutput("mapSnowbull_ui")
-          )
+
+          if (config$brand$brand == 'yukon') {
+            nav_panel(
+              title = uiOutput("mapsNavSnowbullTitle"),
+              value = "snowBulletinMap",
+              uiOutput("mapSnowbull_ui")
+            )
+          }
         ), # End maps nav_menu
 
         # Plot nav menu
@@ -341,7 +343,14 @@ app_ui <- function(request) {
             title = uiOutput("plotsNavContTitle"),
             value = "contPlot",
             uiOutput("plotContinuous_ui")
-          )
+          ),
+          if (!config$public) {
+            nav_panel(
+              title = uiOutput("plotsNavContAdaptiveTitle"),
+              value = "contPlotAdaptive",
+              uiOutput("plotContinuousAdaptive_ui")
+            )
+          }
         ), # End plot nav_menu
 
         # Reports nav menu
@@ -368,7 +377,7 @@ app_ui <- function(request) {
               )
             },
             # Don't show the snow bulletin menu if not deployed on YG internal network
-            if (config$network_check) {
+            if (config$network_check && config$brand$brand == 'yukon') {
               nav_panel(
                 title = uiOutput("reportsNavSnowbullTitle"),
                 value = "snowBulletin",
@@ -477,12 +486,7 @@ app_ui <- function(request) {
               uiOutput("addContData_ui")
             ),
             nav_panel(
-              title = "Edit/delete continuous data",
-              value = "editContData",
-              uiOutput("editContData_ui")
-            ),
-            nav_panel(
-              title = "Add/modify timeseries corrections",
+              title = "Add / modify timeseries corrections",
               value = "continuousCorrections",
               uiOutput("continuousCorrections_ui")
             ),
@@ -497,7 +501,7 @@ app_ui <- function(request) {
               uiOutput("grades_approvals_qualifiers_ui")
             ),
             nav_panel(
-              title = "Add/edit timeseries",
+              title = "Add / edit timeseries",
               value = "addTimeseries",
               uiOutput("addTimeseries_ui")
             ),
@@ -519,22 +523,17 @@ app_ui <- function(request) {
               uiOutput("addDiscData_ui")
             ),
             nav_panel(
-              title = "Add/edit samples",
+              title = "Add / edit samples",
               value = "addSamples",
               uiOutput("addSamples_ui")
             ),
             nav_panel(
-              title = "Edit/delete discrete data",
-              value = "editDiscData",
-              uiOutput("editDiscData_ui")
-            ),
-            nav_panel(
-              title = "Add/modify guidelines",
+              title = "Add / modify guidelines",
               value = "addGuidelines",
               uiOutput("addGuidelines_ui")
             ),
             nav_panel(
-              title = "Add/edit sample series",
+              title = "Add / edit sample series",
               value = "addSampleSeries",
               uiOutput("addSampleSeries_ui")
             ),
@@ -551,12 +550,12 @@ app_ui <- function(request) {
             title = "Locations",
             value = "dbLocsTasks",
             nav_panel(
-              title = "Add/modify locations",
+              title = "Add / modify locations",
               value = "addLocation",
               uiOutput("addLocation_ui")
             ),
             nav_panel(
-              title = "Add/modify sub-locations",
+              title = "Add / modify sub-locations",
               value = "addSubLocation",
               uiOutput("addSubLocation_ui")
             )
@@ -565,7 +564,7 @@ app_ui <- function(request) {
 
         if (!config$public) {
           nav_menu(
-            title = "Files/Docs",
+            title = "Files / Docs",
             value = "fileTasks",
             nav_panel(
               title = "Documents",
@@ -590,14 +589,9 @@ app_ui <- function(request) {
             title = "Field",
             value = "fieldTasks",
             nav_panel(
-              title = "Add/modify field visit",
+              title = "Add / modify field visit",
               value = "visit",
               uiOutput("visit_ui")
-            ),
-            nav_panel(
-              title = "Deploy/recover instruments",
-              value = "deploy_recover",
-              uiOutput("deploy_recover_ui"), # points to the same module as in Equipment
             )
           )
         },
@@ -615,13 +609,28 @@ app_ui <- function(request) {
               title = "Create / modify instruments",
               value = "manageInstruments",
               uiOutput("manageInstruments_ui")
+            ),
+            nav_panel(
+              title = "Create / modify sensors",
+              value = "manageSensors",
+              uiOutput("manageSensors_ui")
+            ),
+            nav_panel(
+              title = "Log instrument maintenance",
+              value = "instrumentMaintenance",
+              uiOutput("instrumentMaintenance_ui")
+            ),
+            nav_panel(
+              title = "Deploy / recover instruments",
+              value = "deploy_recover",
+              uiOutput("deploy_recover_ui"), # points to the same module as in Equipment
             )
           )
         },
 
         if (!config$public) {
           nav_menu(
-            title = "Boreholes/wells",
+            title = "Boreholes / wells",
             value = "wellTasks",
             nav_panel(
               title = "Simpler Index",
@@ -629,7 +638,7 @@ app_ui <- function(request) {
               uiOutput("simplerIndex_ui")
             ),
             nav_panel(
-              title = "Edit borehole/well records",
+              title = "Edit borehole / well records",
               value = "editBoreholesWells",
               uiOutput("editBoreholesWells_ui")
             ),
@@ -789,6 +798,30 @@ app_ui <- function(request) {
               value = "viewFeedback",
               uiOutput("viewFeedback_ui")
             )
+          )
+        },
+
+        if (!config$public) {
+          nav_menu(
+            title = "Help",
+            value = "adminHelpTasks",
+            nav_item(tags$a(
+              "YGwater admin help",
+              href = "html/admin_help/admin_help.html",
+              target = "_blank",
+              rel = "noopener noreferrer",
+              class = "dropdown-item"
+            )),
+            nav_item(actionLink(
+              "open_admin_page_help",
+              "Current page help",
+              class = "dropdown-item"
+            )),
+            nav_item(actionLink(
+              "open_aquacache_vignette",
+              "AquaCache database reference",
+              class = "dropdown-item"
+            ))
           )
         },
         # The nav_spacer() and nav_item below are used to have an actionButton to toggle language on the right side of the navbar

@@ -43,13 +43,44 @@ if (Sys.getenv("CI") == "true") {
     aquacachePass = "runner",
     aquacacheAdminUser = "runner",
     aquacacheAdminPass = "runner",
+    aquacacheTestHost = "localhost",
+    aquacacheTestPort = "5432",
+    aquacacheTestUser = "runner",
+    aquacacheTestPass = "runner",
     AQUSER = "readonly",
     AQPASS = "WaterIsLife",
     AQSERVER = "https://yukon.aquaticinformatics.net/AQUARIUS"
   )
   message("Running on CI, setting environment accordingly.")
-}
+} else {
+  # If not running onf CI, check that the datbase 'testdb' exists at the host and port in the .Renviron file. If not, instruct user to craete it with AquaCache::create_test_db()
+  test_db_exists <- tryCatch(
+    {
+      con <- AquaConnect(
+        name = Sys.getenv("aquacacheTestName"),
+        host = Sys.getenv("aquacacheTestHost"),
+        port = Sys.getenv("aquacacheTestPort"),
+        user = Sys.getenv("aquacacheTestUser"),
+        password = Sys.getenv("aquacacheTestPass")
+      )
+      DBI::dbDisconnect(con)
 
+      message(
+        "Database 'testdb' found at the host and port specified in your .Renviron file. Proceeding with tests."
+      )
+      TRUE
+    },
+    error = function(e) {
+      FALSE
+    }
+  )
+
+  if (!test_db_exists) {
+    stop(
+      "Database 'testdb' not found at the host and port specified in your .Renviron file. Please create it with AquaCache::create_test_db() before running the tests."
+    )
+  }
+}
 set.seed(123) # Set seed for reproducibility in tests
 
 # Ensure ragg is available for deterministic PNG outputs
@@ -64,4 +95,23 @@ ggplot2::theme_set(ggplot2::theme_gray(base_family = "DejaVu Sans"))
 pathPrep <- function(path) {
   x <- chartr("\\", "/", path)
   return(x)
+}
+
+# Function to override default AquaConnect() parameters with those from the .Renviron file, for use in tests. This allows us to use a test database on CI and a different one locally without changing the code of the tests.
+test_con <- function(
+  name = Sys.getenv("aquacacheTestName"),
+  host = Sys.getenv("aquacacheTestHost"),
+  port = Sys.getenv("aquacacheTestPort"),
+  user = Sys.getenv("aquacacheTestUser"),
+  password = Sys.getenv("aquacacheTestPass"),
+  silent = FALSE
+) {
+  AquaConnect(
+    name = name,
+    host = host,
+    port = port,
+    username = user,
+    password = password,
+    silent = silent
+  )
 }

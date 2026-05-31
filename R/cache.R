@@ -1,11 +1,11 @@
 #' In-memory cache
 #'
 #' @description
-#' Provides global helper functions to store and retrieve cached data across user sessions. Each cached item includes a timestamp and is automatically refreshed when called after the specified time-to-live (TTL) has expired.
+#' Provides global helper functions to store and retrieve cached data across user sessions. Each cached item includes a timestamp and is automatically refreshed when called after the specified time-to-live (TTL) has expired, or when `check_fun` is provided and reports that the cached value is no longer valid.
 #'
 #' @param key A unique character string identifying the cached data.
-#' @param fetch_fun A function that returns the value to cache when the current cache entry is missing or expired.
-#' @param check_fun An optional function that checks if the cached value is still valid even though the `ttl` is expired and returns TRUE or FALSE. If TRUE, the cached value is returned; if FALSE, a new value is fetched. This function should be significantly faster than `fetch_fun`.
+#' @param fetch_fun A function that returns the value to cache when the current cache entry is missing, expired, or invalid.
+#' @param check_fun An optional function that checks if the cached value is still valid and returns TRUE or FALSE. When supplied, it is called on every cache hit. If TRUE, the cached value is returned; if FALSE, a new value is fetched. This function should be significantly faster than `fetch_fun`.
 #' @param ttl Time-to-live for the cached value in seconds. Defaults to 3600 seconds (1 hour).
 #' @param env The environment in which to store the cache. Defaults to `.GlobalEnv`, but can be set to a different environment if needed, such as session$userData in a Shiny app so that the cache is specific to that session.
 #'
@@ -27,18 +27,16 @@ get_cached <- function(
   # Check if the key exists and if the cached value is still valid. If it exists and is valid, return the cached value. If it exists but is expired, fetch a new value. If it does not exist, fetch a new value.
   if (exists(key, envir = cache_env, inherits = FALSE)) {
     entry <- get(key, envir = cache_env, inherits = FALSE)
-    # If the entry exists and is still valid, return the cached value
-    if (difftime(Sys.time(), entry$timestamp, units = "secs") > ttl) {
-      if (!is.null(check_fun) && is.function(check_fun)) {
-        # If the entry is expired, check if it can be reused using 'check_fun'
-        if (check_fun()) {
-          # check_fun should return TRUE if the cached value is still valid
-          return(entry$value)
-        } # If check_fun returns FALSE, we fall through to fetch a new value
-      } # If check_fun is NULL, we fall through to fetch a new value
+
+    if (!is.null(check_fun) && is.function(check_fun)) {
+      if (check_fun()) {
+        return(entry$value)
+      }
     } else {
-      # If the entry is still valid or it's invalid and check_fun is NULL, return the cached value
-      return(entry$value)
+      # If the entry exists and is still valid, return the cached value
+      if (difftime(Sys.time(), entry$timestamp, units = "secs") <= ttl) {
+        return(entry$value)
+      }
     }
   }
 

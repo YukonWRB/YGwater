@@ -1,0 +1,4002 @@
+contPlotAdaptiveUI <- function(id) {
+  ns <- NS(id)
+  tagList(
+    tags$style(HTML(sprintf(
+      "
+    /* container id */
+    #%s.accordion {
+      /* optional default for all panels */
+    }
+    
+    /* Panel: filters_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #FFFCF5;
+      --bs-accordion-btn-bg:    #FBE5B2;
+      --bs-accordion-active-bg: #FBE5B2;
+    }
+    
+    /* Panel: table_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #E5F4F6;
+      --bs-accordion-btn-bg:    #0097A9;
+      --bs-accordion-active-bg: #0097A9;
+    }
+    
+    /* Panel: plot_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #F1F4E5;
+      --bs-accordion-btn-bg:    #bacc81ff;
+      --bs-accordion-active-bg: #bacc81ff;
+    }
+
+    /* Panel: metadata_panel */
+    #%s .accordion-item[data-value='%s'] {
+      --bs-accordion-bg:        #FFFCF5;
+      --bs-accordion-btn-bg:    #FBE5B2;
+      --bs-accordion-active-bg: #FBE5B2;
+    }
+
+    ",
+      ns("accordion1"),
+      ns("accordion1"),
+      ns("filters_panel"),
+      ns("accordion1"),
+      ns("table_panel"),
+      ns("accordion1"),
+      ns("plot_options_panel"),
+      ns("accordion2"),
+      ns("metadata_panel")
+    ))),
+
+    # Adjust table background so they don't blend into the accordion
+    tags$style(HTML(sprintf(
+      "
+      /* Force DT table backgrounds to white for these module tables */
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td,
+    
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td,
+    
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td,
+    
+      #%s table.dataTable,
+      #%s table.dataTable tbody,
+      #%s table.dataTable tbody tr,
+      #%s table.dataTable tbody td {
+        background-color: #FFFFFF !important;
+      }
+    
+      /* Only timeseries_table has the filter row in the header */
+      #%s table.dataTable thead tr,
+      #%s table.dataTable thead th,
+      #%s table.dataTable thead td {
+        background-color: #FFFFFF !important;
+      }
+      ",
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("location_metadata_table"),
+      ns("location_metadata_table"),
+      ns("location_metadata_table"),
+      ns("location_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_metadata_table"),
+      ns("timeseries_ownership_table"),
+      ns("timeseries_ownership_table"),
+      ns("timeseries_ownership_table"),
+      ns("timeseries_ownership_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table"),
+      ns("timeseries_table")
+    ))),
+
+    uiOutput(ns("banner")),
+    uiOutput(ns("main"))
+  )
+}
+
+contPlotAdaptive <- function(id, language, windowDims, inputs) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+
+    if (session$userData$user_logged_in) {
+      cached <- cont_data.plot_module_data(
+        con = session$userData$AquaCache,
+        env = session$userData$app_cache
+      )
+    } else {
+      cached <- cont_data.plot_module_data(con = session$userData$AquaCache)
+    }
+
+    moduleData <- reactiveValues(
+      locs = cached$locs,
+      sub_locs = cached$sub_locs,
+      params = cached$params,
+      param_groups = cached$param_groups,
+      param_sub_groups = cached$param_sub_groups,
+      media = cached$media,
+      aggregation_types = cached$aggregation_types,
+      locations_projects = cached$locations_projects,
+      projects = cached$projects,
+      locations_networks = cached$locations_networks,
+      networks = cached$networks,
+      range = cached$range,
+      timeseries = cached$timeseries
+    )
+
+    moduleInputs <- reactiveValues(
+      location_id = if (!is.null(inputs$location_id)) {
+        as.numeric(inputs$location_id)
+      } else {
+        NULL
+      }
+    )
+
+    values <- reactiveValues(
+      water_level = moduleData$params$parameter_id[
+        moduleData$params$param_name == "water level"
+      ],
+      water_flow = moduleData$params$parameter_id[
+        moduleData$params$param_name == "water flow"
+      ],
+      swe = moduleData$params$parameter_id[
+        moduleData$params$param_name == "snow water equivalent"
+      ],
+      snow_depth = moduleData$params$parameter_id[
+        moduleData$params$param_name == "snow depth"
+      ]
+    )
+
+    initial_timeseries_ids <- if (!is.null(inputs$timeseries_id)) {
+      utils::head(unique(as.numeric(inputs$timeseries_id)), 4)
+    } else {
+      numeric(0)
+    }
+    selected_timeseries_slots <- reactiveVal(
+      if (length(initial_timeseries_ids) > 0) {
+        initial_timeseries_ids
+      } else {
+        NA_real_
+      }
+    )
+    active_timeseries_slot <- reactiveVal(1L)
+
+    selected_timeseries_ids <- reactive({
+      slots <- selected_timeseries_slots()
+      ids <- as.numeric(slots[!is.na(slots)])
+      if (length(ids) == 0) {
+        return(NULL)
+      }
+      ids
+    })
+
+    selected_timeseries_id_active <- reactive({
+      slots <- selected_timeseries_slots()
+      if (length(slots) == 0) {
+        return(NULL)
+      }
+      idx <- active_timeseries_slot()
+      if (
+        is.null(idx) ||
+          is.na(idx) ||
+          idx < 1 ||
+          idx > length(slots) ||
+          is.na(slots[[idx]])
+      ) {
+        filled_idx <- which(!is.na(slots))
+        if (length(filled_idx) == 0) {
+          return(NULL)
+        }
+        idx <- filled_idx[[1]]
+      }
+      as.numeric(slots[[idx]])
+    })
+
+    output$has_multiple_timeseries <- renderText({
+      ids <- selected_timeseries_ids()
+      if (!is.null(ids) && length(ids) > 1) {
+        "true"
+      } else {
+        "false"
+      }
+    })
+    outputOptions(
+      output,
+      "has_multiple_timeseries",
+      suspendWhenHidden = FALSE
+    )
+
+    location_network_filter <- reactive({
+      loc_ids <- moduleData$locs$location_id
+
+      if (!is.null(input$network_filter) && length(input$network_filter) > 0) {
+        loc_ids <- intersect(
+          loc_ids,
+          moduleData$locations_networks$location_id[
+            moduleData$locations_networks$network_id %in% input$network_filter
+          ]
+        )
+      }
+
+      if (!is.null(input$project_filter) && length(input$project_filter) > 0) {
+        loc_ids <- intersect(
+          loc_ids,
+          moduleData$locations_projects$location_id[
+            moduleData$locations_projects$project_id %in% input$project_filter
+          ]
+        )
+      }
+
+      loc_ids
+    })
+
+    location_filter_value <- reactive({
+      if (is.null(moduleInputs$location_id)) {
+        return(NULL)
+      }
+
+      loc_name_col <- tr("generic_name_col", language$language)
+      locs <- unique(moduleData$locs, by = "location_id")
+
+      available_values <- locs[
+        location_id %in% moduleInputs$location_id,
+        ..loc_name_col
+      ][[loc_name_col]]
+
+      if (length(available_values) == 0) {
+        return(NULL)
+      }
+
+      stats::na.omit(available_values)[1]
+    })
+
+    timeseries_table_reactive <- reactive({
+      loc_name_col <- tr("generic_name_col", language$language)
+      sub_loc_col <- tr("sub_location_col", language$language)
+      param_col <- tr("param_name_col", language$language)
+      media_col <- tr("media_type_col", language$language)
+      agg_col <- tr("aggregation_type_col", language$language)
+      network_col <- tr("generic_name_col", language$language)
+      project_col <- tr("generic_name_col", language$language)
+
+      ts <- moduleData$timeseries
+      loc_filter_ids <- location_network_filter()
+      ts <- ts[location_id %in% loc_filter_ids]
+
+      locs <- unique(moduleData$locs, by = "location_id")
+      sub_locs <- unique(moduleData$sub_locs, by = "sub_location_id")
+      params <- unique(moduleData$params, by = "parameter_id")
+      media <- unique(moduleData$media, by = "media_id")
+      aggregation_types <- unique(
+        moduleData$aggregation_types,
+        by = "aggregation_type_id"
+      )
+
+      networks <- moduleData$locations_networks
+      if (nrow(networks) > 0 && nrow(moduleData$networks) > 0) {
+        networks <- merge(
+          networks,
+          moduleData$networks,
+          by = "network_id",
+          all.x = TRUE,
+          allow.cartesian = TRUE
+        )[,
+          .(
+            networks = paste(
+              unique(stats::na.omit(.SD[[network_col]])),
+              collapse = ", "
+            )
+          ),
+          .SDcols = network_col,
+          by = location_id
+        ]
+      } else {
+        networks <- data.table::data.table(
+          location_id = numeric(),
+          networks = character()
+        )
+      }
+
+      projects <- moduleData$locations_projects
+      if (nrow(projects) > 0 && nrow(moduleData$projects) > 0) {
+        projects <- merge(
+          projects,
+          moduleData$projects,
+          by = "project_id",
+          all.x = TRUE,
+          allow.cartesian = TRUE
+        )[,
+          .(
+            projects = paste(
+              unique(stats::na.omit(.SD[[project_col]])),
+              collapse = ", "
+            )
+          ),
+          .SDcols = project_col,
+          by = location_id
+        ]
+      } else {
+        projects <- data.table::data.table(
+          location_id = numeric(),
+          projects = character()
+        )
+      }
+
+      ts <- merge(
+        ts,
+        locs[,
+          .(location_id, location = .SD[[loc_name_col]]),
+          .SDcols = loc_name_col
+        ],
+        by = "location_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        sub_locs[,
+          .(sub_location_id, sub_location = .SD[[sub_loc_col]]),
+          .SDcols = sub_loc_col
+        ],
+        by = "sub_location_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        params[,
+          .(parameter_id, parameter = .SD[[param_col]]),
+          .SDcols = param_col
+        ],
+        by = "parameter_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        media[, .(media_id, media = .SD[[media_col]]), .SDcols = media_col],
+        by = "media_id",
+        all.x = TRUE
+      )
+      ts <- merge(
+        ts,
+        aggregation_types[,
+          .(aggregation_type_id, aggregation = .SD[[agg_col]]),
+          .SDcols = agg_col
+        ],
+        by = "aggregation_type_id",
+        all.x = TRUE
+      )
+      ts <- merge(ts, networks, by = "location_id", all.x = TRUE)
+      ts <- merge(ts, projects, by = "location_id", all.x = TRUE)
+
+      ts[, `:=`(
+        start_date = as.Date(start_datetime),
+        end_date = as.Date(end_datetime),
+        parameter = as.factor(parameter),
+        media = as.factor(media),
+        aggregation = as.factor(aggregation),
+        z = as.numeric(z),
+        location = as.factor(location),
+        sub_location = as.factor(sub_location),
+        loc_code = as.factor(loc_code),
+        networks = as.factor(networks),
+        projects = as.factor(projects)
+      )]
+
+      # Convert to periods
+      ts[,
+        record_rate := ifelse(
+          !is.na(record_rate),
+          as.character(lubridate::seconds_to_period(record_rate)),
+          NA_character_
+        )
+      ]
+
+      ts <- ts[, .(
+        timeseries_id,
+        location,
+        sub_location,
+        loc_code,
+        parameter,
+        media,
+        aggregation,
+        z,
+        record_rate,
+        networks,
+        projects,
+        start_date,
+        end_date
+      )]
+
+      # Helper function to identify empty columns
+      is_empty_col <- function(col) {
+        if (is.character(col) || is.factor(col)) {
+          all(is.na(col) | col == "")
+        } else {
+          all(is.na(col))
+        }
+      }
+
+      empty_cols <- setdiff(
+        names(ts)[vapply(ts, is_empty_col, logical(1))],
+        "timeseries_id"
+      )
+      if (length(empty_cols) > 0) {
+        ts[, (empty_cols) := NULL]
+      }
+
+      data.table::setorder(ts, location, parameter)
+      ts
+    })
+
+    output$banner <- renderUI({
+      application_notifications_ui(
+        ns = ns,
+        lang = language$language,
+        con = session$userData$AquaCache,
+        module_id = "contPlotAdaptive"
+      )
+    })
+
+    output$main <- renderUI({
+      req(moduleData, language$language)
+      network_col <- tr("generic_name_col", language$language)
+      project_col <- tr("generic_name_col", language$language)
+      network_choices <- if (
+        nrow(moduleData$networks) > 0 &&
+          network_col %in% names(moduleData$networks)
+      ) {
+        stats::setNames(
+          moduleData$networks$network_id[order(moduleData$networks[[
+            network_col
+          ]])],
+          moduleData$networks[[network_col]][order(moduleData$networks[[
+            network_col
+          ]])]
+        )
+      } else {
+        NULL
+      }
+      project_choices <- if (
+        nrow(moduleData$projects) > 0 &&
+          project_col %in% names(moduleData$projects)
+      ) {
+        stats::setNames(
+          moduleData$projects$project_id[order(moduleData$projects[[
+            project_col
+          ]])],
+          moduleData$projects[[project_col]][order(moduleData$projects[[
+            project_col
+          ]])]
+        )
+      } else {
+        NULL
+      }
+      tags <- tagList(
+        bslib::accordion(
+          id = ns("accordion1"),
+          open = c(ns("table_panel"), ns("plot_options_panel")),
+          bslib::accordion_panel(
+            title = tr("filters", language$language),
+            value = ns("filters_panel"),
+            fluidRow(
+              column(
+                width = 6,
+                selectizeInput(
+                  ns("network_filter"),
+                  label = tr("networks", language$language),
+                  choices = network_choices,
+                  multiple = TRUE,
+                  options = list(
+                    placeholder = tr("select_network", language$language)
+                  )
+                )
+              ),
+              column(
+                width = 6,
+                selectizeInput(
+                  ns("project_filter"),
+                  label = tr("projects", language$language),
+                  choices = project_choices,
+                  multiple = TRUE,
+                  options = list(
+                    placeholder = tr("select_project", language$language)
+                  )
+                )
+              )
+            )
+          ), # End filters_panel
+          bslib::accordion_panel(
+            title = tr("cont_table_heading", language$language),
+            value = ns("table_panel"),
+            div(
+              DT::dataTableOutput(ns("timeseries_table")),
+              uiOutput(ns("selected_timeseries_output")),
+              actionButton(
+                ns("add_new_timeseries"),
+                label = "Add another timeseries"
+              )
+            ) # End div
+          ), # End table_panel
+          bslib::accordion_panel(
+            title = tr("cont_table_plot_heading", language$language),
+            value = ns("plot_options_panel"),
+            selectizeInput(
+              ns("plot_type"),
+              label = tr("plot_type", language$language),
+              # Choice names (and an additional option for timeseries_multi) are updated later if multiple timeseries are selected.
+              choices = stats::setNames(
+                c("timeseries", "overlap_yrs", "histogram"),
+                c(
+                  tr("plot_type_ts", language$language),
+                  tr("plot_type_overlap", language$language),
+                  tr("plot_type_histogram", language$language)
+                )
+              )
+            ),
+            bslib::layout_sidebar(
+              sidebar = bslib::sidebar(
+                title = tr("plot_extra_options", language$language),
+                position = "right",
+                open = FALSE,
+                width = 360,
+                radioButtons(
+                  ns("plot_lang"),
+                  label = tr("language", language$language),
+                  choices = stats::setNames(
+                    c("en", "fr"),
+                    c(
+                      tr("english", language$language),
+                      tr("francais", language$language)
+                    )
+                  ),
+                  selected = language$abbrev,
+                  inline = TRUE
+                ),
+                checkboxInput(
+                  ns("plot_filter"),
+                  tr("plot_filter", language$language),
+                  value = FALSE
+                ),
+                checkboxInput(
+                  ns("showgridx"),
+                  tr("show_x_grid", language$language),
+                  value = FALSE
+                ),
+                checkboxInput(
+                  ns("showgridy"),
+                  tr("show_y_grid", language$language),
+                  value = FALSE
+                ),
+                conditionalPanel(
+                  condition = "output.has_multiple_timeseries == 'true'",
+                  ns = ns,
+                  checkboxInput(
+                    ns("shareX"),
+                    label = tooltip(
+                      trigger = list(
+                        tr("share_x_axis", language$language),
+                        bsicons::bs_icon("info-circle-fill")
+                      ),
+                      tr("share_x_axis_tooltip", language$language)
+                    ),
+                    value = TRUE
+                  ),
+                  checkboxInput(
+                    ns("shareY"),
+                    label = tooltip(
+                      trigger = list(
+                        tr("share_y_axis", language$language),
+                        bsicons::bs_icon("info-circle-fill")
+                      ),
+                      tr("share_y_axis_tooltip", language$language)
+                    ),
+                    value = FALSE
+                  )
+                ),
+                sliderInput(
+                  ns("line_scale"),
+                  tr("line_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                ),
+                sliderInput(
+                  ns("axis_scale"),
+                  tr("axis_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                ),
+                sliderInput(
+                  ns("legend_scale"),
+                  tr("legend_scale", language$language),
+                  min = 0.2,
+                  max = 3,
+                  value = 1,
+                  step = 0.1
+                )
+              ),
+              div(
+                fluidRow(
+                  class = "align-items-start",
+                  column(
+                    width = 6,
+                    # Show date range and shortcut selection buttons if NOT overlapping years or histogram
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all'",
+                      ns = ns,
+                      dateRangeInput(
+                        ns("date_range"),
+                        tr("date_range_lab", language$language),
+                        start = Sys.Date() - 365,
+                        end = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        startview = "month",
+                        language = language$abbrev,
+                        separator = tr("date_sep", language$language)
+                      ),
+                      actionButton(
+                        ns("last_30"),
+                        tr("plot_last_30", language$language)
+                      ),
+                      actionButton(
+                        ns("entire_record"),
+                        tr("plot_all_record", language$language)
+                      )
+                    ),
+                    # Show years to plot ONLY for overlapping years and histograms
+                    conditionalPanel(
+                      condition = "input.plot_type == 'overlap_yrs' || input.plot_type == 'histogram'",
+                      ns = ns,
+                      dateRangeInput(
+                        ns("doy_range"),
+                        tr("date_range_select_doy", language$language),
+                        start = Sys.Date() - 365,
+                        end = Sys.Date(),
+                        format = "yyyy-mm-dd",
+                        language = language$abbrev,
+                        separator = tr("date_sep", language$language)
+                      ),
+                      div(
+                        selectizeInput(
+                          ns("plot_years"),
+                          label = tr("plot_select_years", language$language),
+                          choices = NULL,
+                          multiple = TRUE
+                        ), # Choices are populated based on the location and parameter
+                        style = "display: flex; align-items: center;",
+                        span(
+                          id = ns("log_info_years"),
+                          `data-bs-toggle` = "tooltip",
+                          `data-placement` = "right",
+                          `data-trigger` = "click hover",
+                          title = tr("plot_select_yrs", language$language),
+                          icon(
+                            "info-circle",
+                            style = "font-size: 100%; margin-left: 5px;"
+                          )
+                        )
+                      )
+                    ),
+                    # Timezone is applicable to all types
+                    selectizeInput(
+                      ns("plot_timezone"),
+                      label = tr("plot_timezone_offset", language$language),
+                      choices = -12:14,
+                      selected = -7,
+                      multiple = FALSE,
+                      options = list(
+                        placeholder = tr(
+                          "plot_timezone_offset_placeholder",
+                          language$language
+                        )
+                      )
+                    ),
+                    NULL
+                  ),
+                  column(
+                    width = 6,
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries' || input.plot_type == 'timeseries_all' || input.plot_type == 'overlap_yrs'",
+                      ns = ns,
+                      checkboxInput(
+                        ns("apply_datum"),
+                        tr("plot_apply_vert_datum", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_hist"),
+                        tr("plot_hist_range", language$language),
+                        value = TRUE
+                      ),
+                      div(
+                        selectizeInput(
+                          ns("historic_range_overlap"),
+                          label = tr(
+                            "plot_hist_range_select",
+                            language$language
+                          ),
+                          choices = stats::setNames(
+                            c("all", "last", "none"),
+                            c(
+                              tr("all_yrs_record", language$language),
+                              tr("last_yr_only", language$language),
+                              tr("none_fm", language$language)
+                            )
+                          ),
+                          selected = "all"
+                        ),
+                        style = "display: flex; align-items: center;",
+                        span(
+                          id = ns("log_info_hist_range"),
+                          `data-bs-toggle` = "tooltip",
+                          `data-placement` = "right",
+                          `data-trigger` = "click hover",
+                          title = tr(
+                            "plot_hist_range_select_tooltip",
+                            language$language
+                          ),
+                          icon(
+                            "info-circle",
+                            style = "font-size: 100%; margin-left: 5px;"
+                          )
+                        )
+                      ),
+                      uiOutput(ns("historic_range_note")),
+                      checkboxInput(
+                        ns("show_unusable"),
+                        tr("plot_show_unusable", language$language),
+                        value = FALSE
+                      )
+                    ),
+                    conditionalPanel(
+                      condition = "input.plot_type == 'timeseries'",
+                      ns = ns,
+                      checkboxInput(
+                        ns("show_grades"),
+                        tr("plot_show_grades", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_approvals"),
+                        tr("plot_show_approvals", language$language),
+                        value = FALSE
+                      ),
+                      checkboxInput(
+                        ns("show_qualifiers"),
+                        tr("plot_show_qualifiers", language$language),
+                        value = FALSE
+                      )
+                    ),
+                    conditionalPanel(
+                      condition = "input.plot_type == 'histogram'",
+                      ns = ns,
+                      selectizeInput(
+                        ns("hist_transformation"),
+                        label = "Transformation",
+                        choices = c(
+                          "sum",
+                          "min",
+                          "max",
+                          "mean",
+                          "median",
+                          "integral"
+                        ),
+                        selected = "sum"
+                      ),
+                      selectizeInput(
+                        ns("hist_bin_units"),
+                        label = "Bin units",
+                        choices = c(
+                          "day",
+                          "week",
+                          "month",
+                          "year"
+                        ),
+                        selected = "month"
+                      ),
+                      numericInput(
+                        ns("hist_bin_width"),
+                        label = "Bin width",
+                        value = 1,
+                        min = 1
+                      ),
+                      numericInput(
+                        ns("hist_threshold"),
+                        label = "Min % of records to show bin (0-100)",
+                        value = 90,
+                        min = 1,
+                        max = 100
+                      ),
+                      checkboxInput(
+                        ns("hist_completeness_labels"),
+                        label = "Show completeness % above bins",
+                        value = TRUE
+                      )
+                    ) # End histogram conditionalPanel
+                  ) # End right column
+                ),
+                tags$div(style = "height: 10px;"),
+                input_task_button(
+                  ns("make_plot"),
+                  label = tr("create_plot", language$language),
+                  label_busy = tr("processing", language$language),
+                  class = "btn btn-primary"
+                )
+              )
+            )
+          ) # End plot_options_panel
+        ), # End accordion 1
+        tags$div(style = "height: 10px;"),
+        div(
+          id = ns("plot_container"),
+          plotly::plotlyOutput(ns("plot"), height = "800px", inline = TRUE)
+        ),
+        uiOutput(ns("full_screen_ui")),
+
+        # Space so the table and plot aren't in each other's faces
+        tags$div(style = "height: 15px;"),
+
+        # Start accordion 2
+        bslib::accordion(
+          id = ns("accordion2"),
+          bslib::accordion_panel(
+            title = tr("metadata", language$language),
+            value = ns("metadata_panel"),
+            uiOutput(ns("metadata_message")),
+            uiOutput(ns("metadata_timeseries_tabs")),
+            tags$div(style = "height: 10px;"),
+            fluidRow(
+              column(
+                width = 6,
+                tags$h5(tr("location_metadata_heading", language$language)),
+                DT::dataTableOutput(ns("location_metadata_table"))
+              ),
+              column(
+                width = 6,
+                tags$h5(tr("timeseries_metadata_heading", language$language)),
+                DT::dataTableOutput(ns("timeseries_metadata_table"))
+              )
+            ),
+            tags$div(style = "height: 10px;"),
+            tags$h5(tr("ownership_history_heading", language$language)),
+            DT::dataTableOutput(ns("timeseries_ownership_table"))
+          )
+        ) # End accordion2 accordion
+      ) # End tagList
+      return(tags)
+    }) # End renderUI
+
+    session$onFlushed(
+      function() {
+        shinyjs::runjs(
+          sprintf(
+            "trackContainerSize('%s', '%s');",
+            ns("plot_container"),
+            ns("plot_container_dims")
+          )
+        )
+      },
+      once = TRUE
+    )
+
+    # Observe changes to timeseries selections Update plot type choices accordingly and reset selected plot type if it's no longer valid.
+    observe({
+      ids <- selected_timeseries_ids()
+      plot_type_choices <- if (length(ids) > 1) {
+        stats::setNames(
+          c(
+            "timeseries", # several plots, one per timeseries
+            "timeseries_all", # all one plot
+            "overlap_yrs", # several plots
+            "histogram" # several plots
+          ),
+          c(
+            tr("plot_type_ts_many", language$language),
+            tr("plot_type_ts_all", language$language),
+            tr("plot_type_overlap_many", language$language),
+            tr("plot_type_histogram_many", language$language)
+          )
+        )
+      } else {
+        stats::setNames(
+          c("timeseries", "overlap_yrs", "histogram"),
+          c(
+            tr("plot_type_ts", language$language),
+            tr("plot_type_overlap", language$language),
+            tr("plot_type_histogram", language$language)
+          )
+        )
+      }
+
+      valid_plot_types <- unname(plot_type_choices)
+      selected_plot_type <- if (
+        !is.null(input$plot_type) &&
+          input$plot_type %in% valid_plot_types
+      ) {
+        input$plot_type
+      } else {
+        "timeseries"
+      }
+
+      if (length(ids) == 1 && identical(selected_plot_type, "timeseries_all")) {
+        selected_plot_type <- "timeseries"
+      }
+
+      updateSelectizeInput(
+        session,
+        "plot_type",
+        choices = plot_type_choices,
+        selected = selected_plot_type
+      )
+    })
+
+    is_snow_parameter_selection <- reactive({
+      ids <- selected_timeseries_ids()
+      if (is.null(ids) || length(ids) == 0) {
+        return(FALSE)
+      }
+
+      ts_rows <- moduleData$timeseries[timeseries_id %in% as.numeric(ids)]
+      if (nrow(ts_rows) == 0 || !("parameter_id" %in% names(ts_rows))) {
+        return(FALSE)
+      }
+
+      snow_param_ids <- if (exists("values", inherits = TRUE)) {
+        suppressWarnings(as.numeric(c(
+          values$swe,
+          values$snow_depth
+        )))
+      } else {
+        numeric(0)
+      }
+      snow_param_ids <- unique(stats::na.omit(snow_param_ids))
+      if (length(snow_param_ids) == 0) {
+        return(FALSE)
+      }
+
+      selected_param_ids <- unique(stats::na.omit(as.numeric(
+        ts_rows$parameter_id
+      )))
+      any(selected_param_ids %in% snow_param_ids)
+    })
+
+    current_plot_type <- reactive({
+      if (is.null(input$plot_type) || length(input$plot_type) == 0) {
+        return("timeseries")
+      }
+
+      plot_type <- as.character(input$plot_type[[1]])
+      if (
+        !(plot_type %in%
+          c(
+            "timeseries",
+            "timeseries_all",
+            "overlap_yrs",
+            "histogram"
+          ))
+      ) {
+        return("timeseries")
+      }
+
+      plot_type
+    })
+
+    current_plot_resolution <- reactive({
+      "auto"
+    })
+
+    current_legend_position <- reactive({
+      dims <- windowDims()
+      if (
+        is.null(dims) ||
+          is.null(dims$width) ||
+          is.null(dims$height) ||
+          any(is.na(c(dims$width, dims$height)))
+      ) {
+        return("v")
+      }
+
+      if (dims$width > dims$height) {
+        "v"
+      } else {
+        "h"
+      }
+    })
+
+    selected_historic_range_metadata <- reactive({
+      if (is.null(moduleData) || is.null(moduleData$timeseries)) {
+        return(data.frame(
+          aggregation_type = character(),
+          record_rate = numeric()
+        ))
+      }
+
+      ids <- selected_timeseries_ids()
+      if (is.null(ids) || length(ids) == 0) {
+        return(data.frame(
+          aggregation_type = character(),
+          record_rate = numeric()
+        ))
+      }
+
+      ts_rows <- moduleData$timeseries[timeseries_id %in% as.numeric(ids)]
+      if (nrow(ts_rows) == 0) {
+        return(data.frame(
+          aggregation_type = character(),
+          record_rate = numeric()
+        ))
+      }
+
+      aggregation_type <- if ("aggregation_type" %in% names(ts_rows)) {
+        ts_rows$aggregation_type
+      } else if (
+        "aggregation_type_id" %in%
+          names(ts_rows) &&
+          !is.null(moduleData$aggregation_types) &&
+          "aggregation_type_id" %in% names(moduleData$aggregation_types) &&
+          "aggregation_type" %in% names(moduleData$aggregation_types)
+      ) {
+        moduleData$aggregation_types[
+          match(
+            ts_rows$aggregation_type_id,
+            moduleData$aggregation_types$aggregation_type_id
+          ),
+          "aggregation_type"
+        ][[1]]
+      } else {
+        rep(NA_character_, nrow(ts_rows))
+      }
+
+      record_rate <- if ("record_rate" %in% names(ts_rows)) {
+        ts_rows$record_rate
+      } else {
+        rep(NA_real_, nrow(ts_rows))
+      }
+
+      data.frame(
+        aggregation_type = aggregation_type,
+        record_rate = record_rate
+      )
+    })
+
+    historic_range_meaningless_note <- function(
+      aggregation_types,
+      resolution,
+      record_rate_seconds = NULL,
+      lang = "en"
+    ) {
+      if (
+        !historic_range_is_meaningless(
+          aggregation_types = aggregation_types,
+          resolution = resolution,
+          record_rate_seconds = record_rate_seconds
+        )
+      ) {
+        return(NULL)
+      }
+      return(tr("plot_hist_range_meaningless", language$language))
+    }
+
+    historic_range_ui_state <- reactive({
+      plot_type <- current_plot_type()
+      if (!(plot_type %in% c("timeseries", "timeseries_all", "overlap_yrs"))) {
+        return(list(disabled = FALSE, note = NULL))
+      }
+
+      hist_meta <- selected_historic_range_metadata()
+      note <- historic_range_meaningless_note(
+        aggregation_types = hist_meta$aggregation_type,
+        resolution = current_plot_resolution(),
+        record_rate_seconds = hist_meta$record_rate,
+        lang = language$abbrev
+      )
+
+      list(disabled = !is.null(note), note = note)
+    })
+
+    observe({
+      hist_state <- historic_range_ui_state()
+
+      if (isTRUE(hist_state$disabled)) {
+        updateCheckboxInput(session, "show_hist", value = FALSE)
+        updateSelectizeInput(
+          session,
+          "historic_range_overlap",
+          selected = "none"
+        )
+        shinyjs::disable("show_hist")
+        shinyjs::disable("historic_range_overlap")
+      } else {
+        shinyjs::enable("show_hist")
+        shinyjs::enable("historic_range_overlap")
+      }
+    })
+
+    output$historic_range_note <- renderUI({
+      hist_state <- historic_range_ui_state()
+      if (!isTRUE(hist_state$disabled)) {
+        return(NULL)
+      }
+
+      tags$div(
+        class = "text-muted small",
+        hist_state$note
+      )
+    })
+
+    apply_default_doy_range <- function(use_snow_defaults) {
+      current_year <- lubridate::year(Sys.Date())
+
+      if (isTRUE(use_snow_defaults)) {
+        updateDateRangeInput(
+          session,
+          "doy_range",
+          min = as.Date(sprintf("%d-01-01", current_year - 1)),
+          max = as.Date(sprintf("%d-12-31", current_year)),
+          start = as.Date(sprintf("%d-09-01", current_year - 1)),
+          end = as.Date(sprintf("%d-06-01", current_year))
+        )
+      } else {
+        updateDateRangeInput(
+          session,
+          "doy_range",
+          min = as.Date(sprintf("%d-01-01", current_year)),
+          max = as.Date(sprintf("%d-12-31", current_year)),
+          start = as.Date(sprintf("%d-01-01", current_year)),
+          end = as.Date(sprintf("%d-12-31", current_year))
+        )
+      }
+    }
+
+    observeEvent(
+      list(selected_timeseries_ids(), input$plot_type),
+      {
+        plot_type <- if (
+          is.null(input$plot_type) || length(input$plot_type) == 0
+        ) {
+          "timeseries"
+        } else {
+          as.character(input$plot_type[[1]])
+        }
+        if (!(plot_type %in% c("overlap_yrs", "histogram"))) {
+          return()
+        }
+        apply_default_doy_range(is_snow_parameter_selection())
+      },
+      ignoreNULL = FALSE
+    )
+
+    compute_plot_year_choices <- function(ts_rows, doy_range_input) {
+      ts_start <- suppressWarnings(as.Date(ts_rows$start_datetime))
+      ts_end <- suppressWarnings(as.Date(ts_rows$end_datetime))
+      valid_ts_rows <- !is.na(ts_start) & !is.na(ts_end)
+      if (!any(valid_ts_rows)) {
+        current_year <- as.integer(lubridate::year(Sys.Date()))
+        return(current_year)
+      }
+      ts_start <- ts_start[valid_ts_rows]
+      ts_end <- ts_end[valid_ts_rows]
+
+      range_min_year <- as.integer(min(lubridate::year(ts_start), na.rm = TRUE))
+      range_max_year <- as.integer(max(lubridate::year(ts_end), na.rm = TRUE))
+
+      doy_vals <- suppressWarnings(lubridate::yday(as.Date(doy_range_input)))
+      if (length(doy_vals) != 2 || any(is.na(doy_vals))) {
+        doy_vals <- c(1L, 365L)
+      }
+      start_doy <- as.integer(doy_vals[[1]])
+      end_doy <- as.integer(doy_vals[[2]])
+      overlaps_new_year <- start_doy > end_doy
+
+      candidate_start <- range_min_year - if (overlaps_new_year) 1L else 0L
+      candidate_end <- range_max_year
+      if (candidate_start > candidate_end) {
+        candidate_end <- candidate_start
+      }
+      candidate_years <- seq(candidate_start, candidate_end)
+
+      doy_to_date <- function(year, doy) {
+        max_doy <- if (lubridate::leap_year(year)) 366L else 365L
+        safe_doy <- max(1L, min(as.integer(doy), max_doy))
+        as.Date(sprintf("%04d-01-01", year)) + (safe_doy - 1L)
+      }
+
+      valid_years <- candidate_years[vapply(
+        candidate_years,
+        function(y) {
+          season_start <- doy_to_date(y, start_doy)
+          season_end_exclusive <- if (overlaps_new_year) {
+            doy_to_date(y + 1L, end_doy) + 1L
+          } else {
+            doy_to_date(y, end_doy) + 1L
+          }
+          any(ts_start < season_end_exclusive & ts_end >= season_start)
+        },
+        logical(1)
+      )]
+
+      if (length(valid_years) == 0) {
+        valid_years <- candidate_years
+      }
+
+      valid_years <- as.integer(valid_years)
+      # Order years in descending order so the most recent year is selected by default in the UI.
+      valid_years <- valid_years[order(valid_years, decreasing = TRUE)]
+    }
+
+    observeEvent(
+      list(selected_timeseries_ids(), input$doy_range),
+      {
+        ids <- selected_timeseries_ids()
+        if (is.null(ids) || length(ids) == 0) {
+          updateSelectizeInput(
+            session,
+            "plot_years",
+            choices = numeric(0),
+            selected = numeric(0)
+          )
+          return()
+        }
+
+        ts_rows <- moduleData$timeseries[timeseries_id %in% as.numeric(ids)]
+        if (nrow(ts_rows) == 0) {
+          return()
+        }
+
+        year_choices <- compute_plot_year_choices(ts_rows, input$doy_range)
+        selected_years <- suppressWarnings(as.integer(input$plot_years))
+        selected_years <- intersect(selected_years, year_choices)
+        if (length(selected_years) == 0) {
+          selected_years <- max(year_choices)
+        }
+
+        updateSelectizeInput(
+          session,
+          "plot_years",
+          choices = year_choices,
+          selected = selected_years
+        )
+      },
+      ignoreNULL = FALSE
+    )
+
+    # Keep selected slots valid when table rows change
+    observeEvent(
+      timeseries_table_reactive(),
+      {
+        ts <- timeseries_table_reactive()
+        slots <- selected_timeseries_slots()
+
+        if (nrow(ts) == 0) {
+          selected_timeseries_slots(NA_real_)
+          active_timeseries_slot(1L)
+          return()
+        }
+
+        valid_slots <- slots[!is.na(slots) & slots %in% ts$timeseries_id]
+        if (length(valid_slots) == 0) {
+          selected_timeseries_slots(NA_real_)
+          active_timeseries_slot(1L)
+          return()
+        }
+
+        selected_timeseries_slots(as.numeric(valid_slots))
+        active_timeseries_slot(
+          min(active_timeseries_slot(), length(valid_slots))
+        )
+      },
+      ignoreNULL = FALSE
+    )
+
+    # Update active slot when a row is selected in the table
+    observeEvent(input$timeseries_table_rows_selected, {
+      ts <- timeseries_table_reactive()
+      if (
+        !is.null(input$timeseries_table_rows_selected) &&
+          length(input$timeseries_table_rows_selected) == 1 &&
+          nrow(ts) >= input$timeseries_table_rows_selected
+      ) {
+        selected_id <- ts$timeseries_id[input$timeseries_table_rows_selected]
+        slots <- selected_timeseries_slots()
+        idx <- active_timeseries_slot()
+
+        if (is.null(idx) || is.na(idx) || idx < 1 || idx > length(slots)) {
+          idx <- 1L
+        }
+
+        duplicate_idx <- which(!is.na(slots) & slots == selected_id)
+        if (length(duplicate_idx) > 0 && duplicate_idx[[1]] != idx) {
+          active_timeseries_slot(duplicate_idx[[1]])
+        } else {
+          slots[[idx]] <- as.numeric(selected_id)
+          selected_timeseries_slots(as.numeric(slots))
+          active_timeseries_slot(idx)
+        }
+      }
+
+      # Update the date range input to reflect the active selected timeseries
+      selected_id <- selected_timeseries_id_active()
+      if (is.null(selected_id)) {
+        return()
+      }
+      # In some cases the min date is not a year after the max date, so take the max one to prevent a blank date range.
+      safe_min <- max(
+        ts$end_date[ts$timeseries_id == selected_id] - 365,
+        ts$start_date[ts$timeseries_id == selected_id],
+        na.rm = TRUE
+      )
+      updateDateRangeInput(
+        session,
+        "date_range",
+        start = safe_min,
+        end = ts$end_date[ts$timeseries_id == selected_id],
+        min = ts$start_date[ts$timeseries_id == selected_id],
+        max = ts$end_date[ts$timeseries_id == selected_id]
+      )
+    })
+
+    # Render the timeseries table
+    output$timeseries_table <- DT::renderDataTable({
+      ts <- timeseries_table_reactive()
+
+      column_labels <- c(
+        timeseries_id = "timeseries_id",
+        location = tr("loc", language$language),
+        sub_location = tr("sub_loc", language$language),
+        loc_code = tr("code", language$language),
+        parameter = tr("parameter", language$language),
+        media = tr("media", language$language),
+        aggregation = tr("aggregation", language$language),
+        z = tr("z", language$language),
+        record_rate = tr("record_rate", language$language),
+        networks = tr("network", language$language),
+        projects = tr("project", language$language),
+        start_date = tr("start_date", language$language),
+        end_date = tr("end_date", language$language)
+      )
+
+      visible_cols <- names(ts)
+      col_names <- unname(column_labels[visible_cols[-1]])
+
+      order_columns <- list()
+      if ("location" %in% visible_cols) {
+        order_columns[[length(order_columns) + 1]] <- list(
+          match("location", visible_cols) - 1,
+          "asc"
+        )
+      }
+      if ("parameter" %in% visible_cols) {
+        order_columns[[length(order_columns) + 1]] <- list(
+          match("parameter", visible_cols) - 1,
+          "asc"
+        )
+      }
+
+      search_cols <- vector("list", ncol(ts))
+      if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
+        search_cols[[match("location", names(ts))]] <- list(
+          search = location_filter_value()
+        )
+      }
+
+      date_targets <- which(names(ts) %in% c("start_date", "end_date")) - 1
+      dt <- DT::datatable(
+        ts,
+        rownames = FALSE,
+        # Switch up selection mode based on whether multiple selection is allowed. Max 4 selections.
+        selection = list(mode = "single"),
+        options = list(
+          pageLength = 10,
+          lengthMenu = c(5, 10, 20),
+          columnDefs = list(
+            list(visible = FALSE, targets = 0),
+            list(
+              targets = date_targets,
+              render = htmlwidgets::JS(
+                "function(data, type, row){
+                  if (!data) return '';
+                  var d = new Date(data);
+                  if (type === 'display') return d.toISOString().substring(0,10);
+                  return data;
+                }"
+              )
+            )
+          ),
+          searchCols = search_cols,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
+            sprintf(
+              "function(settings, json) {
+                 var api = this.api();
+    
+                 $(api.table().header()).css({'font-size': '90%%'});
+                 $(api.table().body()).css({'font-size': '80%%'});
+    
+                 setTimeout(function() {
+                   $(api.table().container())
+                     .find('thead input[type=\"search\"]')
+                     .attr('placeholder', '%s');
+                 }, 0);
+               }",
+              tr("all_m", language$language)
+            )
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          ),
+          order = order_columns,
+          stateSave = FALSE
+        ), # End options
+        colnames = c("timeseries_id", col_names),
+        filter = "top",
+        callback = htmlwidgets::JS(
+          sprintf(
+            "
+          var tips = {
+            4: '%s',
+            6: '%s'
+          };
+        
+          var applyTips = function() {
+            var $thead = $(table.table().header());
+            var $rows  = $thead.find('tr');
+        
+            var $labelRow = $rows.filter(function() {
+              return $(this).find('th').filter(function() {
+                return $.trim($(this).text()).length > 0;
+              }).length > 0;
+            }).first();
+        
+            $labelRow.find('th').each(function(i) {
+              if (!(i in tips)) return;
+        
+              var $th   = $(this);
+              var $icon = $th.find('.dt-info-icon');
+        
+              if ($icon.length === 0) {
+                $icon = $('<i class=\"fa fa-info-circle dt-info-icon\" style=\"font-size:100%%; margin-left:5px; cursor:help;\"></i>')
+                  .appendTo($th);
+        
+                // Make it focusable (Tab) and clickable (mobile)
+                $icon.attr({ tabindex: 0, role: 'button', 'aria-label': 'Info' });
+              }
+        
+              // Bootstrap 5 tooltip attributes (title is read by BS)
+              $icon.attr({
+                title: tips[i],
+                'data-bs-toggle': 'tooltip',
+                'data-bs-trigger': 'hover focus click',
+                'data-bs-placement': 'top'
+              });
+        
+              // Initialize (or update) Bootstrap tooltip instance
+              var el = $icon.get(0);
+              if (window.bootstrap && bootstrap.Tooltip) {
+                var inst = bootstrap.Tooltip.getInstance(el);
+                if (inst) {
+                  inst.setContent({ '.tooltip-inner': tips[i] });
+                } else {
+                  new bootstrap.Tooltip(el, { trigger: 'hover focus click', delay: { show: 0, hide: 0 } });
+                }
+              }
+            });
+          };
+        
+          applyTips();
+          table.on('draw.dt', applyTips);
+          ",
+            tr("cont_table_tooltip1", language$language),
+            tr("cont_table_tooltip2", language$language)
+          )
+        )
+      )
+      dt
+    })
+
+    output$selected_timeseries_output <- renderUI({
+      slots <- selected_timeseries_slots()
+      ts <- timeseries_table_reactive()
+      selected_count <- sum(!is.na(slots))
+      show_delete <- selected_count > 1
+
+      if (length(slots) == 0) {
+        return(NULL)
+      }
+
+      rows <- lapply(seq_along(slots), function(i) {
+        ts_id <- slots[[i]]
+        label <- tr("metadata_select_prompt", language$language)
+        if (!is.na(ts_id)) {
+          row_match <- ts[timeseries_id == ts_id]
+          if (nrow(row_match) > 0) {
+            row_match <- row_match[1]
+
+            ts_meta <- moduleData$timeseries[timeseries_id == ts_id]
+            start_dt <- if (nrow(ts_meta) > 0) {
+              format(
+                as.POSIXct(ts_meta$start_datetime[[1]], tz = "UTC"),
+                "%Y-%m-%d %H:%M"
+              )
+            } else {
+              NA_character_
+            }
+            end_dt <- if (nrow(ts_meta) > 0) {
+              format(
+                as.POSIXct(ts_meta$end_datetime[[1]], tz = "UTC"),
+                "%Y-%m-%d %H:%M"
+              )
+            } else {
+              NA_character_
+            }
+
+            label_parts <- c(
+              as.character(row_match$location),
+              as.character(row_match$sub_location),
+              as.character(row_match$parameter),
+              paste0(tr("start_date", language$language), ": ", start_dt),
+              paste0(tr("end_date", language$language), ": ", end_dt),
+              paste0("ID: ", row_match$timeseries_id)
+            )
+            label_parts <- label_parts[
+              !is.na(label_parts) &
+                nzchar(label_parts) &
+                !grepl(":\\s*$", label_parts)
+            ]
+            label <- paste(label_parts, collapse = " | ")
+          } else {
+            label <- paste0("ID: ", ts_id)
+          }
+        }
+
+        row_style <- if (active_timeseries_slot() == i) {
+          "border-left: 4px solid #0097A9; padding-left: 10px;"
+        } else {
+          "padding-left: 14px;"
+        }
+
+        fluidRow(
+          style = paste0("margin-top: 8px; ", row_style),
+          column(
+            width = 10,
+            tags$div(
+              tags$strong(paste0("Timeseries ", i, ": ")),
+              label
+            )
+          ),
+          column(
+            width = 2,
+            if (show_delete && !is.na(ts_id)) {
+              actionButton(
+                ns(paste0("delete_timeseries_", i)),
+                label = "Delete",
+                class = "btn btn-outline-danger btn-sm"
+              )
+            }
+          )
+        )
+      })
+
+      do.call(tagList, rows)
+    })
+
+    observeEvent(input$add_new_timeseries, {
+      slots <- selected_timeseries_slots()
+      if (length(slots) >= 4) {
+        return()
+      }
+
+      if (any(is.na(slots))) {
+        active_timeseries_slot(which(is.na(slots))[[1]])
+        return()
+      }
+
+      selected_timeseries_slots(c(slots, NA_real_))
+      active_timeseries_slot(length(slots) + 1L)
+    })
+
+    observe({
+      slots <- selected_timeseries_slots()
+      if (length(slots) >= 4 || any(is.na(slots))) {
+        shinyjs::hide("add_new_timeseries")
+      } else {
+        shinyjs::show("add_new_timeseries")
+      }
+    })
+
+    lapply(seq_len(4), function(i) {
+      observeEvent(
+        input[[paste0("delete_timeseries_", i)]],
+        {
+          slots <- selected_timeseries_slots()
+          if (i > length(slots) || is.na(slots[[i]])) {
+            return()
+          }
+
+          slots <- slots[-i]
+          if (length(slots) == 0) {
+            slots <- NA_real_
+          }
+          selected_timeseries_slots(as.numeric(slots))
+          active_timeseries_slot(min(i, length(slots)))
+        },
+        ignoreInit = TRUE
+      )
+    })
+
+    proxy <- DT::dataTableProxy("timeseries_table")
+
+    # Keep table highlight in sync with active selected timeseries slot
+    observeEvent(
+      list(
+        selected_timeseries_slots(),
+        active_timeseries_slot(),
+        timeseries_table_reactive()
+      ),
+      {
+        ts <- timeseries_table_reactive()
+        id <- selected_timeseries_id_active()
+
+        if (is.null(id) || nrow(ts) == 0) {
+          DT::selectRows(proxy, NULL)
+          return()
+        }
+
+        row <- which(ts$timeseries_id == id)
+        if (length(row) == 1) {
+          DT::selectRows(proxy, row)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    # Observe buttons to update date range
+    observeEvent(input$last_30, {
+      ts <- timeseries_table_reactive()
+      selected_id <- selected_timeseries_id_active()
+      if (is.null(selected_id)) {
+        return()
+      }
+      selected_row <- which(ts$timeseries_id == selected_id)
+      if (length(selected_row) == 0) {
+        return()
+      }
+      end_date <- ts$end_date[selected_row]
+      safe_start_date <- max(
+        end_date - 30,
+        ts$start_date[selected_row],
+        na.rm = TRUE
+      )
+      updateDateRangeInput(
+        session,
+        "date_range",
+        start = safe_start_date,
+        end = end_date
+      )
+    })
+
+    observeEvent(input$entire_record, {
+      ts <- timeseries_table_reactive()
+      selected_id <- selected_timeseries_id_active()
+      if (is.null(selected_id)) {
+        return()
+      }
+      selected_row <- which(ts$timeseries_id == selected_id)
+      if (length(selected_row) == 0) {
+        return()
+      }
+      start_date <- ts$start_date[selected_row]
+      end_date <- ts$end_date[selected_row]
+      updateDateRangeInput(
+        session,
+        "date_range",
+        start = start_date,
+        end = end_date
+      )
+    })
+
+    plot_request <- reactive({
+      ts <- timeseries_table_reactive()
+      validate(need(nrow(ts) > 0, tr("error", language$language)))
+
+      selected_ids <- selected_timeseries_ids()
+      selected_ids <- as.numeric(selected_ids)
+      selected_ids <- selected_ids[selected_ids %in% ts$timeseries_id]
+      validate(need(
+        length(selected_ids) > 0,
+        "Please select a row in the table before creating a plot."
+      ))
+
+      plot_type <- if (
+        is.null(input$plot_type) ||
+          length(input$plot_type) == 0
+      ) {
+        "timeseries"
+      } else {
+        as.character(input$plot_type[[1]])
+      }
+      if (plot_type == "timeseries_all" && length(selected_ids) == 1) {
+        plot_type <- "timeseries"
+      }
+
+      if (plot_type %in% c("timeseries", "timeseries_all")) {
+        req(input$date_range)
+      } else {
+        req(input$doy_range)
+      }
+
+      timezone_offset <- suppressWarnings(as.numeric(input$plot_timezone))
+      if (length(timezone_offset) == 0 || is.na(timezone_offset[[1]])) {
+        timezone_offset <- -7
+      } else {
+        timezone_offset <- timezone_offset[[1]]
+      }
+      timezone_name <- if (timezone_offset == 0) {
+        "UTC"
+      } else {
+        sprintf("Etc/GMT%+d", -as.integer(timezone_offset))
+      }
+
+      hist_bin_units_input <- if (
+        is.null(input$hist_bin_units) ||
+          length(input$hist_bin_units) == 0
+      ) {
+        "day"
+      } else {
+        input$hist_bin_units[[1]]
+      }
+
+      hist_bin_units <- switch(
+        hist_bin_units_input,
+        hour = "hours",
+        day = "days",
+        week = "weeks",
+        month = "months",
+        year = "years",
+        hours = "hours",
+        days = "days",
+        weeks = "weeks",
+        months = "months",
+        years = "years",
+        "days"
+      )
+
+      selected_years <- suppressWarnings(as.numeric(input$plot_years))
+      if (length(selected_years) == 0 || all(is.na(selected_years))) {
+        selected_years <- NULL
+      } else {
+        selected_years <- sort(unique(selected_years[!is.na(selected_years)]))
+      }
+
+      plot_resolution <- current_plot_resolution()
+      hist_state <- historic_range_ui_state()
+
+      list(
+        plot_type = plot_type,
+        timeseries_ids = selected_ids,
+        timeseries_id = selected_ids[[1]],
+        start_date = if (plot_type %in% c("timeseries", "timeseries_all")) {
+          input$date_range[1]
+        } else {
+          NULL
+        },
+        end_date = if (plot_type %in% c("timeseries", "timeseries_all")) {
+          input$date_range[2]
+        } else {
+          NULL
+        },
+        start_day = if (plot_type %in% c("overlap_yrs", "histogram")) {
+          input$doy_range[1]
+        } else {
+          NULL
+        },
+        end_day = if (plot_type %in% c("overlap_yrs", "histogram")) {
+          input$doy_range[2]
+        } else {
+          NULL
+        },
+        years = selected_years,
+        historic_range = !isTRUE(hist_state$disabled) &&
+          isTRUE(input$show_hist),
+        historic_range_overlap = if (isTRUE(hist_state$disabled)) {
+          "none"
+        } else if (
+          is.null(input$historic_range_overlap) ||
+            length(input$historic_range_overlap) == 0
+        ) {
+          "all"
+        } else {
+          input$historic_range_overlap[[1]]
+        },
+        unusable = isTRUE(input$show_unusable),
+        grades = plot_type == "timeseries" && isTRUE(input$show_grades),
+        approvals = plot_type == "timeseries" && isTRUE(input$show_approvals),
+        qualifiers = plot_type == "timeseries" && isTRUE(input$show_qualifiers),
+        hist_transformation = if (
+          is.null(input$hist_transformation) ||
+            length(input$hist_transformation) == 0
+        ) {
+          "sum"
+        } else {
+          input$hist_transformation[[1]]
+        },
+        hist_bin_units = hist_bin_units,
+        hist_bin_width = if (
+          is.null(input$hist_bin_width) ||
+            is.na(input$hist_bin_width)
+        ) {
+          1
+        } else {
+          as.numeric(input$hist_bin_width)
+        },
+        hist_threshold = if (
+          is.null(input$hist_threshold) ||
+            is.na(input$hist_threshold)
+        ) {
+          0
+        } else {
+          as.numeric(input$hist_threshold) / 100
+        },
+        hist_completeness_labels = isTRUE(input$hist_completeness_labels),
+        lang = if (
+          !is.null(input$plot_lang) &&
+            length(input$plot_lang) > 0 &&
+            input$plot_lang[[1]] %in% c("en", "fr")
+        ) {
+          input$plot_lang[[1]]
+        } else {
+          language$abbrev
+        },
+        plot_resolution = plot_resolution,
+        plot_timezone = timezone_name,
+        as_of = if (
+          is.null(input$as_of) ||
+            length(input$as_of) == 0 ||
+            is.na(input$as_of[[1]])
+        ) {
+          NULL
+        } else {
+          input$as_of[[1]]
+        },
+        datum = isTRUE(input$apply_datum),
+        filter = if (isTRUE(input$plot_filter)) {
+          20
+        } else {
+          NULL
+        },
+        line_scale = if (
+          is.null(input$line_scale) ||
+            is.na(input$line_scale)
+        ) {
+          1
+        } else {
+          as.numeric(input$line_scale)
+        },
+        axis_scale = if (
+          is.null(input$axis_scale) ||
+            is.na(input$axis_scale)
+        ) {
+          1
+        } else {
+          as.numeric(input$axis_scale)
+        },
+        legend_scale = if (
+          is.null(input$legend_scale) ||
+            is.na(input$legend_scale)
+        ) {
+          1
+        } else {
+          as.numeric(input$legend_scale)
+        },
+        legend_position = current_legend_position(),
+        gridx = isTRUE(input$showgridx),
+        gridy = isTRUE(input$showgridy),
+        shareX = isTRUE(input$shareX),
+        shareY = isTRUE(input$shareY),
+        use_webgl = isTRUE(session$userData$use_webgl),
+        db = list(
+          name = session$userData$config$dbName,
+          host = session$userData$config$dbHost,
+          port = session$userData$config$dbPort,
+          user = session$userData$config$dbUser,
+          pass = session$userData$config$dbPass
+        )
+      )
+    })
+
+    format_metadata_value <- function(value) {
+      if (is.null(value) || length(value) == 0) {
+        return(NA_character_)
+      }
+      if (is.list(value)) {
+        value <- unlist(value, use.names = FALSE)
+      }
+      if (length(value) > 1) {
+        return(paste(stats::na.omit(value), collapse = ", "))
+      }
+      value <- as.character(value)
+      if (!is.na(value) && grepl("^\\{.*\\}$", value)) {
+        value <- gsub("^\\{|\\}$", "", value)
+        value <- gsub(",", ", ", value)
+      }
+      if (identical(value, "")) {
+        return(NA_character_)
+      }
+      value
+    }
+
+    metadata_base_table <- function(attributes, values) {
+      metadata <- data.frame(
+        attribute = attributes,
+        value = values,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+      metadata <- metadata[!is.na(metadata$value) & metadata$value != "", ]
+      metadata
+    }
+
+    output$metadata_timeseries_tabs <- renderUI({
+      ids <- selected_timeseries_ids()
+      if (is.null(ids) || length(ids) == 0) {
+        return(NULL)
+      }
+
+      ts <- timeseries_table_reactive()
+      ids_chr <- as.character(ids)
+      current_tab <- if (is.null(input$metadata_timeseries_tab)) {
+        ""
+      } else {
+        as.character(input$metadata_timeseries_tab)
+      }
+      selected_tab <- if (nzchar(current_tab) && current_tab %in% ids_chr) {
+        current_tab
+      } else {
+        ids_chr[[1]]
+      }
+
+      tabs <- lapply(seq_along(ids), function(i) {
+        ts_id <- as.numeric(ids[[i]])
+        row_match <- ts[timeseries_id == ts_id]
+        label <- paste0("Timeseries ", i, " (ID: ", ts_id, ")")
+        if (nrow(row_match) > 0) {
+          row_match <- row_match[1]
+          label_parts <- c(
+            paste0("Timeseries ", i),
+            as.character(row_match$location),
+            as.character(row_match$parameter),
+            paste0("ID: ", ts_id)
+          )
+          label_parts <- label_parts[
+            !is.na(label_parts) &
+              nzchar(label_parts)
+          ]
+          label <- paste(label_parts, collapse = " | ")
+        }
+
+        tabPanel(
+          title = label,
+          value = as.character(ts_id),
+          tags$div(style = "height: 1px;")
+        )
+      })
+
+      do.call(
+        tabsetPanel,
+        c(
+          list(
+            id = ns("metadata_timeseries_tab"),
+            type = "tabs",
+            selected = selected_tab
+          ),
+          tabs
+        )
+      )
+    })
+
+    metadata_timeseries_id <- reactive({
+      ids <- selected_timeseries_ids()
+      if (is.null(ids) || length(ids) == 0) {
+        return(NULL)
+      }
+
+      selected_tab <- suppressWarnings(as.numeric(
+        input$metadata_timeseries_tab
+      ))
+      if (
+        length(selected_tab) == 1 &&
+          !is.na(selected_tab) &&
+          selected_tab %in% as.numeric(ids)
+      ) {
+        return(as.numeric(selected_tab))
+      }
+
+      as.numeric(ids[[1]])
+    })
+
+    selected_location_id <- reactive({
+      ts_id <- metadata_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NULL)
+      }
+      location_id <- moduleData$timeseries[
+        timeseries_id == ts_id,
+        location_id
+      ]
+      if (length(location_id) == 0) {
+        return(NULL)
+      }
+      location_id[[1]]
+    })
+
+    selected_sub_location <- reactive({
+      ts_id <- metadata_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NA_character_)
+      }
+      selected_sub_location_id <- moduleData$timeseries[
+        timeseries_id == ts_id,
+        sub_location_id
+      ]
+      if (length(selected_sub_location_id) == 0) {
+        return(NA_character_)
+      }
+      selected_sub_location_id <- selected_sub_location_id[[1]]
+      if (
+        is.null(selected_sub_location_id) || is.na(selected_sub_location_id)
+      ) {
+        return(NA_character_)
+      }
+      sub_loc_col <- tr("sub_location_col", language$language)
+      sub_loc <- moduleData$sub_locs[
+        sub_location_id == selected_sub_location_id,
+        ..sub_loc_col
+      ][[sub_loc_col]]
+      if (length(sub_loc) == 0) {
+        return(NA_character_)
+      }
+      sub_loc[[1]]
+    })
+
+    location_metadata <- reactive({
+      req(selected_location_id())
+      loc_tbl <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste0(
+          "SELECT * FROM ",
+          if (language$abbrev == "fr") {
+            "location_metadata_fr"
+          } else {
+            "location_metadata_en"
+          },
+          " WHERE location_id = ",
+          selected_location_id(),
+          ";"
+        )
+      )
+      if (nrow(loc_tbl) == 0) {
+        return(NULL)
+      }
+      location_name <- if (language$abbrev == "fr") {
+        loc_tbl$nom
+      } else {
+        loc_tbl$name
+      }
+      location_code <- if (language$abbrev == "fr") {
+        loc_tbl$code_de_site
+      } else {
+        loc_tbl$location_code
+      }
+      projects <- if (language$abbrev == "fr") {
+        loc_tbl$projets
+      } else {
+        loc_tbl$projects
+      }
+      networks <- if (language$abbrev == "fr") {
+        loc_tbl$`réseaux`
+      } else {
+        loc_tbl$networks
+      }
+      elevation <- if (language$abbrev == "fr") {
+        loc_tbl$altitude
+      } else {
+        loc_tbl$elevation
+      }
+      metadata_base_table(
+        attributes = c(
+          tr("loc", language$language),
+          tr("location_code_label", language$language),
+          tr("sub_loc", language$language),
+          tr("latitude", language$language),
+          tr("longitude", language$language),
+          tr("elevation_m", language$language),
+          tr("datum", language$language),
+          tr("projects", language$language),
+          tr("networks", language$language)
+        ),
+        values = c(
+          format_metadata_value(location_name),
+          format_metadata_value(location_code),
+          format_metadata_value(selected_sub_location()),
+          format_metadata_value(loc_tbl$latitude),
+          format_metadata_value(loc_tbl$longitude),
+          format_metadata_value(elevation),
+          format_metadata_value(loc_tbl$datum),
+          format_metadata_value(projects),
+          format_metadata_value(networks)
+        )
+      )
+    })
+
+    timeseries_metadata <- reactive({
+      ts_id <- metadata_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NULL)
+      }
+
+      ts_tbl <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste0(
+          "SELECT * FROM ",
+          if (language$abbrev == "fr") {
+            "continuous.timeseries_metadata_fr"
+          } else {
+            "continuous.timeseries_metadata_en"
+          },
+          " WHERE timeseries_id = ",
+          ts_id,
+          ";"
+        )
+      )
+
+      if (nrow(ts_tbl) == 0) {
+        return(NULL)
+      }
+
+      if (language$abbrev == "fr") {
+        parameter <- ts_tbl$`nom_paramètre`
+        media <- ts_tbl$`type_de_média`
+        aggregation <- ts_tbl$`type_agrégation`
+        record_rate <- ts_tbl$`fréquence_enregistrement`
+        depth_height <- ts_tbl$`profondeur_hauteur_m`
+        start_dt <- ts_tbl$`début`
+        end_dt <- ts_tbl$fin
+      } else {
+        parameter <- ts_tbl$parameter_name
+        media <- ts_tbl$media_type
+        aggregation <- ts_tbl$aggregation_type
+        record_rate <- ts_tbl$recording_rate
+        depth_height <- ts_tbl$depth_height_m
+        start_dt <- ts_tbl$start_datetime
+        end_dt <- ts_tbl$end_datetime
+      }
+      record_rate_seconds <- suppressWarnings(as.numeric(record_rate))
+      record_rate_display <- if (!is.na(record_rate_seconds)) {
+        as.character(lubridate::seconds_to_period(record_rate_seconds))
+      } else {
+        format_metadata_value(record_rate)
+      }
+      metadata_base_table(
+        attributes = c(
+          tr("parameter", language$language),
+          tr("media", language$language),
+          tr("aggregation", language$language),
+          tr("nominal_rate", language$language),
+          tr("depth_height_m", language$language),
+          tr("start_date", language$language),
+          tr("end_date", language$language),
+          tr("note", language$language)
+        ),
+        values = c(
+          format_metadata_value(parameter),
+          format_metadata_value(media),
+          format_metadata_value(aggregation),
+          format_metadata_value(record_rate_display),
+          format_metadata_value(depth_height),
+          format_metadata_value(start_dt),
+          format_metadata_value(end_dt),
+          format_metadata_value(ts_tbl$note)
+        )
+      )
+    })
+
+    timeseries_ownership <- reactive({
+      ts_id <- metadata_timeseries_id()
+      if (is.null(ts_id)) {
+        return(NULL)
+      }
+      ownership_tbl <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste0(
+          "SELECT o.start_dt, o.end_dt, ",
+          if (language$abbrev == "fr") {
+            "COALESCE(org.name_fr, org.name) AS owner"
+          } else {
+            "org.name AS owner"
+          },
+          " FROM continuous.owners o ",
+          "JOIN public.organizations org ",
+          "ON o.organization_id = org.organization_id ",
+          "WHERE o.timeseries_id = ",
+          ts_id,
+          " ORDER BY o.start_dt;"
+        )
+      )
+      if (nrow(ownership_tbl) == 0) {
+        return(NULL)
+      }
+      ownership_tbl
+    })
+
+    adaptiveState <- reactiveValues(
+      active = FALSE,
+      mode = NULL,
+      current_xlim = NULL,
+      render_key = NULL,
+      plot_ready = FALSE,
+      last_trace_count = 0L,
+      ignore_relayout_key = NULL,
+      data = NULL,
+      meta = NULL,
+      payload = NULL
+    )
+
+    adaptive_plot_width_px <- reactive({
+      if (!is.null(input$plot_container_dims$width)) {
+        return(input$plot_container_dims$width)
+      }
+
+      if (!is.null(windowDims())) {
+        return(max(480, windowDims()$width - 80))
+      }
+
+      900
+    })
+
+    adaptive_target_bins <- reactive({
+      YGwater:::viewport_ribbon_target_bins(width_px = adaptive_plot_width_px())
+    })
+
+    relayout_key <- function(relayout) {
+      if (is.null(relayout) || length(relayout) == 0L) {
+        return(NULL)
+      }
+      paste(
+        names(relayout),
+        vapply(
+          relayout,
+          function(value) paste(as.character(value), collapse = ","),
+          character(1)
+        ),
+        sep = "=",
+        collapse = "|"
+      )
+    }
+
+    current_legend_orientation <- reactive({
+      if (!is.null(windowDims()) && windowDims()$width <= windowDims()$height) {
+        return("h")
+      }
+      "v"
+    })
+
+    render_adaptive_plot <- function(
+      xlim = NULL,
+      full_render = FALSE,
+      force = FALSE
+    ) {
+      req(isTRUE(adaptiveState$active))
+      req(!is.null(adaptiveState$payload))
+
+      key_xlim <- if (is.null(xlim)) {
+        "full"
+      } else {
+        paste(format(xlim, tz = "UTC", usetz = TRUE), collapse = "|")
+      }
+      target_bins <- adaptive_target_bins()
+      legend_orientation <- current_legend_orientation()
+      render_key <- paste(
+        key_xlim,
+        target_bins,
+        legend_orientation,
+        sep = "::"
+      )
+
+      if (!force && identical(adaptiveState$render_key, render_key)) {
+        return(invisible(NULL))
+      }
+
+      needs_full_plot <- full_render || !isTRUE(adaptiveState$plot_ready)
+
+      built <- YGwater:::viewport_adaptive_plot(
+        payload = adaptiveState$payload,
+        source = ns("plot"),
+        xlim = xlim,
+        n_bins = target_bins,
+        legend_orientation = legend_orientation,
+        build_plot = needs_full_plot
+      )
+
+      old_trace_count <- adaptiveState$last_trace_count
+      adaptiveState$current_xlim <- xlim
+      adaptiveState$render_key <- render_key
+      adaptiveState$last_trace_count <- built$trace_bundle$trace_count
+
+      if (needs_full_plot) {
+        output$plot <- plotly::renderPlotly({
+          built$plot
+        })
+        adaptiveState$plot_ready <- TRUE
+        return(invisible(NULL))
+      }
+
+      proxy <- plotly::plotlyProxy("plot", session)
+      if (old_trace_count > 0) {
+        proxy <- plotly::plotlyProxyInvoke(
+          proxy,
+          "deleteTraces",
+          seq_len(old_trace_count) - 1L
+        )
+      }
+
+      if (built$trace_bundle$trace_count > 0) {
+        plotly::plotlyProxyInvoke(
+          proxy,
+          "addTraces",
+          built$trace_bundle$traces
+        )
+      }
+    }
+
+    # ExtendedTask that does the heavy plotting work
+    long_ts_plot <- ExtendedTask$new(function(req) {
+      # req is the list returned by plot_request()
+      promises::future_promise({
+        tryCatch(
+          {
+            # New connection necessary because the task gets farmed out to another core
+            db_config <- req$db
+            con <- AquaConnect(
+              name = db_config$name,
+              host = db_config$host,
+              port = db_config$port,
+              username = db_config$user,
+              password = db_config$pass,
+              silent = TRUE
+            )
+            # Auto close the connection - important!!!
+            on.exit(DBI::dbDisconnect(con))
+
+            plot_type <- as.character(req$plot_type)
+            if (
+              length(plot_type) == 0 ||
+                is.na(plot_type[[1]]) ||
+                !nzchar(plot_type[[1]])
+            ) {
+              stop("Missing plot type.")
+            }
+            plot_type <- plot_type[[1]]
+
+            timeseries_ids <- as.numeric(req$timeseries_ids)
+            timeseries_ids <- timeseries_ids[!is.na(timeseries_ids)]
+            if (length(timeseries_ids) == 0) {
+              stop("No timeseries selected.")
+            }
+            use_webgl <- isTRUE(req$use_webgl)
+
+            plot_timezone <- as.character(req$plot_timezone)
+            if (
+              length(plot_timezone) == 0 ||
+                is.na(plot_timezone[[1]]) ||
+                !nzchar(plot_timezone[[1]])
+            ) {
+              plot_timezone <- "Etc/GMT+7"
+            } else {
+              plot_timezone <- plot_timezone[[1]]
+            }
+
+            plot_resolution <- as.character(req$plot_resolution)
+            if (
+              length(plot_resolution) == 0 ||
+                is.na(plot_resolution[[1]]) ||
+                !(tolower(plot_resolution[[1]]) %in% c("max", "hour", "day"))
+            ) {
+              plot_resolution <- NULL
+            } else {
+              plot_resolution <- tolower(plot_resolution[[1]])
+            }
+
+            normalize_plot_result <- function(result) {
+              if (is.list(result) && !is.null(result$plot)) {
+                if (is.null(result$data)) {
+                  extra <- result[setdiff(names(result), "plot")]
+                  result$data <- if (length(extra) > 0) extra else NULL
+                }
+                return(result)
+              }
+              list(plot = result, data = NULL)
+            }
+
+            dedupe_subplot_legend <- function(plot_obj) {
+              if (
+                is.null(plot_obj$x$data) ||
+                  length(plot_obj$x$data) == 0
+              ) {
+                return(plot_obj)
+              }
+
+              seen_keys <- character(0)
+              for (i in seq_along(plot_obj$x$data)) {
+                trace_i <- plot_obj$x$data[[i]]
+                if (
+                  !(is.null(trace_i$showlegend) || isTRUE(trace_i$showlegend))
+                ) {
+                  next
+                }
+
+                name_i <- if (!is.null(trace_i$name)) {
+                  as.character(trace_i$name)
+                } else {
+                  ""
+                }
+                group_i <- if (!is.null(trace_i$legendgroup)) {
+                  as.character(trace_i$legendgroup)
+                } else {
+                  ""
+                }
+                legend_key <- paste(group_i, name_i, sep = "::")
+                if (!nzchar(gsub(":", "", legend_key))) {
+                  next
+                }
+
+                if (legend_key %in% seen_keys) {
+                  plot_obj$x$data[[i]]$showlegend <- FALSE
+                } else {
+                  plot_obj$x$data[[i]]$showlegend <- TRUE
+                  seen_keys <- c(seen_keys, legend_key)
+                }
+              }
+
+              plot_obj
+            }
+
+            combine_plot_results <- function(
+              results,
+              ids,
+              shareX = FALSE,
+              shareY = FALSE
+            ) {
+              if (length(results) == 1) {
+                return(results[[1]])
+              }
+
+              plot_list <- lapply(results, `[[`, "plot")
+              combined_plot <- do.call(
+                plotly::subplot,
+                c(
+                  plot_list,
+                  list(
+                    nrows = length(plot_list),
+                    shareX = shareX,
+                    shareY = shareY,
+                    titleY = TRUE,
+                    margin = 0.05
+                  )
+                )
+              )
+              combined_plot <- dedupe_subplot_legend(combined_plot)
+
+              data_names <- make.unique(as.character(ids))
+              combined_data <- stats::setNames(
+                lapply(results, `[[`, "data"),
+                data_names
+              )
+              list(plot = combined_plot, data = combined_data)
+            }
+
+            date_range_xlim <- function(start_date, end_date, tz) {
+              start <- as.POSIXct(as.Date(start_date), tz = tz)
+              end <- as.POSIXct(as.Date(end_date), tz = tz) + 24 * 60 * 60
+              c(start, end)
+            }
+
+            fetch_timeseries_labels <- function(ids) {
+              ids_sql <- paste(as.integer(ids), collapse = ",")
+              labels <- DBI::dbGetQuery(
+                con,
+                paste0(
+                  "SELECT ts.timeseries_id, ",
+                  "COALESCE(p.param_name, ts.parameter_id::text) AS parameter ",
+                  "FROM timeseries ts ",
+                  "LEFT JOIN parameters p ON ts.parameter_id = p.parameter_id ",
+                  "WHERE ts.timeseries_id IN (",
+                  ids_sql,
+                  ");"
+                )
+              )
+              stats::setNames(
+                lapply(ids, function(id) {
+                  row <- labels[labels$timeseries_id == id, , drop = FALSE]
+                  if (nrow(row) == 0) {
+                    return(paste("Timeseries", id))
+                  }
+                  titleCase(row$parameter[[1]], req$lang)
+                }),
+                as.character(ids)
+              )
+            }
+
+            palette_for_series <- function(n) {
+              grDevices::colorRampPalette(c(
+                "#00454e",
+                "#547f7a",
+                "#7A9A01",
+                "#FFA900",
+                "#DC4405"
+              ))(max(1L, n))
+            }
+
+            subplot_panel_domain <- function(index, n) {
+              top <- 1 - (index - 1) / n
+              bottom <- 1 - index / n
+              if (index < n) {
+                bottom <- bottom + 0.025
+              }
+              c(max(0, bottom), min(1, top))
+            }
+
+            subplot_layout <- function(series, selected_xlim) {
+              n <- length(series)
+              layout <- list(
+                title = NULL,
+                margin = list(b = 0, t = 25, l = 60, r = 35),
+                hovermode = "x unified",
+                legend = list(
+                  font = list(size = req$legend_scale * 12),
+                  orientation = req$legend_position
+                ),
+                font = list(family = "Nunito Sans")
+              )
+
+              for (i in seq_len(n)) {
+                panel_domain <- subplot_panel_domain(i, n)
+                xaxis_name <- YGwater:::viewport_layout_axis_name("x", i)
+                yaxis_name <- YGwater:::viewport_layout_axis_name("y", i)
+                xref <- YGwater:::viewport_axis_ref("x", i)
+                yref <- YGwater:::viewport_axis_ref("y", i)
+
+                layout[[xaxis_name]] <- list(
+                  anchor = yref,
+                  showgrid = req$gridx,
+                  showline = TRUE,
+                  tickformat = if (req$lang == "en") {
+                    "%b %-d '%y"
+                  } else {
+                    "%-d %b '%y"
+                  },
+                  titlefont = list(size = req$axis_scale * 14),
+                  tickfont = list(size = req$axis_scale * 12),
+                  matches = if (isTRUE(req$shareX) && i > 1) "x" else NULL,
+                  showticklabels = i == n
+                )
+                layout[[yaxis_name]] <- list(
+                  domain = panel_domain,
+                  anchor = xref,
+                  title = list(
+                    text = series[[i]]$yaxis_title,
+                    standoff = 10
+                  ),
+                  showgrid = req$gridy,
+                  showline = TRUE,
+                  zeroline = FALSE,
+                  titlefont = list(size = req$axis_scale * 13),
+                  tickfont = list(size = req$axis_scale * 12),
+                  autorange = if (isTRUE(series[[i]]$invert)) {
+                    "reversed"
+                  } else {
+                    TRUE
+                  },
+                  matches = if (isTRUE(req$shareY) && i > 1) "y" else NULL
+                )
+              }
+
+              YGwater:::viewport_layout_apply_xlim(
+                layout,
+                xlim = selected_xlim,
+                xaxis_names = vapply(
+                  seq_len(n),
+                  function(i) YGwater:::viewport_layout_axis_name("x", i),
+                  character(1)
+                )
+              )
+            }
+
+            normalize_timeseries_datetime <- function(value) {
+              if (inherits(value, "character")) {
+                value <- as.Date(value)
+              }
+              if (inherits(value, "Date") && !inherits(value, "POSIXt")) {
+                value <- as.POSIXct(value, tz = plot_timezone) + 24 * 60 * 60
+              } else {
+                value <- as.POSIXct(value, tz = plot_timezone)
+              }
+              attr(value, "tzone") <- "UTC"
+              value
+            }
+
+            correction_interval_seconds <- function(value) {
+              if (is.null(value) || length(value) == 0 || is.na(value[[1]])) {
+                return(NA_real_)
+              }
+              out <- suppressWarnings(as.numeric(value, units = "secs"))
+              if (is.finite(out[[1]])) {
+                return(out[[1]])
+              }
+              out <- suppressWarnings(as.numeric(lubridate::period(value)))
+              if (is.finite(out[[1]])) out[[1]] else NA_real_
+            }
+
+            apply_simple_corrections <- function(trace_data, corrections) {
+              if (!nrow(trace_data) || !nrow(corrections)) {
+                return(trace_data)
+              }
+
+              supported_types <- c(
+                "delete",
+                "trim",
+                "offset linear",
+                "drift linear",
+                "scale"
+              )
+              if (any(!(corrections$correction_type %in% supported_types))) {
+                return(NULL)
+              }
+
+              for (i in seq_len(nrow(corrections))) {
+                corr <- corrections[i]
+                idx <- trace_data$datetime >= corr$start_dt &
+                  trace_data$datetime <= corr$end_dt &
+                  !is.na(trace_data$value)
+                if (!any(idx)) {
+                  next
+                }
+
+                if (corr$correction_type == "delete") {
+                  trace_data[idx, value := NA_real_]
+                } else if (corr$correction_type == "trim") {
+                  if (!is.na(corr$value1)) {
+                    trace_data[idx & value < corr$value1, value := NA_real_]
+                  }
+                  if (!is.na(corr$value2)) {
+                    trace_data[idx & value > corr$value2, value := NA_real_]
+                  }
+                } else if (corr$correction_type == "offset linear") {
+                  trace_data[idx, value := value + corr$value1]
+                } else if (corr$correction_type == "scale") {
+                  trace_data[idx, value := value * (corr$value1 / 100)]
+                } else if (corr$correction_type == "drift linear") {
+                  step_secs <- correction_interval_seconds(
+                    corr$timestep_window
+                  )
+                  if (!is.finite(step_secs) || step_secs <= 0) {
+                    return(NULL)
+                  }
+                  elapsed_secs <- as.numeric(
+                    difftime(
+                      trace_data$datetime[idx],
+                      corr$start_dt,
+                      units = "secs"
+                    )
+                  )
+                  trace_data[
+                    idx,
+                    value := value +
+                      corr$value1 *
+                        elapsed_secs /
+                        step_secs
+                  ]
+                }
+              }
+
+              trace_data
+            }
+
+            apply_unusable_intervals <- function(
+              trace_data,
+              ts_id,
+              start_dt,
+              end_dt
+            ) {
+              if (isTRUE(req$unusable) || !nrow(trace_data)) {
+                return(trace_data)
+              }
+
+              unusable_dt <- dbGetQueryDT(
+                con,
+                "SELECT g.start_dt, g.end_dt
+                 FROM continuous.grades g
+                 LEFT JOIN public.grade_types gt
+                   ON g.grade_type_id = gt.grade_type_id
+                 WHERE g.timeseries_id = $1
+                   AND g.end_dt >= $2
+                   AND g.start_dt <= $3
+                   AND gt.grade_type_description = 'Unusable';",
+                params = list(ts_id, start_dt, end_dt)
+              )
+              if (!nrow(unusable_dt)) {
+                return(trace_data)
+              }
+
+              trace_data[
+                unusable_dt,
+                on = .(datetime >= start_dt, datetime <= end_dt),
+                value := NA_real_
+              ]
+              trace_data
+            }
+
+            apply_trace_datum <- function(trace_data, ts_id) {
+              if (!isTRUE(req$datum) || !nrow(trace_data)) {
+                return(trace_data)
+              }
+
+              datum_m <- trace_datum_offset(ts_id)
+              if (!is.na(datum_m) && datum_m != 0) {
+                trace_data[, value := value + datum_m]
+              }
+              trace_data
+            }
+
+            trace_datum_offset <- function(ts_id) {
+              if (!isTRUE(req$datum)) {
+                return(0)
+              }
+
+              units <- ac_get_timeseries_unit(con, ts_id)
+              if (is.na(units) || units != "m") {
+                return(0)
+              }
+
+              location_id <- DBI::dbGetQuery(
+                con,
+                "SELECT location_id
+                 FROM continuous.timeseries
+                 WHERE timeseries_id = $1;",
+                params = list(ts_id)
+              )[1, 1]
+              datum_m <- DBI::dbGetQuery(
+                con,
+                "SELECT conversion_m
+                 FROM public.datum_conversions
+                  WHERE location_id = $1
+                    AND current = TRUE;",
+                params = list(location_id)
+              )[1, 1]
+              if (is.na(datum_m)) {
+                return(0)
+              }
+              as.numeric(datum_m)
+            }
+
+            apply_adaptive_trace_filter <- function(
+              trace_data,
+              parameter_name
+            ) {
+              if (
+                is.null(req$filter) ||
+                  !inherits(req$filter, "numeric") ||
+                  !nrow(trace_data)
+              ) {
+                return(trace_data)
+              }
+
+              water_parameter <- parameter_name %in%
+                c(
+                  "water level",
+                  "niveau d'eau",
+                  "flow",
+                  "débit d'eau",
+                  "snow depth",
+                  "profondeur de la neige",
+                  "snow water equivalent",
+                  "équivalent en eau de la neige",
+                  "distance"
+                ) ||
+                grepl("precipitation", parameter_name, ignore.case = TRUE)
+
+              if (isTRUE(water_parameter)) {
+                trace_data[value < 0 & !is.na(value), value := NA_real_]
+              } else {
+                trace_data[value < -100 & !is.na(value), value := NA_real_]
+              }
+
+              rollmedian <- zoo::rollapply(
+                trace_data$value,
+                width = req$filter,
+                FUN = "median",
+                align = "center",
+                fill = "extend",
+                na.rm = TRUE
+              )
+              rollmad <- zoo::rollapply(
+                trace_data$value,
+                width = req$filter,
+                FUN = "mad",
+                align = "center",
+                fill = "extend",
+                na.rm = TRUE
+              )
+              outlier <- abs(trace_data$value - rollmedian) > 5 * rollmad
+              trace_data$value[outlier] <- NA_real_
+              trace_data
+            }
+
+            fetch_fast_basic_trace <- function(ts_id, parameter_name) {
+              ts_meta <- DBI::dbGetQuery(
+                con,
+                "SELECT timeseries_type, start_datetime, end_datetime
+                 FROM continuous.timeseries
+                 WHERE timeseries_id = $1;",
+                params = list(ts_id)
+              )
+              if (
+                nrow(ts_meta) == 0L ||
+                  is.na(ts_meta$timeseries_type[[1]]) ||
+                  ts_meta$timeseries_type[[1]] != "basic"
+              ) {
+                return(NULL)
+              }
+
+              start_dt <- max(
+                normalize_timeseries_datetime(req$start_date),
+                as.POSIXct(ts_meta$start_datetime[[1]], tz = "UTC"),
+                na.rm = TRUE
+              )
+              end_dt <- min(
+                normalize_timeseries_datetime(req$end_date),
+                as.POSIXct(ts_meta$end_datetime[[1]], tz = "UTC"),
+                na.rm = TRUE
+              )
+              if (is.na(start_dt) || is.na(end_dt) || end_dt < start_dt) {
+                return(NULL)
+              }
+
+              trace_data <- dbGetQueryDT(
+                con,
+                "SELECT datetime, value, imputed
+                 FROM continuous.measurements_continuous
+                 WHERE timeseries_id = $1
+                   AND datetime BETWEEN $2 AND $3
+                 ORDER BY datetime ASC;",
+                params = list(ts_id, start_dt, end_dt)
+              )
+              if (!nrow(trace_data)) {
+                return(NULL)
+              }
+
+              corrections <- dbGetQueryDT(
+                con,
+                "SELECT c.start_dt, c.end_dt, c.value1, c.value2,
+                        c.timestep_window, c.equation,
+                        ct.correction_type, ct.priority
+                 FROM continuous.corrections c
+                 JOIN continuous.correction_types ct
+                   ON c.correction_type = ct.correction_type_id
+                 WHERE c.timeseries_id = $1
+                   AND c.start_dt <= $2
+                   AND c.end_dt >= $3
+                 ORDER BY ct.priority ASC, c.start_dt ASC, c.correction_id ASC;",
+                params = list(ts_id, end_dt, start_dt)
+              )
+
+              trace_data <- apply_simple_corrections(trace_data, corrections)
+              if (is.null(trace_data)) {
+                return(NULL)
+              }
+
+              trace_data <- apply_unusable_intervals(
+                trace_data,
+                ts_id,
+                start_dt,
+                end_dt
+              )
+              trace_data <- apply_trace_datum(trace_data, ts_id)
+              trace_data <- apply_adaptive_trace_filter(
+                trace_data,
+                parameter_name
+              )
+              attr(trace_data$datetime, "tzone") <- plot_timezone
+              trace_data
+            }
+
+            build_adaptive_timeseries <- function(
+              ids,
+              mode = c("single", "traces", "subplots")
+            ) {
+              mode <- match.arg(mode)
+              include_status_bands <- mode %in%
+                c("single", "subplots") &&
+                (isTRUE(req$grades) ||
+                  isTRUE(req$approvals) ||
+                  isTRUE(req$qualifiers))
+              selected_xlim <- date_range_xlim(
+                req$start_date,
+                req$end_date,
+                plot_timezone
+              )
+              labels <- fetch_timeseries_labels(ids)
+              colors <- palette_for_series(length(ids))
+
+              payloads <- lapply(seq_along(ids), function(i) {
+                ts_id <- ids[[i]]
+                parameter_label <- labels[[as.character(ts_id)]]
+                plot_payload <- plotTimeseries(
+                  timeseries_id = ts_id,
+                  start_date = req$start_date,
+                  end_date = req$end_date,
+                  historic_range = req$historic_range,
+                  datum = req$datum,
+                  filter = req$filter,
+                  unusable = req$unusable,
+                  grades = include_status_bands && isTRUE(req$grades),
+                  approvals = include_status_bands && isTRUE(req$approvals),
+                  qualifiers = include_status_bands && isTRUE(req$qualifiers),
+                  lang = req$lang,
+                  webgl = use_webgl,
+                  con = con,
+                  data = TRUE,
+                  build_plot = FALSE,
+                  line_scale = req$line_scale,
+                  axis_scale = req$axis_scale,
+                  legend_scale = req$legend_scale,
+                  legend_position = req$legend_position,
+                  gridx = req$gridx,
+                  gridy = req$gridy,
+                  slider = FALSE,
+                  tzone = plot_timezone,
+                  resolution = "day",
+                  as_of = req$as_of
+                )
+
+                fast_trace <- fetch_fast_basic_trace(
+                  ts_id,
+                  tolower(parameter_label)
+                )
+                if (!is.null(fast_trace)) {
+                  plot_payload$data$trace_data <- fast_trace
+                }
+                plot_payload$meta$line_name <- parameter_label
+                plot_payload$meta$line_color <- colors[[i]]
+                plot_payload
+              })
+
+              series <- lapply(seq_along(payloads), function(i) {
+                item <- payloads[[i]]
+                xaxis <- NULL
+                yaxis <- NULL
+                if (mode == "subplots") {
+                  xaxis <- YGwater:::viewport_axis_ref("x", i)
+                  yaxis <- YGwater:::viewport_axis_ref("y", i)
+                }
+                yaxis_title <- NULL
+                if (!is.null(item$meta$layout$yaxis$title$text)) {
+                  yaxis_title <- item$meta$layout$yaxis$title$text
+                }
+                list(
+                  trace_data = item$data$trace_data,
+                  range_data = item$data$range_data,
+                  meta = item$meta,
+                  line_name = item$meta$line_name,
+                  line_color = colors[[i]],
+                  line_width = 2.5 * req$line_scale,
+                  xaxis = xaxis,
+                  yaxis = yaxis,
+                  yaxis_title = yaxis_title,
+                  invert = identical(
+                    item$meta$layout$yaxis$autorange,
+                    "reversed"
+                  )
+                )
+              })
+
+              if (mode == "subplots") {
+                layout <- subplot_layout(series, selected_xlim)
+                xaxis_names <- vapply(
+                  seq_along(series),
+                  function(i) YGwater:::viewport_layout_axis_name("x", i),
+                  character(1)
+                )
+              } else {
+                layout <- payloads[[1]]$meta$layout
+                layout$title <- if (length(ids) == 1) {
+                  layout$title
+                } else {
+                  NULL
+                }
+                xaxis_names <- "xaxis"
+              }
+
+              status_band_list <- list()
+              if (include_status_bands) {
+                base_axis_count <- length(series)
+                for (i in seq_along(payloads)) {
+                  status_bands <- payloads[[i]]$meta$status_bands
+                  if (
+                    is.null(status_bands) ||
+                      is.null(status_bands$polygons) ||
+                      nrow(status_bands$polygons) == 0L
+                  ) {
+                    next
+                  }
+
+                  status_axis_index <- base_axis_count + i
+                  main_xaxis_name <- YGwater:::viewport_layout_axis_name("x", i)
+                  main_yaxis_name <- YGwater:::viewport_layout_axis_name("y", i)
+                  status_xaxis_name <- YGwater:::viewport_layout_axis_name(
+                    "x",
+                    status_axis_index
+                  )
+                  status_yaxis_name <- YGwater:::viewport_layout_axis_name(
+                    "y",
+                    status_axis_index
+                  )
+                  status_xaxis_ref <- YGwater:::viewport_axis_ref(
+                    "x",
+                    status_axis_index
+                  )
+                  status_yaxis_ref <- YGwater:::viewport_axis_ref(
+                    "y",
+                    status_axis_index
+                  )
+
+                  status_bands$xaxis <- status_xaxis_ref
+                  status_bands$yaxis <- status_yaxis_ref
+                  if (!is.null(status_bands$annotations)) {
+                    status_bands$annotations <- lapply(
+                      status_bands$annotations,
+                      function(annotation) {
+                        annotation$yref <- status_yaxis_ref
+                        annotation
+                      }
+                    )
+                  }
+
+                  layout <- YGwater:::viewport_layout_add_status_bands(
+                    layout,
+                    status_bands,
+                    main_xaxis_name = main_xaxis_name,
+                    main_yaxis_name = main_yaxis_name,
+                    status_xaxis_name = status_xaxis_name,
+                    status_yaxis_name = status_yaxis_name
+                  )
+                  series[[i]]$xaxis <- YGwater:::viewport_axis_ref("x", i)
+                  series[[i]]$yaxis <- YGwater:::viewport_axis_ref("y", i)
+                  xaxis_names <- c(xaxis_names, status_xaxis_name)
+                  status_band_list[[
+                    length(status_band_list) + 1L
+                  ]] <- status_bands
+                }
+              }
+
+              data_names <- make.unique(as.character(ids))
+              list(
+                mode = "adaptive_plot",
+                data = if (length(payloads) == 1) {
+                  payloads[[1]]$data
+                } else {
+                  stats::setNames(lapply(payloads, `[[`, "data"), data_names)
+                },
+                adaptive = list(
+                  mode = paste0("timeseries_", mode),
+                  initial_xlim = selected_xlim,
+                  meta = list(),
+                  payload = list(
+                    series = series,
+                    layout = layout,
+                    config = payloads[[1]]$meta$config,
+                    xaxis_names = xaxis_names,
+                    status_bands = if (length(status_band_list) > 0L) {
+                      status_band_list
+                    } else {
+                      NULL
+                    }
+                  )
+                )
+              )
+            }
+
+            overlap_xlim_from_days <- function(start_day, end_day, years, tz) {
+              if (is.null(years) || length(years) == 0 || all(is.na(years))) {
+                last_year <- lubridate::year(Sys.Date())
+              } else {
+                last_year <- max(as.numeric(years), na.rm = TRUE)
+              }
+
+              overlap_bound <- function(value, end_of_day = FALSE) {
+                if (is.null(value) || length(value) == 0 || is.na(value[[1]])) {
+                  return(NA_real_)
+                }
+
+                if (inherits(value, "Date") || inherits(value, "POSIXt")) {
+                  out <- as.POSIXct(value[[1]], tz = tz)
+                  lubridate::year(out) <- last_year
+                  if (end_of_day && inherits(value, "Date")) {
+                    out <- out + 24 * 60 * 60 - 1
+                  }
+                  return(out)
+                }
+
+                parsed <- suppressWarnings(as.POSIXct(
+                  as.character(value[[1]]),
+                  tz = tz
+                ))
+                if (!is.na(parsed)) {
+                  lubridate::year(parsed) <- last_year
+                  if (
+                    end_of_day &&
+                      !grepl(" [0-9]{1,2}:", as.character(value[[1]]))
+                  ) {
+                    parsed <- parsed + 24 * 60 * 60 - 1
+                  }
+                  return(parsed)
+                }
+
+                day_value <- suppressWarnings(as.numeric(value[[1]]))
+                if (!is.finite(day_value)) {
+                  return(NA_real_)
+                }
+                origin <- if (end_of_day) {
+                  paste0(last_year - 1, "-12-31 23:59:59")
+                } else {
+                  paste0(last_year - 1, "-12-31")
+                }
+                lubridate::force_tz(
+                  as.POSIXct(day_value * 24 * 60 * 60, origin = origin, tz = "UTC"),
+                  tz
+                )
+              }
+
+              start <- overlap_bound(start_day)
+              end <- overlap_bound(end_day, end_of_day = TRUE)
+              if (any(is.na(c(start, end)))) {
+                return(NULL)
+              }
+              if (start > end) {
+                lubridate::year(start) <- lubridate::year(start) - 1
+              }
+              c(start, end)
+            }
+
+            build_adaptive_overlap <- function(ids) {
+              selected_xlim <- overlap_xlim_from_days(
+                req$start_day,
+                req$end_day,
+                req$years,
+                plot_timezone
+              )
+              overlap_resolution <- if (is.null(plot_resolution)) {
+                "max"
+              } else {
+                plot_resolution
+              }
+              overlap_payloads <- lapply(ids, function(ts_id) {
+                tryCatch(
+                  plotOverlap(
+                    timeseries_id = ts_id,
+                    startDay = req$start_day,
+                    endDay = req$end_day,
+                    years = req$years,
+                    historic_range = req$historic_range_overlap,
+                    datum = req$datum,
+                    filter = req$filter,
+                    unusable = req$unusable,
+                    lang = req$lang,
+                    webgl = use_webgl,
+                    slider = FALSE,
+                    line_scale = req$line_scale,
+                    axis_scale = req$axis_scale,
+                    legend_scale = req$legend_scale,
+                    legend_position = req$legend_position,
+                    gridx = req$gridx,
+                    gridy = req$gridy,
+                    con = con,
+                    data = TRUE,
+                    build_plot = FALSE,
+                    tzone = plot_timezone,
+                    resolution = overlap_resolution
+                  ),
+                  error = function(e) {
+                    stop(
+                      paste0(
+                        "Timeseries ",
+                        ts_id,
+                        " (overlap): ",
+                        e$message
+                      )
+                    )
+                  }
+                )
+              })
+              plot_year_levels <- sort(unique(unlist(lapply(
+                overlap_payloads,
+                function(payload) payload$data$trace_data$plot_year
+              ))))
+              colors <- rev(grDevices::colorRampPalette(c(
+                "#00454e",
+                "#7A9A01",
+                "#FFA900",
+                "#DC4405"
+              ))(max(1L, length(plot_year_levels))))
+              colors <- stats::setNames(colors, as.character(plot_year_levels))
+
+              series <- list()
+              for (payload_i in seq_along(overlap_payloads)) {
+                payload <- overlap_payloads[[payload_i]]
+                trace_data <- data.table::as.data.table(payload$data$trace_data)
+                range_data <- payload$data$range_data
+                years_i <- sort(unique(trace_data$plot_year))
+                for (year_i in seq_along(years_i)) {
+                  plot_year_value <- years_i[[year_i]]
+                  series[[length(series) + 1L]] <- list(
+                    trace_data = trace_data[
+                      trace_data[["plot_year"]] == plot_year_value
+                    ],
+                    range_data = if (payload_i == 1 && year_i == 1) {
+                      range_data
+                    } else {
+                      data.frame()
+                    },
+                    meta = payload$meta,
+                    x_col = "plot_datetime",
+                    range_x_col = "datetime",
+                    line_name = as.character(plot_year_value),
+                    line_color = colors[[as.character(plot_year_value)]],
+                    line_width = 2.5 * req$line_scale
+                  )
+                }
+              }
+
+              trace_x_values <- do.call(c, lapply(series, function(item) {
+                item$trace_data[[item$x_col]]
+              }))
+              if (
+                length(trace_x_values) > 0 &&
+                  any(!is.na(trace_x_values))
+              ) {
+                selected_xlim <- range(trace_x_values, na.rm = TRUE)
+              }
+
+              list(
+                mode = "adaptive_plot",
+                data = if (length(overlap_payloads) == 1) {
+                  overlap_payloads[[1]]$data
+                } else {
+                  stats::setNames(
+                    lapply(overlap_payloads, `[[`, "data"),
+                    make.unique(as.character(ids))
+                  )
+                },
+                adaptive = list(
+                  mode = "overlap",
+                  initial_xlim = selected_xlim,
+                  meta = list(),
+                  payload = list(
+                    series = series,
+                    layout = overlap_payloads[[1]]$meta$layout,
+                    config = overlap_payloads[[1]]$meta$config,
+                    xaxis_names = "xaxis"
+                  )
+                )
+              )
+            }
+
+            if (plot_type == "timeseries") {
+              return(build_adaptive_timeseries(
+                timeseries_ids,
+                mode = if (length(timeseries_ids) > 1) "subplots" else "single"
+              ))
+            }
+
+            if (plot_type == "timeseries_all") {
+              return(build_adaptive_timeseries(timeseries_ids, mode = "traces"))
+            }
+
+            if (plot_type == "overlap_yrs") {
+              return(build_adaptive_overlap(timeseries_ids))
+            }
+
+            if (plot_type == "histogram") {
+              histogram_plots <- lapply(timeseries_ids, function(ts_id) {
+                tryCatch(
+                  normalize_plot_result(
+                    plotTimeseriesHistogram(
+                      timeseries_id = ts_id,
+                      startDay = req$start_day,
+                      endDay = req$end_day,
+                      bin_width = req$hist_bin_width,
+                      bin_width_units = req$hist_bin_units,
+                      years = req$years,
+                      transformation = req$hist_transformation,
+                      threshold = req$hist_threshold,
+                      completeness_label = req$hist_completeness_labels,
+                      lang = req$lang,
+                      tzone = plot_timezone,
+                      con = con,
+                      data = TRUE,
+                      line_scale = req$line_scale,
+                      axis_scale = req$axis_scale,
+                      legend_scale = req$legend_scale,
+                      legend_position = req$legend_position,
+                      gridx = req$gridx,
+                      gridy = req$gridy
+                    )
+                  ),
+                  error = function(e) {
+                    stop(
+                      paste0(
+                        "Timeseries ",
+                        ts_id,
+                        " (histogram): ",
+                        e$message
+                      )
+                    )
+                  }
+                )
+              })
+              return(combine_plot_results(
+                histogram_plots,
+                timeseries_ids,
+                shareX = req$shareX,
+                shareY = req$shareY
+              ))
+            }
+
+            stop("Unsupported plot type selected.")
+          },
+          error = function(e) {
+            return(e$message)
+          }
+        )
+      })
+    }) |>
+      bind_task_button("make_plot")
+
+    plot_created <- reactiveVal(FALSE) # Flag to determine if a plot has been created
+
+    # Kick off task on button click
+    observeEvent(input$make_plot, {
+      if (is.null(selected_timeseries_ids())) {
+        showModal(modalDialog(
+          title = tr("error", language$language),
+          tr("cont_table_intro", language$language),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton(tr("close", language$language))
+          )
+        ))
+        return()
+      }
+
+      if (plot_created()) {
+        shinyjs::hide("full_screen_ui")
+      }
+      adaptiveState$active <- FALSE
+      adaptiveState$mode <- NULL
+      adaptiveState$current_xlim <- NULL
+      adaptiveState$render_key <- NULL
+      adaptiveState$plot_ready <- FALSE
+      adaptiveState$last_trace_count <- 0L
+      adaptiveState$ignore_relayout_key <- relayout_key(isolate(
+        plotly::event_data("plotly_relayout", source = ns("plot"))
+      ))
+      adaptiveState$data <- NULL
+      adaptiveState$meta <- NULL
+      adaptiveState$payload <- NULL
+      long_ts_plot$invoke(plot_request())
+    })
+
+    observeEvent(input$cancel, {
+      removeModal()
+    })
+
+    observeEvent(long_ts_plot$result(), {
+      result <- long_ts_plot$result()
+
+      if (inherits(result, "character")) {
+        showModal(modalDialog(
+          title = tr("error", language$language),
+          result,
+          footer = tagList(
+            actionButton(ns("cancel"), tr("cancel", language$language))
+          ),
+          easyClose = TRUE
+        ))
+        return()
+      }
+
+      if (identical(result$mode, "adaptive_plot")) {
+        if (!is.null(result$warning) && nzchar(result$warning)) {
+          showNotification(result$warning, type = "warning")
+        }
+        adaptiveState$active <- TRUE
+        adaptiveState$mode <- result$adaptive$mode
+        adaptiveState$current_xlim <- NULL
+        if (!is.null(result$adaptive$initial_xlim)) {
+          adaptiveState$current_xlim <- result$adaptive$initial_xlim
+        }
+        adaptiveState$render_key <- NULL
+        adaptiveState$plot_ready <- FALSE
+        adaptiveState$last_trace_count <- 0L
+        adaptiveState$ignore_relayout_key <- relayout_key(isolate(
+          plotly::event_data("plotly_relayout", source = ns("plot"))
+        ))
+        adaptiveState$data <- result$data
+        adaptiveState$meta <- result$adaptive$meta
+        adaptiveState$payload <- result$adaptive$payload
+        render_adaptive_plot(
+          xlim = adaptiveState$current_xlim,
+          full_render = TRUE,
+          force = TRUE
+        )
+      } else {
+        adaptiveState$active <- FALSE
+        adaptiveState$mode <- NULL
+        adaptiveState$current_xlim <- NULL
+        adaptiveState$render_key <- NULL
+        adaptiveState$plot_ready <- FALSE
+        adaptiveState$last_trace_count <- 0L
+        adaptiveState$ignore_relayout_key <- NULL
+        adaptiveState$data <- NULL
+        adaptiveState$meta <- NULL
+        adaptiveState$payload <- NULL
+
+        output$plot <- plotly::renderPlotly({
+          isolate(result$plot)
+        })
+      }
+
+      # Create a full screen button if necessary
+      if (!plot_created()) {
+        output$full_screen_ui <- renderUI({
+          # Side-by-side buttons
+          page_fluid(
+            div(
+              class = "d-inline-block",
+              actionButton(
+                ns("full_screen"),
+                tr("full_screen", language$language)
+              ),
+              style = "display: none;"
+            ),
+            div(
+              class = "d-inline-block",
+              downloadButton(
+                ns("download_data"),
+                tr("dl_data", language$language)
+              ),
+              style = "display: none;"
+            )
+          )
+        })
+      } else {
+        shinyjs::show("full_screen_ui")
+      }
+      plot_created(TRUE)
+    }) # End renderPlotly
+
+    output$metadata_message <- renderUI({
+      if (is.null(selected_timeseries_ids())) {
+        return(
+          tags$em(tr("metadata_select_prompt", language$language))
+        )
+      }
+      NULL
+    })
+
+    output$location_metadata_table <- DT::renderDataTable({
+      metadata <- location_metadata()
+      req(metadata)
+      DT::datatable(
+        metadata,
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          dom = "t",
+          pageLength = 10,
+          ordering = FALSE,
+          searching = FALSE,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {
+             $(this.api().table().header()).css({
+              'font-size': '90%'
+             });
+             $(this.api().table().body()).css({
+              'font-size': '80%'
+             });
+            }"
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          )
+        ),
+        colnames = c(
+          tr("attribute", language$language),
+          tr("value", language$language)
+        )
+      )
+    })
+
+    output$timeseries_metadata_table <- DT::renderDataTable({
+      metadata <- timeseries_metadata()
+      req(metadata)
+      DT::datatable(
+        metadata,
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          dom = "t",
+          pageLength = 10,
+          ordering = FALSE,
+          searching = FALSE,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {
+             $(this.api().table().header()).css({
+              'font-size': '90%'
+             });
+             $(this.api().table().body()).css({
+              'font-size': '80%'
+             });
+            }"
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          )
+        ),
+        colnames = c(
+          tr("attribute", language$language),
+          tr("value", language$language)
+        )
+      )
+    })
+
+    output$timeseries_ownership_table <- DT::renderDataTable({
+      ownership <- timeseries_ownership()
+      date_targets <- c(0, 1)
+      req(ownership)
+      DT::datatable(
+        ownership,
+        rownames = FALSE,
+        selection = "none",
+        options = list(
+          paging = TRUE,
+          pageLength = 5,
+          ordering = TRUE,
+          searching = FALSE,
+          scrollX = TRUE,
+          initComplete = htmlwidgets::JS(
+            "function(settings, json) {
+             $(this.api().table().header()).css({
+              'font-size': '90%'
+             });
+             $(this.api().table().body()).css({
+              'font-size': '80%'
+             });
+            }"
+          ),
+          language = list(
+            info = tr("tbl_info", language$language),
+            infoEmpty = tr("tbl_info_empty", language$language),
+            paginate = list(previous = "", `next` = ""),
+            search = tr("tbl_search", language$language),
+            lengthMenu = tr("tbl_length", language$language),
+            infoFiltered = tr("tbl_filtered", language$language),
+            zeroRecords = tr("tbl_zero", language$language)
+          )
+        ),
+        colnames = c(
+          tr("start_date", language$language),
+          tr("end_date", language$language),
+          tr("owner", language$language)
+        )
+      )
+    })
+
+    # Observe changes to the windowDims reactive value and update the legend position using plotlyProxy
+    # The js function takes care of debouncing the window resize event and also reacts to a change in orientation or full screen event
+    observeEvent(
+      windowDims(),
+      {
+        req(plot_created())
+        if (is.null(windowDims())) {
+          return()
+        }
+        if (windowDims()$width > windowDims()$height) {
+          plotly::plotlyProxy("plot", session) %>%
+            plotly::plotlyProxyInvoke(
+              "relayout",
+              legend = list(orientation = "v")
+            )
+        } else {
+          plotly::plotlyProxy("plot", session) %>%
+            plotly::plotlyProxyInvoke(
+              "relayout",
+              legend = list(orientation = "h")
+            )
+        }
+      },
+      ignoreNULL = TRUE
+    )
+
+    relayout_event <- shiny::debounce(
+      reactive({
+        if (
+          !isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)
+        ) {
+          return(NULL)
+        }
+        plotly::event_data("plotly_relayout", source = ns("plot"))
+      }),
+      millis = 150
+    )
+
+    observeEvent(
+      relayout_event(),
+      {
+        if (is.null(relayout_event())) {
+          return()
+        }
+        if (
+          !isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)
+        ) {
+          return()
+        }
+        relayout <- relayout_event()
+        event_key <- relayout_key(relayout)
+        if (
+          !is.null(event_key) &&
+            identical(event_key, adaptiveState$ignore_relayout_key)
+        ) {
+          adaptiveState$ignore_relayout_key <- NULL
+          return()
+        }
+        has_xaxis_change <- any(grepl(
+          "^xaxis[0-9]*\\.(range\\[[01]\\]|autorange)$",
+          names(relayout)
+        ))
+        if (!has_xaxis_change) {
+          return()
+        }
+        xlim <- YGwater:::viewport_ribbon_relayout_xlim(relayout, tz = "UTC")
+        render_adaptive_plot(xlim = xlim)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$plot_container_dims,
+      {
+        if (
+          !isTRUE(adaptiveState$active) || !isTRUE(adaptiveState$plot_ready)
+        ) {
+          return()
+        }
+        render_adaptive_plot(xlim = adaptiveState$current_xlim)
+      },
+      ignoreInit = TRUE
+    )
+
+    # Observe the full screen button and run the javascript function to make the plot full screen
+    observeEvent(
+      input$full_screen,
+      {
+        shinyjs::runjs(paste0("toggleFullScreen('", ns("plot"), "');"))
+        # Manually trigger a window resize event after some delay
+        shinyjs::runjs(
+          "
+                      setTimeout(function() {
+                        sendWindowSizeToShiny();
+                      }, 700);
+                    "
+        )
+        shinyjs::runjs(
+          sprintf(
+            "
+              setTimeout(function() {
+                var container = document.getElementById('%s');
+                if (!container) return;
+                var rect = container.getBoundingClientRect();
+                Shiny.setInputValue('%s', {
+                  width: rect.width,
+                  height: rect.height,
+                  timestamp: new Date().getTime()
+                });
+              }, 700);
+            ",
+            ns("plot_container"),
+            ns("plot_container_dims")
+          )
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    # Send the user the plotting data
+    output$download_data <- downloadHandler(
+      filename = function() {
+        time <- Sys.time()
+        attr(time, "tzone") <- "UTC"
+        paste0(
+          "continuous_plot_data_",
+          gsub("-", "", gsub(" ", "_", gsub(":", "", substr(time, 0, 16)))),
+          "_UTC.xlsx"
+        )
+      },
+      content = function(file) {
+        req <- isolate(plot_request())
+        out <- long_ts_plot$result()$data
+
+        wb <- openxlsx::createWorkbook()
+
+        existing_sheets <- character(0)
+        unique_sheet_name <- function(name) {
+          clean_name <- gsub("[\\\\/?*\\[\\]:]", "_", name)
+          clean_name <- gsub("^'+|'+$", "", clean_name)
+          clean_name <- trimws(clean_name)
+          if (!nzchar(clean_name)) {
+            clean_name <- "sheet"
+          }
+          clean_name <- substr(clean_name, 1, 31)
+
+          candidate <- clean_name
+          suffix <- 1L
+          while (candidate %in% existing_sheets) {
+            suffix_text <- paste0("_", suffix)
+            candidate <- paste0(
+              substr(clean_name, 1, max(1, 31 - nchar(suffix_text))),
+              suffix_text
+            )
+            suffix <- suffix + 1L
+          }
+
+          existing_sheets <<- c(existing_sheets, candidate)
+          candidate
+        }
+
+        write_data_recursive <- function(x, prefix = "data") {
+          if (is.null(x)) {
+            return(invisible(NULL))
+          }
+
+          if (is.data.frame(x)) {
+            sheet_name <- unique_sheet_name(prefix)
+            openxlsx::addWorksheet(wb, sheetName = sheet_name)
+            openxlsx::writeData(
+              wb,
+              sheet = sheet_name,
+              x = x,
+              colNames = TRUE
+            )
+            return(invisible(NULL))
+          }
+
+          if (is.list(x)) {
+            nm <- names(x)
+            if (is.null(nm) || any(!nzchar(nm))) {
+              nm <- paste0("item", seq_along(x))
+            }
+
+            for (i in seq_along(x)) {
+              write_data_recursive(
+                x[[i]],
+                prefix = paste(prefix, nm[[i]], sep = "_")
+              )
+            }
+          }
+        }
+
+        base_metadata <- data.frame(
+          Attribute = c(
+            "Generated on:",
+            "Plot type:",
+            "Timeseries IDs:",
+            "Plot language:",
+            "Plot timezone:",
+            "Plot resolution:"
+          ),
+          Value = c(
+            paste0(
+              substr(.POSIXct(Sys.time(), tz = "UTC"), 1, 16),
+              " UTC"
+            ),
+            req$plot_type,
+            paste(req$timeseries_ids, collapse = ", "),
+            req$lang,
+            req$plot_timezone,
+            if (!is.null(req$plot_resolution)) {
+              req$plot_resolution
+            } else {
+              NA_character_
+            }
+          ),
+          stringsAsFactors = FALSE,
+          check.names = FALSE
+        )
+
+        if (
+          length(req$timeseries_ids) == 1 &&
+            is.list(out) &&
+            is.data.frame(out$trace_data) &&
+            is.data.frame(out$range_data)
+        ) {
+          timeseries <- req$timeseries_id
+          loc_id <- moduleData$timeseries[
+            timeseries_id == timeseries,
+            location_id
+          ]
+          location <- moduleData$locs[
+            location_id == loc_id,
+            get(tr("generic_name_col", language$language))
+          ]
+          sloc_id <- moduleData$timeseries[
+            timeseries_id == timeseries,
+            sub_location_id
+          ]
+          if (!is.na(sloc_id)) {
+            sub_location <- moduleData$sub_locs[
+              sub_location_id == sloc_id,
+              get(tr("sub_location_col", language$language))
+            ]
+          } else {
+            sub_location <- NA
+          }
+          pid <- moduleData$timeseries[
+            timeseries_id == timeseries,
+            parameter_id
+          ]
+          parameter <- moduleData$params[
+            parameter_id == pid,
+            get(tr("param_name_col", language$language))
+          ]
+          units <- moduleData$params[
+            parameter_id == pid,
+            get("unit")
+          ]
+          date_range_start <- format(
+            min(out$trace_data$datetime, na.rm = TRUE),
+            "%Y-%m-%d %H:%M"
+          )
+          date_range_end <- format(
+            max(out$trace_data$datetime, na.rm = TRUE),
+            "%Y-%m-%d %H:%M"
+          )
+          hist_range_start <- as.character(moduleData$timeseries[
+            timeseries_id == timeseries,
+            start_datetime
+          ])
+          hist_range_end <- as.character(moduleData$timeseries[
+            timeseries_id == timeseries,
+            end_datetime
+          ])
+
+          metadata <- rbind(
+            base_metadata,
+            data.frame(
+              Attribute = c(
+                "Location:",
+                "Sub-location:",
+                "Parameter:",
+                "Units:",
+                "Start of exported data:",
+                "End of exported data:",
+                "Start historic record for stats calculations:",
+                "End historic record for stats calculations:"
+              ),
+              Value = c(
+                location,
+                sub_location,
+                parameter,
+                units,
+                date_range_start,
+                date_range_end,
+                hist_range_start,
+                hist_range_end
+              ),
+              stringsAsFactors = FALSE,
+              check.names = FALSE
+            )
+          )
+
+          openxlsx::addWorksheet(wb, sheetName = "metadata")
+          existing_sheets <- c(existing_sheets, "metadata")
+          openxlsx::writeData(
+            wb,
+            sheet = "metadata",
+            x = metadata,
+            colNames = TRUE
+          )
+
+          trace_data <- out$trace_data
+          names(trace_data)[1:2] <- c(
+            "datetime_UTC",
+            paste0(parameter, "_", units)
+          )
+          openxlsx::addWorksheet(wb, sheetName = "trace_data")
+          existing_sheets <- c(existing_sheets, "trace_data")
+          openxlsx::writeData(
+            wb,
+            sheet = "trace_data",
+            x = trace_data,
+            colNames = TRUE
+          )
+
+          range_data <- out$range_data
+          names(range_data)[1:5] <- c(
+            "datetime_UTC",
+            paste0("historic_min_", units),
+            paste0("historic_max_", units),
+            paste0("historic_Q75_", units),
+            paste0("historic_Q25_", units)
+          )
+          openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
+          existing_sheets <- c(existing_sheets, "historic_range_data")
+          openxlsx::writeData(
+            wb,
+            sheet = "historic_range_data",
+            x = range_data,
+            colNames = TRUE
+          )
+        } else {
+          openxlsx::addWorksheet(wb, sheetName = "metadata")
+          existing_sheets <- c(existing_sheets, "metadata")
+          openxlsx::writeData(
+            wb,
+            sheet = "metadata",
+            x = base_metadata,
+            colNames = TRUE
+          )
+          write_data_recursive(out)
+        }
+
+        openxlsx::saveWorkbook(
+          wb,
+          file,
+          overwrite = TRUE
+        )
+      } # End content
+    ) # End downloadHandler
+  }) # End moduleServer
+}

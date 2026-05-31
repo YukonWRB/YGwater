@@ -1509,21 +1509,19 @@ get_daily_percentiles <- function(
                     "WITH daily_temp AS (",
                     "    SELECT",
                     "        l.location_code,",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    WHERE l.location_code IN (%s)",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY l.location_code, DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_fdd AS (",
                     "    SELECT",
@@ -1615,21 +1613,19 @@ get_daily_percentiles <- function(
                     "WITH daily_temp AS (",
                     "    SELECT",
                     "        l.location_code,",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    WHERE l.location_code IN (%s)",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY l.location_code, DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_ddt AS (",
                     "    SELECT",
@@ -1960,21 +1956,19 @@ get_parameter_percentile_limits <- function(
                 paste(
                     "WITH daily_temp AS (",
                     "    SELECT",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    WHERE l.location_code = %s",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_fdd AS (",
                     "    SELECT",
@@ -2018,21 +2012,19 @@ get_parameter_percentile_limits <- function(
                 paste(
                     "WITH daily_temp AS (",
                     "    SELECT",
-                    "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                    "        AVG(mc.value) AS mean_temp",
-                    "    FROM measurements_continuous mc",
-                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "        mcd.date AS date,",
+                    "        mcd.value AS mean_temp",
+                    "    FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
                     "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    JOIN locations l ON ts.location_id = l.location_id",
                     "    WHERE l.location_code = %s",
                     "      AND p.param_name = 'temperature, air'",
-                    "      AND mc.value IS NOT NULL",
+                    "      AND mcd.value IS NOT NULL",
                     paste0(
-                        "      AND mc.datetime >= ",
-                        historical_start_date_sql,
-                        "::timestamp"
+                        "      AND mcd.date >= ",
+                        historical_start_date_sql
                     ),
-                    "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                     "),",
                     "daily_ddt AS (",
                     "    SELECT",
@@ -2508,21 +2500,22 @@ plot_continuous_with_percentiles_and_return_periods <- function(
     p <- plotly::plot_ly()
 
     if (include_percentiles && nrow(pct) > 0) {
-        # Extend the historical envelope from the selected start year through
-        # the end of reference year + 1.
+        # Build a padded envelope around the visible window, but keep it
+        # bounded to the configured historical period to avoid oversized
+        # ribbon polygons that can trigger plot clipping artifacts.
         ref_year <- suppressWarnings(as.integer(
             format(now_ts, "%Y", tz = plot_timezone)
         ))
         if (is.na(ref_year)) {
             ref_year <- as.integer(format(Sys.time(), "%Y", tz = plot_timezone))
         }
+
+        # Only show percentile envelope for 1 year before to 1 year after the reference year
         percentile_cycle_start_date <- as.Date(sprintf(
             "%d-01-01",
-            historical_start_year
+            ref_year - 1L
         ))
-        percentile_cycle_end_date <- as.Date(
-            sprintf("%d-12-31", ref_year + 1L)
-        )
+        percentile_cycle_end_date <- as.Date(sprintf("%d-12-31", ref_year + 1L))
         percentile_dates <- seq(
             percentile_cycle_start_date,
             percentile_cycle_end_date,
@@ -2542,24 +2535,31 @@ plot_continuous_with_percentiles_and_return_periods <- function(
             stringsAsFactors = FALSE
         )
         pct_plot$doy[pct_months == 2 & pct_days == 29] <- NA_integer_
-        pct_lookup <- pct[, c(
-            "location_code",
-            "doy",
-            "p0",
-            "p10",
-            "p25",
-            "p50",
-            "p75",
-            "p90",
-            "p100"
-        )]
+        pct_bands <- c("p0", "p10", "p25", "p50", "p75", "p90", "p100")
+        pct_lookup <- pct[,
+            intersect(c("location_code", "doy", pct_bands), names(pct)),
+            drop = FALSE
+        ]
+        for (col in setdiff(
+            c("location_code", "doy", pct_bands),
+            names(pct_lookup)
+        )) {
+            pct_lookup[[col]] <- if (col == "location_code") {
+                rep(location_code, nrow(pct_lookup))
+            } else {
+                rep(NA_real_, nrow(pct_lookup))
+            }
+        }
         pct_key <- paste(pct_lookup$location_code, pct_lookup$doy)
         plot_key <- paste(pct_plot$location_code, pct_plot$doy)
         match_idx <- match(plot_key, pct_key)
-        for (col in c("p0", "p10", "p25", "p50", "p75", "p90", "p100")) {
+        for (col in pct_bands) {
             pct_plot[[col]] <- pct_lookup[[col]][match_idx]
         }
         pct_plot <- pct_plot[order(pct_plot$datetime), ]
+        for (col in setdiff(c("datetime", pct_bands), names(pct_plot))) {
+            pct_plot[[col]] <- rep(NA_real_, nrow(pct_plot))
+        }
 
         # Prevent ribbon self-clipping caused by NA gaps in percentile bands.
         pct_plot <- pct_plot[
@@ -2820,7 +2820,7 @@ plot_continuous_with_percentiles_and_return_periods <- function(
             shapes = all_shapes,
             annotations = rp_annotations,
             legend = list(orientation = "v", x = 0.01, y = 0.99),
-            margin = list(r = 80)
+            margin = list(r = 80, t = 60)
         )
 }
 
@@ -2946,10 +2946,32 @@ build_station_plot <- function(
     con,
     snow_survey_parameters,
     load_entire_record = FALSE,
+    relative_view_weeks_before = 52L,
+    relative_view_weeks_after = 52L,
     continuous_data = NULL,
     percentiles = NULL,
     return_periods = NULL
 ) {
+    normalize_relative_view_weeks <- function(value, default_value) {
+        parsed <- suppressWarnings(as.integer(value))
+        if (length(parsed) == 0 || is.na(parsed) || parsed < 0) {
+            return(as.integer(default_value))
+        }
+        parsed
+    }
+
+    relative_view_weeks_before <- normalize_relative_view_weeks(
+        relative_view_weeks_before,
+        52L
+    )
+    relative_view_weeks_after <- normalize_relative_view_weeks(
+        relative_view_weeks_after,
+        52L
+    )
+
+    view_start_ago <- sprintf("%d weeks", relative_view_weeks_before)
+    view_end_ahead <- sprintf("%d weeks", relative_view_weeks_after)
+
     tryCatch(
         suppressWarnings({
             if (parameter %in% snow_survey_parameters) {
@@ -2992,6 +3014,8 @@ build_station_plot <- function(
                     percentiles = percentiles,
                     return_periods = return_periods,
                     parameter = parameter,
+                    view_start_ago = view_start_ago,
+                    view_end_ahead = view_end_ahead,
                     reference_time = as.character(reference_time),
                     load_entire_record = load_entire_record,
                     con = con,
@@ -3005,6 +3029,8 @@ build_station_plot <- function(
                             percentiles = percentiles,
                             return_periods = data.frame(),
                             parameter = parameter,
+                            view_start_ago = view_start_ago,
+                            view_end_ahead = view_end_ahead,
                             reference_time = as.character(reference_time),
                             load_entire_record = load_entire_record,
                             con = con,
@@ -3413,23 +3439,30 @@ plot_continuous_static_with_percentiles_and_return_periods <- function(
                 stringsAsFactors = FALSE
             )
             pct_plot$doy[pct_months == 2 & pct_days == 29] <- NA_integer_
-            pct_lookup <- pct[, c(
-                "location_code",
-                "doy",
-                "p0",
-                "p10",
-                "p25",
-                "p50",
-                "p75",
-                "p90",
-                "p100"
-            )]
+            pct_bands <- c("p0", "p10", "p25", "p50", "p75", "p90", "p100")
+            pct_lookup <- pct[,
+                intersect(c("location_code", "doy", pct_bands), names(pct)),
+                drop = FALSE
+            ]
+            for (col in setdiff(
+                c("location_code", "doy", pct_bands),
+                names(pct_lookup)
+            )) {
+                pct_lookup[[col]] <- if (col == "location_code") {
+                    rep(location_code, nrow(pct_lookup))
+                } else {
+                    rep(NA_real_, nrow(pct_lookup))
+                }
+            }
             match_idx <- match(
                 paste(pct_plot$location_code, pct_plot$doy),
                 paste(pct_lookup$location_code, pct_lookup$doy)
             )
-            for (col in c("p0", "p10", "p25", "p50", "p75", "p90", "p100")) {
+            for (col in pct_bands) {
                 pct_plot[[col]] <- pct_lookup[[col]][match_idx]
+            }
+            for (col in setdiff(c("datetime", pct_bands), names(pct_plot))) {
+                pct_plot[[col]] <- rep(NA_real_, nrow(pct_plot))
             }
             pct_plot <- pct_plot[
                 stats::complete.cases(pct_plot[, c(
@@ -4197,14 +4230,13 @@ get_fdd_summary <- function(
                 "    SELECT",
                 "        tt.location_id,",
                 "        tt.timeseries_id,",
-                "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                "        AVG(mc.value) AS mean_temp",
+                "        mcd.date AS date,",
+                "        mcd.value AS mean_temp",
                 "    FROM target_timeseries tt",
-                "    JOIN measurements_continuous mc",
-                "      ON mc.timeseries_id = tt.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                paste0("      AND mc.datetime <= ", ref_ts_sql),
-                "    GROUP BY tt.location_id, tt.timeseries_id, DATE_TRUNC('day', mc.datetime)::date",
+                "    JOIN measurements_calculated_daily mcd",
+                "      ON mcd.timeseries_id = tt.timeseries_id",
+                "    WHERE mcd.value IS NOT NULL",
+                paste0("      AND mcd.date <= ", ref_date_sql),
                 "),",
                 "daily_fdd AS (",
                 "    SELECT",
@@ -4341,14 +4373,13 @@ get_ddt_summary <- function(
                 "    SELECT",
                 "        tt.location_id,",
                 "        tt.timeseries_id,",
-                "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                "        AVG(mc.value) AS mean_temp",
+                "        mcd.date AS date,",
+                "        mcd.value AS mean_temp",
                 "    FROM target_timeseries tt",
-                "    JOIN measurements_continuous mc",
-                "      ON mc.timeseries_id = tt.timeseries_id",
-                "    WHERE mc.value IS NOT NULL",
-                paste0("      AND mc.datetime <= ", ref_ts_sql),
-                "    GROUP BY tt.location_id, tt.timeseries_id, DATE_TRUNC('day', mc.datetime)::date",
+                "    JOIN measurements_calculated_daily mcd",
+                "      ON mcd.timeseries_id = tt.timeseries_id",
+                "    WHERE mcd.value IS NOT NULL",
+                paste0("      AND mcd.date <= ", ref_date_sql),
                 "),",
                 "daily_ddt AS (",
                 "    SELECT",
@@ -5489,26 +5520,23 @@ get_historical_overlay_timeseries <- function(
                     paste(
                         "WITH daily_temp AS (",
                         "    SELECT",
-                        "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                        "        AVG(mc.value) AS mean_temp",
-                        "    FROM measurements_continuous mc",
-                        "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "        mcd.date AS date,",
+                        "        mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
                         "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                         "    JOIN locations l ON l.location_id = ts.location_id",
                         "    WHERE l.location_code = %s",
                         "      AND p.param_name = 'temperature, air'",
-                        "      AND mc.value IS NOT NULL",
+                        "      AND mcd.value IS NOT NULL",
                         paste0(
-                            "      AND mc.datetime >= ",
-                            season_start_sql,
-                            "::timestamp"
+                            "      AND mcd.date >= ",
+                            season_start_sql
                         ),
                         paste0(
-                            "      AND mc.datetime < (",
-                            year_end_sql,
-                            " + INTERVAL '1 day')::timestamp"
+                            "      AND mcd.date <= ",
+                            year_end_sql
                         ),
-                        "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                         "),",
                         "daily_fdd AS (",
                         "    SELECT",
@@ -5557,26 +5585,23 @@ get_historical_overlay_timeseries <- function(
                     paste(
                         "WITH daily_temp AS (",
                         "    SELECT",
-                        "        DATE_TRUNC('day', mc.datetime)::date AS date,",
-                        "        AVG(mc.value) AS mean_temp",
-                        "    FROM measurements_continuous mc",
-                        "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "        mcd.date AS date,",
+                        "        mcd.value AS mean_temp",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
                         "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                         "    JOIN locations l ON l.location_id = ts.location_id",
                         "    WHERE l.location_code = %s",
                         "      AND p.param_name = 'temperature, air'",
-                        "      AND mc.value IS NOT NULL",
+                        "      AND mcd.value IS NOT NULL",
                         paste0(
-                            "      AND mc.datetime >= ",
-                            season_start_sql,
-                            "::timestamp"
+                            "      AND mcd.date >= ",
+                            season_start_sql
                         ),
                         paste0(
-                            "      AND mc.datetime < (",
-                            year_end_sql,
-                            " + INTERVAL '1 day')::timestamp"
+                            "      AND mcd.date <= ",
+                            year_end_sql
                         ),
-                        "    GROUP BY DATE_TRUNC('day', mc.datetime)::date",
                         "),",
                         "daily_ddt AS (",
                         "    SELECT",
@@ -5746,7 +5771,7 @@ launch_freshet_dashboard <- function(con) {
             "#dashboard-panels.comfortable { grid-template-columns: 1fr; }",
             "#controls .dashboard-controls-wrap { display:flex; flex-direction:column; gap:0.3rem; }",
             "#controls .dashboard-controls-row { display:grid; gap:0.35rem; align-items:start; justify-items:stretch; }",
-            "#controls .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 12rem 7rem 9rem; justify-content:start; align-items:end; }",
+            "#controls .dashboard-controls-row.dashboard-controls-top { grid-template-columns: 12rem 8rem 8rem 12rem 7rem 9rem; justify-content:start; align-items:end; }",
             "#controls .dashboard-controls-row.dashboard-controls-plot { grid-template-columns: repeat(6, minmax(0, 1fr)); }",
             "#controls .dashboard-controls-cell { min-width:0; display:flex; flex-direction:column; justify-content:flex-start; }",
             "#controls .dashboard-controls-cell > * { width:100%; }",
@@ -5801,6 +5826,18 @@ launch_freshet_dashboard <- function(con) {
                         ),
                         shiny::tags$div(
                             class = "dashboard-controls-cell",
+                            shiny::numericInput(
+                                "relative_view_weeks_before",
+                                "Rel view before (weeks)",
+                                value = 52,
+                                min = 0,
+                                max = 520,
+                                step = 1,
+                                width = "100%"
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
                             shiny::tags$div(
                                 class = "form-group shiny-input-container",
                                 style = "margin-bottom:0;",
@@ -5820,6 +5857,18 @@ launch_freshet_dashboard <- function(con) {
                                     max = format(Sys.time(), "%Y-%m-%dT%H:%M"),
                                     oninput = "if(this.max && this.value > this.max){ this.value = this.max; } Shiny.setInputValue('time0', this.value, {priority: 'event'});"
                                 )
+                            )
+                        ),
+                        shiny::tags$div(
+                            class = "dashboard-controls-cell",
+                            shiny::numericInput(
+                                "relative_view_weeks_after",
+                                "Rel view after (weeks)",
+                                value = 52,
+                                min = 0,
+                                max = 520,
+                                step = 1,
+                                width = "100%"
                             )
                         ),
                         shiny::tags$div(
@@ -5957,7 +6006,7 @@ launch_freshet_dashboard <- function(con) {
                             shiny::checkboxInput(
                                 "station_plot_show_legend",
                                 "Show legend",
-                                value = TRUE,
+                                value = FALSE,
                                 width = NULL
                             ),
                             shiny::actionButton(
@@ -5996,7 +6045,7 @@ launch_freshet_dashboard <- function(con) {
             bslib::card_body(
                 shiny::tags$p(
                     shiny::tags$b("Disclaimer: "),
-                    "Historical ranges and return periods are calculated on the fly using daily corrected data and have not been independently verified by a hydrologist. Note that sub-daily variance may not be captured by daily average historical ranges, especially for variables such as temperature. Real-time data may be unreliable and subject to future corrections.",
+                    "Historical ranges and return periods are calculated on the fly using daily corrected data and have not been independently verified by a hydrologist. Note that sub-daily variance may not be captured by daily average historical ranges, especially for variables such as temperature. Real-time data may be unreliable and subject to future corrections. Sharp edges in the historical record are likely caused by incomplete records, and not representative of sudden shifts in the underlying hydrology. Please contact the YG Water Security team if you have questions or concerns about the data or calculations used in this dashboard.",
                     style = "font-size:0.85em; color:#6b7280; margin:0;"
                 )
             )
@@ -8173,6 +8222,17 @@ launch_freshet_dashboard <- function(con) {
         }
 
         normalize_plot_request <- function(request) {
+            normalize_relative_view_weeks <- function(
+                value,
+                default_value = 52L
+            ) {
+                parsed <- suppressWarnings(as.integer(value))
+                if (length(parsed) == 0 || is.na(parsed) || parsed < 0) {
+                    return(as.integer(default_value))
+                }
+                parsed
+            }
+
             list(
                 station = request$station %||% "",
                 parameter = request$parameter %||% "",
@@ -8183,6 +8243,14 @@ launch_freshet_dashboard <- function(con) {
                 secondary_parameter = request$secondary_parameter %||% "",
                 secondary_historical_years = normalize_selected_historical_years(
                     request$secondary_historical_years
+                ),
+                relative_view_weeks_before = normalize_relative_view_weeks(
+                    request$relative_view_weeks_before,
+                    52L
+                ),
+                relative_view_weeks_after = normalize_relative_view_weeks(
+                    request$relative_view_weeks_after,
+                    52L
                 ),
                 reference_time = request$reference_time %||% ""
             )
@@ -8196,6 +8264,8 @@ launch_freshet_dashboard <- function(con) {
                 secondary_station = secondary_plot_key()$station,
                 secondary_parameter = secondary_plot_key()$parameter,
                 secondary_historical_years = input$secondary_historical_years,
+                relative_view_weeks_before = input$relative_view_weeks_before,
+                relative_view_weeks_after = input$relative_view_weeks_after,
                 reference_time = input$time0 %||% ""
             ))
         })
@@ -8253,6 +8323,8 @@ launch_freshet_dashboard <- function(con) {
                 secondary_historical_years = normalize_selected_historical_years(
                     input$secondary_historical_years
                 ),
+                relative_view_weeks_before = input$relative_view_weeks_before,
+                relative_view_weeks_after = input$relative_view_weeks_after,
                 reference_time = time_zero(),
                 request_signature = current_station_plot_signature()
             )
@@ -8460,9 +8532,8 @@ launch_freshet_dashboard <- function(con) {
                 title_parts <- c(
                     title_parts,
                     sprintf(
-                        "Secondary %s: %s",
-                        station_label_for_code(request$secondary_station),
-                        request$secondary_parameter
+                        "Secondary %s",
+                        station_label_for_code(request$secondary_station)
                     )
                 )
             }
@@ -8510,6 +8581,8 @@ launch_freshet_dashboard <- function(con) {
                 con = con,
                 snow_survey_parameters = snow_survey_parameters,
                 load_entire_record = FALSE,
+                relative_view_weeks_before = request$relative_view_weeks_before,
+                relative_view_weeks_after = request$relative_view_weeks_after,
                 continuous_data = bundle$continuous,
                 percentiles = bundle$percentiles,
                 return_periods = bundle$return_periods
@@ -9037,7 +9110,6 @@ launch_freshet_dashboard <- function(con) {
     shiny::shinyApp(ui = ui, server = server)
 }
 
-if (sys.nframe() == 0) {
-    app <- launch_freshet_dashboard(con = con)
-    shiny::runApp(app)
-}
+
+app <- launch_freshet_dashboard(con = con)
+shiny::runApp(app)
