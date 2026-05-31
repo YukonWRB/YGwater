@@ -589,6 +589,88 @@ table.on("click", "tr", function() {
     restarted <- reactiveValues(initialized = FALSE, restarted = FALSE)
     instruments_data <- reactiveValues()
     select_data <- reactiveValues() # Holds data to populate select menus
+    observer_select_value <- function(observer_id) {
+      observer_id <- unlist(observer_id, use.names = FALSE)
+      if (length(observer_id) == 0 || is.null(observer_id) || is.na(observer_id[1])) {
+        return(character(0))
+      }
+      as.character(observer_id[1])
+    }
+    refresh_observer_choices <- function() {
+      instruments_data$observers <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT * FROM observers"
+      )
+      instruments_data$observers$observer_string <- paste0(
+        instruments_data$observers$observer_first,
+        " ",
+        instruments_data$observers$observer_last,
+        " (",
+        instruments_data$observers$organization,
+        ")"
+      )
+      select_data$recorder <- stats::setNames(
+        c("new", instruments_data$observers$observer_id),
+        c("Add new observer", instruments_data$observers$observer_string)
+      )
+    }
+    restarted_observer_value <- function() {
+      restart_observer <- observer_select_value(calibration_data$restart_observer)
+      if (length(restart_observer) > 0) {
+        return(restart_observer)
+      }
+
+      restarted_id <- calibration_data$restarted_id
+      if (
+        length(restarted_id) == 0 ||
+          is.null(restarted_id) ||
+          is.na(restarted_id) ||
+          restarted_id == 0
+      ) {
+        return(character(0))
+      }
+
+      row_num <- match(
+        restarted_id,
+        calibrations$incomplete_calibrations$calibration_id
+      )
+      if (is.na(row_num)) {
+        return(character(0))
+      }
+
+      observer_select_value(
+        calibrations$incomplete_calibrations[row_num, "observer"]
+      )
+    }
+    update_observer_input <- function(selected = character(0), clear = TRUE) {
+      selected <- observer_select_value(selected)
+      choices <- isolate(select_data$recorder)
+      session$onFlushed(
+        function() {
+          updateSelectizeInput(
+            session,
+            "observer",
+            choices = choices,
+            selected = selected
+          )
+        },
+        once = TRUE
+      )
+    }
+    render_observer_input <- function(selected = character(0), clear = TRUE) {
+      selected <- observer_select_value(selected)
+      clear <- isTRUE(clear) && length(selected) == 0
+      output$observer <- renderUI({
+        selectizeInput(
+          ns("observer"),
+          label = "Calibrator name",
+          choices = select_data$recorder,
+          options = selectize_empty_options(clear = clear),
+          selected = selected
+        )
+      })
+      update_observer_input(selected = selected, clear = clear)
+    }
     default_obs_datetime <- function() {
       .POSIXct(Sys.time(), tz = "UTC")
     }
@@ -1094,10 +1176,7 @@ table.on("click", "tr", function() {
       "SELECT * FROM calibrations"
     ) # This will be used to check if there are any incomplete calibrations
 
-    instruments_data$observers <- DBI::dbGetQuery(
-      session$userData$AquaCache,
-      "SELECT * FROM observers"
-    )
+    refresh_observer_choices()
 
     output$calibration_instruments_table <- DT::renderDT(
       {
@@ -1116,32 +1195,16 @@ table.on("click", "tr", function() {
     observeEvent(input$last_observer_id, {
       # This is used to set the last observer ID to the last observer selected, recovered from cookies
       try({
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = input$last_observer_id
-          )
-        })
+        render_observer_input(
+          selected = input$last_observer_id,
+          clear = FALSE
+        )
       })
     })
 
     observe({
       if (!restarted$initialized) {
-        instruments_data$observers$observer_string <- paste0(
-          instruments_data$observers$observer_first,
-          " ",
-          instruments_data$observers$observer_last,
-          " (",
-          instruments_data$observers$organization,
-          ")"
-        )
-        select_data$recorder <- stats::setNames(
-          c("new", instruments_data$observers$observer_id),
-          c("Add new observer", instruments_data$observers$observer_string)
-        )
+        refresh_observer_choices()
 
         # look for a cookie with the last observer ID
         shinyjs::runjs(sprintf(
@@ -1150,14 +1213,7 @@ table.on("click", "tr", function() {
           ns('last_observer_id')
         ))
 
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
+        render_observer_input()
         output$ID_sensor_holder <- renderUI({
           div(
             selectizeInput(
@@ -1272,34 +1328,11 @@ table.on("click", "tr", function() {
           )
         )
         # Update the observers data.frame and selectizeInputs
-        instruments_data$observers <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "SELECT * FROM observers"
-        )
-        instruments_data$observers$observer_string <- paste0(
-          instruments_data$observers$observer_first,
-          " ",
-          instruments_data$observers$observer_last,
-          " (",
-          instruments_data$observers$organization,
-          ")"
-        )
-        select_data$recorder <- stats::setNames(
-          c("new", instruments_data$observers$observer_id),
-          c("Add new observer", instruments_data$observers$observer_string)
-        )
+        refresh_observer_choices()
 
         selected_id <- max(instruments_data$observers$observer_id)
 
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options(clear = FALSE),
-            selected = selected_id
-          )
-        })
+        render_observer_input(selected = selected_id, clear = FALSE)
         shinyjs::runjs(paste0(
           "Cookies.set('last_observer_id', '",
           selected_id,
@@ -1865,14 +1898,7 @@ table.on("click", "tr", function() {
     # Create reset functions for each calibration type ################################################
     reset_basic <- function(keep_observer = FALSE) {
       if (!keep_observer) {
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
+        render_observer_input()
       }
       shinyWidgets::updateAirDateInput(
         session,
@@ -2403,15 +2429,14 @@ table.on("click", "tr", function() {
       if (input$tab_panel == "Checks / calibrations") {
         shinyjs::show("calibration_instruments_table")
         shinyjs::show("submit_btn")
-        output$observer <- renderUI({
-          selectizeInput(
-            ns("observer"),
-            label = "Calibrator name",
-            choices = select_data$recorder,
-            options = selectize_empty_options()
-          )
-        })
+        refresh_observer_choices()
+        if (isTRUE(restarted$restarted)) {
+          render_observer_input(selected = restarted_observer_value())
+        } else {
+          render_observer_input(selected = isolate(input$observer))
+        }
       } else if (input$tab_panel == "View unfinished calibrations") {
+        refresh_observer_choices()
         output$incomplete_table <- DT::renderDT(
           complete$incomplete,
           rownames = FALSE,
@@ -2433,6 +2458,7 @@ table.on("click", "tr", function() {
             timer = 3000
           )
         } else {
+          refresh_observer_choices()
           shinyjs::show("restart_table")
           send_table$restarted_cal <- data.frame(
             "Saved records (recovered session)" = entry_display_labels$basic,
@@ -2445,6 +2471,12 @@ table.on("click", "tr", function() {
           ])
           calibration_data$next_id <- incomplete_ID
           calibration_data$restarted_id <- incomplete_ID
+          calibration_data$restart_observer <- observer_select_value(
+            calibrations$incomplete_calibrations[
+              restart_value,
+              "observer"
+            ]
+          )
 
           # Search for entries in parameter-specific sheets with the same calibration_id and update the fields
           all_sheets <- DBI::dbListTables(session$userData$AquaCache)
@@ -2762,17 +2794,9 @@ table.on("click", "tr", function() {
             }
           }
           # Reset the basic fields according to recovered info
-          output$observer <- renderUI({
-            selectizeInput(
-              ns("observer"),
-              label = "Calibrator name",
-              choices = select_data$recorder,
-              selected = select_data$recorder[calibrations$incomplete_calibrations[
-                restart_value,
-                "observer"
-              ]]
-            )
-          })
+          render_observer_input(
+            selected = calibration_data$restart_observer
+          )
           shinyWidgets::updateAirDateInput(
             session,
             "obs_datetime",
@@ -2972,6 +2996,7 @@ table.on("click", "tr", function() {
             shinyjs::hide("restart_table")
             restarted$restarted <- FALSE
             calibration_data$restarted_id <- 0
+            calibration_data$restart_observer <- NULL
             calibration_data$next_id <- NULL
           }
           alert("Deleted", type = "success", timer = 2000)
@@ -5128,6 +5153,7 @@ table.on("click", "tr", function() {
         calibration_data$do <- NULL
         calibration_data$depth <- NULL
         calibration_data$restarted_id <- 0
+        calibration_data$restart_observer <- NULL
         # Reset tables
         send_table$saved <- data.frame(
           "Saved records" = "Nothing saved yet",
