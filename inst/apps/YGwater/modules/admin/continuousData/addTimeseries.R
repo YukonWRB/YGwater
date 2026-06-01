@@ -1775,7 +1775,7 @@ addTimeseries <- function(id, language) {
               tags$p(
                 class = "text-muted small",
                 paste(
-                  "New default corrections use broad UTC bounds:",
+                  "New default corrections use broad datetime bounds:",
                   format(bounds$start_dt, "%Y-%m-%d %H:%M:%S %Z", tz = "UTC"),
                   "to",
                   format(bounds$end_dt, "%Y-%m-%d %H:%M:%S %Z", tz = "UTC")

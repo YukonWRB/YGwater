@@ -1926,7 +1926,14 @@ contPlot <- function(id, language, windowDims, inputs) {
         gridx = isTRUE(input$showgridx),
         gridy = isTRUE(input$showgridy),
         shareX = isTRUE(input$shareX),
-        shareY = isTRUE(input$shareY)
+        shareY = isTRUE(input$shareY),
+        db = list(
+          name = session$userData$config$dbName,
+          host = session$userData$config$dbHost,
+          port = session$userData$config$dbPort,
+          user = session$userData$config$dbUser,
+          pass = session$userData$config$dbPass
+        )
       )
     })
 
@@ -2257,15 +2264,17 @@ contPlot <- function(id, language, windowDims, inputs) {
     # ExtendedTask that does the heavy plotting work
     long_ts_plot <- ExtendedTask$new(function(req) {
       # req is the list returned by plot_request()
-      tryCatch(
-        {
+      promises::future_promise({
+        tryCatch(
+          {
           # New connection necessary because the task gets farmed out to another core
+          db_config <- req$db
           con <- AquaConnect(
-            name = config$dbName,
-            host = config$dbHost,
-            port = config$dbPort,
-            username = config$dbUser,
-            password = config$dbPass,
+            name = db_config$name,
+            host = db_config$host,
+            port = db_config$port,
+            username = db_config$user,
+            password = db_config$pass,
             silent = TRUE
           )
           # Auto close the connection - important!!!
@@ -2576,11 +2585,12 @@ contPlot <- function(id, language, windowDims, inputs) {
           }
 
           stop("Unsupported plot type selected.")
-        },
-        error = function(e) {
-          return(e$message)
-        }
-      )
+          },
+          error = function(e) {
+            return(e$message)
+          }
+        )
+      })
     }) |>
       bind_task_button("make_plot")
 
