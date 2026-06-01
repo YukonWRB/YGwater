@@ -939,6 +939,93 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             reference_time
         )
 
+        if (identical(parameter, "temperature, air")) {
+            aggregation_sql <- DBI::dbQuoteString(
+                con,
+                daily_temperature_aggregation_name()
+            )
+
+            dat <- YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH target_locations AS (",
+                        "    SELECT UNNEST(ARRAY[%s]::text[]) AS location_code",
+                        "),",
+                        "target_timeseries AS (",
+                        "    SELECT ts.location_id, ts.timeseries_id",
+                        "    FROM timeseries ts",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
+                        "    JOIN target_locations tl ON tl.location_code = l.location_code",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
+                        "    WHERE p.param_name = 'temperature, air'",
+                        "      AND a.aggregation_type = %s",
+                        "),",
+                        "daily_latest AS (",
+                        "    SELECT DISTINCT ON (tt.location_id)",
+                        "        tt.location_id, tt.timeseries_id, mcd.date::timestamp AS latest_time, mcd.value AS current_value",
+                        "    FROM target_timeseries tt",
+                        "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
+                        "    WHERE mcd.value IS NOT NULL",
+                        paste0(
+                            "      AND mcd.date >= ",
+                            recent_cutoff_date_sql
+                        ),
+                        paste0("      AND mcd.date <= ", ref_date_sql),
+                        "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
+                        "),",
+                        "daily_change AS (",
+                        "    SELECT",
+                        "        dl.location_id, dl.timeseries_id, dl.latest_time, dl.current_value,",
+                        "        dl.current_value - prev.value AS change_24h,",
+                        "        dl.current_value - prev48.value AS change_48h,",
+                        "        dl.current_value - prev1w.value AS change_1w",
+                        "    FROM daily_latest dl",
+                        "    LEFT JOIN LATERAL (",
+                        "        SELECT mcd.value FROM measurements_calculated_daily mcd",
+                        "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                        "          AND mcd.value IS NOT NULL",
+                        "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
+                        "        ORDER BY mcd.date DESC LIMIT 1",
+                        "    ) prev ON TRUE",
+                        "    LEFT JOIN LATERAL (",
+                        "        SELECT mcd.value FROM measurements_calculated_daily mcd",
+                        "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                        "          AND mcd.value IS NOT NULL",
+                        "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 days'",
+                        "        ORDER BY mcd.date DESC LIMIT 1",
+                        "    ) prev48 ON TRUE",
+                        "    LEFT JOIN LATERAL (",
+                        "        SELECT mcd.value FROM measurements_calculated_daily mcd",
+                        "        WHERE mcd.timeseries_id = dl.timeseries_id",
+                        "          AND mcd.value IS NOT NULL",
+                        "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 days'",
+                        "        ORDER BY mcd.date DESC LIMIT 1",
+                        "    ) prev1w ON TRUE",
+                        ")",
+                        "SELECT loc.location_id, loc.location_code, loc.name, d.timeseries_id,",
+                        "    d.latest_time, d.current_value, d.change_24h, d.change_48h, d.change_1w,",
+                        paste0(
+                            "    EXTRACT(EPOCH FROM (",
+                            ref_ts_sql,
+                            " - d.latest_time)) / 3600.0 AS last_data_age_hours"
+                        ),
+                        "FROM daily_change d",
+                        "JOIN locations loc ON loc.location_id = d.location_id",
+                        "ORDER BY loc.location_code"
+                    ),
+                    location_codes_sql,
+                    aggregation_sql
+                ),
+                con = con
+            )
+
+            return(interpret_loaded_times_as_local(
+                dat,
+                time_columns = c("latest_time")
+            ))
+        }
+
         dat <- YGwater::dbGetQueryDT(
             sprintf(
                 paste(
@@ -2325,6 +2412,62 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             historical_end_year,
             ", 12, 31)"
         )
+
+        if (identical(parameter, "temperature, air")) {
+            aggregation_sql <- DBI::dbQuoteString(
+                con,
+                daily_temperature_aggregation_name()
+            )
+            return(YGwater::dbGetQueryDT(
+                sprintf(
+                    paste(
+                        "WITH daily_values AS (",
+                        "    SELECT l.location_code,",
+                        "        CASE WHEN EXTRACT(MONTH FROM mc.date) > 2 AND ((EXTRACT(YEAR FROM mc.date)::int %% 4 = 0 AND EXTRACT(YEAR FROM mc.date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM mc.date)::int %% 400 = 0)",
+                        "            THEN EXTRACT(DOY FROM mc.date)::int - 1 ELSE EXTRACT(DOY FROM mc.date)::int END AS doy,",
+                        "        mc.value",
+                        "    FROM measurements_calculated_daily mc",
+                        "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
+                        "    JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
+                        "    WHERE l.location_code IN (%s)",
+                        "      AND p.param_name = 'temperature, air'",
+                        "      AND a.aggregation_type = %s",
+                        paste0(
+                            "      AND mc.date >= ",
+                            historical_start_date_sql
+                        ),
+                        paste0(
+                            "      AND mc.date <= ",
+                            historical_end_date_sql
+                        ),
+                        "      AND NOT (EXTRACT(MONTH FROM mc.date) = 2 AND EXTRACT(DAY FROM mc.date) = 29)",
+                        "      AND mc.value IS NOT NULL",
+                        "),",
+                        "by_doy AS (",
+                        "    SELECT location_code, doy, COUNT(*) AS n_values,",
+                        "        percentile_cont(0.00) WITHIN GROUP (ORDER BY value) AS p0,",
+                        "        percentile_cont(0.10) WITHIN GROUP (ORDER BY value) AS p10,",
+                        "        percentile_cont(0.25) WITHIN GROUP (ORDER BY value) AS p25,",
+                        "        percentile_cont(0.50) WITHIN GROUP (ORDER BY value) AS p50,",
+                        "        percentile_cont(0.75) WITHIN GROUP (ORDER BY value) AS p75,",
+                        "        percentile_cont(0.90) WITHIN GROUP (ORDER BY value) AS p90,",
+                        "        percentile_cont(1.00) WITHIN GROUP (ORDER BY value) AS p100",
+                        "    FROM daily_values GROUP BY location_code, doy",
+                        ")",
+                        "SELECT lc.location_code, gs.doy, b.n_values, b.p0, b.p10, b.p25, b.p50, b.p75, b.p90, b.p100",
+                        "FROM (SELECT DISTINCT location_code FROM daily_values) lc",
+                        "CROSS JOIN generate_series(1, 365) AS gs(doy)",
+                        "LEFT JOIN by_doy b ON b.location_code = lc.location_code AND b.doy = gs.doy",
+                        "ORDER BY lc.location_code, gs.doy"
+                    ),
+                    location_codes_str,
+                    aggregation_sql
+                ),
+                con = con
+            ))
+        }
 
         if (identical(parameter, "FDD")) {
             return(YGwater::dbGetQueryDT(
@@ -6225,7 +6368,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         hist_median,
                         NA_real_
                     )
-                    delta_vs_median_pct <- (most_recent_value /
+                    rel_to_med_pct <- (most_recent_value /
                         median_denom) *
                         100
 
@@ -6234,7 +6377,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         month_label = most_recent_month,
                         month_value = round(most_recent_value, 1),
                         `Historical median` = round(hist_median, 1),
-                        delta_vs_median_pct = round(delta_vs_median_pct, 1),
+                        rel_to_med_pct = round(rel_to_med_pct, 1),
                         Percentile = round(percentile_rank, 1),
                         check.names = FALSE,
                         stringsAsFactors = FALSE
@@ -6243,8 +6386,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "Most recent month"
                     names(view)[names(view) == "month_value"] <-
                         "Most recent value"
-                    names(view)[names(view) == "delta_vs_median_pct"] <-
-                        "Delta vs median (%)"
+                    names(view)[names(view) == "rel_to_med_pct"] <-
+                        "Rel. to hist. (%)"
 
                     result_table <- DT::datatable(
                         view,
@@ -6253,7 +6396,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         options = dt_options
                     )
 
-                    change_positions <- grep("^Delta", names(view))
+                    change_positions <- grep("^Rel\\. to hist\\.", names(view))
                     if (length(change_positions) > 0) {
                         result_table <- DT::formatStyle(
                             result_table,
@@ -6342,11 +6485,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     stringsAsFactors = FALSE
                 )
                 names(view)[names(view) == "change_24h_pct"] <-
-                    "Delta 24 h (%)"
+                    "24h change (%)"
                 names(view)[names(view) == "change_48h_pct"] <-
-                    "   elta 48 h (%)"
+                    "48h change (%)"
                 names(view)[names(view) == "change_1wk_pct"] <-
-                    "Delta 1 wk (%)"
+                    "1wk change (%)"
             } else if (identical(summary_mode, "compared_recent")) {
                 view <- data.frame(
                     Station = station_col,
@@ -6367,11 +6510,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     stringsAsFactors = FALSE
                 )
                 names(view)[names(view) == "change_24h_abs"] <-
-                    "Delta 24 h"
+                    "24h change"
                 names(view)[names(view) == "change_48h_abs"] <-
-                    "Delta 48 h"
+                    "48h change"
                 names(view)[names(view) == "change_1wk_abs"] <-
-                    "Delta 1 wk"
+                    "1wk change"
             } else {
                 selected_parameter <- input$parameter
                 if (
@@ -6493,7 +6636,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         hist_median,
                         NA_real_
                     )
-                    delta_vs_median_pct <- ((current_value - hist_median) /
+                    rel_to_med_pct <- ((current_value - hist_median) /
                         median_denom) *
                         100
                     view <- data.frame(
@@ -6505,8 +6648,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         ),
                         Value = round(current_value, 3),
                         `Historical median` = round(hist_median, 3),
-                        `Rel. to med. (%)` = round(
-                            delta_vs_median_pct,
+                        rel_to_med_pct = round(
+                            rel_to_med_pct,
                             3
                         ),
                         Percentile = round(percentile_rank, 1),
@@ -6517,8 +6660,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         check.names = FALSE,
                         stringsAsFactors = FALSE
                     )
-                    names(view)[names(view) == "delta_vs_median_pct"] <-
-                        "Rel. to med. (%)"
+                    names(view)[names(view) == "rel_to_med_pct"] <-
+                        "Rel. to hist. (%)"
                 } else {
                     view <- data.frame(
                         Station = station_col,
@@ -6846,8 +6989,19 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             updated <- stored
             updated$primary_historical_years <-
                 normalize_selected_historical_years(prim_yrs)
-            updated$secondary_historical_years <-
-                normalize_selected_historical_years(sec_yrs)
+
+            # Only carry secondary historical years when a full,
+            # eligible secondary selection exists.
+            if (isTRUE(stored$has_valid_secondary_selection)) {
+                updated$secondary_historical_years <-
+                    normalize_selected_historical_years(sec_yrs)
+            } else {
+                updated$secondary_historical_years <- NULL
+            }
+
+            if (isTRUE(identical(updated, stored))) {
+                return()
+            }
 
             station_plot_request(updated)
         })
@@ -7020,7 +7174,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             derived_parameters <- c(
                 "FDD",
                 "DDT",
-                "temperature, air",
                 "precipitation (1wk)"
             )
 
@@ -7050,6 +7203,50 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         ),
                         error = function(e) NULL
                     ))
+                }
+
+                if (identical(parameter_name, "temperature, air")) {
+                    code_sql <- DBI::dbQuoteString(con, location_code)
+                    aggregation_sql <- DBI::dbQuoteString(
+                        con,
+                        daily_temperature_aggregation_name()
+                    )
+                    history_days <- max(rel_weeks_before * 7L, 1L)
+
+                    d <- tryCatch(
+                        YGwater::dbGetQueryDT(
+                            sprintf(
+                                paste(
+                                    "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
+                                    "FROM measurements_calculated_daily mcd",
+                                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                    "JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
+                                    "JOIN locations l ON l.location_id = ts.location_id",
+                                    "WHERE l.location_code = %s",
+                                    "  AND p.param_name = 'temperature, air'",
+                                    "  AND a.aggregation_type = %s",
+                                    "  AND mcd.date >= CURRENT_DATE - %s",
+                                    "  AND mcd.value IS NOT NULL",
+                                    "ORDER BY 1"
+                                ),
+                                code_sql,
+                                aggregation_sql,
+                                history_days
+                            ),
+                            con = con
+                        ),
+                        error = function(e) NULL
+                    )
+
+                    if (!is.null(d) && nrow(d) > 0) {
+                        d <- interpret_loaded_times_as_local(
+                            d,
+                            time_columns = "datetime"
+                        )
+                    }
+
+                    return(d)
                 }
 
                 # Discrete snow survey data: query samples/discrete.results.
@@ -7180,7 +7377,49 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 d
             }
 
+            fetch_temperature_instantaneous_series <- function(location_code) {
+                code_sql <- DBI::dbQuoteString(con, location_code)
+                history_days <- max(rel_weeks_before * 7L, 1L)
+
+                d <- tryCatch(
+                    YGwater::dbGetQueryDT(
+                        sprintf(
+                            paste(
+                                "SELECT mc.datetime AS datetime, mc.value AS value",
+                                "FROM measurements_continuous mc",
+                                "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                                "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                "JOIN locations l ON l.location_id = ts.location_id",
+                                "WHERE l.location_code = %s",
+                                "  AND p.param_name = 'temperature, air'",
+                                "  AND mc.datetime >= NOW() - INTERVAL '%s days'",
+                                "  AND mc.datetime <= NOW()",
+                                "  AND mc.value IS NOT NULL",
+                                "ORDER BY 1"
+                            ),
+                            code_sql,
+                            history_days
+                        ),
+                        con = con
+                    ),
+                    error = function(e) NULL
+                )
+
+                if (!is.null(d) && nrow(d) > 0) {
+                    d <- interpret_loaded_times_as_local(
+                        d,
+                        time_columns = "datetime"
+                    )
+                }
+
+                d
+            }
+
             dat <- fetch_plot_series(code, param)
+            temp_inst_dat <- NULL
+            if (identical(param, "temperature, air")) {
+                temp_inst_dat <- fetch_temperature_instantaneous_series(code)
+            }
 
             if (is.null(dat) || nrow(dat) == 0) {
                 return(
@@ -7764,11 +8003,42 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         x = ~datetime,
                         y = ~value,
                         yaxis = "y",
-                        name = param,
+                        name = if (identical(param, "temperature, air")) {
+                            sprintf("%s (daily mean)", param)
+                        } else {
+                            param
+                        },
                         line = list(color = "#2563eb", width = 2),
                         hovertemplate = paste0(
-                            param,
+                            if (identical(param, "temperature, air")) {
+                                paste0(param, " (daily mean)")
+                            } else {
+                                param
+                            },
                             " (",
+                            code,
+                            "): %{y:.3f}<extra></extra>"
+                        ),
+                        inherit = FALSE
+                    )
+            }
+
+            if (
+                identical(param, "temperature, air") &&
+                    !is.null(temp_inst_dat) &&
+                    nrow(temp_inst_dat) > 0
+            ) {
+                p <- p %>%
+                    plotly::add_lines(
+                        data = temp_inst_dat,
+                        x = ~datetime,
+                        y = ~value,
+                        yaxis = "y",
+                        name = sprintf("%s (instantaneous)", param),
+                        line = list(color = "#1d4ed8", width = 1, dash = "dot"),
+                        hovertemplate = paste0(
+                            param,
+                            " (instantaneous) (",
                             code,
                             "): %{y:.3f}<extra></extra>"
                         ),
@@ -7778,6 +8048,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
             has_secondary_trace <- FALSE
             sec_dat <- NULL
+            sec_temp_inst_dat <- NULL
 
             if (
                 !is.null(sec_code) &&
@@ -7789,6 +8060,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 sec_dat <- fetch_plot_series(sec_code, sec_param)
                 if (!is.null(sec_dat) && nrow(sec_dat) > 0) {
                     has_secondary_trace <- TRUE
+                    if (identical(sec_param, "temperature, air")) {
+                        sec_temp_inst_dat <- fetch_temperature_instantaneous_series(
+                            sec_code
+                        )
+                    }
                     sec_is_survey_param <- sec_param %in%
                         c(
                             "snow water eq (survey)",
@@ -7822,11 +8098,50 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                 x = ~datetime,
                                 y = ~value,
                                 yaxis = "y2",
-                                name = sec_param,
+                                name = if (
+                                    identical(sec_param, "temperature, air")
+                                ) {
+                                    sprintf("%s (daily mean)", sec_param)
+                                } else {
+                                    sec_param
+                                },
                                 line = list(color = "#f97316", width = 2),
                                 hovertemplate = paste0(
-                                    sec_param,
+                                    if (
+                                        identical(sec_param, "temperature, air")
+                                    ) {
+                                        paste0(sec_param, " (daily mean)")
+                                    } else {
+                                        sec_param
+                                    },
                                     " (",
+                                    sec_code,
+                                    "): %{y:.3f}<extra></extra>"
+                                ),
+                                inherit = FALSE
+                            )
+                    }
+
+                    if (
+                        identical(sec_param, "temperature, air") &&
+                            !is.null(sec_temp_inst_dat) &&
+                            nrow(sec_temp_inst_dat) > 0
+                    ) {
+                        p <- p %>%
+                            plotly::add_lines(
+                                data = sec_temp_inst_dat,
+                                x = ~datetime,
+                                y = ~value,
+                                yaxis = "y2",
+                                name = sprintf("%s (instantaneous)", sec_param),
+                                line = list(
+                                    color = "#9a3412",
+                                    width = 1,
+                                    dash = "dot"
+                                ),
+                                hovertemplate = paste0(
+                                    sec_param,
+                                    " (instantaneous) (",
                                     sec_code,
                                     "): %{y:.3f}<extra></extra>"
                                 ),
@@ -8090,18 +8405,23 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             # ------------------------------------------------------------------
             # Historical overlay traces (secondary station, selected years)
             # ------------------------------------------------------------------
+            secondary_years <- normalize_selected_historical_years(
+                request$secondary_historical_years
+            )
             secondary_overlays <- if (
-                !is.null(sec_code) &&
+                isTRUE(request$has_valid_secondary_selection) &&
+                    !is.null(sec_code) &&
                     nzchar(sec_code) &&
                     !identical(sec_code, code) &&
                     !is.null(sec_param) &&
-                    nzchar(sec_param)
+                    nzchar(sec_param) &&
+                    length(secondary_years) > 0
             ) {
                 tryCatch(
                     get_historical_overlay_timeseries(
                         location_code = sec_code,
                         parameter = sec_param,
-                        years = request$secondary_historical_years,
+                        years = secondary_years,
                         con = con,
                         reference_time = request$reference_time,
                         precip_accumulation = request$precip_accumulation
@@ -8272,6 +8592,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 dat,
                 is_survey_trace = isTRUE(is_survey_param)
             )
+            if (!is.null(temp_inst_dat) && nrow(temp_inst_dat) > 0) {
+                visible_y <- c(
+                    visible_y,
+                    visible_values_in_window(temp_inst_dat, FALSE)
+                )
+            }
             if (length(primary_overlays) > 0) {
                 for (ov_series in primary_overlays) {
                     if (is.null(ov_series) || nrow(ov_series) == 0) {
@@ -8358,6 +8684,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             sec_dat,
                             is_survey_trace = isTRUE(sec_is_survey_for_range)
                         )
+                    )
+                }
+                if (
+                    !is.null(sec_temp_inst_dat) && nrow(sec_temp_inst_dat) > 0
+                ) {
+                    sec_visible_y <- c(
+                        sec_visible_y,
+                        visible_values_in_window(sec_temp_inst_dat, FALSE)
                     )
                 }
 
