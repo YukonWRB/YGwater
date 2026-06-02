@@ -136,12 +136,32 @@ contPlot <- function(id, language, windowDims, inputs) {
       timeseries = cached$timeseries
     )
 
-    moduleInputs <- reactiveValues(
-      location_id = if (!is.null(inputs$location_id)) {
-        as.numeric(inputs$location_id)
-      } else {
-        NULL
+    map_location_from_inputs <- function(target_tab) {
+      if (is.null(inputs)) {
+        return(NULL)
       }
+      if (!identical(inputs$location_target, target_tab)) {
+        return(NULL)
+      }
+
+      location_id <- suppressWarnings(as.numeric(inputs$location_id))
+      location_id <- unique(location_id[!is.na(location_id)])
+      if (length(location_id) == 0) {
+        return(NULL)
+      }
+
+      location_id
+    }
+
+    clear_map_location_request <- function(target_tab) {
+      if (!is.null(inputs) && identical(inputs$location_target, target_tab)) {
+        inputs$location_id <- NULL
+        inputs$location_target <- NULL
+      }
+    }
+
+    moduleInputs <- reactiveValues(
+      location_id = map_location_from_inputs("contPlot")
     )
 
     values <- reactiveValues(
@@ -260,6 +280,23 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
 
       stats::na.omit(available_values)[1]
+    })
+
+    escape_dt_regex <- function(value) {
+      gsub(
+        "([][{}()+*^$.|?\\\\])",
+        "\\\\\\1",
+        value
+      )
+    }
+
+    location_filter_regex <- reactive({
+      location <- location_filter_value()
+      if (is.null(location) || length(location) == 0 || is.na(location)) {
+        return(NULL)
+      }
+
+      paste0("^", escape_dt_regex(as.character(location[[1]])), "$")
     })
 
     timeseries_table_reactive <- reactive({
@@ -1410,9 +1447,11 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
 
       search_cols <- vector("list", ncol(ts))
-      if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
+      if (!is.null(location_filter_regex()) && "location" %in% names(ts)) {
         search_cols[[match("location", names(ts))]] <- list(
-          search = location_filter_value()
+          search = location_filter_regex(),
+          regex = TRUE,
+          smart = FALSE
         )
       }
 
@@ -1668,6 +1707,37 @@ contPlot <- function(id, language, windowDims, inputs) {
     })
 
     proxy <- DT::dataTableProxy("timeseries_table")
+
+    apply_map_location_request <- function() {
+      loc_id <- map_location_from_inputs("contPlot")
+      if (is.null(loc_id)) {
+        return(invisible(NULL))
+      }
+
+      loc_id <- loc_id[loc_id %in% moduleData$locs$location_id]
+      if (length(loc_id) == 0) {
+        clear_map_location_request("contPlot")
+        return(invisible(NULL))
+      }
+
+      moduleInputs$location_id <- loc_id[[1]]
+      selected_timeseries_slots(NA_real_)
+      active_timeseries_slot(1L)
+      updateSelectizeInput(session, "network_filter", selected = character(0))
+      updateSelectizeInput(session, "project_filter", selected = character(0))
+      DT::selectRows(proxy, NULL)
+
+      clear_map_location_request("contPlot")
+      invisible(NULL)
+    }
+
+    observeEvent(
+      if (!is.null(inputs)) inputs$location_request_id else NULL,
+      {
+        apply_map_location_request()
+      },
+      ignoreNULL = TRUE
+    )
 
     # Keep table highlight in sync with active selected timeseries slot
     observeEvent(

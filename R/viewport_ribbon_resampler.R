@@ -251,6 +251,8 @@ viewport_ribbon_resample <- function(
   x_col = "x",
   line_col = "y",
   bands = NULL,
+  line_hover_x_col = NULL,
+  band_hover_x_col = NULL,
   xlim = NULL,
   n_bins = 700L,
   pad_fraction = 0.02,
@@ -278,6 +280,12 @@ viewport_ribbon_resample <- function(
   x_all_num <- as.numeric(dt[[x_col]])
   if (!any(is.finite(x_all_num))) {
     stop("`data` must contain finite x values.")
+  }
+  if (!is.null(line_hover_x_col) && !(line_hover_x_col %in% names(dt))) {
+    line_hover_x_col <- NULL
+  }
+  if (!is.null(band_hover_x_col) && !(band_hover_x_col %in% names(dt))) {
+    band_hover_x_col <- NULL
   }
   if (is.unsorted(x_all_num, na.rm = TRUE)) {
     dt <- data.table::copy(dt)
@@ -471,7 +479,7 @@ viewport_ribbon_resample <- function(
         local[idx]
       },
       by = .(.run = .line_run, .bin),
-      .SDcols = c(x_col, line_col, ".row_id")
+      .SDcols = unique(c(x_col, line_col, line_hover_x_col, ".row_id"))
     ]
 
     if (nrow(line_dt) > 0) {
@@ -482,6 +490,13 @@ viewport_ribbon_resample <- function(
         old = c(x_col, line_col),
         new = c("x", "y")
       )
+      if (!is.null(line_hover_x_col)) {
+        if (identical(line_hover_x_col, x_col)) {
+          line_dt[, hover_x := x]
+        } else if (line_hover_x_col %in% names(line_dt)) {
+          data.table::setnames(line_dt, line_hover_x_col, "hover_x")
+        }
+      }
     }
   }
 
@@ -513,12 +528,19 @@ viewport_ribbon_resample <- function(
 
       band_dt <- visible[
         !is.na(get(lower_col)) & !is.na(get(upper_col)),
-        .(
-          x = get(x_col)[ceiling(.N / 2)],
-          ymin = min(get(lower_col), na.rm = TRUE),
-          ymax = max(get(upper_col), na.rm = TRUE),
-          n_raw = .N
-        ),
+        {
+          mid <- ceiling(.N / 2)
+          out <- list(
+            x = get(x_col)[mid],
+            ymin = min(get(lower_col), na.rm = TRUE),
+            ymax = max(get(upper_col), na.rm = TRUE),
+            n_raw = .N
+          )
+          if (!is.null(band_hover_x_col)) {
+            out$hover_x <- get(band_hover_x_col)[mid]
+          }
+          out
+        },
         by = .(.run = .band_run, .bin)
       ]
 
@@ -556,7 +578,11 @@ viewport_ribbon_trace_bundle <- function(
   line_color = "#00454e",
   line_width = 1.4,
   band_styles = NULL,
-  hover = TRUE
+  hover = TRUE,
+  line_showlegend = TRUE,
+  line_legendgroup = line_name,
+  band_showlegend = TRUE,
+  band_legendgroups = NULL
 ) {
   if (is.null(band_styles)) {
     band_styles <- list(
@@ -594,6 +620,16 @@ viewport_ribbon_trace_bundle <- function(
         line = list(color = "rgba(120, 120, 120, 0.75)", width = 0.3)
       )
     }
+    show_band_legend <- if (length(band_showlegend) == 1L) {
+      isTRUE(band_showlegend)
+    } else {
+      isTRUE(band_showlegend[[band_name]])
+    }
+    band_legendgroup <- if (!is.null(band_legendgroups)) {
+      band_legendgroups[[band_name]]
+    } else {
+      band_name
+    }
 
     lower_label <- if (grepl("typical|typique", band_name, ignore.case = TRUE)) {
       "Q25"
@@ -606,15 +642,20 @@ viewport_ribbon_trace_bundle <- function(
       "Max"
     }
     band_runs <- split(band_dt, by = ".run", keep.by = FALSE)
-    showlegend <- TRUE
+    showlegend <- show_band_legend
 
     for (seg in band_runs) {
       x_poly <- c(seg$x, rev(seg$x))
       y_poly <- c(seg$ymin, rev(seg$ymax))
+      hover_x <- if ("hover_x" %in% names(seg)) {
+        seg$hover_x
+      } else {
+        seg$x
+      }
       hover_text <- paste0(
         band_name,
         "<br>",
-        format(seg$x, usetz = TRUE),
+        format(hover_x, usetz = TRUE),
         "<br>",
         lower_label,
         ": ",
@@ -635,7 +676,7 @@ viewport_ribbon_trace_bundle <- function(
         fillcolor = style$fillcolor,
         line = style$line,
         name = band_name,
-        legendgroup = band_name,
+        legendgroup = band_legendgroup,
         showlegend = showlegend,
         hoverinfo = if (hover) "text" else "skip",
         hovertemplate = if (hover) "%{text}<extra></extra>" else NULL,
@@ -661,6 +702,11 @@ viewport_ribbon_trace_bundle <- function(
     x_out <- rep(line_dt$x[NA_integer_], out_len)
     y_out <- rep(NA_real_, out_len)
     text_out <- rep(NA_character_, out_len)
+    hover_x <- if ("hover_x" %in% names(line_dt)) {
+      line_dt$hover_x
+    } else {
+      line_dt$x
+    }
 
     x_out[out_pos] <- line_dt$x
     y_out[out_pos] <- line_dt$y
@@ -668,7 +714,7 @@ viewport_ribbon_trace_bundle <- function(
       text_out[out_pos] <- paste0(
         line_name,
         "<br>",
-        format(line_dt$x, usetz = TRUE),
+        format(hover_x, usetz = TRUE),
         "<br>Value: ",
         signif(line_dt$y, 5)
       )
@@ -682,8 +728,8 @@ viewport_ribbon_trace_bundle <- function(
       connectgaps = FALSE,
       line = list(color = line_color, width = line_width),
       name = line_name,
-      legendgroup = line_name,
-      showlegend = TRUE,
+      legendgroup = line_legendgroup,
+      showlegend = isTRUE(line_showlegend),
       hoverinfo = if (hover) "text" else "skip",
       hovertemplate = if (hover) "%{text}<extra></extra>" else NULL,
       text = if (hover) text_out else NULL
@@ -1314,33 +1360,44 @@ viewport_adaptive_plot <- function(
         data = trace_dt,
         x_col = x_col,
         line_col = y_col,
+        line_hover_x_col = item$line_hover_x_col,
         xlim = xlim,
         n_bins = n_bins
       )
     }
 
     band_summary <- NULL
-    if (
-      nrow(range_dt) > 0 &&
-        all(c(range_x_col, "min", "max", "q25", "q75") %in% names(range_dt))
-    ) {
-      band_names <- meta$band_names
-      if (is.null(band_names)) {
-        band_names <- list(historic = "Historic", typical = "Typical")
+    if (nrow(range_dt) > 0) {
+      band_defs <- item$band_defs
+      if (is.null(band_defs)) {
+        band_defs <- meta$band_defs
+      }
+      if (is.null(band_defs)) {
+        band_names <- meta$band_names
+        if (is.null(band_names)) {
+          band_names <- list(historic = "Historic", typical = "Typical")
+        }
+
+        band_defs <- list()
+        band_defs[[band_names$historic]] <- c("min", "max")
+        band_defs[[band_names$typical]] <- c("q25", "q75")
       }
 
-      band_defs <- list()
-      band_defs[[band_names$historic]] <- c("min", "max")
-      band_defs[[band_names$typical]] <- c("q25", "q75")
-
-      band_summary <- viewport_ribbon_resample(
-        data = range_dt,
-        x_col = range_x_col,
-        line_col = NULL,
-        bands = band_defs,
-        xlim = xlim,
-        n_bins = n_bins
-      )
+      required_band_cols <- unique(unlist(band_defs, use.names = FALSE))
+      if (
+        length(band_defs) > 0 &&
+          all(c(range_x_col, required_band_cols) %in% names(range_dt))
+      ) {
+        band_summary <- viewport_ribbon_resample(
+          data = range_dt,
+          x_col = range_x_col,
+          line_col = NULL,
+          bands = band_defs,
+          band_hover_x_col = item$range_hover_x_col,
+          xlim = xlim,
+          n_bins = n_bins
+        )
+      }
     }
 
     xaxis <- item$xaxis
@@ -1363,7 +1420,23 @@ viewport_adaptive_plot <- function(
       line_color = line_color,
       line_width = line_width,
       band_styles = meta$band_styles,
-      hover = hover
+      hover = hover,
+      line_showlegend = if (!is.null(item$line_showlegend)) {
+        item$line_showlegend
+      } else {
+        TRUE
+      },
+      line_legendgroup = if (!is.null(item$line_legendgroup)) {
+        item$line_legendgroup
+      } else {
+        line_name
+      },
+      band_showlegend = if (!is.null(item$band_showlegend)) {
+        item$band_showlegend
+      } else {
+        TRUE
+      },
+      band_legendgroups = item$band_legendgroups
     )
     item_traces <- item_bundle$traces
     item_traces <- lapply(
@@ -1372,6 +1445,12 @@ viewport_adaptive_plot <- function(
       xaxis = xaxis,
       yaxis = yaxis
     )
+    if (!is.null(item$showlegend) && !isTRUE(item$showlegend)) {
+      item_traces <- lapply(item_traces, function(trace) {
+        trace$showlegend <- FALSE
+        trace
+      })
+    }
 
     traces <- c(traces, item_traces)
     client_points <- client_points + item_bundle$client_points

@@ -215,10 +215,6 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
-      "apps/YGwater/modules/admin/continuousData/continuousCorrections.R",
-      package = "YGwater"
-    ))
-    source(system.file(
       "apps/YGwater/modules/admin/continuousData/imputeMissing.R",
       package = "YGwater"
     ))

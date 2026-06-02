@@ -486,17 +486,12 @@ app_ui <- function(request) {
               uiOutput("addContData_ui")
             ),
             nav_panel(
-              title = "Add / modify timeseries corrections",
-              value = "continuousCorrections",
-              uiOutput("continuousCorrections_ui")
-            ),
-            nav_panel(
               title = "Impute missing values",
               value = "imputeMissing",
               uiOutput("imputeMissing_ui")
             ),
             nav_panel(
-              title = "Apply grades, approvals, qualifiers",
+              title = "Review / edit timeseries",
               value = "grades_approvals_qualifiers",
               uiOutput("grades_approvals_qualifiers_ui")
             ),
