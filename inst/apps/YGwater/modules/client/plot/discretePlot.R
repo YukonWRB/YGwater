@@ -50,6 +50,34 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
     browse_selected_sample_ids <- reactiveVal(numeric(0))
 
+    map_location_from_inputs <- function(target_tab) {
+      if (is.null(inputs)) {
+        return(NULL)
+      }
+      if (!identical(inputs$location_target, target_tab)) {
+        return(NULL)
+      }
+
+      location_id <- suppressWarnings(as.numeric(inputs$location_id))
+      location_id <- unique(location_id[!is.na(location_id)])
+      if (length(location_id) == 0) {
+        return(NULL)
+      }
+
+      location_id
+    }
+
+    clear_map_location_request <- function(target_tab) {
+      if (!is.null(inputs) && identical(inputs$location_target, target_tab)) {
+        inputs$location_id <- NULL
+        inputs$location_target <- NULL
+      }
+    }
+
+    moduleInputs <- reactiveValues(
+      location_id = map_location_from_inputs("discPlot")
+    )
+
     ac_option_rows <- function(scope, lookup, scope_col, lookup_col) {
       if (is.null(scope) || nrow(scope) == 0 || nrow(lookup) == 0) {
         return(lookup[0, , drop = FALSE])
@@ -1822,6 +1850,74 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       )
     }
 
+    apply_map_location_request <- function() {
+      loc_id <- map_location_from_inputs("discPlot")
+      if (is.null(loc_id)) {
+        return(invisible(NULL))
+      }
+
+      loc_id <- loc_id[loc_id %in% moduleData$AC_locs$location_id]
+      if (length(loc_id) == 0) {
+        clear_map_location_request("discPlot")
+        return(invisible(NULL))
+      }
+      loc_id <- loc_id[[1]]
+      moduleInputs$location_id <- loc_id
+      browse_selected_sample_ids(numeric(0))
+
+      updateRadioButtons(session, "data_source", selected = "AC")
+      updateRadioButtons(session, "AC_selector_mode", selected = "guided")
+      updateSelectizeInput(
+        session,
+        "locations_AC",
+        choices = stats::setNames(
+          moduleData$AC_locs$location_id,
+          moduleData$AC_locs$name
+        ),
+        selected = loc_id,
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session,
+        "parameters_AC",
+        selected = character(0),
+        server = TRUE
+      )
+
+      for (input_id in c(
+        "media_AC",
+        "sub_locations_AC",
+        "sample_types_AC",
+        "collection_methods_AC",
+        "result_speciations_AC",
+        "sample_fractions_AC",
+        "result_value_types_AC",
+        "result_types_AC",
+        "browse_sample_parameters_AC",
+        "browse_plot_parameters_AC"
+      )) {
+        updateSelectizeInput(
+          session,
+          input_id,
+          selected = "all",
+          server = TRUE
+        )
+      }
+      updateCheckboxInput(session, "season_highlight_enabled", value = FALSE)
+      updateCheckboxInput(session, "season_filter_enabled", value = FALSE)
+
+      clear_map_location_request("discPlot")
+      invisible(NULL)
+    }
+
+    observeEvent(
+      if (!is.null(inputs)) inputs$location_request_id else NULL,
+      {
+        apply_map_location_request()
+      },
+      ignoreNULL = TRUE
+    )
+
     observeEvent(input$data_source, {
       req(moduleData)
       if (input$data_source == "EQ") {
@@ -1835,8 +1931,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             moduleData$AC_locs$location_id,
             moduleData$AC_locs$name
           ),
-          selected = if (!is.null(inputs$location_id)) {
-            inputs$location_id
+          selected = if (!is.null(moduleInputs$location_id)) {
+            moduleInputs$location_id
           } else {
             NULL
           },

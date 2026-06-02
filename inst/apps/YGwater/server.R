@@ -96,7 +96,6 @@ app_server <- function(input, output, session) {
     "manageSensors",
     "instrumentMaintenance",
     "addContData",
-    "continuousCorrections",
     "imputeMissing",
     "grades_approvals_qualifiers",
     "addDiscData",
@@ -1027,7 +1026,6 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addContData,
-          session$userData$admin_privs$continuousCorrections,
           session$userData$admin_privs$imputeMissing,
           session$userData$admin_privs$grades_approvals_qualifiers,
           session$userData$admin_privs$addTimeseries,
@@ -1037,9 +1035,6 @@ app_server <- function(input, output, session) {
         nav_show(id = "navbar", target = "continuousDataTasks")
         if (!isTRUE(session$userData$admin_privs$addContData)) {
           nav_hide(id = "navbar", target = "addContData")
-        }
-        if (!isTRUE(session$userData$admin_privs$continuousCorrections)) {
-          nav_hide(id = "navbar", target = "continuousCorrections")
         }
         if (!isTRUE(session$userData$admin_privs$imputeMissing)) {
           nav_hide(id = "navbar", target = "imputeMissing")
@@ -1689,7 +1684,6 @@ app_server <- function(input, output, session) {
     ui_loaded$instrumentMaintenance <- FALSE
 
     ui_loaded$addContData <- FALSE
-    ui_loaded$continuousCorrections <- FALSE
     ui_loaded$imputeMissing <- FALSE
     ui_loaded$grades_approvals_qualifiers <- FALSE
     ui_loaded$syncCont <- FALSE
@@ -1779,7 +1773,6 @@ app_server <- function(input, output, session) {
     "manageSensors",
     "instrumentMaintenance",
     "addContData",
-    "continuousCorrections",
     "imputeMissing",
     "grades_approvals_qualifiers",
     "addDiscData",
@@ -2865,21 +2858,26 @@ app_server <- function(input, output, session) {
                 "UPDATE"
               ))
             ),
-            continuousCorrections = has_priv(
-              tbl = session$userData$table_privs,
-              "continuous.corrections",
-              list(c("INSERT", "UPDATE"))
-            ),
             imputeMissing = has_priv(
               tbl = session$userData$table_privs,
               "continuous.measurements_continuous"
             ),
-            grades_approvals_qualifiers = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "continuous.grades",
-                "continuous.approvals",
+            grades_approvals_qualifiers = any(
+              has_priv(
+                tbl = session$userData$table_privs,
+                "continuous.grades"
+              ),
+              has_priv(
+                tbl = session$userData$table_privs,
+                "continuous.approvals"
+              ),
+              has_priv(
+                tbl = session$userData$table_privs,
                 "continuous.qualifiers"
+              ),
+              has_priv(
+                tbl = session$userData$table_privs,
+                "continuous.corrections"
               )
             ),
             addTimeseries = has_priv(
@@ -3366,6 +3364,7 @@ app_server <- function(input, output, session) {
   # Load modules based on input$navbar ################################
   # Store information to pass between modules
   moduleOutputs <- reactiveValues()
+  moduleOutputs$mapLocs <- reactiveValues()
 
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home") # Default tab for viz mode
@@ -3549,10 +3548,6 @@ app_server <- function(input, output, session) {
           windowDims,
           inputs = moduleOutputs$mapLocs
         ) # Call the server
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
       }
     }
     if (input$navbar == "contPlot") {
@@ -3565,14 +3560,8 @@ app_server <- function(input, output, session) {
           "contPlot",
           language = languageSelection,
           windowDims,
-          # inputs temporarily disabled because of issues with narrowing the datatable using inputs.
-          # inputs = moduleOutputs$mapLocs
-          inputs = NULL
+          inputs = moduleOutputs$mapLocs
         )
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
       }
     }
     if (input$navbar == "contPlotAdaptive") {
@@ -3597,9 +3586,10 @@ app_server <- function(input, output, session) {
         output$mapLocs_ui <- renderUI(mapLocsUI("mapLocs"))
         ui_loaded$monitoringLocationsMap <- TRUE
         # Call the server
-        moduleOutputs$mapLocs <- mapLocs(
+        mapLocs(
           "mapLocs",
-          language = languageSelection
+          language = languageSelection,
+          outputs = moduleOutputs$mapLocs
         )
       }
       observe({
@@ -3610,12 +3600,6 @@ app_server <- function(input, output, session) {
           }
           if (target == "contData") {
             ui_loaded$contData <- FALSE
-          }
-          if (target == "discPlot") {
-            ui_loaded$discPlot <- FALSE
-          }
-          if (target == "contPlot") {
-            ui_loaded$contPlot <- FALSE
           }
           nav_select(session = session, "navbar", selected = target) # Change tabs
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -3757,6 +3741,7 @@ app_server <- function(input, output, session) {
         ) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$location_target <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
       }
@@ -3772,6 +3757,7 @@ app_server <- function(input, output, session) {
         ) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$location_target <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
       }
@@ -3925,18 +3911,6 @@ app_server <- function(input, output, session) {
         }
       })
     }
-    if (input$navbar == "continuousCorrections") {
-      if (!ui_loaded$continuousCorrections) {
-        output$continuousCorrections_ui <- renderUI(continuousCorrectionsUI(
-          "continuousCorrections"
-        ))
-        ui_loaded$continuousCorrections <- TRUE
-        continuousCorrections(
-          "continuousCorrections",
-          language = languageSelection
-        )
-      }
-    }
     if (input$navbar == "imputeMissing") {
       if (!ui_loaded$imputeMissing) {
         output$imputeMissing_ui <- renderUI(imputeMissingUI("imputeMissing")) # Render the UI
@@ -3946,11 +3920,11 @@ app_server <- function(input, output, session) {
     }
     if (input$navbar == "grades_approvals_qualifiers") {
       if (!ui_loaded$grades_approvals_qualifiers) {
-        output$grades_approvals_qualifiers_ui <- renderUI(grades_approvals_qualifiersUI(
+        output$grades_approvals_qualifiers_ui <- renderUI(continuousDataReviewUI(
           "grades_approvals_qualifiers"
         )) # Render the UI
         ui_loaded$grades_approvals_qualifiers <- TRUE
-        grades_approvals_qualifiers(
+        continuousDataReview(
           "grades_approvals_qualifiers",
           language = languageSelection
         ) # Call the server

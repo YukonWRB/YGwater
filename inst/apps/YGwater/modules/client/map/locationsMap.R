@@ -102,13 +102,27 @@ mapLocsUI <- function(id) {
   )
 }
 
-mapLocs <- function(id, language) {
+mapLocs <- function(id, language, outputs = NULL) {
   moduleServer(id, function(input, output, session) {
     # Server setup ####
 
     ns <- session$ns
 
-    outputs <- reactiveValues() # This allows the module to pass values back to the main server
+    if (is.null(outputs)) {
+      outputs <- reactiveValues()
+    } # This allows the module to pass values back to the main server
+
+    send_location_request <- function(target_tab, location_id) {
+      outputs$location_id <- location_id
+      outputs$location_target <- target_tab
+
+      request_id <- outputs$location_request_id
+      if (is.null(request_id) || is.na(request_id)) {
+        request_id <- 0L
+      }
+      outputs$location_request_id <- request_id + 1L
+      outputs$change_tab <- target_tab
+    }
 
     if (session$userData$user_logged_in) {
       cached <- map_location_module_data(
@@ -1159,8 +1173,7 @@ mapLocs <- function(id, language) {
     # Listen for a click in the popup
     observeEvent(input$clicked_dl_data_discrete, {
       if (!is.null(input$clicked_dl_data_discrete)) {
-        outputs$change_tab <- "discData"
-        outputs$location_id <- input$clicked_dl_data_discrete
+        send_location_request("discData", input$clicked_dl_data_discrete)
         shinyjs::runjs(sprintf(
           "shinyjs.resetInput({name: '%s'})",
           session$ns("clicked_dl_data_discrete")
@@ -1169,8 +1182,7 @@ mapLocs <- function(id, language) {
     })
     observeEvent(input$clicked_dl_data_continuous, {
       if (!is.null(input$clicked_dl_data_continuous)) {
-        outputs$change_tab <- "contData"
-        outputs$location_id <- input$clicked_dl_data_continuous
+        send_location_request("contData", input$clicked_dl_data_continuous)
         shinyjs::runjs(sprintf(
           "shinyjs.resetInput({name: '%s'})",
           session$ns("clicked_dl_data_continuous")
@@ -1179,8 +1191,7 @@ mapLocs <- function(id, language) {
     })
     observeEvent(input$clicked_view_plots_discrete, {
       if (!is.null(input$clicked_view_plots_discrete)) {
-        outputs$change_tab <- "discPlot"
-        outputs$location_id <- input$clicked_view_plots_discrete
+        send_location_request("discPlot", input$clicked_view_plots_discrete)
         shinyjs::runjs(sprintf(
           "shinyjs.resetInput({name: '%s'})",
           session$ns("clicked_view_plots_discrete")
@@ -1189,8 +1200,7 @@ mapLocs <- function(id, language) {
     })
     observeEvent(input$clicked_view_plots_continuous, {
       if (!is.null(input$clicked_view_plots_continuous)) {
-        outputs$change_tab <- "contPlot"
-        outputs$location_id <- input$clicked_view_plots_continuous
+        send_location_request("contPlot", input$clicked_view_plots_continuous)
         shinyjs::runjs(sprintf(
           "shinyjs.resetInput({name: '%s'})",
           session$ns("clicked_view_plots_continuous")
