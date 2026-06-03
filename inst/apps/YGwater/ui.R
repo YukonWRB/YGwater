@@ -501,6 +501,11 @@ app_ui <- function(request) {
               uiOutput("addTimeseries_ui")
             ),
             nav_panel(
+              title = "Add / edit derived timeseries",
+              value = "addCompoundTimeseries",
+              uiOutput("addCompoundTimeseries_ui")
+            ),
+            nav_panel(
               title = "Sync timeseries",
               value = "syncCont",
               uiOutput("syncCont_ui")
