@@ -227,6 +227,10 @@ YGwater_globals <- function(
       package = "YGwater"
     ))
     source(system.file(
+      "apps/YGwater/modules/admin/continuousData/addCompoundTimeseries.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/continuousData/syncCont.R",
       package = "YGwater"
     ))

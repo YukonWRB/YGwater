@@ -90,6 +90,7 @@ app_server <- function(input, output, session) {
     "addLocation",
     "addSubLocation",
     "addTimeseries",
+    "addCompoundTimeseries",
     "deploy_recover",
     "calibrate",
     "manageInstruments",
@@ -1029,6 +1030,7 @@ app_server <- function(input, output, session) {
           session$userData$admin_privs$imputeMissing,
           session$userData$admin_privs$grades_approvals_qualifiers,
           session$userData$admin_privs$addTimeseries,
+          session$userData$admin_privs$addCompoundTimeseries,
           session$userData$admin_privs$syncCont
         )
       ) {
@@ -1044,6 +1046,9 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$addTimeseries)) {
           nav_hide(id = "navbar", target = "addTimeseries")
+        }
+        if (!isTRUE(session$userData$admin_privs$addCompoundTimeseries)) {
+          nav_hide(id = "navbar", target = "addCompoundTimeseries")
         }
         if (!isTRUE(session$userData$admin_privs$syncCont)) {
           nav_hide(id = "navbar", target = "syncCont")
@@ -1688,6 +1693,7 @@ app_server <- function(input, output, session) {
     ui_loaded$grades_approvals_qualifiers <- FALSE
     ui_loaded$syncCont <- FALSE
     ui_loaded$addTimeseries <- FALSE
+    ui_loaded$addCompoundTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
     ui_loaded$addSamples <- FALSE
@@ -1767,6 +1773,7 @@ app_server <- function(input, output, session) {
     "addLocation",
     "addSubLocation",
     "addTimeseries",
+    "addCompoundTimeseries",
     "deploy_recover",
     "calibrate",
     "manageInstruments",
@@ -2899,6 +2906,33 @@ app_server <- function(input, output, session) {
                 c("INSERT")
               )
             ),
+            addCompoundTimeseries = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "continuous.timeseries",
+                "continuous.timeseries_compounds",
+                "continuous.timeseries_compound_members",
+                "public.locations_z"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE",
+                  "DELETE"
+                ),
+                c(
+                  "INSERT",
+                  "DELETE"
+                ),
+                c(
+                  "INSERT"
+                )
+              )
+            ),
             syncCont = has_priv(
               tbl = session$userData$table_privs,
               c(
@@ -3574,7 +3608,7 @@ app_server <- function(input, output, session) {
           "contPlotAdaptive",
           language = languageSelection,
           windowDims = windowDims,
-          inputs = NULL
+          inputs = moduleOutputs$mapLocs
         )
       }
     }
@@ -3844,6 +3878,18 @@ app_server <- function(input, output, session) {
         if (!is.null(moduleOutputs$addContData)) {
           moduleOutputs$addContData$change_tab <- NULL
         }
+      }
+    }
+    if (input$navbar == "addCompoundTimeseries") {
+      if (!ui_loaded$addCompoundTimeseries) {
+        output$addCompoundTimeseries_ui <- renderUI(
+          addCompoundTimeseriesUI("addCompoundTimeseries")
+        )
+        ui_loaded$addCompoundTimeseries <- TRUE
+        addCompoundTimeseries(
+          "addCompoundTimeseries",
+          language = languageSelection
+        )
       }
     }
     if (input$navbar == "deploy_recover") {

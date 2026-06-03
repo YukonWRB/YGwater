@@ -459,7 +459,7 @@ viewport_ribbon_resample <- function(
         .line_run := cumsum(c(
           1L,
           diff(.run) != 0L |
-            head(is.na(get(line_col)), -1L)
+            utils::head(is.na(get(line_col)), -1L)
         ))
       ]
     } else {
@@ -515,11 +515,10 @@ viewport_ribbon_resample <- function(
       if (nrow(visible) > 1) {
         band_missing <- is.na(visible[[lower_col]]) |
           is.na(visible[[upper_col]])
-        visible[
-          ,
+        visible[,
           .band_run := cumsum(c(
             1L,
-            diff(.run) != 0L | head(band_missing, -1L)
+            diff(.run) != 0L | utils::head(band_missing, -1L)
           ))
         ]
       } else {
@@ -631,12 +630,16 @@ viewport_ribbon_trace_bundle <- function(
       band_name
     }
 
-    lower_label <- if (grepl("typical|typique", band_name, ignore.case = TRUE)) {
+    lower_label <- if (
+      grepl("typical|typique", band_name, ignore.case = TRUE)
+    ) {
       "Q25"
     } else {
       "Min"
     }
-    upper_label <- if (grepl("typical|typique", band_name, ignore.case = TRUE)) {
+    upper_label <- if (
+      grepl("typical|typique", band_name, ignore.case = TRUE)
+    ) {
       "Q75"
     } else {
       "Max"

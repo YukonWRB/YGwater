@@ -96,22 +96,3 @@ pathPrep <- function(path) {
   x <- chartr("\\", "/", path)
   return(x)
 }
-
-# Function to override default AquaConnect() parameters with those from the .Renviron file, for use in tests. This allows us to use a test database on CI and a different one locally without changing the code of the tests.
-test_con <- function(
-  name = Sys.getenv("aquacacheTestName"),
-  host = Sys.getenv("aquacacheTestHost"),
-  port = Sys.getenv("aquacacheTestPort"),
-  user = Sys.getenv("aquacacheTestUser"),
-  password = Sys.getenv("aquacacheTestPass"),
-  silent = FALSE
-) {
-  AquaConnect(
-    name = name,
-    host = host,
-    port = port,
-    username = user,
-    password = password,
-    silent = silent
-  )
-}

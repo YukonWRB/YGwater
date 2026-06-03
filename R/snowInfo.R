@@ -100,7 +100,10 @@ snowInfo <- function(
     all_locs <- TRUE
   } else {
     locs_in <- locations
-    quoted_locs <- paste(DBI::dbQuoteString(con, as.character(locs_in)), collapse = ", ")
+    quoted_locs <- paste(
+      DBI::dbQuoteString(con, as.character(locs_in)),
+      collapse = ", "
+    )
     locations <- DBI::dbGetQuery(
       con,
       paste0(
@@ -484,8 +487,10 @@ snowInfo <- function(
       yrs <- seq(1980, lubridate::year(Sys.Date())) #Start in 1980 because the network is essentially unchanged since then
       meanMaxSWE <- NULL
       meanMaxDepth <- NULL
+      meanMaxYears <- integer(0)
       meanApr1SWE <- NULL
       meanApr1Depth <- NULL
+      meanApr1Years <- integer(0)
       for (i in yrs) {
         yearMaxSWE <- NULL
         yearMaxDepth <- NULL
@@ -534,10 +539,12 @@ snowInfo <- function(
         ) {
           meanMaxSWE <- c(meanMaxSWE, mean(yearMaxSWE, na.rm = TRUE))
           meanMaxDepth <- c(meanMaxDepth, mean(yearMaxDepth, na.rm = TRUE))
+          meanMaxYears <- c(meanMaxYears, i)
         }
-        if (!is.null(yearApr1SWE) & !is.null(yearApr1Depth)) {
+        if (length(yearApr1SWE) > 0 & length(yearApr1Depth) > 0) {
           meanApr1SWE <- c(meanApr1SWE, mean(yearApr1SWE, na.rm = TRUE))
           meanApr1Depth <- c(meanApr1Depth, mean(yearApr1Depth, na.rm = TRUE))
+          meanApr1Years <- c(meanApr1Years, i)
         }
       }
 
@@ -549,7 +556,7 @@ snowInfo <- function(
       plot_all_SWE <- data.frame(
         "location" = "all_locs_max",
         target_datetime = as.POSIXct(paste0(
-          seq(min(yrs), min(yrs) + length(meanMaxSWE) - 1),
+          meanMaxYears,
           "-01-01 00:00"
         )),
         param_name = "snow water equivalent",
@@ -558,7 +565,7 @@ snowInfo <- function(
       plot_all_depth <- data.frame(
         "location" = "all_locs_max",
         target_datetime = as.POSIXct(paste0(
-          seq(min(yrs), min(yrs) + length(meanMaxDepth) - 1),
+          meanMaxYears,
           "-01-01 00:00"
         )),
         param_name = "snow depth",
@@ -567,7 +574,7 @@ snowInfo <- function(
       plot_apr1_SWE <- data.frame(
         "location" = "all_locs_Apr1",
         target_datetime = as.POSIXct(paste0(
-          seq(min(yrs), min(yrs) + length(meanApr1SWE) - 1),
+          meanApr1Years,
           "-04-01 00:00"
         )),
         param_name = "snow water equivalent",
@@ -576,7 +583,7 @@ snowInfo <- function(
       plot_apr1_depth <- data.frame(
         "location" = "all_locs_Apr1",
         target_datetime = as.POSIXct(paste0(
-          seq(min(yrs), min(yrs) + length(meanApr1SWE) - 1),
+          meanApr1Years,
           "-04-01 00:00"
         )),
         param_name = "snow depth",
@@ -715,45 +722,61 @@ snowInfo <- function(
       }
       plot_results <- results[results$location == name, ]
       plot_results <- plot_results[order(plot_results$target_datetime), ]
-      plot_results$location_id <- NULL
-      plot_results$sample_id <- NULL
 
-      SWE <- plot_results[
-        plot_results$param_name == "snow water equivalent",
-        "result"
+      plot_results_dt <- data.table::as.data.table(plot_results)
+      density_swe <- plot_results_dt[
+        param_name == "snow water equivalent",
+        .(
+          sample_id,
+          datetime,
+          target_datetime,
+          year,
+          month,
+          location,
+          name,
+          SWE = result
+        )
       ]
-      depth <- plot_results[plot_results$param_name == "snow depth", "result"]
-      datetimes <- plot_results[
-        plot_results$param_name == "snow water equivalent",
-        "datetime"
+      density_depth <- plot_results_dt[
+        param_name == "snow depth",
+        .(sample_id, target_datetime, depth = result)
       ]
-      target_datetimes <- plot_results[
-        plot_results$param_name == "snow water equivalent",
-        "target_datetime"
+      density_swe[,
+        density_key := ifelse(
+          !is.na(sample_id),
+          paste0("sample:", sample_id),
+          paste0("target:", as.character(target_datetime))
+        )
       ]
-      years <- plot_results[
-        plot_results$param_name == "snow water equivalent",
-        "year"
+      density_depth[,
+        density_key := ifelse(
+          !is.na(sample_id),
+          paste0("sample:", sample_id),
+          paste0("target:", as.character(target_datetime))
+        )
       ]
-      months <- plot_results[
-        plot_results$param_name == "snow water equivalent",
-        "month"
-      ]
-
-      density <- data.frame(
-        datetime = datetimes,
-        target_datetime = target_datetimes,
+      density <- merge(
+        density_swe,
+        density_depth[, .(density_key, depth)],
+        by = "density_key",
+        all = FALSE
+      )
+      density <- as.data.frame(density[, .(
+        datetime,
+        target_datetime,
         result = (SWE / 10) / depth,
         unit_default = "g/cm3",
-        year = years,
-        month = months,
-        location = unique(plot_results$location),
-        name = unique(plot_results$name),
+        year,
+        month,
+        location,
+        name,
         flag = "C",
         param_name = "density"
-      )
+      )])
       density <- inf_to_na(density)
 
+      plot_results$location_id <- NULL
+      plot_results$sample_id <- NULL
       plot_results <- rbind(plot_results, density[!is.na(density$result), ])
 
       plotSWE <- ggplot2::ggplot(
