@@ -159,17 +159,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ]
     )
 
-    initial_timeseries_ids <- if (!is.null(inputs$timeseries_id)) {
-      utils::head(unique(as.numeric(inputs$timeseries_id)), 4)
-    } else {
-      numeric(0)
-    }
     selected_timeseries_slots <- reactiveVal(
-      if (length(initial_timeseries_ids) > 0) {
-        initial_timeseries_ids
-      } else {
-        NA_real_
-      }
+      NA_real_
     )
     active_timeseries_slot <- reactiveVal(1L)
 
@@ -240,26 +231,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
 
       loc_ids
-    })
-
-    location_filter_value <- reactive({
-      if (is.null(moduleInputs$location_id)) {
-        return(NULL)
-      }
-
-      loc_name_col <- tr("generic_name_col", language$language)
-      locs <- unique(moduleData$locs, by = "location_id")
-
-      available_values <- locs[
-        location_id %in% moduleInputs$location_id,
-        ..loc_name_col
-      ][[loc_name_col]]
-
-      if (length(available_values) == 0) {
-        return(NULL)
-      }
-
-      stats::na.omit(available_values)[1]
     })
 
     timeseries_table_reactive <- reactive({
@@ -1386,13 +1357,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         )
       }
 
-      search_cols <- vector("list", ncol(ts))
-      if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
-        search_cols[[match("location", names(ts))]] <- list(
-          search = location_filter_value()
-        )
-      }
-
       date_targets <- which(names(ts) %in% c("start_date", "end_date")) - 1
       dt <- DT::datatable(
         ts,
@@ -1416,7 +1380,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               )
             )
           ),
-          searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
@@ -2594,34 +2557,48 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               ]
               missing_rows <- is.na(meta$timeseries_id)
               if (any(missing_rows)) {
-                meta[missing_rows, timeseries_id := as.numeric(ids)[missing_rows]]
-                meta[missing_rows, location_name := paste(
-                  "Timeseries",
-                  timeseries_id
-                )]
-                meta[missing_rows, parameter_name := paste(
-                  "Timeseries",
-                  timeseries_id
-                )]
+                meta[
+                  missing_rows,
+                  timeseries_id := as.numeric(ids)[missing_rows]
+                ]
+                meta[
+                  missing_rows,
+                  location_name := paste(
+                    "Timeseries",
+                    timeseries_id
+                  )
+                ]
+                meta[
+                  missing_rows,
+                  parameter_name := paste(
+                    "Timeseries",
+                    timeseries_id
+                  )
+                ]
               }
               meta[, location_name := titleCase(location_name, req$lang)]
               meta[, parameter_name := titleCase(parameter_name, req$lang)]
-              meta[, units := vapply(
-                timeseries_id,
-                function(ts_id) {
-                  unit <- tryCatch(
-                    ac_get_timeseries_unit(con, ts_id),
-                    error = function(e) NA_character_
-                  )
-                  if (is.na(unit) || !nzchar(unit)) "" else unit
-                },
-                character(1)
-              )]
+              meta[,
+                units := vapply(
+                  timeseries_id,
+                  function(ts_id) {
+                    unit <- tryCatch(
+                      ac_get_timeseries_unit(con, ts_id),
+                      error = function(e) NA_character_
+                    )
+                    if (is.na(unit) || !nzchar(unit)) "" else unit
+                  },
+                  character(1)
+                )
+              ]
               meta[, data_key := paste0(location_id, "_", parameter_id)]
-              meta[is.na(data_key) | data_key == "NA_NA", data_key := paste0(
-                "timeseries_",
-                timeseries_id
-              )]
+              meta[
+                is.na(data_key) | data_key == "NA_NA",
+                data_key := paste0(
+                  "timeseries_",
+                  timeseries_id
+                )
+              ]
               meta[, invert := plot_default_y_orientation == "inverted"]
               meta[is.na(invert), invert := FALSE]
               meta[]
@@ -2881,16 +2858,20 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   r = (80 + (30 * ((n_axes - 2) %/% 2))) *
                     req$axis_scale,
                   b = 0,
-                  t = 30 * length(unique(vapply(
-                    series,
-                    function(item) item$meta_row$location_id,
-                    numeric(1)
-                  )))
+                  t = 30 *
+                    length(unique(vapply(
+                      series,
+                      function(item) item$meta_row$location_id,
+                      numeric(1)
+                    )))
                 ),
                 xaxis = list(
-                  title = list(standoff = 0, font = list(
-                    size = 14 * req$axis_scale
-                  )),
+                  title = list(
+                    standoff = 0,
+                    font = list(
+                      size = 14 * req$axis_scale
+                    )
+                  ),
                   tickfont = list(size = req$axis_scale * 12),
                   showgrid = req$gridx,
                   showline = TRUE,
@@ -3256,7 +3237,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               mode = c("single", "traces", "subplots")
             ) {
               mode <- match.arg(mode)
-              include_status_bands <- mode %in% c("single", "subplots") &&
+              include_status_bands <- mode %in%
+                c("single", "subplots") &&
                 (isTRUE(req$grades) ||
                   isTRUE(req$approvals) ||
                   isTRUE(req$qualifiers))
@@ -3334,7 +3316,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 if (mode == "subplots") {
                   xaxis <- YGwater:::viewport_axis_ref("x", i)
                   yaxis <- YGwater:::viewport_axis_ref("y", i)
-                  line_name <- build_trace_title(meta_row, include_units = FALSE)
+                  line_name <- build_trace_title(
+                    meta_row,
+                    include_units = FALSE
+                  )
                   line_legendgroup <- line_name
                   subplot_title <- line_name
                   yaxis_title <- build_yaxis_title(meta_row)
@@ -3360,7 +3345,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   band_styles <- stats::setNames(
                     list(list(
                       fillcolor = rgba_color(colors[[i]], 0.15),
-                      line = list(color = rgba_color(colors[[i]], 0.35), width = 0.3)
+                      line = list(
+                        color = rgba_color(colors[[i]], 0.35),
+                        width = 0.3
+                      )
                     )),
                     line_name
                   )
@@ -3400,7 +3388,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   invert = identical(
                     item$meta$layout$yaxis$autorange,
                     "reversed"
-                  ) || isTRUE(meta_row$invert)
+                  ) ||
+                    isTRUE(meta_row$invert)
                 )
               })
 
@@ -3554,7 +3543,11 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   paste0(last_year - 1, "-12-31")
                 }
                 lubridate::force_tz(
-                  as.POSIXct(day_value * 24 * 60 * 60, origin = origin, tz = "UTC"),
+                  as.POSIXct(
+                    day_value * 24 * 60 * 60,
+                    origin = origin,
+                    tz = "UTC"
+                  ),
                   tz
                 )
               }
@@ -3697,7 +3690,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                     tickcolor = "black"
                   )
 
-                  title_text <- if (!is.null(meta_rows) && nrow(meta_rows) >= i) {
+                  title_text <- if (
+                    !is.null(meta_rows) && nrow(meta_rows) >= i
+                  ) {
                     build_trace_title(meta_rows[i], include_units = FALSE)
                   } else {
                     payload_layout$title$text
@@ -3708,7 +3703,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                     } else {
                       panel_domain[[2]] + 0.025
                     }
-                    layout$annotations[[length(layout$annotations) + 1L]] <- list(
+                    layout$annotations[[
+                      length(layout$annotations) + 1L
+                    ]] <- list(
                       text = title_text,
                       x = 0,
                       xref = "paper",
@@ -3778,9 +3775,12 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 }
               }
 
-              trace_x_values <- do.call(c, lapply(series, function(item) {
-                item$trace_data[[item$x_col]]
-              }))
+              trace_x_values <- do.call(
+                c,
+                lapply(series, function(item) {
+                  item$trace_data[[item$x_col]]
+                })
+              )
               if (
                 length(trace_x_values) > 0 &&
                   any(!is.na(trace_x_values))

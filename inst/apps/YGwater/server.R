@@ -3574,7 +3574,7 @@ app_server <- function(input, output, session) {
           "contPlotAdaptive",
           language = languageSelection,
           windowDims = windowDims,
-          inputs = NULL
+          inputs = moduleOutputs$mapLocs
         )
       }
     }
