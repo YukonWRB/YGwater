@@ -1,6 +1,16 @@
 # Notably, most tests here exercise the plumber2 router via api(run = FALSE).
 # Tests for api.R are in tests/testthat/test-api.R
 
+rlang::check_installed(
+  "fireproof",
+  reason = "required to test API V2 OpenAPI spec validity"
+)
+rlang::check_installed(
+  "later",
+  reason = "required to test API V2 async behavior"
+)
+
+
 # Helpers to test JSON responses
 content_text <- function(response) {
   if (!is.null(response$body)) {
@@ -20,7 +30,9 @@ expect_content_type <- function(response, pattern) {
   } else {
     httr::headers(response)
   }
-  content_type <- headers[[which(tolower(names(headers)) == "content-type")[1L]]]
+  content_type <- headers[[which(tolower(names(headers)) == "content-type")[
+    1L
+  ]]]
 
   expect_true(
     grepl(pattern, content_type, ignore.case = TRUE),
@@ -152,7 +164,7 @@ test_that("api(version = 2) builds a plumber2 router without running", {
     list(list(url = "/water-data/api/v2"))
   )
   expect_equal(
-    head(names(pr$.__enclos_env__$private$OPENAPI$paths), 2L),
+    utils::head(names(pr$.__enclos_env__$private$OPENAPI$paths), 2L),
     c("/locations", "/timeseries")
   )
 
