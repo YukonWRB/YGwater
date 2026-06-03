@@ -2242,10 +2242,10 @@ v2_finalize_tabular_response
 #* Return image(s)
 #* @get /images/download
 #* @query start:string Start timestamp in ISO 8601 format (example: 2026-06-01T14:30:00Z), or date only (YYYY-MM-DD) to select all images for that day.
-#* @query end:string End timestamp in ISO 8601 format (example: 2026-06-01T15:30:00Z). Leave empty to download the single image closest to start. If both start and end are empty, the endpoint returns the most recent image for the location.
+#* @query end:string End timestamp in ISO 8601 format (example: 2026-06-01T15:30:00Z). Leave empty to download the single image closest to start. If both start and end are empty, the endpoint returns the most recent image(s) for the location.
 #* @query location_name:string* Location name (case-insensitive exact match).
 #* @query image_type:string Image type name (case-insensitive exact match). Optional.
-#* @query limit:integer(100) Maximum number of images to return.
+#* @query limit:integer(1) Maximum number of images to return.
 #* @serializer application/octet-stream v2_binary_serializer()
 #* @async
 function(client_id, query) {
@@ -2363,16 +2363,17 @@ function(client_id, query) {
   image_type <- v2_query_value(query, "image_type")
   has_image_type <- !is.null(image_type) && nzchar(trimws(image_type))
 
-  lim <- suppressWarnings(as.integer(v2_query_value(query, "limit", "100")))
+  lim <- suppressWarnings(as.integer(v2_query_value(query, "limit", "1")))
   if (is.na(lim) || lim <= 0L) {
-    lim <- 100L
+    lim <- 1L
   }
   lim <- min(lim, 500L)
 
   single_image_mode <-
-    isTRUE(no_time_filter_mode) ||
-    (!isTRUE(day_window_mode) &&
-      (isTRUE(end_missing) || isTRUE(lim == 1L)))
+    (!isTRUE(no_time_filter_mode) &&
+      !isTRUE(day_window_mode) &&
+      isTRUE(end_missing)) ||
+    isTRUE(lim == 1L)
 
   ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
@@ -2402,12 +2403,16 @@ function(client_id, query) {
         AND LOWER(COALESCE(it.image_type, '')) = LOWER($2)
       ORDER BY i.datetime DESC,
         i.image_id DESC
-      LIMIT 1"
+      LIMIT $3"
 
       out <- DBI::dbGetQuery(
         ctx$con,
         sql,
-        params = list(trimws(location_name), trimws(image_type))
+        params = list(
+          trimws(location_name),
+          trimws(image_type),
+          as.integer(lim)
+        )
       )
     } else {
       sql <- "SELECT
@@ -2429,12 +2434,12 @@ function(client_id, query) {
       WHERE LOWER(COALESCE(l.name, '')) = LOWER($1)
       ORDER BY i.datetime DESC,
         i.image_id DESC
-      LIMIT 1"
+      LIMIT $2"
 
       out <- DBI::dbGetQuery(
         ctx$con,
         sql,
-        params = list(trimws(location_name))
+        params = list(trimws(location_name), as.integer(lim))
       )
     }
   } else if (isTRUE(end_missing)) {

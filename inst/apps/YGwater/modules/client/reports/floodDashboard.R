@@ -651,6 +651,91 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         }
     }
 
+    #' Return available historical trace years for a station/parameter
+    #'
+    #' @param location_code Character station location code.
+    #' @param parameter Character dashboard parameter label.
+    #' @param con DBI database connection.
+    #' @return Integer vector of available years sorted descending.
+    #' @keywords internal
+    #' @noRd
+    get_available_historical_trace_years <- function(
+        location_code,
+        parameter,
+        con
+    ) {
+        if (
+            is.null(location_code) ||
+                length(location_code) == 0 ||
+                !nzchar(location_code) ||
+                is.null(parameter) ||
+                !nzchar(parameter)
+        ) {
+            return(integer(0))
+        }
+
+        location_sql <- DBI::dbQuoteString(con, location_code)
+        parameter_sql <- DBI::dbQuoteString(
+            con,
+            parameter_query_name(parameter)
+        )
+
+        sql <- if (
+            parameter %in% c("snow water eq (survey)", "snow depth (survey)")
+        ) {
+            sprintf(
+                paste(
+                    "SELECT DISTINCT EXTRACT(YEAR FROM s.target_datetime)::int AS year",
+                    "FROM samples s",
+                    "JOIN discrete.results dr",
+                    "  ON dr.sample_id = s.sample_id",
+                    "JOIN parameters p",
+                    "  ON p.parameter_id = dr.parameter_id",
+                    "JOIN locations l",
+                    "  ON l.location_id = s.location_id",
+                    "WHERE l.location_code = %s",
+                    "  AND p.param_name = %s",
+                    "  AND dr.result IS NOT NULL",
+                    "  AND s.target_datetime IS NOT NULL",
+                    "ORDER BY year DESC"
+                ),
+                location_sql,
+                parameter_sql
+            )
+        } else {
+            sprintf(
+                paste(
+                    "SELECT DISTINCT EXTRACT(YEAR FROM mcd.date)::int AS year",
+                    "FROM measurements_calculated_daily mcd",
+                    "JOIN timeseries ts",
+                    "  ON ts.timeseries_id = mcd.timeseries_id",
+                    "JOIN parameters p",
+                    "  ON p.parameter_id = ts.parameter_id",
+                    "JOIN locations l",
+                    "  ON l.location_id = ts.location_id",
+                    "WHERE l.location_code = %s",
+                    "  AND p.param_name = %s",
+                    "  AND mcd.value IS NOT NULL",
+                    "ORDER BY year DESC"
+                ),
+                location_sql,
+                parameter_sql
+            )
+        }
+
+        dat <- tryCatch(
+            YGwater::dbGetQueryDT(sql, con = con),
+            error = function(e) data.frame()
+        )
+
+        if (is.null(dat) || nrow(dat) == 0 || !"year" %in% names(dat)) {
+            return(integer(0))
+        }
+
+        years <- suppressWarnings(as.integer(dat$year))
+        sort(unique(years[!is.na(years)]), decreasing = TRUE)
+    }
+
     daily_temperature_aggregation_name <- function() {
         "(min+max)/2"
     }
@@ -4443,12 +4528,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
 
         fva <- read_fva_json()
         communities <- names(fva)
-        current_calendar_year <- as.integer(format(Sys.Date(), "%Y"))
-        historical_year_choices <- if (current_calendar_year > 2000L) {
-            as.character(seq(current_calendar_year - 1L, 2000L))
-        } else {
-            character(0)
-        }
 
         shiny::observeEvent(
             TRUE,
@@ -4472,7 +4551,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "primary_historical_years",
-                    choices = historical_year_choices,
+                    choices = character(0),
                     selected = character(0),
                     server = TRUE
                 )
@@ -4480,7 +4559,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "secondary_historical_years",
-                    choices = historical_year_choices,
+                    choices = character(0),
                     selected = character(0),
                     server = TRUE
                 )
@@ -4532,6 +4611,18 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         none_select_value <- "__none__"
         precipitation_parameters <- c(
             "precipitation (1wk)"
+        )
+        report_parameters <- c(
+            "water level",
+            "water flow",
+            "precipitation (1wk)",
+            "temperature, air",
+            "FDD",
+            "DDT",
+            "snow water eq (pillow)",
+            "snow depth (pillow)",
+            "snow water eq (survey)",
+            "snow depth (survey)"
         )
 
         summary_data <- shiny::reactive({
@@ -6752,6 +6843,153 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         # Plot server
         # -----------------------------------------------------------------------
 
+        shiny::observe({
+            dat <- available_primary_stations()
+            if (is.null(dat) || nrow(dat) == 0) {
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "primary_historical_years",
+                    choices = character(0),
+                    selected = character(0),
+                    server = TRUE
+                )
+                return()
+            }
+
+            station_code <- input$station
+            if (
+                is.null(station_code) ||
+                    !nzchar(station_code) ||
+                    !station_code %in% dat$location_code
+            ) {
+                station_code <- dat$location_code[[1]]
+            }
+
+            selected_parameter <- input$parameter
+            if (is.null(selected_parameter) || !nzchar(selected_parameter)) {
+                selected_parameter <- "water level"
+            }
+
+            available_years <- get_available_historical_trace_years(
+                location_code = station_code,
+                parameter = selected_parameter,
+                con = con
+            )
+
+            reference_year <- suppressWarnings(as.integer(format(
+                time_zero(),
+                "%Y"
+            )))
+            if (length(reference_year) == 1 && !is.na(reference_year)) {
+                available_years <- available_years[
+                    available_years < reference_year
+                ]
+            }
+
+            current_selected <- normalize_selected_historical_years(
+                shiny::isolate(input$primary_historical_years)
+            )
+            selected <- as.character(
+                current_selected[current_selected %in% available_years]
+            )
+
+            shiny::updateSelectizeInput(
+                session,
+                inputId = "primary_historical_years",
+                choices = as.character(available_years),
+                selected = selected,
+                server = TRUE
+            )
+        })
+
+        shiny::observe({
+            selected_parameter <- input$secondary_parameter
+            selected_station <- input$secondary_station
+            primary_station <- input$station
+
+            if (
+                is.null(selected_parameter) ||
+                    !nzchar(selected_parameter) ||
+                    identical(selected_parameter, none_select_value) ||
+                    is.null(selected_station) ||
+                    !nzchar(selected_station) ||
+                    identical(selected_station, none_select_value)
+            ) {
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "secondary_historical_years",
+                    choices = character(0),
+                    selected = character(0),
+                    server = TRUE
+                )
+                return()
+            }
+
+            all_locations <- community_locations()
+            if (is.null(all_locations) || nrow(all_locations) == 0) {
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "secondary_historical_years",
+                    choices = character(0),
+                    selected = character(0),
+                    server = TRUE
+                )
+                return()
+            }
+
+            eligible_secondary <- eligible_secondary_locations(
+                sec_param = selected_parameter,
+                all_locs = all_locations,
+                primary_station_code = primary_station
+            )
+
+            if (
+                is.null(eligible_secondary) ||
+                    nrow(eligible_secondary) == 0 ||
+                    !selected_station %in% eligible_secondary$location_code
+            ) {
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "secondary_historical_years",
+                    choices = character(0),
+                    selected = character(0),
+                    server = TRUE
+                )
+                return()
+            }
+
+            available_years <- get_available_historical_trace_years(
+                location_code = selected_station,
+                parameter = selected_parameter,
+                con = con
+            )
+
+            reference_year <- suppressWarnings(as.integer(format(
+                time_zero(),
+                "%Y"
+            )))
+            if (length(reference_year) == 1 && !is.na(reference_year)) {
+                available_years <- available_years[
+                    available_years < reference_year
+                ]
+            }
+
+            current_selected <- normalize_selected_historical_years(
+                shiny::isolate(input$secondary_historical_years)
+            )
+            selected <- as.character(
+                current_selected[current_selected %in% available_years]
+            )
+
+            shiny::updateSelectizeInput(
+                session,
+                inputId = "secondary_historical_years",
+                choices = as.character(available_years),
+                selected = selected,
+                server = TRUE
+            )
+        })
+
         time_zero <- shiny::reactive({
             if (!is.null(input$time0) && nzchar(input$time0)) {
                 suppressWarnings(as.POSIXct(
@@ -7051,36 +7289,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         })
 
         output$station_plot_title <- shiny::renderText({
-            request <- station_plot_request()
-            if (is.null(request)) {
-                return("Station Plot")
-            }
-
-            if (
-                !is.null(request$secondary_station_label) &&
-                    nzchar(request$secondary_station_label)
-            ) {
-                sprintf(
-                    "%s: %s vs %s",
-                    parameter_display_label(
-                        request$parameter,
-                        request$precip_accumulation
-                    ),
-                    request$primary_station_label %||%
-                        request$primary_station_code,
-                    request$secondary_station_label
-                )
-            } else {
-                sprintf(
-                    "%s: %s",
-                    parameter_display_label(
-                        request$parameter,
-                        request$precip_accumulation
-                    ),
-                    request$primary_station_label %||%
-                        request$primary_station_code
-                )
-            }
+            "Station Plot"
         })
 
         # Push showlegend into the live Plotly widget without re-rendering.
@@ -8785,22 +8994,53 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 }
             )
 
+            primary_plot_label <- request$primary_station_label %||%
+                request$primary_station_code
+            secondary_plot_label <- request$secondary_station_label %||%
+                request$secondary_station_code
+
+            plot_title_text <- if (
+                isTRUE(has_secondary_trace) &&
+                    !is.null(secondary_plot_label) &&
+                    nzchar(secondary_plot_label)
+            ) {
+                sprintf("%s<br>vs %s", primary_plot_label, secondary_plot_label)
+            } else {
+                as.character(primary_plot_label)
+            }
+
+            y_axis_title <- if (isTRUE(has_secondary_trace)) {
+                paste0(y_title, " [", primary_plot_label, "]")
+            } else {
+                y_title
+            }
+
             p %>%
                 plotly::layout(
+                    title = list(
+                        text = plot_title_text,
+                        x = 0.01,
+                        xanchor = "left"
+                    ),
                     xaxis = list(
                         title = "",
                         range = x_range
                     ),
                     yaxis = if (!is.null(y_range)) {
-                        list(title = y_title, range = y_range)
+                        list(title = y_axis_title, range = y_range)
                     } else {
-                        list(title = y_title)
+                        list(title = y_axis_title)
                     },
                     yaxis2 = if (has_secondary_trace) {
                         list(
-                            title = parameter_axis_title(
-                                sec_param,
-                                precip_accumulation = request$precip_accumulation
+                            title = paste0(
+                                parameter_axis_title(
+                                    sec_param,
+                                    precip_accumulation = request$precip_accumulation
+                                ),
+                                " [",
+                                secondary_plot_label,
+                                "]"
                             ),
                             range = secondary_y_range,
                             overlaying = "y",
@@ -8824,5 +9064,484 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     margin = list(l = 60, r = 60, t = 60, b = 40)
                 )
         })
+
+        data_frame_to_html_table <- function(dat, max_rows = 200L) {
+            if (is.null(dat) || nrow(dat) == 0) {
+                return(shiny::tags$div(
+                    style = "color:#6b7280; margin-bottom:0.75rem;",
+                    "No table data available."
+                ))
+            }
+
+            dat <- as.data.frame(dat, stringsAsFactors = FALSE)
+            dat <- dat[
+                seq_len(min(nrow(dat), as.integer(max_rows))),
+                ,
+                drop = FALSE
+            ]
+
+            for (col_name in names(dat)) {
+                if (inherits(dat[[col_name]], c("POSIXct", "POSIXt"))) {
+                    dat[[col_name]] <- format(
+                        dat[[col_name]],
+                        "%Y-%m-%d %H:%M:%S",
+                        tz = "Etc/GMT+7"
+                    )
+                }
+            }
+
+            header <- shiny::tags$tr(
+                lapply(names(dat), function(col_name) shiny::tags$th(col_name))
+            )
+            rows <- lapply(seq_len(nrow(dat)), function(i) {
+                values <- lapply(dat[i, , drop = FALSE], function(v) {
+                    value <- v[[1]]
+                    if (is.na(value)) "" else as.character(value)
+                })
+                shiny::tags$tr(lapply(values, function(v) shiny::tags$td(v)))
+            })
+
+            shiny::tags$table(
+                style = paste(
+                    "border-collapse:collapse; width:100%; margin-bottom:1rem;",
+                    "font-size:0.85rem;"
+                ),
+                shiny::tags$thead(header),
+                shiny::tags$tbody(rows)
+            )
+        }
+
+        ggplot_to_data_uri <- function(plot_obj, width = 1200, height = 450) {
+            tmp_png <- tempfile(fileext = ".png")
+            on.exit(unlink(tmp_png), add = TRUE)
+
+            grDevices::png(
+                filename = tmp_png,
+                width = width,
+                height = height,
+                res = 120
+            )
+            print(plot_obj)
+            grDevices::dev.off()
+
+            raw_png <- readBin(
+                tmp_png,
+                what = "raw",
+                n = file.info(tmp_png)$size
+            )
+            base64enc::dataURI(data = raw_png, mime = "image/png")
+        }
+
+        output$export_html_report <- shiny::downloadHandler(
+            filename = function() {
+                community <- input$community %||% "community"
+                safe_community <- gsub("[^A-Za-z0-9_-]+", "_", community)
+                stamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+                sprintf("flood_dashboard_%s_%s.html", safe_community, stamp)
+            },
+            content = function(file) {
+                shiny::req(has_valid_connection())
+                shiny::req(!is.null(input$community) && nzchar(input$community))
+
+                reference_time <- time_zero()
+                report_generated <- format(
+                    Sys.time(),
+                    "%Y-%m-%d %H:%M:%S",
+                    tz = "Etc/GMT+7"
+                )
+                ref_str <- format(
+                    as.POSIXct(reference_time, tz = "Etc/GMT+7"),
+                    "%Y-%m-%d %H:%M:%S",
+                    tz = "Etc/GMT+7"
+                )
+
+                community_dat <- community_locations()
+                if (is.null(community_dat)) {
+                    community_dat <- data.frame()
+                }
+
+                community_map <- NULL
+                if (nrow(community_dat) > 0) {
+                    map_dat <- community_dat[
+                        !is.na(community_dat$longitude) &
+                            !is.na(community_dat$latitude),
+                        ,
+                        drop = FALSE
+                    ]
+                    if (nrow(map_dat) > 0) {
+                        community_map <- leaflet::leaflet(data = map_dat)
+                        community_map <- leaflet::addProviderTiles(
+                            community_map,
+                            "CartoDB.Positron"
+                        )
+                        community_map <- leaflet::addCircleMarkers(
+                            community_map,
+                            lng = ~longitude,
+                            lat = ~latitude,
+                            radius = 5,
+                            stroke = TRUE,
+                            weight = 1,
+                            color = "#111827",
+                            fillColor = "#2563eb",
+                            fillOpacity = 0.8,
+                            popup = ~ paste0(
+                                "<strong>",
+                                name,
+                                "</strong><br>",
+                                location_code
+                            )
+                        )
+                        community_map <- leaflet::fitBounds(
+                            community_map,
+                            lng1 = min(map_dat$longitude, na.rm = TRUE),
+                            lat1 = min(map_dat$latitude, na.rm = TRUE),
+                            lng2 = max(map_dat$longitude, na.rm = TRUE),
+                            lat2 = max(map_dat$latitude, na.rm = TRUE)
+                        )
+                    }
+                }
+
+                parameter_sections <- lapply(
+                    report_parameters,
+                    function(param) {
+                        station_subset <- community_dat
+                        if (
+                            is.null(station_subset) || nrow(station_subset) == 0
+                        ) {
+                            station_subset <- data.frame()
+                        }
+
+                        if (nrow(station_subset) > 0) {
+                            if (param %in% snow_survey_parameters) {
+                                survey_summary <- tryCatch(
+                                    get_snow_survey_summary(
+                                        location_codes = unique(
+                                            station_subset$location_code
+                                        ),
+                                        parameter = param,
+                                        con = con,
+                                        reference_time = reference_time
+                                    ),
+                                    error = function(e) data.frame()
+                                )
+                                if (
+                                    !is.null(survey_summary) &&
+                                        nrow(survey_summary) > 0 &&
+                                        "location_id" %in% names(survey_summary)
+                                ) {
+                                    station_subset <- station_subset[
+                                        station_subset$location_id %in%
+                                            survey_summary$location_id,
+                                        ,
+                                        drop = FALSE
+                                    ]
+                                } else {
+                                    station_subset <- station_subset[
+                                        0,
+                                        ,
+                                        drop = FALSE
+                                    ]
+                                }
+                            } else {
+                                eligible_ids <- tryCatch(
+                                    get_location_ids_with_parameter(
+                                        location_ids = station_subset$location_id,
+                                        parameter = param,
+                                        con = con
+                                    ),
+                                    error = function(e) integer(0)
+                                )
+                                station_subset <- station_subset[
+                                    station_subset$location_id %in%
+                                        eligible_ids,
+                                    ,
+                                    drop = FALSE
+                                ]
+                            }
+                        }
+
+                        location_codes <- unique(as.character(
+                            station_subset$location_code
+                        ))
+                        location_codes <- location_codes[
+                            !is.na(location_codes) & nzchar(location_codes)
+                        ]
+
+                        summary_table <- if (length(location_codes) == 0) {
+                            data.frame()
+                        } else if (identical(param, "precipitation (1wk)")) {
+                            tryCatch(
+                                get_precipitation_timeseries_summary(
+                                    location_codes = location_codes,
+                                    con = con,
+                                    reference_time = reference_time
+                                ),
+                                error = function(e) data.frame()
+                            )
+                        } else if (param %in% snow_survey_parameters) {
+                            tryCatch(
+                                get_snow_survey_summary(
+                                    location_codes = location_codes,
+                                    parameter = param,
+                                    con = con,
+                                    reference_time = reference_time
+                                ),
+                                error = function(e) data.frame()
+                            )
+                        } else {
+                            tryCatch(
+                                get_latest_parameter_summary(
+                                    location_codes = location_codes,
+                                    parameter = param,
+                                    con = con,
+                                    reference_time = reference_time
+                                ),
+                                error = function(e) data.frame()
+                            )
+                        }
+
+                        plot_nodes <- lapply(location_codes, function(code) {
+                            series <- tryCatch(
+                                get_station_timeseries(
+                                    location_code = code,
+                                    parameter = param,
+                                    con = con,
+                                    reference_time = reference_time,
+                                    load_entire_record = FALSE,
+                                    historical_start_year = 1990L,
+                                    precip_accumulation = normalize_precip_accumulation(
+                                        input$precip_accumulation
+                                    )
+                                ),
+                                error = function(e) data.frame()
+                            )
+
+                            if (is.null(series) || nrow(series) == 0) {
+                                return(NULL)
+                            }
+
+                            series <- series[
+                                !is.na(series$datetime) & !is.na(series$value),
+                                ,
+                                drop = FALSE
+                            ]
+                            if (nrow(series) == 0) {
+                                return(NULL)
+                            }
+
+                            plt <- ggplot2::ggplot(
+                                series,
+                                ggplot2::aes(
+                                    x = rlang::.data$datetime,
+                                    y = rlang::.data$value
+                                )
+                            ) +
+                                ggplot2::geom_line(
+                                    color = "#1d4ed8",
+                                    linewidth = 0.45
+                                ) +
+                                ggplot2::theme_minimal(base_size = 11) +
+                                ggplot2::labs(
+                                    title = paste0(
+                                        code,
+                                        " - ",
+                                        parameter_display_label(
+                                            param,
+                                            precip_accumulation = normalize_precip_accumulation(
+                                                input$precip_accumulation
+                                            )
+                                        )
+                                    ),
+                                    x = NULL,
+                                    y = NULL
+                                )
+
+                            plot_uri <- tryCatch(
+                                ggplot_to_data_uri(plt),
+                                error = function(e) NULL
+                            )
+                            if (is.null(plot_uri)) {
+                                return(NULL)
+                            }
+
+                            shiny::tags$div(
+                                style = "margin-bottom:0.8rem;",
+                                shiny::tags$img(
+                                    src = plot_uri,
+                                    style = "width:100%; border:1px solid #e5e7eb; border-radius:4px;"
+                                )
+                            )
+                        })
+                        plot_nodes <- plot_nodes[
+                            !vapply(plot_nodes, is.null, logical(1))
+                        ]
+
+                        shiny::tags$section(
+                            style = "margin-top:1.2rem;",
+                            shiny::tags$h2(
+                                style = "margin-bottom:0.35rem; border-bottom:1px solid #e5e7eb; padding-bottom:0.25rem;",
+                                parameter_display_label(
+                                    param,
+                                    precip_accumulation = normalize_precip_accumulation(
+                                        input$precip_accumulation
+                                    )
+                                )
+                            ),
+                            shiny::tags$h3(
+                                style = "margin:0.35rem 0; font-size:1rem;",
+                                "Table"
+                            ),
+                            data_frame_to_html_table(
+                                summary_table,
+                                max_rows = 500L
+                            ),
+                            shiny::tags$h3(
+                                style = "margin:0.35rem 0; font-size:1rem;",
+                                "Plots"
+                            ),
+                            if (length(plot_nodes) > 0) {
+                                plot_nodes
+                            } else {
+                                shiny::tags$div(
+                                    style = "color:#6b7280; margin-bottom:1rem;",
+                                    "No plots available for this parameter in the selected community."
+                                )
+                            }
+                        )
+                    }
+                )
+
+                image_nodes <- {
+                    series <- tryCatch(
+                        community_image_series(),
+                        error = function(e) NULL
+                    )
+                    if (is.null(series) || nrow(series) == 0) {
+                        list(shiny::tags$div(
+                            style = "color:#6b7280;",
+                            "No community image series available."
+                        ))
+                    } else {
+                        lapply(seq_len(nrow(series)), function(i) {
+                            series_id <- suppressWarnings(as.integer(series$img_series_id[[
+                                i
+                            ]]))
+                            if (is.na(series_id)) {
+                                return(NULL)
+                            }
+
+                            img <- tryCatch(
+                                DBI::dbGetQuery(
+                                    con,
+                                    paste0(
+                                        "SELECT image_id, datetime, format, file ",
+                                        "FROM images ",
+                                        "WHERE img_series_id = ",
+                                        series_id,
+                                        " AND file IS NOT NULL ",
+                                        "ORDER BY datetime DESC LIMIT 1"
+                                    )
+                                ),
+                                error = function(e) data.frame()
+                            )
+                            if (nrow(img) == 0) {
+                                return(NULL)
+                            }
+
+                            img_src <- tryCatch(
+                                image_blob_to_data_uri(
+                                    image_blob = img$file[[1]],
+                                    image_format = img$format[[1]]
+                                ),
+                                error = function(e) NULL
+                            )
+                            if (is.null(img_src)) {
+                                return(NULL)
+                            }
+
+                            station_name <- as.character(
+                                series$name[[i]] %||%
+                                    series$location_code[[i]] %||%
+                                    series_id
+                            )
+                            ts_label <- format(
+                                as.POSIXct(img$datetime[[1]], tz = "Etc/GMT+7"),
+                                "%Y-%m-%d %H:%M:%S",
+                                tz = "Etc/GMT+7"
+                            )
+
+                            shiny::tags$div(
+                                style = "margin-bottom:1rem;",
+                                shiny::tags$div(
+                                    style = "font-weight:600; margin-bottom:0.2rem;",
+                                    station_name
+                                ),
+                                shiny::tags$div(
+                                    style = "color:#6b7280; font-size:0.82rem; margin-bottom:0.3rem;",
+                                    paste("Latest image:", ts_label)
+                                ),
+                                shiny::tags$img(
+                                    src = img_src,
+                                    style = "max-width:100%; border:1px solid #e5e7eb; border-radius:4px;"
+                                )
+                            )
+                        })
+                    }
+                }
+                image_nodes <- image_nodes[
+                    !vapply(image_nodes, is.null, logical(1))
+                ]
+
+                report_body <- htmltools::tagList(
+                    shiny::tags$h1("Flood Dashboard Report"),
+                    shiny::tags$div(
+                        style = "margin-bottom:0.8rem; color:#334155;",
+                        shiny::tags$div(paste("Community:", input$community)),
+                        shiny::tags$div(paste("Reference time:", ref_str)),
+                        shiny::tags$div(paste("Generated:", report_generated))
+                    ),
+                    shiny::tags$section(
+                        shiny::tags$h2("Map"),
+                        if (is.null(community_map)) {
+                            shiny::tags$div(
+                                style = "color:#6b7280; margin-bottom:1rem;",
+                                "No map data available for this community."
+                            )
+                        } else {
+                            community_map
+                        }
+                    ),
+                    parameter_sections,
+                    shiny::tags$section(
+                        style = "margin-top:1.2rem;",
+                        shiny::tags$h2("Images"),
+                        image_nodes
+                    )
+                )
+
+                report_doc <- htmltools::tagList(
+                    shiny::tags$html(
+                        shiny::tags$head(
+                            shiny::tags$meta(charset = "utf-8"),
+                            shiny::tags$title("Flood Dashboard Report"),
+                            shiny::tags$style(shiny::HTML(paste(
+                                "body { font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; margin: 1rem; color: #111827; }",
+                                "h1, h2, h3 { color: #0f172a; }",
+                                "table, th, td { border: 1px solid #d1d5db; }",
+                                "th, td { padding: 0.25rem 0.4rem; text-align: left; }",
+                                "th { background: #f8fafc; }"
+                            )))
+                        ),
+                        shiny::tags$body(report_body)
+                    )
+                )
+
+                htmltools::save_html(
+                    report_doc,
+                    file = file,
+                    background = "white"
+                )
+            }
+        )
     })
 }
