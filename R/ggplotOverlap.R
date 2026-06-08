@@ -183,7 +183,6 @@ ggplotOverlap <- function(
   # Select save path
   if (!is.null(save_path)) {
     if (save_path %in% c("Choose", "choose")) {
-      # print("Select the folder where you want this graph saved.")
       save_path <- rstudioapi::selectDirectory(
         caption = "Select Save Folder",
         path = file.path(Sys.getenv("USERPROFILE"), "Desktop")
@@ -361,7 +360,7 @@ ggplotOverlap <- function(
       parameter_tbl <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE param_name = '",
+          "SELECT parameter_id, param_name, param_name_fr FROM public.parameters WHERE param_name = '",
           escaped_parameter,
           "' OR param_name_fr = '",
           escaped_parameter,
@@ -372,11 +371,13 @@ ggplotOverlap <- function(
       if (is.na(parameter_code)) {
         stop("The parameter you entered does not exist in the database.")
       }
-    } else if (inherits(parameter, "numeric")) {
+    } else if (
+      inherits(parameter, "numeric") || inherits(parameter, "integer")
+    ) {
       parameter_tbl <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT parameter_id, param_name, param_name_fr FROM parameters WHERE parameter_id = ",
+          "SELECT parameter_id, param_name, param_name_fr FROM public.parameters WHERE parameter_id = ",
           parameter,
           ";"
         )
@@ -418,8 +419,6 @@ ggplotOverlap <- function(
           location_id,
           " AND parameter_id = ",
           parameter_code,
-          " AND aggregation_type_id = ",
-          instantaneous,
           ";"
         )
       )
@@ -431,8 +430,6 @@ ggplotOverlap <- function(
           location_id,
           " AND parameter_id = ",
           parameter_code,
-          " AND aggregation_type_id = ",
-          instantaneous,
           " AND record_rate = '",
           record_rate,
           "';"

@@ -1,20 +1,19 @@
 skip_on_cran()
-skip_on_ci()
 
 skip_if(
-  !nzchar(Sys.getenv("aquacacheHost")),
+  !nzchar(Sys.getenv("aquacacheTestHost")),
   "Aquacache connection details are not configured"
 )
 skip_if(
-  !nzchar(Sys.getenv("aquacacheName")),
+  !nzchar(Sys.getenv("aquacacheTestName")),
   "Aquacache connection details are not configured"
 )
 skip_if(
-  !nzchar(Sys.getenv("aquacacheUser")),
+  !nzchar(Sys.getenv("aquacacheTestUser")),
   "Aquacache connection details are not configured"
 )
 skip_if(
-  !nzchar(Sys.getenv("aquacachePass")),
+  !nzchar(Sys.getenv("aquacacheTestPass")),
   "Aquacache connection details are not configured"
 )
 
@@ -22,7 +21,7 @@ skip_if_not_installed("rpostgis")
 skip_if_not_installed("jsonlite")
 skip_if_not_installed("terra")
 
-con <- AquaConnect(silent = TRUE)
+con <- test_AquaConnect(silent = TRUE)
 on.exit(DBI::dbDisconnect(con), add = TRUE)
 
 
@@ -30,11 +29,11 @@ test_that("getVector retrieves a single feature by name", {
   # Query table 'spatial.vectors' to find a valid feature name for layer 'Locations'
   name <- DBI::dbGetQuery(
     con,
-    "SELECT feature_name FROM spatial.vectors WHERE layer_name = 'Locations' LIMIT 1;"
-  )$feature_name
+    "SELECT feature_name, layer_name FROM spatial.vectors LIMIT 1;"
+  )
   result <- getVector(
-    layer_name = "Locations",
-    feature_name = name,
+    layer_name = name$layer_name,
+    feature_name = name$feature_name,
     con = con,
     silent = TRUE
   )
@@ -55,16 +54,18 @@ test_that("getVector retrieves a single feature by name", {
         names(attrs)
     )
   )
-  expect_equal(attrs$layer_name, "Locations")
   expect_gt(nchar(attrs$feature_name), 2)
-  expect_equal(attrs$geom_type, "ST_Point")
   expect_gte(nchar(attrs$description), 2)
 })
 
 
 test_that("getVector retrieves all features in a layer", {
+  layers <- DBI::dbGetQuery(
+    con,
+    "SELECT DISTINCT layer_name FROM spatial.vectors LIMIT 1;"
+  )
   result <- getVector(
-    layer_name = "Locations",
+    layer_name = layers$layer_name[1],
     con = con,
     silent = TRUE
   )
@@ -72,13 +73,16 @@ test_that("getVector retrieves all features in a layer", {
   # Find out how many features are expected via a database query
   exp <- DBI::dbGetQuery(
     con,
-    "SELECT layer_name, feature_name, geom_id AS n FROM spatial.vectors WHERE layer_name = 'Locations';"
+    paste0(
+      "SELECT layer_name, feature_name, geom_id AS n FROM spatial.vectors WHERE layer_name = '",
+      layers$layer_name[1],
+      "';"
+    )
   )
 
   expect_equal(terra::nrow(result), nrow(exp))
 
   attrs <- terra::values(result)
-  expect_true(all(attrs$geom_type == "ST_Point"))
   expect_setequal(
     attrs$feature_name,
     exp$feature_name

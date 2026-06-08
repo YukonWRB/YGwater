@@ -74,12 +74,24 @@ if (Sys.getenv("CI") == "true") {
       FALSE
     }
   )
+}
 
-  if (!test_db_exists) {
-    stop(
-      "Database 'testdb' not found at the host and port specified in your .Renviron file. Please create it with AquaCache::create_test_db() before running the tests."
-    )
-  }
+if (!test_db_exists) {
+  stop(
+    "Database 'testdb' not found at the host and port specified in your .Renviron file. Please create it with AquaCache::create_test_db() before running the tests."
+  )
+}
+
+# Create a helper function for test connections to the test database, which will use the environment variables set above. This is used in multiple test files.
+test_AquaConnect <- function(silent = TRUE) {
+  AquaConnect(
+    name = Sys.getenv("aquacacheTestName"),
+    host = Sys.getenv("aquacacheTestHost"),
+    port = Sys.getenv("aquacacheTestPort"),
+    user = Sys.getenv("aquacacheTestUser"),
+    password = Sys.getenv("aquacacheTestPass"),
+    silent = silent
+  )
 }
 set.seed(123) # Set seed for reproducibility in tests
 
