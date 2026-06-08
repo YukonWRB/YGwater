@@ -188,6 +188,7 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
   async_routes <- c(
     "/timeseries/measurements",
+    "/images/download",
     "/samples",
     "/samples/results",
     "/snow-bulletin/leaflet",
