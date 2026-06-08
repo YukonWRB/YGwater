@@ -166,6 +166,8 @@ api <- function(
   version <- api_normalize_version(version)
   api_target <- api_find_target(version)
 
+  rlang::check_installed("httpuv", reason = "required to run the YGwater API")
+
   if (identical(api_target$engine, "plumber")) {
     rlang::check_installed("plumber", reason = "required to run API v1")
     rlang::check_installed("memoise", reason = "required to run API v1")
@@ -175,6 +177,7 @@ api <- function(
       "plumber2",
       reason = "required to run API v2 or newer"
     )
+    rlang::check_installed("mirai", reason = "required to run API v2 or newer")
   } else {
     stop("Unsupported API router engine.", call. = FALSE)
   }

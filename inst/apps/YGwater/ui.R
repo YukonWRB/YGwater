@@ -486,22 +486,12 @@ app_ui <- function(request) {
               uiOutput("addContData_ui")
             ),
             nav_panel(
-              title = "Edit / delete continuous data",
-              value = "editContData",
-              uiOutput("editContData_ui")
-            ),
-            nav_panel(
-              title = "Add / modify timeseries corrections",
-              value = "continuousCorrections",
-              uiOutput("continuousCorrections_ui")
-            ),
-            nav_panel(
               title = "Impute missing values",
               value = "imputeMissing",
               uiOutput("imputeMissing_ui")
             ),
             nav_panel(
-              title = "Apply grades, approvals, qualifiers",
+              title = "Review / edit timeseries",
               value = "grades_approvals_qualifiers",
               uiOutput("grades_approvals_qualifiers_ui")
             ),
@@ -509,6 +499,11 @@ app_ui <- function(request) {
               title = "Add / edit timeseries",
               value = "addTimeseries",
               uiOutput("addTimeseries_ui")
+            ),
+            nav_panel(
+              title = "Add / edit derived timeseries",
+              value = "addCompoundTimeseries",
+              uiOutput("addCompoundTimeseries_ui")
             ),
             nav_panel(
               title = "Sync timeseries",
@@ -531,11 +526,6 @@ app_ui <- function(request) {
               title = "Add / edit samples",
               value = "addSamples",
               uiOutput("addSamples_ui")
-            ),
-            nav_panel(
-              title = "Edit / delete discrete data",
-              value = "editDiscData",
-              uiOutput("editDiscData_ui")
             ),
             nav_panel(
               title = "Add / modify guidelines",

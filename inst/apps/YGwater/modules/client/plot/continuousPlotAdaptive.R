@@ -159,17 +159,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ]
     )
 
-    initial_timeseries_ids <- if (!is.null(inputs$timeseries_id)) {
-      utils::head(unique(as.numeric(inputs$timeseries_id)), 4)
-    } else {
-      numeric(0)
-    }
     selected_timeseries_slots <- reactiveVal(
-      if (length(initial_timeseries_ids) > 0) {
-        initial_timeseries_ids
-      } else {
-        NA_real_
-      }
+      NA_real_
     )
     active_timeseries_slot <- reactiveVal(1L)
 
@@ -240,26 +231,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
 
       loc_ids
-    })
-
-    location_filter_value <- reactive({
-      if (is.null(moduleInputs$location_id)) {
-        return(NULL)
-      }
-
-      loc_name_col <- tr("generic_name_col", language$language)
-      locs <- unique(moduleData$locs, by = "location_id")
-
-      available_values <- locs[
-        location_id %in% moduleInputs$location_id,
-        ..loc_name_col
-      ][[loc_name_col]]
-
-      if (length(available_values) == 0) {
-        return(NULL)
-      }
-
-      stats::na.omit(available_values)[1]
     })
 
     timeseries_table_reactive <- reactive({
@@ -1386,13 +1357,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         )
       }
 
-      search_cols <- vector("list", ncol(ts))
-      if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
-        search_cols[[match("location", names(ts))]] <- list(
-          search = location_filter_value()
-        )
-      }
-
       date_targets <- which(names(ts) %in% c("start_date", "end_date")) - 1
       dt <- DT::datatable(
         ts,
@@ -1416,7 +1380,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               )
             )
           ),
-          searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
@@ -2360,12 +2323,31 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
 
       if (built$trace_bundle$trace_count > 0) {
-        plotly::plotlyProxyInvoke(
+        proxy <- plotly::plotlyProxyInvoke(
           proxy,
           "addTraces",
           built$trace_bundle$traces
         )
       }
+
+      xaxis_names <- adaptiveState$payload$xaxis_names
+      if (is.null(xaxis_names) || length(xaxis_names) == 0) {
+        xaxis_names <- "xaxis"
+      }
+      relayout_args <- stats::setNames(
+        lapply(xaxis_names, function(axis_name) {
+          if (is.null(xlim)) {
+            list(autorange = TRUE)
+          } else {
+            list(range = xlim, autorange = FALSE)
+          }
+        }),
+        xaxis_names
+      )
+      do.call(
+        plotly::plotlyProxyInvoke,
+        c(list(p = proxy, method = "relayout"), relayout_args)
+      )
     }
 
     # ExtendedTask that does the heavy plotting work
@@ -2520,92 +2502,299 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               c(start, end)
             }
 
-            fetch_timeseries_labels <- function(ids) {
+            fetch_timeseries_plot_metadata <- function(ids) {
               ids_sql <- paste(as.integer(ids), collapse = ",")
-              labels <- DBI::dbGetQuery(
+              meta <- DBI::dbGetQuery(
                 con,
                 paste0(
-                  "SELECT ts.timeseries_id, ",
-                  "COALESCE(p.param_name, ts.parameter_id::text) AS parameter ",
+                  "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ",
+                  "ts.aggregation_type_id, lz.z_meters AS z, ",
+                  "COALESCE(at.aggregation_type, '') AS aggregation_type, ",
+                  if (req$lang == "fr") {
+                    paste0(
+                      "COALESCE(l.name_fr, l.name, ts.location_id::text) ",
+                      "AS location_name, ",
+                      "COALESCE(p.param_name_fr, p.param_name, ",
+                      "ts.parameter_id::text) AS parameter_name, "
+                    )
+                  } else {
+                    paste0(
+                      "COALESCE(l.name, ts.location_id::text) ",
+                      "AS location_name, ",
+                      "COALESCE(p.param_name, ts.parameter_id::text) ",
+                      "AS parameter_name, "
+                    )
+                  },
+                  "p.plot_default_y_orientation ",
                   "FROM timeseries ts ",
+                  "LEFT JOIN locations l ON ts.location_id = l.location_id ",
                   "LEFT JOIN parameters p ON ts.parameter_id = p.parameter_id ",
+                  "LEFT JOIN aggregation_types at ",
+                  "ON ts.aggregation_type_id = at.aggregation_type_id ",
+                  "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id ",
                   "WHERE ts.timeseries_id IN (",
                   ids_sql,
                   ");"
                 )
               )
-              stats::setNames(
-                lapply(ids, function(id) {
-                  row <- labels[labels$timeseries_id == id, , drop = FALSE]
-                  if (nrow(row) == 0) {
-                    return(paste("Timeseries", id))
-                  }
-                  titleCase(row$parameter[[1]], req$lang)
-                }),
-                as.character(ids)
-              )
+              meta <- data.table::as.data.table(meta)
+              if (!nrow(meta)) {
+                meta <- data.table::data.table(
+                  timeseries_id = numeric(),
+                  location_id = numeric(),
+                  parameter_id = numeric(),
+                  aggregation_type_id = numeric(),
+                  z = numeric(),
+                  aggregation_type = character(),
+                  location_name = character(),
+                  parameter_name = character(),
+                  plot_default_y_orientation = character()
+                )
+              }
+
+              meta <- meta[
+                match(as.numeric(ids), as.numeric(meta$timeseries_id))
+              ]
+              missing_rows <- is.na(meta$timeseries_id)
+              if (any(missing_rows)) {
+                meta[
+                  missing_rows,
+                  timeseries_id := as.numeric(ids)[missing_rows]
+                ]
+                meta[
+                  missing_rows,
+                  location_name := paste(
+                    "Timeseries",
+                    timeseries_id
+                  )
+                ]
+                meta[
+                  missing_rows,
+                  parameter_name := paste(
+                    "Timeseries",
+                    timeseries_id
+                  )
+                ]
+              }
+              meta[, location_name := titleCase(location_name, req$lang)]
+              meta[, parameter_name := titleCase(parameter_name, req$lang)]
+              meta[,
+                units := vapply(
+                  timeseries_id,
+                  function(ts_id) {
+                    unit <- tryCatch(
+                      ac_get_timeseries_unit(con, ts_id),
+                      error = function(e) NA_character_
+                    )
+                    if (is.na(unit) || !nzchar(unit)) "" else unit
+                  },
+                  character(1)
+                )
+              ]
+              meta[, data_key := paste0(location_id, "_", parameter_id)]
+              meta[
+                is.na(data_key) | data_key == "NA_NA",
+                data_key := paste0(
+                  "timeseries_",
+                  timeseries_id
+                )
+              ]
+              meta[, invert := plot_default_y_orientation == "inverted"]
+              meta[is.na(invert), invert := FALSE]
+              meta[]
             }
 
             palette_for_series <- function(n) {
               grDevices::colorRampPalette(c(
                 "#00454e",
-                "#547f7a",
                 "#7A9A01",
-                "#FFA900",
+                "#F2A900",
                 "#DC4405"
               ))(max(1L, n))
             }
 
-            subplot_panel_domain <- function(index, n) {
-              top <- 1 - (index - 1) / n
-              bottom <- 1 - index / n
-              if (index < n) {
-                bottom <- bottom + 0.025
+            rgba_color <- function(hex_color, opacity) {
+              rgb_vals <- grDevices::col2rgb(hex_color)
+              sprintf(
+                "rgba(%d, %d, %d, %.2f)",
+                rgb_vals[1, ],
+                rgb_vals[2, ],
+                rgb_vals[3, ],
+                opacity
+              )
+            }
+
+            truncate_for_scale <- function(value, max_chars, legend_scale) {
+              value <- as.character(value)
+              limit <- max(4L, as.integer(max_chars * (1 / legend_scale)))
+              ifelse(
+                nchar(value) > limit,
+                paste0(substr(value, 1L, max(1L, limit - 3L)), "..."),
+                value
+              )
+            }
+
+            aggregation_label <- function(value) {
+              value <- as.character(value)
+              ifelse(is.na(value) | value == "", "", paste0(", ", value))
+            }
+
+            z_label <- function(value) {
+              ifelse(is.na(value), "", paste0(" ", value, " meters"))
+            }
+
+            build_trace_title <- function(meta_row, include_units = TRUE) {
+              name <- truncate_for_scale(
+                meta_row$location_name,
+                27L,
+                req$legend_scale
+              )
+              parameter_name <- truncate_for_scale(
+                meta_row$parameter_name,
+                20L,
+                req$legend_scale
+              )
+              units <- if (include_units && nzchar(meta_row$units)) {
+                paste0(", ", meta_row$units)
+              } else {
+                ""
               }
+              paste0(
+                name,
+                z_label(meta_row$z),
+                " (",
+                parameter_name,
+                aggregation_label(meta_row$aggregation_type),
+                units,
+                ")"
+              )
+            }
+
+            build_yaxis_title <- function(meta_row) {
+              paste0(
+                meta_row$parameter_name,
+                aggregation_label(meta_row$aggregation_type),
+                if (nzchar(meta_row$units)) {
+                  paste0(" (", meta_row$units, ")")
+                } else {
+                  ""
+                }
+              )
+            }
+
+            multi_plot_title <- function(meta_rows) {
+              titles <- paste0(
+                truncate_for_scale(meta_rows$location_name, 40L, 1),
+                " (",
+                meta_rows$parameter_name,
+                aggregation_label(meta_rows$aggregation_type),
+                ")"
+              )
+              paste(titles, collapse = "<br>")
+            }
+
+            min_max_band_styles <- function(fill_color = "#D4ECEF") {
+              list(
+                `Min-Max` = list(
+                  fillcolor = fill_color,
+                  line = list(color = fill_color, width = 0.2)
+                )
+              )
+            }
+
+            iqr_band_name <- function() {
+              if (req$lang == "en") "IQR" else "EIQ"
+            }
+
+            subplot_band_styles <- function() {
+              band_name <- iqr_band_name()
+              styles <- min_max_band_styles()
+              styles[[band_name]] <- list(
+                fillcolor = "rgba(95, 157, 166, 0.45)",
+                line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+              )
+              styles
+            }
+
+            subplot_panel_domain <- function(index, n, gap = 0.08) {
+              if (n <= 1) {
+                return(c(0, 1))
+              }
+              gap <- min(0.18, max(0.03, as.numeric(gap)))
+              panel_height <- (1 - gap * (n - 1)) / n
+              top <- 1 - (index - 1) * (panel_height + gap)
+              bottom <- top - panel_height
               c(max(0, bottom), min(1, top))
             }
 
             subplot_layout <- function(series, selected_xlim) {
               n <- length(series)
+              nrows <- ceiling(sqrt(n))
+              ncols <- ceiling(n / nrows)
+              x_gap <- if (ncols > 1) 0.07 * req$axis_scale else 0
+              y_gap <- if (nrows > 1) 0.10 * req$axis_scale else 0
+              x_width <- (1 - x_gap * (ncols - 1)) / ncols
+              y_height <- (1 - y_gap * (nrows - 1)) / nrows
               layout <- list(
                 title = NULL,
-                margin = list(b = 0, t = 25, l = 60, r = 35),
+                margin = list(
+                  b = 0,
+                  t = max(45, 35 * req$axis_scale),
+                  l = 50 * req$axis_scale,
+                  r = 35
+                ),
                 hovermode = "x unified",
                 legend = list(
                   font = list(size = req$legend_scale * 12),
                   orientation = req$legend_position
                 ),
-                font = list(family = "Nunito Sans")
+                font = list(family = "Nunito Sans"),
+                annotations = list()
               )
 
               for (i in seq_len(n)) {
-                panel_domain <- subplot_panel_domain(i, n)
+                row <- ceiling(i / ncols)
+                col <- (i - 1) %% ncols + 1
+                x0 <- (col - 1) * (x_width + x_gap)
+                x_domain <- c(x0, x0 + x_width)
+                y1 <- 1 - (row - 1) * (y_height + y_gap)
+                y_domain <- c(y1 - y_height, y1)
                 xaxis_name <- YGwater:::viewport_layout_axis_name("x", i)
                 yaxis_name <- YGwater:::viewport_layout_axis_name("y", i)
                 xref <- YGwater:::viewport_axis_ref("x", i)
                 yref <- YGwater:::viewport_axis_ref("y", i)
 
                 layout[[xaxis_name]] <- list(
+                  domain = x_domain,
                   anchor = yref,
                   showgrid = req$gridx,
                   showline = TRUE,
+                  linecolor = "black",
                   tickformat = if (req$lang == "en") {
                     "%b %-d '%y"
                   } else {
                     "%-d %b '%y"
                   },
+                  showticklabels = TRUE,
+                  side = "bottom",
+                  ticks = "outside",
+                  ticklen = 5,
+                  tickwidth = 1,
+                  tickcolor = "black",
+                  automargin = TRUE,
+                  title = list(standoff = 0),
                   titlefont = list(size = req$axis_scale * 14),
                   tickfont = list(size = req$axis_scale * 12),
-                  matches = if (isTRUE(req$shareX) && i > 1) "x" else NULL,
-                  showticklabels = i == n
+                  matches = if (isTRUE(req$shareX) && i > 1) "x" else NULL
                 )
                 layout[[yaxis_name]] <- list(
-                  domain = panel_domain,
+                  domain = y_domain,
                   anchor = xref,
                   title = list(
                     text = series[[i]]$yaxis_title,
                     standoff = 10
                   ),
+                  automargin = TRUE,
                   showgrid = req$gridy,
                   showline = TRUE,
                   zeroline = FALSE,
@@ -2616,7 +2805,23 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   } else {
                     TRUE
                   },
-                  matches = if (isTRUE(req$shareY) && i > 1) "y" else NULL
+                  matches = if (isTRUE(req$shareY) && i > 1) "y" else NULL,
+                  ticks = "outside",
+                  ticklen = 5,
+                  tickwidth = 1,
+                  tickcolor = "black"
+                )
+
+                layout$annotations[[length(layout$annotations) + 1L]] <- list(
+                  x = x_domain[[1]],
+                  y = min(1, y_domain[[2]] + if (row == 1) 0.012 else 0.025),
+                  xref = "paper",
+                  yref = "paper",
+                  xanchor = "left",
+                  yanchor = "bottom",
+                  text = series[[i]]$subplot_title,
+                  showarrow = FALSE,
+                  font = list(size = 16 * req$axis_scale)
                 )
               }
 
@@ -2628,6 +2833,104 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   function(i) YGwater:::viewport_layout_axis_name("x", i),
                   character(1)
                 )
+              )
+            }
+
+            traces_layout <- function(series, selected_xlim) {
+              n_axes <- length(series)
+              layout <- list(
+                title = if (n_axes > 1) {
+                  list(
+                    text = multi_plot_title(data.table::rbindlist(
+                      lapply(series, `[[`, "meta_row"),
+                      fill = TRUE
+                    )),
+                    x = 0.05,
+                    xref = "container",
+                    font = list(size = 16 * req$axis_scale)
+                  )
+                } else {
+                  NULL
+                },
+                margin = list(
+                  l = (80 + (30 * ((n_axes - 1) %/% 2))) *
+                    req$axis_scale,
+                  r = (80 + (30 * ((n_axes - 2) %/% 2))) *
+                    req$axis_scale,
+                  b = 0,
+                  t = 30 *
+                    length(unique(vapply(
+                      series,
+                      function(item) item$meta_row$location_id,
+                      numeric(1)
+                    )))
+                ),
+                xaxis = list(
+                  title = list(
+                    standoff = 0,
+                    font = list(
+                      size = 14 * req$axis_scale
+                    )
+                  ),
+                  tickfont = list(size = req$axis_scale * 12),
+                  showgrid = req$gridx,
+                  showline = TRUE,
+                  showspikes = TRUE,
+                  tickformat = if (req$lang == "fr") {
+                    "%-d %b '%y"
+                  } else {
+                    "%b %-d '%y"
+                  },
+                  rangeslider = list(visible = FALSE)
+                ),
+                hovermode = "closest",
+                legend = list(
+                  font = list(size = req$legend_scale * 12),
+                  orientation = req$legend_position
+                ),
+                font = list(family = "Nunito Sans")
+              )
+
+              for (i in seq_len(n_axes)) {
+                yaxis_name <- YGwater:::viewport_layout_axis_name("y", i)
+                layout[[yaxis_name]] <- list(
+                  titlefont = list(
+                    color = series[[i]]$line_color,
+                    size = req$axis_scale * 14
+                  ),
+                  tickfont = list(
+                    color = series[[i]]$line_color,
+                    size = req$axis_scale * 12
+                  ),
+                  tickcolor = series[[i]]$line_color,
+                  ticks = "outside",
+                  overlaying = if (i > 1) "y" else NULL,
+                  side = if (i %% 2 == 0) "right" else "left",
+                  title = list(
+                    text = series[[i]]$yaxis_title,
+                    standoff = ((i - 1) %/% 2) *
+                      (28 * req$axis_scale),
+                    font = list(size = req$axis_scale * 14)
+                  ),
+                  type = "linear",
+                  zeroline = FALSE,
+                  showline = TRUE,
+                  showgrid = req$gridy,
+                  gridcolor = series[[i]]$line_color,
+                  showspikes = TRUE,
+                  spikethickness = req$axis_scale * 2,
+                  autorange = if (isTRUE(series[[i]]$invert)) {
+                    "reversed"
+                  } else {
+                    NULL
+                  }
+                )
+              }
+
+              YGwater:::viewport_layout_apply_xlim(
+                layout,
+                xlim = selected_xlim,
+                xaxis_names = "xaxis"
               )
             }
 
@@ -2944,12 +3247,14 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 req$end_date,
                 plot_timezone
               )
-              labels <- fetch_timeseries_labels(ids)
+              meta_rows <- fetch_timeseries_plot_metadata(ids)
               colors <- palette_for_series(length(ids))
+              use_fast_trace <- is.null(req$as_of) &&
+                (is.null(plot_resolution) || identical(plot_resolution, "max"))
 
               payloads <- lapply(seq_along(ids), function(i) {
                 ts_id <- ids[[i]]
-                parameter_label <- labels[[as.character(ts_id)]]
+                parameter_label <- tolower(meta_rows$parameter_name[[i]])
                 plot_payload <- plotTimeseries(
                   timeseries_id = ts_id,
                   start_date = req$start_date,
@@ -2974,48 +3279,117 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   gridy = req$gridy,
                   slider = FALSE,
                   tzone = plot_timezone,
-                  resolution = "day",
+                  resolution = plot_resolution,
                   as_of = req$as_of
                 )
 
-                fast_trace <- fetch_fast_basic_trace(
-                  ts_id,
-                  tolower(parameter_label)
-                )
-                if (!is.null(fast_trace)) {
-                  plot_payload$data$trace_data <- fast_trace
+                if (isTRUE(use_fast_trace)) {
+                  fast_trace <- fetch_fast_basic_trace(
+                    ts_id,
+                    parameter_label
+                  )
+                  if (!is.null(fast_trace)) {
+                    plot_payload$data$trace_data <- fast_trace
+                  }
                 }
-                plot_payload$meta$line_name <- parameter_label
-                plot_payload$meta$line_color <- colors[[i]]
+                plot_payload$meta$line_color <- if (mode == "single") {
+                  "#00454e"
+                } else {
+                  colors[[i]]
+                }
                 plot_payload
               })
 
               series <- lapply(seq_along(payloads), function(i) {
                 item <- payloads[[i]]
+                meta_row <- meta_rows[i]
                 xaxis <- NULL
                 yaxis <- NULL
+                line_name <- item$meta$line_name
+                yaxis_title <- item$meta$layout$yaxis$title$text
+                subplot_title <- line_name
+                band_defs <- NULL
+                band_styles <- item$meta$band_styles
+                line_legendgroup <- line_name
+                band_legendgroups <- NULL
+                band_showlegend <- TRUE
                 if (mode == "subplots") {
                   xaxis <- YGwater:::viewport_axis_ref("x", i)
                   yaxis <- YGwater:::viewport_axis_ref("y", i)
+                  line_name <- build_trace_title(
+                    meta_row,
+                    include_units = FALSE
+                  )
+                  line_legendgroup <- line_name
+                  subplot_title <- line_name
+                  yaxis_title <- build_yaxis_title(meta_row)
+                  band_name <- iqr_band_name()
+                  band_defs <- list(
+                    `Min-Max` = c("min", "max")
+                  )
+                  band_defs[[band_name]] <- c("q25", "q75")
+                  band_styles <- subplot_band_styles()
+                  band_showlegend <- i == 1L
+                  band_legendgroups <- stats::setNames(
+                    c("Min-Max", band_name),
+                    c("Min-Max", band_name)
+                  )
+                } else if (mode == "traces") {
+                  yaxis <- YGwater:::viewport_axis_ref("y", i)
+                  line_name <- build_trace_title(meta_row, include_units = TRUE)
+                  yaxis_title <- line_name
+                  band_defs <- stats::setNames(
+                    list(c("min", "max")),
+                    line_name
+                  )
+                  band_styles <- stats::setNames(
+                    list(list(
+                      fillcolor = rgba_color(colors[[i]], 0.15),
+                      line = list(
+                        color = rgba_color(colors[[i]], 0.35),
+                        width = 0.3
+                      )
+                    )),
+                    line_name
+                  )
+                  line_legendgroup <- paste0("line_", i)
+                  band_legendgroups <- stats::setNames(
+                    paste0("range_", i),
+                    line_name
+                  )
                 }
-                yaxis_title <- NULL
-                if (!is.null(item$meta$layout$yaxis$title$text)) {
-                  yaxis_title <- item$meta$layout$yaxis$title$text
+
+                if (is.null(yaxis_title)) {
+                  yaxis_title <- build_yaxis_title(meta_row)
                 }
                 list(
                   trace_data = item$data$trace_data,
                   range_data = item$data$range_data,
-                  meta = item$meta,
-                  line_name = item$meta$line_name,
-                  line_color = colors[[i]],
+                  meta = utils::modifyList(
+                    item$meta,
+                    list(band_styles = band_styles)
+                  ),
+                  meta_row = meta_row,
+                  line_name = line_name,
+                  line_color = if (mode == "single") {
+                    "#00454e"
+                  } else {
+                    colors[[i]]
+                  },
                   line_width = 2.5 * req$line_scale,
                   xaxis = xaxis,
                   yaxis = yaxis,
                   yaxis_title = yaxis_title,
+                  subplot_title = subplot_title,
+                  band_defs = band_defs,
+                  band_showlegend = band_showlegend,
+                  band_legendgroups = band_legendgroups,
+                  line_legendgroup = line_legendgroup,
                   invert = identical(
                     item$meta$layout$yaxis$autorange,
                     "reversed"
-                  )
+                  ) ||
+                    isTRUE(meta_row$invert)
                 )
               })
 
@@ -3026,13 +3400,11 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   function(i) YGwater:::viewport_layout_axis_name("x", i),
                   character(1)
                 )
+              } else if (mode == "traces") {
+                layout <- traces_layout(series, selected_xlim)
+                xaxis_names <- "xaxis"
               } else {
                 layout <- payloads[[1]]$meta$layout
-                layout$title <- if (length(ids) == 1) {
-                  layout$title
-                } else {
-                  NULL
-                }
                 xaxis_names <- "xaxis"
               }
 
@@ -3098,7 +3470,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 }
               }
 
-              data_names <- make.unique(as.character(ids))
+              data_names <- make.unique(as.character(meta_rows$data_key))
               list(
                 mode = "adaptive_plot",
                 data = if (length(payloads) == 1) {
@@ -3131,22 +3503,64 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               } else {
                 last_year <- max(as.numeric(years), na.rm = TRUE)
               }
-              start_day <- as.numeric(start_day)
-              end_day <- as.numeric(end_day)
-              start <- as.POSIXct(
-                start_day * 24 * 60 * 60,
-                origin = paste0(last_year - 1, "-12-31"),
-                tz = "UTC"
-              )
-              end <- as.POSIXct(
-                end_day * 24 * 60 * 60,
-                origin = paste0(last_year - 1, "-12-31 23:59:59"),
-                tz = "UTC"
-              )
+
+              overlap_bound <- function(value, end_of_day = FALSE) {
+                if (is.null(value) || length(value) == 0 || is.na(value[[1]])) {
+                  return(NA_real_)
+                }
+
+                if (inherits(value, "Date") || inherits(value, "POSIXt")) {
+                  out <- as.POSIXct(value[[1]], tz = tz)
+                  lubridate::year(out) <- last_year
+                  if (end_of_day && inherits(value, "Date")) {
+                    out <- out + 24 * 60 * 60 - 1
+                  }
+                  return(out)
+                }
+
+                parsed <- suppressWarnings(as.POSIXct(
+                  as.character(value[[1]]),
+                  tz = tz
+                ))
+                if (!is.na(parsed)) {
+                  lubridate::year(parsed) <- last_year
+                  if (
+                    end_of_day &&
+                      !grepl(" [0-9]{1,2}:", as.character(value[[1]]))
+                  ) {
+                    parsed <- parsed + 24 * 60 * 60 - 1
+                  }
+                  return(parsed)
+                }
+
+                day_value <- suppressWarnings(as.numeric(value[[1]]))
+                if (!is.finite(day_value)) {
+                  return(NA_real_)
+                }
+                origin <- if (end_of_day) {
+                  paste0(last_year - 1, "-12-31 23:59:59")
+                } else {
+                  paste0(last_year - 1, "-12-31")
+                }
+                lubridate::force_tz(
+                  as.POSIXct(
+                    day_value * 24 * 60 * 60,
+                    origin = origin,
+                    tz = "UTC"
+                  ),
+                  tz
+                )
+              }
+
+              start <- overlap_bound(start_day)
+              end <- overlap_bound(end_day, end_of_day = TRUE)
+              if (any(is.na(c(start, end)))) {
+                return(NULL)
+              }
               if (start > end) {
                 lubridate::year(start) <- lubridate::year(start) - 1
               }
-              c(lubridate::force_tz(start, tz), lubridate::force_tz(end, tz))
+              c(start, end)
             }
 
             build_adaptive_overlap <- function(ids) {
@@ -3156,35 +3570,171 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 req$years,
                 plot_timezone
               )
-              colors <- palette_for_series(max(1L, length(req$years)))
+              overlap_resolution <- if (is.null(plot_resolution)) {
+                "max"
+              } else {
+                plot_resolution
+              }
               overlap_payloads <- lapply(ids, function(ts_id) {
-                plotOverlap(
-                  timeseries_id = ts_id,
-                  startDay = 1,
-                  endDay = 365,
-                  years = req$years,
-                  historic_range = req$historic_range_overlap,
-                  datum = req$datum,
-                  filter = req$filter,
-                  unusable = req$unusable,
-                  lang = req$lang,
-                  webgl = use_webgl,
-                  slider = FALSE,
-                  line_scale = req$line_scale,
-                  axis_scale = req$axis_scale,
-                  legend_scale = req$legend_scale,
-                  legend_position = req$legend_position,
-                  gridx = req$gridx,
-                  gridy = req$gridy,
-                  con = con,
-                  data = TRUE,
-                  build_plot = FALSE,
-                  tzone = plot_timezone,
-                  resolution = plot_resolution
+                tryCatch(
+                  plotOverlap(
+                    timeseries_id = ts_id,
+                    startDay = req$start_day,
+                    endDay = req$end_day,
+                    years = req$years,
+                    historic_range = req$historic_range_overlap,
+                    datum = req$datum,
+                    filter = req$filter,
+                    unusable = req$unusable,
+                    lang = req$lang,
+                    webgl = use_webgl,
+                    slider = FALSE,
+                    line_scale = req$line_scale,
+                    axis_scale = req$axis_scale,
+                    legend_scale = req$legend_scale,
+                    legend_position = req$legend_position,
+                    gridx = req$gridx,
+                    gridy = req$gridy,
+                    con = con,
+                    data = TRUE,
+                    build_plot = FALSE,
+                    tzone = plot_timezone,
+                    resolution = overlap_resolution
+                  ),
+                  error = function(e) {
+                    stop(
+                      paste0(
+                        "Timeseries ",
+                        ts_id,
+                        " (overlap): ",
+                        e$message
+                      )
+                    )
+                  }
                 )
               })
+              overlap_meta_rows <- fetch_timeseries_plot_metadata(ids)
+              plot_year_levels <- sort(unique(unlist(lapply(
+                overlap_payloads,
+                function(payload) payload$data$trace_data$plot_year
+              ))))
+              colors <- rev(grDevices::colorRampPalette(c(
+                "#00454e",
+                "#7A9A01",
+                "#FFA900",
+                "#DC4405"
+              ))(max(1L, length(plot_year_levels))))
+              colors <- stats::setNames(colors, as.character(plot_year_levels))
+
+              overlap_subplot_layout <- function(payloads, xlim, meta_rows) {
+                n <- length(payloads)
+                layout <- list(
+                  title = NULL,
+                  margin = list(
+                    b = 0,
+                    t = max(45, 35 * req$axis_scale),
+                    l = 60 * req$axis_scale,
+                    r = 35
+                  ),
+                  hovermode = "x unified",
+                  legend = list(
+                    font = list(size = req$legend_scale * 12),
+                    orientation = req$legend_position
+                  ),
+                  font = list(family = "Nunito Sans"),
+                  annotations = list()
+                )
+
+                for (i in seq_len(n)) {
+                  panel_domain <- subplot_panel_domain(i, n)
+                  xaxis_name <- YGwater:::viewport_layout_axis_name("x", i)
+                  yaxis_name <- YGwater:::viewport_layout_axis_name("y", i)
+                  xref <- YGwater:::viewport_axis_ref("x", i)
+                  yref <- YGwater:::viewport_axis_ref("y", i)
+                  payload_layout <- payloads[[i]]$meta$layout
+
+                  layout[[xaxis_name]] <- list(
+                    domain = c(0, 1),
+                    anchor = yref,
+                    showgrid = req$gridx,
+                    showline = TRUE,
+                    linecolor = "black",
+                    tickformat = if (req$lang == "en") "%b %-d" else "%-d %b",
+                    titlefont = list(size = req$axis_scale * 14),
+                    tickfont = list(size = req$axis_scale * 12),
+                    nticks = 10,
+                    matches = if (isTRUE(req$shareX) && i > 1) "x" else NULL,
+                    showticklabels = i == n,
+                    side = "bottom",
+                    automargin = TRUE,
+                    ticks = "outside",
+                    ticklen = 5,
+                    tickwidth = 1,
+                    tickcolor = "black"
+                  )
+                  layout[[yaxis_name]] <- list(
+                    domain = panel_domain,
+                    anchor = xref,
+                    title = payload_layout$yaxis$title,
+                    automargin = TRUE,
+                    showgrid = req$gridy,
+                    showline = TRUE,
+                    zeroline = FALSE,
+                    titlefont = list(size = req$axis_scale * 14),
+                    tickfont = list(size = req$axis_scale * 12),
+                    autorange = payload_layout$yaxis$autorange,
+                    matches = if (isTRUE(req$shareY) && i > 1) "y" else NULL,
+                    ticks = "outside",
+                    ticklen = 5,
+                    tickwidth = 1,
+                    tickcolor = "black"
+                  )
+
+                  title_text <- if (
+                    !is.null(meta_rows) && nrow(meta_rows) >= i
+                  ) {
+                    build_trace_title(meta_rows[i], include_units = FALSE)
+                  } else {
+                    payload_layout$title$text
+                  }
+                  if (!is.null(title_text) && nzchar(title_text)) {
+                    title_y <- if (i == 1) {
+                      1
+                    } else {
+                      panel_domain[[2]] + 0.025
+                    }
+                    layout$annotations[[
+                      length(layout$annotations) + 1L
+                    ]] <- list(
+                      text = title_text,
+                      x = 0,
+                      xref = "paper",
+                      xanchor = "left",
+                      y = title_y,
+                      yref = "paper",
+                      yanchor = "bottom",
+                      showarrow = FALSE,
+                      font = list(size = req$axis_scale * 16)
+                    )
+                  }
+                }
+
+                if (length(layout$annotations) == 0) {
+                  layout$annotations <- NULL
+                }
+                YGwater:::viewport_layout_apply_xlim(
+                  layout,
+                  xlim = xlim,
+                  xaxis_names = vapply(
+                    seq_len(n),
+                    function(i) YGwater:::viewport_layout_axis_name("x", i),
+                    character(1)
+                  )
+                )
+              }
 
               series <- list()
+              seen_overlap_years <- character(0)
               for (payload_i in seq_along(overlap_payloads)) {
                 payload <- overlap_payloads[[payload_i]]
                 trace_data <- data.table::as.data.table(payload$data$trace_data)
@@ -3192,23 +3742,50 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 years_i <- sort(unique(trace_data$plot_year))
                 for (year_i in seq_along(years_i)) {
                   plot_year_value <- years_i[[year_i]]
+                  panel_axis_index <- if (length(overlap_payloads) > 1) {
+                    payload_i
+                  } else {
+                    NULL
+                  }
+                  year_label <- as.character(plot_year_value)
+                  show_year_legend <- !(year_label %in% seen_overlap_years)
+                  seen_overlap_years <- c(seen_overlap_years, year_label)
                   series[[length(series) + 1L]] <- list(
                     trace_data = trace_data[
                       trace_data[["plot_year"]] == plot_year_value
                     ],
-                    range_data = if (payload_i == 1 && year_i == 1) {
+                    range_data = if (year_i == 1) {
                       range_data
                     } else {
                       data.frame()
                     },
                     meta = payload$meta,
                     x_col = "plot_datetime",
+                    line_hover_x_col = "datetime",
                     range_x_col = "datetime",
-                    line_name = as.character(plot_year_value),
-                    line_color = colors[[((year_i - 1) %% length(colors)) + 1]],
-                    line_width = 2.5 * req$line_scale
+                    line_name = year_label,
+                    line_color = colors[[year_label]],
+                    line_width = 2.5 * req$line_scale,
+                    xaxis = YGwater:::viewport_axis_ref("x", panel_axis_index),
+                    yaxis = YGwater:::viewport_axis_ref("y", panel_axis_index),
+                    line_showlegend = show_year_legend,
+                    line_legendgroup = year_label,
+                    band_showlegend = payload_i == 1L && year_i == 1L
                   )
                 }
+              }
+
+              trace_x_values <- do.call(
+                c,
+                lapply(series, function(item) {
+                  item$trace_data[[item$x_col]]
+                })
+              )
+              if (
+                length(trace_x_values) > 0 &&
+                  any(!is.na(trace_x_values))
+              ) {
+                selected_xlim <- range(trace_x_values, na.rm = TRUE)
               }
 
               list(
@@ -3227,9 +3804,25 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   meta = list(),
                   payload = list(
                     series = series,
-                    layout = overlap_payloads[[1]]$meta$layout,
+                    layout = if (length(overlap_payloads) > 1) {
+                      overlap_subplot_layout(
+                        overlap_payloads,
+                        selected_xlim,
+                        overlap_meta_rows
+                      )
+                    } else {
+                      overlap_payloads[[1]]$meta$layout
+                    },
                     config = overlap_payloads[[1]]$meta$config,
-                    xaxis_names = "xaxis"
+                    xaxis_names = if (length(overlap_payloads) > 1) {
+                      vapply(
+                        seq_along(overlap_payloads),
+                        function(i) YGwater:::viewport_layout_axis_name("x", i),
+                        character(1)
+                      )
+                    } else {
+                      "xaxis"
+                    }
                   )
                 )
               )
@@ -3331,9 +3924,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$render_key <- NULL
       adaptiveState$plot_ready <- FALSE
       adaptiveState$last_trace_count <- 0L
-      adaptiveState$ignore_relayout_key <- relayout_key(isolate(
-        plotly::event_data("plotly_relayout", source = ns("plot"))
-      ))
+      adaptiveState$ignore_relayout_key <- NULL
       adaptiveState$data <- NULL
       adaptiveState$meta <- NULL
       adaptiveState$payload <- NULL
@@ -3372,9 +3963,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         adaptiveState$render_key <- NULL
         adaptiveState$plot_ready <- FALSE
         adaptiveState$last_trace_count <- 0L
-        adaptiveState$ignore_relayout_key <- relayout_key(isolate(
-          plotly::event_data("plotly_relayout", source = ns("plot"))
-        ))
+        adaptiveState$ignore_relayout_key <- NULL
         adaptiveState$data <- result$data
         adaptiveState$meta <- result$adaptive$meta
         adaptiveState$payload <- result$adaptive$payload

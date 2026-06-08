@@ -159,17 +159,8 @@ contPlot <- function(id, language, windowDims, inputs) {
       ]
     )
 
-    initial_timeseries_ids <- if (!is.null(inputs$timeseries_id)) {
-      utils::head(unique(as.numeric(inputs$timeseries_id)), 4)
-    } else {
-      numeric(0)
-    }
     selected_timeseries_slots <- reactiveVal(
-      if (length(initial_timeseries_ids) > 0) {
-        initial_timeseries_ids
-      } else {
-        NA_real_
-      }
+      NA_real_
     )
     active_timeseries_slot <- reactiveVal(1L)
 
@@ -240,26 +231,6 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
 
       loc_ids
-    })
-
-    location_filter_value <- reactive({
-      if (is.null(moduleInputs$location_id)) {
-        return(NULL)
-      }
-
-      loc_name_col <- tr("generic_name_col", language$language)
-      locs <- unique(moduleData$locs, by = "location_id")
-
-      available_values <- locs[
-        location_id %in% moduleInputs$location_id,
-        ..loc_name_col
-      ][[loc_name_col]]
-
-      if (length(available_values) == 0) {
-        return(NULL)
-      }
-
-      stats::na.omit(available_values)[1]
     })
 
     timeseries_table_reactive <- reactive({
@@ -1409,13 +1380,6 @@ contPlot <- function(id, language, windowDims, inputs) {
         )
       }
 
-      search_cols <- vector("list", ncol(ts))
-      if (!is.null(location_filter_value()) && "location" %in% names(ts)) {
-        search_cols[[match("location", names(ts))]] <- list(
-          search = location_filter_value()
-        )
-      }
-
       date_targets <- which(names(ts) %in% c("start_date", "end_date")) - 1
       dt <- DT::datatable(
         ts,
@@ -1439,7 +1403,6 @@ contPlot <- function(id, language, windowDims, inputs) {
               )
             )
           ),
-          searchCols = search_cols,
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             # Adjustment to 'thead input[type="search"]' selector changes the default 'All' placeholder text to a translated string
@@ -2267,149 +2230,204 @@ contPlot <- function(id, language, windowDims, inputs) {
       promises::future_promise({
         tryCatch(
           {
-          # New connection necessary because the task gets farmed out to another core
-          db_config <- req$db
-          con <- AquaConnect(
-            name = db_config$name,
-            host = db_config$host,
-            port = db_config$port,
-            username = db_config$user,
-            password = db_config$pass,
-            silent = TRUE
-          )
-          # Auto close the connection - important!!!
-          on.exit(DBI::dbDisconnect(con))
+            # New connection necessary because the task gets farmed out to another core
+            db_config <- req$db
+            con <- AquaConnect(
+              name = db_config$name,
+              host = db_config$host,
+              port = db_config$port,
+              username = db_config$user,
+              password = db_config$pass,
+              silent = TRUE
+            )
+            # Auto close the connection - important!!!
+            on.exit(DBI::dbDisconnect(con))
 
-          plot_type <- as.character(req$plot_type)
-          if (
-            length(plot_type) == 0 ||
-              is.na(plot_type[[1]]) ||
-              !nzchar(plot_type[[1]])
-          ) {
-            stop("Missing plot type.")
-          }
-          plot_type <- plot_type[[1]]
-
-          timeseries_ids <- as.numeric(req$timeseries_ids)
-          timeseries_ids <- timeseries_ids[!is.na(timeseries_ids)]
-          if (length(timeseries_ids) == 0) {
-            stop("No timeseries selected.")
-          }
-
-          plot_timezone <- as.character(req$plot_timezone)
-          if (
-            length(plot_timezone) == 0 ||
-              is.na(plot_timezone[[1]]) ||
-              !nzchar(plot_timezone[[1]])
-          ) {
-            plot_timezone <- "Etc/GMT+7"
-          } else {
-            plot_timezone <- plot_timezone[[1]]
-          }
-
-          plot_resolution <- as.character(req$plot_resolution)
-          if (
-            length(plot_resolution) == 0 ||
-              is.na(plot_resolution[[1]]) ||
-              !(tolower(plot_resolution[[1]]) %in% c("max", "hour", "day"))
-          ) {
-            plot_resolution <- "day"
-          } else {
-            plot_resolution <- tolower(plot_resolution[[1]])
-          }
-
-          normalize_plot_result <- function(result) {
-            if (is.list(result) && !is.null(result$plot)) {
-              if (is.null(result$data)) {
-                extra <- result[setdiff(names(result), "plot")]
-                result$data <- if (length(extra) > 0) extra else NULL
-              }
-              return(result)
-            }
-            list(plot = result, data = NULL)
-          }
-
-          dedupe_subplot_legend <- function(plot_obj) {
+            plot_type <- as.character(req$plot_type)
             if (
-              is.null(plot_obj$x$data) ||
-                length(plot_obj$x$data) == 0
+              length(plot_type) == 0 ||
+                is.na(plot_type[[1]]) ||
+                !nzchar(plot_type[[1]])
             ) {
-              return(plot_obj)
+              stop("Missing plot type.")
+            }
+            plot_type <- plot_type[[1]]
+
+            timeseries_ids <- as.numeric(req$timeseries_ids)
+            timeseries_ids <- timeseries_ids[!is.na(timeseries_ids)]
+            if (length(timeseries_ids) == 0) {
+              stop("No timeseries selected.")
             }
 
-            seen_keys <- character(0)
-            for (i in seq_along(plot_obj$x$data)) {
-              trace_i <- plot_obj$x$data[[i]]
+            plot_timezone <- as.character(req$plot_timezone)
+            if (
+              length(plot_timezone) == 0 ||
+                is.na(plot_timezone[[1]]) ||
+                !nzchar(plot_timezone[[1]])
+            ) {
+              plot_timezone <- "Etc/GMT+7"
+            } else {
+              plot_timezone <- plot_timezone[[1]]
+            }
+
+            plot_resolution <- as.character(req$plot_resolution)
+            if (
+              length(plot_resolution) == 0 ||
+                is.na(plot_resolution[[1]]) ||
+                !(tolower(plot_resolution[[1]]) %in% c("max", "hour", "day"))
+            ) {
+              plot_resolution <- "day"
+            } else {
+              plot_resolution <- tolower(plot_resolution[[1]])
+            }
+
+            normalize_plot_result <- function(result) {
+              if (is.list(result) && !is.null(result$plot)) {
+                if (is.null(result$data)) {
+                  extra <- result[setdiff(names(result), "plot")]
+                  result$data <- if (length(extra) > 0) extra else NULL
+                }
+                return(result)
+              }
+              list(plot = result, data = NULL)
+            }
+
+            dedupe_subplot_legend <- function(plot_obj) {
               if (
-                !(is.null(trace_i$showlegend) || isTRUE(trace_i$showlegend))
+                is.null(plot_obj$x$data) ||
+                  length(plot_obj$x$data) == 0
               ) {
-                next
+                return(plot_obj)
               }
 
-              name_i <- if (!is.null(trace_i$name)) {
-                as.character(trace_i$name)
-              } else {
-                ""
-              }
-              group_i <- if (!is.null(trace_i$legendgroup)) {
-                as.character(trace_i$legendgroup)
-              } else {
-                ""
-              }
-              legend_key <- paste(group_i, name_i, sep = "::")
-              if (!nzchar(gsub(":", "", legend_key))) {
-                next
+              seen_keys <- character(0)
+              for (i in seq_along(plot_obj$x$data)) {
+                trace_i <- plot_obj$x$data[[i]]
+                if (
+                  !(is.null(trace_i$showlegend) || isTRUE(trace_i$showlegend))
+                ) {
+                  next
+                }
+
+                name_i <- if (!is.null(trace_i$name)) {
+                  as.character(trace_i$name)
+                } else {
+                  ""
+                }
+                group_i <- if (!is.null(trace_i$legendgroup)) {
+                  as.character(trace_i$legendgroup)
+                } else {
+                  ""
+                }
+                legend_key <- paste(group_i, name_i, sep = "::")
+                if (!nzchar(gsub(":", "", legend_key))) {
+                  next
+                }
+
+                if (legend_key %in% seen_keys) {
+                  plot_obj$x$data[[i]]$showlegend <- FALSE
+                } else {
+                  plot_obj$x$data[[i]]$showlegend <- TRUE
+                  seen_keys <- c(seen_keys, legend_key)
+                }
               }
 
-              if (legend_key %in% seen_keys) {
-                plot_obj$x$data[[i]]$showlegend <- FALSE
-              } else {
-                plot_obj$x$data[[i]]$showlegend <- TRUE
-                seen_keys <- c(seen_keys, legend_key)
-              }
+              plot_obj
             }
 
-            plot_obj
-          }
+            combine_plot_results <- function(
+              results,
+              ids,
+              shareX = FALSE,
+              shareY = FALSE
+            ) {
+              if (length(results) == 1) {
+                return(results[[1]])
+              }
 
-          combine_plot_results <- function(
-            results,
-            ids,
-            shareX = FALSE,
-            shareY = FALSE
-          ) {
-            if (length(results) == 1) {
-              return(results[[1]])
-            }
-
-            plot_list <- lapply(results, `[[`, "plot")
-            combined_plot <- do.call(
-              plotly::subplot,
-              c(
-                plot_list,
-                list(
-                  nrows = length(plot_list),
-                  shareX = shareX,
-                  shareY = shareY,
-                  titleY = TRUE,
-                  margin = 0.05
+              plot_list <- lapply(results, `[[`, "plot")
+              combined_plot <- do.call(
+                plotly::subplot,
+                c(
+                  plot_list,
+                  list(
+                    nrows = length(plot_list),
+                    shareX = shareX,
+                    shareY = shareY,
+                    titleY = TRUE,
+                    margin = 0.05
+                  )
                 )
               )
-            )
-            combined_plot <- dedupe_subplot_legend(combined_plot)
+              combined_plot <- dedupe_subplot_legend(combined_plot)
 
-            data_names <- make.unique(as.character(ids))
-            combined_data <- stats::setNames(
-              lapply(results, `[[`, "data"),
-              data_names
-            )
-            list(plot = combined_plot, data = combined_data)
-          }
+              data_names <- make.unique(as.character(ids))
+              combined_data <- stats::setNames(
+                lapply(results, `[[`, "data"),
+                data_names
+              )
+              list(plot = combined_plot, data = combined_data)
+            }
 
-          if (plot_type == "timeseries") {
-            if (length(timeseries_ids) > 1) {
+            if (plot_type == "timeseries") {
+              if (length(timeseries_ids) > 1) {
+                plot <- plotMultiTimeseries(
+                  type = "subplots",
+                  timeseries_ids = timeseries_ids,
+                  start_date = req$start_date,
+                  end_date = req$end_date,
+                  historic_range = req$historic_range,
+                  datum = req$datum,
+                  filter = req$filter,
+                  unusable = req$unusable,
+                  lang = req$lang,
+                  webgl = session$userData$use_webgl,
+                  con = con,
+                  data = TRUE,
+                  tzone = plot_timezone,
+                  resolution = plot_resolution,
+                  line_scale = req$line_scale,
+                  axis_scale = req$axis_scale,
+                  legend_scale = req$legend_scale,
+                  legend_position = req$legend_position,
+                  gridx = req$gridx,
+                  gridy = req$gridy,
+                  shareX = req$shareX,
+                  shareY = req$shareY
+                )
+              } else {
+                plot <- plotTimeseries(
+                  timeseries_id = req$timeseries_id,
+                  start_date = req$start_date,
+                  end_date = req$end_date,
+                  historic_range = req$historic_range,
+                  datum = req$datum,
+                  filter = req$filter,
+                  unusable = req$unusable,
+                  grades = req$grades,
+                  approvals = req$approvals,
+                  qualifiers = req$qualifiers,
+                  lang = req$lang,
+                  webgl = session$userData$use_webgl,
+                  con = con,
+                  data = TRUE,
+                  line_scale = req$line_scale,
+                  axis_scale = req$axis_scale,
+                  legend_scale = req$legend_scale,
+                  legend_position = req$legend_position,
+                  gridx = req$gridx,
+                  gridy = req$gridy,
+                  slider = FALSE,
+                  tzone = plot_timezone,
+                  resolution = plot_resolution
+                )
+              }
+              return(normalize_plot_result(plot))
+            }
+
+            if (plot_type == "timeseries_all") {
               plot <- plotMultiTimeseries(
-                type = "subplots",
+                type = "traces",
                 timeseries_ids = timeseries_ids,
                 start_date = req$start_date,
                 end_date = req$end_date,
@@ -2421,8 +2439,6 @@ contPlot <- function(id, language, windowDims, inputs) {
                 webgl = session$userData$use_webgl,
                 con = con,
                 data = TRUE,
-                tzone = plot_timezone,
-                resolution = plot_resolution,
                 line_scale = req$line_scale,
                 axis_scale = req$axis_scale,
                 legend_scale = req$legend_scale,
@@ -2430,161 +2446,108 @@ contPlot <- function(id, language, windowDims, inputs) {
                 gridx = req$gridx,
                 gridy = req$gridy,
                 shareX = req$shareX,
-                shareY = req$shareY
-              )
-            } else {
-              plot <- plotTimeseries(
-                timeseries_id = req$timeseries_id,
-                start_date = req$start_date,
-                end_date = req$end_date,
-                historic_range = req$historic_range,
-                datum = req$datum,
-                filter = req$filter,
-                unusable = req$unusable,
-                grades = req$grades,
-                approvals = req$approvals,
-                qualifiers = req$qualifiers,
-                lang = req$lang,
-                webgl = session$userData$use_webgl,
-                con = con,
-                data = TRUE,
-                line_scale = req$line_scale,
-                axis_scale = req$axis_scale,
-                legend_scale = req$legend_scale,
-                legend_position = req$legend_position,
-                gridx = req$gridx,
-                gridy = req$gridy,
-                slider = FALSE,
+                shareY = req$shareY,
                 tzone = plot_timezone,
                 resolution = plot_resolution
               )
+              return(normalize_plot_result(plot))
             }
-            return(normalize_plot_result(plot))
-          }
 
-          if (plot_type == "timeseries_all") {
-            plot <- plotMultiTimeseries(
-              type = "traces",
-              timeseries_ids = timeseries_ids,
-              start_date = req$start_date,
-              end_date = req$end_date,
-              historic_range = req$historic_range,
-              datum = req$datum,
-              filter = req$filter,
-              unusable = req$unusable,
-              lang = req$lang,
-              webgl = session$userData$use_webgl,
-              con = con,
-              data = TRUE,
-              line_scale = req$line_scale,
-              axis_scale = req$axis_scale,
-              legend_scale = req$legend_scale,
-              legend_position = req$legend_position,
-              gridx = req$gridx,
-              gridy = req$gridy,
-              shareX = req$shareX,
-              shareY = req$shareY,
-              tzone = plot_timezone,
-              resolution = plot_resolution
-            )
-            return(normalize_plot_result(plot))
-          }
-
-          if (plot_type == "overlap_yrs") {
-            overlap_plots <- lapply(timeseries_ids, function(ts_id) {
-              tryCatch(
-                normalize_plot_result(
-                  plotOverlap(
-                    timeseries_id = ts_id,
-                    startDay = req$start_day,
-                    endDay = req$end_day,
-                    years = req$years,
-                    historic_range = req$historic_range_overlap,
-                    datum = req$datum,
-                    filter = req$filter,
-                    unusable = req$unusable,
-                    lang = req$lang,
-                    webgl = session$userData$use_webgl,
-                    slider = FALSE,
-                    line_scale = req$line_scale,
-                    axis_scale = req$axis_scale,
-                    legend_scale = req$legend_scale,
-                    legend_position = req$legend_position,
-                    gridx = req$gridx,
-                    gridy = req$gridy,
-                    con = con,
-                    data = TRUE,
-                    tzone = plot_timezone,
-                    resolution = plot_resolution
-                  )
-                ),
-                error = function(e) {
-                  stop(
-                    paste0(
-                      "Timeseries ",
-                      ts_id,
-                      " (overlap): ",
-                      e$message
+            if (plot_type == "overlap_yrs") {
+              overlap_plots <- lapply(timeseries_ids, function(ts_id) {
+                tryCatch(
+                  normalize_plot_result(
+                    plotOverlap(
+                      timeseries_id = ts_id,
+                      startDay = req$start_day,
+                      endDay = req$end_day,
+                      years = req$years,
+                      historic_range = req$historic_range_overlap,
+                      datum = req$datum,
+                      filter = req$filter,
+                      unusable = req$unusable,
+                      lang = req$lang,
+                      webgl = session$userData$use_webgl,
+                      slider = FALSE,
+                      line_scale = req$line_scale,
+                      axis_scale = req$axis_scale,
+                      legend_scale = req$legend_scale,
+                      legend_position = req$legend_position,
+                      gridx = req$gridx,
+                      gridy = req$gridy,
+                      con = con,
+                      data = TRUE,
+                      tzone = plot_timezone,
+                      resolution = plot_resolution
                     )
-                  )
-                }
-              )
-            })
-            return(combine_plot_results(
-              overlap_plots,
-              timeseries_ids,
-              shareX = req$shareX,
-              shareY = req$shareY
-            ))
-          }
-
-          if (plot_type == "histogram") {
-            histogram_plots <- lapply(timeseries_ids, function(ts_id) {
-              tryCatch(
-                normalize_plot_result(
-                  plotTimeseriesHistogram(
-                    timeseries_id = ts_id,
-                    startDay = req$start_day,
-                    endDay = req$end_day,
-                    bin_width = req$hist_bin_width,
-                    bin_width_units = req$hist_bin_units,
-                    years = req$years,
-                    transformation = req$hist_transformation,
-                    threshold = req$hist_threshold,
-                    completeness_label = req$hist_completeness_labels,
-                    lang = req$lang,
-                    tzone = plot_timezone,
-                    con = con,
-                    data = TRUE,
-                    line_scale = req$line_scale,
-                    axis_scale = req$axis_scale,
-                    legend_scale = req$legend_scale,
-                    legend_position = req$legend_position,
-                    gridx = req$gridx,
-                    gridy = req$gridy
-                  )
-                ),
-                error = function(e) {
-                  stop(
-                    paste0(
-                      "Timeseries ",
-                      ts_id,
-                      " (histogram): ",
-                      e$message
+                  ),
+                  error = function(e) {
+                    stop(
+                      paste0(
+                        "Timeseries ",
+                        ts_id,
+                        " (overlap): ",
+                        e$message
+                      )
                     )
-                  )
-                }
-              )
-            })
-            return(combine_plot_results(
-              histogram_plots,
-              timeseries_ids,
-              shareX = req$shareX,
-              shareY = req$shareY
-            ))
-          }
+                  }
+                )
+              })
+              return(combine_plot_results(
+                overlap_plots,
+                timeseries_ids,
+                shareX = req$shareX,
+                shareY = req$shareY
+              ))
+            }
 
-          stop("Unsupported plot type selected.")
+            if (plot_type == "histogram") {
+              histogram_plots <- lapply(timeseries_ids, function(ts_id) {
+                tryCatch(
+                  normalize_plot_result(
+                    plotTimeseriesHistogram(
+                      timeseries_id = ts_id,
+                      startDay = req$start_day,
+                      endDay = req$end_day,
+                      bin_width = req$hist_bin_width,
+                      bin_width_units = req$hist_bin_units,
+                      years = req$years,
+                      transformation = req$hist_transformation,
+                      threshold = req$hist_threshold,
+                      completeness_label = req$hist_completeness_labels,
+                      lang = req$lang,
+                      tzone = plot_timezone,
+                      con = con,
+                      data = TRUE,
+                      line_scale = req$line_scale,
+                      axis_scale = req$axis_scale,
+                      legend_scale = req$legend_scale,
+                      legend_position = req$legend_position,
+                      gridx = req$gridx,
+                      gridy = req$gridy
+                    )
+                  ),
+                  error = function(e) {
+                    stop(
+                      paste0(
+                        "Timeseries ",
+                        ts_id,
+                        " (histogram): ",
+                        e$message
+                      )
+                    )
+                  }
+                )
+              })
+              return(combine_plot_results(
+                histogram_plots,
+                timeseries_ids,
+                shareX = req$shareX,
+                shareY = req$shareY
+              ))
+            }
+
+            stop("Unsupported plot type selected.")
           },
           error = function(e) {
             return(e$message)

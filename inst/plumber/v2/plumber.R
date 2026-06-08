@@ -84,6 +84,24 @@ v2_text_serializer <- function(...) {
   }
 }
 
+v2_binary_serializer <- function(...) {
+  function(value) {
+    if (is.null(value)) {
+      return(raw(0))
+    }
+
+    if (is.raw(value)) {
+      return(value)
+    }
+
+    if (is.list(value) && length(value) == 1L && is.raw(value[[1L]])) {
+      return(value[[1L]])
+    }
+
+    charToRaw(paste(value, collapse = "\n"))
+  }
+}
+
 # Clean up classes 'pq_text' and 'pq_jsonb' from RPostgres to ensure they serialize properly to JSON, converting arrays to lists and parsing JSON strings as needed
 v2_clean_for_json <- function(x) {
   if (!is.data.frame(x)) {
@@ -1020,6 +1038,7 @@ v2_snow_info_endpoint <- function(
 #* @any /timeseries/*
 #* @any /samples
 #* @any /samples/*
+#* @any /images/*
 #* @any /snow-bulletin/leaflet
 #* @any /snow-survey/*
 function(request, response, client_id) {
@@ -1614,8 +1633,8 @@ function(client_id, query) {
              AND slow.timeseries_id IS NULL
              AND mc.datetime >= $1
              AND mc.datetime <= $2",
-         basic_modified_filter_sql,
-         "
+    basic_modified_filter_sql,
+    "
          ),
          basic_measurements_slow AS MATERIALIZED (
            SELECT
@@ -1639,8 +1658,8 @@ function(client_id, query) {
            WHERE st.timeseries_type = 'basic'
              AND mc.datetime >= $1
              AND mc.datetime <= $2",
-         basic_modified_filter_sql,
-         "
+    basic_modified_filter_sql,
+    "
          ),
          basic_corrections AS MATERIALIZED (
            SELECT
@@ -1805,15 +1824,15 @@ function(client_id, query) {
              WHERE src.root_timeseries_id = m.timeseries_id
            ) source_stamp ON TRUE
            WHERE st.timeseries_type <> 'basic'",
-        compound_modified_filter_sql,
-        "
+    compound_modified_filter_sql,
+    "
          )
          ",
-        measurement_select_sql,
-        "
+    measurement_select_sql,
+    "
          FROM measurement_rows m",
-        measurement_join_sql,
-        "ORDER BY m.datetime ASC
+    measurement_join_sql,
+    "ORDER BY m.datetime ASC
          LIMIT ",
     limit_param
   )
@@ -2219,6 +2238,612 @@ function(client_id, query) {
 }
 #* @then
 v2_finalize_tabular_response
+
+#* Return image(s)
+#* @get /images/download
+#* @query start:string Start timestamp in ISO 8601 format (example: 2026-06-01T14:30:00Z), or date only (YYYY-MM-DD) to select all images for that day.
+#* @query end:string End timestamp in ISO 8601 format (example: 2026-06-01T15:30:00Z). Leave empty to download the single image closest to start. If both start and end are empty, the endpoint returns the most recent image(s) for the location.
+#* @query location_name:string* Location name (case-insensitive exact match).
+#* @query image_type:string Image type name (case-insensitive exact match). Optional.
+#* @query limit:integer(1) Maximum number of images to return.
+#* @serializer application/octet-stream v2_binary_serializer()
+#* @async
+function(client_id, query) {
+  timestamp_example <- "2026-06-01T14:30:00Z"
+  date_only_pattern <- "^\\d{4}-\\d{2}-\\d{2}$"
+  download_error <- function(message, status = 400L, x_status = "error") {
+    v2_response(
+      message,
+      status = status,
+      headers = list(
+        "X-Status" = x_status,
+        "Content-Type" = "text/plain; charset=UTF-8"
+      ),
+      serialized = TRUE
+    )
+  }
+
+  start_value <- v2_query_value(query, "start")
+  end_value <- v2_query_value(query, "end")
+  start_missing <- is.null(start_value)
+  end_missing <- is.null(end_value)
+
+  if (isTRUE(start_missing) && !isTRUE(end_missing)) {
+    return(download_error(
+      paste(
+        "Missing required 'start' parameter when 'end' is provided.",
+        "Example:",
+        timestamp_example
+      ),
+      status = 400L
+    ))
+  }
+
+  no_time_filter_mode <- isTRUE(start_missing) && isTRUE(end_missing)
+
+  start_ts <- NULL
+  start_is_day_only <- FALSE
+  if (!isTRUE(start_missing)) {
+    start_text <- trimws(start_value)
+    start_is_day_only <- grepl(date_only_pattern, start_text)
+
+    if (isTRUE(start_is_day_only)) {
+      start_ts <- as.POSIXct(paste0(start_text, " 00:00:00"), tz = "UTC")
+    } else {
+      start_ts <- v2_parse_datetime(start_value)
+    }
+
+    if (is.null(start_ts) || is.na(start_ts)) {
+      return(download_error(
+        paste(
+          "Invalid 'start' parameter.",
+          "Must be ISO 8601 (for example:",
+          timestamp_example,
+          ") or date only (YYYY-MM-DD)."
+        ),
+        status = 400L
+      ))
+    }
+  }
+
+  end_ts <- NULL
+  if (!end_missing) {
+    end_text <- trimws(end_value)
+    end_is_day_only <- grepl(date_only_pattern, end_text)
+
+    if (isTRUE(end_is_day_only)) {
+      end_ts <- as.POSIXct(paste0(end_text, " 23:59:59"), tz = "UTC")
+    } else {
+      end_ts <- v2_parse_datetime(end_value)
+    }
+
+    if (is.null(end_ts) || is.na(end_ts)) {
+      return(download_error(
+        paste(
+          "Invalid 'end' parameter.",
+          "Must be ISO 8601 (for example:",
+          timestamp_example,
+          ") or date only (YYYY-MM-DD)."
+        ),
+        status = 400L
+      ))
+    }
+
+    if (end_ts < start_ts) {
+      return(download_error(
+        "Invalid time window: 'end' must be greater than or equal to 'start'.",
+        status = 400L
+      ))
+    }
+
+    # Normalize identical start/end to "end missing" so the endpoint
+    # returns the single image nearest to start.
+    if (isTRUE(as.numeric(end_ts) == as.numeric(start_ts))) {
+      end_missing <- TRUE
+      end_ts <- NULL
+    }
+  }
+
+  day_window_mode <- !isTRUE(start_missing) &&
+    isTRUE(start_is_day_only) &&
+    isTRUE(end_missing)
+  if (isTRUE(day_window_mode)) {
+    end_missing <- FALSE
+    end_ts <- start_ts + 24 * 60 * 60 - 1
+  }
+
+  location_name <- v2_query_value(query, "location_name")
+  if (is.null(location_name) || !nzchar(trimws(location_name))) {
+    return(download_error(
+      "Missing required 'location_name' parameter.",
+      status = 400L
+    ))
+  }
+
+  image_type <- v2_query_value(query, "image_type")
+  has_image_type <- !is.null(image_type) && nzchar(trimws(image_type))
+
+  lim <- suppressWarnings(as.integer(v2_query_value(query, "limit", "1")))
+  if (is.na(lim) || lim <= 0L) {
+    lim <- 1L
+  }
+  lim <- min(lim, 500L)
+
+  single_image_mode <-
+    (!isTRUE(no_time_filter_mode) &&
+      !isTRUE(day_window_mode) &&
+      isTRUE(end_missing)) ||
+    isTRUE(lim == 1L)
+
+  ctx <- v2_context(client_id)
+  if (!is.null(ctx$error)) {
+    return(ctx$error)
+  }
+  on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+
+  if (isTRUE(no_time_filter_mode)) {
+    if (isTRUE(has_image_type)) {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE LOWER(COALESCE(l.name, '')) = LOWER($1)
+        AND LOWER(COALESCE(it.image_type, '')) = LOWER($2)
+      ORDER BY i.datetime DESC,
+        i.image_id DESC
+      LIMIT $3"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(
+          trimws(location_name),
+          trimws(image_type),
+          as.integer(lim)
+        )
+      )
+    } else {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE LOWER(COALESCE(l.name, '')) = LOWER($1)
+      ORDER BY i.datetime DESC,
+        i.image_id DESC
+      LIMIT $2"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(trimws(location_name), as.integer(lim))
+      )
+    }
+  } else if (isTRUE(end_missing)) {
+    if (isTRUE(has_image_type)) {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE LOWER(COALESCE(l.name, '')) = LOWER($2)
+        AND LOWER(COALESCE(it.image_type, '')) = LOWER($3)
+      ORDER BY ABS(EXTRACT(EPOCH FROM (i.datetime - $1))),
+        i.datetime DESC,
+        i.image_id DESC
+      LIMIT 1"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(start_ts, trimws(location_name), trimws(image_type))
+      )
+    } else {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE LOWER(COALESCE(l.name, '')) = LOWER($2)
+      ORDER BY ABS(EXTRACT(EPOCH FROM (i.datetime - $1))),
+        i.datetime DESC,
+        i.image_id DESC
+      LIMIT 1"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(start_ts, trimws(location_name))
+      )
+    }
+  } else if (isTRUE(single_image_mode)) {
+    if (isTRUE(has_image_type)) {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE i.datetime >= $1
+        AND i.datetime <= $2
+        AND LOWER(COALESCE(l.name, '')) = LOWER($3)
+        AND LOWER(COALESCE(it.image_type, '')) = LOWER($4)
+      ORDER BY ABS(EXTRACT(EPOCH FROM (i.datetime - $1))),
+        i.datetime DESC,
+        i.image_id DESC
+      LIMIT 1"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(
+          start_ts,
+          end_ts,
+          trimws(location_name),
+          trimws(image_type)
+        )
+      )
+    } else {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE i.datetime >= $1
+        AND i.datetime <= $2
+        AND LOWER(COALESCE(l.name, '')) = LOWER($3)
+      ORDER BY ABS(EXTRACT(EPOCH FROM (i.datetime - $1))),
+        i.datetime DESC,
+        i.image_id DESC
+      LIMIT 1"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(start_ts, end_ts, trimws(location_name))
+      )
+    }
+  } else {
+    if (isTRUE(has_image_type)) {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE i.datetime >= $1
+        AND i.datetime <= $2
+        AND LOWER(COALESCE(l.name, '')) = LOWER($3)
+        AND LOWER(COALESCE(it.image_type, '')) = LOWER($4)
+      ORDER BY i.datetime DESC, i.image_id DESC
+      LIMIT $5"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(
+          start_ts,
+          end_ts,
+          trimws(location_name),
+          trimws(image_type),
+          as.integer(lim)
+        )
+      )
+    } else {
+      sql <- "SELECT
+        i.image_id,
+        i.img_series_id,
+        i.datetime,
+        i.location_id,
+        l.name AS location_name,
+        l.name_fr AS location_name_fr,
+        i.image_type AS image_type_id,
+        it.image_type,
+        i.format,
+        i.file
+      FROM files.images i
+      LEFT JOIN public.locations l
+        ON l.location_id = i.location_id
+      LEFT JOIN files.image_types it
+        ON it.image_type_id = i.image_type
+      WHERE i.datetime >= $1
+        AND i.datetime <= $2
+        AND LOWER(COALESCE(l.name, '')) = LOWER($3)
+      ORDER BY i.datetime DESC, i.image_id DESC
+      LIMIT $4"
+
+      out <- DBI::dbGetQuery(
+        ctx$con,
+        sql,
+        params = list(start_ts, end_ts, trimws(location_name), as.integer(lim))
+      )
+    }
+  }
+
+  if (nrow(out) == 0L) {
+    no_data_message <- if (isTRUE(no_time_filter_mode)) {
+      "No images found for the specified location_name."
+    } else if (isTRUE(day_window_mode)) {
+      "No images found for the specified date and location_name."
+    } else if (isTRUE(end_missing)) {
+      "No images found near the specified start timestamp and location_name."
+    } else {
+      "No images found for the specified start/end window and location_name."
+    }
+    if (isTRUE(has_image_type)) {
+      no_data_message <- paste(no_data_message, "Applied image_type filter.")
+    }
+
+    return(download_error(no_data_message, status = 404L, x_status = "info"))
+  }
+
+  image_datetimes <- suppressWarnings(as.POSIXct(out$datetime, tz = "UTC"))
+  if (any(is.na(image_datetimes))) {
+    return(download_error(
+      paste(
+        "Matched records contain invalid image timestamps in AquaCache.",
+        "Please verify image datetime values before downloading."
+      ),
+      status = 422L
+    ))
+  }
+
+  blob_to_raw <- function(blob) {
+    if (is.null(blob)) {
+      return(raw(0))
+    }
+
+    if (is.list(blob)) {
+      if (length(blob) == 0L || is.null(blob[[1L]])) {
+        return(raw(0))
+      }
+      blob <- blob[[1L]]
+    }
+
+    if (is.character(blob) && length(blob) == 1L && nzchar(blob)) {
+      hex <- blob[[1L]]
+      if (startsWith(hex, "\\x")) {
+        hex <- substring(hex, 3L)
+      }
+      if (grepl("^[0-9A-Fa-f]+$", hex) && (nchar(hex) %% 2L) == 0L) {
+        return(as.raw(strtoi(
+          substring(
+            hex,
+            seq.int(1L, nchar(hex), by = 2L),
+            seq.int(2L, nchar(hex), by = 2L)
+          ),
+          16L
+        )))
+      }
+    }
+
+    if (is.raw(blob)) {
+      return(blob)
+    }
+
+    raw(0)
+  }
+
+  if (isTRUE(single_image_mode)) {
+    img_raw <- blob_to_raw(out$file[[1L]])
+    if (length(img_raw) == 0L) {
+      return(download_error(
+        "Image bytes are empty for the selected record.",
+        status = 404L
+      ))
+    }
+
+    file_stub <- sprintf(
+      "image_%s_%s",
+      out$image_id[[1L]],
+      format(image_datetimes[[1L]], "%Y%m%dT%H%M%S", tz = "UTC")
+    )
+
+    return(v2_response(
+      img_raw,
+      headers = list(
+        "Content-Type" = "image/jpeg",
+        "Content-Disposition" = sprintf(
+          "attachment; filename=\"%s.jpg\"",
+          file_stub
+        )
+      ),
+      serialized = TRUE
+    ))
+  }
+
+  tmp_dir <- tempfile(pattern = "images_download_")
+  dir.create(tmp_dir, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(tmp_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  written_files <- character(0)
+  for (i in seq_len(nrow(out))) {
+    img_raw <- blob_to_raw(out$file[[i]])
+    if (length(img_raw) == 0L) {
+      next
+    }
+
+    ext <- tolower(trimws(as.character(out$format[[i]] %||% "jpg")))
+    ext <- gsub("^\\.", "", ext)
+    if (!nzchar(ext)) {
+      ext <- "jpg"
+    }
+
+    file_name <- sprintf(
+      "image_%s_%s.%s",
+      out$image_id[[i]],
+      format(image_datetimes[[i]], "%Y%m%dT%H%M%S", tz = "UTC"),
+      ext
+    )
+    file_path <- file.path(tmp_dir, file_name)
+    writeBin(img_raw, file_path)
+    written_files <- c(written_files, file_path)
+  }
+
+  if (length(written_files) == 0L) {
+    return(download_error(
+      "No valid image bytes were available in the selected time window.",
+      status = 404L
+    ))
+  }
+
+  zip_path <- tempfile(pattern = "images_download_", fileext = ".zip")
+  on.exit(unlink(zip_path, force = TRUE), add = TRUE)
+
+  zip_built <- FALSE
+  zip_error <- NULL
+  has_zip_pkg <- requireNamespace("zip", quietly = TRUE)
+
+  if (isTRUE(has_zip_pkg)) {
+    zip_result <- try(
+      zip::zipr(
+        zipfile = zip_path,
+        files = basename(written_files),
+        root = tmp_dir
+      ),
+      silent = TRUE
+    )
+
+    zip_built <- file.exists(zip_path) && file.info(zip_path)$size > 0
+    if (!zip_built && inherits(zip_result, "try-error")) {
+      zip_error <- as.character(zip_result)
+    }
+  }
+
+  if (!zip_built) {
+    old_wd <- getwd()
+    on.exit(setwd(old_wd), add = TRUE)
+    setwd(tmp_dir)
+
+    zip_status <- try(
+      utils::zip(
+        zipfile = zip_path,
+        files = basename(written_files),
+        flags = "-j"
+      ),
+      silent = TRUE
+    )
+
+    zip_built <- file.exists(zip_path) && file.info(zip_path)$size > 0
+    if (!zip_built && inherits(zip_status, "try-error")) {
+      zip_error <- as.character(zip_status)
+    }
+  }
+
+  if (!zip_built) {
+    zip_hint <- if (!isTRUE(has_zip_pkg) && !nzchar(Sys.which("zip"))) {
+      "No zip backend is available (R package 'zip' or system zip utility)."
+    } else {
+      ""
+    }
+    return(download_error(
+      paste(
+        "Failed to build zip archive for selected images.",
+        zip_hint,
+        if (!is.null(zip_error)) paste("Details:", zip_error) else ""
+      ),
+      status = 500L
+    ))
+  }
+
+  zip_raw <- readBin(zip_path, what = "raw", n = file.info(zip_path)$size)
+
+  archive_stub <- sprintf(
+    "images_%s_%s",
+    format(start_ts, "%Y%m%dT%H%M%S", tz = "UTC"),
+    format(end_ts, "%Y%m%dT%H%M%S", tz = "UTC")
+  )
+
+  v2_response(
+    zip_raw,
+    headers = list(
+      "Content-Type" = "application/zip",
+      "Content-Disposition" = sprintf(
+        "attachment; filename=\"%s.zip\"",
+        archive_stub
+      )
+    ),
+    serialized = TRUE
+  )
+}
+#* @then
+v2_finalize_response
 
 #* Return SWE snow bulletin leaflet map HTML
 #* @get /snow-bulletin/leaflet

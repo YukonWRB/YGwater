@@ -229,9 +229,18 @@ imgMapView <- function(id, language) {
       bindEvent(language$language)
 
     output$image_nav_controls <- renderUI({
-      tagList(
-        actionButton(ns("prev_img"), "\u2190"),
-        actionButton(ns("next_img"), "\u2192")
+      div(
+        style = "display:flex; flex-direction:row; gap:6px; align-items:center; flex-wrap:nowrap;",
+        actionButton(
+          ns("prev_img"),
+          "\u25c0",
+          style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+        ),
+        actionButton(
+          ns("next_img"),
+          "\u25b6",
+          style = "padding:0.15rem 0.4rem; font-size:0.85rem; height:auto;"
+        )
       )
     }) |>
       bindEvent(language$language)

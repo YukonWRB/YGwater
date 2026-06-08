@@ -673,15 +673,23 @@ ORDER BY v.location_name, v.timeseries_id;
   if (nrow(temperature) > 0) {
     names(temperature)[names(temperature) == "location_code"] <- "Location"
     names(temperature)[names(temperature) == "location_name"] <- "Name"
-    names(temperature)[names(temperature) == "min_value"] <- "y'day Tmin (°C)"
-    names(temperature)[names(temperature) == "mean_value"] <- "y'day Tmean (°C)"
-    names(temperature)[names(temperature) == "max_value"] <- "y'day Tmax (°C)"
-    names(temperature)[names(temperature) == "week_min"] <- "1 wk Tmin (°C)"
-    names(temperature)[names(temperature) == "week_max"] <- "1 wk Tmax (°C)"
-    names(temperature)[names(temperature) == "week_mean"] <- "1 wk Tmean (°C)"
+    names(temperature)[
+      names(temperature) == "min_value"
+    ] <- "y'day Tmin (\u2103)"
+    names(temperature)[
+      names(temperature) == "mean_value"
+    ] <- "y'day Tmean (\u2103)"
+    names(temperature)[
+      names(temperature) == "max_value"
+    ] <- "y'day Tmax (\u2103)"
+    names(temperature)[names(temperature) == "week_min"] <- "1 wk Tmin (\u2103)"
+    names(temperature)[names(temperature) == "week_max"] <- "1 wk Tmax (\u2103)"
+    names(temperature)[
+      names(temperature) == "week_mean"
+    ] <- "1 wk Tmean (\u2103)"
     names(temperature)[
       names(temperature) == "week_difference_historical_mean"
-    ] <- "diff. from 1 wk historical mean (°C)"
+    ] <- "diff. from 1 wk historical mean (\u2103)"
 
     temperature$`Location specific comments` <- NA
     temperature$`Yesterday's comments` <- NA

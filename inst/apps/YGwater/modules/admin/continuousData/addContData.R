@@ -381,9 +381,10 @@ addContData <- function(id, language) {
            ON u_from.unit_id = uc.from_unit_id
          JOIN public.units u_to
            ON u_to.unit_id = uc.to_unit_id
-         ORDER BY u_from.unit_name, u_to.unit_name"
+        ORDER BY u_from.unit_name, u_to.unit_name"
       )
     )
+    nonbasic_member_options <- reactiveVal(NULL)
 
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
@@ -402,21 +403,119 @@ addContData <- function(id, language) {
       shinyjs::disable('upload_overwrite_some')
     }
 
-    ts_meta <- reactiveVal({
+    load_timeseries_metadata <- function() {
       dbGetQueryDT(
         session$userData$AquaCache,
-        # "SELECT timeseries_id, location_name AS location, alias_name AS alias, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes, sensor_priority FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, units, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
+        "SELECT
+           md.timeseries_id,
+           md.location_name AS location,
+           md.parameter_name AS parameter,
+           md.units,
+           md.media_type AS media,
+           md.aggregation_type AS aggregation,
+           md.recording_rate AS record_rate_minutes,
+           md.timeseries_type_code,
+           md.timeseries_type,
+           ts.active,
+           ts.publicly_visible,
+           md.sensor_priority,
+           md.start_datetime,
+           md.end_datetime
+         FROM continuous.timeseries_metadata_en md
+         INNER JOIN continuous.timeseries ts
+           ON md.timeseries_id = ts.timeseries_id
+         ORDER BY
+           md.location_name,
+           md.parameter_name,
+           md.media_type,
+           md.aggregation_type,
+           md.recording_rate,
+           md.timeseries_id"
       )
-    })
+    }
+
+    ts_meta <- reactiveVal(load_timeseries_metadata())
+
+    load_nonbasic_member_options <- function(compound_timeseries_id) {
+      DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "
+        WITH RECURSIVE dependency_tree AS (
+          SELECT
+            m.timeseries_id AS requested_timeseries_id,
+            m.member_alias::text AS member_path,
+            m.member_alias,
+            m.member_timeseries_id,
+            m.member_priority,
+            m.use_from,
+            m.use_to,
+            1 AS depth,
+            ARRAY[m.timeseries_id, m.member_timeseries_id] AS path_ids
+          FROM continuous.timeseries_compound_members AS m
+          WHERE m.timeseries_id = $1
+
+          UNION ALL
+
+          SELECT
+            d.requested_timeseries_id,
+            d.member_path || ' -> ' || m.member_alias,
+            m.member_alias,
+            m.member_timeseries_id,
+            m.member_priority,
+            m.use_from,
+            m.use_to,
+            d.depth + 1,
+            d.path_ids || m.member_timeseries_id
+          FROM dependency_tree AS d
+          INNER JOIN continuous.timeseries AS parent
+            ON parent.timeseries_id = d.member_timeseries_id
+          INNER JOIN continuous.timeseries_compound_members AS m
+            ON m.timeseries_id = d.member_timeseries_id
+          WHERE parent.timeseries_type = 'compound'
+            AND NOT m.member_timeseries_id = ANY(d.path_ids)
+        )
+        SELECT
+          d.depth,
+          d.member_path,
+          d.member_alias,
+          d.member_priority,
+          d.use_from,
+          d.use_to,
+          md.timeseries_id,
+          md.location_name AS location,
+          md.parameter_name AS parameter,
+          md.units,
+          md.media_type AS media,
+          md.aggregation_type AS aggregation,
+          md.recording_rate AS record_rate_minutes,
+          md.timeseries_type_code,
+          md.timeseries_type,
+          ts.active,
+          ts.publicly_visible,
+          md.sensor_priority,
+          md.start_datetime,
+          md.end_datetime,
+          (md.timeseries_type_code = 'basic') AS can_accept_data
+        FROM dependency_tree AS d
+        INNER JOIN continuous.timeseries_metadata_en AS md
+          ON md.timeseries_id = d.member_timeseries_id
+        INNER JOIN continuous.timeseries AS ts
+          ON ts.timeseries_id = d.member_timeseries_id
+        ORDER BY
+          d.depth,
+          d.member_path,
+          d.member_priority,
+          md.location_name,
+          md.parameter_name,
+          md.timeseries_id
+        ",
+        params = list(as.integer(compound_timeseries_id))
+      )
+    }
 
     # Reload module data when asked
     observeEvent(input$reload_module, {
-      ts_meta(dbGetQueryDT(
-        session$userData$AquaCache,
-        # "SELECT timeseries_id, location_name AS location, alias_name AS alias, parameter_name AS parameter, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes, sensor_priority FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
-        "SELECT timeseries_id, location_name AS location, parameter_name AS parameter, units, media_type AS media, aggregation_type AS aggregation, recording_rate AS record_rate_minutes FROM continuous.timeseries_metadata_en ORDER BY location_name, parameter_name, media_type, aggregation_type, record_rate_minutes ASC"
-      ))
+      ts_meta(load_timeseries_metadata())
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
@@ -449,16 +548,22 @@ addContData <- function(id, language) {
       df <- ts_meta()
       df$record_rate_minutes <- as.factor(df$record_rate_minutes)
       df$location <- as.factor(df$location)
-      # df$alias <- as.factor(df$alias)
       df$media <- as.factor(df$media)
       df$aggregation <- as.factor(df$aggregation)
       df$parameter <- as.factor(df$parameter)
-      # df$sensor_priority <- as.factor(df$sensor_priority)
+      df$timeseries_type <- as.factor(df$timeseries_type)
+      df$active <- as.factor(df$active)
+      df$publicly_visible <- as.factor(df$publicly_visible)
+      df$sensor_priority <- as.factor(df$sensor_priority)
+
+      hidden_columns <- which(
+        names(df) %in% c("timeseries_id", "timeseries_type_code")
+      ) - 1L
       DT::datatable(
         df,
         selection = 'single',
         options = list(
-          columnDefs = list(list(targets = 0, visible = FALSE)),
+          columnDefs = list(list(targets = hidden_columns, visible = FALSE)),
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             "function(settings, json) {",
@@ -483,16 +588,130 @@ addContData <- function(id, language) {
     observeEvent(input$ts_table_rows_selected, {
       sel <- input$ts_table_rows_selected
       if (length(sel) > 0) {
-        timeseries(ts_meta()[sel, 'timeseries_id'][[1]])
+        selected <- ts_meta()[sel, , drop = FALSE]
+        if (identical(selected$timeseries_type_code[[1]], "basic")) {
+          timeseries(selected$timeseries_id[[1]])
+        } else {
+          timeseries(NULL)
+          nonbasic_member_options(
+            load_nonbasic_member_options(selected$timeseries_id[[1]])
+          )
+          showModal(modalDialog(
+            title = paste(
+              "Cannot add data directly to",
+              selected$timeseries_type[[1]],
+              "timeseries"
+            ),
+            tags$p(
+              paste(
+                "Select a basic member timeseries below, then click",
+                "'Use this timeseries' to add measurements to the source",
+                "series instead."
+              )
+            ),
+            DT::DTOutput(ns("nonbasic_members_table")),
+            easyClose = TRUE,
+            size = "xl",
+            footer = tagList(
+              modalButton("Cancel"),
+              actionButton(
+                ns("use_member_timeseries"),
+                "Use this timeseries",
+                class = "btn-primary"
+              )
+            )
+          ))
+        }
       } else {
         timeseries(NULL)
       }
+    })
+
+    output$nonbasic_members_table <- DT::renderDT({
+      df <- nonbasic_member_options()
+      if (is.null(df) || nrow(df) == 0) {
+        df <- data.frame(
+          message = "No member timeseries are defined for this timeseries.",
+          stringsAsFactors = FALSE
+        )
+        return(DT::datatable(df, selection = "none", rownames = FALSE))
+      }
+
+      df$timeseries_type <- as.factor(df$timeseries_type)
+      df$can_accept_data <- as.factor(df$can_accept_data)
+      df$active <- as.factor(df$active)
+      df$publicly_visible <- as.factor(df$publicly_visible)
+      df$sensor_priority <- as.factor(df$sensor_priority)
+
+      DT::datatable(
+        df,
+        selection = "single",
+        options = list(
+          columnDefs = list(
+            list(targets = which(names(df) == "timeseries_type_code") - 1L, visible = FALSE)
+          ),
+          pageLength = 10,
+          scrollX = TRUE
+        ),
+        filter = "top",
+        rownames = FALSE
+      )
+    })
+
+    observeEvent(input$use_member_timeseries, {
+      df <- nonbasic_member_options()
+      sel <- input$nonbasic_members_table_rows_selected
+      if (is.null(df) || nrow(df) == 0 || is.null(sel) || length(sel) != 1) {
+        showNotification(
+          "Select a member timeseries first.",
+          type = "error"
+        )
+        return()
+      }
+
+      selected <- df[sel, , drop = FALSE]
+      if (!isTRUE(selected$can_accept_data[[1]])) {
+        showNotification(
+          "Select a Basic member timeseries. Compound members cannot accept direct uploads.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      target_id <- as.integer(selected$timeseries_id[[1]])
+      main_row <- match(target_id, ts_meta()$timeseries_id)
+      if (is.na(main_row)) {
+        showNotification(
+          "Selected member timeseries is no longer in the main table. Reload the module and try again.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      timeseries(target_id)
+      DT::dataTableProxy("ts_table", session = session) |>
+        DT::selectRows(main_row)
+      removeModal()
+      showNotification(
+        paste("Selected timeseries", target_id, "for data entry."),
+        type = "message"
+      )
     })
 
     selected_timeseries_meta <- reactive({
       req(timeseries())
       meta <- ts_meta()
       meta[meta$timeseries_id == timeseries(), , drop = FALSE]
+    })
+
+    selected_timeseries_is_basic <- reactive({
+      if (is.null(timeseries())) {
+        return(FALSE)
+      }
+      meta <- selected_timeseries_meta()
+      nrow(meta) == 1 && identical(meta$timeseries_type_code[[1]], "basic")
     })
 
     selected_timeseries_units <- reactive({
@@ -1813,6 +2032,12 @@ addContData <- function(id, language) {
 
     observe({
       if (!can_insert) {
+        shinyjs::disable("upload")
+        shinyjs::disable("upload_overwrite_all")
+        shinyjs::disable("upload_overwrite_some")
+        return()
+      }
+      if (!isTRUE(selected_timeseries_is_basic())) {
         shinyjs::disable("upload")
         shinyjs::disable("upload_overwrite_all")
         shinyjs::disable("upload_overwrite_some")
@@ -3430,6 +3655,14 @@ addContData <- function(id, language) {
     check_fx <- function() {
       if (is.null(timeseries())) {
         showNotification('Please select a timeseries first.', type = 'error')
+        return(FALSE)
+      }
+      if (!isTRUE(selected_timeseries_is_basic())) {
+        showNotification(
+          'Data can only be added directly to Basic timeseries. Select a Basic member source timeseries first.',
+          type = 'error',
+          duration = 8
+        )
         return(FALSE)
       }
       if (nrow(data$df) == 0) {

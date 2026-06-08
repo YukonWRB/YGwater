@@ -90,19 +90,17 @@ app_server <- function(input, output, session) {
     "addLocation",
     "addSubLocation",
     "addTimeseries",
+    "addCompoundTimeseries",
     "deploy_recover",
     "calibrate",
     "manageInstruments",
     "manageSensors",
     "instrumentMaintenance",
     "addContData",
-    "continuousCorrections",
     "imputeMissing",
-    "editContData",
     "grades_approvals_qualifiers",
     "addDiscData",
     "addSamples",
-    "editDiscData",
     "addGuidelines",
     "addSampleSeries",
     "addDocs",
@@ -177,9 +175,7 @@ app_server <- function(input, output, session) {
     "editBoreholesWells",
     "manageBoreholeDocuments",
     "addDiscData",
-    "editDiscData",
     "addContData",
-    "editContData",
     "manageInstruments",
     "manageSensors",
     "instrumentMaintenance",
@@ -1031,23 +1027,16 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addContData,
-          session$userData$admin_privs$editContData,
-          session$userData$admin_privs$continuousCorrections,
           session$userData$admin_privs$imputeMissing,
           session$userData$admin_privs$grades_approvals_qualifiers,
           session$userData$admin_privs$addTimeseries,
+          session$userData$admin_privs$addCompoundTimeseries,
           session$userData$admin_privs$syncCont
         )
       ) {
         nav_show(id = "navbar", target = "continuousDataTasks")
         if (!isTRUE(session$userData$admin_privs$addContData)) {
           nav_hide(id = "navbar", target = "addContData")
-        }
-        if (!isTRUE(session$userData$admin_privs$editContData)) {
-          nav_hide(id = "navbar", target = "editContData")
-        }
-        if (!isTRUE(session$userData$admin_privs$continuousCorrections)) {
-          nav_hide(id = "navbar", target = "continuousCorrections")
         }
         if (!isTRUE(session$userData$admin_privs$imputeMissing)) {
           nav_hide(id = "navbar", target = "imputeMissing")
@@ -1057,6 +1046,9 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$addTimeseries)) {
           nav_hide(id = "navbar", target = "addTimeseries")
+        }
+        if (!isTRUE(session$userData$admin_privs$addCompoundTimeseries)) {
+          nav_hide(id = "navbar", target = "addCompoundTimeseries")
         }
         if (!isTRUE(session$userData$admin_privs$syncCont)) {
           nav_hide(id = "navbar", target = "syncCont")
@@ -1070,7 +1062,6 @@ app_server <- function(input, output, session) {
         any(
           session$userData$admin_privs$addDiscData,
           session$userData$admin_privs$addSamples,
-          session$userData$admin_privs$editDiscData,
           session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
           session$userData$admin_privs$addGuidelines
@@ -1082,9 +1073,6 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$addSamples)) {
           nav_hide(id = "navbar", target = "addSamples")
-        }
-        if (!isTRUE(session$userData$admin_privs$editDiscData)) {
-          nav_hide(id = "navbar", target = "editDiscData")
         }
         if (!isTRUE(session$userData$admin_privs$addSampleSeries)) {
           nav_hide(id = "navbar", target = "addSampleSeries")
@@ -1701,16 +1689,14 @@ app_server <- function(input, output, session) {
     ui_loaded$instrumentMaintenance <- FALSE
 
     ui_loaded$addContData <- FALSE
-    ui_loaded$continuousCorrections <- FALSE
     ui_loaded$imputeMissing <- FALSE
-    ui_loaded$editContData <- FALSE
     ui_loaded$grades_approvals_qualifiers <- FALSE
     ui_loaded$syncCont <- FALSE
     ui_loaded$addTimeseries <- FALSE
+    ui_loaded$addCompoundTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
     ui_loaded$addSamples <- FALSE
-    ui_loaded$editDiscData <- FALSE
     ui_loaded$addGuidelines <- FALSE
     ui_loaded$addSampleSeries <- FALSE
     ui_loaded$syncDisc <- FALSE
@@ -1787,20 +1773,18 @@ app_server <- function(input, output, session) {
     "addLocation",
     "addSubLocation",
     "addTimeseries",
+    "addCompoundTimeseries",
     "deploy_recover",
     "calibrate",
     "manageInstruments",
     "manageSensors",
     "instrumentMaintenance",
     "addContData",
-    "continuousCorrections",
     "imputeMissing",
-    "editContData",
     "grades_approvals_qualifiers",
     "addDiscData",
     "addSamples",
     "addSampleSeries",
-    "editDiscData",
     "addGuidelines",
     "addDocs",
     "addImgs",
@@ -2881,29 +2865,26 @@ app_server <- function(input, output, session) {
                 "UPDATE"
               ))
             ),
-            editContData = has_priv(
-              tbl = session$userData$table_privs,
-              "continuous.measurements_continuous",
-              list(c(
-                "UPDATE",
-                "DELETE"
-              ))
-            ),
-            continuousCorrections = has_priv(
-              tbl = session$userData$table_privs,
-              "continuous.corrections",
-              list(c("INSERT", "UPDATE"))
-            ),
             imputeMissing = has_priv(
               tbl = session$userData$table_privs,
               "continuous.measurements_continuous"
             ),
-            grades_approvals_qualifiers = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "continuous.grades",
-                "continuous.approvals",
+            grades_approvals_qualifiers = any(
+              has_priv(
+                tbl = session$userData$table_privs,
+                "continuous.grades"
+              ),
+              has_priv(
+                tbl = session$userData$table_privs,
+                "continuous.approvals"
+              ),
+              has_priv(
+                tbl = session$userData$table_privs,
                 "continuous.qualifiers"
+              ),
+              has_priv(
+                tbl = session$userData$table_privs,
+                "continuous.corrections"
               )
             ),
             addTimeseries = has_priv(
@@ -2923,6 +2904,33 @@ app_server <- function(input, output, session) {
                   "INSERT"
                 ),
                 c("INSERT")
+              )
+            ),
+            addCompoundTimeseries = has_priv(
+              tbl = session$userData$table_privs,
+              c(
+                "continuous.timeseries",
+                "continuous.timeseries_compounds",
+                "continuous.timeseries_compound_members",
+                "public.locations_z"
+              ),
+              list(
+                c(
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "INSERT",
+                  "UPDATE",
+                  "DELETE"
+                ),
+                c(
+                  "INSERT",
+                  "DELETE"
+                ),
+                c(
+                  "INSERT"
+                )
               )
             ),
             syncCont = has_priv(
@@ -2969,20 +2977,6 @@ app_server <- function(input, output, session) {
                 "INSERT",
                 "UPDATE"
               ))
-            ),
-            editDiscData = has_priv(
-              tbl = session$userData$table_privs,
-              c("discrete.samples", "discrete.results"),
-              list(
-                c(
-                  "UPDATE",
-                  "DELETE"
-                ),
-                c(
-                  "UPDATE",
-                  "DELETE"
-                )
-              )
             ),
             addSampleSeries = has_priv(
               tbl = session$userData$table_privs,
@@ -3404,6 +3398,7 @@ app_server <- function(input, output, session) {
   # Load modules based on input$navbar ################################
   # Store information to pass between modules
   moduleOutputs <- reactiveValues()
+  moduleOutputs$mapLocs <- reactiveValues()
 
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home") # Default tab for viz mode
@@ -3587,10 +3582,6 @@ app_server <- function(input, output, session) {
           windowDims,
           inputs = moduleOutputs$mapLocs
         ) # Call the server
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
       }
     }
     if (input$navbar == "contPlot") {
@@ -3603,14 +3594,8 @@ app_server <- function(input, output, session) {
           "contPlot",
           language = languageSelection,
           windowDims,
-          # inputs temporarily disabled because of issues with narrowing the datatable using inputs.
-          # inputs = moduleOutputs$mapLocs
-          inputs = NULL
+          inputs = moduleOutputs$mapLocs
         )
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
       }
     }
     if (input$navbar == "contPlotAdaptive") {
@@ -3623,7 +3608,7 @@ app_server <- function(input, output, session) {
           "contPlotAdaptive",
           language = languageSelection,
           windowDims = windowDims,
-          inputs = NULL
+          inputs = moduleOutputs$mapLocs
         )
       }
     }
@@ -3635,9 +3620,10 @@ app_server <- function(input, output, session) {
         output$mapLocs_ui <- renderUI(mapLocsUI("mapLocs"))
         ui_loaded$monitoringLocationsMap <- TRUE
         # Call the server
-        moduleOutputs$mapLocs <- mapLocs(
+        mapLocs(
           "mapLocs",
-          language = languageSelection
+          language = languageSelection,
+          outputs = moduleOutputs$mapLocs
         )
       }
       observe({
@@ -3648,12 +3634,6 @@ app_server <- function(input, output, session) {
           }
           if (target == "contData") {
             ui_loaded$contData <- FALSE
-          }
-          if (target == "discPlot") {
-            ui_loaded$discPlot <- FALSE
-          }
-          if (target == "contPlot") {
-            ui_loaded$contPlot <- FALSE
           }
           nav_select(session = session, "navbar", selected = target) # Change tabs
           moduleOutputs$mapLocs$change_tab <- NULL
@@ -3795,6 +3775,7 @@ app_server <- function(input, output, session) {
         ) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$location_target <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
       }
@@ -3810,6 +3791,7 @@ app_server <- function(input, output, session) {
         ) # Call the server
         if (!is.null(moduleOutputs$mapLocs)) {
           moduleOutputs$mapLocs$location_id <- NULL
+          moduleOutputs$mapLocs$location_target <- NULL
           moduleOutputs$mapLocs$change_tab <- NULL
         }
       }
@@ -3898,6 +3880,18 @@ app_server <- function(input, output, session) {
         }
       }
     }
+    if (input$navbar == "addCompoundTimeseries") {
+      if (!ui_loaded$addCompoundTimeseries) {
+        output$addCompoundTimeseries_ui <- renderUI(
+          addCompoundTimeseriesUI("addCompoundTimeseries")
+        )
+        ui_loaded$addCompoundTimeseries <- TRUE
+        addCompoundTimeseries(
+          "addCompoundTimeseries",
+          language = languageSelection
+        )
+      }
+    }
     if (input$navbar == "deploy_recover") {
       if (!ui_loaded$deploy_recover) {
         output$deploy_recover_ui <- renderUI(deploy_recover_UI(
@@ -3963,18 +3957,6 @@ app_server <- function(input, output, session) {
         }
       })
     }
-    if (input$navbar == "continuousCorrections") {
-      if (!ui_loaded$continuousCorrections) {
-        output$continuousCorrections_ui <- renderUI(continuousCorrectionsUI(
-          "continuousCorrections"
-        ))
-        ui_loaded$continuousCorrections <- TRUE
-        continuousCorrections(
-          "continuousCorrections",
-          language = languageSelection
-        )
-      }
-    }
     if (input$navbar == "imputeMissing") {
       if (!ui_loaded$imputeMissing) {
         output$imputeMissing_ui <- renderUI(imputeMissingUI("imputeMissing")) # Render the UI
@@ -3982,20 +3964,13 @@ app_server <- function(input, output, session) {
         imputeMissing("imputeMissing", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "editContData") {
-      if (!ui_loaded$editContData) {
-        output$editContData_ui <- renderUI(editContDataUI("editContData")) # Render the UI
-        ui_loaded$editContData <- TRUE
-        editContData("editContData", language = languageSelection) # Call the server
-      }
-    }
     if (input$navbar == "grades_approvals_qualifiers") {
       if (!ui_loaded$grades_approvals_qualifiers) {
-        output$grades_approvals_qualifiers_ui <- renderUI(grades_approvals_qualifiersUI(
+        output$grades_approvals_qualifiers_ui <- renderUI(continuousDataReviewUI(
           "grades_approvals_qualifiers"
         )) # Render the UI
         ui_loaded$grades_approvals_qualifiers <- TRUE
-        grades_approvals_qualifiers(
+        continuousDataReview(
           "grades_approvals_qualifiers",
           language = languageSelection
         ) # Call the server
@@ -4027,13 +4002,6 @@ app_server <- function(input, output, session) {
         output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
         ui_loaded$addSamples <- TRUE
         addSamples("addSamples", language = languageSelection)
-      }
-    }
-    if (input$navbar == "editDiscData") {
-      if (!ui_loaded$editDiscData) {
-        output$editDiscData_ui <- renderUI(editDiscDataUI("editDiscData")) # Render the UI
-        ui_loaded$editDiscData <- TRUE
-        editDiscData("editDiscData", language = languageSelection) # Call the server
       }
     }
     if (input$navbar == "addGuidelines") {
