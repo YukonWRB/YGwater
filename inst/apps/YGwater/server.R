@@ -2525,7 +2525,7 @@ app_server <- function(input, output, session) {
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p')
-            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments', 'field')
+            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field')
         )
         SELECT t.schema,
                t.table_name,
@@ -3013,9 +3013,11 @@ app_server <- function(input, output, session) {
             addGuidelines = has_priv(
               tbl = session$userData$table_privs,
               c(
-                "discrete.guidelines",
-                "discrete.samples",
-                "discrete.results"
+                "criteria.guidelines",
+                "criteria.guideline_value_rules",
+                "criteria.guidelines_fractions",
+                "criteria.guidelines_media_types",
+                "criteria.guideline_locations"
               ),
               list(
                 c(
@@ -3023,8 +3025,26 @@ app_server <- function(input, output, session) {
                   "INSERT",
                   "UPDATE"
                 ),
-                c("INSERT"),
-                c("INSERT")
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                )
               )
             ),
             addDocs = has_priv(
