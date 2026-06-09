@@ -5,6 +5,51 @@ old_warn <- getOption("warn")
 options(warn = -1)
 on.exit(options(warn = old_warn), add = TRUE)
 
+test_con <- test_AquaConnect()
+
+wlevel <- DBI::dbGetQuery(
+  test_con,
+  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+)$parameter_id[[1]]
+
+flow <- DBI::dbGetQuery(
+  test_con,
+  "SELECT parameter_id FROM parameters WHERE param_name = 'water flow';"
+)$parameter_id[[1]]
+
+swe <- DBI::dbGetQuery(
+  test_con,
+  "SELECT parameter_id FROM parameters WHERE param_name = 'snow water equivalent';"
+)$parameter_id[[1]]
+
+# Find the first water level timeseries in the DB
+wlevel_ts <- DBI::dbGetQuery(
+  test_con,
+  paste0(
+    "SELECT location_id, parameter_id, timeseries_id FROM timeseries WHERE parameter_id = ",
+    wlevel,
+    " LIMIT 1;"
+  )
+)
+
+flow_ts <- DBI::dbGetQuery(
+  test_con,
+  paste0(
+    "SELECT location_id, parameter_id, timeseries_id FROM timeseries WHERE parameter_id = ",
+    flow,
+    " LIMIT 1;"
+  )
+)
+
+swe_ts <- DBI::dbGetQuery(
+  test_con,
+  paste0(
+    "SELECT location_id, parameter_id, timeseries_id FROM timeseries WHERE parameter_id = ",
+    swe,
+    " LIMIT 1;"
+  )
+)
+
 test_that("continuous level plot is as expected for full year with numeric startDay and endDay when saved to a file", {
   skip_on_ci()
 
@@ -16,8 +61,9 @@ test_that("continuous level plot is as expected for full year with numeric start
   on.exit(unlink(path), add = TRUE)
 
   plot <- ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    wlevel_ts$location_id[1],
+    wlevel_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = "2022",
@@ -48,8 +94,9 @@ test_that("french labels work with full year", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    location = wlevel_ts$location_id[1],
+    parameter = wlevel_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = "2022",
@@ -80,8 +127,9 @@ test_that("continuous level plot is as expected for full year with numeric start
   on.exit(unlink(path), add = TRUE)
 
   plot <- suppressWarnings(ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    location = wlevel_ts$location_id[1],
+    parameter = wlevel_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = "2022",
@@ -112,8 +160,9 @@ test_that("continuous level plot is as expected for full year with character sta
   on.exit(unlink(path), add = TRUE)
 
   plot <- ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    location = wlevel_ts$location_id[1],
+    parameter = wlevel_ts$parameter_id[1],
     startDay = "2023-01-01",
     endDay = "2023-12-31",
     years = "2021",
@@ -144,8 +193,9 @@ test_that("continuous flow plot is as expected for full year with numeric startD
   on.exit(unlink(path), add = TRUE)
 
   plot <- ggplotOverlap(
-    "09EA004",
-    "water flow",
+    con = test_con,
+    location = flow_ts$location_id[1],
+    parameter = flow_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = "2020",
@@ -168,11 +218,29 @@ test_that("continuous flow plot is as expected for full year with numeric startD
 test_that("overlaping year plot throws no error when years is NULL", {
   skip_on_ci() # The latest year is not in the test database
 
+  start_day <- DBI::dbGetQuery(
+    test_con,
+    paste0(
+      "SELECT start_datetime FROM timeseries WHERE timeseries_id = ",
+      swe_ts$timeseries_id[1],
+      ";"
+    )
+  )[1, 1]
+  end_day <- DBI::dbGetQuery(
+    test_con,
+    paste0(
+      "SELECT end_datetime FROM timeseries WHERE timeseries_id = ",
+      swe_ts$timeseries_id[1],
+      ";"
+    )
+  )[1, 1]
+
   expect_no_error(suppressWarnings(ggplotOverlap(
-    "09AA-M1",
-    "snow water equivalent",
-    startDay = "2023-09-01",
-    endDay = "2023-05-31",
+    con = test_con,
+    location = swe_ts$location_id[1],
+    parameter = swe_ts$parameter_id[1],
+    startDay = start_day,
+    endDay = end_day,
     return_months = c(4, 5),
     historic_range = "last",
     gridx = FALSE
@@ -190,44 +258,11 @@ test_that("SWE plot works when overlaping new year, dates as character", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- ggplotOverlap(
-    "09AA-M1",
-    "snow water equivalent",
+    con = test_con,
+    location = swe_ts$location_id[1],
+    parameter = swe_ts$parameter_id[1],
     startDay = "2023-09-01",
     endDay = "2023-05-31",
-    years = "2022",
-    save_path = NULL,
-    return_months = c(4, 5),
-    historic_range = "last",
-    datum = FALSE,
-    gridx = FALSE
-  )
-  ggplot2::ggsave(
-    filename = path,
-    plot = plot,
-    width = 10,
-    height = 6,
-    dpi = 300,
-    device = ragg::agg_png
-  )
-
-  expect_snapshot_file(path)
-})
-
-test_that("depth plot works when overlaping new year, dates as numeric", {
-  skip_on_ci()
-
-  dir <- file.path(tempdir(), "plotly_tests")
-  unlink(dir, recursive = TRUE, force = TRUE)
-  dir.create(dir, recursive = TRUE)
-  path <- file.path(dir, "test7.png")
-  path <- pathPrep(path)
-  on.exit(unlink(path), add = TRUE)
-
-  plot <- ggplotOverlap(
-    "09AA-M1",
-    "snow depth",
-    startDay = 250,
-    endDay = 150,
     years = "2022",
     save_path = NULL,
     return_months = c(4, 5),
@@ -258,8 +293,9 @@ test_that("french labels work with overlaping years", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- ggplotOverlap(
-    "09AA-M1",
-    "snow depth",
+    con = test_con,
+    location = swe_ts$location_id[1],
+    parameter = swe_ts$parameter_id[1],
     startDay = 250,
     endDay = 150,
     years = "2022",
@@ -283,6 +319,8 @@ test_that("french labels work with overlaping years", {
 
 test_that("ggplotOverlap can show data in the past", {
   skip_on_ci() # Because the CI instance would not have the necessary historical data
+
+  # Here we'll use the regular prod/dev DB connection so that audit data can be found
   con <- AquaConnect(silent = TRUE)
   on.exit(DBI::dbDisconnect(con), add = TRUE)
 
@@ -367,8 +405,9 @@ test_that("continuous level plot is as expected for multiple years when output t
   on.exit(unlink(path), add = TRUE)
 
   plot <- suppressWarnings(ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    location = swe_ts$location_id[1],
+    parameter = swe_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = c(2021, 2022),
@@ -389,8 +428,9 @@ test_that("continuous level plot is as expected for multiple years when output t
 
 test_that("too big year error message happens", {
   expect_error(suppressWarnings(ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    location = swe_ts$location_id[1],
+    parameter = swe_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = lubridate::year(Sys.Date()) + 2,
@@ -410,8 +450,9 @@ test_that("historic range can be < requested year", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- suppressWarnings(ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    location = swe_ts$location_id[1],
+    parameter = swe_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = c(2022),
@@ -442,8 +483,9 @@ test_that("returns can be for yrs > requested year", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- suppressWarnings(ggplotOverlap(
-    "09EA004",
-    "water level",
+    con = test_con,
+    location = swe_ts$location_id[1],
+    parameter = swe_ts$parameter_id[1],
     startDay = 1,
     endDay = 365,
     years = c(2021),

@@ -56,11 +56,11 @@ expect_json_df_response <- function(response, expected_names = NULL) {
 
 test_that("tests for API V1", {
   # Set some environment variables for the API to use. These are normally set when the API is launched using api() but are set here in the local environment.
-  Sys.setenv(APIaquacacheUser = Sys.getenv("aquacacheUser", "runner"))
-  Sys.setenv(APIaquacachePass = Sys.getenv("aquacachePass", "runner"))
-  Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheName", "testdb"))
-  Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheHost", "localhost"))
-  Sys.setenv(APIaquacachePort = Sys.getenv("aquacachePort", "5432"))
+  Sys.setenv(APIaquacacheUser = Sys.getenv("aquacacheTestUser", "runner"))
+  Sys.setenv(APIaquacachePass = Sys.getenv("aquacacheTestPass", "runner"))
+  Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheTestName", "testdb"))
+  Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheTestHost", "localhost"))
+  Sys.setenv(APIaquacachePort = Sys.getenv("aquacacheTestPort", "5432"))
 
   # Set up and start the API and a test session
   expect_silent({

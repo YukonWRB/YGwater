@@ -1,12 +1,15 @@
 test_that("Access connection works", {
-  skip_on_ci()
-  skip_on_cran()
-  if (file.exists("//carver/infosys/EQWin/WaterResources.mdb")) {
-    con <- AccessConnect(path = "//carver/infosys/EQWin/WaterResources.mdb", silent = TRUE)
-    tbls <- DBI::dbListTables(con)
-    expect_gt(length(tbls), 0)
-    DBI::dbDisconnect(con)
-  } else {
-    skip("Access database file not found, skipping test.")
-  }
+  # Test .mdb first
+  con <- AccessConnect(path = test_path("fixtures/tiny.mdb"), silent = TRUE)
+  tbls <- DBI::dbListTables(con)
+  # Ensure that 'test_table' is listed
+  expect_true("test_table" %in% tbls)
+  DBI::dbDisconnect(con)
+
+  # Test .accdb
+  con <- AccessConnect(path = test_path("fixtures/tiny.accdb"), silent = TRUE)
+  tbls <- DBI::dbListTables(con)
+  # Ensure that 'test_table' is listed
+  expect_true("test_table" %in% tbls)
+  DBI::dbDisconnect(con)
 })
