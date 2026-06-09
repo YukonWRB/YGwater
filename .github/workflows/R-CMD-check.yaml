@@ -66,11 +66,16 @@ jobs:
         run: |
           Rscript -e "R.utils::gunzip('tests/testthat/fixtures/test_db.sql.gz')"
 
-      - name: Load test database
-        env:
-          PGPASSWORD: runner
+      - name: Install AquaCache package from GitHub
         run: |
-          psql -h 127.0.0.1 -U runner -d testdb -f tests/testthat/fixtures/test_db.sql
+          Rscript -e "remotes::install_github('YukonWRB/AquaCache')"
+
+      - name: Load test database
+        # env:
+          # PGPASSWORD: runner
+        run: |
+          # psql -h 127.0.0.1 -U runner -d testdb -f tests/testthat/fixtures/test_db.sql
+          Rscript -e "AquaCache::restore_seed_db('tests/testthat/fixtures/test_db.sql', 'testdb', 'localhost', '5432', 'runner', 'runner', hnh = FALSE)"
 
       - uses: r-lib/actions/check-r-package@v2
         with:
