@@ -177,7 +177,7 @@ YGwater <- function(
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
-      "The database does not have the required 'application' schema, or is at minimum missing the 'page_content' or 'notifications' tables. You'll need to bring the AquaCache database up to revision 31 at minimum."
+      "The database does not have or cannot see the required 'application' schema, or is missing the 'page_content' or 'notifications' tables from that schema. Make sure the SEARCH_PATH is set appropriately and that the launch user has permissions to see the 'application' schema and its tables. The 'application' schema is required for the app to function."
     )
   }
 
@@ -218,7 +218,7 @@ YGwater <- function(
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
-      "The user you're connecting with can't execute the function 'continuous.measurements_continuous_corrected'. This function is required for the app to function."
+      "The user you're connecting with can't execute the database function 'continuous.measurements_continuous_corrected'. This function is required for the app to function."
     )
   }
   if (!DBI::dbExistsTable(con, "samples")) {
