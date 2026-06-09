@@ -75,7 +75,7 @@ jobs:
           # PGPASSWORD: runner
         run: |
           # psql -h 127.0.0.1 -U runner -d testdb -f tests/testthat/fixtures/test_db.sql
-          Rscript -e "AquaCache::restore_seed_db('tests/testthat/fixtures/test_db.sql', 'testdb', 'localhost', '5432', 'runner', 'runner', hnh = FALSE)"
+          Rscript -e "AquaCache::restore_seed_db('tests/testthat/fixtures/test_db.sql', 'testdb', 'localhost', '5432', 'runner', 'runner', nhn = FALSE)"
 
       - uses: r-lib/actions/check-r-package@v2
         with:

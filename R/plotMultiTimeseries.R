@@ -238,7 +238,6 @@ plotMultiTimeseries <- function(
       "Parameter `sub_locations` is ignored when `timeseries_ids` is provided."
     )
   }
-
   # Check record_rates
   if (is.null(timeseries_ids)) {
     if (!is.null(record_rates)) {
@@ -252,7 +251,7 @@ plotMultiTimeseries <- function(
       rates_char <- lubridate::as.period(NA)
       for (i in 1:length(record_rates)) {
         rates_char[i] <- lubridate::period(record_rates[i])
-        if (!lubridate::is.period(rates_char[i])) {
+        if (!lubridate::is.period(rates_char[i]) || is.na(rates_char[i])) {
           warning(
             "Your entry ",
             i,
@@ -1031,6 +1030,11 @@ plotMultiTimeseries <- function(
             " AND current = TRUE"
           )
         )
+
+        if (nrow(datum.conv) < 1) {
+          datum.conv <- data.frame(conversion_m = 0)
+        }
+
         if (is.na(datum.conv$conversion_m)) {
           datum.conv <- data.frame(conversion_m = 0)
         }

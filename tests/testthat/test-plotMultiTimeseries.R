@@ -4,6 +4,38 @@ skip_on_cran()
 
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
+test_con <- test_AquaConnect(silent = TRUE)
+on.exit(DBI::dbDisconnect(test_con), add = TRUE)
+
+wlevel <- DBI::dbGetQuery(
+  test_con,
+  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+)$parameter_id[[1]]
+
+flow <- DBI::dbGetQuery(
+  test_con,
+  "SELECT parameter_id FROM parameters WHERE param_name = 'water flow';"
+)$parameter_id[[1]]
+
+# Find the first water level timeseries in the DB
+wlevel_ts <- DBI::dbGetQuery(
+  test_con,
+  paste0(
+    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id, start_datetime, end_datetime FROM timeseries ts WHERE parameter_id = ",
+    wlevel,
+    " LIMIT 1;"
+  )
+)
+
+flow_ts <- DBI::dbGetQuery(
+  test_con,
+  paste0(
+    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id,start_datetime, end_datetime FROM timeseries ts WHERE parameter_id = ",
+    flow,
+    " LIMIT 1;"
+  )
+)
+
 test_that("plotMultiTimeseries with all defaults is as expected", {
   skip_on_ci()
 
@@ -15,10 +47,16 @@ test_that("plotMultiTimeseries with all defaults is as expected", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotMultiTimeseries(
-    locations = c("09EA004", "09EA004"),
-    parameters = c(1165, 1150),
-    start_date = "2021-01-01",
-    end_date = "2022-01-01",
+    con = test_con,
+    locations = c(wlevel_ts$location_id[1], flow_ts$location_id[1]),
+    parameters = c(wlevel, flow),
+    record_rates = c(wlevel_ts$record_rate[1], flow_ts$record_rate[1]),
+    aggregation_types = c(
+      wlevel_ts$aggregation_type_id[1],
+      flow_ts$aggregation_type_id[1]
+    ),
+    start_date = wlevel_ts$end_datetime[1] - lubridate::days(2),
+    end_date = wlevel_ts$end_datetime[1],
     datum = FALSE
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
@@ -28,20 +66,26 @@ test_that("plotMultiTimeseries with all defaults is as expected", {
 
 test_that("plotMultiTimeseries returns data as expected", {
   plot <- plotMultiTimeseries(
-    locations = c("09EA004", "09EA004"),
-    parameters = c(1165, 1150),
-    start_date = "2021-01-01",
-    end_date = "2022-01-01",
+    con = test_con,
+    locations = c(wlevel_ts$location_id[1], flow_ts$location_id[1]),
+    parameters = c(wlevel, flow),
+    record_rates = c(wlevel_ts$record_rate[1], flow_ts$record_rate[1]),
+    aggregation_types = c(
+      wlevel_ts$aggregation_type_id[1],
+      flow_ts$aggregation_type_id[1]
+    ),
+    start_date = wlevel_ts$end_datetime[1] - lubridate::days(2),
+    end_date = wlevel_ts$end_datetime[1],
     data = TRUE,
     datum = FALSE
   )$data
   expect_type(plot, "list")
   expect_equal(length(plot), 2) # should have two elements, for both timeseries plotted
-  expect_equal(length(plot$`09EA004_1165`), 2) # Should have the trace_data and range_data data.tables
-  expect_named(plot$`09EA004_1165`, c("range_data", "trace_data"))
-  expect_named(plot$`09EA004_1165`$trace_data, c("datetime", "value"))
+  expect_equal(length(plot[[1]]), 2) # Should have the trace_data and range_data data.tables
+  expect_named(plot[[1]], c("range_data", "trace_data"))
+  expect_named(plot[[1]]$trace_data, c("datetime", "value"))
   expect_named(
-    plot$`09EA004_1165`$range_data,
+    plot[[1]]$range_data,
     c("datetime", "min", "max", "q75", "q25")
   )
 })
@@ -49,10 +93,16 @@ test_that("plotMultiTimeseries returns data as expected", {
 test_that("plotMultiTimeseries subplots preserve inverted y-axis orientation", {
   plot <- plotMultiTimeseries(
     type = "subplots",
-    locations = c("09EA004", "09EA004"),
-    parameters = c(1165, 1150),
-    start_date = "2021-01-01",
-    end_date = "2021-01-03",
+    con = test_con,
+    locations = c(wlevel_ts$location_id[1], flow_ts$location_id[1]),
+    parameters = c(wlevel, flow),
+    record_rates = c(wlevel_ts$record_rate[1], flow_ts$record_rate[1]),
+    aggregation_types = c(
+      wlevel_ts$aggregation_type_id[1],
+      flow_ts$aggregation_type_id[1]
+    ),
+    start_date = wlevel_ts$end_datetime[1] - lubridate::days(2),
+    end_date = wlevel_ts$end_datetime[1],
     datum = FALSE,
     historic_range = FALSE,
     invert = c(TRUE, FALSE),
@@ -67,10 +117,16 @@ test_that("plotMultiTimeseries accepts hourly resolution", {
   # Expect a warning about datums not being applied
   expect_warning(
     plot <- plotMultiTimeseries(
-      locations = c("09EA004", "09EA004"),
-      parameters = c(1165, 1150),
-      start_date = "2022-06-01",
-      end_date = "2022-06-03",
+      con = test_con,
+      locations = c(wlevel_ts$location_id[1], flow_ts$location_id[1]),
+      parameters = c(wlevel, flow),
+      record_rates = c(wlevel_ts$record_rate[1], flow_ts$record_rate[1]),
+      aggregation_types = c(
+        wlevel_ts$aggregation_type_id[1],
+        flow_ts$aggregation_type_id[1]
+      ),
+      start_date = wlevel_ts$end_datetime[1] - lubridate::days(2),
+      end_date = wlevel_ts$end_datetime[1],
       resolution = "hour",
       historic_range = TRUE,
       data = TRUE
@@ -79,9 +135,9 @@ test_that("plotMultiTimeseries accepts hourly resolution", {
   )
 
   expect_equal(length(plot), 2)
-  expect_named(plot$`09EA004_1165`, c("range_data", "trace_data"))
-  expect_named(plot$`09EA004_1165`$trace_data, c("datetime", "value"))
-  expect_gt(nrow(plot$`09EA004_1165`$trace_data), 10)
+  expect_named(plot[[1]], c("range_data", "trace_data"))
+  expect_named(plot[[1]]$trace_data, c("datetime", "value"))
+  expect_gt(nrow(plot[[1]]$trace_data), 10)
 })
 
 test_that("plotMultiTimeseries can show data in the past", {
@@ -108,10 +164,6 @@ test_that("plotMultiTimeseries can show data in the past", {
   end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
 
   # Check if the connection can access function 'measurements_calculated_daily_at' which is used for historical queries. If not, skip the test.
-  tsid <- DBI::dbGetQuery(
-    con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1;"
-  )$timeseries_id[[1]]
 
   yes <- FALSE
   tryCatch(
