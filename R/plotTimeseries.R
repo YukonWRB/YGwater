@@ -537,6 +537,7 @@ plotTimeseries <- function(
         )
       }
     } else if (nrow(exist_check) > 1) {
+      temp <- exist_check
       if (is.null(record_rate)) {
         warning(
           "There is more than one entry in the database for location ",
@@ -1409,8 +1410,7 @@ plotTimeseries <- function(
       }
 
       dt[, id := paste0(prefix, "_", .I)]
-      dt[
-        ,
+      dt[,
         .(
           datetime = c(start_dt[1L], start_dt[1L], end_dt[1L], end_dt[1L]),
           y = y_set,
