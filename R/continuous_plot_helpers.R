@@ -262,9 +262,11 @@ add_gap_markers <- function(trace_data, period_seconds) {
   }
 
   trace_data <- data.table::as.data.table(trace_data)
-  data.table::setorder(trace_data, datetime)
+  data.table::setorder(trace_data, "datetime")
 
-  trace_data[, next_datetime := data.table::shift(datetime, type = "lead")]
+  trace_data[,
+    "next_datetime" := data.table::shift(trace_data$datetime, type = "lead")
+  ]
   gap_indices <- which(
     !is.na(trace_data$next_datetime) &
       as.numeric(
@@ -275,7 +277,7 @@ add_gap_markers <- function(trace_data, period_seconds) {
   )
 
   if (length(gap_indices) == 0) {
-    trace_data[, next_datetime := NULL]
+    trace_data[, "next_datetime" := NULL]
     return(trace_data)
   }
 
@@ -287,15 +289,15 @@ add_gap_markers <- function(trace_data, period_seconds) {
     na_rows[[col]] <- NA
   }
   if ("imputed" %in% names(na_rows)) {
-    na_rows[, imputed := FALSE]
+    na_rows[, "imputed" := FALSE]
   }
 
-  trace_data[, next_datetime := NULL]
+  trace_data[, "next_datetime" := NULL]
   out <- data.table::rbindlist(
     list(trace_data, na_rows),
     use.names = TRUE,
     fill = TRUE
   )
-  data.table::setorder(out, datetime)
+  data.table::setorder(out, "datetime")
   out
 }
