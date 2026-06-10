@@ -99,10 +99,14 @@ discData <- function(id, language, inputs) {
       # If logged in, get or create data that lives only with this session,
       cached <- disc_data_module_data(
         con = session$userData$AquaCache,
-        env = session$userData$app_cache
+        env = session$userData$app_cache,
+        public_safe = config$public
       )
     } else {
-      cached <- disc_data_module_data(con = session$userData$AquaCache)
+      cached <- disc_data_module_data(
+        con = session$userData$AquaCache,
+        public_safe = config$public
+      )
     }
 
     moduleData <- reactiveValues(

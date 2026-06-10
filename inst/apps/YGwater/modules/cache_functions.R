@@ -224,22 +224,36 @@ disc_plot_cache_signature <- function(con) {
 }
 
 
-disc_plot_module_data <- function(con, env = .GlobalEnv) {
-  key <- "disc_plot_module_data"
+disc_plot_module_data <- function(con, env = .GlobalEnv, public_safe = FALSE) {
+  key <- if (isTRUE(public_safe)) {
+    "disc_plot_module_data_public"
+  } else {
+    "disc_plot_module_data"
+  }
   get_cached(
     key = key,
     env = env,
     fetch_fun = function() {
+      loc_sql <- if (isTRUE(public_safe)) {
+        "SELECT DISTINCT
+           sp.public_location_id AS location_id,
+           sp.location_name AS name,
+           sp.location_name AS name_fr
+         FROM discrete.samples_public sp
+         ORDER BY sp.location_name ASC"
+      } else {
+        "SELECT loc.location_id, loc.name, loc.name_fr
+         FROM locations AS loc
+         WHERE EXISTS (
+           SELECT 1 FROM samples AS s WHERE s.location_id = loc.location_id
+         )
+         ORDER BY loc.name ASC"
+      }
       list(
         cache_signature = disc_plot_cache_signature(con),
         locs = DBI::dbGetQuery(
           con,
-          "SELECT loc.location_id, loc.name, loc.name_fr
-           FROM locations AS loc
-           WHERE EXISTS (
-             SELECT 1 FROM samples AS s WHERE s.location_id = loc.location_id
-           )
-           ORDER BY loc.name ASC"
+          loc_sql
         ),
         params = DBI::dbGetQuery(
           con,
@@ -318,58 +332,149 @@ disc_plot_module_data <- function(con, env = .GlobalEnv) {
 
 
 # discrete data module #####
-disc_data_module_data <- function(con, env = .GlobalEnv) {
+disc_data_module_data <- function(con, env = .GlobalEnv, public_safe = FALSE) {
   get_cached(
-    key = "disc_data_module_data",
+    key = if (isTRUE(public_safe)) {
+      "disc_data_module_data_public"
+    } else {
+      "disc_data_module_data"
+    },
     env = env,
     fetch_fun = function() {
-      locs <- DBI::dbGetQuery(
-        con,
-        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
-      )
-      sub_locs <- DBI::dbGetQuery(
-        con,
-        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM samples) ORDER BY sub_location_name ASC;"
-      )
+      if (isTRUE(public_safe)) {
+        locs <- DBI::dbGetQuery(
+          con,
+          "SELECT DISTINCT
+             sp.public_location_id AS location_id,
+             sp.location_name AS name,
+             sp.location_name AS name_fr
+           FROM discrete.samples_public sp
+           ORDER BY sp.location_name ASC"
+        )
+        sub_locs <- DBI::dbGetQuery(
+          con,
+          "SELECT DISTINCT
+             sp.sub_location_id,
+             sp.sub_location_name,
+             sp.sub_location_name AS sub_location_name_fr
+           FROM discrete.samples_public sp
+           WHERE sp.sub_location_id IS NOT NULL
+           ORDER BY sp.sub_location_name ASC"
+        )
+      } else {
+        locs <- DBI::dbGetQuery(
+          con,
+          "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
+        )
+        sub_locs <- DBI::dbGetQuery(
+          con,
+          "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM samples) ORDER BY sub_location_name ASC;"
+        )
+      }
       params <- DBI::dbGetQuery(
         con,
-        paste(
-          "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-          ac_parameter_unit_select_sql(con, "p", "unit"),
-          "FROM parameters p",
-          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM results)",
-          "ORDER BY p.param_name ASC;"
-        )
+        if (isTRUE(public_safe)) {
+          "SELECT DISTINCT
+             rp.parameter_id,
+             rp.parameter_name AS param_name,
+             rp.parameter_name AS param_name_fr,
+             rp.units AS unit
+           FROM discrete.results_public rp
+           ORDER BY rp.parameter_name ASC"
+        } else {
+          paste(
+            "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
+            ac_parameter_unit_select_sql(con, "p", "unit"),
+            "FROM parameters p",
+            "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM results)",
+            "ORDER BY p.param_name ASC;"
+          )
+        }
       )
       media <- DBI::dbGetQuery(
         con,
-        "SELECT m.media_id, m.media_type, m.media_type_fr FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"
+        if (isTRUE(public_safe)) {
+          "SELECT DISTINCT media_id, media_type, media_type AS media_type_fr
+           FROM discrete.samples_public
+           WHERE media_id IS NOT NULL"
+        } else {
+          "SELECT m.media_id, m.media_type, m.media_type_fr FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"
+        }
       )
       parameter_relationships <- DBI::dbGetQuery(
         con,
-        "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"
+        if (isTRUE(public_safe)) {
+          "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id
+           FROM parameter_relationships AS p
+           WHERE EXISTS (
+             SELECT 1
+             FROM discrete.results_public r
+             WHERE p.parameter_id = r.parameter_id
+           );"
+        } else {
+          "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"
+        }
       )
       range <- DBI::dbGetQuery(
         con,
-        "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"
+        if (isTRUE(public_safe)) {
+          "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date
+           FROM discrete.samples_public;"
+        } else {
+          "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"
+        }
       )
       sample_types <- DBI::dbGetQuery(
         con,
-        "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM sample_types AS st WHERE EXISTS (SELECT 1 FROM samples AS s WHERE st.sample_type_id = s.sample_type);"
+        if (isTRUE(public_safe)) {
+          "SELECT DISTINCT sample_type_id, sample_type, sample_type AS sample_type_fr
+           FROM discrete.samples_public
+           WHERE sample_type_id IS NOT NULL;"
+        } else {
+          "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM sample_types AS st WHERE EXISTS (SELECT 1 FROM samples AS s WHERE st.sample_type_id = s.sample_type);"
+        }
       )
       samples <- DBI::dbGetQuery(
         con,
-        "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type FROM samples;"
+        if (isTRUE(public_safe)) {
+          "SELECT
+             sample_id,
+             public_location_id AS location_id,
+             sub_location_id,
+             media_id,
+             datetime,
+             sample_type_id AS sample_type
+           FROM discrete.samples_public;"
+        } else {
+          "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type FROM samples;"
+        }
       )
 
-      locations_projects <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT project_id, location_id FROM locations_projects WHERE location_id IN (",
-          paste(locs$location_id, collapse = ", "),
-          ");"
+      locations_projects <- if (nrow(locs) == 0) {
+        data.frame(location_id = numeric(), project_id = numeric())
+      } else if (isTRUE(public_safe)) {
+        DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT DISTINCT loc_proj.project_id, lp.public_location_id AS location_id
+             FROM public.locations_public lp
+             JOIN public.locations_projects loc_proj
+               ON lp.location_id = loc_proj.location_id
+             WHERE lp.public_location_id IN (",
+            paste(locs$location_id, collapse = ", "),
+            ");"
+          )
         )
-      )
+      } else {
+        DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT project_id, location_id FROM locations_projects WHERE location_id IN (",
+            paste(locs$location_id, collapse = ", "),
+            ");"
+          )
+        )
+      }
       if (nrow(locations_projects) > 0) {
         projects <- DBI::dbGetQuery(
           con,
@@ -391,14 +496,31 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
         )
       }
 
-      locations_networks <- DBI::dbGetQuery(
-        con,
-        paste0(
-          "SELECT network_id, location_id FROM locations_networks WHERE location_id IN (",
-          paste(locs$location_id, collapse = ", "),
-          ");"
+      locations_networks <- if (nrow(locs) == 0) {
+        data.frame(location_id = numeric(), network_id = numeric())
+      } else if (isTRUE(public_safe)) {
+        DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT DISTINCT loc_net.network_id, lp.public_location_id AS location_id
+             FROM public.locations_public lp
+             JOIN public.locations_networks loc_net
+               ON lp.location_id = loc_net.location_id
+             WHERE lp.public_location_id IN (",
+            paste(locs$location_id, collapse = ", "),
+            ");"
+          )
         )
-      )
+      } else {
+        DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT network_id, location_id FROM locations_networks WHERE location_id IN (",
+            paste(locs$location_id, collapse = ", "),
+            ");"
+          )
+        )
+      }
       if (nrow(locations_networks) > 0) {
         networks <- DBI::dbGetQuery(
           con,
@@ -478,56 +600,125 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
 
 
 # parameter map module #########
-map_params_module_data <- function(con, env = .GlobalEnv) {
+map_params_module_data <- function(con, env = .GlobalEnv, public_safe = FALSE) {
   get_cached(
-    key = "map_params_module_data",
+    key = if (isTRUE(public_safe)) {
+      "map_params_module_data_public"
+    } else {
+      "map_params_module_data"
+    },
     env = env,
     fetch_fun = function() {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT location_code AS location, name, name_fr, latitude, longitude, location_id FROM locations"
+          if (isTRUE(public_safe)) {
+            "SELECT DISTINCT ON (public_location_id)
+               location_code AS location,
+               name,
+               name_fr,
+               COALESCE(
+                 latitude,
+                 ST_Y(ST_PointOnSurface(public_geom))::numeric
+               ) AS latitude,
+               COALESCE(
+                 longitude,
+                 ST_X(ST_PointOnSurface(public_geom))::numeric
+               ) AS longitude,
+               public_location_id AS location_id,
+               public_geom_type,
+               public_accuracy_m,
+               exact_location_visible,
+               ST_AsGeoJSON(public_geom) AS public_geom_geojson
+             FROM public.locations_public
+             ORDER BY public_location_id, exact_location_visible DESC, location_id"
+          } else {
+            "SELECT location_code AS location, name, name_fr, latitude, longitude, location_id FROM locations"
+          }
         ),
         timeseries = dbGetQueryDT(
           con,
-          paste(
-            "SELECT ts.timeseries_id,",
-            "ts.location_id,",
-            "p.param_name,",
-            "p.param_name_fr,",
-            ac_parameter_unit_select_sql(
-              con,
-              "p",
-              "units",
-              matrix_state_alias = "ts",
-              media_alias = "ts"
-            ),
-            ", ms.matrix_state_name AS matrix_state,",
-            "m.media_type,",
-            "ts.media_id,",
-            "ts.parameter_id,",
-            "ts.aggregation_type_id,",
-            "ts.start_datetime,",
-            "ts.end_datetime,",
-            "lz.z_meters AS z",
-            "FROM continuous.timeseries AS ts",
-            "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
-            "LEFT JOIN public.matrix_states AS ms",
-            "ON ts.matrix_state_id = ms.matrix_state_id",
-            "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
-            "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
-          )
+          if (isTRUE(public_safe)) {
+            paste(
+              "SELECT ts.timeseries_id,",
+              "lp.public_location_id AS location_id,",
+              "p.param_name,",
+              "p.param_name_fr,",
+              ac_parameter_unit_select_sql(
+                con,
+                "p",
+                "units",
+                matrix_state_alias = "ts",
+                media_alias = "ts"
+              ),
+              ", ms.matrix_state_name AS matrix_state,",
+              "m.media_type,",
+              "ts.media_id,",
+              "ts.parameter_id,",
+              "ts.aggregation_type_id,",
+              "ts.start_datetime,",
+              "ts.end_datetime,",
+              "lz.z_meters AS z",
+              "FROM continuous.timeseries AS ts",
+              "JOIN public.locations_public lp ON ts.location_id = lp.location_id",
+              "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
+              "LEFT JOIN public.matrix_states AS ms",
+              "ON ts.matrix_state_id = ms.matrix_state_id",
+              "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
+              "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+            )
+          } else {
+            paste(
+              "SELECT ts.timeseries_id,",
+              "ts.location_id,",
+              "p.param_name,",
+              "p.param_name_fr,",
+              ac_parameter_unit_select_sql(
+                con,
+                "p",
+                "units",
+                matrix_state_alias = "ts",
+                media_alias = "ts"
+              ),
+              ", ms.matrix_state_name AS matrix_state,",
+              "m.media_type,",
+              "ts.media_id,",
+              "ts.parameter_id,",
+              "ts.aggregation_type_id,",
+              "ts.start_datetime,",
+              "ts.end_datetime,",
+              "lz.z_meters AS z",
+              "FROM continuous.timeseries AS ts",
+              "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
+              "LEFT JOIN public.matrix_states AS ms",
+              "ON ts.matrix_state_id = ms.matrix_state_id",
+              "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
+              "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+            )
+          }
         ),
         parameters = dbGetQueryDT(
           con,
-          paste(
-            "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
-            ac_parameter_unit_select_sql(con, "p", "unit_default"),
-            ", pr.group_id, pr.sub_group_id",
-            "FROM public.parameters AS p",
-            "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
-            "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
-          )
+          if (isTRUE(public_safe)) {
+            paste(
+              "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
+              ac_parameter_unit_select_sql(con, "p", "unit_default"),
+              ", pr.group_id, pr.sub_group_id",
+              "FROM public.parameters AS p",
+              "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
+              "JOIN public.locations_public lp ON ts.location_id = lp.location_id",
+              "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
+            )
+          } else {
+            paste(
+              "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
+              ac_parameter_unit_select_sql(con, "p", "unit_default"),
+              ", pr.group_id, pr.sub_group_id",
+              "FROM public.parameters AS p",
+              "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
+              "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
+            )
+          }
         )
       )
     },
@@ -537,62 +728,120 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
 
 
 # locations map module #########
-map_location_module_data <- function(con, env = .GlobalEnv) {
+map_location_module_data <- function(con, env = .GlobalEnv, public_safe = FALSE) {
   get_cached(
-    key = "map_location_module_data",
+    key = if (isTRUE(public_safe)) {
+      "map_location_module_data_public"
+    } else {
+      "map_location_module_data"
+    },
     env = env,
     fetch_fun = function() {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT l.location_code AS location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
+          if (isTRUE(public_safe)) {
+            "SELECT DISTINCT ON (l.public_location_id)
+               l.location_code AS location,
+               l.name,
+               l.name_fr,
+               l.latitude,
+               l.longitude,
+               l.public_location_id AS location_id,
+               l.location_type_name AS type,
+               l.location_type_name_fr AS type_fr,
+               l.public_geom_type,
+               l.public_accuracy_m,
+               l.exact_location_visible,
+               ST_AsGeoJSON(l.public_geom) AS public_geom_geojson
+             FROM public.locations_public l
+             ORDER BY l.public_location_id, l.exact_location_visible DESC, l.location_id;"
+          } else {
+            "SELECT l.location_code AS location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
+          }
         ),
         timeseries = dbGetQueryDT(
           con,
-          paste(
-            "SELECT ts.timeseries_id, ts.location_id, p.param_name,",
-            "p.param_name_fr,",
-            ac_parameter_unit_select_sql(
-              con,
-              "p",
-              "units",
-              matrix_state_alias = "ts",
-              media_alias = "ts"
-            ),
-            ", ms.matrix_state_name AS matrix_state, m.media_type,",
-            "ts.media_id, ts.parameter_id, ts.aggregation_type_id,",
-            "ts.start_datetime, ts.end_datetime, lz.z_meters AS z,",
-            "'continuous' AS data_type",
-            "FROM continuous.timeseries AS ts",
-            "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
-            "LEFT JOIN public.matrix_states AS ms",
-            "ON ts.matrix_state_id = ms.matrix_state_id",
-            "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
-            "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id",
-            "UNION ALL",
-            "SELECT MIN(r.result_id) AS timeseries_id, s.location_id,",
-            "p.param_name, p.param_name_fr,",
-            ac_parameter_unit_select_sql(
-              con,
-              "p",
-              "units",
-              matrix_state_alias = "r",
-              media_alias = "s"
-            ),
-            ", ms.matrix_state_name AS matrix_state, m.media_type,",
-            "s.media_id, r.parameter_id, NULL AS aggregation_type_id,",
-            "MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime,",
-            "MIN(s.z) AS z, 'discrete' AS data_type",
-            "FROM discrete.results r",
-            "JOIN discrete.samples s ON r.sample_id = s.sample_id",
-            "LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id",
-            "LEFT JOIN public.matrix_states ms",
-            "ON r.matrix_state_id = ms.matrix_state_id",
-            "LEFT JOIN public.media_types m ON s.media_id = m.media_id",
-            "GROUP BY s.location_id, p.parameter_id, p.param_name,",
-            "p.param_name_fr, r.matrix_state_id, ms.matrix_state_name,",
-            "m.media_type, s.media_id, r.parameter_id"
-          )
+          if (isTRUE(public_safe)) {
+            paste(
+              "SELECT ts.timeseries_id, lp.public_location_id AS location_id, p.param_name,",
+              "p.param_name_fr,",
+              ac_parameter_unit_select_sql(
+                con,
+                "p",
+                "units",
+                matrix_state_alias = "ts",
+                media_alias = "ts"
+              ),
+              ", ms.matrix_state_name AS matrix_state, m.media_type,",
+              "ts.media_id, ts.parameter_id, ts.aggregation_type_id,",
+              "ts.start_datetime, ts.end_datetime, lz.z_meters AS z,",
+              "'continuous' AS data_type",
+              "FROM continuous.timeseries AS ts",
+              "JOIN public.locations_public lp ON ts.location_id = lp.location_id",
+              "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
+              "LEFT JOIN public.matrix_states AS ms",
+              "ON ts.matrix_state_id = ms.matrix_state_id",
+              "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
+              "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id",
+              "UNION ALL",
+              "SELECT MIN(r.result_id) AS timeseries_id, r.public_location_id AS location_id,",
+              "r.parameter_name AS param_name, r.parameter_name AS param_name_fr,",
+              "MAX(r.units) AS units,",
+              "r.matrix_state_name AS matrix_state, r.media_type,",
+              "r.media_id, r.parameter_id, NULL AS aggregation_type_id,",
+              "MIN(r.datetime) AS start_datetime, MAX(r.datetime) AS end_datetime,",
+              "MIN(r.depth_height_m) AS z, 'discrete' AS data_type",
+              "FROM discrete.results_public r",
+              "GROUP BY r.public_location_id, r.parameter_id, r.parameter_name,",
+              "r.matrix_state_name, r.media_type, r.media_id"
+            )
+          } else {
+            paste(
+              "SELECT ts.timeseries_id, ts.location_id, p.param_name,",
+              "p.param_name_fr,",
+              ac_parameter_unit_select_sql(
+                con,
+                "p",
+                "units",
+                matrix_state_alias = "ts",
+                media_alias = "ts"
+              ),
+              ", ms.matrix_state_name AS matrix_state, m.media_type,",
+              "ts.media_id, ts.parameter_id, ts.aggregation_type_id,",
+              "ts.start_datetime, ts.end_datetime, lz.z_meters AS z,",
+              "'continuous' AS data_type",
+              "FROM continuous.timeseries AS ts",
+              "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
+              "LEFT JOIN public.matrix_states AS ms",
+              "ON ts.matrix_state_id = ms.matrix_state_id",
+              "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
+              "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id",
+              "UNION ALL",
+              "SELECT MIN(r.result_id) AS timeseries_id, s.location_id,",
+              "p.param_name, p.param_name_fr,",
+              ac_parameter_unit_select_sql(
+                con,
+                "p",
+                "units",
+                matrix_state_alias = "r",
+                media_alias = "s"
+              ),
+              ", ms.matrix_state_name AS matrix_state, m.media_type,",
+              "s.media_id, r.parameter_id, NULL AS aggregation_type_id,",
+              "MIN(s.datetime) AS start_datetime, MAX(s.datetime) AS end_datetime,",
+              "MIN(s.z) AS z, 'discrete' AS data_type",
+              "FROM discrete.results r",
+              "JOIN discrete.samples s ON r.sample_id = s.sample_id",
+              "LEFT JOIN public.parameters p ON r.parameter_id = p.parameter_id",
+              "LEFT JOIN public.matrix_states ms",
+              "ON r.matrix_state_id = ms.matrix_state_id",
+              "LEFT JOIN public.media_types m ON s.media_id = m.media_id",
+              "GROUP BY s.location_id, p.parameter_id, p.param_name,",
+              "p.param_name_fr, r.matrix_state_id, ms.matrix_state_name,",
+              "m.media_type, s.media_id, r.parameter_id"
+            )
+          }
         ),
         projects = dbGetQueryDT(
           con,
@@ -604,18 +853,40 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
         ),
         locations_projects = dbGetQueryDT(
           con,
-          "SELECT project_id, location_id FROM locations_projects;"
+          if (isTRUE(public_safe)) {
+            "SELECT DISTINCT loc_proj.project_id, lp.public_location_id AS location_id
+             FROM public.locations_public lp
+             JOIN public.locations_projects loc_proj
+               ON lp.location_id = loc_proj.location_id;"
+          } else {
+            "SELECT project_id, location_id FROM locations_projects;"
+          }
         ),
         locations_networks = dbGetQueryDT(
           con,
-          "SELECT network_id, location_id FROM locations_networks;"
+          if (isTRUE(public_safe)) {
+            "SELECT DISTINCT loc_net.network_id, lp.public_location_id AS location_id
+             FROM public.locations_public lp
+             JOIN public.locations_networks loc_net
+               ON lp.location_id = loc_net.location_id;"
+          } else {
+            "SELECT network_id, location_id FROM locations_networks;"
+          }
         ),
         media_types = dbGetQueryDT(
           con,
-          "SELECT mt.media_id, mt.media_type, mt.media_type_fr FROM public.media_types mt WHERE mt.media_id IN (
+          paste(
+            "SELECT mt.media_id, mt.media_type, mt.media_type_fr FROM public.media_types mt WHERE mt.media_id IN (
               SELECT DISTINCT media_id FROM continuous.timeseries
               UNION
-              SELECT DISTINCT media_id FROM discrete.samples)"
+              SELECT DISTINCT media_id FROM ",
+            if (isTRUE(public_safe)) {
+              "discrete.samples_public"
+            } else {
+              "discrete.samples"
+            },
+            ")"
+          )
         ),
         parameters = dbGetQueryDT(
           con,
@@ -628,28 +899,50 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
             "WHERE p.parameter_id IN (",
             "SELECT DISTINCT parameter_id FROM continuous.timeseries",
             "UNION",
-            "SELECT DISTINCT parameter_id FROM discrete.results)"
+            "SELECT DISTINCT parameter_id FROM ",
+            if (isTRUE(public_safe)) {
+              "discrete.results_public"
+            } else {
+              "discrete.results"
+            },
+            ")"
           )
         ),
         parameter_groups = dbGetQueryDT(
           con,
-          "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
+          paste(
+            "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
              FROM public.parameter_groups AS pg
              LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id
             WHERE pr.parameter_id IN (
               SELECT DISTINCT parameter_id FROM continuous.timeseries
               UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)"
+              SELECT DISTINCT parameter_id FROM ",
+              if (isTRUE(public_safe)) {
+                "discrete.results_public"
+              } else {
+                "discrete.results"
+              },
+              ")"
+          )
         ),
         parameter_sub_groups = dbGetQueryDT(
           con,
-          "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
+          paste(
+            "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
              FROM public.parameter_sub_groups AS psg
              LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id
             WHERE pr.parameter_id IN (
               SELECT DISTINCT parameter_id FROM continuous.timeseries
               UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)"
+              SELECT DISTINCT parameter_id FROM ",
+              if (isTRUE(public_safe)) {
+                "discrete.results_public"
+              } else {
+                "discrete.results"
+              },
+              ")"
+          )
         )
       )
     },

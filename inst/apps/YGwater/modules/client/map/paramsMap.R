@@ -40,10 +40,14 @@ mapParams <- function(id, language) {
     if (session$userData$user_logged_in) {
       cached <- map_params_module_data(
         con = session$userData$AquaCache,
-        env = session$userData$app_cache
+        env = session$userData$app_cache,
+        public_safe = config$public
       )
     } else {
-      cached <- map_params_module_data(con = session$userData$AquaCache)
+      cached <- map_params_module_data(
+        con = session$userData$AquaCache,
+        public_safe = config$public
+      )
     }
 
     moduleData <- reactiveValues(

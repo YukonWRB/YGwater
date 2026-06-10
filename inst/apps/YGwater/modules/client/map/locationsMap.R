@@ -127,10 +127,14 @@ mapLocs <- function(id, language, outputs = NULL) {
     if (session$userData$user_logged_in) {
       cached <- map_location_module_data(
         con = session$userData$AquaCache,
-        env = session$userData$app_cache
+        env = session$userData$app_cache,
+        public_safe = config$public
       )
     } else {
-      cached <- map_location_module_data(con = session$userData$AquaCache)
+      cached <- map_location_module_data(
+        con = session$userData$AquaCache,
+        public_safe = config$public
+      )
     }
 
     moduleData <- reactiveValues(
@@ -1112,49 +1116,92 @@ mapLocs <- function(id, language, outputs = NULL) {
       map_proxy <- leaflet::leafletProxy("map", session = session) %>%
         leaflet::clearMarkers() %>%
         leaflet::clearMarkerClusters() %>%
+        leaflet::clearGroup("Reporting polygons") %>%
         leaflet::removeControl("location_type_legend")
 
       if (nrow(loc.sub) > 0) {
-        # Build per-row SVG data URIs (matches nrow(loc.sub))
-        icon_urls <- mapply(
-          svg_data_uri,
-          shape = loc.sub$shape,
-          fill = loc.sub$color_hex,
-          MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
-          USE.NAMES = FALSE
-        )
+        if ("public_geom_type" %in% names(loc.sub) &&
+          "public_geom_geojson" %in% names(loc.sub)) {
+          polygon_locs <- loc.sub[
+            public_geom_type == "reporting_polygon" &
+              !is.na(public_geom_geojson) &
+              nzchar(public_geom_geojson)
+          ]
+        } else {
+          polygon_locs <- loc.sub[0]
+        }
 
-        # Create icons with custom class names, used for pie chart cluster icons
-        slug <- function(x) gsub("[^A-Za-z0-9_-]", "_", x)
-        icons <- leaflet::icons(
-          iconUrl = icon_urls,
-          iconWidth = 15,
-          iconHeight = 15,
-          className = paste0(
-            "loc-type-",
-            slug(loc.sub$type_label),
-            " loc-col-",
-            gsub("#", "", loc.sub$color_hex)
+        if (nrow(polygon_locs) > 0) {
+          for (j in seq_len(nrow(polygon_locs))) {
+            map_proxy <- leaflet::addGeoJSON(
+              map_proxy,
+              geojson = polygon_locs$public_geom_geojson[[j]],
+              group = "Reporting polygons",
+              layerId = paste0(
+                "reporting_polygon_",
+                polygon_locs$location_id[[j]]
+              ),
+              color = "#244C5A",
+              weight = 2,
+              fillOpacity = 0.2
+            )
+          }
+        }
+
+        marker_locs <- loc.sub
+        if ("public_geom_type" %in% names(marker_locs)) {
+          marker_locs <- marker_locs[
+            is.na(public_geom_type) | public_geom_type != "reporting_polygon"
+          ]
+        }
+        marker_locs <- marker_locs[
+          !is.na(latitude) & !is.na(longitude)
+        ]
+
+        # Build per-row SVG data URIs (matches nrow(loc.sub))
+        if (nrow(marker_locs) > 0) {
+          icon_urls <- mapply(
+            svg_data_uri,
+            shape = marker_locs$shape,
+            fill = marker_locs$color_hex,
+            MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
+            USE.NAMES = FALSE
           )
-        )
+
+          # Create icons with custom class names, used for pie chart cluster icons
+          slug <- function(x) gsub("[^A-Za-z0-9_-]", "_", x)
+          icons <- leaflet::icons(
+            iconUrl = icon_urls,
+            iconWidth = 15,
+            iconHeight = 15,
+            className = paste0(
+              "loc-type-",
+              slug(marker_locs$type_label),
+              " loc-col-",
+              gsub("#", "", marker_locs$color_hex)
+            )
+          )
+
+          map_proxy <- map_proxy %>%
+            leaflet::addMarkers(
+              data = marker_locs,
+              lng = ~longitude,
+              lat = ~latitude,
+              popup = ~popup_html,
+              icon = icons,
+              clusterOptions = if (isTRUE(input$cluster_points)) {
+                leaflet::markerClusterOptions(
+                  iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
+                  maxClusterRadius = 80, # cluster radius in pixels
+                  spiderfyOnMaxZoom = TRUE
+                )
+              } else {
+                NULL
+              }
+            )
+        }
 
         map_proxy <- map_proxy %>%
-          leaflet::addMarkers(
-            data = loc.sub,
-            lng = ~longitude,
-            lat = ~latitude,
-            popup = ~popup_html,
-            icon = icons,
-            clusterOptions = if (isTRUE(input$cluster_points)) {
-              leaflet::markerClusterOptions(
-                iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
-                maxClusterRadius = 80, # cluster radius in pixels
-                spiderfyOnMaxZoom = TRUE
-              )
-            } else {
-              NULL
-            }
-          ) %>%
           leaflet::addControl(
             build_symbol_legend(
               type_map,

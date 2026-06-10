@@ -1118,9 +1118,35 @@ function(request, response, query) {
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
 
   sql <- if (lang == "en") {
-    "SELECT * FROM public.location_metadata_en ORDER BY location_id"
+    "SELECT DISTINCT ON (public_location_id)
+       public_location_id AS location_id,
+       name,
+       alias,
+       location_code,
+       location_type_name AS location_type,
+       latitude,
+       longitude,
+       note,
+       public_geom_type,
+       public_accuracy_m,
+       exact_location_visible
+     FROM public.locations_public
+     ORDER BY public_location_id, exact_location_visible DESC, location_id"
   } else {
-    "SELECT * FROM public.location_metadata_fr ORDER BY location_id"
+    "SELECT DISTINCT ON (public_location_id)
+       public_location_id AS location_id,
+       name_fr AS nom,
+       alias,
+       location_code AS code_de_site,
+       location_type_name_fr AS type_de_site,
+       latitude,
+       longitude,
+       note,
+       public_geom_type,
+       public_accuracy_m,
+       exact_location_visible
+     FROM public.locations_public
+     ORDER BY public_location_id, exact_location_visible DESC, location_id"
   }
 
   out <- DBI::dbGetQuery(ctx$con, sql)
@@ -2048,8 +2074,74 @@ function(client_id, query) {
   }
 
   sql <- "SELECT
-    sm.*
-  FROM discrete.samples_metadata_en sm
+    sm.sample_id,
+    sm.public_location_id AS location_id,
+    sm.exact_location_id,
+    sm.reporting_area_id,
+    sm.reporting_location_id,
+    sm.reporting_area_n_locs,
+    sm.location_code,
+    sm.location_name,
+    sm.alias_name,
+    sm.latitude,
+    sm.longitude,
+    sm.public_geom_type,
+    sm.public_accuracy_m,
+    sm.public_geom_method,
+    sm.exact_location_visible,
+    sm.location_elevation,
+    sm.projects,
+    sm.networks,
+    sm.sub_location_id,
+    sm.sub_location_name,
+    sm.sub_location_latitude,
+    sm.sub_location_longitude,
+    sm.media_id,
+    sm.media_type,
+    sm.depth_height_m,
+    sm.datetime,
+    sm.target_datetime,
+    sm.collection_method_id,
+    sm.collection_method,
+    sm.sample_type_id,
+    sm.sample_type,
+    sm.linked_sample_id,
+    sm.sample_volume_ml,
+    sm.purge_volume_l,
+    sm.purge_time_min,
+    sm.flow_rate_l_min,
+    sm.wave_hgt_m,
+    sm.sample_grade_id,
+    sm.sample_grade_code,
+    sm.sample_grade_description,
+    sm.sample_approval_id,
+    sm.sample_approval_code,
+    sm.sample_approval_description,
+    sm.sample_qualifier_id,
+    sm.sample_qualifier_code,
+    sm.sample_qualifier_description,
+    sm.owner_id,
+    sm.owner_name,
+    sm.contributor_id,
+    sm.contributor_name,
+    sm.commissioning_org_id,
+    sm.commissioning_org_name,
+    sm.sampling_org_id,
+    sm.sampling_org_name,
+    sm.field_visit_id,
+    sm.data_sharing_agreement_id,
+    sm.documents,
+    sm.import_source,
+    sm.import_source_id,
+    sm.no_update,
+    sm.note,
+    sm.share_with,
+    sm.private_expiry,
+    sm.created,
+    sm.created_by,
+    sm.modified,
+    sm.modified_by
+  FROM discrete.samples_public sm
   WHERE sm.datetime >= $1 AND sm.datetime <= $2"
 
   locations <- v2_query_value(query, "locations")
@@ -2066,7 +2158,7 @@ function(client_id, query) {
     }
     sql <- paste0(
       sql,
-      " AND sm.location_id IN (",
+      " AND sm.public_location_id IN (",
       paste(location_ids, collapse = ","),
       ")"
     )
@@ -2088,7 +2180,7 @@ function(client_id, query) {
       sql,
       " AND EXISTS (
         SELECT 1
-          FROM discrete.results r
+          FROM discrete.results_public r
           WHERE r.sample_id = sm.sample_id
             AND r.parameter_id IN (",
       paste(parameter_ids, collapse = ","),
@@ -2163,8 +2255,91 @@ function(client_id, query) {
 
   sql <- paste0(
     "SELECT
-    r.*
-  FROM discrete.results_metadata_en r
+    r.result_id,
+    r.sample_id,
+    r.public_location_id AS location_id,
+    r.exact_location_id,
+    r.reporting_area_id,
+    r.reporting_location_id,
+    r.reporting_area_n_locs,
+    r.location_code,
+    r.location_name,
+    r.alias_name,
+    r.latitude,
+    r.longitude,
+    r.public_geom_type,
+    r.public_accuracy_m,
+    r.public_geom_method,
+    r.exact_location_visible,
+    r.location_elevation,
+    r.projects,
+    r.networks,
+    r.sub_location_id,
+    r.sub_location_name,
+    r.sub_location_latitude,
+    r.sub_location_longitude,
+    r.media_id,
+    r.media_type,
+    r.depth_height_m,
+    r.datetime,
+    r.target_datetime,
+    r.collection_method_id,
+    r.collection_method,
+    r.sample_type_id,
+    r.sample_type,
+    r.sample_grade_id,
+    r.sample_grade_code,
+    r.sample_grade_description,
+    r.sample_approval_id,
+    r.sample_approval_code,
+    r.sample_approval_description,
+    r.sample_qualifier_id,
+    r.sample_qualifier_code,
+    r.sample_qualifier_description,
+    r.sample_owner_id,
+    r.sample_owner_name,
+    r.sample_contributor_id,
+    r.sample_contributor_name,
+    r.sample_import_source,
+    r.sample_import_source_id,
+    r.sample_note,
+    r.parameter_id,
+    r.parameter_name,
+    r.cas_number,
+    r.matrix_state_id,
+    r.matrix_state_code,
+    r.matrix_state_name,
+    r.units,
+    r.sample_fraction_id,
+    r.sample_fraction,
+    r.result_type_id,
+    r.result_type,
+    r.result,
+    r.result_condition_id,
+    r.result_condition,
+    r.result_condition_value,
+    r.result_value_type_id,
+    r.result_value_type,
+    r.result_speciation_id,
+    r.result_speciation,
+    r.protocol_method_id,
+    r.protocol_method,
+    r.protocol_description,
+    r.protocol_url,
+    r.lab_id,
+    r.lab_name,
+    r.analysis_datetime,
+    r.sample_no_update,
+    r.result_no_update,
+    r.sample_share_with,
+    r.result_share_with,
+    r.sample_private_expiry,
+    r.result_private_expiry,
+    r.created,
+    r.created_by,
+    r.modified,
+    r.modified_by
+  FROM discrete.results_public r
   WHERE r.sample_id IN (",
     paste(sample_ids, collapse = ","),
     ")"

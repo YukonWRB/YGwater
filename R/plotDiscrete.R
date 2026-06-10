@@ -39,6 +39,7 @@
 #' @param sample_ids Optional AquaCache sample ids to include. This is used by Shiny browse-table selections.
 #' @param season_ranges Optional AquaCache seasonal date ranges to include. Dates are accepted, but only the day-of-year is used; ranges may cross New Year.
 #' @param season_highlight_ranges Optional date ranges to highlight on the plot background. Dates are accepted, but only month/day is used; ranges may cross New Year.
+#' @param public_safe Should AquaCache queries use public-safe views and public location IDs? Default is FALSE.
 #' @param dbSource The database source to use, 'AC' for aquacache or 'EQ' for EQWin. Default is 'EQ'. Connections to aquacache are made using function [AquaConnect()] while EQWin connections use [AccessConnect()].
 #' @param dbCon A database connection object, optional. Leave NULL to create a new connection and have it closed automatically.
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`.
@@ -86,6 +87,7 @@ plotDiscrete <- function(
   sample_ids = NULL,
   season_ranges = NULL,
   season_highlight_ranges = NULL,
+  public_safe = FALSE,
   dbSource = "EQ",
   dbCon = NULL,
   dbPath = eqwin_db_path(),
@@ -1041,11 +1043,41 @@ plotDiscrete <- function(
       }
     }
 
+    location_table <- if (isTRUE(public_safe)) {
+      "public.locations_public"
+    } else {
+      "locations"
+    }
+    samples_table <- if (isTRUE(public_safe)) {
+      "discrete.samples_public"
+    } else {
+      "samples"
+    }
+    results_table <- if (isTRUE(public_safe)) {
+      "discrete.results_public"
+    } else {
+      "results"
+    }
+    location_id_select <- if (isTRUE(public_safe)) {
+      "public_location_id AS location_id"
+    } else {
+      "location_id"
+    }
+    sample_location_col <- if (isTRUE(public_safe)) {
+      "public_location_id"
+    } else {
+      "location_id"
+    }
+
     # Validate existence of parameters and/or locations
     if (!is.null(locations)) {
       if (inherits(locations, "character")) {
         query <- paste0(
-          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE LOWER(location_code) IN (LOWER('",
+          "SELECT ",
+          if (isTRUE(public_safe)) "DISTINCT ON (public_location_id) " else "DISTINCT ",
+          location_id_select, ", location_code AS location, alias, name, name_fr FROM ",
+          location_table,
+          " WHERE LOWER(location_code) IN (LOWER('",
           paste0(locations, collapse = "'), LOWER('"),
           "')) ",
           "OR LOWER(alias) IN (LOWER('",
@@ -1060,7 +1092,13 @@ plotDiscrete <- function(
         )
       } else {
         query <- paste0(
-          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE location_id IN (",
+          "SELECT ",
+          if (isTRUE(public_safe)) "DISTINCT ON (public_location_id) " else "DISTINCT ",
+          location_id_select, ", location_code AS location, alias, name, name_fr FROM ",
+          location_table,
+          " WHERE ",
+          if (isTRUE(public_safe)) "public_location_id" else "location_id",
+          " IN (",
           paste0(locations, collapse = ", "),
           ");"
         )
@@ -1111,10 +1149,22 @@ plotDiscrete <- function(
       locIds <- DBI::dbGetQuery(
         AC,
         paste0(
-          "SELECT DISTINCT l.location_id, l.location_code AS location,",
+          "SELECT ",
+          if (isTRUE(public_safe)) "DISTINCT ON (s.public_location_id) " else "DISTINCT ",
+          if (isTRUE(public_safe)) {
+            "s.public_location_id AS location_id"
+          } else {
+            "l.location_id"
+          },
+          ", l.location_code AS location,",
           " l.alias, l.name, l.name_fr",
-          " FROM locations AS l",
-          " INNER JOIN samples AS s ON l.location_id = s.location_id",
+          " FROM ", location_table, " AS l",
+          " INNER JOIN ", samples_table, " AS s ON l.",
+          if (isTRUE(public_safe)) {
+            "public_location_id = s.public_location_id"
+          } else {
+            "location_id = s.location_id"
+          },
           " WHERE s.sample_id IN (",
           paste0(sample_ids, collapse = ", "),
           ");"
@@ -1231,7 +1281,7 @@ plotDiscrete <- function(
           "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, ",
           unit_sql,
           " FROM parameters AS p",
-          " INNER JOIN results AS r ON p.parameter_id = r.parameter_id",
+          " INNER JOIN ", results_table, " AS r ON p.parameter_id = r.parameter_id",
           " WHERE r.sample_id IN (",
           paste0(sample_ids, collapse = ", "),
           ");"
@@ -1254,8 +1304,51 @@ plotDiscrete <- function(
     }
 
     if (is.null(sub_locations) | nrow(subLocIds) == 0) {
-      samp_query <- paste0(
+      if (isTRUE(public_safe)) {
+        samp_query <- paste0(
+          "
+    SELECT
+        s.sample_id,
+        s.public_location_id AS location_id,
+        s.sub_location_name,
+        s.sub_location_name AS sub_location_name_fr,
+        s.sub_location_id,
+        s.media_id,
+        s.media_type,
+        s.media_type AS media_type_fr,
+        s.depth_height_m AS z,
+        s.datetime,
+        s.target_datetime,
+        s.linked_sample_id AS linked_with,
+        s.collection_method_id,
+        cm.collection_method,
+        s.sample_type_id,
+        s.sample_type,
+        s.sample_grade_description AS grade_type_description,
+        s.sample_grade_description AS grade_type_description_fr,
+        s.sample_approval_description AS approval_type_description,
+        s.sample_approval_description AS approval_type_description_fr,
+        s.sample_qualifier_description AS qualifier_type_description,
+        s.sample_qualifier_description AS qualifier_type_description_fr
+    FROM
+        discrete.samples_public AS s
+    LEFT JOIN
+        collection_methods as cm ON s.collection_method_id = cm.collection_method_id
+    WHERE s.public_location_id IN (",
+          paste0(locIds$location_id, collapse = ", "),
+          ")
+    AND s.datetime > '",
+          start,
+          "' AND s.datetime < '",
+          end,
+          "'",
+          sample_id_clause,
+          ";
         "
+        )
+      } else {
+        samp_query <- paste0(
+          "
     SELECT
         s.sample_id,
         s.location_id,
@@ -1296,20 +1389,78 @@ plotDiscrete <- function(
     LEFT JOIN
         sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
     WHERE s.location_id IN (",
-        paste0(locIds$location_id, collapse = ", "),
-        ") 
+          paste0(locIds$location_id, collapse = ", "),
+          ") 
     AND s.datetime > '",
-        start,
-        "' AND s.datetime < '",
-        end,
-        "'",
-        sample_id_clause,
-        ";
+          start,
+          "' AND s.datetime < '",
+          end,
+          "'",
+          sample_id_clause,
+          ";
         "
-      )
+        )
+      }
     } else {
-      samp_query <- paste0(
-        "
+      if (isTRUE(public_safe)) {
+        samp_query <- paste0(
+          "
+SELECT
+    s.sample_id,
+    s.public_location_id AS location_id,
+    s.sub_location_name,
+    s.sub_location_name AS sub_location_name_fr,
+    s.sub_location_id,
+    s.media_id,
+    s.media_type,
+    s.media_type AS media_type_fr,
+    s.depth_height_m AS z,
+    s.datetime,
+    s.target_datetime,
+    s.linked_sample_id AS linked_with,
+    s.collection_method_id,
+    cm.collection_method,
+    s.sample_type_id,
+    s.sample_type,
+    s.sample_grade_description AS grade_type_description,
+    s.sample_grade_description AS grade_type_description_fr,
+    s.sample_approval_description AS approval_type_description,
+    s.sample_approval_description AS approval_type_description_fr,
+    s.sample_qualifier_description AS qualifier_type_description,
+    s.sample_qualifier_description AS qualifier_type_description_fr
+FROM
+    discrete.samples_public AS s
+LEFT JOIN
+    collection_methods AS cm ON s.collection_method_id = cm.collection_method_id
+WHERE
+    (s.public_location_id, COALESCE(s.sub_location_id, -1)) IN (
+        ",
+          paste0(
+            "(",
+            locIds$location_id,
+            ", ",
+            data.table::fifelse(
+              is.na(subLocIds$sub_location_id),
+              -1,
+              subLocIds$sub_location_id
+            ),
+            ")",
+            collapse = ", "
+          ),
+          "
+    )
+AND s.datetime > '",
+          start,
+          "' AND s.datetime < '",
+          end,
+          "'",
+          sample_id_clause,
+          ";
+"
+        )
+      } else {
+        samp_query <- paste0(
+          "
 SELECT
     s.sample_id,
     s.location_id,
@@ -1367,14 +1518,15 @@ WHERE
         "
     )
 AND s.datetime > '",
-        start,
-        "' AND s.datetime < '",
-        end,
-        "'",
-        sample_id_clause,
-        ";
+          start,
+          "' AND s.datetime < '",
+          end,
+          "'",
+          sample_id_clause,
+          ";
 "
-      )
+        )
+      }
     }
 
     samples <- DBI::dbGetQuery(AC, samp_query)
@@ -1419,8 +1571,42 @@ AND s.datetime > '",
     }
 
     # Get the measurements from table results
-    res_query <- paste0(
-      "
+    if (isTRUE(public_safe)) {
+      res_query <- paste0(
+        "
+    SELECT
+        r.result_id,
+        r.sample_id,
+        r.parameter_id,
+        r.result_type_id,
+        r.result,
+        r.result_condition_id AS result_condition,
+        r.result_condition_value,
+        r.result_value_type_id,
+        r.sample_fraction_id,
+        r.result_speciation_id,
+        r.matrix_state_id,
+        r.result_type,
+        r.result_condition AS result_condition_label,
+        r.result_value_type,
+        r.sample_fraction,
+        r.result_speciation,
+        r.matrix_state_name AS matrix_state
+    FROM
+        discrete.results_public AS r
+    WHERE
+        r.sample_id IN (",
+        paste0(samples$sample_id, collapse = ", "),
+        ")
+    AND
+        r.parameter_id IN (",
+        paste0(paramIds$parameter_id, collapse = ", "),
+        ")
+        ;"
+      )
+    } else {
+      res_query <- paste0(
+        "
     SELECT 
         r.result_id,
         r.sample_id,
@@ -1459,10 +1645,11 @@ AND s.datetime > '",
       ")
     AND
         r.parameter_id IN (",
-      paste0(paramIds$parameter_id, collapse = ", "),
-      ")
+        paste0(paramIds$parameter_id, collapse = ", "),
+        ")
         ;"
-    )
+      )
+    }
 
     results <- DBI::dbGetQuery(AC, res_query)
 

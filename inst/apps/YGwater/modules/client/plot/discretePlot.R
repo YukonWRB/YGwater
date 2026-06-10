@@ -29,10 +29,14 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     if (isTRUE(session$userData$user_logged_in)) {
       cached <- disc_plot_module_data(
         con = session$userData$AquaCache,
-        env = session$userData$app_cache
+        env = session$userData$app_cache,
+        public_safe = config$public
       )
     } else {
-      cached <- disc_plot_module_data(con = session$userData$AquaCache)
+      cached <- disc_plot_module_data(
+        con = session$userData$AquaCache,
+        public_safe = config$public
+      )
     }
 
     moduleData <- reactiveValues(
@@ -2236,6 +2240,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 sample_ids = sample_ids,
                 season_ranges = season_ranges,
                 season_highlight_ranges = season_highlight_ranges,
+                public_safe = config$public,
                 dbSource = dbSource,
                 dbPath = dbPath,
                 dbCon = con,
