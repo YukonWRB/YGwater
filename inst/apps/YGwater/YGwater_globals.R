@@ -12,7 +12,8 @@ YGwater_globals <- function(
   logout_timer_min,
   analytics,
   public,
-  brand
+  brand,
+  test_exists
 ) {
   library(shiny)
   library(shinyjs)
@@ -1294,7 +1295,8 @@ YGwater_globals <- function(
     admin = FALSE,
     sidebar_bg = "#FFFCF5", # Default background color for all sidebars
     main_bg = "#D9EFF2", # Default background color for all main panels
-    brand = brand
+    brand = brand,
+    test_exists = test_exists
   )
 
   return(config)

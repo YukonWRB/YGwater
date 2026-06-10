@@ -2372,6 +2372,9 @@ app_server <- function(input, output, session) {
     # Reset the session userData with the default credentials
     session$userData$config$dbUser <- config$dbUser
     session$userData$config$dbPass <- config$dbPass
+    if (config$test_exists && input$username == "tester") {
+      session$userData$config$dbName <- config$dbName
+    }
 
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     showViz(show = TRUE) # Restore public/viz tabs immediately without relying on the removed admin button
@@ -2436,11 +2439,34 @@ app_server <- function(input, output, session) {
           });
           "
         )),
-        title = tr("login", languageSelection$language),
-        renderUI(HTML(
-          tr("login_txt", languageSelection$language),
-          "<br> <br>"
+
+        tags$style(HTML(
+          "
+          .login-test-contact {
+            background-color: rgba(242, 169, 0, 0.10);  /* YG yellow, softened */
+            border: 1px solid rgba(242, 169, 0, 0.35);
+            border-left: 4px solid #F2A900;
+            color: #244C5A;
+            padding: 10px 12px;
+            border-radius: 4px;
+            font-size: 0.95em;
+          }
+          .login-test-contact p:last-child {
+            margin-bottom: 0;
+          }
+          "
         )),
+
+        title = tr("login", languageSelection$language),
+
+        tags$div(
+          class = "login-test-contact",
+          role = "note",
+          tr("login_test_contact", languageSelection$language)
+        ),
+
+        br(),
+
         textInput("username", tr("un", languageSelection$language)),
         passwordInput("password", tr("pwd", languageSelection$language)),
         footer = tagList(
@@ -2488,14 +2514,26 @@ app_server <- function(input, output, session) {
 
     tryCatch(
       {
-        session$userData$AquaCache_new <- AquaConnect(
-          name = session$userData$config$dbName,
-          host = session$userData$config$dbHost,
-          port = session$userData$config$dbPort,
-          username = input$username,
-          password = input$password,
-          silent = TRUE
-        )
+        if (config$test_exists && input$username == "tester") {
+          session$userData$AquaCache_new <- AquaConnect(
+            name = "testdb",
+            host = session$userData$config$dbHost,
+            port = session$userData$config$dbPort,
+            username = input$username,
+            password = input$password,
+            silent = TRUE
+          )
+        } else {
+          session$userData$AquaCache_new <- AquaConnect(
+            name = session$userData$config$dbName,
+            host = session$userData$config$dbHost,
+            port = session$userData$config$dbPort,
+            username = input$username,
+            password = input$password,
+            silent = TRUE
+          )
+        }
+
         # Test the connection
         test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
         if (nrow(test) > 0) {
@@ -2509,6 +2547,9 @@ app_server <- function(input, output, session) {
           # Update the session with the new user's credentials
           session$userData$config$dbUser <- input$username
           session$userData$config$dbPass <- input$password
+          if (config$test_exists && input$username == "tester") {
+            session$userData$config$dbName <- "testdb"
+          }
 
           # Reset the application_name to 'YGwater_shiny'
           DBI::dbExecute(

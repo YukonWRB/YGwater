@@ -55,7 +55,7 @@ feedback_text,thumbs up down button text,Was this page helpful?,Avez-vous trouv�
 submit,submit button text,Submit,Soumettre
 feedback_placeholder_up,placeholder text,Optional: how did this page help you?,En quoi cette page vous a-t-elle été utile? (Facultatif)
 feedback_placeholder_down,placeholder text,Optional: how can we improve this page?,Comment peut-on améliorer cette page? (Facultatif)
-login_txt,Body text for pop-up,Log in to add/modify data and administer assets.,Connectez vous pour ajouter/modifier des données.
+login_test_contact,,Contact us if you need a test account!,Contactez-nous si vous avez besoin d'un compte de test!
 un,username,Username,Nom d'utilisateur
 pwd,password,Password,Mot de passe
 login_success,modal title,Login successful,Connecté
