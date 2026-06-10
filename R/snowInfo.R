@@ -88,11 +88,11 @@ snowInfo <- function(
       con,
       "
     SELECT DISTINCT l.location_code AS location, l.name, l.name_fr, l.alias, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
-    FROM locations AS l
-    JOIN locations_networks AS ln ON l.location_id = ln.location_id
-    JOIN networks AS n ON ln.network_id = n.network_id
-    JOIN samples AS s ON l.location_id = s.location_id
-    JOIN datum_conversions AS d ON l.location_id = d.location_id
+    FROM public.locations AS l
+    JOIN public.locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN public.networks AS n ON ln.network_id = n.network_id
+    JOIN discrete.samples AS s ON l.location_id = s.location_id
+    JOIN public.datum_conversions AS d ON l.location_id = d.location_id
     WHERE n.name = 'Yukon Snow Survey Network'
     ORDER BY l.name;
   "
@@ -109,11 +109,11 @@ snowInfo <- function(
       paste0(
         "
     SELECT DISTINCT l.location_code AS location, l.name, l.name_fr, l.alias, l.note, l.location_id, l.latitude, l.longitude, d.conversion_m, l.created, l.modified
-    FROM locations AS l
-    JOIN locations_networks AS ln ON l.location_id = ln.location_id
-    JOIN networks AS n ON ln.network_id = n.network_id
-    JOIN samples AS s ON l.location_id = s.location_id
-    JOIN datum_conversions AS d ON l.location_id = d.location_id
+    FROM public.locations AS l
+    JOIN public.locations_networks AS ln ON l.location_id = ln.location_id
+    JOIN public.networks AS n ON ln.network_id = n.network_id
+    JOIN discrete.samples AS s ON l.location_id = s.location_id
+    JOIN public.datum_conversions AS d ON l.location_id = d.location_id
     WHERE n.name = 'Yukon Snow Survey Network'
       AND (
         l.location_id::text IN (",
@@ -161,7 +161,7 @@ snowInfo <- function(
   # Get the measurements
   snow_id <- DBI::dbGetQuery(
     con,
-    "SELECT media_id FROM media_types WHERE media_type = 'snow'"
+    "SELECT media_id FROM public.media_types WHERE media_type = 'snow'"
   )[1, 1]
   if (is.na(snow_id)) {
     stop("snowInfo: could not find media_id for 'snow' in media_types table.")
@@ -170,7 +170,7 @@ snowInfo <- function(
     con,
     paste0(
       "SELECT sample_id, location_id, datetime, target_datetime 
-      FROM samples 
+      FROM discrete.samples 
       WHERE location_id IN (",
       paste(locations$location_id, collapse = ", "),
       ") AND media_id = ",
@@ -211,10 +211,10 @@ snowInfo <- function(
         media_alias = "s"
       ),
       ", rvt.result_value_type AS flag
-      FROM results AS r 
-      JOIN samples AS s ON s.sample_id = r.sample_id
-      JOIN parameters AS p ON p.parameter_id = r.parameter_id 
-      JOIN result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type
+      FROM discrete.results AS r 
+      JOIN discrete.samples AS s ON s.sample_id = r.sample_id
+      JOIN public.parameters AS p ON p.parameter_id = r.parameter_id 
+      JOIN discrete.result_value_types AS rvt ON rvt.result_value_type_id = r.result_value_type
       WHERE r.sample_id IN ('",
       paste(samples$sample_id, collapse = "', '"),
       "') AND p.parameter_id IN (21, 1220) ",
@@ -725,20 +725,20 @@ snowInfo <- function(
 
       plot_results_dt <- data.table::as.data.table(plot_results)
       density_swe <- plot_results_dt[
-        param_name == "snow water equivalent",
+        plot_results_dt$param_name == "snow water equivalent",
         .(
-          sample_id,
-          datetime,
-          target_datetime,
-          year,
-          month,
-          location,
-          name,
-          SWE = result
+          "sample_id",
+          "datetime",
+          "target_datetime",
+          "year",
+          "month",
+          "location",
+          "name",
+          "SWE" = result
         )
       ]
       density_depth <- plot_results_dt[
-        param_name == "snow depth",
+        plot_results_dt$param_name == "snow depth",
         .(sample_id, target_datetime, depth = result)
       ]
       density_swe[,

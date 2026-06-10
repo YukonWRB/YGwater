@@ -304,12 +304,18 @@ plotTimeseriesHistogram <- function(
   }))
 
   season_windows[,
-    season_start_utc := lubridate::with_tz(season_start_local, "UTC")
+    "season_start_utc" := lubridate::with_tz(
+      season_windows$season_start_local,
+      "UTC"
+    )
   ]
   season_windows[,
-    season_end_utc := lubridate::with_tz(season_end_local, "UTC")
+    "season_end_utc" := lubridate::with_tz(
+      season_windows$season_end_local,
+      "UTC"
+    )
   ]
-  data.table::setorder(season_windows, plot_year)
+  data.table::setorder(season_windows, "plot_year")
 
   build_bin_windows <- function(windows_dt) {
     bins <- vector("list", nrow(windows_dt))
