@@ -116,7 +116,7 @@ test_that("French timeseries plot is as expected for one year with historic rang
     start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 365),
     end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     lang = "fr",
-    con = con
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
