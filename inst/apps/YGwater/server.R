@@ -1343,7 +1343,7 @@ app_server <- function(input, output, session) {
       }
 
       # Admin menu ----------------------------------------------------------
-      # Admin menu is always shown because every logged in user can change their own password
+      # Admin menu is always shown because every logged in user can change their own password (though this is gated for public_reader and tester)
       nav_show(id = "navbar", target = "adminTasks")
       nav_show(id = "navbar", target = "adminHelpTasks")
       nav_show(id = "navbar", target = "adminHome")
@@ -2470,7 +2470,11 @@ app_server <- function(input, output, session) {
         textInput("username", tr("un", languageSelection$language)),
         passwordInput("password", tr("pwd", languageSelection$language)),
         footer = tagList(
-          checkboxInput("test_login", tr("login_test_checkbox", languageSelection$language), value = FALSE),
+          checkboxInput(
+            "test_login",
+            tr("login_test_checkbox", languageSelection$language),
+            value = FALSE
+          ),
           modalButton(tr("close", languageSelection$language)),
           actionButton(
             "confirmLogin",
@@ -2506,6 +2510,16 @@ app_server <- function(input, output, session) {
       showModal(modalDialog(
         title = tr("login_fail", languageSelection$language),
         tr("login_fail_missing", languageSelection$language),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", languageSelection$language))
+      ))
+      return()
+    }
+    if (input$username == 'public_reader') {
+      clear_modals()
+      showModal(modalDialog(
+        title = tr("login_fail", languageSelection$language),
+        tr("login_fail_public_reader", languageSelection$language),
         easyClose = TRUE,
         footer = modalButton(tr("close", languageSelection$language))
       ))

@@ -64,6 +64,7 @@ login_success_msg,modal text,You are now logged in as,Vous êtes maintenant conn
 login_fail,modal title,Login failed,Connexion échouée
 login_fail_msg,modal text,Wrong username or password.,Nom d'utilisateur ou mot de passe incorrect.
 login_fail_missing,modal text,Please enter both a username and password.,Entrez un nom d'utilisateur et un mot de passe.
+login_fail_public_reader,modal text for login,public_reader is not allowed to log in,public_reader n'est pas autorisé à se connecter
 login_fail_attempts,modal text,Too many login attempts. Please try again later.,Trop d'essais. Réessayez plus tard.
 login_confirm,modal actionButton text,Log in,Se connecter
 login,button text,Login,Connexion
@@ -461,6 +462,7 @@ pw_change_success,modal text,Password updated successfully.,Mot de passe mis à 
 pw_change_fail_match,modal text,New passwords do not match.,Les nouveaux mots de passe ne correspondent pas.
 pw_change_fail_current,modal text,Current password incorrect.,Mot de passe actuel incorrect.
 pw_change_title,modal title,Change password,Changer le mot de passe
+pw_change_prohibited,modal text,Password change prohibited for this user.,Changement de mot de passe interdit pour cet utilisateur.
 snowbull_relative_median,,Percent of Median,Pourcentage de la médiane historique
 snowbull_percent_of_normal,,Percent of Normal,Pourcentage de la normale
 snowbull_historical_median,,Historical Median,Médiane historique

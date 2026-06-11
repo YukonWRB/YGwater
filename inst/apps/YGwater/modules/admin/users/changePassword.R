@@ -87,6 +87,17 @@ changePassword <- function(id, language) {
     observeEvent(input$submit, ignoreInit = TRUE, {
       req(input$current_pwd, input$new_pwd, input$confirm_pwd)
 
+      # Prevent public_reader and tester from changing password
+      if (session$userData$config$dbUser %in% c("public_reader", "tester")) {
+        showModal(modalDialog(
+          title = trl("error"),
+          trl("pw_change_prohibited"),
+          easyClose = TRUE,
+          footer = actionButton(ns("close"), trl("close"))
+        ))
+        return(invisible(NULL))
+      }
+
       req(
         nchar(input$current_pwd) > 0,
         nchar(input$new_pwd) > 0,
