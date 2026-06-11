@@ -40,29 +40,29 @@ YGwater <- function(
   public = TRUE,
   brand = "yukon"
 ) {
-  rlang::check_installed("shiny", reason = "required to use YGwater app")
-  rlang::check_installed("shinyjs", reason = "required to use YGwater app")
-  rlang::check_installed("DT", reason = "required to use YGwater app")
-  rlang::check_installed("tidyhydat", reason = "required to use YGwater app")
-  rlang::check_installed("htmltools", reason = "required to use YGwater app")
+  rlang::check_installed("shiny", reason = "to use YGwater app")
+  rlang::check_installed("shinyjs", reason = "to use YGwater app")
+  rlang::check_installed("DT", reason = "to use YGwater app")
+  rlang::check_installed("tidyhydat", reason = "to use YGwater app")
+  rlang::check_installed("htmltools", reason = "to use YGwater app")
   rlang::check_installed(
     "future",
-    reason = "required to enable asynchronous operations in YGwater apps"
+    reason = "to enable asynchronous operations in YGwater apps"
   )
   rlang::check_installed(
     "promises",
-    reason = "required to enable asynchronous operations in YGwater apps"
+    reason = "to enable asynchronous operations in YGwater apps"
   )
   rlang::check_installed(
     "bslib",
-    reason = "required to enable bootstrap 5 themes and elements in YGwater apps"
+    reason = "to enable bootstrap 5 themes and elements in YGwater apps"
   )
-  rlang::check_installed("bsicons", reason = "required to use YGwater app")
-  rlang::check_installed("exifr", reason = "required to use YGwater app")
-  rlang::check_installed("leaflet", reason = "required to use YGwater app")
-  rlang::check_installed("zip", reason = "required to use YGwater app")
-  rlang::check_installed("htmlwidgets", reason = "required to use YGwater app")
-  rlang::check_installed("jsonlite", reason = "required to use YGwater app")
+  rlang::check_installed("bsicons", reason = "to use YGwater app")
+  rlang::check_installed("exifr", reason = "to use YGwater app")
+  rlang::check_installed("leaflet", reason = "to use YGwater app")
+  rlang::check_installed("zip", reason = "to use YGwater app")
+  rlang::check_installed("htmlwidgets", reason = "to use YGwater app")
+  rlang::check_installed("jsonlite", reason = "to use YGwater app")
   rlang::check_installed(
     "base64enc",
     reason = "to create base64-encoded plot images"
