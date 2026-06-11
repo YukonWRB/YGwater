@@ -2372,7 +2372,7 @@ app_server <- function(input, output, session) {
     # Reset the session userData with the default credentials
     session$userData$config$dbUser <- config$dbUser
     session$userData$config$dbPass <- config$dbPass
-    if (config$test_exists && input$username == "tester") {
+    if (config$test_exists && input$test_login) {
       session$userData$config$dbName <- config$dbName
     }
 
@@ -2470,6 +2470,7 @@ app_server <- function(input, output, session) {
         textInput("username", tr("un", languageSelection$language)),
         passwordInput("password", tr("pwd", languageSelection$language)),
         footer = tagList(
+          checkboxInput("test_login", tr("login_test_checkbox", languageSelection$language), value = FALSE),
           modalButton(tr("close", languageSelection$language)),
           actionButton(
             "confirmLogin",
@@ -2514,7 +2515,7 @@ app_server <- function(input, output, session) {
 
     tryCatch(
       {
-        if (config$test_exists && input$username == "tester") {
+        if (config$test_exists && input$test_login) {
           session$userData$AquaCache_new <- AquaConnect(
             name = "testdb",
             host = session$userData$config$dbHost,
@@ -2546,7 +2547,7 @@ app_server <- function(input, output, session) {
           # Update the session with the new user's credentials
           session$userData$config$dbUser <- input$username
           session$userData$config$dbPass <- input$password
-          if (config$test_exists && input$username == "tester") {
+          if (config$test_exists && input$test_login) {
             session$userData$config$dbName <- "testdb"
           }
 

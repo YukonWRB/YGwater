@@ -3,6 +3,7 @@ manageUsersUI <- function(id) {
   page_fluid(
     tagList(
       uiOutput(ns("banner")),
+      uiOutput(ns("testdb")),
       selectizeInput(
         ns("group_user"),
         NULL,
@@ -72,7 +73,9 @@ manageUsersUI <- function(id) {
           choices = NULL,
           multiple = TRUE
         ),
-        helpText("Table privilege controls apply to tables in the selected schemas."),
+        helpText(
+          "Table privilege controls apply to tables in the selected schemas."
+        ),
         selectizeInput(
           ns("group_table_permission_select"),
           "Direct SELECT on tables",
@@ -117,7 +120,9 @@ manageUsersUI <- function(id) {
           choices = NULL,
           multiple = TRUE
         ),
-        helpText("Inherited privileges are shown below but only direct user-level grants are modified here."),
+        helpText(
+          "Inherited privileges are shown below but only direct user-level grants are modified here."
+        ),
         selectizeInput(
           ns("user_table_permission_select"),
           "Direct SELECT on tables",
@@ -166,7 +171,10 @@ manageUsersUI <- function(id) {
           choices = NULL
         ),
         actionButton(ns("preview_role_delete"), "Preview references"),
-        actionButton(ns("cleanup_role_references"), "Clean share_with references"),
+        actionButton(
+          ns("cleanup_role_references"),
+          "Clean share_with references"
+        ),
         actionButton(ns("drop_role"), "Drop role"),
         DT::DTOutput(ns("role_delete_preview"))
       ),
@@ -178,6 +186,18 @@ manageUsersUI <- function(id) {
 manageUsers <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$testdb <- renderUI({
+      if (session$userData$config$dbName == "testdb") {
+        tags$div(
+          class = "alert alert-warning",
+          role = "alert",
+          "Important: You are logged in to the test database, but changes you make to users and groups here WILL persist to the production database as it is on the same server."
+        )
+      } else {
+        NULL
+      }
+    })
 
     password_requirements <- "Password must be at least 8 characters and include uppercase, lowercase, and a number."
     status <- reactiveVal("")
@@ -663,8 +683,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
       if (nrow(table_display) > 0) {
         names(table_display)[names(table_display) == "table"] <- "object"
         table_display$object_type <- "table"
-        table_display <- table_display[
-          ,
+        table_display <- table_display[,
           c(
             "object",
             "object_type",
@@ -1290,7 +1309,10 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
               role = role,
               inherited_roles = member_groups(role)
             )
-            set_status(sprintf("Updated direct privileges for user '%s'.", role))
+            set_status(sprintf(
+              "Updated direct privileges for user '%s'.",
+              role
+            ))
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK;")
@@ -1358,7 +1380,10 @@ ORDER BY table_schema, table_name",
           )
         }
         role_delete_preview(dat)
-        set_status(sprintf("Previewed share_with references for role '%s'.", role))
+        set_status(sprintf(
+          "Previewed share_with references for role '%s'.",
+          role
+        ))
       },
       ignoreInit = TRUE,
       ignoreNULL = TRUE
