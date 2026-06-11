@@ -247,7 +247,9 @@ YGwater <- function(
             name = 'testdb',
             username = 'tester',
             password = 'tester',
-            silent = TRUE
+            silent = TRUE,
+            host = dbHost,
+            port = dbPort
           )
 
           DBI::dbDisconnect(test_con)

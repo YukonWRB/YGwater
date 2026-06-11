@@ -2538,7 +2538,6 @@ app_server <- function(input, output, session) {
         test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
         if (nrow(test) > 0) {
           # Means the connection was successful
-
           # Drop the old connection
           safe_disconnect(session$userData$AquaCache)
           session$userData$AquaCache <- session$userData$AquaCache_new
@@ -2582,6 +2581,7 @@ app_server <- function(input, output, session) {
             session$userData$AquaCache,
             sql
           )
+          out <<- session$userData$table_privs
           # Create a qualified name column for easier filtering
           session$userData$table_privs$qual_name <- paste0(
             session$userData$table_privs$schema,
