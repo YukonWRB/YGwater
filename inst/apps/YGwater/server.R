@@ -2515,6 +2515,7 @@ app_server <- function(input, output, session) {
       ))
       return()
     }
+    # prevent public_reader from logging in on normal and test instances
     if (input$username == 'public_reader') {
       clear_modals()
       showModal(modalDialog(
@@ -2525,6 +2526,18 @@ app_server <- function(input, output, session) {
       ))
       return()
     }
+    # prevent 'tester' from logging in on production instances
+    if (input$username == 'tester' && !input$test_login) {
+      clear_modals()
+      showModal(modalDialog(
+        title = tr("login_fail", languageSelection$language),
+        tr("login_fail_tester", languageSelection$language),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", languageSelection$language))
+      ))
+      return()
+    }
+
     log_attempts(log_attempts() + 1)
 
     tryCatch(
@@ -3390,9 +3403,14 @@ app_server <- function(input, output, session) {
           showModal(modalDialog(
             title = tr("login_success", languageSelection$language),
             paste0(
-              tr("login_success_msg", languageSelection$language),
-              " ",
-              input$username
+              if (session$userData$config$dbName == "testdb") {
+                tr("login_suggess_msg_testing", languageSelection$language)
+              } else {
+                tr("login_success_msg", languageSelection$language)
+              },
+              " '",
+              input$username,
+              "'."
             ),
             easyClose = TRUE,
             footer = modalButton(tr("close", languageSelection$language))
