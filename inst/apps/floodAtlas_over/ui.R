@@ -43,7 +43,7 @@ app_ui <- function(request) {
       plotly::plotlyOutput("plot", height = "100%", width = "100%") |>
         shinycssloaders::withSpinner(
           type = 5,
-          color = #244C5A)
+          color = "#244C5A"
         )
     ),
     htmlOutput("error")
