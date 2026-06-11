@@ -2366,6 +2366,76 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
         if (input$data_source == "EQ") {
           pendingSeasonMetadata(NULL)
+
+          # get out all inputs for debugging purposes
+          out <<- list(
+            start = input$date_range_EQ[1],
+            end = input$date_range_EQ[2],
+            locations = if (input$locs_groups == "locations") {
+              input$locations_EQ
+            } else {
+              NULL
+            },
+            locGrp = if (input$locs_groups == "loc_groups") {
+              input$location_groups
+            } else {
+              NULL
+            },
+            parameters = if (input$params_groups == "parameters") {
+              input$parameters_EQ
+            } else {
+              NULL
+            },
+            paramGrp = if (input$params_groups == "param_groups") {
+              input$parameter_groups
+            } else {
+              NULL
+            },
+            standard = if (length(input$standard) == 0) {
+              NULL
+            } else {
+              input$standard
+            },
+            log = input$log_scale,
+            facet_on = input$facet_on,
+            loc_code = input$loc_code,
+            shareX = input$shareX,
+            shareY = input$shareY,
+            rows = if (is.null(plot_aes$nrows)) "auto" else plot_aes$nrows,
+            target_datetime = input$target_datetime,
+            colorblind = plot_aes$colorblind,
+            lang = plot_aes$lang,
+            point_scale = plot_aes$point_scale,
+            guideline_scale = plot_aes$guideline_scale,
+            axis_scale = plot_aes$axis_scale,
+            legend_scale = plot_aes$legend_scale,
+            legend_position = if (
+              windowDims()$width > 1.3 * windowDims()$height
+            ) {
+              "v"
+            } else {
+              "h"
+            },
+            gridx = plot_aes$showgridx,
+            gridy = plot_aes$showgridy,
+            sub_location_ids = NULL,
+            media = NULL,
+            sample_types = NULL,
+            collection_methods = NULL,
+            result_types = NULL,
+            sample_fractions = NULL,
+            result_value_types = NULL,
+            result_speciations = NULL,
+            include_blanks = TRUE,
+            duplicate_action = "show",
+            sample_ids = NULL,
+            season_ranges = NULL,
+            season_highlight_ranges = NULL,
+            dbSource = input$data_source,
+            dbPath = input$EQWin_source, # EQWin connection so no need to pass config
+            config = NULL # EQWin connection so no need to pass config
+          )
+
           plot_output_discrete$invoke(
             start = input$date_range_EQ[1],
             end = input$date_range_EQ[2],

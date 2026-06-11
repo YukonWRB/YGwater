@@ -91,6 +91,45 @@ plotDiscrete <- function(
   dbPath = eqwin_db_path(),
   data = FALSE
 ) {
+  # testing params
+  # start = "2010-05-12"
+  # end = "2026-10-31"
+  # locations <- "(EG)W9"
+  # locGrp <- NULL
+  # parameters <- "As-T"
+  # paramGrp <- NULL
+  # standard <- NULL
+  # log = FALSE
+  # loc_code = "name"
+  # shareX = TRUE
+  # shareY = FALSE
+  # rows = "auto"
+  # target_datetime = FALSE
+  # colorblind = FALSE
+  # lang = "en"
+  # point_scale = 1
+  # guideline_scale = 1
+  # axis_scale = 1
+  # legend_scale = 1
+  # legend_position = 'v'
+  # gridx = FALSE
+  # gridy = FALSE
+  # sub_location_ids = NULL
+  # media = NULL
+  # sample_types = NULL
+  # collection_methods = NULL
+  # result_types = NULL
+  # sample_fractions = NULL
+  # result_value_types = NULL
+  # result_speciations = NULL
+  # include_blanks = TRUE
+  # duplicate_action = "show"
+  # sample_ids = NULL
+  # season_ranges = NULL
+  # season_highlight_ranges = NULL
+  # dbSource = "EQ"
+  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"
+  # dbCon = NULL
   # initial checks, connection, and validations #######################################################################################
 
   return_data <- data # data is used as an object in this function, but keeping the function argument as 'data' keeps things consistent with other functions for calling purposes.
@@ -470,7 +509,13 @@ plotDiscrete <- function(
           c(span$x0, span$x1, span$x1, span$x0, span$x0),
           tz = "UTC"
         ),
-        y = c(y_range[[1]], y_range[[1]], y_range[[2]], y_range[[2]], y_range[[1]])
+        y = c(
+          y_range[[1]],
+          y_range[[1]],
+          y_range[[2]],
+          y_range[[2]],
+          y_range[[1]]
+        )
       )
       p <- plotly::add_trace(
         p,
@@ -755,9 +800,9 @@ plotDiscrete <- function(
         "SELECT eqsampls.StnId, eqsampls.SampleId, eqsampls.CollectDateTime FROM eqsampls INNER JOIN eqcodes ON eqsampls.SampleClass = eqcodes.CodeValue WHERE eqcodes.CodeField = 'eqsampls.SampleClass' AND eqsampls.StnId IN (",
         paste0(StnIds, collapse = ", "),
         ") AND eqsampls.CollectDateTime > #",
-        as.character(start),
+        as.character(lubridate::floor_date(start)),
         "# AND eqsampls.CollectDateTime < #",
-        as.character(end),
+        as.character(lubridate::ceiling_date(end)),
         "# AND eqcodes.CodeValue <> 'D';"
       )
     )
