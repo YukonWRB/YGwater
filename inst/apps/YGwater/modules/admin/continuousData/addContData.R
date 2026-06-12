@@ -73,8 +73,8 @@ addContDataUI <- function(id) {
             ns = ns,
             fileInput(
               ns("file"),
-              "Upload .csv or .xlsx",
-              accept = c(".csv", ".xlsx")
+              "Upload .csv, .xlsx, .xle, or logger .html",
+              accept = c(".csv", ".xlsx", ".xle", ".html", ".htm")
             )
           ),
           conditionalPanel(
@@ -1317,8 +1317,23 @@ addContData <- function(id, language) {
       unit_conversion_state$previous_label <- NULL
     })
 
+    uploaded_file_ext <- reactive({
+      req(input$file)
+      tolower(tools::file_ext(input$file$name))
+    })
+
+    uploaded_file_is_logger <- reactive({
+      uploaded_file_ext() %in% c("xle", "html", "htm")
+    })
+
     upload_raw <- reactive({
       req(input$file)
+      ext <- uploaded_file_ext()
+
+      if (uploaded_file_is_logger()) {
+        return(read_logger_file_data(input$file$datapath, file_type = ext))
+      }
+
       req(input$raw_start_row)
       # Set starting row to 1 if input is null, so we don't have to catch empty inputs in validate
       starting_row <- ifelse(
@@ -1326,8 +1341,6 @@ addContData <- function(id, language) {
         1,
         input$raw_start_row
       )
-
-      ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
         out <- readxl::read_xlsx(
           input$file$datapath,
@@ -1362,6 +1375,8 @@ addContData <- function(id, language) {
 
         return(out)
       }
+
+      stop("Unsupported file extension: .", ext, call. = FALSE)
     })
 
     class_type_choices <- reactive({
@@ -1454,7 +1469,9 @@ addContData <- function(id, language) {
         "confirm_mapping"
       }
 
-      if (is.null(input$raw_start_row)) {
+      if (uploaded_file_is_logger()) {
+        shinyjs::enable(target_id)
+      } else if (is.null(input$raw_start_row)) {
         shinyjs::disable(target_id)
       } else if (is.na(input$raw_start_row)) {
         shinyjs::disable(target_id)
@@ -1496,7 +1513,7 @@ addContData <- function(id, language) {
     output$map_col_inputs <- renderUI({
       validate(
         need(
-          input$raw_start_row > 0,
+          uploaded_file_is_logger() || input$raw_start_row > 0,
           'Invalid header row'
         ),
         need(
@@ -2473,8 +2490,10 @@ addContData <- function(id, language) {
         tagList(
           'Identify which columns represent date-time and value (and optionally grade/approval/qualifier):',
           hr(),
-          numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
-            tooltip("The row number which contains your data's column names"),
+          if (!uploaded_file_is_logger()) {
+            numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
+              tooltip("The row number which contains your data's column names")
+          },
           uiOutput(ns('map_col_inputs'))
         )
       } else {
@@ -2547,7 +2566,7 @@ addContData <- function(id, language) {
       }
     })
 
-    # Store modal to be shown upon user uploading .csv or .xlsx
+    # Store modal to be shown upon user uploading a tabular or logger file
     map_col_modal <- modalDialog(
       title = 'Identify columns',
       uiOutput(ns('map_modal_body')),
@@ -2565,6 +2584,18 @@ addContData <- function(id, language) {
         approval = character(),
         qualifier = character()
       )
+      if (tolower(tools::file_ext(input$file$name)) %in% c("xle", "html", "htm")) {
+        updateSelectizeInput(
+          session,
+          "UTC_offset",
+          selected = format_utc_offset(0L)
+        )
+        showNotification(
+          "Logger file datetimes were converted to UTC for upload.",
+          type = "message",
+          duration = 8
+        )
+      }
       showModal(map_col_modal)
     })
 
