@@ -50,6 +50,7 @@ addContDataUI <- function(id) {
           id = ns("ts_panel"),
           title = "Timeseries selection",
           actionButton(ns("addNewTS"), "Click here to add a new timeseries"),
+          p("If targetting multiple timeseries withn a single data file, select one of your targets to start and click the 'Select additional timeseries' button. This will narrow your options to those sharing a location with your first choice, and you can select all additional timeseries contained in the data file.")
           DT::DTOutput(ns("ts_table"))
         )
       ),
@@ -133,7 +134,7 @@ addContDataUI <- function(id) {
           ),
           radioButtons(
             ns("no_update"),
-            "Prevent updates to these data by automatic processes?",
+            "Prevent updates to these data by automatic processes, such as import scripts?",
             choices = c("Yes" = "yes", "No" = "no"),
             inline = TRUE,
             selected = "no"
@@ -558,7 +559,8 @@ addContData <- function(id, language) {
 
       hidden_columns <- which(
         names(df) %in% c("timeseries_id", "timeseries_type_code")
-      ) - 1L
+      ) -
+        1L
       DT::datatable(
         df,
         selection = 'single',
@@ -648,7 +650,10 @@ addContData <- function(id, language) {
         selection = "single",
         options = list(
           columnDefs = list(
-            list(targets = which(names(df) == "timeseries_type_code") - 1L, visible = FALSE)
+            list(
+              targets = which(names(df) == "timeseries_type_code") - 1L,
+              visible = FALSE
+            )
           ),
           pageLength = 10,
           scrollX = TRUE
@@ -741,7 +746,7 @@ addContData <- function(id, language) {
       } else {
         paste0("Database unit for this timeseries: ", unit)
       }
-      detail <- "Enter or convert values to this unit before upload."
+      detail <- "Enter or convert values to this unit before upload (see yellow 'Convert units' button if needed)."
 
       div(
         class = if (is.na(unit)) {
@@ -1326,6 +1331,76 @@ addContData <- function(id, language) {
       uploaded_file_ext() %in% c("xle", "html", "htm")
     })
 
+    logger_upload_message <- reactive({
+      req(input$file)
+      if (!uploaded_file_is_logger()) {
+        return(NULL)
+      }
+
+      note <- attr(upload_raw(), "logger_timezone_note")
+      if (is.character(note) && length(note) == 1 && nzchar(note)) {
+        return(note)
+      }
+
+      "Logger datetimes were prepared as UTC for upload."
+    })
+
+    raw_file_preview <- reactive({
+      req(input$file)
+      ext <- uploaded_file_ext()
+      if (ext %in% c("xle", "html", "htm")) {
+        out <- utils::head(upload_raw(), 100)
+        return(data.frame(Row = seq_len(nrow(out)), out, check.names = FALSE))
+      }
+
+      if (ext == "xlsx") {
+        out <- readxl::read_xlsx(
+          input$file$datapath,
+          sheet = 1,
+          col_names = FALSE,
+          n_max = 100
+        ) |>
+          as.data.frame()
+      } else if (ext == "csv") {
+        lines <- readLines(input$file$datapath, n = 100, warn = FALSE)
+        if (length(lines) == 0) {
+          return(data.frame())
+        }
+        rows <- lapply(lines, function(line) {
+          if (!nzchar(line)) {
+            return("")
+          }
+          tryCatch(
+            read.csv(
+              text = line,
+              header = FALSE,
+              stringsAsFactors = FALSE,
+              check.names = FALSE
+            ) |>
+              unlist(use.names = FALSE),
+            error = function(e) line
+          )
+        })
+        max_cols <- max(lengths(rows), 1L)
+        out <- as.data.frame(
+          do.call(
+            rbind,
+            lapply(rows, function(row) {
+              length(row) <- max_cols
+              row
+            })
+          ),
+          stringsAsFactors = FALSE,
+          check.names = FALSE
+        )
+      } else {
+        return(NULL)
+      }
+
+      names(out) <- paste0("Column ", seq_len(ncol(out)))
+      data.frame(Line = seq_len(nrow(out)), out, check.names = FALSE)
+    })
+
     upload_raw <- reactive({
       req(input$file)
       ext <- uploaded_file_ext()
@@ -1555,24 +1630,69 @@ addContData <- function(id, language) {
             selectizeInput(
               ns('upload_grade_col'),
               'Optional: select the column for grades:',
-              choices = choices_optional,
-              selected = pick_col(c('grade', 'grades'))
+              choices = c("None" = "", choices_optional),
+              selected = ""
             ),
             selectizeInput(
               ns('upload_approval_col'),
               'Optional: select the column for approvals:',
-              choices = choices_optional,
-              selected = pick_col(c('approval', 'approvals'))
+              choices = c("None" = "", choices_optional),
+              selected = ""
             ),
             selectizeInput(
               ns('upload_qualifier_col'),
               'Optional: select the column for qualifiers:',
-              choices = choices_optional,
-              selected = pick_col(c('qualifier', 'qualifiers'))
+              choices = c("None" = "", choices_optional),
+              selected = ""
             )
           )
         }
       )
+    })
+
+    output$raw_file_preview <- DT::renderDT({
+      preview <- raw_file_preview()
+      validate(
+        need(
+          !is.null(preview) && nrow(preview) > 0,
+          "No preview is available for this file."
+        )
+      )
+
+      selected_row <- if (
+        uploaded_file_is_logger() ||
+          is.null(input$raw_start_row) ||
+          is.na(input$raw_start_row) ||
+          input$raw_start_row < 1
+      ) {
+        NA_integer_
+      } else {
+        as.integer(input$raw_start_row)
+      }
+
+      preview_table <- DT::datatable(
+        preview,
+        rownames = FALSE,
+        class = "compact stripe",
+        options = list(
+          pageLength = 10,
+          lengthMenu = c(5, 10, 25, 50, 100),
+          scrollX = TRUE,
+          autoWidth = TRUE
+        )
+      )
+
+      if (!uploaded_file_is_logger() && "Line" %in% names(preview)) {
+        preview_table <- preview_table |>
+          DT::formatStyle(
+            "Line",
+            target = "row",
+            backgroundColor = DT::styleEqual(selected_row, "#fff3cd"),
+            fontWeight = DT::styleEqual(selected_row, "bold")
+          )
+      }
+
+      preview_table
     })
 
     parse_datetime <- function(x) {
@@ -2488,12 +2608,32 @@ addContData <- function(id, language) {
     output$map_modal_body <- renderUI({
       if (map_modal_state$step == "columns") {
         tagList(
-          'Identify which columns represent date-time and value (and optionally grade/approval/qualifier):',
+          'Identify which columns represent date-time and value (and optionally grade/approval/qualifier)',
+          'Hint: if this file contains more than one timeseries, go back to the timeseries selection menu and select all applicable timeseries before uploading the file.',
           hr(),
-          if (!uploaded_file_is_logger()) {
-            numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
-              tooltip("The row number which contains your data's column names")
+          if (uploaded_file_is_logger()) {
+            div(
+              class = "alert alert-info",
+              style = "padding: 8px; margin-bottom: 10px;",
+              logger_upload_message()
+            )
           },
+          if (!uploaded_file_is_logger()) {
+            tagList(
+              numericInput(
+                ns('raw_start_row'),
+                label = 'Header Row',
+                value = 1
+              ) |>
+                tooltip(
+                  "The row number which contains your data's column names"
+                )
+            )
+          },
+          tags$div(
+            style = "font-size: 11px; line-height: 1.15; margin-bottom: 10px;",
+            DT::DTOutput(ns("raw_file_preview"))
+          ),
           uiOutput(ns('map_col_inputs'))
         )
       } else {
@@ -2571,6 +2711,7 @@ addContData <- function(id, language) {
       title = 'Identify columns',
       uiOutput(ns('map_modal_body')),
       easyClose = FALSE,
+      size = "xl",
       footer = uiOutput(ns('map_modal_footer'))
     )
 
@@ -2584,14 +2725,16 @@ addContData <- function(id, language) {
         approval = character(),
         qualifier = character()
       )
-      if (tolower(tools::file_ext(input$file$name)) %in% c("xle", "html", "htm")) {
+      if (
+        tolower(tools::file_ext(input$file$name)) %in% c("xle", "html", "htm")
+      ) {
         updateSelectizeInput(
           session,
           "UTC_offset",
           selected = format_utc_offset(0L)
         )
         showNotification(
-          "Logger file datetimes were converted to UTC for upload.",
+          logger_upload_message(),
           type = "message",
           duration = 8
         )

@@ -78,6 +78,11 @@ test_that("logger file reader converts xle to uploadable data", {
   expect_s3_class(res$datetime, "POSIXct")
   expect_identical(attr(res$datetime, "tzone"), "UTC")
   expect_false(any(is.na(res$datetime)))
+  expect_match(
+    attr(res, "logger_timezone_note"),
+    "no offset shift was applied",
+    fixed = TRUE
+  )
 })
 
 test_that("logger file reader accepts default_tz names and fixed offsets", {
@@ -130,4 +135,9 @@ test_that("logger file reader converts VuSitu html to uploadable data", {
     "2025-08-26 01:00:00"
   )
   expect_equal(res$`Pressure (m)`, 100.985 * 0.1019716213 * 1.001)
+  expect_match(
+    attr(res, "logger_timezone_note"),
+    "UTC-07:00",
+    fixed = TRUE
+  )
 })
