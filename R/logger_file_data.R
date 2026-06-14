@@ -101,7 +101,13 @@ read_solinst_xle_data <- function(file, default_tz = "UTC") {
     out[, (converted$name) := converted$values]
   }
 
-  as.data.frame(out)
+  out <- as.data.frame(out)
+  attr(out, "logger_timezone_note") <- logger_timezone_note(
+    offset_seconds = NA_real_,
+    default_tz = default_tz,
+    file_has_offset = FALSE
+  )
+  out
 }
 
 read_insitu_html_data <- function(file, default_tz = "UTC") {
@@ -154,7 +160,13 @@ read_insitu_html_data <- function(file, default_tz = "UTC") {
     out[, `Pressure (m)` := `Depth (m)` * 0.999]
   }
 
-  as.data.frame(out)
+  out <- as.data.frame(out)
+  attr(out, "logger_timezone_note") <- logger_timezone_note(
+    offset_seconds = offset_seconds,
+    default_tz = default_tz,
+    file_has_offset = !is.na(offset_seconds)
+  )
+  out
 }
 
 xle_node_text <- function(node, name) {
@@ -248,6 +260,9 @@ utc_offset_hours_to_seconds <- function(offset_hours) {
 
 parse_logger_utc_offset <- function(value) {
   value <- trimws(as.character(value))
+  if (toupper(value) %in% c("UTC", "GMT")) {
+    return(0)
+  }
   value <- sub("^(UTC|GMT)\\s*", "", value, ignore.case = TRUE)
   if (identical(toupper(value), "Z")) {
     return(0)
@@ -268,6 +283,63 @@ parse_logger_utc_offset <- function(value) {
   }
 
   sign * (hours * 3600 + minutes * 60)
+}
+
+logger_timezone_note <- function(offset_seconds, default_tz, file_has_offset) {
+  if (isTRUE(file_has_offset)) {
+    offset_label <- format_logger_utc_offset(offset_seconds)
+    if (isTRUE(offset_seconds == 0)) {
+      return(paste0(
+        "The logger file contains UTC offset ",
+        offset_label,
+        ". Datetimes were already UTC, so no offset shift was applied. ",
+        "The UTC offset of data control has been set to UTC+00:00."
+      ))
+    }
+
+    return(paste0(
+      "The logger file contains UTC offset ",
+      offset_label,
+      ". Datetimes were shifted to UTC for upload. ",
+      "The UTC offset of data control has been set to UTC+00:00."
+    ))
+  }
+
+  tz_info <- normalize_logger_default_tz(default_tz)
+  if (!is.na(tz_info$offset_seconds)) {
+    offset_label <- format_logger_utc_offset(tz_info$offset_seconds)
+    if (isTRUE(tz_info$offset_seconds == 0)) {
+      return(paste0(
+        "The logger file does not contain an explicit UTC offset. ",
+        "Datetimes were treated as UTC, so no offset shift was applied. ",
+        "The UTC offset of data control has been set to UTC+00:00."
+      ))
+    }
+
+    return(paste0(
+      "The logger file does not contain an explicit UTC offset. ",
+      "Datetimes were interpreted as ",
+      offset_label,
+      " and shifted to UTC for upload. ",
+      "The UTC offset of data control has been set to UTC+00:00."
+    ))
+  }
+
+  paste0(
+    "The logger file does not contain an explicit UTC offset. ",
+    "Datetimes were interpreted in the ",
+    tz_info$tz,
+    " time zone and converted to UTC for upload. ",
+    "The UTC offset of data control has been set to UTC+00:00."
+  )
+}
+
+format_logger_utc_offset <- function(offset_seconds) {
+  sign <- if (offset_seconds < 0) "-" else "+"
+  abs_seconds <- abs(offset_seconds)
+  hours <- floor(abs_seconds / 3600)
+  minutes <- floor((abs_seconds %% 3600) / 60)
+  sprintf("UTC%s%02d:%02d", sign, hours, minutes)
 }
 
 logger_datetime_formats <- function() {
