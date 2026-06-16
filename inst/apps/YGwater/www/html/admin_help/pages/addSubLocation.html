@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add / modify sub-locations help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+    code { background: #f3f4f5; padding: 0.1rem 0.25rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Add / modify sub-locations</h1>
+  <p>Use this page to create or update sub-locations attached to a parent monitoring location. Sub-locations represent specific points within a location, such as a sampling point, sensor depth, bank, channel, intake, well screen, stilling well, or other repeated measurement position.</p>
+
+  <h2>When to use a sub-location</h2>
+  <p>Create a sub-location when multiple distinct measurement or sampling points belong to the same general monitoring location. This keeps the site grouped under one parent location while preserving the exact point used for samples, timeseries, deployments, images, or documents.</p>
+
+  <h2>Add or modify mode</h2>
+  <p>Choose <strong>Add new</strong> to create a sub-location. Choose <strong>Modify existing</strong> to select a sub-location from the table and edit its metadata. In modify mode, the associated parent location is locked so the sub-location is not accidentally moved to another location.</p>
+
+  <h2>Associated location</h2>
+  <p>Every sub-location must be associated with exactly one parent location. If the parent location is missing, create it first in <strong>Add / modify locations</strong>. Choose the parent carefully because downstream records may depend on this relationship.</p>
+
+  <h2>Names</h2>
+  <p>Enter a unique English sub-location name and, when available, a unique French name. Use clear names that distinguish the sub-location from other points at the same parent location, such as <code>Main channel</code>, <code>Left bank</code>, <code>Well screen 1</code>, or <code>Staff gauge</code>.</p>
+
+  <h2>Coordinates</h2>
+  <p>Enter latitude and longitude in decimal degrees using WGS84. Coordinates can be typed directly or chosen on the map. The map shows the parent location and helps verify that the sub-location is spatially reasonable.</p>
+
+  <h2>Distance from parent location</h2>
+  <p>The page warns when a sub-location is more than 10 meters from its parent location. This is not always wrong, but it should be intentional. If the distance warning appears, confirm that the selected parent location and coordinates are correct, then acknowledge the warning before saving.</p>
+
+  <h2>Access groups</h2>
+  <p>The <strong>Share with groups</strong> field controls which database roles can see the sub-location. <code>public_reader</code> is selected by default. Use restricted groups when the sub-location should not be broadly visible.</p>
+
+  <h2>Notes</h2>
+  <p>Use the sub-location note for concise details that help future users identify or interpret the point, such as marker descriptions, offset notes, sensor mounting details, or field conventions.</p>
+
+  <h2>Before saving</h2>
+  <p>Confirm the parent location, names, coordinates, access groups, and any distance warning. After saving, the sub-location can be used by timeseries, samples, deployments, and other records that need a more specific position than the parent location alone.</p>
+</body>
+</html>

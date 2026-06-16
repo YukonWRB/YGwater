@@ -1,3 +1,57 @@
+params_map_stats_period_label <- function(value, lang) {
+  if (identical(value, "full")) {
+    if (identical(lang, "fr")) "Toute la p\u00e9riode" else "Entire record"
+  } else {
+    if (identical(lang, "fr")) "30 derni\u00e8res ann\u00e9es" else "Last 30 years"
+  }
+}
+
+params_map_daily_stats_select_sql <- function(
+  con,
+  stats_period = "30yr",
+  columns = c("percent_historic_range", "max", "min", "doy_count")
+) {
+  if (!(stats_period %in% c("30yr", "full"))) {
+    stats_period <- "30yr"
+  }
+
+  available <- DBI::dbGetQuery(
+    con,
+    "SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'continuous'
+       AND table_name = 'measurements_calculated_daily'"
+  )$column_name
+
+  suffix <- ""
+  if (
+    identical(stats_period, "30yr") &&
+      all(paste0(columns, "_30yr") %in% available)
+  ) {
+    suffix <- "_30yr"
+  }
+
+  out <- vapply(
+    columns,
+    function(column) {
+      source_column <- paste0(column, suffix)
+      source_sql <- as.character(DBI::dbQuoteIdentifier(con, source_column))
+      if (identical(source_column, column)) {
+        source_sql
+      } else {
+        paste0(
+          source_sql,
+          " AS ",
+          as.character(DBI::dbQuoteIdentifier(con, column))
+        )
+      }
+    },
+    character(1)
+  )
+  attr(out, "count_column") <- paste0("doy_count", suffix)
+  out
+}
+
 mapParamsUI <- function(id) {
   ns <- NS(id)
 
@@ -94,6 +148,25 @@ mapParams <- function(id, language) {
             )
           ),
           selected = "range",
+          multiple = FALSE
+        ),
+        selectizeInput(
+          ns("stats_period"),
+          label = if (language$abbrev == "fr") {
+            "P\u00e9riode des statistiques"
+          } else {
+            "Stats period"
+          },
+          choices = stats::setNames(
+            c("30yr", "full"),
+            vapply(
+              c("30yr", "full"),
+              params_map_stats_period_label,
+              character(1),
+              lang = language$abbrev
+            )
+          ),
+          selected = map_params$stats_period,
           multiple = FALSE
         ),
         dateInput(
@@ -219,6 +292,7 @@ mapParams <- function(id, language) {
       days2 = 1,
       latest = FALSE,
       target = Sys.Date(),
+      stats_period = "30yr",
       params = 1,
       bins = c(-Inf, 0, 20, 40, 60, 80, 100, Inf),
       colors = c(
@@ -231,6 +305,14 @@ mapParams <- function(id, language) {
         "#A50026"
       )
     )
+
+    observeEvent(input$stats_period, {
+      if (is.null(input$stats_period) || !(input$stats_period %in% c("30yr", "full"))) {
+        map_params$stats_period <- "30yr"
+      } else {
+        map_params$stats_period <- input$stats_period
+      }
+    })
 
     # Observe 'map_latest_measurements'. If TRUE, 'target' is adjusted to Sys.Date()
     observeEvent(input$latest, {
@@ -411,6 +493,11 @@ mapParams <- function(id, language) {
     # Listen for input changes and update the map ########################################################
     updateMap <- function() {
       map_type <- req(input$mapType)
+      stats_select <- params_map_daily_stats_select_sql(
+        session$userData$AquaCache,
+        stats_period = map_params$stats_period
+      )
+      stats_filter_count <- attr(stats_select, "count_column")
 
       # integrity checks
       if (is.na(map_params$yrs1) || is.na(map_params$days1)) {
@@ -487,14 +574,16 @@ mapParams <- function(id, language) {
             "WITH ranked_data AS (
                                           SELECT
                                               timeseries_id, 
-                                              max, 
-                                              min, 
-                                              doy_count,
+                                              ",
+            paste(stats_select[c("max", "min", "doy_count")], collapse = ",\n                                              "),
+            ",
                                               ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                           FROM 
                                               measurements_calculated_daily
                                           WHERE 
-                                              doy_count >= ",
+                                              ",
+            stats_filter_count,
+            " >= ",
             as.numeric(map_params$yrs1),
             " 
                                           AND timeseries_id IN (",
@@ -526,7 +615,14 @@ mapParams <- function(id, language) {
         range1 <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
-            "SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ",
+            "SELECT ",
+            paste(
+              c("timeseries_id", "date", "value", stats_select),
+              collapse = ", "
+            ),
+            " FROM measurements_calculated_daily WHERE ",
+            stats_filter_count,
+            " >= ",
             as.numeric(map_params$yrs1),
             " AND timeseries_id IN (",
             paste(tsids1, collapse = ","),
@@ -617,14 +713,16 @@ mapParams <- function(id, language) {
               "WITH ranked_data AS (
                                             SELECT
                                                 timeseries_id, 
-                                                max, 
-                                                min, 
-                                                doy_count,
+                                                ",
+              paste(stats_select[c("max", "min", "doy_count")], collapse = ",\n                                                "),
+              ",
                                                 ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                             FROM 
                                                 measurements_calculated_daily
                                             WHERE 
-                                                doy_count >= ",
+                                                ",
+              stats_filter_count,
+              " >= ",
               as.numeric(map_params$yrs2),
               " 
                                             AND timeseries_id IN (",
@@ -655,7 +753,14 @@ mapParams <- function(id, language) {
           range2 <- dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "SELECT timeseries_id, date, value, percent_historic_range, max, min, doy_count FROM measurements_calculated_daily WHERE doy_count >= ",
+              "SELECT ",
+              paste(
+                c("timeseries_id", "date", "value", stats_select),
+                collapse = ", "
+              ),
+              " FROM measurements_calculated_daily WHERE ",
+              stats_filter_count,
+              " >= ",
               as.numeric(map_params$yrs2),
               " AND timeseries_id IN (",
               paste(tsids2, collapse = ","),
@@ -834,7 +939,7 @@ mapParams <- function(id, language) {
               "",
               paste0("Matrix state: ", matrix_state, "<br>")
             ),
-            tr("map_actual_date", language$language),
+            tr("date", language$language),
             ": ",
             if (map_params$latest) {
               paste0(datetime, " UTC")

@@ -1,3 +1,106 @@
+continuous_data_daily_stats_columns <- c(
+  "percent_historic_range",
+  "max",
+  "min",
+  "q90",
+  "q75",
+  "q50",
+  "q25",
+  "q10",
+  "mean",
+  "doy_count"
+)
+
+continuous_data_daily_stats_available_columns <- function(con) {
+  DBI::dbGetQuery(
+    con,
+    "SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'continuous'
+       AND table_name = 'measurements_calculated_daily'"
+  )$column_name
+}
+
+continuous_data_quote_column <- function(con, column, table_alias = "m") {
+  prefix <- if (is.null(table_alias) || !nzchar(table_alias)) {
+    ""
+  } else {
+    paste0(table_alias, ".")
+  }
+  paste0(prefix, as.character(DBI::dbQuoteIdentifier(con, column)))
+}
+
+continuous_data_daily_stats_preview_select_sql <- function(
+  con,
+  table_alias = "m"
+) {
+  available <- continuous_data_daily_stats_available_columns(con)
+  base_select <- vapply(
+    continuous_data_daily_stats_columns,
+    continuous_data_quote_column,
+    character(1),
+    con = con,
+    table_alias = table_alias
+  )
+
+  thirty_year_select <- vapply(
+    continuous_data_daily_stats_columns,
+    function(column) {
+      column_30yr <- paste0(column, "_30yr")
+      if (column_30yr %in% available) {
+        continuous_data_quote_column(con, column_30yr, table_alias)
+      } else {
+        cast <- if (identical(column, "doy_count")) "integer" else "numeric"
+        paste0(
+          "NULL::",
+          cast,
+          " AS ",
+          as.character(DBI::dbQuoteIdentifier(con, column_30yr))
+        )
+      }
+    },
+    character(1)
+  )
+
+  c(base_select, thirty_year_select)
+}
+
+continuous_data_missing_30yr_select_sql <- function(con) {
+  available <- continuous_data_daily_stats_available_columns(con)
+  missing_30yr <- setdiff(
+    paste0(continuous_data_daily_stats_columns, "_30yr"),
+    available
+  )
+
+  if (length(missing_30yr) == 0) {
+    return("")
+  }
+
+  paste0(
+    ", ",
+    paste(
+      vapply(
+        missing_30yr,
+        function(column) {
+          cast <- if (identical(column, "doy_count_30yr")) {
+            "integer"
+          } else {
+            "numeric"
+          }
+          paste0(
+            "NULL::",
+            cast,
+            " AS ",
+            as.character(DBI::dbQuoteIdentifier(con, column))
+          )
+        },
+        character(1)
+      ),
+      collapse = ", "
+    )
+  )
+}
+
 contDataUI <- function(id) {
   ns <- NS(id)
 
@@ -65,22 +168,26 @@ contData <- function(id, language, inputs) {
     # Functions and data fetch ################
     # Adjust multiple selection based on if 'all' is selected
     observeFilterInput <- function(inputId) {
-      observeEvent(input[[inputId]], {
-        # Check if 'all' is selected and adjust accordingly
-        if (length(input[[inputId]]) > 1) {
-          # If 'all' was selected last, remove all other selections
-          if (input[[inputId]][length(input[[inputId]])] == "all") {
+      observeEvent(
+        input[[inputId]],
+        {
+          values <- input[[inputId]]
+          if (is.null(values) || length(values) == 0) {
             updateSelectizeInput(session, inputId, selected = "all")
-          } else if ("all" %in% input[[inputId]]) {
-            # If 'all' is already selected and another option is selected, remove 'all'
-            updateSelectizeInput(
-              session,
-              inputId,
-              selected = input[[inputId]][length(input[[inputId]])]
-            )
+            return()
           }
-        }
-      })
+          values <- as.character(values)
+          if (length(values) > 1 && "all" %in% values) {
+            selected <- if (identical(values[[length(values)]], "all")) {
+              "all"
+            } else {
+              setdiff(values, "all")
+            }
+            updateSelectizeInput(session, inputId, selected = selected)
+          }
+        },
+        ignoreNULL = FALSE
+      )
     }
 
     # Get the data to populate drop-downs. Runs every time this module is loaded.
@@ -2247,6 +2354,10 @@ contData <- function(id, language, inputs) {
       # subset[, rn := NULL] # Drop column 'rn', left over from the window function
 
       # Single query using a window function to limit to first and last rows per timeseries_id
+      daily_stats_select <- continuous_data_daily_stats_preview_select_sql(
+        session$userData$AquaCache,
+        table_alias = "m"
+      )
       query <- paste0(
         "WITH extremes AS (
           SELECT
@@ -2263,9 +2374,9 @@ contData <- function(id, language, inputs) {
         m.timeseries_id,
         m.date AS date_UTC,
         m.value,
-        m.percent_historic_range,
-        m.max, m.min, m.q90, m.q75, m.q50, m.q25, m.q10, m.mean,
-        m.doy_count
+        ",
+        paste(daily_stats_select, collapse = ",\n        "),
+        "
         FROM measurements_calculated_daily AS m
         JOIN extremes AS e
         ON m.timeseries_id = e.timeseries_id
@@ -2276,7 +2387,8 @@ contData <- function(id, language, inputs) {
       )
 
       subset <- dbGetQueryDT(session$userData$AquaCache, query)
-      subset[, c(3:12) := lapply(.SD, round, 2), .SDcols = c(3:12)]
+      round_cols <- names(subset)[seq.int(3L, ncol(subset))]
+      subset[, (round_cols) := lapply(.SD, round, 2), .SDcols = round_cols]
 
       output$modal_timeseries_subset <- DT::renderDT({
         # Create datatable for the measurements
@@ -2573,6 +2685,10 @@ contData <- function(id, language, inputs) {
           }
 
           # This only fetches the first/last daily mean data as other resolutions take way too long.
+          daily_stats_select <- continuous_data_daily_stats_preview_select_sql(
+            session$userData$AquaCache,
+            table_alias = "m"
+          )
           query <- paste0(
             "WITH extremes AS (
           SELECT
@@ -2594,9 +2710,9 @@ contData <- function(id, language, inputs) {
         m.timeseries_id,
         m.date AS date_UTC,
         m.value,
-        m.percent_historic_range,
-        m.max, m.min, m.q90, m.q75, m.q50, m.q25, m.q10, m.mean,
-        m.doy_count
+        ",
+            paste(daily_stats_select, collapse = ",\n        "),
+            "
         FROM measurements_calculated_daily AS m
         JOIN extremes AS e
         ON m.timeseries_id = e.timeseries_id
@@ -2606,7 +2722,8 @@ contData <- function(id, language, inputs) {
         "
           )
           subset <- dbGetQueryDT(session$userData$AquaCache, query)
-          subset[, c(3:12) := lapply(.SD, round, 2), .SDcols = c(3:12)]
+          round_cols <- names(subset)[seq.int(3L, ncol(subset))]
+          subset[, (round_cols) := lapply(.SD, round, 2), .SDcols = round_cols]
 
           output$modal_timeseries_subset <- DT::renderDT({
             # Create datatable for the measurements
@@ -2740,6 +2857,9 @@ contData <- function(id, language, inputs) {
         } else {
           "end_datetime_UTC"
         }
+        missing_30yr_select <- continuous_data_missing_30yr_select_sql(
+          session$userData$AquaCache
+        )
 
         data <- list(
           location_metadata = dbGetQueryDT(
@@ -2760,7 +2880,9 @@ contData <- function(id, language, inputs) {
           daily_means_stats = dbGetQueryDT(
             session$userData$AquaCache,
             paste0(
-              "SELECT * FROM measurements_calculated_daily WHERE timeseries_id IN (",
+              "SELECT m.*",
+              missing_30yr_select,
+              " FROM measurements_calculated_daily AS m WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
               ") AND date >= '",
               input$modal_date_range[1],

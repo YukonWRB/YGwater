@@ -9,9 +9,9 @@ get_cached(key, fetch_fun, check_fun = NULL, ttl = 3600, env = .GlobalEnv)
 \arguments{
 \item{key}{A unique character string identifying the cached data.}
 
-\item{fetch_fun}{A function that returns the value to cache when the current cache entry is missing or expired.}
+\item{fetch_fun}{A function that returns the value to cache when the current cache entry is missing, expired, or invalid.}
 
-\item{check_fun}{An optional function that checks if the cached value is still valid even though the \code{ttl} is expired and returns TRUE or FALSE. If TRUE, the cached value is returned; if FALSE, a new value is fetched. This function should be significantly faster than \code{fetch_fun}.}
+\item{check_fun}{An optional function that checks if the cached value is still valid and returns TRUE or FALSE. When supplied, it is called on every cache hit. If TRUE, the cached value is returned; if FALSE, a new value is fetched. This function should be significantly faster than \code{fetch_fun}.}
 
 \item{ttl}{Time-to-live for the cached value in seconds. Defaults to 3600 seconds (1 hour).}
 
@@ -21,5 +21,5 @@ get_cached(key, fetch_fun, check_fun = NULL, ttl = 3600, env = .GlobalEnv)
 The cached value for \code{key}.
 }
 \description{
-Provides global helper functions to store and retrieve cached data across user sessions. Each cached item includes a timestamp and is automatically refreshed when called after the specified time-to-live (TTL) has expired.
+Provides global helper functions to store and retrieve cached data across user sessions. Each cached item includes a timestamp and is automatically refreshed when called after the specified time-to-live (TTL) has expired, or when \code{check_fun} is provided and reports that the cached value is no longer valid.
 }

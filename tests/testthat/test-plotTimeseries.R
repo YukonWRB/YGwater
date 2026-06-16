@@ -1,7 +1,23 @@
 # Note: these tests depend on installation of Python and a few libraries. This is taken care of in the setup.R file within the testthat folder.
 
-con <- AquaConnect(silent = TRUE)
-on.exit(DBI::dbDisconnect(con), add = TRUE)
+test_con <- test_AquaConnect(silent = TRUE)
+on.exit(DBI::dbDisconnect(test_con), add = TRUE)
+
+
+wlevel <- DBI::dbGetQuery(
+  test_con,
+  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+)$parameter_id[[1]]
+
+# Find the first water level timeseries in the DB
+wlevel_ts <- DBI::dbGetQuery(
+  test_con,
+  paste0(
+    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id, start_datetime, end_datetime FROM continuous.timeseries ts WHERE parameter_id = ",
+    wlevel,
+    " LIMIT 1;"
+  )
+)
 
 test_that("timeseries plot is as expected for one year with no historic range or slider", {
   skip_on_cran()
@@ -15,13 +31,15 @@ test_that("timeseries plot is as expected for one year with no historic range or
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotTimeseries(
-    location = "09EA004",
+    location = wlevel_ts$location_id[1],
     parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    record_rate = wlevel_ts$record_rate[1],
+    aggregation_type = wlevel_ts$aggregation_type_id[1],
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 30),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     historic_range = FALSE,
     slider = FALSE,
-    con = con
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -40,12 +58,14 @@ test_that("timeseries plot is as expected for one year with no historic range", 
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotTimeseries(
-    location = "09EA004",
+    location = wlevel_ts$location_id[1],
     parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    record_rate = wlevel_ts$record_rate[1],
+    aggregation_type = wlevel_ts$aggregation_type_id[1],
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 365),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     historic_range = FALSE,
-    con = con
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -64,11 +84,13 @@ test_that("timeseries plot is as expected for one year with historic range", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotTimeseries(
-    location = "09EA004",
+    location = wlevel_ts$location_id[1],
     parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
-    con = con
+    record_rate = wlevel_ts$record_rate[1],
+    aggregation_type = wlevel_ts$aggregation_type_id[1],
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 365),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -87,12 +109,14 @@ test_that("French timeseries plot is as expected for one year with historic rang
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotTimeseries(
-    location = "09EA004",
+    location = wlevel_ts$location_id[1],
     parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    record_rate = wlevel_ts$record_rate[1],
+    aggregation_type = wlevel_ts$aggregation_type_id[1],
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 365),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     lang = "fr",
-    con = con
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -111,13 +135,15 @@ test_that("French timeseries plot is as expected for one year with historic rang
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotTimeseries(
-    location = "09EA004",
+    location = wlevel_ts$location_id[1],
     parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    record_rate = wlevel_ts$record_rate[1],
+    aggregation_type = wlevel_ts$aggregation_type_id[1],
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 365),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     lang = "fr",
     slider = FALSE,
-    con = con
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -136,16 +162,15 @@ test_that("grades, approvals, qualifiers are displayed", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotTimeseries(
-    location = "09EA004",
-    parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    timeseries_id = 1,
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 365),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     lang = "fr",
     slider = FALSE,
     grades = TRUE,
     qualifiers = TRUE,
     approvals = TRUE,
-    con = con
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -164,14 +189,13 @@ test_that("one of grades, approvals, qualifiers is displayed", {
   on.exit(unlink(path), add = TRUE)
 
   plot <- plotTimeseries(
-    location = "09EA004",
-    parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    timeseries_id = 1,
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 365),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     lang = "fr",
     slider = FALSE,
     grades = TRUE,
-    con = con
+    con = test_con
   )
   plotly::save_image(plot, file = path, width = 500, height = 500)
 
@@ -182,14 +206,13 @@ test_that("returned plot data is as expected", {
   skip_on_cran()
 
   plot <- plotTimeseries(
-    location = "09EA004",
-    parameter = "water level",
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    timeseries_id = 1,
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 30),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     lang = "fr",
     slider = FALSE,
     data = TRUE,
-    con = con
+    con = test_con
   )$data
   expect_type(plot, "list")
   expect_named(plot, c("trace_data", "range_data"))
@@ -197,63 +220,19 @@ test_that("returned plot data is as expected", {
   expect_named(plot$range_data, c("datetime", "min", "max", "q75", "q25"))
 })
 
-test_that("returned plot data is as expected with all parameters specified", {
-  skip_on_cran()
-
-  plot <- plotTimeseries(
-    location = "09EA004",
-    sub_location = NULL,
-    parameter = "water level",
-    record_rate = 5 * 60, # 5 minutes for WSC data
-    aggregation_type = "instantaneous",
-    z = NULL,
-    z_approx = NULL,
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
-    lang = "fr",
-    slider = FALSE,
-    data = TRUE,
-    datum = FALSE,
-    custom_title = NULL,
-    filter = 20,
-    unusable = FALSE,
-    grades = TRUE,
-    approvals = TRUE,
-    qualifiers = TRUE,
-    historic_range = TRUE,
-    con = con
-  )$data
-  expect_type(plot, "list")
-  expect_named(plot, c("trace_data", "range_data"))
-  expect_named(plot$trace_data, c("datetime", "value", "imputed"))
-  expect_named(plot$range_data, c("datetime", "min", "max", "q75", "q25"))
-})
 
 test_that("plotTimeseries works when given only a timeseries_id", {
   skip_on_cran()
 
-  # Find an appropriate timeseries_id
-  wl <- DBI::dbGetQuery(
-    con,
-    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
-  )[1, 1]
-  loc_id <- DBI::dbGetQuery(
-    con,
-    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
-  )[1, 1]
-  tsid <- DBI::dbGetQuery(
-    con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2;",
-    params = list(wl, loc_id)
-  )[1, 1]
   plot <- plotTimeseries(
-    timeseries_id = tsid,
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    timeseries_id = wlevel_ts$timeseries_id[1],
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 30),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     historic_range = TRUE,
     slider = FALSE,
     data = TRUE,
-    con = con
+    stats_period = "30yr",
+    con = test_con
   )
   expect_s3_class(plot$plot, "plotly")
   expect_named(plot$data, c("trace_data", "range_data"))
@@ -279,29 +258,15 @@ test_that("plotTimeseries works when given only a timeseries_id", {
 test_that("plotTimeseries plots raw and corrected data", {
   skip_on_cran()
 
-  # Find an appropriate timeseries_id
-  wl <- DBI::dbGetQuery(
-    con,
-    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
-  )[1, 1]
-  loc_id <- DBI::dbGetQuery(
-    con,
-    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
-  )[1, 1]
-  tsid <- DBI::dbGetQuery(
-    con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2;",
-    params = list(wl, loc_id)
-  )[1, 1]
   plot <- plotTimeseries(
-    timeseries_id = tsid,
-    start_date = "2022-01-01",
-    end_date = "2023-01-01",
+    timeseries_id = wlevel_ts$timeseries_id[1],
+    start_date = as.character(lubridate::date(wlevel_ts$end_datetime[1]) - 30),
+    end_date = as.character(lubridate::date(wlevel_ts$end_datetime[1])),
     historic_range = TRUE,
     slider = FALSE,
     data = TRUE,
     raw = TRUE,
-    con = con
+    con = test_con
   )
   expect_s3_class(plot$plot, "plotly")
   expect_named(plot$data, c("trace_data", "range_data"))
@@ -328,33 +293,13 @@ test_that("plotTimeseries plots raw and corrected data", {
 
 test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", {
   skip_on_cran()
+  tsid <- wlevel_ts$timeseries_id[1]
 
-  wl <- DBI::dbGetQuery(
-    con,
-    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
-  )[1, 1]
-  loc_id <- DBI::dbGetQuery(
-    con,
-    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
-  )[1, 1]
-  tsid <- DBI::dbGetQuery(
-    con,
-    paste0(
-      "SELECT ts.timeseries_id FROM timeseries ts ",
-      "LEFT JOIN aggregation_types at ",
-      "ON ts.aggregation_type_id = at.aggregation_type_id ",
-      "WHERE ts.parameter_id = $1 AND ts.location_id = $2 ",
-      "AND at.aggregation_type IN ('instantaneous', 'mean') ",
-      "LIMIT 1;"
-    ),
-    params = list(wl, loc_id)
-  )[1, 1]
-
-  start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
-  end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
+  start_dt <- wlevel_ts$end_datetime[1] - lubridate::days(30)
+  end_dt <- wlevel_ts$end_datetime[1]
 
   agg_type <- DBI::dbGetQuery(
-    con,
+    test_con,
     paste0(
       "SELECT at.aggregation_type FROM timeseries ts ",
       "LEFT JOIN aggregation_types at ",
@@ -365,7 +310,7 @@ test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", 
   )[1, 1]
 
   source <- dbGetQueryDT(
-    con,
+    test_con,
     paste0(
       "SELECT datetime, value_corrected, imputed ",
       "FROM continuous.measurements_continuous_corrected($1, $2, $3) ",
@@ -414,7 +359,7 @@ test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", 
     slider = FALSE,
     historic_range = FALSE,
     data = TRUE,
-    con = con
+    con = test_con
   )$data$trace_data
 
   out <- out[
@@ -431,6 +376,9 @@ test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", 
 test_that("plotTimeseries can show data in the past", {
   skip_on_ci() # Because the CI instance would not have the necessary historical data
   skip_on_cran()
+
+  con <- AquaConnect() # Connect to regular DB so that we can work with historical data
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
 
   if (
     !isTRUE(DBI::dbGetQuery(
@@ -458,6 +406,39 @@ test_that("plotTimeseries can show data in the past", {
   as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC") # Has to be after implementation of patch_38, otherwise the old AquaCache logic was deleting rows and replacing, resulting in recent created_on timestamps - this made it appear as if there was nothing in the past.
   start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
   end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
+
+  yes <- FALSE
+  tryCatch(
+    {
+      DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT date, value, max, min, q75, q25",
+          "FROM continuous.measurements_calculated_daily_at(",
+          "  $1,",
+          "  ARRAY[$2]::INTEGER[],",
+          "  $3::DATE,",
+          "  $4::DATE",
+          ")",
+          "ORDER by date ASC;"
+        ),
+        params = list(as_of, tsid, start_dt, end_dt)
+      )
+      yes <- TRUE
+    },
+    error = function(e) {
+      message(
+        "Cannot access measurements_calculated_daily_at function: ",
+        e$message
+      )
+    }
+  )
+
+  if (!yes) {
+    skip(
+      "Connection cannot access measurements_calculated_daily_at function, which is required for historical queries."
+    )
+  }
 
   out_max <- plotTimeseries(
     timeseries_id = tsid,

@@ -93,6 +93,7 @@ mapSnowbull <- function(id, language) {
     ns <- session$ns
 
     months <- YGwater:::snowbull_months(short = TRUE)
+    month_choices <- c(2L, 3L, 4L, 5L)
 
     snowbull_shapefiles <- YGwater:::load_bulletin_shapefiles(
       session$userData$AquaCache
@@ -102,6 +103,26 @@ mapSnowbull <- function(id, language) {
     )
 
     static_style_elements <- YGwater:::get_static_style_elements()
+
+    latest_datetime <- suppressWarnings(max(
+      c(
+        snowbull_timeseries$swe$basins$timeseries$data$datetime,
+        snowbull_timeseries$swe$pillows$timeseries$data$datetime,
+        snowbull_timeseries$swe$surveys$timeseries$data$datetime
+      ),
+      na.rm = TRUE
+    ))
+
+    if (!is.finite(latest_datetime)) {
+      latest_datetime <- lubridate::now(tzone = "UTC")
+    }
+
+    selected_year <- as.character(lubridate::year(latest_datetime))
+    selected_month <- as.character(lubridate::month(latest_datetime))
+
+    if (!selected_month %in% as.character(month_choices)) {
+      selected_month <- as.character(max(month_choices))
+    }
 
     output$banner <- renderUI({
       application_notifications_ui(
@@ -123,11 +144,11 @@ mapSnowbull <- function(id, language) {
             tr("gen_snowBul_year", language$language),
             style = "display: block; margin-bottom: 5px;"
           ),
-          selectInput(
+          selectizeInput(
             ns("year"),
             label = NULL,
             choices = as.character(current_year:2000),
-            selected = "2026",
+            selected = selected_year,
             width = "100%"
           )
         ),
@@ -137,11 +158,11 @@ mapSnowbull <- function(id, language) {
             tr("month", language$language),
             style = "display: block; margin-bottom: 5px;"
           ),
-          selectInput(
+          selectizeInput(
             ns("month"),
             label = NULL,
             choices = stats::setNames(
-              as.character(c(2, 3, 4, 5)),
+              as.character(month_choices),
               c(
                 tr("feb", language$language),
                 tr("mar", language$language),
@@ -149,7 +170,7 @@ mapSnowbull <- function(id, language) {
                 tr("may", language$language)
               )
             ),
-            selected = "3",
+            selected = selected_month,
             width = "100%"
           )
         ),

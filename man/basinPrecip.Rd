@@ -31,7 +31,7 @@ basinPrecip(
 
 \item{title}{Should a title be added to the map? Only used if map = TRUE.}
 
-\item{raster_col}{The color palette to use for the raster plot. Default is terra::map.pal("elevation", 10), \strong{not} the terra::plot default. In all cases a very light blue-grey is the lowest precip amount color. Refer to \code{\link[terra:mappal]{terra::map.pal()}} for other color options. Only used if map = TRUE.}
+\item{raster_col}{The color palette to use for the raster plot. Default is terra::map.pal("elevation", 10), \strong{not} the terra::plot default. In all cases a very light blue-grey is the lowest precip amount color. Refer to \code{\link[terra:map.pal]{terra::map.pal()}} for other color options. Only used if map = TRUE.}
 
 \item{silent}{If TRUE, no output is printed to the console.}
 

@@ -45,6 +45,73 @@ continuous_trace_uses_corrected_source <- function(
   nrow(corrections_apply) > 0
 }
 
+#' Normalize the daily-statistics period selector
+#' @param stats_period One of "full" or "30yr".
+#' @return A normalized period string.
+#' @noRd
+normalize_daily_stats_period <- function(stats_period) {
+  stats_period <- match.arg(stats_period, c("full", "30yr"))
+  stats_period
+}
+
+#' Build stable daily-statistics SELECT expressions
+#' @param con A DBI database connection object.
+#' @param stats_period One of "full" or "30yr".
+#' @param columns Base daily-statistics columns to select.
+#' @param table_alias Optional table alias to prefix column references.
+#' @return A character vector of SQL SELECT expressions.
+#' @noRd
+daily_stats_select_sql <- function(
+  con,
+  stats_period = "full",
+  columns = c("min", "max", "q75", "q25"),
+  table_alias = NULL
+) {
+  stats_period <- normalize_daily_stats_period(stats_period)
+  available <- DBI::dbGetQuery(
+    con,
+    "SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'continuous'
+       AND table_name = 'measurements_calculated_daily'"
+  )$column_name
+
+  suffix <- ""
+  if (
+    identical(stats_period, "30yr") &&
+      all(paste0(columns, "_30yr") %in% available)
+  ) {
+    suffix <- "_30yr"
+  }
+
+  prefix <- if (is.null(table_alias) || !nzchar(table_alias)) {
+    ""
+  } else {
+    paste0(table_alias, ".")
+  }
+
+  vapply(
+    columns,
+    function(column) {
+      source_column <- paste0(column, suffix)
+      source_sql <- paste0(
+        prefix,
+        as.character(DBI::dbQuoteIdentifier(con, source_column))
+      )
+      if (identical(source_column, column)) {
+        source_sql
+      } else {
+        paste0(
+          source_sql,
+          " AS ",
+          as.character(DBI::dbQuoteIdentifier(con, column))
+        )
+      }
+    },
+    character(1)
+  )
+}
+
 #' Normalize the as_of input to a POSIXct object in UTC timezone
 #' @param as_of The input value for as_of, which can be NULL, character, Date, or POSIXct.
 #' @param tzone The timezone to use for parsing character inputs, which can be a string or numeric offset.
@@ -262,9 +329,11 @@ add_gap_markers <- function(trace_data, period_seconds) {
   }
 
   trace_data <- data.table::as.data.table(trace_data)
-  data.table::setorder(trace_data, datetime)
+  data.table::setorder(trace_data, "datetime")
 
-  trace_data[, next_datetime := data.table::shift(datetime, type = "lead")]
+  trace_data[,
+    "next_datetime" := data.table::shift(trace_data$datetime, type = "lead")
+  ]
   gap_indices <- which(
     !is.na(trace_data$next_datetime) &
       as.numeric(
@@ -275,7 +344,7 @@ add_gap_markers <- function(trace_data, period_seconds) {
   )
 
   if (length(gap_indices) == 0) {
-    trace_data[, next_datetime := NULL]
+    trace_data[, "next_datetime" := NULL]
     return(trace_data)
   }
 
@@ -287,15 +356,15 @@ add_gap_markers <- function(trace_data, period_seconds) {
     na_rows[[col]] <- NA
   }
   if ("imputed" %in% names(na_rows)) {
-    na_rows[, imputed := FALSE]
+    na_rows[, "imputed" := FALSE]
   }
 
-  trace_data[, next_datetime := NULL]
+  trace_data[, "next_datetime" := NULL]
   out <- data.table::rbindlist(
     list(trace_data, na_rows),
     use.names = TRUE,
     fill = TRUE
   )
-  data.table::setorder(out, datetime)
+  data.table::setorder(out, "datetime")
   out
 }

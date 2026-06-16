@@ -45,5 +45,5 @@ Writes a .pdf containing YOWN data in the specified directory.
 Generates a plot of the specified YOWN well's water level data, with options for statistical calculations and formatting. The plot can be saved to a specified directory or displayed in the console.
 }
 \details{
-To store login credentials in your .renviron profile, call \code{\link[usethis:edit]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".
+To store login credentials in your .renviron profile, call \code{\link[usethis:edit_r_environ]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS = "your password".
 }

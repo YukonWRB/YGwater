@@ -43,13 +43,60 @@ if (Sys.getenv("CI") == "true") {
     aquacachePass = "runner",
     aquacacheAdminUser = "runner",
     aquacacheAdminPass = "runner",
+    aquacacheTestName = "testdb",
+    aquacacheTestHost = "localhost",
+    aquacacheTestPort = "5432",
+    aquacacheTestUser = "runner",
+    aquacacheTestPass = "runner",
     AQUSER = "readonly",
     AQPASS = "WaterIsLife",
     AQSERVER = "https://yukon.aquaticinformatics.net/AQUARIUS"
   )
   message("Running on CI, setting environment accordingly.")
+  test_db_exists <- TRUE # We assume the test database exists on CI, since it's created in the workflow file. If it doesn't, the tests will fail and we'll know to fix the CI setup.
 }
 
+# Check that the datbase 'testdb' exists at the host and port in the .Renviron file. If not, instruct user to craete it with AquaCache::create_test_db()
+test_db_exists <- tryCatch(
+  {
+    con <- AquaConnect(
+      name = Sys.getenv("aquacacheTestName"),
+      host = Sys.getenv("aquacacheTestHost"),
+      port = Sys.getenv("aquacacheTestPort"),
+      user = Sys.getenv("aquacacheTestUser"),
+      password = Sys.getenv("aquacacheTestPass"),
+      silent = TRUE
+    )
+    DBI::dbDisconnect(con)
+
+    TRUE
+  },
+  error = function(e) {
+    FALSE
+  }
+)
+
+if (!test_db_exists) {
+  stop(
+    "Database 'testdb' not found at the host and port specified in your .Renviron file. Please create it with AquaCache::create_test_db() before running the tests."
+  )
+} else {
+  message(
+    "Database 'testdb' found at the host and port specified in your .Renviron file. Proceeding with tests."
+  )
+}
+
+# Create a helper function for test connections to the test database, which will use the environment variables set above. This is used in multiple test files.
+test_AquaConnect <- function(silent = TRUE) {
+  AquaConnect(
+    name = Sys.getenv("aquacacheTestName"),
+    host = Sys.getenv("aquacacheTestHost"),
+    port = Sys.getenv("aquacacheTestPort"),
+    user = Sys.getenv("aquacacheTestUser"),
+    password = Sys.getenv("aquacacheTestPass"),
+    silent = silent
+  )
+}
 set.seed(123) # Set seed for reproducibility in tests
 
 # Ensure ragg is available for deterministic PNG outputs

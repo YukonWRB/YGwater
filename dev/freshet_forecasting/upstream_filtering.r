@@ -196,7 +196,7 @@ get_monitoring_locations_as_sf <- function(con) {
 }
 
 get_monitoring_location_parameter_ids <- function(con) {
-    YGwater::dbGetQueryDT(
+    location_parameter_ids <- YGwater::dbGetQueryDT(
         paste(
             "WITH location_params AS (",
             "    SELECT l.location_id, l.location_code, p.parameter_id",
@@ -227,6 +227,48 @@ get_monitoring_location_parameter_ids <- function(con) {
         ),
         con = con
     )
+
+    # Represent image series as synthetic parameter_id 0 so image-capable
+    # locations are carried through the same JSON filtering/encoding workflow.
+    image_series_parameter_ids <- tryCatch(
+        YGwater::dbGetQueryDT(
+            paste(
+                "SELECT DISTINCT l.location_id, l.location_code, 0::integer AS parameter_id",
+                "FROM image_series s",
+                "JOIN locations l ON l.location_id = s.location_id",
+                "WHERE s.location_id IS NOT NULL",
+                "ORDER BY l.location_code"
+            ),
+            con = con
+        ),
+        error = function(e) {
+            data.frame(
+                location_id = integer(),
+                location_code = character(),
+                parameter_id = integer(),
+                stringsAsFactors = FALSE
+            )
+        }
+    )
+
+    if (nrow(image_series_parameter_ids) == 0) {
+        return(location_parameter_ids)
+    }
+
+    combined <- rbind(
+        location_parameter_ids,
+        image_series_parameter_ids
+    )
+    combined$location_id <- as.integer(combined$location_id)
+    combined$location_code <- as.character(combined$location_code)
+    combined$parameter_id <- as.integer(combined$parameter_id)
+
+    combined <- unique(combined[, c(
+        "location_id",
+        "location_code",
+        "parameter_id"
+    )])
+    combined[order(combined$location_code, combined$parameter_id), ]
 }
 
 get_stations_by_basin <- function(location_codes, poly, monitoring_stations) {
@@ -741,6 +783,7 @@ load_target_gauge_context <- function(
 
     station_status_table <- sf::st_drop_geometry(
         gauges_in_target_basin[, c(
+            "name",
             "location_code",
             "location_id",
             "station_status"
@@ -1059,23 +1102,78 @@ build_target_gauge_station_export <- function(
 ) {
     station_status_table <- target_context$station_status_table
     route_table <- target_context$target_gauge_route_table
+    target_gauges <- target_context$target_gauges
+    target_gauge <- target_context$target_gauge
+
+    if (is.null(station_status_table) || nrow(station_status_table) == 0) {
+        station_status_table <- data.frame(
+            name = character(),
+            location_code = character(),
+            location_id = integer(),
+            station_status = integer(),
+            stringsAsFactors = FALSE
+        )
+    }
+
+    # Always include the active target gauge and always force its encoding to 0.
+    # This prevents the target from being dropped by monitoring-data filters.
+    if (!is.null(target_gauge) && nrow(target_gauge) > 0) {
+        target_rows <- data.frame(
+            name = as.character(target_gauge$name),
+            location_code = as.character(target_gauge$location_code),
+            location_id = as.integer(target_gauge$location_id),
+            station_status = 0L,
+            stringsAsFactors = FALSE
+        )
+
+        target_keys <- paste0(
+            target_rows$location_code,
+            "::",
+            target_rows$location_id
+        )
+        station_keys <- paste0(
+            as.character(station_status_table$location_code),
+            "::",
+            as.integer(station_status_table$location_id)
+        )
+
+        station_status_table <- station_status_table[
+            !(station_keys %in% target_keys),
+            ,
+            drop = FALSE
+        ]
+        station_status_table <- unique(rbind(station_status_table, target_rows))
+    }
 
     lapply(seq_len(nrow(station_status_table)), function(row_index) {
         station_row <- station_status_table[row_index, , drop = FALSE]
+        station_location_code <- station_row$location_code[[1]]
+        station_location_id <- station_row$location_id[[1]]
+
+        station_location_name <- as.character(station_row$name[[1]])
+        if (is.na(station_location_name) || !nzchar(station_location_name)) {
+            station_location_name <- target_gauges[
+                target_gauges$location_code == station_location_code &
+                    target_gauges$location_id == station_location_id,
+                "name"
+            ][[1]]
+        }
+        if (is.na(station_location_name) || !nzchar(station_location_name)) {
+            station_location_name <- station_location_code
+        }
+
         station_parameters <- location_parameter_ids[
-            location_parameter_ids$location_code ==
-                station_row$location_code[[1]] &
-                location_parameter_ids$location_id ==
-                    station_row$location_id[[1]],
-            "parameter_id"
+            location_parameter_ids$location_code == station_location_code &
+                location_parameter_ids$location_id == station_location_id,
         ]
         station_parameter_ids <- sort(unique(as.integer(unlist(
-            station_parameters,
+            station_parameters$parameter_id,
             use.names = FALSE
         ))))
+
         route_row <- route_table[
-            route_table$location_code == station_row$location_code[[1]] &
-                route_table$location_id == station_row$location_id[[1]],
+            route_table$location_code == station_location_code &
+                route_table$location_id == station_location_id,
             ,
             drop = FALSE
         ]
@@ -1097,10 +1195,9 @@ build_target_gauge_station_export <- function(
         }
 
         list(
-            location_code = jsonlite::unbox(station_row$location_code[[1]]),
-            location_id = jsonlite::unbox(as.integer(station_row$location_id[[
-                1
-            ]])),
+            location_code = jsonlite::unbox(station_location_code),
+            location_id = jsonlite::unbox(as.integer(station_location_id)),
+            location_name = jsonlite::unbox(station_location_name),
             parameter_ids = unname(station_parameter_ids),
             encoding = jsonlite::unbox(as.integer(station_row$station_status[[
                 1
@@ -1118,6 +1215,20 @@ read_target_gauge_station_encoding_json <- function(
 ) {
     candidate_paths <- unique(stats::na.omit(c(
         input_path,
+        file.path(
+            "inst",
+            "data-raw",
+            "flood_vulnerable_gauges_encoded.json"
+        ),
+        file.path(
+            "data-raw",
+            "flood_vulnerable_gauges_encoded.json"
+        ),
+        file.path(
+            "inst",
+            "extdata",
+            "flood_vulnerable_gauges_encoded.json"
+        ),
         file.path(
             "dev",
             "freshet_forecasting",
@@ -1147,8 +1258,8 @@ read_target_gauge_station_encoding_json <- function(
 
 write_target_gauge_station_encoding_json <- function(
     output_path = file.path(
-        "dev",
-        "freshet_forecasting",
+        "inst",
+        "extdata",
         "flood_vulnerable_gauges_encoded.json"
     ),
     yaml_path = file.path(
@@ -1191,15 +1302,16 @@ write_target_gauge_station_encoding_json <- function(
         auto_unbox = FALSE,
         null = "null"
     )
-    writeLines(json_payload, con = output_path, useBytes = TRUE)
+    dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+    writeLines(json_payload, con = file(output_path, encoding = "UTF-8"))
 
     invisible(export_payload)
 }
 
 
 target_gauge_context <- load_target_gauge_context(
-    community = "Dawson",
-    target_gauge_name = "Yukon River At Dawson"
+    community = "Old Crow",
+    target_gauge_name = "Porcupine River Below Old Crow River",
 )
 
 target_gauge_hierarchy <- target_gauge_context$target_basin_hierarchy
@@ -1208,3 +1320,6 @@ target_gauge_route_table <- target_gauge_context$target_gauge_route_table
 dawson_routing_plot <- plot_target_gauge_routing(target_gauge_context)
 
 print(dawson_routing_plot)
+
+
+write_target_gauge_station_encoding_json()

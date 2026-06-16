@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YGwater page help</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.5; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1, h2 { color: #244c5a; }
+    code { background: #f3f4f5; padding: 0.1rem 0.25rem; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1 id="title">YGwater page help</h1>
+  <p>This is a placeholder for page-specific admin help.</p>
+  <p id="page-name"></p>
+  <h2>To be documented</h2>
+  <p>Add the dedicated HTML file at <code>inst/apps/YGwater/www/html/admin_help/pages/&lt;page_id&gt;.html</code> to replace this placeholder for a page.</p>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const page = params.get("page") || "unknown";
+    document.getElementById("title").textContent = page + " help";
+    document.getElementById("page-name").innerHTML = "No dedicated help document exists yet for <code>" + page + "</code>.";
+  </script>
+</body>
+</html>

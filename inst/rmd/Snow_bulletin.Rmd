@@ -343,7 +343,7 @@ snowbullpillow2 <- function(location_pil,
                             custom_title) {
   # Get this years snow pillow
   snow_p <- DBI::dbGetQuery(con, paste0(
-    "SELECT date, value FROM measurements_calculated_daily_corrected ",
+    "SELECT date, value FROM measurements_calculated_daily ",
     "WHERE timeseries_id = ", location_pil,
     " AND date >= '", year - 1, "-09-01' ", # bulletin_year
     "AND date <= '", year, "-0", month, "-01' "

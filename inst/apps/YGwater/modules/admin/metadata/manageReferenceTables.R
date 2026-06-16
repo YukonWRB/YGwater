@@ -133,9 +133,9 @@ reference_deployment_choices_query <- function(
     "FROM public.locations_metadata_instruments AS lmi",
     "LEFT JOIN public.locations AS l ON lmi.location_id = l.location_id",
     "LEFT JOIN instruments.instruments AS i ON lmi.instrument_id = i.instrument_id",
-    "LEFT JOIN instruments.instrument_make AS mk ON i.make = mk.make_id",
-    "LEFT JOIN instruments.instrument_model AS mdl ON i.model = mdl.model_id",
-    "LEFT JOIN instruments.instrument_type AS it ON i.type = it.type_id",
+    "LEFT JOIN instruments.instrument_makes AS mk ON i.make = mk.make_id",
+    "LEFT JOIN instruments.instrument_models AS mdl ON i.model = mdl.model_id",
+    "LEFT JOIN instruments.instrument_types AS it ON i.type = it.type_id",
     where_sql,
     "ORDER BY l.location_code, i.serial_no, lmi.start_datetime DESC, lmi.metadata_id DESC"
   )
@@ -211,8 +211,9 @@ reference_table_configs <- function() {
       key = "organizations",
       title = "Organizations",
       description = paste(
-        "Create and update organizations used across locations,",
-        "timeseries ownership, samples, documents, images, and instruments."
+        "Create and update owner and contributor organizations used",
+        "across locations, timeseries, samples, documents, images,",
+        "and instruments."
       ),
       schema = "public",
       table = "organizations",
@@ -760,7 +761,10 @@ reference_table_configs <- function() {
           step = 1
         ),
         reference_text_field("logger_input_label", "Logger input label"),
-        reference_text_field("protocol_signal_ref", "Protocol signal reference"),
+        reference_text_field(
+          "protocol_signal_ref",
+          "Protocol signal reference"
+        ),
         reference_text_field("acquisition_command", "Acquisition command"),
         reference_select_field(
           "timeseries_id",

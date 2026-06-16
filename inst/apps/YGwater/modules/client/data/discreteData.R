@@ -55,22 +55,26 @@ discData <- function(id, language, inputs) {
     # Functions and data fetch ################
     # Adjust multiple selection based on if 'all' is selected
     observeFilterInput <- function(inputId) {
-      observeEvent(input[[inputId]], {
-        # Check if 'all' is selected and adjust accordingly
-        if (length(input[[inputId]]) > 1) {
-          # If 'all' was selected last, remove all other selections
-          if (input[[inputId]][length(input[[inputId]])] == "all") {
+      observeEvent(
+        input[[inputId]],
+        {
+          values <- input[[inputId]]
+          if (is.null(values) || length(values) == 0) {
             updateSelectizeInput(session, inputId, selected = "all")
-          } else if ("all" %in% input[[inputId]]) {
-            # If 'all' is already selected and another option is selected, remove 'all'
-            updateSelectizeInput(
-              session,
-              inputId,
-              selected = input[[inputId]][length(input[[inputId]])]
-            )
+            return()
           }
-        }
-      })
+          values <- as.character(values)
+          if (length(values) > 1 && "all" %in% values) {
+            selected <- if (identical(values[[length(values)]], "all")) {
+              "all"
+            } else {
+              setdiff(values, "all")
+            }
+            updateSelectizeInput(session, inputId, selected = selected)
+          }
+        },
+        ignoreNULL = FALSE
+      )
     }
 
     parameter_unit_sql <- function(

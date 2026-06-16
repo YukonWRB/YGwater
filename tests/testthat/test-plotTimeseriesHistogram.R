@@ -1,17 +1,30 @@
 # Note: these tests depend on installation of Python and a few libraries.
 # This is taken care of in the setup.R file within the testthat folder.
 
-con <- AquaConnect(silent = TRUE)
-on.exit(DBI::dbDisconnect(con), add = TRUE)
+test_con <- test_AquaConnect(silent = TRUE)
+on.exit(DBI::dbDisconnect(test_con), add = TRUE)
 
-tsid <- DBI::dbGetQuery(
-  con,
-  "SELECT timeseries_id FROM timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1"
-)$timeseries_id
+wlevel <- DBI::dbGetQuery(
+  test_con,
+  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+)$parameter_id[[1]]
+
+# Find the first water level timeseries in the DB
+wlevel_ts <- DBI::dbGetQuery(
+  test_con,
+  paste0(
+    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id, start_datetime, end_datetime FROM continuous.timeseries ts WHERE parameter_id = ",
+    wlevel,
+    " LIMIT 1;"
+  )
+)
+
+tsid <- wlevel_ts$timeseries_id[1]
 
 test_that("plotTimeseriesHistogram validates inputs", {
   expect_error(
     plotTimeseriesHistogram(
+      con = test_con,
       timeseries_id = tsid,
       startDay = 0,
       endDay = 365
@@ -21,29 +34,31 @@ test_that("plotTimeseriesHistogram validates inputs", {
 
   expect_error(
     plotTimeseriesHistogram(
+      con = test_con,
       timeseries_id = tsid,
       startDay = 1,
       endDay = 365,
       threshold = 1.1
     ),
-    "between 0 and 1"
+    "between 0 and 1."
   )
 
   expect_error(
     plotTimeseriesHistogram(
+      con = test_con,
       timeseries_id = tsid,
       startDay = 1,
       endDay = 365,
       tzone = 1.5
     ),
-    "whole hour"
+    "must be a single whole hour value."
   )
 })
 
 test_that("plotTimeseriesHistogram returns plot/data structure", {
   skip_on_cran()
 
-  test_year <- 2022
+  test_year <- lubridate::year(wlevel_ts$end_datetime[1]) - 1
   out <- plotTimeseriesHistogram(
     timeseries_id = tsid,
     startDay = 31,
@@ -51,7 +66,7 @@ test_that("plotTimeseriesHistogram returns plot/data structure", {
     years = test_year,
     tzone = "UTC",
     data = TRUE,
-    con = con
+    con = test_con
   )
 
   expect_type(out, "list")
@@ -77,7 +92,10 @@ test_that("plotTimeseriesHistogram returns plot/data structure", {
 test_that("weekly bins start at startDay and end on full-bin boundaries", {
   skip_on_cran()
 
-  yrs <- c(2022, 2023)
+  yrs <- c(
+    lubridate::year(wlevel_ts$end_datetime[1]) - 2,
+    lubridate::year(wlevel_ts$end_datetime[1]) - 1
+  )
   out <- plotTimeseriesHistogram(
     timeseries_id = tsid,
     startDay = 31,
@@ -87,7 +105,7 @@ test_that("weekly bins start at startDay and end on full-bin boundaries", {
     years = yrs,
     tzone = "UTC",
     data = TRUE,
-    con = con
+    con = test_con
   )
   pd <- out$plot_data
 
@@ -118,7 +136,10 @@ test_that("weekly bins start at startDay and end on full-bin boundaries", {
 test_that("overlap day-of-year mode works across year boundary", {
   skip_on_cran()
 
-  yrs <- c(2022, 2023)
+  yrs <- c(
+    lubridate::year(wlevel_ts$end_datetime[1]) - 2,
+    lubridate::year(wlevel_ts$end_datetime[1]) - 1
+  )
   out <- plotTimeseriesHistogram(
     timeseries_id = tsid,
     startDay = 335,
@@ -128,7 +149,7 @@ test_that("overlap day-of-year mode works across year boundary", {
     years = yrs,
     tzone = "UTC",
     data = TRUE,
-    con = con
+    con = test_con
   )
   pd <- out$plot_data
 
@@ -149,7 +170,7 @@ test_that("overlap day-of-year mode works across year boundary", {
 test_that("integral transformation returns non-zero values", {
   skip_on_cran()
 
-  test_year <- 2022
+  test_year <- lubridate::year(wlevel_ts$end_datetime[1]) - 1
   out <- plotTimeseriesHistogram(
     timeseries_id = tsid,
     startDay = 31,
@@ -158,7 +179,7 @@ test_that("integral transformation returns non-zero values", {
     transformation = "integral",
     tzone = "UTC",
     data = TRUE,
-    con = con
+    con = test_con
   )
 
   vals <- out$plot_data$value
@@ -170,7 +191,10 @@ test_that("integral transformation returns non-zero values", {
 test_that("style parameters and timezone are applied", {
   skip_on_cran()
 
-  yrs <- c(2022, 2023)
+  yrs <- c(
+    lubridate::year(wlevel_ts$end_datetime[1]) - 2,
+    lubridate::year(wlevel_ts$end_datetime[1]) - 1
+  )
   out <- plotTimeseriesHistogram(
     timeseries_id = tsid,
     startDay = 31,
@@ -186,7 +210,7 @@ test_that("style parameters and timezone are applied", {
     gridy = TRUE,
     tzone = -7,
     data = TRUE,
-    con = con
+    con = test_con
   )
 
   built <- plotly::plotly_build(out$plot)
@@ -203,7 +227,7 @@ test_that("style parameters and timezone are applied", {
 test_that("threshold and completeness fields are coherent", {
   skip_on_cran()
 
-  test_year <- 2022
+  test_year <- lubridate::year(wlevel_ts$end_datetime[1]) - 1
   out <- plotTimeseriesHistogram(
     timeseries_id = tsid,
     startDay = 31,
@@ -213,7 +237,7 @@ test_that("threshold and completeness fields are coherent", {
     completeness_label = TRUE,
     tzone = "UTC",
     data = TRUE,
-    con = con
+    con = test_con
   )
   pd <- out$plot_data
 
@@ -225,6 +249,14 @@ test_that("threshold and completeness fields are coherent", {
 test_that("plotTimeseriesHistogram can show data in the past", {
   skip_on_ci() # Because the CI instance would not have the necessary historical data
   skip_on_cran()
+
+  con <- AquaConnect(silent = TRUE) # Connect to regular DB so that we can work with historical data
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  tsid <- DBI::dbGetQuery(
+    con,
+    "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1"
+  )$timeseries_id
 
   if (
     !isTRUE(DBI::dbGetQuery(

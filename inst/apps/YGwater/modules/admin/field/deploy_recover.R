@@ -52,7 +52,8 @@ deploy_recover <- function(id, language) {
     )
 
     selected_metadata_id <- reactiveVal(NULL)
-    selected_timeseries_id <- reactiveVal(NA_integer_)
+    selected_timeseries_ids <- reactiveVal(integer(0))
+    timeseries_modal_selected_rows <- reactiveVal(integer(0))
     selection_sync_in_progress <- reactiveVal(FALSE)
     pending_update_values <- reactiveVal(NULL)
 
@@ -264,19 +265,75 @@ deploy_recover <- function(id, language) {
       label
     }
 
-    record_associated_timeseries_id <- function(record) {
+    normalize_integer_vector <- function(x) {
+      if (is.null(x) || length(x) == 0) {
+        return(integer(0))
+      }
+      if (is.list(x) && length(x) == 1) {
+        x <- x[[1]]
+      }
+      if (is.null(x) || length(x) == 0) {
+        return(integer(0))
+      }
+      if (is.character(x) && length(x) == 1 && grepl("^\\{.*\\}$", x)) {
+        x <- strsplit(sub("^\\{(.*)\\}$", "\\1", x), ",", fixed = TRUE)[[1]]
+      }
+
+      x <- x[!is.na(x)]
+      if (!length(x)) {
+        return(integer(0))
+      }
+
+      sort(unique(as.integer(x)))
+    }
+
+    same_integer_set <- function(x, y) {
+      identical(normalize_integer_vector(x), normalize_integer_vector(y))
+    }
+
+    format_timeseries_id_list <- function(timeseries_ids) {
+      timeseries_ids <- normalize_integer_vector(timeseries_ids)
+      if (!length(timeseries_ids)) {
+        return("")
+      }
+
+      paste(timeseries_ids, collapse = ", ")
+    }
+
+    record_direct_timeseries_ids <- function(record) {
+      if (
+        is.null(record) ||
+          nrow(record) == 0 ||
+          !"direct_timeseries_ids" %in% names(record)
+      ) {
+        return(integer(0))
+      }
+
+      normalize_integer_vector(record$direct_timeseries_ids[[1]])
+    }
+
+    record_signal_timeseries_ids <- function(record) {
+      if (
+        is.null(record) ||
+          nrow(record) == 0 ||
+          !"signal_timeseries_ids" %in% names(record)
+      ) {
+        return(integer(0))
+      }
+
+      normalize_integer_vector(record$signal_timeseries_ids[[1]])
+    }
+
+    record_associated_timeseries_ids <- function(record) {
       if (is.null(record) || nrow(record) == 0) {
-        return(NA_integer_)
+        return(integer(0))
       }
 
-      if ("associated_timeseries_id" %in% names(record)) {
-        associated_tsid <- as_nullable_integer(record$associated_timeseries_id[[1]])
-        if (!is.na(associated_tsid)) {
-          return(associated_tsid)
-        }
+      if (deployment_has_signal_rows(record)) {
+        return(record_signal_timeseries_ids(record))
       }
 
-      as_nullable_integer(record$timeseries_id[[1]])
+      record_direct_timeseries_ids(record)
     }
 
     deployment_has_signal_rows <- function(record) {
@@ -302,8 +359,16 @@ deploy_recover <- function(id, language) {
         return("Signal metadata")
       }
 
-      if (!is.na(as_nullable_integer(record$timeseries_id[[1]]))) {
-        return("Legacy deployment link")
+      direct_count <- if ("direct_timeseries_count" %in% names(record)) {
+        as_nullable_integer(record$direct_timeseries_count[[1]])
+      } else {
+        length(record_direct_timeseries_ids(record))
+      }
+      if (!is.na(direct_count) && direct_count > 0) {
+        if (direct_count == 1L) {
+          return("Deployment link")
+        }
+        return("Deployment links (multiple timeseries)")
       }
 
       ""
@@ -345,7 +410,9 @@ deploy_recover <- function(id, language) {
 
       pieces <- character(0)
 
-      if (!is.na(record$connection_count[[1]]) && record$connection_count[[1]] > 0) {
+      if (
+        !is.na(record$connection_count[[1]]) && record$connection_count[[1]] > 0
+      ) {
         pieces <- c(
           pieces,
           paste0(
@@ -357,14 +424,19 @@ deploy_recover <- function(id, language) {
         )
       }
 
-      if (!is.na(record$signal_row_count[[1]]) && record$signal_row_count[[1]] > 0) {
+      if (
+        !is.na(record$signal_row_count[[1]]) && record$signal_row_count[[1]] > 0
+      ) {
         signal_piece <- paste0(
           "Signal row",
           plural_suffix(record$signal_row_count[[1]]),
           ": ",
           record$signal_row_count[[1]]
         )
-        if (!is.na(record$mapped_signal_count[[1]]) && record$mapped_signal_count[[1]] > 0) {
+        if (
+          !is.na(record$mapped_signal_count[[1]]) &&
+            record$mapped_signal_count[[1]] > 0
+        ) {
           signal_piece <- paste0(
             signal_piece,
             " (",
@@ -459,14 +531,14 @@ deploy_recover <- function(id, language) {
       paste(pieces, collapse = " | ")
     }
 
-    selected_timeseries_persist_value <- function() {
+    selected_timeseries_persist_values <- function() {
       record <- selected_record()
 
       if (deployment_has_signal_rows(record)) {
-        return(as_nullable_integer(record$timeseries_id[[1]]))
+        return(record_direct_timeseries_ids(record))
       }
 
-      as_nullable_integer(selected_timeseries_id())
+      normalize_integer_vector(selected_timeseries_ids())
     }
 
     timeseries_association_locked <- function(record = selected_record()) {
@@ -494,6 +566,36 @@ deploy_recover <- function(id, language) {
       }
 
       row
+    }
+
+    find_timeseries_rows <- function(timeseries_ids) {
+      timeseries_ids <- normalize_integer_vector(timeseries_ids)
+      if (
+        !length(timeseries_ids) ||
+          is.null(moduleData$timeseries) ||
+          nrow(moduleData$timeseries) == 0
+      ) {
+        if (is.null(moduleData$timeseries)) {
+          return(NULL)
+        }
+        return(moduleData$timeseries[0, , drop = FALSE])
+      }
+
+      rows <- moduleData$timeseries[
+        moduleData$timeseries$timeseries_id %in% timeseries_ids,
+        ,
+        drop = FALSE
+      ]
+
+      if (nrow(rows) == 0) {
+        return(rows)
+      }
+
+      rows[
+        match(timeseries_ids, rows$timeseries_id, nomatch = 0),
+        ,
+        drop = FALSE
+      ]
     }
 
     format_timeseries_title <- function(timeseries_row) {
@@ -634,6 +736,30 @@ deploy_recover <- function(id, language) {
       ]
     }
 
+    get_timeseries_modal_rows <- function() {
+      available <- get_filtered_timeseries()
+      selected_rows <- find_timeseries_rows(selected_timeseries_ids())
+
+      if (is.null(selected_rows) || nrow(selected_rows) == 0) {
+        return(available)
+      }
+      if (is.null(available) || nrow(available) == 0) {
+        return(selected_rows)
+      }
+
+      missing_selected <- selected_rows[
+        !selected_rows$timeseries_id %in% available$timeseries_id,
+        ,
+        drop = FALSE
+      ]
+
+      if (nrow(missing_selected) == 0) {
+        return(available)
+      }
+
+      rbind(missing_selected, available)
+    }
+
     deployment_identity_changed <- function(values, record) {
       if (is.null(record) || nrow(record) == 0) {
         return(FALSE)
@@ -646,7 +772,10 @@ deploy_recover <- function(id, language) {
           record$sub_location_id[[1]]
         ) ||
         !same_nullable_integer(values$z_id, record$z_id[[1]]) ||
-        !same_nullable_integer(values$timeseries_id, record$timeseries_id[[1]])
+        !same_integer_set(
+          values$timeseries_ids,
+          record_direct_timeseries_ids(record)
+        )
     }
 
     summarize_identity_changes <- function(values, record) {
@@ -712,34 +841,28 @@ deploy_recover <- function(id, language) {
       }
 
       if (
-        !same_nullable_integer(values$timeseries_id, record$timeseries_id[[1]])
+        !same_integer_set(
+          values$timeseries_ids,
+          record_direct_timeseries_ids(record)
+        )
       ) {
-        current_tsid <- record_associated_timeseries_id(record)
-        current_ts <- find_timeseries_row(current_tsid)
-        new_ts <- find_timeseries_row(values$timeseries_id)
+        current_tsids <- record_direct_timeseries_ids(record)
+        new_tsids <- normalize_integer_vector(values$timeseries_ids)
 
         changes <- c(
           changes,
           paste(
             "Timeseries:",
-            if (is.null(current_ts)) {
-              if (is.na(current_tsid)) {
-                "None"
-              } else {
-                paste("Timeseries #", current_tsid)
-              }
+            if (!length(current_tsids)) {
+              "None"
             } else {
-              format_timeseries_title(current_ts)
+              paste("Timeseries #", format_timeseries_id_list(current_tsids))
             },
             "->",
-            if (is.null(new_ts)) {
-              if (is.na(values$timeseries_id)) {
-                "None"
-              } else {
-                paste("Timeseries #", values$timeseries_id)
-              }
+            if (!length(new_tsids)) {
+              "None"
             } else {
-              format_timeseries_title(new_ts)
+              paste("Timeseries #", format_timeseries_id_list(new_tsids))
             }
           )
         )
@@ -944,7 +1067,8 @@ deploy_recover <- function(id, language) {
       if (clear_selection) {
         selected_metadata_id(NULL)
       }
-      selected_timeseries_id(NA_integer_)
+      selected_timeseries_ids(integer(0))
+      timeseries_modal_selected_rows(integer(0))
       pending_update_values(NULL)
 
       updateSelectizeInput(session, "instrument_id", selected = character(0))
@@ -982,11 +1106,23 @@ deploy_recover <- function(id, language) {
         session$userData$AquaCache,
         "
         SELECT
-          has_table_privilege(current_user, 'public.locations_metadata_instruments', 'SELECT') AS can_select,
-          has_table_privilege(current_user, 'public.locations_metadata_instruments', 'INSERT') AS can_insert,
-          has_table_privilege(current_user, 'public.locations_metadata_instruments', 'UPDATE') AS can_update
+          has_table_privilege(current_user, 'public.locations_metadata_instruments', 'SELECT') AND
+            has_table_privilege(current_user, 'public.locations_metadata_instrument_timeseries', 'SELECT')
+            AS can_select,
+          has_table_privilege(current_user, 'public.locations_metadata_instruments', 'INSERT') AND
+            has_table_privilege(current_user, 'public.locations_metadata_instrument_timeseries', 'INSERT') AND
+            has_table_privilege(current_user, 'public.locations_metadata_instrument_timeseries', 'DELETE')
+            AS can_insert,
+          has_table_privilege(current_user, 'public.locations_metadata_instruments', 'UPDATE') AND
+            has_table_privilege(current_user, 'public.locations_metadata_instrument_timeseries', 'INSERT') AND
+            has_table_privilege(current_user, 'public.locations_metadata_instrument_timeseries', 'DELETE')
+            AS can_update
         "
       )
+
+      if (!isTRUE(moduleData$permissions$can_select[[1]])) {
+        return(invisible(NULL))
+      }
 
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -1037,11 +1173,11 @@ deploy_recover <- function(id, language) {
           it.type AS instrument_type,
           i.date_retired
         FROM instruments.instruments AS i
-        LEFT JOIN instruments.instrument_make AS mk
+        LEFT JOIN instruments.instrument_makes AS mk
           ON i.make = mk.make_id
-        LEFT JOIN instruments.instrument_model AS mdl
+        LEFT JOIN instruments.instrument_models AS mdl
           ON i.model = mdl.model_id
-        LEFT JOIN instruments.instrument_type AS it
+        LEFT JOIN instruments.instrument_types AS it
           ON i.type = it.type_id
         ORDER BY i.serial_no ASC, i.instrument_id ASC
         "
@@ -1120,14 +1256,14 @@ deploy_recover <- function(id, language) {
           sl.sub_location_name,
           lmi.z_id,
           lz.z_meters,
-          lmi.timeseries_id,
-          COALESCE(
-            lmi.timeseries_id,
-            CASE
-              WHEN COALESCE(conn.distinct_signal_timeseries_count, 0) = 1
-                THEN conn.signal_timeseries_id
-            END
-          ) AS associated_timeseries_id,
+          COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])
+            AS direct_timeseries_ids,
+          COALESCE(lmit.timeseries_count, 0) AS direct_timeseries_count,
+          CASE
+            WHEN COALESCE(conn.signal_row_count, 0) > 0
+              THEN COALESCE(conn.signal_timeseries_ids, ARRAY[]::integer[])
+            ELSE COALESCE(lmit.timeseries_ids, ARRAY[]::integer[])
+          END AS associated_timeseries_ids,
           COALESCE(conn.connection_count, 0) AS connection_count,
           COALESCE(conn.signal_row_count, 0) AS signal_row_count,
           COALESCE(conn.mapped_signal_count, 0) AS mapped_signal_count,
@@ -1173,6 +1309,11 @@ deploy_recover <- function(id, language) {
               WHERE c.instrument_metadata_id = lmi.metadata_id
                 AND s.timeseries_id IS NOT NULL
             ) AS signal_timeseries_id,
+            ARRAY_AGG(DISTINCT s.timeseries_id ORDER BY s.timeseries_id)
+              FILTER (
+                WHERE c.instrument_metadata_id = lmi.metadata_id
+                  AND s.timeseries_id IS NOT NULL
+              ) AS signal_timeseries_ids,
             COUNT(DISTINCT c.connection_id)
               FILTER (WHERE c.logger_metadata_id = lmi.metadata_id)
               AS logger_connection_count
@@ -1183,6 +1324,14 @@ deploy_recover <- function(id, language) {
             (c.instrument_metadata_id = lmi.metadata_id OR
                c.logger_metadata_id = lmi.metadata_id)
         ) AS conn ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT
+            COUNT(*)::integer AS timeseries_count,
+            ARRAY_AGG(lmit.timeseries_id ORDER BY lmit.timeseries_id)
+              AS timeseries_ids
+          FROM public.locations_metadata_instrument_timeseries AS lmit
+          WHERE lmit.metadata_id = lmi.metadata_id
+        ) AS lmit ON TRUE
         LEFT JOIN LATERAL (
           SELECT
             COUNT(DISTINCT ts.transmission_setup_id)
@@ -1217,11 +1366,11 @@ deploy_recover <- function(id, language) {
           ON lmi.z_id = lz.z_id
         LEFT JOIN instruments.instruments AS i
           ON lmi.instrument_id = i.instrument_id
-        LEFT JOIN instruments.instrument_make AS mk
+        LEFT JOIN instruments.instrument_makes AS mk
           ON i.make = mk.make_id
-        LEFT JOIN instruments.instrument_model AS mdl
+        LEFT JOIN instruments.instrument_models AS mdl
           ON i.model = mdl.model_id
-        LEFT JOIN instruments.instrument_type AS it
+        LEFT JOIN instruments.instrument_types AS it
           ON i.type = it.type_id
         ORDER BY lmi.start_datetime DESC, lmi.metadata_id DESC
         "
@@ -1284,7 +1433,7 @@ deploy_recover <- function(id, language) {
     })
 
     selected_timeseries_details <- reactive({
-      find_timeseries_row(selected_timeseries_id())
+      find_timeseries_rows(selected_timeseries_ids())
     })
 
     timeseries_matches_current_filters <- reactive({
@@ -1298,16 +1447,22 @@ deploy_recover <- function(id, language) {
         return(TRUE)
       }
 
-      timeseries_row <- selected_timeseries_details()
-      if (is.null(timeseries_row)) {
+      timeseries_rows <- selected_timeseries_details()
+      if (is.null(timeseries_rows) || nrow(timeseries_rows) == 0) {
         return(TRUE)
       }
 
-      timeseries_matches_values(timeseries_row, values)
+      all(vapply(
+        seq_len(nrow(timeseries_rows)),
+        function(i) {
+          timeseries_matches_values(timeseries_rows[i, , drop = FALSE], values)
+        },
+        logical(1)
+      ))
     })
 
     timeseries_table_data <- reactive({
-      available <- get_filtered_timeseries()
+      available <- get_timeseries_modal_rows()
 
       if (nrow(available) == 0) {
         return(data.frame(
@@ -1371,10 +1526,14 @@ deploy_recover <- function(id, language) {
 
       data.frame(
         metadata_id = df$metadata_id,
-        timeseries_id = ifelse(
-          is.na(df$associated_timeseries_id),
-          "",
-          as.character(df$associated_timeseries_id)
+        timeseries_id = vapply(
+          seq_len(nrow(df)),
+          function(i) {
+            format_timeseries_id_list(
+              record_associated_timeseries_ids(df[i, , drop = FALSE])
+            )
+          },
+          character(1)
         ),
         association_mode = vapply(
           seq_len(nrow(df)),
@@ -1432,10 +1591,14 @@ deploy_recover <- function(id, language) {
       data.frame(
         metadata_id = df$metadata_id,
         deployment_status = as.factor(safe_text(df$deployment_status)),
-        timeseries_id = ifelse(
-          is.na(df$associated_timeseries_id),
-          "",
-          as.character(df$associated_timeseries_id)
+        timeseries_id = vapply(
+          seq_len(nrow(df)),
+          function(i) {
+            format_timeseries_id_list(
+              record_associated_timeseries_ids(df[i, , drop = FALSE])
+            )
+          },
+          character(1)
         ),
         association_mode = vapply(
           seq_len(nrow(df)),
@@ -1472,7 +1635,7 @@ deploy_recover <- function(id, language) {
         return(invisible(NULL))
       }
 
-      selected_timeseries_id(record_associated_timeseries_id(record))
+      selected_timeseries_ids(record_associated_timeseries_ids(record))
 
       updateSelectizeInput(
         session,
@@ -1561,7 +1724,7 @@ deploy_recover <- function(id, language) {
         location_id = as_nullable_integer(input$location_id),
         sub_location_id = as_nullable_integer(input$sub_location_id),
         z_id = as_nullable_integer(input$z_id),
-        timeseries_id = selected_timeseries_persist_value(),
+        timeseries_ids = selected_timeseries_persist_values(),
         start_datetime = scalar_utc_datetime(input$start_datetime),
         end_datetime = if (isTRUE(input$has_end_datetime)) {
           scalar_utc_datetime(input$end_datetime)
@@ -1637,7 +1800,10 @@ deploy_recover <- function(id, language) {
       if (
         require_selected &&
           deployment_has_signal_rows(current_record) &&
-          !same_nullable_integer(values$timeseries_id, current_record$timeseries_id[[1]])
+          !same_integer_set(
+            values$timeseries_ids,
+            record_direct_timeseries_ids(current_record)
+          )
       ) {
         stop(
           paste(
@@ -1647,21 +1813,58 @@ deploy_recover <- function(id, language) {
           )
         )
       }
-      if (!is.na(values$timeseries_id)) {
-        timeseries_row <- find_timeseries_row(values$timeseries_id)
+      for (timeseries_id in normalize_integer_vector(values$timeseries_ids)) {
+        timeseries_row <- find_timeseries_row(timeseries_id)
         if (is.null(timeseries_row)) {
-          stop("The selected timeseries could not be found.")
+          stop(paste("Timeseries #", timeseries_id, "could not be found."))
         }
         if (!timeseries_matches_values(timeseries_row, values)) {
           stop(
             paste(
-              "The selected timeseries does not match the selected location,",
+              "One or more selected timeseries do not match the selected location,",
               "sub-location, and elevation/depth."
             )
           )
         }
       }
       invisible(TRUE)
+    }
+
+    replace_deployment_timeseries <- function(metadata_id, timeseries_ids) {
+      metadata_id <- as_nullable_integer(metadata_id)
+      if (is.na(metadata_id)) {
+        stop("A deployment metadata_id is required to update timeseries links.")
+      }
+
+      timeseries_ids <- normalize_integer_vector(timeseries_ids)
+
+      DBI::dbExecute(
+        session$userData$AquaCache,
+        "
+        DELETE FROM public.locations_metadata_instrument_timeseries
+        WHERE metadata_id = $1
+        ",
+        params = list(metadata_id)
+      )
+
+      if (!length(timeseries_ids)) {
+        return(invisible(NULL))
+      }
+
+      for (timeseries_id in timeseries_ids) {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "
+          INSERT INTO public.locations_metadata_instrument_timeseries (
+            metadata_id,
+            timeseries_id
+          ) VALUES ($1, $2)
+          ",
+          params = list(metadata_id, timeseries_id)
+        )
+      }
+
+      invisible(NULL)
     }
 
     upsert_record <- function(
@@ -1688,60 +1891,69 @@ deploy_recover <- function(id, language) {
       }
 
       if (is.null(metadata_id)) {
-        inserted <- DBI::dbGetQuery(
-          session$userData$AquaCache,
-          "
-          INSERT INTO public.locations_metadata_instruments (
-            location_id, sub_location_id, instrument_id, start_datetime,
-            end_datetime, note, z_id, timeseries_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          RETURNING metadata_id
-          ",
-          params = list(
-            values$location_id,
-            values$sub_location_id,
-            values$instrument_id,
-            values$start_datetime,
-            values$end_datetime,
-            values$note,
-            values$z_id,
-            values$timeseries_id
+        DBI::dbWithTransaction(session$userData$AquaCache, {
+          inserted <- DBI::dbGetQuery(
+            session$userData$AquaCache,
+            "
+            INSERT INTO public.locations_metadata_instruments (
+              location_id, sub_location_id, instrument_id, start_datetime,
+              end_datetime, note, z_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            RETURNING metadata_id
+            ",
+            params = list(
+              values$location_id,
+              values$sub_location_id,
+              values$instrument_id,
+              values$start_datetime,
+              values$end_datetime,
+              values$note,
+              values$z_id
+            )
           )
-        )
-        inserted$metadata_id[[1]]
+
+          metadata_id <- inserted$metadata_id[[1]]
+          replace_deployment_timeseries(metadata_id, values$timeseries_ids)
+          metadata_id
+        })
       } else {
-        DBI::dbExecute(
-          session$userData$AquaCache,
-          "
-          UPDATE public.locations_metadata_instruments
-          SET
-            location_id = $1,
-            sub_location_id = $2,
-            instrument_id = $3,
-            start_datetime = $4,
-            end_datetime = $5,
-            note = $6,
-            z_id = $7,
-            timeseries_id = $8
-          WHERE metadata_id = $9
-          ",
-          params = list(
-            values$location_id,
-            values$sub_location_id,
-            values$instrument_id,
-            values$start_datetime,
-            values$end_datetime,
-            values$note,
-            values$z_id,
-            values$timeseries_id,
-            metadata_id
+        DBI::dbWithTransaction(session$userData$AquaCache, {
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "
+            UPDATE public.locations_metadata_instruments
+            SET
+              location_id = $1,
+              sub_location_id = $2,
+              instrument_id = $3,
+              start_datetime = $4,
+              end_datetime = $5,
+              note = $6,
+              z_id = $7
+            WHERE metadata_id = $8
+            ",
+            params = list(
+              values$location_id,
+              values$sub_location_id,
+              values$instrument_id,
+              values$start_datetime,
+              values$end_datetime,
+              values$note,
+              values$z_id,
+              metadata_id
+            )
           )
-        )
-        metadata_id
+          replace_deployment_timeseries(metadata_id, values$timeseries_ids)
+          metadata_id
+        })
       }
     }
 
-    end_current_and_redeploy <- function(values, metadata_id) {
+    end_current_and_redeploy <- function(
+      values,
+      metadata_id,
+      current_end_datetime
+    ) {
       validate_form_values(values, require_selected = TRUE)
 
       current_record <- selected_record()
@@ -1761,11 +1973,26 @@ deploy_recover <- function(id, language) {
         current_record$start_datetime[[1]],
         tz = "UTC"
       )
-      if (values$start_datetime <= current_start) {
+      if (is.null(current_end_datetime) || !length(current_end_datetime)) {
+        stop("Current deployment end date/time is required.")
+      }
+      current_end_datetime <- as.POSIXct(current_end_datetime[[1]], tz = "UTC")
+      if (is.na(current_end_datetime)) {
+        stop("Current deployment end date/time is required.")
+      }
+      if (current_end_datetime <= current_start) {
         stop(
           paste(
-            "To end the current deployment and re-deploy, set the new",
-            "deployment start after the current deployment start."
+            "Current deployment end must be after the current deployment",
+            "start."
+          )
+        )
+      }
+      if (values$start_datetime < current_end_datetime) {
+        stop(
+          paste(
+            "New deployment start must be at or after the current deployment",
+            "end."
           )
         )
       }
@@ -1780,7 +2007,7 @@ deploy_recover <- function(id, language) {
             SET end_datetime = $1
             WHERE metadata_id = $2
             ",
-            params = list(values$start_datetime, metadata_id)
+            params = list(current_end_datetime, metadata_id)
           )
 
           inserted <- DBI::dbGetQuery(
@@ -1788,8 +2015,8 @@ deploy_recover <- function(id, language) {
             "
             INSERT INTO public.locations_metadata_instruments (
               location_id, sub_location_id, instrument_id, start_datetime,
-              end_datetime, note, z_id, timeseries_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+              end_datetime, note, z_id
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING metadata_id
             ",
             params = list(
@@ -1799,19 +2026,25 @@ deploy_recover <- function(id, language) {
               values$start_datetime,
               values$end_datetime,
               values$note,
-              values$z_id,
-              values$timeseries_id
+              values$z_id
             )
           )
 
-          inserted$metadata_id[[1]]
+          inserted_metadata_id <- inserted$metadata_id[[1]]
+          replace_deployment_timeseries(
+            inserted_metadata_id,
+            values$timeseries_ids
+          )
+
+          inserted_metadata_id
         }
       )
     }
 
     save_selected_record <- function(
       values,
-      strategy = c("modify", "redeploy")
+      strategy = c("modify", "redeploy"),
+      current_end_datetime = NULL
     ) {
       strategy <- match.arg(strategy)
       metadata_id <- selected_metadata_id()
@@ -1825,7 +2058,8 @@ deploy_recover <- function(id, language) {
         modify = upsert_record(values = values, metadata_id = metadata_id),
         redeploy = end_current_and_redeploy(
           values = values,
-          metadata_id = metadata_id
+          metadata_id = metadata_id,
+          current_end_datetime = current_end_datetime
         )
       )
 
@@ -1840,8 +2074,8 @@ deploy_recover <- function(id, language) {
 
     output$timeseries_selection_ui <- renderUI({
       record <- selected_record()
-      timeseries_row <- selected_timeseries_details()
-      selected_tsid <- selected_timeseries_id()
+      timeseries_rows <- selected_timeseries_details()
+      selected_tsids <- normalize_integer_vector(selected_timeseries_ids())
       signal_managed <- deployment_has_signal_rows(record)
       note_ui <- p(
         class = "help-block",
@@ -1864,7 +2098,7 @@ deploy_recover <- function(id, language) {
         NULL
       }
 
-      if (signal_managed && is.na(selected_tsid)) {
+      if (signal_managed && !length(selected_tsids)) {
         return(tagList(
           note_ui,
           signal_ui,
@@ -1891,7 +2125,7 @@ deploy_recover <- function(id, language) {
         ))
       }
 
-      if (is.null(timeseries_row) && is.na(selected_tsid)) {
+      if (!length(selected_tsids)) {
         return(tagList(
           note_ui,
           signal_ui,
@@ -1902,26 +2136,21 @@ deploy_recover <- function(id, language) {
         ))
       }
 
-      if (is.null(timeseries_row)) {
-        return(tagList(
-          note_ui,
-          signal_ui,
-          div(
-            class = "alert alert-warning",
-            paste0(
-              "Timeseries #",
-              selected_tsid,
-              " is associated with this form but could not be loaded."
-            )
-          )
-        ))
+      loaded_ids <- if (
+        is.null(timeseries_rows) ||
+          nrow(timeseries_rows) == 0
+      ) {
+        integer(0)
+      } else {
+        normalize_integer_vector(timeseries_rows$timeseries_id)
       }
+      missing_ids <- setdiff(selected_tsids, loaded_ids)
 
       status_ui <- if (!isTRUE(timeseries_matches_current_filters())) {
         div(
           class = "alert alert-warning",
           paste(
-            "The selected timeseries no longer matches the current location,",
+            "One or more selected timeseries no longer match the current location,",
             "sub-location, and elevation/depth."
           )
         )
@@ -1933,20 +2162,36 @@ deploy_recover <- function(id, language) {
         note_ui,
         signal_ui,
         status_ui,
-        div(
-          class = "well well-sm",
-          tags$strong(format_timeseries_title(timeseries_row)),
-          tags$br(),
-          format_timeseries_meta(timeseries_row),
-          if (
-            !is.na(timeseries_row$note[[1]]) && nzchar(timeseries_row$note[[1]])
-          ) {
-            tagList(
-              tags$br(),
-              tags$em(timeseries_row$note[[1]])
+        if (length(missing_ids)) {
+          div(
+            class = "alert alert-warning",
+            paste(
+              "Timeseries",
+              format_timeseries_id_list(missing_ids),
+              "are associated with this form but could not be loaded."
             )
-          }
-        )
+          )
+        },
+        if (!is.null(timeseries_rows) && nrow(timeseries_rows) > 0) {
+          tagList(lapply(seq_len(nrow(timeseries_rows)), function(i) {
+            timeseries_row <- timeseries_rows[i, , drop = FALSE]
+            div(
+              class = "well well-sm",
+              tags$strong(format_timeseries_title(timeseries_row)),
+              tags$br(),
+              format_timeseries_meta(timeseries_row),
+              if (
+                !is.na(timeseries_row$note[[1]]) &&
+                  nzchar(timeseries_row$note[[1]])
+              ) {
+                tagList(
+                  tags$br(),
+                  tags$em(timeseries_row$note[[1]])
+                )
+              }
+            )
+          }))
+        }
       )
     })
 
@@ -2001,9 +2246,15 @@ deploy_recover <- function(id, language) {
     })
 
     output$timeseries_table <- DT::renderDT({
+      selected_rows <- timeseries_modal_selected_rows()
+      selection <- list(mode = "multiple")
+      if (length(selected_rows)) {
+        selection$selected <- selected_rows
+      }
+
       DT::datatable(
         timeseries_table_data(),
-        selection = "single",
+        selection = selection,
         rownames = FALSE,
         filter = "top",
         options = list(
@@ -2016,11 +2267,11 @@ deploy_recover <- function(id, language) {
 
     output$timeseries_action_button <- renderUI({
       button_label <- if (timeseries_association_locked()) {
-        "Timeseries managed in Connection signals"
-      } else if (is.na(selected_timeseries_id())) {
-        "Associate with a timeseries"
+        "Timeseries associations managed in Connection signals"
+      } else if (!length(selected_timeseries_ids())) {
+        "Associate with one or more timeseries"
       } else {
-        "Modify timeseries association"
+        "Modify timeseries associations"
       }
 
       button <- actionButton(
@@ -2329,11 +2580,17 @@ deploy_recover <- function(id, language) {
       }
 
       available_timeseries_ids <- timeseries_table_data()$timeseries_id
-      current_timeseries_id <- selected_timeseries_id()
+      current_timeseries_ids <- normalize_integer_vector(
+        selected_timeseries_ids()
+      )
+      selected_idx <- which(
+        available_timeseries_ids %in% current_timeseries_ids
+      )
+      timeseries_modal_selected_rows(selected_idx)
 
       showModal(
         modalDialog(
-          title = "Associate with a timeseries",
+          title = "Associate with one or more timeseries",
           uiOutput(ns("timeseries_modal_context")),
           DT::DTOutput(ns("timeseries_table")),
           easyClose = TRUE,
@@ -2342,7 +2599,7 @@ deploy_recover <- function(id, language) {
             modalButton("Cancel"),
             actionButton(
               ns("clear_timeseries_selection"),
-              "Clear association"
+              "Clear associations"
             ),
             actionButton(
               ns("confirm_timeseries_selection"),
@@ -2351,21 +2608,6 @@ deploy_recover <- function(id, language) {
             )
           )
         )
-      )
-
-      session$onFlushed(
-        function() {
-          proxy <- DT::dataTableProxy("timeseries_table", session = session)
-          selected_idx <- which(
-            available_timeseries_ids == current_timeseries_id
-          )
-
-          DT::selectRows(
-            proxy,
-            if (length(selected_idx) == 1) selected_idx else NULL
-          )
-        },
-        once = TRUE
       )
     }
 
@@ -2395,6 +2637,16 @@ deploy_recover <- function(id, language) {
                 "telemetry metadata. Choosing 'Modify existing deployment'",
                 "keeps those child records attached to this same deployment;",
                 "choose re-deploy to start a new deployment record instead."
+              )
+            )
+          },
+          if (can_redeploy) {
+            div(
+              class = "alert alert-warning",
+              paste(
+                "If you end the current deployment and re-deploy, you will",
+                "be asked for both the current deployment end time and the",
+                "new deployment start time."
               )
             )
           },
@@ -2428,6 +2680,144 @@ deploy_recover <- function(id, language) {
       )
     }
 
+    show_redeploy_timing_modal <- function(values, record) {
+      if (is.null(values) || is.null(record) || nrow(record) == 0) {
+        showNotification(
+          "The pending re-deployment values could not be found.",
+          type = "error",
+          duration = 15
+        )
+        return(invisible(NULL))
+      }
+
+      current_start <- coerce_utc_datetime(record$start_datetime[[1]])
+      end_default <- default_datetime()
+      if (
+        !is.na(values$start_datetime) &&
+          values$start_datetime > current_start
+      ) {
+        end_default <- values$start_datetime
+      }
+      start_default <- end_default
+
+      showModal(
+        modalDialog(
+          title = "End current deployment and re-deploy",
+          p(
+            paste(
+              "Set the time the current deployment ended, then set the start",
+              "time for the new deployment record."
+            )
+          ),
+          div(
+            class = "alert alert-info",
+            paste(
+              "Current deployment started:",
+              format_timestamp(current_start)
+            )
+          ),
+          fluidRow(
+            column(
+              5,
+              selectizeInput(
+                ns("redeploy_end_timezone"),
+                "Current deployment end timezone",
+                choices = input_timezone_choices(),
+                selected = default_input_timezone(),
+                multiple = FALSE,
+                width = "100%"
+              )
+            ),
+            column(
+              7,
+              shinyWidgets::airDatepickerInput(
+                ns("redeploy_end_datetime"),
+                label = "Current deployment end",
+                value = end_default,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                maxDate = Sys.Date() + 365,
+                startView = Sys.Date(),
+                update_on = "change",
+                tz = air_datetime_widget_timezone(default_input_timezone()),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
+              )
+            )
+          ),
+          fluidRow(
+            column(
+              5,
+              selectizeInput(
+                ns("redeploy_start_timezone"),
+                "New deployment start timezone",
+                choices = input_timezone_choices(),
+                selected = default_input_timezone(),
+                multiple = FALSE,
+                width = "100%"
+              )
+            ),
+            column(
+              7,
+              shinyWidgets::airDatepickerInput(
+                ns("redeploy_start_datetime"),
+                label = "New deployment start",
+                value = start_default,
+                range = FALSE,
+                multiple = FALSE,
+                timepicker = TRUE,
+                maxDate = Sys.Date() + 365,
+                startView = Sys.Date(),
+                update_on = "change",
+                tz = air_datetime_widget_timezone(default_input_timezone()),
+                timepickerOpts = shinyWidgets::timepickerOptions(
+                  minutesStep = 15,
+                  timeFormat = "HH:mm"
+                )
+              )
+            )
+          ),
+          easyClose = TRUE,
+          size = "l",
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("confirm_redeploy_timing"),
+              "End and create new deployment",
+              class = "btn-warning"
+            )
+          )
+        )
+      )
+    }
+
+    collect_redeploy_timing_values <- function(values) {
+      if (is.null(values)) {
+        stop("No pending re-deployment values were found.")
+      }
+
+      current_end_datetime <- scalar_utc_datetime(input$redeploy_end_datetime)
+      new_start_datetime <- scalar_utc_datetime(input$redeploy_start_datetime)
+
+      if (is.na(current_end_datetime)) {
+        stop("Current deployment end date/time is required.")
+      }
+      if (is.na(new_start_datetime)) {
+        stop("New deployment start date/time is required.")
+      }
+
+      values$start_datetime <- new_start_datetime
+      values$end_datetime <- empty_utc_datetime()
+
+      list(
+        values = values,
+        current_end_datetime = current_end_datetime
+      )
+    }
+
     observeEvent(
       input$start_timezone,
       {
@@ -2442,6 +2832,24 @@ deploy_recover <- function(id, language) {
       {
         new_timezone <- normalize_input_timezone(input$end_timezone)
         shift_datetime_input_timezone("end_datetime", new_timezone)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$redeploy_end_timezone,
+      {
+        new_timezone <- normalize_input_timezone(input$redeploy_end_timezone)
+        shift_datetime_input_timezone("redeploy_end_datetime", new_timezone)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$redeploy_start_timezone,
+      {
+        new_timezone <- normalize_input_timezone(input$redeploy_start_timezone)
+        shift_datetime_input_timezone("redeploy_start_datetime", new_timezone)
       },
       ignoreInit = TRUE
     )
@@ -2482,7 +2890,8 @@ deploy_recover <- function(id, language) {
     observeEvent(
       input$clear_timeseries_selection,
       {
-        selected_timeseries_id(NA_integer_)
+        selected_timeseries_ids(integer(0))
+        timeseries_modal_selected_rows(integer(0))
         removeModal()
       },
       ignoreInit = TRUE
@@ -2492,17 +2901,20 @@ deploy_recover <- function(id, language) {
       input$confirm_timeseries_selection,
       {
         selected_row <- input$timeseries_table_rows_selected
-        if (length(selected_row) != 1) {
+        if (is.null(selected_row)) {
+          selected_row <- timeseries_modal_selected_rows()
+        }
+        if (!length(selected_row)) {
           showNotification(
-            "Select a timeseries in the table first.",
+            "Select one or more timeseries in the table first.",
             type = "warning",
             duration = 10
           )
           return()
         }
 
-        selected_timeseries_id(
-          timeseries_table_data()$timeseries_id[[selected_row]]
+        selected_timeseries_ids(
+          timeseries_table_data()$timeseries_id[selected_row]
         )
         removeModal()
       },
@@ -2667,9 +3079,34 @@ deploy_recover <- function(id, language) {
         tryCatch(
           {
             removeModal()
-            save_selected_record(
+            show_redeploy_timing_modal(
               values = pending_update_values(),
-              strategy = "redeploy"
+              record = selected_record()
+            )
+          },
+          error = function(e) {
+            showNotification(
+              paste("Failed to prepare re-deployment:", e$message),
+              type = "error",
+              duration = 15
+            )
+          }
+        )
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$confirm_redeploy_timing,
+      {
+        tryCatch(
+          {
+            timing <- collect_redeploy_timing_values(pending_update_values())
+            removeModal()
+            save_selected_record(
+              values = timing$values,
+              strategy = "redeploy",
+              current_end_datetime = timing$current_end_datetime
             )
             pending_update_values(NULL)
             showNotification(

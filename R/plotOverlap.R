@@ -35,11 +35,15 @@
 #'   to FALSE to force standard scatter traces.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
+#' @param build_plot Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
 #' @param as_of Optional point-in-time timestamp at which measurement values and
 #'   stored daily summaries should be reconstructed. Character, Date, and
 #'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
 #'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param stats_period Historical range statistics period. Use "full" for
+#'   full-record statistics or "30yr" for the most recent 30-year statistics
+#'   when the connected database provides them. Default is "full".
 #'
 #' @return An html plot.
 #'
@@ -108,7 +112,9 @@ plotOverlap <- function(
   lang = "en",
   data = FALSE,
   con = NULL,
-  as_of = NULL
+  as_of = NULL,
+  stats_period = "full",
+  build_plot = TRUE
 ) {
   # Deal with non-standard evaluations from data.table to silence check() notes
   datetime <- date <- start_dt <- end_dt <- period <- NULL
@@ -116,6 +122,11 @@ plotOverlap <- function(
   if (is.null(con)) {
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
+  }
+  stats_period <- normalize_daily_stats_period(stats_period)
+
+  if (!build_plot && !data) {
+    stop("`build_plot = FALSE` requires `data = TRUE`.")
   }
 
   #Suppress warnings otherwise ggplot annoyingly flags every geom that wasn't plotted
@@ -755,18 +766,42 @@ plotOverlap <- function(
   }
 
   if (is.null(as_of)) {
+    daily_select <- paste(
+      c(
+        "date",
+        "value",
+        daily_stats_select_sql(
+          con,
+          stats_period = stats_period,
+          columns = c("max", "min", "q75", "q25")
+        )
+      ),
+      collapse = ", "
+    )
     daily <- dbGetQueryDT(
       con,
       glue::glue_sql(
-        "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
+        "SELECT {DBI::SQL(daily_select)} FROM measurements_calculated_daily WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
         .con = con
       )
     )
   } else {
+    daily_select <- paste(
+      c(
+        "date",
+        "value",
+        daily_stats_select_sql(
+          con,
+          stats_period = stats_period,
+          columns = c("max", "min", "q75", "q25")
+        )
+      ),
+      collapse = ", "
+    )
     daily <- dbGetQueryDT(
       con,
       paste(
-        "SELECT date, value, max, min, q75, q25",
+        paste0("SELECT ", daily_select),
         "FROM continuous.measurements_calculated_daily_at(",
         "  $1,",
         "  ARRAY[$2]::INTEGER[],",
@@ -1208,6 +1243,140 @@ plotOverlap <- function(
   }
 
   # Create basic plot with historic range
+  if (title) {
+    if (is.null(custom_title)) {
+      if (lang == "fr") {
+        stn_name <- DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT name_fr FROM locations where location_id = '",
+            location_id,
+            "'"
+          )
+        )[1, 1]
+      }
+      if (lang == "en" || is.na(stn_name)) {
+        stn_name <- DBI::dbGetQuery(
+          con,
+          paste0(
+            "SELECT name FROM locations where location_id = '",
+            location_id,
+            "'"
+          )
+        )[1, 1]
+      }
+      stn_name <- titleCase(stn_name, lang)
+    } else {
+      stn_name <- custom_title
+    }
+  }
+
+  as_of_title <- format_as_of_title(as_of, tzone, lang)
+  adaptive_title <- if (title) {
+    if (is.null(as_of_title)) {
+      stn_name
+    } else {
+      paste0(stn_name, "<br><sup>", as_of_title, "</sup>")
+    }
+  } else {
+    NULL
+  }
+
+  adaptive_meta <- list(
+    hover = hover,
+    band_names = list(
+      # historic = if (lang == "en") "Historic" else "Historique",
+      historic = if (stats_period == "full") {
+        "Min-Max"
+      } else {
+        if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
+      },
+      typical = if (stats_period == "full") {
+        if (lang == "en") "Typical" else "Typique"
+      } else {
+        if (lang == "en") "Typical 30 yrs" else "Typique 30 ann\u00E9es"
+      }
+    ),
+    band_styles = list(
+      Historic = list(
+        fillcolor = "rgba(212, 236, 239, 0.85)",
+        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+      ),
+      Historique = list(
+        fillcolor = "rgba(212, 236, 239, 0.85)",
+        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+      ),
+      Typical = list(
+        fillcolor = "rgba(95, 157, 166, 0.45)",
+        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+      ),
+      Typique = list(
+        fillcolor = "rgba(95, 157, 166, 0.45)",
+        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+      )
+    ),
+    layout = list(
+      title = if (is.null(adaptive_title)) {
+        NULL
+      } else {
+        list(
+          text = adaptive_title,
+          x = 0.05,
+          xref = "container",
+          font = list(size = axis_scale * 18)
+        )
+      },
+      xaxis = list(
+        title = list(standoff = 0),
+        showgrid = gridx,
+        showline = TRUE,
+        tickformat = if (lang == "en") "%b %-d" else "%-d %b",
+        titlefont = list(size = axis_scale * 14),
+        tickfont = list(size = axis_scale * 12),
+        nticks = 10,
+        rangeslider = list(
+          visible = if (slider & legend_position == "v") TRUE else FALSE
+        ),
+        ticks = "outside",
+        ticklen = 5,
+        tickwidth = 1,
+        tickcolor = "black"
+      ),
+      yaxis = list(
+        title = list(
+          text = paste0(parameter_name, " (", units, ")"),
+          standoff = 10
+        ),
+        automargin = TRUE,
+        showgrid = gridy,
+        showline = TRUE,
+        zeroline = FALSE,
+        titlefont = list(size = axis_scale * 14),
+        tickfont = list(size = axis_scale * 12),
+        autorange = if (invert) "reversed" else TRUE,
+        ticks = "outside",
+        ticklen = 5,
+        tickwidth = 1,
+        tickcolor = "black"
+      ),
+      margin = list(b = 0, t = 40 * axis_scale, l = 50 * axis_scale),
+      hovermode = if (hover) "x unified" else ("none"),
+      legend = list(
+        font = list(size = legend_scale * 12),
+        orientation = legend_position
+      ),
+      font = list(family = "Nunito Sans")
+    ),
+    config = list(locale = lang)
+  )
+
+  if (data && !build_plot) {
+    datalist <- list(
+      trace_data = realtime,
+      range_data = if (historic_range != "none") ribbon else data.frame()
+    )
+    return(list(data = datalist, meta = adaptive_meta))
+  }
 
   plot <- plotly::plot_ly()
 
@@ -1218,16 +1387,19 @@ plotOverlap <- function(
         x = ~datetime,
         ymin = ~q25,
         ymax = ~q75,
-        # name = if (lang == "en") "IQR" else "EIQ",
-        name = if (lang == "en") "Typical" else "Typique",
+        name = if (stats_period == "full") {
+          if (lang == "en") "Typical" else "Typique"
+        } else {
+          if (lang == "en") "Typical 30 yrs" else "Typique 30 ann\u00E9es"
+        },
         color = I("#5f9da6"),
         line = list(width = 0.2),
         hoverinfo = if (hover) "text" else "none",
         text = if (hover) {
           ~ paste0(
-            "q25: ",
+            "Q25: ",
             round(.data$q25, 2),
-            ", q75: ",
+            ", Q75: ",
             round(.data$q75, 2),
             " (",
             as.Date(.data$datetime),
@@ -1241,8 +1413,11 @@ plotOverlap <- function(
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,
-        # name = "Min-Max",
-        name = if (lang == "en") "Historic" else "Historique",
+        name = if (stats_period == "full") {
+          "Min-Max"
+        } else {
+          if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
+        },
         color = I("#D4ECEF"),
         line = list(width = 0.2),
         hoverinfo = if (hover) "text" else "none",

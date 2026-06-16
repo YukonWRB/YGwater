@@ -33,5 +33,5 @@ A list with four data.frames: station metadata; timeseries information consistin
 Fetches and processes data downloaded from an Aquarius web-hosted server and returns it in a concise format. Note that any times returned by this function are in UTC.
 }
 \details{
-To store login credentials in your .renviron file, call \code{\link[usethis:edit]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS="your password". The server should be entered at server="your_server_url".
+To store login credentials in your .renviron file, call \code{\link[usethis:edit_r_environ]{usethis::edit_r_environ()}} and enter your username and password as value pairs, as AQUSER="your username" and AQPASS="your password". The server should be entered at server="your_server_url".
 }

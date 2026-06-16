@@ -340,7 +340,7 @@ mapRaster <- function(id, language) {
           fillOpacity = 1,
           opacity = 1,
           label = ~feature_name,
-          group = tr("snowbull_communities", language$language)
+          group = tr("communities", language$language)
         ) %>%
         leaflet::addLabelOnlyMarkers(
           data = communities,
@@ -357,7 +357,7 @@ mapRaster <- function(id, language) {
               "font-size" = "10px"
             )
           ),
-          group = tr("snowbull_communities", language$language)
+          group = tr("communities", language$language)
         ) %>%
         leaflet::addCircleMarkers(
           data = pillows[!is.na(pillows$swe), ],
@@ -424,7 +424,7 @@ mapRaster <- function(id, language) {
             tr("snowbull_snow_survey", language$language),
             tr("gen_snowBul_basins", language$language),
             tr("snowbull_swe_basin", language$language),
-            tr("snowbull_communities", language$language),
+            tr("communities", language$language),
             tr("isocontours", language$language)
           ),
           options = leaflet::layersControlOptions(collapsed = FALSE)
