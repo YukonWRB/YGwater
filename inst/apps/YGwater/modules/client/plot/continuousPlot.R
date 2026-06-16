@@ -719,6 +719,27 @@ contPlot <- function(id, language, windowDims, inputs) {
                         tr("plot_hist_range", language$language),
                         value = TRUE
                       ),
+                      selectizeInput(
+                        ns("historic_stats_period"),
+                        label = if (language$abbrev == "fr") {
+                          "P\u00e9riode des statistiques"
+                        } else {
+                          "Stats period"
+                        },
+                        choices = stats::setNames(
+                          c("30yr", "full"),
+                          if (language$abbrev == "fr") {
+                            c(
+                              "30 derni\u00e8res ann\u00e9es",
+                              "Toute la p\u00e9riode"
+                            )
+                          } else {
+                            c("Last 30 years", "Entire record")
+                          }
+                        ),
+                        selected = "30yr",
+                        multiple = FALSE
+                      ),
                       div(
                         selectizeInput(
                           ns("historic_range_overlap"),
@@ -991,6 +1012,23 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
 
       resolution
+    })
+
+    current_historic_stats_period <- reactive({
+      if (
+        is.null(input$historic_stats_period) ||
+          length(input$historic_stats_period) == 0 ||
+          is.na(input$historic_stats_period[[1]])
+      ) {
+        return("30yr")
+      }
+
+      stats_period <- as.character(input$historic_stats_period[[1]])
+      if (!(stats_period %in% c("30yr", "full"))) {
+        return("30yr")
+      }
+
+      stats_period
     })
 
     current_legend_position <- reactive({
@@ -1814,6 +1852,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         } else {
           input$historic_range_overlap[[1]]
         },
+        stats_period = current_historic_stats_period(),
         unusable = isTRUE(input$show_unusable),
         grades = isTRUE(input$show_grades),
         approvals = isTRUE(input$show_approvals),
@@ -2151,6 +2190,7 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       if (language$abbrev == "fr") {
         parameter <- ts_tbl$`nom_paramètre`
+        units <- ts_tbl$`unités`
         media <- ts_tbl$`type_de_média`
         aggregation <- ts_tbl$`type_agrégation`
         record_rate <- ts_tbl$`fréquence_enregistrement`
@@ -2159,6 +2199,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         end_dt <- ts_tbl$fin
       } else {
         parameter <- ts_tbl$parameter_name
+        units <- ts_tbl$units
         media <- ts_tbl$media_type
         aggregation <- ts_tbl$aggregation_type
         record_rate <- ts_tbl$recording_rate
@@ -2175,6 +2216,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       metadata_base_table(
         attributes = c(
           tr("parameter", language$language),
+          tr("units", language$language),
           tr("media", language$language),
           tr("aggregation", language$language),
           tr("nominal_rate", language$language),
@@ -2185,6 +2227,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         ),
         values = c(
           format_metadata_value(parameter),
+          format_metadata_value(units),
           format_metadata_value(media),
           format_metadata_value(aggregation),
           format_metadata_value(record_rate_display),
@@ -2386,6 +2429,7 @@ contPlot <- function(id, language, windowDims, inputs) {
                   data = TRUE,
                   tzone = plot_timezone,
                   resolution = plot_resolution,
+                  stats_period = req$stats_period,
                   line_scale = req$line_scale,
                   axis_scale = req$axis_scale,
                   legend_scale = req$legend_scale,
@@ -2419,7 +2463,8 @@ contPlot <- function(id, language, windowDims, inputs) {
                   gridy = req$gridy,
                   slider = FALSE,
                   tzone = plot_timezone,
-                  resolution = plot_resolution
+                  resolution = plot_resolution,
+                  stats_period = req$stats_period
                 )
               }
               return(normalize_plot_result(plot))
@@ -2448,7 +2493,8 @@ contPlot <- function(id, language, windowDims, inputs) {
                 shareX = req$shareX,
                 shareY = req$shareY,
                 tzone = plot_timezone,
-                resolution = plot_resolution
+                resolution = plot_resolution,
+                stats_period = req$stats_period
               )
               return(normalize_plot_result(plot))
             }
@@ -2478,7 +2524,8 @@ contPlot <- function(id, language, windowDims, inputs) {
                       con = con,
                       data = TRUE,
                       tzone = plot_timezone,
-                      resolution = plot_resolution
+                      resolution = plot_resolution,
+                      stats_period = req$stats_period
                     )
                   ),
                   error = function(e) {

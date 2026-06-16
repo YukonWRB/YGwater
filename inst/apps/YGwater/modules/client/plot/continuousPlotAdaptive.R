@@ -693,6 +693,24 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                         tr("plot_hist_range", language$language),
                         value = TRUE
                       ),
+                      selectizeInput(
+                        ns("historic_stats_period"),
+                        label = if (language$abbrev == "fr") {
+                          "P\u00e9riode des statistiques"
+                        } else {
+                          "Stats period"
+                        },
+                        choices = stats::setNames(
+                          c("30yr", "full"),
+                          if (language$abbrev == "fr") {
+                            c("30 derni\u00e8res ann\u00e9es", "Toute la p\u00e9riode")
+                          } else {
+                            c("Last 30 years", "Entire record")
+                          }
+                        ),
+                        selected = "30yr",
+                        multiple = FALSE
+                      ),
                       div(
                         selectizeInput(
                           ns("historic_range_overlap"),
@@ -968,6 +986,23 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
     current_plot_resolution <- reactive({
       "auto"
+    })
+
+    current_historic_stats_period <- reactive({
+      if (
+        is.null(input$historic_stats_period) ||
+          length(input$historic_stats_period) == 0 ||
+          is.na(input$historic_stats_period[[1]])
+      ) {
+        return("30yr")
+      }
+
+      stats_period <- as.character(input$historic_stats_period[[1]])
+      if (!(stats_period %in% c("30yr", "full"))) {
+        return("30yr")
+      }
+
+      stats_period
     })
 
     current_legend_position <- reactive({
@@ -1791,6 +1826,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         } else {
           input$historic_range_overlap[[1]]
         },
+        stats_period = current_historic_stats_period(),
         unusable = isTRUE(input$show_unusable),
         grades = plot_type == "timeseries" && isTRUE(input$show_grades),
         approvals = plot_type == "timeseries" && isTRUE(input$show_approvals),
@@ -3280,7 +3316,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   slider = FALSE,
                   tzone = plot_timezone,
                   resolution = plot_resolution,
-                  as_of = req$as_of
+                  as_of = req$as_of,
+                  stats_period = req$stats_period
                 )
 
                 if (isTRUE(use_fast_trace)) {
@@ -3599,7 +3636,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                     data = TRUE,
                     build_plot = FALSE,
                     tzone = plot_timezone,
-                    resolution = overlap_resolution
+                    resolution = overlap_resolution,
+                    stats_period = req$stats_period
                   ),
                   error = function(e) {
                     stop(
