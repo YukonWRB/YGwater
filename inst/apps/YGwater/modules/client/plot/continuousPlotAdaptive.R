@@ -703,7 +703,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                         choices = stats::setNames(
                           c("30yr", "full"),
                           if (language$abbrev == "fr") {
-                            c("30 derni\u00e8res ann\u00e9es", "Toute la p\u00e9riode")
+                            c(
+                              "30 derni\u00e8res ann\u00e9es",
+                              "Toute la p\u00e9riode"
+                            )
                           } else {
                             c("Last 30 years", "Entire record")
                           }
@@ -2174,6 +2177,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
       if (language$abbrev == "fr") {
         parameter <- ts_tbl$`nom_paramètre`
+        units <- ts_tbl$`unités`
         media <- ts_tbl$`type_de_média`
         aggregation <- ts_tbl$`type_agrégation`
         record_rate <- ts_tbl$`fréquence_enregistrement`
@@ -2182,6 +2186,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         end_dt <- ts_tbl$fin
       } else {
         parameter <- ts_tbl$parameter_name
+        units <- ts_tbl$units
         media <- ts_tbl$media_type
         aggregation <- ts_tbl$aggregation_type
         record_rate <- ts_tbl$recording_rate
@@ -2198,6 +2203,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       metadata_base_table(
         attributes = c(
           tr("parameter", language$language),
+          tr("units", language$language),
           tr("media", language$language),
           tr("aggregation", language$language),
           tr("nominal_rate", language$language),
@@ -2208,6 +2214,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         ),
         values = c(
           format_metadata_value(parameter),
+          format_metadata_value(units),
           format_metadata_value(media),
           format_metadata_value(aggregation),
           format_metadata_value(record_rate_display),
