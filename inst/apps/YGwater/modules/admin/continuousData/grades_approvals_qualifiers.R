@@ -1074,7 +1074,11 @@ continuousDataReview <- function(id, language) {
         }
         updateNumericInput(session, "correction_value2", label = label)
       }
-      updateNumericInput(session, "correction_window", label = "Time window (seconds)")
+      updateNumericInput(
+        session,
+        "correction_window",
+        label = "Time window (seconds)"
+      )
 
       if (!is.null(record)) {
         updateNumericInput(session, "correction_value1", value = record$value1)
@@ -1093,9 +1097,13 @@ continuousDataReview <- function(id, language) {
       invisible(NULL)
     }
 
-    observeEvent(input$correction_type, {
-      update_correction_inputs()
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$correction_type,
+      {
+        update_correction_inputs()
+      },
+      ignoreNULL = TRUE
+    )
 
     observeEvent(
       active_kind(),
@@ -1152,7 +1160,11 @@ continuousDataReview <- function(id, language) {
           format_number,
           character(1)
         )
-        display$Equation <- ifelse(is.na(display$equation), "", display$equation)
+        display$Equation <- ifelse(
+          is.na(display$equation),
+          "",
+          display$equation
+        )
         display <- display[, c(
           "record_id",
           "type_id",
@@ -1326,7 +1338,11 @@ continuousDataReview <- function(id, language) {
 
     output$corrections_table <- DT::renderDT({
       req(selected_ts())
-      render_overview_table(assignments()$corrections, "corrections", "correction")
+      render_overview_table(
+        assignments()$corrections,
+        "corrections",
+        "correction"
+      )
     })
 
     overlap_records <- function(df, start_dt, end_dt, exclude_id = NULL) {
@@ -1432,9 +1448,17 @@ continuousDataReview <- function(id, language) {
 
     observe({
       label <- if (is.null(selected_record())) {
-        if (identical(active_kind(), "correction")) "Add correction" else "Add attribute"
+        if (identical(active_kind(), "correction")) {
+          "Add correction"
+        } else {
+          "Add attribute"
+        }
       } else {
-        if (identical(active_kind(), "correction")) "Update correction" else "Update attribute"
+        if (identical(active_kind(), "correction")) {
+          "Update correction"
+        } else {
+          "Update attribute"
+        }
       }
       shiny::updateActionButton(session, "apply_attribute", label = label)
     })
@@ -1445,7 +1469,11 @@ continuousDataReview <- function(id, language) {
         stop("Select a correction type before applying.")
       }
 
-      value1 <- if (isTRUE(row$value1[[1]])) input$correction_value1 else NA_real_
+      value1 <- if (isTRUE(row$value1[[1]])) {
+        input$correction_value1
+      } else {
+        NA_real_
+      }
       value2 <- if (isTRUE(row$value2[[1]]) || is.na(row$value2[[1]])) {
         input$correction_value2
       } else {
@@ -1456,7 +1484,9 @@ continuousDataReview <- function(id, language) {
       } else {
         NA_integer_
       }
-      equation <- if (isTRUE(row$equation[[1]]) && nzchar(input$correction_equation)) {
+      equation <- if (
+        isTRUE(row$equation[[1]]) && nzchar(input$correction_equation)
+      ) {
         input$correction_equation
       } else {
         NA_character_
@@ -1514,7 +1544,11 @@ continuousDataReview <- function(id, language) {
         qualifier = data$qualifiers,
         correction = data$corrections
       )
-      exclude_id <- if (!is.null(action$record)) action$record$record_id else NULL
+      exclude_id <- if (!is.null(action$record)) {
+        action$record$record_id
+      } else {
+        NULL
+      }
       overlaps <- overlap_records(
         current,
         action$start_dt,
@@ -1538,7 +1572,9 @@ continuousDataReview <- function(id, language) {
           nrow(overlaps)
       ) {
         return(tagList(
-          p("Qualifiers can overlap. This will add another qualifier over a range that already has qualifiers."),
+          p(
+            "Qualifiers can overlap. This will add another qualifier over a range that already has qualifiers."
+          ),
           tags$ul(lapply(describe_overlaps(overlaps), tags$li))
         ))
       }
@@ -1689,7 +1725,11 @@ continuousDataReview <- function(id, language) {
       }
 
       showNotification(
-        if (is.null(record)) "Record added successfully." else "Record updated successfully.",
+        if (is.null(record)) {
+          "Record added successfully."
+        } else {
+          "Record updated successfully."
+        },
         type = "message"
       )
       assignment_refresh(assignment_refresh() + 1)
@@ -2029,7 +2069,9 @@ continuousDataReview <- function(id, language) {
         }
         fill_col <- tryCatch(
           grDevices::adjustcolor(row$color_code, alpha.f = opacity),
-          error = function(e) grDevices::adjustcolor("#cccccc", alpha.f = opacity)
+          error = function(e) {
+            grDevices::adjustcolor("#cccccc", alpha.f = opacity)
+          }
         )
         shapes[[length(shapes) + 1]] <- list(
           type = "rect",
@@ -2103,7 +2145,11 @@ continuousDataReview <- function(id, language) {
         shapes <- add_interval_shapes(shapes, assignments_list$grades, 0.09)
         shapes <- add_interval_shapes(shapes, assignments_list$approvals, 0.12)
         shapes <- add_interval_shapes(shapes, assignments_list$qualifiers, 0.15)
-        shapes <- add_interval_shapes(shapes, assignments_list$corrections, 0.08)
+        shapes <- add_interval_shapes(
+          shapes,
+          assignments_list$corrections,
+          0.08
+        )
       }
 
       if (isTRUE(input$show_field_readings) && nrow(visits)) {
@@ -2138,7 +2184,7 @@ continuousDataReview <- function(id, language) {
           name = "Raw",
           line = list(color = "#6C757D"),
           hoverinfo = "text",
-          text = ~paste0("Raw: ", round(value_raw, 4), " (", datetime, ")")
+          text = ~ paste0("Raw: ", round(value_raw, 4), " (", datetime, ")")
         )
       }
       p <- plotly::add_lines(
@@ -2149,7 +2195,7 @@ continuousDataReview <- function(id, language) {
         name = "Corrected",
         line = list(color = "#0072B2"),
         hoverinfo = "text",
-        text = ~paste0(
+        text = ~ paste0(
           "Corrected: ",
           round(value_corrected, 4),
           " (",
@@ -2172,7 +2218,7 @@ continuousDataReview <- function(id, language) {
             line = list(width = 1, color = "#FFFFFF")
           ),
           hoverinfo = "text",
-          text = ~paste0("Field reading: ", value, " (", datetime, ")")
+          text = ~ paste0("Field reading: ", value, " (", datetime, ")")
         )
       }
 
@@ -2191,7 +2237,7 @@ continuousDataReview <- function(id, language) {
             line = list(width = 1, color = "#FFFFFF")
           ),
           hoverinfo = "text",
-          text = ~paste0(
+          text = ~ paste0(
             event_type,
             ": ",
             instrument,
