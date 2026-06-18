@@ -86,8 +86,8 @@ addContDataUI <- function(id) {
             ns = ns,
             fileInput(
               ns("file"),
-              "Upload .csv, .xlsx, .xle, or logger .html",
-              accept = c(".csv", ".xlsx", ".xle", ".html", ".htm")
+              "Upload .csv, .xlsx, .xle, logger .html, or .hobo",
+              accept = c(".csv", ".xlsx", ".xle", ".html", ".htm", ".hobo")
             )
           ),
           conditionalPanel(
@@ -1597,7 +1597,7 @@ addContData <- function(id, language) {
     })
 
     uploaded_file_is_logger <- reactive({
-      uploaded_file_ext() %in% c("xle", "html", "htm")
+      uploaded_file_ext() %in% c("xle", "html", "htm", "hobo")
     })
 
     logger_upload_message <- reactive({
@@ -1617,7 +1617,7 @@ addContData <- function(id, language) {
     raw_file_preview <- reactive({
       req(input$file)
       ext <- uploaded_file_ext()
-      if (ext %in% c("xle", "html", "htm")) {
+      if (ext %in% c("xle", "html", "htm", "hobo")) {
         out <- utils::head(upload_raw(), 100)
         return(data.frame(Row = seq_len(nrow(out)), out, check.names = FALSE))
       }
@@ -3634,7 +3634,7 @@ addContData <- function(id, language) {
         qualifier = character()
       )
       if (
-        tolower(tools::file_ext(input$file$name)) %in% c("xle", "html", "htm")
+        tolower(tools::file_ext(input$file$name)) %in% c("xle", "html", "htm", "hobo")
       ) {
         updateSelectizeInput(
           session,
