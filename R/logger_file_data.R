@@ -45,6 +45,9 @@ read_logger_file_data <- function(file, file_type = NULL, default_tz = "UTC") {
 
 read_solinst_xle_data <- function(file, default_tz = "UTC") {
   xml_file <- xml2::read_xml(file)
+  if (!identical(xml2::xml_name(xml2::xml_root(xml_file)), "Body_xle")) {
+    stop("File does not appear to be a Solinst XLE logger file.", call. = FALSE)
+  }
 
   channel_nodes <- xml2::xml_find_all(
     xml_file,
@@ -115,6 +118,12 @@ read_solinst_xle_data <- function(file, default_tz = "UTC") {
 
 read_insitu_html_data <- function(file, default_tz = "UTC") {
   html <- xml2::read_html(file)
+  if (!is_insitu_html_logger_file(html)) {
+    stop(
+      "File does not appear to be an InSitu/VuSitu HTML logger file.",
+      call. = FALSE
+    )
+  }
 
   header_nodes <- rvest::html_elements(html, "tr.dataHeader td")
   headers <- rvest::html_text(header_nodes, trim = TRUE)
@@ -170,6 +179,17 @@ read_insitu_html_data <- function(file, default_tz = "UTC") {
     file_has_offset = !is.na(offset_seconds)
   )
   out
+}
+
+is_insitu_html_logger_file <- function(html) {
+  has_data_table <- length(rvest::html_elements(html, "[isi-data-table]")) > 0L
+  has_data_rows <- length(rvest::html_elements(html, "[isi-data-row]")) > 0L
+  has_time_offset <- length(rvest::html_elements(
+    html,
+    "[isi-group-member='ReportProperties'][isi-property='TimeOffset']"
+  )) > 0L
+
+  has_data_table && has_data_rows && has_time_offset
 }
 
 read_hobo_data <- function(file, default_tz = "UTC") {
