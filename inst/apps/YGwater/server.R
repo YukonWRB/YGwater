@@ -98,7 +98,7 @@ app_server <- function(input, output, session) {
     "instrumentMaintenance",
     "addContData",
     "imputeMissing",
-    "grades_approvals_qualifiers",
+    "continuousDataReview",
     "addDiscData",
     "addSamples",
     "addGuidelines",
@@ -1028,7 +1028,7 @@ app_server <- function(input, output, session) {
         any(
           session$userData$admin_privs$addContData,
           session$userData$admin_privs$imputeMissing,
-          session$userData$admin_privs$grades_approvals_qualifiers,
+          session$userData$admin_privs$continuousDataReview,
           session$userData$admin_privs$addTimeseries,
           session$userData$admin_privs$addCompoundTimeseries,
           session$userData$admin_privs$syncCont
@@ -1041,8 +1041,8 @@ app_server <- function(input, output, session) {
         if (!isTRUE(session$userData$admin_privs$imputeMissing)) {
           nav_hide(id = "navbar", target = "imputeMissing")
         }
-        if (!isTRUE(session$userData$admin_privs$grades_approvals_qualifiers)) {
-          nav_hide(id = "navbar", target = "grades_approvals_qualifiers")
+        if (!isTRUE(session$userData$admin_privs$continuousDataReview)) {
+          nav_hide(id = "navbar", target = "continuousDataReview")
         }
         if (!isTRUE(session$userData$admin_privs$addTimeseries)) {
           nav_hide(id = "navbar", target = "addTimeseries")
@@ -1690,7 +1690,7 @@ app_server <- function(input, output, session) {
 
     ui_loaded$addContData <- FALSE
     ui_loaded$imputeMissing <- FALSE
-    ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$continuousDataReview <- FALSE
     ui_loaded$syncCont <- FALSE
     ui_loaded$addTimeseries <- FALSE
     ui_loaded$addCompoundTimeseries <- FALSE
@@ -1781,7 +1781,7 @@ app_server <- function(input, output, session) {
     "instrumentMaintenance",
     "addContData",
     "imputeMissing",
-    "grades_approvals_qualifiers",
+    "continuousDataReview",
     "addDiscData",
     "addSamples",
     "addSampleSeries",
@@ -2938,7 +2938,7 @@ app_server <- function(input, output, session) {
               tbl = session$userData$table_privs,
               "continuous.measurements_continuous"
             ),
-            grades_approvals_qualifiers = any(
+            continuousDataReview = any(
               has_priv(
                 tbl = session$userData$table_privs,
                 "continuous.grades"
@@ -4038,14 +4038,14 @@ app_server <- function(input, output, session) {
         imputeMissing("imputeMissing", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "grades_approvals_qualifiers") {
-      if (!ui_loaded$grades_approvals_qualifiers) {
-        output$grades_approvals_qualifiers_ui <- renderUI(continuousDataReviewUI(
-          "grades_approvals_qualifiers"
+    if (input$navbar == "continuousDataReview") {
+      if (!ui_loaded$continuousDataReview) {
+        output$continuousDataReview_ui <- renderUI(continuousDataReviewUI(
+          "continuousDataReview"
         )) # Render the UI
-        ui_loaded$grades_approvals_qualifiers <- TRUE
+        ui_loaded$continuousDataReview <- TRUE
         continuousDataReview(
-          "grades_approvals_qualifiers",
+          "continuousDataReview",
           language = languageSelection
         ) # Call the server
       }

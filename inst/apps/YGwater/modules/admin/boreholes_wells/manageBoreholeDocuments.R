@@ -251,11 +251,19 @@ manageBoreholeDocuments <- function(id, language) {
       }
       first <- docs[1, ]
       if (tolower(first$format) %in% c("png", "jpg", "jpeg", "gif", "webp")) {
+        doc <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT document FROM files.documents WHERE document_id = $1;",
+          params = list(as.integer(first$document_id))
+        )
+        if (nrow(doc) != 1) {
+          return(tags$p("Preview document could not be loaded."))
+        }
         mime <- paste0(
           "image/",
           ifelse(tolower(first$format) == "jpg", "jpeg", tolower(first$format))
         )
-        raw <- first$document[[1]]
+        raw <- doc$document[[1]]
         encoded <- openssl::base64_encode(raw)
         return(tagList(
           tags$p(sprintf("Previewing: %s", first$name)),

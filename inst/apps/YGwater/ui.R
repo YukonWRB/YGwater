@@ -493,8 +493,8 @@ app_ui <- function(request) {
             ),
             nav_panel(
               title = "Review / edit timeseries",
-              value = "grades_approvals_qualifiers",
-              uiOutput("grades_approvals_qualifiers_ui")
+              value = "continuousDataReview",
+              uiOutput("continuousDataReview_ui")
             ),
             nav_panel(
               title = "Add / edit timeseries",

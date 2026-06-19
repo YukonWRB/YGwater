@@ -1958,11 +1958,7 @@ plotMultiTimeseries <- function(
             x = ~datetime,
             ymin = ~min,
             ymax = ~max,
-            name = if (stats_period == "full") {
-              "Min-Max"
-            } else {
-              if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
-            },
+            name = "Min-Max",
             legendgroup = "Min-Max",
             showlegend = if (i == 1) TRUE else FALSE, # Only show legend for the first ribbon trace
             color = I("#D4ECEF"),
@@ -1987,11 +1983,6 @@ plotMultiTimeseries <- function(
             ymin = ~q25,
             ymax = ~q75,
             name = if (lang == "en") "IQR" else "EIQ",
-            name = if (stats_period == "full") {
-              if (lang == "en") "IQR" else "EIQ"
-            } else {
-              if (lang == "en") "IQR 30 yrs" else "EIQ 30 ann\u00E9es"
-            },
             legendgroup = if (lang == "en") "IQR" else "EIQ",
             showlegend = if (i == 1) TRUE else FALSE, # Only show legend for the first ribbon trace
             color = I("#5f9da6"),

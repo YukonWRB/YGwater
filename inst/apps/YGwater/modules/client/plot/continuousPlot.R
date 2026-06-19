@@ -860,6 +860,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         ), # End accordion 1
         tags$div(style = "height: 10px;"),
         plotly::plotlyOutput(ns("plot"), height = "800px", inline = TRUE),
+        uiOutput(ns("historic_stats_caption")),
         uiOutput(ns("full_screen_ui")),
 
         # Space so the table and plot aren't in each other's faces
@@ -1814,6 +1815,18 @@ contPlot <- function(id, language, windowDims, inputs) {
 
       plot_resolution <- current_plot_resolution()
       hist_state <- historic_range_ui_state()
+      timeseries_source <- moduleData$timeseries
+      timeseries_table <- data.frame(
+        timeseries_id = timeseries_source$timeseries_id,
+        start_datetime = timeseries_source$start_datetime,
+        end_datetime = timeseries_source$end_datetime,
+        stringsAsFactors = FALSE
+      )
+      timeseries_table <- timeseries_table[
+        timeseries_table$timeseries_id %in% selected_ids,
+        ,
+        drop = FALSE
+      ]
 
       list(
         plot_type = plot_type,
@@ -1929,6 +1942,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         gridy = isTRUE(input$showgridy),
         shareX = isTRUE(input$shareX),
         shareY = isTRUE(input$shareY),
+        timeseries_table = timeseries_table,
         db = list(
           name = session$userData$config$dbName,
           host = session$userData$config$dbHost,
@@ -2412,6 +2426,32 @@ contPlot <- function(id, language, windowDims, inputs) {
               list(plot = combined_plot, data = combined_data)
             }
 
+            historic_caption_enabled <- function(plot_type) {
+              if (plot_type %in% c("timeseries", "timeseries_all")) {
+                return(isTRUE(req$historic_range))
+              }
+              if (identical(plot_type, "overlap_yrs")) {
+                return(!identical(req$historic_range_overlap, "none"))
+              }
+              FALSE
+            }
+
+            add_historic_caption <- function(result, ids, plot_type) {
+              if (!historic_caption_enabled(plot_type)) {
+                return(result)
+              }
+
+              caption <- YGwater:::historic_stats_caption_for_plot_data(
+                stats_period = req$stats_period,
+                plot_data = result$data,
+                timeseries_ids = ids,
+                timeseries_table = req$timeseries_table,
+                lang = req$lang
+              )
+              result$historic_stats_caption <- caption
+              result
+            }
+
             if (plot_type == "timeseries") {
               if (length(timeseries_ids) > 1) {
                 plot <- plotMultiTimeseries(
@@ -2467,7 +2507,11 @@ contPlot <- function(id, language, windowDims, inputs) {
                   stats_period = req$stats_period
                 )
               }
-              return(normalize_plot_result(plot))
+              return(add_historic_caption(
+                normalize_plot_result(plot),
+                timeseries_ids,
+                plot_type
+              ))
             }
 
             if (plot_type == "timeseries_all") {
@@ -2496,7 +2540,11 @@ contPlot <- function(id, language, windowDims, inputs) {
                 resolution = plot_resolution,
                 stats_period = req$stats_period
               )
-              return(normalize_plot_result(plot))
+              return(add_historic_caption(
+                normalize_plot_result(plot),
+                timeseries_ids,
+                plot_type
+              ))
             }
 
             if (plot_type == "overlap_yrs") {
@@ -2540,11 +2588,15 @@ contPlot <- function(id, language, windowDims, inputs) {
                   }
                 )
               })
-              return(combine_plot_results(
-                overlap_plots,
+              return(add_historic_caption(
+                combine_plot_results(
+                  overlap_plots,
+                  timeseries_ids,
+                  shareX = req$shareX,
+                  shareY = req$shareY
+                ),
                 timeseries_ids,
-                shareX = req$shareX,
-                shareY = req$shareY
+                plot_type
               ))
             }
 
@@ -2605,6 +2657,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       bind_task_button("make_plot")
 
     plot_created <- reactiveVal(FALSE) # Flag to determine if a plot has been created
+    historic_stats_caption <- reactiveVal(NULL)
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
@@ -2623,6 +2676,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       if (plot_created()) {
         shinyjs::hide("full_screen_ui")
       }
+      historic_stats_caption(NULL)
       long_ts_plot$invoke(plot_request())
     })
 
@@ -2647,6 +2701,7 @@ contPlot <- function(id, language, windowDims, inputs) {
       output$plot <- plotly::renderPlotly({
         isolate(long_ts_plot$result()$plot)
       })
+      historic_stats_caption(long_ts_plot$result()$historic_stats_caption)
 
       # Create a full screen button if necessary
       if (!plot_created()) {
@@ -2676,6 +2731,25 @@ contPlot <- function(id, language, windowDims, inputs) {
       }
       plot_created(TRUE)
     }) # End renderPlotly
+
+    output$historic_stats_caption <- renderUI({
+      caption <- historic_stats_caption()
+      if (is.null(caption) || !nzchar(caption)) {
+        return(NULL)
+      }
+      tags$div(
+        caption,
+        style = paste(
+          "width: 100%;",
+          "text-align: right;",
+          "padding-right: 18px;",
+          "margin-top: 4px;",
+          "font-size: 14px;",
+          "line-height: 1.25;",
+          "color: #000000;"
+        )
+      )
+    })
 
     output$metadata_message <- renderUI({
       if (is.null(selected_timeseries_ids())) {
@@ -3000,14 +3074,21 @@ contPlot <- function(id, language, windowDims, inputs) {
             max(out$trace_data$datetime, na.rm = TRUE),
             "%Y-%m-%d %H:%M"
           )
-          hist_range_start <- as.character(moduleData$timeseries[
-            timeseries_id == timeseries,
-            start_datetime
-          ])
-          hist_range_end <- as.character(moduleData$timeseries[
-            timeseries_id == timeseries,
-            end_datetime
-          ])
+          hist_window <- historic_stats_export_window(
+            stats_period = req$stats_period,
+            trace_data = out$trace_data,
+            range_data = out$range_data,
+            timeseries_start = moduleData$timeseries[
+              timeseries_id == timeseries,
+              start_datetime
+            ],
+            timeseries_end = moduleData$timeseries[
+              timeseries_id == timeseries,
+              end_datetime
+            ]
+          )
+          hist_range_start <- hist_window$start
+          hist_range_end <- hist_window$end
 
           metadata <- rbind(
             base_metadata,
