@@ -171,6 +171,45 @@ historic_stats_export_window <- function(
   )
 }
 
+#' Prepare historic-range data for plot-data exports
+#' @param range_data Plot range data returned by continuous plotting helpers.
+#' @param units Unit label for exported historic-stat columns.
+#' @return A data frame ready for XLSX export, or NULL when no range exists.
+#' @noRd
+#' @keywords internal
+historic_range_data_for_export <- function(range_data, units) {
+  expected_cols <- c("datetime", "min", "max", "q75", "q25")
+  if (
+    !is.data.frame(range_data) ||
+      nrow(range_data) == 0L ||
+      !all(expected_cols %in% names(range_data))
+  ) {
+    return(NULL)
+  }
+
+  has_complete_stats <- Reduce(
+    `&`,
+    lapply(range_data[c("min", "max", "q75", "q25")], function(x) !is.na(x))
+  )
+  if (!any(has_complete_stats)) {
+    return(NULL)
+  }
+
+  range_data <- data.table::as.data.table(range_data)[, ..expected_cols]
+  data.table::setnames(
+    range_data,
+    expected_cols,
+    c(
+      "datetime_UTC",
+      paste0("historic_min_", units),
+      paste0("historic_max_", units),
+      paste0("historic_Q75_", units),
+      paste0("historic_Q25_", units)
+    )
+  )
+  as.data.frame(range_data)
+}
+
 #' Build the historic-statistics caption used below plot legends
 #' @param stats_period One of "full" or "30yr".
 #' @param plot_data Plot data returned by continuous plotting helpers.

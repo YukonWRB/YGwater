@@ -4555,21 +4555,30 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             max(out$trace_data$datetime, na.rm = TRUE),
             "%Y-%m-%d %H:%M"
           )
-          hist_window <- historic_stats_export_window(
-            stats_period = req$stats_period,
-            trace_data = out$trace_data,
-            range_data = out$range_data,
-            timeseries_start = moduleData$timeseries[
-              timeseries_id == timeseries,
-              start_datetime
-            ],
-            timeseries_end = moduleData$timeseries[
-              timeseries_id == timeseries,
-              end_datetime
-            ]
+          range_data <- YGwater:::historic_range_data_for_export(
+            out$range_data,
+            units
           )
-          hist_range_start <- hist_window$start
-          hist_range_end <- hist_window$end
+          if (is.null(range_data)) {
+            hist_range_start <- NA_character_
+            hist_range_end <- NA_character_
+          } else {
+            hist_window <- historic_stats_export_window(
+              stats_period = req$stats_period,
+              trace_data = out$trace_data,
+              range_data = out$range_data,
+              timeseries_start = moduleData$timeseries[
+                timeseries_id == timeseries,
+                start_datetime
+              ],
+              timeseries_end = moduleData$timeseries[
+                timeseries_id == timeseries,
+                end_datetime
+              ]
+            )
+            hist_range_start <- hist_window$start
+            hist_range_end <- hist_window$end
+          }
 
           metadata <- rbind(
             base_metadata,
@@ -4622,22 +4631,16 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             colNames = TRUE
           )
 
-          range_data <- out$range_data
-          names(range_data)[1:5] <- c(
-            "datetime_UTC",
-            paste0("historic_min_", units),
-            paste0("historic_max_", units),
-            paste0("historic_Q75_", units),
-            paste0("historic_Q25_", units)
-          )
-          openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
-          existing_sheets <- c(existing_sheets, "historic_range_data")
-          openxlsx::writeData(
-            wb,
-            sheet = "historic_range_data",
-            x = range_data,
-            colNames = TRUE
-          )
+          if (!is.null(range_data)) {
+            openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
+            existing_sheets <- c(existing_sheets, "historic_range_data")
+            openxlsx::writeData(
+              wb,
+              sheet = "historic_range_data",
+              x = range_data,
+              colNames = TRUE
+            )
+          }
         } else {
           openxlsx::addWorksheet(wb, sheetName = "metadata")
           existing_sheets <- c(existing_sheets, "metadata")
