@@ -2,6 +2,7 @@ adminLandingUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     uiOutput(ns("banner")),
+    uiOutput(ns("testdb")),
     tags$div(
       tags$h2("Admin overview"),
       tags$p(
@@ -69,6 +70,18 @@ adminLanding <- function(id, language) {
         con = session$userData$AquaCache,
         module_id = "adminHome"
       )
+    })
+
+    output$testdb <- renderUI({
+      if (session$userData$config$dbName == "testdb") {
+        tags$div(
+          class = "alert alert-warning",
+          role = "alert",
+          "Important: You are currently logged into the test database. Changes you make here will be erased nightly and will not affect production data, except for changes to passwords, to users, and to groups. To connect to the production database, log out and log back in with your regular credentials."
+        )
+      } else {
+        NULL
+      }
     })
   })
 }

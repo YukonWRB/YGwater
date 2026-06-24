@@ -43,6 +43,9 @@
 #'   stored daily summaries should be reconstructed. Character, Date, and
 #'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
 #'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param stats_period Historical range statistics period. Use "full" for
+#'   full-record statistics or "30yr" for the most recent 30-year statistics
+#'   when the connected database provides them. Default is "full".
 #'
 #' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
 #'
@@ -84,7 +87,8 @@ plotMultiTimeseries <- function(
   tzone = "auto",
   data = FALSE,
   con = NULL,
-  as_of = NULL
+  as_of = NULL,
+  stats_period = "full"
 ) {
   # type <- 'traces'
   # locations <- c("138", "140")
@@ -129,6 +133,7 @@ plotMultiTimeseries <- function(
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
+  stats_period <- normalize_daily_stats_period(stats_period)
 
   if (!type %in% c('traces', 'subplots')) {
     stop(
@@ -1053,6 +1058,17 @@ plotMultiTimeseries <- function(
       end_date = sub.end_date
     )
     if (historic_range) {
+      range_select <- paste(
+        c(
+          "date AS datetime",
+          daily_stats_select_sql(
+            con,
+            stats_period = stats_period,
+            columns = c("min", "max", "q75", "q25")
+          )
+        ),
+        collapse = ", "
+      )
       # get data from the measurements_calculated_daily table for historic ranges plus values from the corrected continuous measurement function. Where there isn't any data in the function output fill in with the value from the daily table.
       range_end <- sub.end_date + 1 * 24 * 60 * 60
       range_start <- sub.start_date - 1 * 24 * 60 * 60
@@ -1060,7 +1076,9 @@ plotMultiTimeseries <- function(
         range_data <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date AS datetime, min, max, q75, q25  FROM measurements_calculated_daily WHERE timeseries_id = ",
+            "SELECT ",
+            range_select,
+            " FROM measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date BETWEEN '",
             range_start,
@@ -1073,7 +1091,7 @@ plotMultiTimeseries <- function(
         range_data <- dbGetQueryDT(
           con,
           paste(
-            "SELECT date AS datetime, min, max, q75, q25",
+            paste0("SELECT ", range_select),
             "FROM continuous.measurements_calculated_daily_at(",
             "  $1,",
             "  ARRAY[$2]::INTEGER[],",

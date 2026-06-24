@@ -40,29 +40,29 @@ YGwater <- function(
   public = TRUE,
   brand = "yukon"
 ) {
-  rlang::check_installed("shiny", reason = "required to use YGwater app")
-  rlang::check_installed("shinyjs", reason = "required to use YGwater app")
-  rlang::check_installed("DT", reason = "required to use YGwater app")
-  rlang::check_installed("tidyhydat", reason = "required to use YGwater app")
-  rlang::check_installed("htmltools", reason = "required to use YGwater app")
+  rlang::check_installed("shiny", reason = "to use YGwater app")
+  rlang::check_installed("shinyjs", reason = "to use YGwater app")
+  rlang::check_installed("DT", reason = "to use YGwater app")
+  rlang::check_installed("tidyhydat", reason = "to use YGwater app")
+  rlang::check_installed("htmltools", reason = "to use YGwater app")
   rlang::check_installed(
     "future",
-    reason = "required to enable asynchronous operations in YGwater apps"
+    reason = "to enable asynchronous operations in YGwater apps"
   )
   rlang::check_installed(
     "promises",
-    reason = "required to enable asynchronous operations in YGwater apps"
+    reason = "to enable asynchronous operations in YGwater apps"
   )
   rlang::check_installed(
     "bslib",
-    reason = "required to enable bootstrap 5 themes and elements in YGwater apps"
+    reason = "to enable bootstrap 5 themes and elements in YGwater apps"
   )
-  rlang::check_installed("bsicons", reason = "required to use YGwater app")
-  rlang::check_installed("exifr", reason = "required to use YGwater app")
-  rlang::check_installed("leaflet", reason = "required to use YGwater app")
-  rlang::check_installed("zip", reason = "required to use YGwater app")
-  rlang::check_installed("htmlwidgets", reason = "required to use YGwater app")
-  rlang::check_installed("jsonlite", reason = "required to use YGwater app")
+  rlang::check_installed("bsicons", reason = "to use YGwater app")
+  rlang::check_installed("exifr", reason = "to use YGwater app")
+  rlang::check_installed("leaflet", reason = "to use YGwater app")
+  rlang::check_installed("zip", reason = "to use YGwater app")
+  rlang::check_installed("htmlwidgets", reason = "to use YGwater app")
+  rlang::check_installed("jsonlite", reason = "to use YGwater app")
   rlang::check_installed(
     "base64enc",
     reason = "to create base64-encoded plot images"
@@ -142,24 +142,7 @@ YGwater <- function(
     }
   }
 
-  # Load the global variables, library calls, and possibly in future a connection to the DB.
-  source(system.file("apps/YGwater/YGwater_globals.R", package = "YGwater"))
-  YGwater_globals(
-    dbName = dbName,
-    dbHost = dbHost,
-    dbPort = dbPort,
-    dbUser = dbUser,
-    dbPass = dbPass,
-    accessPath1 = accessPath1,
-    accessPath2 = accessPath2,
-    network_check = network_check,
-    public = public,
-    logout_timer_min = logout_timer_min,
-    analytics = analytics,
-    brand = brand
-  )
-
-  # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app
+  # Connect and check that the database has the required tables/schemas; disconnect immediately afterwards because connections are made in app per user
   con <- AquaConnect(
     name = dbName,
     host = dbHost,
@@ -252,10 +235,53 @@ YGwater <- function(
     )
   }
 
+  # Check if the database 'testdb' exists and can be seen on the cluster. This is used to give the user the option to log in to the test DB so they can try things out without consequences.
+  test_exists <- FALSE
+  if (!public) {
+    dbs <- DBI::dbGetQuery(con, "SELECT datname FROM pg_database;")
+    if ("testdb" %in% dbs$datname) {
+      # Check if the user 'tester' can log in with password 'tester'
+      tryCatch(
+        {
+          test_con <- AquaConnect(
+            name = 'testdb',
+            username = 'tester',
+            password = 'tester',
+            silent = TRUE,
+            host = dbHost,
+            port = dbPort
+          )
+
+          DBI::dbDisconnect(test_con)
+          test_exists <- TRUE
+        },
+        error = function(e) {
+          test_exists <<- FALSE
+        }
+      )
+    }
+  }
+
   # Disconnect from the database
   DBI::dbDisconnect(con)
 
-  # shiny::enableBookmarking(store = "url")  # Enable bookmarking
+  # Load the global variables, library calls, and possibly in future a connection to the DB.
+  source(system.file("apps/YGwater/YGwater_globals.R", package = "YGwater"))
+  YGwater_globals(
+    dbName = dbName,
+    dbHost = dbHost,
+    dbPort = dbPort,
+    dbUser = dbUser,
+    dbPass = dbPass,
+    accessPath1 = accessPath1,
+    accessPath2 = accessPath2,
+    network_check = network_check,
+    public = public,
+    logout_timer_min = logout_timer_min,
+    analytics = analytics,
+    brand = brand,
+    test_exists = test_exists
+  )
 
   # Set up for ExtendedTasks or promises
   # If on Windows OR running interactively, use multisession, else use multicore

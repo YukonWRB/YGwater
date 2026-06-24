@@ -11,7 +11,7 @@ instrumentMaintenanceUI <- function(id) {
       actionButton(
         ns("show_all_upcoming"),
         "Show upcoming maintenance for all",
-        class = "btn-warning w-100 mb-3"
+        class = "btn-warning mb-3"
       ),
       selectizeInput(
         ns("instrument_id"),

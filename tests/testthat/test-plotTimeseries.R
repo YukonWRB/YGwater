@@ -231,6 +231,7 @@ test_that("plotTimeseries works when given only a timeseries_id", {
     historic_range = TRUE,
     slider = FALSE,
     data = TRUE,
+    stats_period = "30yr",
     con = test_con
   )
   expect_s3_class(plot$plot, "plotly")

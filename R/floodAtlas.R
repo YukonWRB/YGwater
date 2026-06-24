@@ -27,19 +27,19 @@ floodAtlas <- function(
   dbPass = Sys.getenv("aquacachePass"),
   server = FALSE
 ) {
-  rlang::check_installed("shiny", reason = "required to use floodAtlas app")
-  rlang::check_installed("shinyjs", reason = "required to use floodAtlas app")
+  rlang::check_installed("shiny", reason = "to use floodAtlas app")
+  rlang::check_installed("shinyjs", reason = "to use floodAtlas app")
   rlang::check_installed(
     "future",
-    reason = "required to enable asynchronous operations in floodAtlas apps"
+    reason = "to enable asynchronous operations in floodAtlas apps"
   )
   rlang::check_installed(
     "bslib",
-    reason = "required to enable bootstrap 5 themes and elements in floodAtlas apps"
+    reason = "to enable bootstrap 5 themes and elements in floodAtlas apps"
   )
   rlang::check_installed(
     "shinycssloaders",
-    reason = "required to use floodAtlas app"
+    reason = "to show a 'loading' spinner in the app"
   )
 
   # If on Windows OR running interactively, use multisession, else use multicore
