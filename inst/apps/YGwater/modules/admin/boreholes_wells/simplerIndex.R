@@ -2161,7 +2161,7 @@ simplerIndex <- function(id, language) {
         value
       }
 
-      convert_flow_to_lpm <- function(value, unit) {
+      convert_flow_to_lps <- function(value, unit) {
         value <- null_if_empty(value)
         if (is.null(value)) {
           return(NULL)
@@ -2171,11 +2171,21 @@ simplerIndex <- function(id, language) {
           return(value)
         }
         unit_lower <- tolower(unit_val)
-        if (unit_lower %in% c("l/s", "lps", "l per s", "l/sec")) {
-          return(value * 60)
+        if (
+          unit_lower %in%
+            c(
+              "l/s",
+              "lps",
+              "l per s",
+              "l/sec",
+              "liters per second",
+              "litres per second"
+            )
+        ) {
+          return(value)
         }
         if (unit_lower %in% c("l/min", "lpm", "l per min", "l/minute")) {
-          return(value)
+          return(value / 60)
         }
         if (
           unit_lower %in%
@@ -2188,10 +2198,10 @@ simplerIndex <- function(id, language) {
               "gallons per minute"
             )
         ) {
-          return(value * 3.785411784)
+          return(value * 3.785411784 / 60)
         }
-        if (unit_lower %in% c("g/s", "gal/s", "gallons per second")) {
-          return(value * 3.785411784 * 60)
+        if (unit_lower %in% c("g/s", "gal/s", "gallons per second", "gps")) {
+          return(value * 3.785411784)
         }
         value
       }
@@ -2319,7 +2329,7 @@ simplerIndex <- function(id, language) {
         sanitized[["casing_od"]],
         metadata$casing_od_unit
       )
-      sanitized$estimated_yield <- convert_flow_to_lpm(
+      sanitized$estimated_yield <- convert_flow_to_lps(
         sanitized[["estimated_yield"]],
         metadata$estimated_yield_unit
       )
@@ -2438,7 +2448,8 @@ simplerIndex <- function(id, language) {
 
       if (
         isTruthy(selected_id) &&
-          (is.null(choices) || !selected_id %in% names(choices))
+          (is.null(choices) ||
+            !as.character(selected_id[1]) %in% as.character(choices))
       ) {
         extra_location <- DBI::dbGetQuery(
           session$userData$AquaCache,
@@ -2835,7 +2846,6 @@ simplerIndex <- function(id, language) {
     observeEvent(
       input$share_with_borehole,
       {
-        req(input$share_with_borehole)
         # Reset it to 'public_reader' if length 0
         if (
           is.null(input$share_with_borehole) ||
@@ -2892,7 +2902,6 @@ simplerIndex <- function(id, language) {
     observeEvent(
       input$share_with_well,
       {
-        req(input$share_with_well)
         if (
           is.null(input$share_with_well) || length(input$share_with_well) == 0
         ) {
@@ -3187,7 +3196,10 @@ simplerIndex <- function(id, language) {
         pending_borehole_purpose_selection(existing_id[[1]])
         pending_borehole_purpose_new(NULL)
         removeModal()
-        showNotification("Existing borehole purpose selected.", type = "message")
+        showNotification(
+          "Existing borehole purpose selected.",
+          type = "message"
+        )
         return()
       }
 
@@ -5059,6 +5071,7 @@ simplerIndex <- function(id, language) {
               latitude = metadata[["latitude"]],
               longitude = metadata[["longitude"]],
               location_source = metadata[["location_source"]],
+              surveyed_ground_elev = metadata[["surveyed_ground_elev"]],
               ground_elev_m = metadata[["surveyed_ground_elev"]],
               purpose_of_borehole = metadata[["purpose_of_borehole"]],
               purpose_borehole_inferred = metadata[[
@@ -5203,6 +5216,9 @@ simplerIndex <- function(id, language) {
               latitude = metadata[["latitude"]],
               longitude = metadata[["longitude"]],
               location_source = metadata[["location_source"]],
+              ground_elev_m = metadata[[
+                "surveyed_ground_elev"
+              ]],
               surveyed_ground_elev = metadata[[
                 "surveyed_ground_elev"
               ]],

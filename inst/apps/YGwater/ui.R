@@ -14,6 +14,7 @@ app_ui <- function(request) {
 
   tagList(
     shinyjs::useShinyjs(),
+
     div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
 
     # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
@@ -492,8 +493,8 @@ app_ui <- function(request) {
             ),
             nav_panel(
               title = "Review / edit timeseries",
-              value = "grades_approvals_qualifiers",
-              uiOutput("grades_approvals_qualifiers_ui")
+              value = "continuousDataReview",
+              uiOutput("continuousDataReview_ui")
             ),
             nav_panel(
               title = "Add / edit timeseries",

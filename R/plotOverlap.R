@@ -41,6 +41,9 @@
 #'   stored daily summaries should be reconstructed. Character, Date, and
 #'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
 #'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param stats_period Historical range statistics period. Use "full" for
+#'   full-record statistics or "30yr" for the most recent 30-year statistics
+#'   when the connected database provides them. Default is "full".
 #'
 #' @return An html plot.
 #'
@@ -110,6 +113,7 @@ plotOverlap <- function(
   data = FALSE,
   con = NULL,
   as_of = NULL,
+  stats_period = "full",
   build_plot = TRUE
 ) {
   # Deal with non-standard evaluations from data.table to silence check() notes
@@ -119,6 +123,7 @@ plotOverlap <- function(
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
+  stats_period <- normalize_daily_stats_period(stats_period)
 
   if (!build_plot && !data) {
     stop("`build_plot = FALSE` requires `data = TRUE`.")
@@ -761,18 +766,42 @@ plotOverlap <- function(
   }
 
   if (is.null(as_of)) {
+    daily_select <- paste(
+      c(
+        "date",
+        "value",
+        daily_stats_select_sql(
+          con,
+          stats_period = stats_period,
+          columns = c("max", "min", "q75", "q25")
+        )
+      ),
+      collapse = ", "
+    )
     daily <- dbGetQueryDT(
       con,
       glue::glue_sql(
-        "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
+        "SELECT {DBI::SQL(daily_select)} FROM measurements_calculated_daily WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
         .con = con
       )
     )
   } else {
+    daily_select <- paste(
+      c(
+        "date",
+        "value",
+        daily_stats_select_sql(
+          con,
+          stats_period = stats_period,
+          columns = c("max", "min", "q75", "q25")
+        )
+      ),
+      collapse = ", "
+    )
     daily <- dbGetQueryDT(
       con,
       paste(
-        "SELECT date, value, max, min, q75, q25",
+        paste0("SELECT ", daily_select),
         "FROM continuous.measurements_calculated_daily_at(",
         "  $1,",
         "  ARRAY[$2]::INTEGER[],",
@@ -1253,30 +1282,25 @@ plotOverlap <- function(
     NULL
   }
 
+  historic_band_name <- "Min-Max"
+  typical_band_name <- if (lang == "en") "Typical" else "Typique"
+  band_styles <- list()
+  band_styles[[historic_band_name]] <- list(
+    fillcolor = "rgba(212, 236, 239, 0.85)",
+    line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+  )
+  band_styles[[typical_band_name]] <- list(
+    fillcolor = "rgba(95, 157, 166, 0.45)",
+    line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+  )
+
   adaptive_meta <- list(
     hover = hover,
     band_names = list(
-      historic = if (lang == "en") "Historic" else "Historique",
-      typical = if (lang == "en") "Typical" else "Typique"
+      historic = historic_band_name,
+      typical = typical_band_name
     ),
-    band_styles = list(
-      Historic = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Historique = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Typical = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      ),
-      Typique = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      )
-    ),
+    band_styles = band_styles,
     layout = list(
       title = if (is.null(adaptive_title)) {
         NULL
@@ -1349,16 +1373,15 @@ plotOverlap <- function(
         x = ~datetime,
         ymin = ~q25,
         ymax = ~q75,
-        # name = if (lang == "en") "IQR" else "EIQ",
         name = if (lang == "en") "Typical" else "Typique",
         color = I("#5f9da6"),
         line = list(width = 0.2),
         hoverinfo = if (hover) "text" else "none",
         text = if (hover) {
           ~ paste0(
-            "q25: ",
+            "Q25: ",
             round(.data$q25, 2),
-            ", q75: ",
+            ", Q75: ",
             round(.data$q75, 2),
             " (",
             as.Date(.data$datetime),
@@ -1372,8 +1395,7 @@ plotOverlap <- function(
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,
-        # name = "Min-Max",
-        name = if (lang == "en") "Historic" else "Historique",
+        name = "Min-Max",
         color = I("#D4ECEF"),
         line = list(width = 0.2),
         hoverinfo = if (hover) "text" else "none",

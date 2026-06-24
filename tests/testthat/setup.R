@@ -43,6 +43,7 @@ if (Sys.getenv("CI") == "true") {
     aquacachePass = "runner",
     aquacacheAdminUser = "runner",
     aquacacheAdminPass = "runner",
+    aquacacheTestName = "testdb",
     aquacacheTestHost = "localhost",
     aquacacheTestPort = "5432",
     aquacacheTestUser = "runner",
@@ -52,33 +53,36 @@ if (Sys.getenv("CI") == "true") {
     AQSERVER = "https://yukon.aquaticinformatics.net/AQUARIUS"
   )
   message("Running on CI, setting environment accordingly.")
-} else {
-  # If not running onf CI, check that the datbase 'testdb' exists at the host and port in the .Renviron file. If not, instruct user to craete it with AquaCache::create_test_db()
-  test_db_exists <- tryCatch(
-    {
-      con <- AquaConnect(
-        name = Sys.getenv("aquacacheTestName"),
-        host = Sys.getenv("aquacacheTestHost"),
-        port = Sys.getenv("aquacacheTestPort"),
-        user = Sys.getenv("aquacacheTestUser"),
-        password = Sys.getenv("aquacacheTestPass")
-      )
-      DBI::dbDisconnect(con)
-
-      message(
-        "Database 'testdb' found at the host and port specified in your .Renviron file. Proceeding with tests."
-      )
-      TRUE
-    },
-    error = function(e) {
-      FALSE
-    }
-  )
+  test_db_exists <- TRUE # We assume the test database exists on CI, since it's created in the workflow file. If it doesn't, the tests will fail and we'll know to fix the CI setup.
 }
+
+# Check that the datbase 'testdb' exists at the host and port in the .Renviron file. If not, instruct user to craete it with AquaCache::create_test_db()
+test_db_exists <- tryCatch(
+  {
+    con <- AquaConnect(
+      name = Sys.getenv("aquacacheTestName"),
+      host = Sys.getenv("aquacacheTestHost"),
+      port = Sys.getenv("aquacacheTestPort"),
+      user = Sys.getenv("aquacacheTestUser"),
+      password = Sys.getenv("aquacacheTestPass"),
+      silent = TRUE
+    )
+    DBI::dbDisconnect(con)
+
+    TRUE
+  },
+  error = function(e) {
+    FALSE
+  }
+)
 
 if (!test_db_exists) {
   stop(
     "Database 'testdb' not found at the host and port specified in your .Renviron file. Please create it with AquaCache::create_test_db() before running the tests."
+  )
+} else {
+  message(
+    "Database 'testdb' found at the host and port specified in your .Renviron file. Proceeding with tests."
   )
 }
 

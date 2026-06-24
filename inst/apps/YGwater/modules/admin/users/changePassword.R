@@ -2,6 +2,7 @@ changePasswordUI <- function(id) {
   ns <- NS(id)
   page_fluid(
     uiOutput(ns("banner")),
+    uiOutput(ns("testdb")),
     uiOutput(ns("pwd_ui"))
   )
 }
@@ -9,6 +10,19 @@ changePasswordUI <- function(id) {
 changePassword <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    output$testdb <- renderUI({
+      if (session$userData$config$dbName == "testdb") {
+        tags$div(
+          class = "alert alert-warning",
+          role = "alert",
+          "Important: You are logged in to the test database, but changes you make to your password here WILL persist to the production database as it is on the same server."
+        )
+      } else {
+        NULL
+      }
+    })
+
     trl <- function(key) tr(key, language$language) # tiny helper
 
     output$banner <- renderUI({
@@ -72,6 +86,17 @@ changePassword <- function(id, language) {
 
     observeEvent(input$submit, ignoreInit = TRUE, {
       req(input$current_pwd, input$new_pwd, input$confirm_pwd)
+
+      # Prevent public_reader and tester from changing password
+      if (session$userData$config$dbUser %in% c("public_reader", "tester")) {
+        showModal(modalDialog(
+          title = trl("error"),
+          trl("pw_change_prohibited"),
+          easyClose = TRUE,
+          footer = actionButton(ns("close"), trl("close"))
+        ))
+        return(invisible(NULL))
+      }
 
       req(
         nchar(input$current_pwd) > 0,

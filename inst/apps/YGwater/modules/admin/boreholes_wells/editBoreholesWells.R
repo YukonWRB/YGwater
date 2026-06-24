@@ -457,16 +457,6 @@ editBoreholesWells <- function(id, language) {
       tryCatch(
         {
           DBI::dbExecute(session$userData$AquaCache, "BEGIN")
-          print(input$borehole_name)
-          print(input$completion_date)
-          print(input$latitude)
-          print(input$longitude)
-          print(input$depth_m)
-          print(input$depth_to_bedrock_m)
-          print(input$drilled_by)
-          print(input$borehole_notes)
-          print(borehole_share)
-          print(borehole_id)
 
           DBI::dbExecute(
             session$userData$AquaCache,

@@ -6,6 +6,7 @@ options(warn = -1)
 on.exit(options(warn = old_warn), add = TRUE)
 
 test_con <- test_AquaConnect()
+on.exit(DBI::dbDisconnect(test_con), add = TRUE)
 
 wlevel <- DBI::dbGetQuery(
   test_con,

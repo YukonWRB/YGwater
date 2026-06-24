@@ -98,7 +98,7 @@ app_server <- function(input, output, session) {
     "instrumentMaintenance",
     "addContData",
     "imputeMissing",
-    "grades_approvals_qualifiers",
+    "continuousDataReview",
     "addDiscData",
     "addSamples",
     "addGuidelines",
@@ -1028,7 +1028,7 @@ app_server <- function(input, output, session) {
         any(
           session$userData$admin_privs$addContData,
           session$userData$admin_privs$imputeMissing,
-          session$userData$admin_privs$grades_approvals_qualifiers,
+          session$userData$admin_privs$continuousDataReview,
           session$userData$admin_privs$addTimeseries,
           session$userData$admin_privs$addCompoundTimeseries,
           session$userData$admin_privs$syncCont
@@ -1041,8 +1041,8 @@ app_server <- function(input, output, session) {
         if (!isTRUE(session$userData$admin_privs$imputeMissing)) {
           nav_hide(id = "navbar", target = "imputeMissing")
         }
-        if (!isTRUE(session$userData$admin_privs$grades_approvals_qualifiers)) {
-          nav_hide(id = "navbar", target = "grades_approvals_qualifiers")
+        if (!isTRUE(session$userData$admin_privs$continuousDataReview)) {
+          nav_hide(id = "navbar", target = "continuousDataReview")
         }
         if (!isTRUE(session$userData$admin_privs$addTimeseries)) {
           nav_hide(id = "navbar", target = "addTimeseries")
@@ -1343,7 +1343,7 @@ app_server <- function(input, output, session) {
       }
 
       # Admin menu ----------------------------------------------------------
-      # Admin menu is always shown because every logged in user can change their own password
+      # Admin menu is always shown because every logged in user can change their own password (though this is gated for public_reader and tester)
       nav_show(id = "navbar", target = "adminTasks")
       nav_show(id = "navbar", target = "adminHelpTasks")
       nav_show(id = "navbar", target = "adminHome")
@@ -1690,7 +1690,7 @@ app_server <- function(input, output, session) {
 
     ui_loaded$addContData <- FALSE
     ui_loaded$imputeMissing <- FALSE
-    ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$continuousDataReview <- FALSE
     ui_loaded$syncCont <- FALSE
     ui_loaded$addTimeseries <- FALSE
     ui_loaded$addCompoundTimeseries <- FALSE
@@ -1781,7 +1781,7 @@ app_server <- function(input, output, session) {
     "instrumentMaintenance",
     "addContData",
     "imputeMissing",
-    "grades_approvals_qualifiers",
+    "continuousDataReview",
     "addDiscData",
     "addSamples",
     "addSampleSeries",
@@ -2372,6 +2372,9 @@ app_server <- function(input, output, session) {
     # Reset the session userData with the default credentials
     session$userData$config$dbUser <- config$dbUser
     session$userData$config$dbPass <- config$dbPass
+    if (config$test_exists && input$test_login) {
+      session$userData$config$dbName <- config$dbName
+    }
 
     showAdmin(show = FALSE, logout = TRUE) # Hide admin tabs and remove logout button
     showViz(show = TRUE) # Restore public/viz tabs immediately without relying on the removed admin button
@@ -2436,14 +2439,42 @@ app_server <- function(input, output, session) {
           });
           "
         )),
-        title = tr("login", languageSelection$language),
-        renderUI(HTML(
-          tr("login_txt", languageSelection$language),
-          "<br> <br>"
+
+        tags$style(HTML(
+          "
+          .login-test-contact {
+            background-color: rgba(242, 169, 0, 0.10);  /* YG yellow, softened */
+            border: 1px solid rgba(242, 169, 0, 0.35);
+            border-left: 4px solid #F2A900;
+            color: #244C5A;
+            padding: 10px 12px;
+            border-radius: 4px;
+            font-size: 0.95em;
+          }
+          .login-test-contact p:last-child {
+            margin-bottom: 0;
+          }
+          "
         )),
+
+        title = tr("login", languageSelection$language),
+
+        tags$div(
+          class = "login-test-contact",
+          role = "note",
+          tr("login_test_contact", languageSelection$language)
+        ),
+
+        br(),
+
         textInput("username", tr("un", languageSelection$language)),
         passwordInput("password", tr("pwd", languageSelection$language)),
         footer = tagList(
+          checkboxInput(
+            "test_login",
+            tr("login_test_checkbox", languageSelection$language),
+            value = FALSE
+          ),
           modalButton(tr("close", languageSelection$language)),
           actionButton(
             "confirmLogin",
@@ -2484,23 +2515,57 @@ app_server <- function(input, output, session) {
       ))
       return()
     }
+    # prevent public_reader from logging in on normal and test instances
+    if (input$username == 'public_reader') {
+      clear_modals()
+      showModal(modalDialog(
+        title = tr("login_fail", languageSelection$language),
+        tr("login_fail_public_reader", languageSelection$language),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", languageSelection$language))
+      ))
+      return()
+    }
+    # prevent 'tester' from logging in on production instances
+    if (input$username == 'tester' && !input$test_login) {
+      clear_modals()
+      showModal(modalDialog(
+        title = tr("login_fail", languageSelection$language),
+        tr("login_fail_tester", languageSelection$language),
+        easyClose = TRUE,
+        footer = modalButton(tr("close", languageSelection$language))
+      ))
+      return()
+    }
+
     log_attempts(log_attempts() + 1)
 
     tryCatch(
       {
-        session$userData$AquaCache_new <- AquaConnect(
-          name = session$userData$config$dbName,
-          host = session$userData$config$dbHost,
-          port = session$userData$config$dbPort,
-          username = input$username,
-          password = input$password,
-          silent = TRUE
-        )
+        if (config$test_exists && input$test_login) {
+          session$userData$AquaCache_new <- AquaConnect(
+            name = "testdb",
+            host = session$userData$config$dbHost,
+            port = session$userData$config$dbPort,
+            username = input$username,
+            password = input$password,
+            silent = TRUE
+          )
+        } else {
+          session$userData$AquaCache_new <- AquaConnect(
+            name = session$userData$config$dbName,
+            host = session$userData$config$dbHost,
+            port = session$userData$config$dbPort,
+            username = input$username,
+            password = input$password,
+            silent = TRUE
+          )
+        }
+
         # Test the connection
         test <- DBI::dbGetQuery(session$userData$AquaCache_new, "SELECT 1;")
         if (nrow(test) > 0) {
           # Means the connection was successful
-
           # Drop the old connection
           safe_disconnect(session$userData$AquaCache)
           session$userData$AquaCache <- session$userData$AquaCache_new
@@ -2509,6 +2574,9 @@ app_server <- function(input, output, session) {
           # Update the session with the new user's credentials
           session$userData$config$dbUser <- input$username
           session$userData$config$dbPass <- input$password
+          if (config$test_exists && input$test_login) {
+            session$userData$config$dbName <- "testdb"
+          }
 
           # Reset the application_name to 'YGwater_shiny'
           DBI::dbExecute(
@@ -2541,6 +2609,7 @@ app_server <- function(input, output, session) {
             session$userData$AquaCache,
             sql
           )
+          out <<- session$userData$table_privs
           # Create a qualified name column for easier filtering
           session$userData$table_privs$qual_name <- paste0(
             session$userData$table_privs$schema,
@@ -2869,7 +2938,7 @@ app_server <- function(input, output, session) {
               tbl = session$userData$table_privs,
               "continuous.measurements_continuous"
             ),
-            grades_approvals_qualifiers = any(
+            continuousDataReview = any(
               has_priv(
                 tbl = session$userData$table_privs,
                 "continuous.grades"
@@ -3354,9 +3423,14 @@ app_server <- function(input, output, session) {
           showModal(modalDialog(
             title = tr("login_success", languageSelection$language),
             paste0(
-              tr("login_success_msg", languageSelection$language),
-              " ",
-              input$username
+              if (session$userData$config$dbName == "testdb") {
+                tr("login_suggess_msg_testing", languageSelection$language)
+              } else {
+                tr("login_success_msg", languageSelection$language)
+              },
+              " '",
+              input$username,
+              "'."
             ),
             easyClose = TRUE,
             footer = modalButton(tr("close", languageSelection$language))
@@ -3984,14 +4058,14 @@ app_server <- function(input, output, session) {
         imputeMissing("imputeMissing", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "grades_approvals_qualifiers") {
-      if (!ui_loaded$grades_approvals_qualifiers) {
-        output$grades_approvals_qualifiers_ui <- renderUI(continuousDataReviewUI(
-          "grades_approvals_qualifiers"
+    if (input$navbar == "continuousDataReview") {
+      if (!ui_loaded$continuousDataReview) {
+        output$continuousDataReview_ui <- renderUI(continuousDataReviewUI(
+          "continuousDataReview"
         )) # Render the UI
-        ui_loaded$grades_approvals_qualifiers <- TRUE
+        ui_loaded$continuousDataReview <- TRUE
         continuousDataReview(
-          "grades_approvals_qualifiers",
+          "continuousDataReview",
           language = languageSelection
         ) # Call the server
       }

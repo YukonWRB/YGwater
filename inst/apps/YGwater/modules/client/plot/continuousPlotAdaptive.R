@@ -693,6 +693,27 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                         tr("plot_hist_range", language$language),
                         value = TRUE
                       ),
+                      selectizeInput(
+                        ns("historic_stats_period"),
+                        label = if (language$abbrev == "fr") {
+                          "P\u00e9riode des statistiques"
+                        } else {
+                          "Stats period"
+                        },
+                        choices = stats::setNames(
+                          c("30yr", "full"),
+                          if (language$abbrev == "fr") {
+                            c(
+                              "30 derni\u00e8res ann\u00e9es",
+                              "Toute la p\u00e9riode"
+                            )
+                          } else {
+                            c("Last 30 years", "Entire record")
+                          }
+                        ),
+                        selected = "30yr",
+                        multiple = FALSE
+                      ),
                       div(
                         selectizeInput(
                           ns("historic_range_overlap"),
@@ -816,6 +837,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           id = ns("plot_container"),
           plotly::plotlyOutput(ns("plot"), height = "800px", inline = TRUE)
         ),
+        uiOutput(ns("historic_stats_caption")),
         uiOutput(ns("full_screen_ui")),
 
         # Space so the table and plot aren't in each other's faces
@@ -968,6 +990,23 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
     current_plot_resolution <- reactive({
       "auto"
+    })
+
+    current_historic_stats_period <- reactive({
+      if (
+        is.null(input$historic_stats_period) ||
+          length(input$historic_stats_period) == 0 ||
+          is.na(input$historic_stats_period[[1]])
+      ) {
+        return("30yr")
+      }
+
+      stats_period <- as.character(input$historic_stats_period[[1]])
+      if (!(stats_period %in% c("30yr", "full"))) {
+        return("30yr")
+      }
+
+      stats_period
     })
 
     current_legend_position <- reactive({
@@ -1753,6 +1792,18 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
       plot_resolution <- current_plot_resolution()
       hist_state <- historic_range_ui_state()
+      timeseries_source <- moduleData$timeseries
+      timeseries_table <- data.frame(
+        timeseries_id = timeseries_source$timeseries_id,
+        start_datetime = timeseries_source$start_datetime,
+        end_datetime = timeseries_source$end_datetime,
+        stringsAsFactors = FALSE
+      )
+      timeseries_table <- timeseries_table[
+        timeseries_table$timeseries_id %in% selected_ids,
+        ,
+        drop = FALSE
+      ]
 
       list(
         plot_type = plot_type,
@@ -1791,6 +1842,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         } else {
           input$historic_range_overlap[[1]]
         },
+        stats_period = current_historic_stats_period(),
         unusable = isTRUE(input$show_unusable),
         grades = plot_type == "timeseries" && isTRUE(input$show_grades),
         approvals = plot_type == "timeseries" && isTRUE(input$show_approvals),
@@ -1876,6 +1928,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         gridy = isTRUE(input$showgridy),
         shareX = isTRUE(input$shareX),
         shareY = isTRUE(input$shareY),
+        timeseries_table = timeseries_table,
         use_webgl = isTRUE(session$userData$use_webgl),
         db = list(
           name = session$userData$config$dbName,
@@ -2138,6 +2191,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
       if (language$abbrev == "fr") {
         parameter <- ts_tbl$`nom_paramètre`
+        units <- ts_tbl$`unités`
         media <- ts_tbl$`type_de_média`
         aggregation <- ts_tbl$`type_agrégation`
         record_rate <- ts_tbl$`fréquence_enregistrement`
@@ -2146,6 +2200,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         end_dt <- ts_tbl$fin
       } else {
         parameter <- ts_tbl$parameter_name
+        units <- ts_tbl$units
         media <- ts_tbl$media_type
         aggregation <- ts_tbl$aggregation_type
         record_rate <- ts_tbl$recording_rate
@@ -2162,6 +2217,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       metadata_base_table(
         attributes = c(
           tr("parameter", language$language),
+          tr("units", language$language),
           tr("media", language$language),
           tr("aggregation", language$language),
           tr("nominal_rate", language$language),
@@ -2172,6 +2228,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         ),
         values = c(
           format_metadata_value(parameter),
+          format_metadata_value(units),
           format_metadata_value(media),
           format_metadata_value(aggregation),
           format_metadata_value(record_rate_display),
@@ -2496,6 +2553,39 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               list(plot = combined_plot, data = combined_data)
             }
 
+            historic_caption_enabled <- function(plot_type) {
+              if (plot_type %in% c("timeseries", "timeseries_all")) {
+                return(isTRUE(req$historic_range))
+              }
+              if (identical(plot_type, "overlap_yrs")) {
+                return(!identical(req$historic_range_overlap, "none"))
+              }
+              FALSE
+            }
+
+            historic_caption_text <- function(data, ids, plot_type) {
+              if (!historic_caption_enabled(plot_type)) {
+                return(NULL)
+              }
+              YGwater:::historic_stats_caption_for_plot_data(
+                stats_period = req$stats_period,
+                plot_data = data,
+                timeseries_ids = ids,
+                timeseries_table = req$timeseries_table,
+                lang = req$lang
+              )
+            }
+
+            add_historic_caption <- function(result, ids, plot_type) {
+              caption <- historic_caption_text(result$data, ids, plot_type)
+              if (is.null(caption) || !nzchar(caption)) {
+                return(result)
+              }
+
+              result$historic_stats_caption <- caption
+              result
+            }
+
             date_range_xlim <- function(start_date, end_date, tz) {
               start <- as.POSIXct(as.Date(start_date), tz = tz)
               end <- as.POSIXct(as.Date(end_date), tz = tz) + 24 * 60 * 60
@@ -2693,13 +2783,20 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               paste(titles, collapse = "<br>")
             }
 
-            min_max_band_styles <- function(fill_color = "#D4ECEF") {
-              list(
-                `Min-Max` = list(
-                  fillcolor = fill_color,
-                  line = list(color = fill_color, width = 0.2)
-                )
+            min_max_band_name <- function() {
+              "Min-Max"
+            }
+
+            min_max_band_styles <- function(
+              fill_color = "#D4ECEF",
+              band_name = min_max_band_name()
+            ) {
+              styles <- list()
+              styles[[band_name]] <- list(
+                fillcolor = fill_color,
+                line = list(color = fill_color, width = 0.2)
               )
+              styles
             }
 
             iqr_band_name <- function() {
@@ -3280,7 +3377,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   slider = FALSE,
                   tzone = plot_timezone,
                   resolution = plot_resolution,
-                  as_of = req$as_of
+                  as_of = req$as_of,
+                  stats_period = req$stats_period
                 )
 
                 if (isTRUE(use_fast_trace)) {
@@ -3324,15 +3422,15 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   subplot_title <- line_name
                   yaxis_title <- build_yaxis_title(meta_row)
                   band_name <- iqr_band_name()
-                  band_defs <- list(
-                    `Min-Max` = c("min", "max")
-                  )
+                  min_max_name <- min_max_band_name()
+                  band_defs <- list()
+                  band_defs[[min_max_name]] <- c("min", "max")
                   band_defs[[band_name]] <- c("q25", "q75")
                   band_styles <- subplot_band_styles()
                   band_showlegend <- i == 1L
                   band_legendgroups <- stats::setNames(
-                    c("Min-Max", band_name),
-                    c("Min-Max", band_name)
+                    c(min_max_name, band_name),
+                    c(min_max_name, band_name)
                   )
                 } else if (mode == "traces") {
                   yaxis <- YGwater:::viewport_axis_ref("y", i)
@@ -3599,7 +3697,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                     data = TRUE,
                     build_plot = FALSE,
                     tzone = plot_timezone,
-                    resolution = overlap_resolution
+                    resolution = overlap_resolution,
+                    stats_period = req$stats_period
                   ),
                   error = function(e) {
                     stop(
@@ -3829,18 +3928,34 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             }
 
             if (plot_type == "timeseries") {
-              return(build_adaptive_timeseries(
+              return(add_historic_caption(
+                build_adaptive_timeseries(
+                  timeseries_ids,
+                  mode = if (length(timeseries_ids) > 1) {
+                    "subplots"
+                  } else {
+                    "single"
+                  }
+                ),
                 timeseries_ids,
-                mode = if (length(timeseries_ids) > 1) "subplots" else "single"
+                plot_type
               ))
             }
 
             if (plot_type == "timeseries_all") {
-              return(build_adaptive_timeseries(timeseries_ids, mode = "traces"))
+              return(add_historic_caption(
+                build_adaptive_timeseries(timeseries_ids, mode = "traces"),
+                timeseries_ids,
+                plot_type
+              ))
             }
 
             if (plot_type == "overlap_yrs") {
-              return(build_adaptive_overlap(timeseries_ids))
+              return(add_historic_caption(
+                build_adaptive_overlap(timeseries_ids),
+                timeseries_ids,
+                plot_type
+              ))
             }
 
             if (plot_type == "histogram") {
@@ -3900,6 +4015,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       bind_task_button("make_plot")
 
     plot_created <- reactiveVal(FALSE) # Flag to determine if a plot has been created
+    historic_stats_caption <- reactiveVal(NULL)
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
@@ -3928,6 +4044,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$data <- NULL
       adaptiveState$meta <- NULL
       adaptiveState$payload <- NULL
+      historic_stats_caption(NULL)
       long_ts_plot$invoke(plot_request())
     })
 
@@ -3967,6 +4084,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         adaptiveState$data <- result$data
         adaptiveState$meta <- result$adaptive$meta
         adaptiveState$payload <- result$adaptive$payload
+        historic_stats_caption(result$historic_stats_caption)
         render_adaptive_plot(
           xlim = adaptiveState$current_xlim,
           full_render = TRUE,
@@ -3987,6 +4105,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         output$plot <- plotly::renderPlotly({
           isolate(result$plot)
         })
+        historic_stats_caption(result$historic_stats_caption)
       }
 
       # Create a full screen button if necessary
@@ -4017,6 +4136,25 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
       plot_created(TRUE)
     }) # End renderPlotly
+
+    output$historic_stats_caption <- renderUI({
+      caption <- historic_stats_caption()
+      if (is.null(caption) || !nzchar(caption)) {
+        return(NULL)
+      }
+      tags$div(
+        caption,
+        style = paste(
+          "width: 100%;",
+          "text-align: right;",
+          "padding-right: 18px;",
+          "margin-top: 4px;",
+          "font-size: 14px;",
+          "line-height: 1.25;",
+          "color: #000000;"
+        )
+      )
+    })
 
     output$metadata_message <- renderUI({
       if (is.null(selected_timeseries_ids())) {
@@ -4417,14 +4555,30 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             max(out$trace_data$datetime, na.rm = TRUE),
             "%Y-%m-%d %H:%M"
           )
-          hist_range_start <- as.character(moduleData$timeseries[
-            timeseries_id == timeseries,
-            start_datetime
-          ])
-          hist_range_end <- as.character(moduleData$timeseries[
-            timeseries_id == timeseries,
-            end_datetime
-          ])
+          range_data <- YGwater:::historic_range_data_for_export(
+            out$range_data,
+            units
+          )
+          if (is.null(range_data)) {
+            hist_range_start <- NA_character_
+            hist_range_end <- NA_character_
+          } else {
+            hist_window <- historic_stats_export_window(
+              stats_period = req$stats_period,
+              trace_data = out$trace_data,
+              range_data = out$range_data,
+              timeseries_start = moduleData$timeseries[
+                timeseries_id == timeseries,
+                start_datetime
+              ],
+              timeseries_end = moduleData$timeseries[
+                timeseries_id == timeseries,
+                end_datetime
+              ]
+            )
+            hist_range_start <- hist_window$start
+            hist_range_end <- hist_window$end
+          }
 
           metadata <- rbind(
             base_metadata,
@@ -4477,22 +4631,16 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             colNames = TRUE
           )
 
-          range_data <- out$range_data
-          names(range_data)[1:5] <- c(
-            "datetime_UTC",
-            paste0("historic_min_", units),
-            paste0("historic_max_", units),
-            paste0("historic_Q75_", units),
-            paste0("historic_Q25_", units)
-          )
-          openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
-          existing_sheets <- c(existing_sheets, "historic_range_data")
-          openxlsx::writeData(
-            wb,
-            sheet = "historic_range_data",
-            x = range_data,
-            colNames = TRUE
-          )
+          if (!is.null(range_data)) {
+            openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
+            existing_sheets <- c(existing_sheets, "historic_range_data")
+            openxlsx::writeData(
+              wb,
+              sheet = "historic_range_data",
+              x = range_data,
+              colNames = TRUE
+            )
+          }
         } else {
           openxlsx::addWorksheet(wb, sheetName = "metadata")
           existing_sheets <- c(existing_sheets, "metadata")

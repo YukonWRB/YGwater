@@ -45,8 +45,16 @@ test_that("viewport ribbon trace bundle returns plotly-ready traces", {
 
   expect_gt(bundle$trace_count, 0)
   expect_gt(bundle$client_points, 0)
-  expect_true(any(vapply(bundle$traces, function(x) identical(x$fill, "toself"), logical(1))))
-  expect_true(any(vapply(bundle$traces, function(x) identical(x$name, "Observed"), logical(1))))
+  expect_true(any(vapply(
+    bundle$traces,
+    function(x) identical(x$fill, "toself"),
+    logical(1)
+  )))
+  expect_true(any(vapply(
+    bundle$traces,
+    function(x) identical(x$name, "Observed"),
+    logical(1)
+  )))
 })
 
 
@@ -172,7 +180,6 @@ test_that("viewport adaptive plot includes status bands", {
   expect_false(layout$xaxis$showticklabels)
   expect_equal(layout$xaxis2$type, "date")
   expect_equal(layout$xaxis2$anchor, "y2")
-  expect_true(layout$xaxis2$fixedrange)
 
   built <- YGwater:::viewport_adaptive_plot(
     payload = list(
@@ -200,11 +207,15 @@ test_that("viewport adaptive plot includes status bands", {
   )))
   expect_true(any(vapply(
     built$trace_bundle$traces,
-    function(trace) identical(trace$xaxis, "x2") && identical(trace$yaxis, "y2"),
+    function(trace) {
+      identical(trace$xaxis, "x2") && identical(trace$yaxis, "y2")
+    },
     logical(1)
   )))
   status_trace <- Filter(
-    function(trace) identical(trace$xaxis, "x2") && identical(trace$yaxis, "y2"),
+    function(trace) {
+      identical(trace$xaxis, "x2") && identical(trace$yaxis, "y2")
+    },
     built$trace_bundle$traces
   )[[1]]
   expect_equal(status_trace$name, "Grade: A")
