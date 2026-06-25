@@ -2593,7 +2593,7 @@ app_server <- function(input, output, session) {
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p')
-            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments', 'field')
+            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field')
         )
         SELECT t.schema,
                t.table_name,
@@ -3082,7 +3082,24 @@ app_server <- function(input, output, session) {
             addGuidelines = has_priv(
               tbl = session$userData$table_privs,
               c(
-                "discrete.guidelines",
+                "criteria.guidelines",
+                "criteria.guideline_value_rules",
+                "criteria.guideline_rule_coefficients",
+                "criteria.guideline_rule_inputs",
+                "criteria.guidelines_fractions",
+                "criteria.guidelines_media_types",
+                "criteria.guideline_publishers",
+                "criteria.guideline_series",
+                "criteria.guideline_comparison_operators",
+                "criteria.guideline_jurisdictions",
+                "criteria.guideline_protection_goals",
+                "criteria.guideline_exposure_durations",
+                "criteria.guideline_averaging_periods",
+                "public.parameters",
+                "public.matrix_states",
+                "public.media_types",
+                "discrete.sample_fractions",
+                "discrete.result_speciations",
                 "discrete.samples",
                 "discrete.results"
               ),
@@ -3092,6 +3109,47 @@ app_server <- function(input, output, session) {
                   "INSERT",
                   "UPDATE"
                 ),
+                c(
+                  "DELETE",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                ),
+                c(
+                  "DELETE",
+                  "INSERT"
+                ),
+                c(
+                  "SELECT",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c(
+                  "SELECT",
+                  "INSERT",
+                  "UPDATE"
+                ),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
+                c("SELECT"),
                 c("INSERT"),
                 c("INSERT")
               )
