@@ -81,46 +81,30 @@ addContDataUI <- function(id) {
             choices = c("File" = "file", "Manual" = "manual"),
             inline = TRUE
           ),
-          conditionalPanel(
-            condition = "input.entry_mode == 'file'",
-            ns = ns,
-            fileInput(
-              ns("file"),
-              "Upload .csv, .xlsx, Solinst .xle, InSite .html, or Onset .hobo files",
-              accept = c(".csv", ".xlsx", ".xle", ".html", ".htm", ".hobo")
-            )
-          ),
-          conditionalPanel(
-            condition = "input.entry_mode == 'manual'",
-            ns = ns,
-            div(
-              actionButton(ns("add_row"), "Add row to end"),
-              actionButton(ns("add_row_above"), "Add row above selection"),
-              actionButton(ns("add_row_below"), "Add row below selection"),
-              actionButton(ns("delete_rows_table"), "Delete selected rows")
-            ),
-            tags$br()
-          ),
-
-          uiOutput(ns("data_tables_ui")),
-          uiOutput(ns("data_table_note")),
-          tags$br(),
-          splitLayout(
-            cellWidths = c("70%", "30%"),
-            selectizeInput(
-              ns("UTC_offset"),
-              "UTC offset of data",
-              choices = input_timezone_choices(),
-              selected = format_utc_offset(0L),
-              multiple = FALSE
+          div(
+            style = "display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;",
+            conditionalPanel(
+              condition = "input.entry_mode == 'file'",
+              ns = ns,
+              div(
+                style = "flex: 1 1 520px; min-width: 320px;",
+                fileInput(
+                  ns("file"),
+                  "Upload .csv, .xlsx, Solinst .xle, InSite .html, or Onset .hobo files",
+                  accept = c(".csv", ".xlsx", ".xle", ".html", ".htm", ".hobo"),
+                  width = "100%"
+                )
+              )
             ),
             div(
-              style = "padding-top: 25px;",
-              actionButton(
-                ns("open_unit_conversion"),
-                "Convert units",
-                icon = icon("calculator"),
-                class = "btn-warning"
+              style = "flex: 0 0 260px;",
+              selectizeInput(
+                ns("UTC_offset"),
+                "UTC offset (applied to all uploaded data)",
+                choices = input_timezone_choices(),
+                selected = format_utc_offset(0L),
+                multiple = FALSE,
+                width = "100%"
               )
             )
           ),
@@ -148,13 +132,37 @@ addContDataUI <- function(id) {
             "Prevent updates to these data by automatic processes, such as import scripts?",
             choices = c("Yes" = "yes", "No" = "no"),
             inline = TRUE,
-            selected = "no"
+            selected = "yes"
           ),
           tags$div(
             "Note: data visibility is controlled by the timeseries visibility parameters."
           ),
-          uiOutput(ns("multi_upload_note"))
-        ),
+          uiOutput(ns("multi_upload_note")),
+          conditionalPanel(
+            condition = "input.entry_mode == 'manual'",
+            ns = ns,
+            div(
+              actionButton(ns("add_row"), "Add row to end"),
+              actionButton(ns("add_row_above"), "Add row above selection"),
+              actionButton(ns("add_row_below"), "Add row below selection"),
+              actionButton(ns("delete_rows_table"), "Delete selected rows")
+            ),
+            tags$br()
+          ),
+
+          uiOutput(ns("data_tables_ui")),
+          uiOutput(ns("data_table_note")),
+          tags$br(),
+          div(
+            style = "margin-top: 8px;",
+            actionButton(
+              ns("open_unit_conversion"),
+              "Convert units",
+              icon = icon("calculator"),
+              class = "btn-warning"
+            )
+          )
+        ), # End of data entry accordion panel
         # accordion to hold uploaded/added data plots and deletion controls
         accordion_panel(
           id = ns("preview_panel"),
@@ -280,6 +288,21 @@ addContDataUI <- function(id) {
 addContData <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    ensure_background_future_plan <- function() {
+      current_plan <- future::plan()
+      if (!inherits(current_plan, "sequential")) {
+        return(invisible(FALSE))
+      }
+      if (identical(Sys.info()[["sysname"]], "Windows") || interactive()) {
+        future::plan("multisession")
+      } else {
+        future::plan("multicore")
+      }
+      invisible(TRUE)
+    }
+
+    ensure_background_future_plan()
 
     output$banner <- renderUI({
       req(language$language)
@@ -896,8 +919,13 @@ addContData <- function(id, language) {
       nrow(meta) == 1 && identical(meta$timeseries_type_code[[1]], "basic")
     })
 
-    selected_timeseries_units <- reactive({
-      meta <- selected_timeseries_meta()
+    timeseries_units <- function(timeseries_id) {
+      meta <- ts_meta()
+      meta <- meta[
+        meta$timeseries_id == as.integer(timeseries_id),
+        ,
+        drop = FALSE
+      ]
       if (!nrow(meta)) {
         return(NA_character_)
       }
@@ -906,6 +934,11 @@ addContData <- function(id, language) {
         return(NA_character_)
       }
       unit
+    }
+
+    selected_timeseries_units <- reactive({
+      req(timeseries())
+      timeseries_units(timeseries())
     })
 
     selected_units_warning_tag <- function() {
@@ -1237,8 +1270,8 @@ addContData <- function(id, language) {
     upload_validation <- reactiveValues(jobs = NULL)
 
     unit_conversion_state <- reactiveValues(
-      previous_values = NULL,
-      previous_label = NULL
+      previous_values = list(),
+      previous_label = list()
     )
 
     table_render_tick <- reactiveVal(0L)
@@ -1247,13 +1280,12 @@ addContData <- function(id, language) {
     }
 
     observeEvent(timeseries(), {
-      unit_conversion_state$previous_values <- NULL
-      unit_conversion_state$previous_label <- NULL
+      unit_conversion_state$previous_values <- list()
+      unit_conversion_state$previous_label <- list()
     })
 
-    unit_conversion_choices <- reactive({
+    unit_conversion_choices_for_unit <- function(unit) {
       req(moduleData$unit_conversions)
-      unit <- selected_timeseries_units()
       if (is.na(unit)) {
         return(moduleData$unit_conversions[0, , drop = FALSE])
       }
@@ -1263,11 +1295,43 @@ addContData <- function(id, language) {
         ,
         drop = FALSE
       ]
+    }
+
+    active_unit_conversion_timeseries <- reactive({
+      jobs <- upload_review_jobs()
+      if (length(jobs) > 0) {
+        job_ids <- vapply(
+          jobs,
+          function(job) as.integer(job$timeseries_id),
+          integer(1)
+        )
+        selected <- input$data_table_tabset
+        if (isTruthy(selected)) {
+          selected_id <- as.integer(sub("^timeseries_", "", selected[[1]]))
+          if (!is.na(selected_id) && selected_id %in% job_ids) {
+            return(selected_id)
+          }
+        }
+        return(job_ids[[1]])
+      }
+
+      if (!is.null(timeseries())) {
+        return(as.integer(timeseries()))
+      }
+
+      NA_integer_
+    })
+
+    unit_conversion_choices <- reactive({
+      unit_conversion_choices_for_unit(
+        timeseries_units(active_unit_conversion_timeseries())
+      )
     })
 
     unit_conversion_controls <- function() {
       req(timeseries())
-      unit <- selected_timeseries_units()
+      target_id <- active_unit_conversion_timeseries()
+      unit <- timeseries_units(target_id)
       if (is.na(unit)) {
         return(div(
           class = "alert alert-danger",
@@ -1305,7 +1369,7 @@ addContData <- function(id, language) {
           tags$div(
             class = "text-muted small",
             paste0(
-              "Use this if the value column is not already in ",
+              "Use this if the selected value column is not already in ",
               unit,
               ". Only the value column is changed."
             )
@@ -1353,6 +1417,7 @@ addContData <- function(id, language) {
             actionButton(ns("convert_units"), "Convert value column"),
             actionButton(ns("rollback_unit_conversion"), "Roll back conversion")
           ),
+          uiOutput(ns("unit_conversion_preview")),
           uiOutput(ns("unit_conversion_status"))
         )
       )
@@ -1380,33 +1445,151 @@ addContData <- function(id, language) {
       ))
     })
 
+    build_unit_conversion <- function(values, unit) {
+      if (identical(input$unit_conversion_mode, "custom")) {
+        factor <- suppressWarnings(as.numeric(input$custom_unit_factor))
+        if (length(factor) != 1 || is.na(factor) || factor <= 0) {
+          return(list(
+            ok = FALSE,
+            message = "Enter a positive custom conversion factor."
+          ))
+        }
+        return(list(
+          ok = TRUE,
+          values = values * factor,
+          label = paste0("custom factor ", signif(factor, 8), " to ", unit)
+        ))
+      }
+
+      if (!isTruthy(input$unit_conversion_id)) {
+        return(list(
+          ok = FALSE,
+          message = paste0("No database conversion to ", unit, " is selected.")
+        ))
+      }
+      choices_df <- unit_conversion_choices()
+      idx <- match(
+        as.integer(input$unit_conversion_id),
+        choices_df$conversion_id
+      )
+      if (is.na(idx)) {
+        return(list(
+          ok = FALSE,
+          message = paste0("No database conversion to ", unit, " is selected.")
+        ))
+      }
+
+      list(
+        ok = TRUE,
+        values = as.numeric(choices_df$scale_a[[idx]]) *
+          values +
+          as.numeric(choices_df$scale_b[[idx]]),
+        label = paste0(
+          choices_df$from_unit[[idx]],
+          " to ",
+          choices_df$to_unit[[idx]]
+        )
+      )
+    }
+
+    output$unit_conversion_preview <- renderUI({
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
+        return(NULL)
+      }
+      df <- active_job_data(target_id)
+      if (nrow(df) == 0) {
+        return(NULL)
+      }
+
+      values <- suppressWarnings(as.numeric(df$value))
+      if (any(is.na(values))) {
+        return(div(
+          class = "alert alert-warning",
+          style = "padding: 8px; margin-top: 10px;",
+          "Value column must be numeric with no missing values before conversion."
+        ))
+      }
+
+      unit <- timeseries_units(target_id)
+      if (is.na(unit)) {
+        return(NULL)
+      }
+      conversion <- build_unit_conversion(values, unit)
+      if (!isTRUE(conversion$ok)) {
+        return(div(
+          class = "text-muted small",
+          style = "margin-top: 10px;",
+          conversion$message
+        ))
+      }
+
+      row_idx <- seq_len(min(5L, nrow(df)))
+      tags$div(
+        style = "margin-top: 10px;",
+        tags$strong("Converted value preview"),
+        tags$table(
+          class = "table table-sm table-bordered",
+          style = "font-size: 12px; margin-top: 4px;",
+          tags$thead(tags$tr(
+            tags$th("datetime"),
+            tags$th("uploaded value"),
+            tags$th("converted value")
+          )),
+          tags$tbody(lapply(row_idx, function(i) {
+            tags$tr(
+              tags$td(as.character(df$datetime[[i]])),
+              tags$td(as.character(df$value[[i]])),
+              tags$td(signif(conversion$values[[i]], 8))
+            )
+          }))
+        )
+      )
+    })
+
     output$unit_conversion_status <- renderUI({
-      if (is.null(unit_conversion_state$previous_values)) {
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
+        return(NULL)
+      }
+      target_key <- as.character(target_id)
+      label <- unit_conversion_state$previous_label[[target_key]]
+      if (is.null(label)) {
         return(NULL)
       }
 
       div(
         class = "text-muted small",
-        paste("Last conversion:", unit_conversion_state$previous_label)
+        paste("Last conversion for this timeseries:", label)
       )
     })
 
     observeEvent(input$convert_units, {
-      if (!is.null(unit_conversion_state$previous_values)) {
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
         showNotification(
-          "Values have already been converted. Roll back before converting again.",
+          "Select a timeseries before converting units.",
+          type = "error"
+        )
+        return()
+      }
+      target_key <- as.character(target_id)
+      if (!is.null(unit_conversion_state$previous_values[[target_key]])) {
+        showNotification(
+          "Values for this timeseries have already been converted. Roll back before converting again.",
           type = "error",
           duration = 8
         )
         return()
       }
 
-      if (nrow(data$df) == 0) {
+      target_df <- active_job_data(target_id)
+      if (nrow(target_df) == 0) {
         showNotification("No table values to convert.", type = "error")
         return()
       }
 
-      values <- suppressWarnings(as.numeric(data$df$value))
+      values <- suppressWarnings(as.numeric(target_df$value))
       if (any(is.na(values))) {
         showNotification(
           "Value column must be numeric with no missing values before conversion.",
@@ -1416,7 +1599,7 @@ addContData <- function(id, language) {
         return()
       }
 
-      unit <- selected_timeseries_units()
+      unit <- timeseries_units(target_id)
       if (is.na(unit)) {
         showNotification(
           "No database unit is set for the selected timeseries.",
@@ -1426,66 +1609,46 @@ addContData <- function(id, language) {
         return()
       }
 
-      if (identical(input$unit_conversion_mode, "custom")) {
-        factor <- suppressWarnings(as.numeric(input$custom_unit_factor))
-        if (length(factor) != 1 || is.na(factor) || factor <= 0) {
-          showNotification(
-            "Enter a positive custom conversion factor.",
-            type = "error"
-          )
-          return()
-        }
-        new_values <- values * factor
-        label <- paste0("custom factor ", signif(factor, 8), " to ", unit)
-      } else {
-        if (!isTruthy(input$unit_conversion_id)) {
-          showNotification(
-            paste0("No database conversion to ", unit, " is selected."),
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
-        choices_df <- unit_conversion_choices()
-        idx <- match(
-          as.integer(input$unit_conversion_id),
-          choices_df$conversion_id
-        )
-        if (is.na(idx)) {
-          showNotification(
-            paste0("No database conversion to ", unit, " is selected."),
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
-        new_values <- as.numeric(choices_df$scale_a[[idx]]) *
-          values +
-          as.numeric(choices_df$scale_b[[idx]])
-        label <- paste0(
-          choices_df$from_unit[[idx]],
-          " to ",
-          choices_df$to_unit[[idx]]
-        )
+      conversion <- build_unit_conversion(values, unit)
+      if (!isTRUE(conversion$ok)) {
+        showNotification(conversion$message, type = "error", duration = 8)
+        return()
       }
 
-      unit_conversion_state$previous_values <- data$df$value
-      unit_conversion_state$previous_label <- label
-      data$df$value <- new_values
-      refresh_data_table()
+      previous_values <- unit_conversion_state$previous_values
+      previous_labels <- unit_conversion_state$previous_label
+      previous_values[[target_key]] <- target_df$value
+      previous_labels[[target_key]] <- conversion$label
+      unit_conversion_state$previous_values <- previous_values
+      unit_conversion_state$previous_label <- previous_labels
+
+      target_df$value <- conversion$values
+      set_upload_job_data(target_id, target_df)
       showNotification(
-        paste("Converted value column:", label),
+        paste("Converted value column:", conversion$label),
         type = "message"
       )
     })
 
     observeEvent(input$rollback_unit_conversion, {
-      if (is.null(unit_conversion_state$previous_values)) {
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
+        showNotification(
+          "Select a timeseries before rolling back a conversion.",
+          type = "error"
+        )
+        return()
+      }
+      target_key <- as.character(target_id)
+      previous_values <- unit_conversion_state$previous_values[[target_key]]
+      previous_label <- unit_conversion_state$previous_label[[target_key]]
+      if (is.null(previous_values)) {
         showNotification("No unit conversion to roll back.", type = "message")
         return()
       }
 
-      if (length(unit_conversion_state$previous_values) != nrow(data$df)) {
+      target_df <- active_job_data(target_id)
+      if (length(previous_values) != nrow(target_df)) {
         showNotification(
           "Cannot roll back because the table row count has changed.",
           type = "error",
@@ -1494,14 +1657,18 @@ addContData <- function(id, language) {
         return()
       }
 
-      data$df$value <- unit_conversion_state$previous_values
-      refresh_data_table()
+      target_df$value <- previous_values
+      set_upload_job_data(target_id, target_df)
       showNotification(
-        paste("Rolled back conversion:", unit_conversion_state$previous_label),
+        paste("Rolled back conversion:", previous_label),
         type = "message"
       )
-      unit_conversion_state$previous_values <- NULL
-      unit_conversion_state$previous_label <- NULL
+      previous_values_list <- unit_conversion_state$previous_values
+      previous_labels <- unit_conversion_state$previous_label
+      previous_values_list[[target_key]] <- NULL
+      previous_labels[[target_key]] <- NULL
+      unit_conversion_state$previous_values <- previous_values_list
+      unit_conversion_state$previous_label <- previous_labels
     })
 
     uploaded_file_ext <- reactive({
@@ -3603,13 +3770,12 @@ addContData <- function(id, language) {
         }
 
         upload_jobs(jobs)
-        plot_data(list())
-        last_plot_signature(list())
+        clear_all_preview_plots()
         preview_plot_queue(empty_preview_queue())
         plot_generation_status(NULL)
         df_mapped <- jobs[[1]]$data
-        unit_conversion_state$previous_values <- NULL
-        unit_conversion_state$previous_label <- NULL
+        unit_conversion_state$previous_values <- list()
+        unit_conversion_state$previous_label <- list()
         data$df <- prepare_table_data(df_mapped)
         if ("grade" %in% names(df_mapped)) {
           data$df$grade <- as.character(df_mapped$grade)
@@ -4335,7 +4501,8 @@ addContData <- function(id, language) {
       }
     })
 
-    plot_data <- reactiveVal(list())
+    plot_data <- reactiveValues()
+    plot_data_keys <- reactiveVal(character())
     last_plot_signature <- reactiveVal(list())
     plot_generation_status <- reactiveVal(NULL)
     preview_plot_busy <- reactiveVal(FALSE)
@@ -4371,21 +4538,53 @@ addContData <- function(id, language) {
         ))
     }
 
+    plot_key <- function(timeseries_id) {
+      paste0("timeseries_", as.integer(timeseries_id))
+    }
+
+    preview_plot_value <- function(timeseries_id) {
+      plot_data[[plot_key(timeseries_id)]]
+    }
+
+    preview_plot_available <- function(timeseries_id) {
+      plot_key(timeseries_id) %in% plot_data_keys()
+    }
+
+    set_preview_plot <- function(timeseries_id, plot) {
+      key <- plot_key(timeseries_id)
+      plot_data[[key]] <- plot
+      keys <- isolate(plot_data_keys())
+      if (!(key %in% keys)) {
+        plot_data_keys(c(keys, key))
+      }
+      invisible(TRUE)
+    }
+
+    clear_all_preview_plots <- function() {
+      keys <- isolate(plot_data_keys())
+      for (key in keys) {
+        plot_data[[key]] <- NULL
+      }
+      plot_data_keys(character())
+      last_plot_signature(list())
+      invisible(TRUE)
+    }
+
     clear_preview_plot <- function(timeseries_id) {
-      target_key <- as.character(as.integer(timeseries_id))
-      plots <- isolate(plot_data())
+      key <- plot_key(timeseries_id)
       signatures <- isolate(last_plot_signature())
       changed <- FALSE
-      if (!is.null(plots[[target_key]])) {
-        plots[[target_key]] <- NULL
+      if (!is.null(isolate(plot_data[[key]]))) {
+        plot_data[[key]] <- NULL
+        plot_data_keys(setdiff(isolate(plot_data_keys()), key))
         changed <- TRUE
       }
+      target_key <- as.character(as.integer(timeseries_id))
       if (!is.null(signatures[[target_key]])) {
         signatures[[target_key]] <- NULL
         changed <- TRUE
       }
       if (isTRUE(changed)) {
-        plot_data(plots)
         last_plot_signature(signatures)
       }
       invisible(changed)
@@ -4677,7 +4876,7 @@ addContData <- function(id, language) {
               x = ~datetime,
               ymin = ~min,
               ymax = ~max,
-              name = "Historic",
+              name = "Min-Max",
               color = I("#D4ECEF"),
               line = list(width = 0.2),
               hoverinfo = "text",
@@ -4714,7 +4913,7 @@ addContData <- function(id, language) {
             x = ~datetime,
             ymin = ~min,
             ymax = ~max,
-            name = "Historic",
+            name = "Min-Max",
             color = I("#D4ECEF"),
             line = list(width = 0.2),
             hoverinfo = "none",
@@ -5117,7 +5316,6 @@ addContData <- function(id, language) {
         active_preview_plot_button(NULL)
       }
 
-      plots <- plot_data()
       signatures <- last_plot_signature()
       target_key <- as.character(as.integer(result$timeseries_id))
       if (!isTRUE(result$ok)) {
@@ -5127,9 +5325,8 @@ addContData <- function(id, language) {
           duration = 10
         )
       } else {
-        plots[[target_key]] <- result$plot
+        set_preview_plot(result$timeseries_id, result$plot)
         signatures[[target_key]] <- result$signature
-        plot_data(plots)
         last_plot_signature(signatures)
       }
       session$onFlushed(
@@ -5164,9 +5361,7 @@ addContData <- function(id, language) {
       }
 
       target_id <- as.integer(job$timeseries_id)
-      target_key <- as.character(target_id)
-      plots <- plot_data()
-      plotted <- !is.null(plots[[target_key]])
+      plotted <- preview_plot_available(target_id)
       stale <- preview_plot_stale(target_id)
       message <- if (!plotted) {
         "Click Generate plot to create this preview."
@@ -5218,7 +5413,9 @@ addContData <- function(id, language) {
       div(
         class = "well",
         style = "padding: 10px; margin-top: 10px;",
-        tags$strong("Delete rows from this plotted timeseries"),
+        tags$strong(
+          "Delete rows from this plotted timeseries. This prevents rows from being uploaded to the database, so use with caution and only when there is absolutely no foreseable use for the data such as pre/post deployment data. You can also apply a delete region *correction* to suppress data without deleting it, or grade it as unusable."
+        ),
         tags$div(
           class = "text-muted small",
           paste("Cutoff datetime uses", tz_name, "to match the plot.")
@@ -5372,7 +5569,7 @@ addContData <- function(id, language) {
           tsid <- as.integer(job$timeseries_id)
           output_id <- target_output_id("data_preview", tsid)
           output[[output_id]] <- plotly::renderPlotly({
-            plot_data()[[as.character(tsid)]]
+            preview_plot_value(tsid)
           })
         })
       }
@@ -5381,7 +5578,7 @@ addContData <- function(id, language) {
     output$data_preview <- plotly::renderPlotly({
       target_id <- active_preview_timeseries()
       req(target_id)
-      plot_data()[[as.character(as.integer(target_id))]]
+      preview_plot_value(target_id)
     })
 
     current_upload_jobs <- function() {
@@ -5599,16 +5796,15 @@ addContData <- function(id, language) {
       data$parsed_value <- NULL
       upload_jobs(NULL)
       upload_validation$jobs <- NULL
-      unit_conversion_state$previous_values <- NULL
-      unit_conversion_state$previous_label <- NULL
+      unit_conversion_state$previous_values <- list()
+      unit_conversion_state$previous_label <- list()
       class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
       class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
       class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
       target_class_ranges$grade <- list()
       target_class_ranges$approval <- list()
       target_class_ranges$qualifier <- list()
-      plot_data(list())
-      last_plot_signature(list())
+      clear_all_preview_plots()
       plot_generation_status(NULL)
       preview_plot_busy(FALSE)
       active_preview_plot_button(NULL)

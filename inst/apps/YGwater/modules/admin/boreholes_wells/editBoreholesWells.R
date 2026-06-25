@@ -28,10 +28,22 @@ editBoreholesWellsUI <- function(id) {
         numericInput(ns("latitude"), "Latitude", value = NA_real_),
         numericInput(ns("longitude"), "Longitude", value = NA_real_),
         numericInput(ns("depth_m"), "Borehole depth (m)", value = NA_real_),
-        numericInput(
-          ns("depth_to_bedrock_m"),
-          "Depth to bedrock (m)",
-          value = NA_real_
+        radioButtons(
+          ns("bedrock_reached"),
+          "Bedrock reached?",
+          choices = list("Yes" = "yes", "No" = "no", "Unknown" = "unknown"),
+          selected = "unknown",
+          inline = TRUE
+        ),
+        conditionalPanel(
+          condition = "input.bedrock_reached == 'yes'",
+          ns = ns,
+          numericInput(
+            ns("depth_to_bedrock_m"),
+            "Depth to bedrock (m)",
+            value = NA_real_,
+            min = 0
+          )
         ),
         selectizeInput(
           ns("drilled_by"),
@@ -193,6 +205,26 @@ editBoreholesWells <- function(id, language) {
       identical(x, TRUE)
     }
 
+    format_bedrock_reached_input <- function(x) {
+      if (is.null(x) || length(x) == 0 || is.na(x[1])) {
+        return("unknown")
+      }
+      if (isTRUE(x[1])) {
+        return("yes")
+      }
+      "no"
+    }
+
+    parse_bedrock_reached <- function(x) {
+      if (identical(x, "yes")) {
+        return(TRUE)
+      }
+      if (identical(x, "no")) {
+        return(FALSE)
+      }
+      NA
+    }
+
     load_data <- function() {
       moduleData$records <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -202,6 +234,7 @@ editBoreholesWells <- function(id, language) {
                 b.longitude,
                 b.completion_date,
                 b.depth_m,
+                b.bedrock_reached,
                 b.depth_to_bedrock_m,
                 b.drilled_by,
                 d.name AS driller_name,
@@ -308,6 +341,11 @@ editBoreholesWells <- function(id, language) {
       updateNumericInput(session, "latitude", value = rec$latitude)
       updateNumericInput(session, "longitude", value = rec$longitude)
       updateNumericInput(session, "depth_m", value = rec$depth_m)
+      updateRadioButtons(
+        session,
+        "bedrock_reached",
+        selected = format_bedrock_reached_input(rec$bedrock_reached)
+      )
       updateNumericInput(
         session,
         "depth_to_bedrock_m",
@@ -387,6 +425,7 @@ editBoreholesWells <- function(id, language) {
       updateNumericInput(session, "latitude", value = NA_real_)
       updateNumericInput(session, "longitude", value = NA_real_)
       updateNumericInput(session, "depth_m", value = NA_real_)
+      updateRadioButtons(session, "bedrock_reached", selected = "unknown")
       updateNumericInput(session, "depth_to_bedrock_m", value = NA_real_)
       updateSelectizeInput(session, "drilled_by", selected = "")
       updateTextAreaInput(session, "borehole_notes", value = "")
@@ -442,6 +481,18 @@ editBoreholesWells <- function(id, language) {
         permafrost_bot <- NULL
       }
 
+      bedrock_reached <- parse_bedrock_reached(input$bedrock_reached)
+      depth_to_bedrock_m <- maybe_num(input$depth_to_bedrock_m)
+      if (!isTRUE(bedrock_reached)) {
+        depth_to_bedrock_m <- NA_real_
+      } else if (is.na(depth_to_bedrock_m)) {
+        showNotification(
+          "Depth to bedrock is required when bedrock was reached.",
+          type = "error"
+        )
+        return()
+      }
+
       completion_date <- if (is.null(input$completion_date)) {
         NA
       } else if (length(input$completion_date) == 0) {
@@ -466,18 +517,20 @@ editBoreholesWells <- function(id, language) {
                  latitude = $3,
                  longitude = $4,
                  depth_m = $5,
-                 depth_to_bedrock_m = $6,
-                 drilled_by = $7,
-                 notes = $8,
-                 share_with = $9::text[]
-             WHERE borehole_id = $10;",
+                 bedrock_reached = $6,
+                 depth_to_bedrock_m = $7,
+                 drilled_by = $8,
+                 notes = $9,
+                 share_with = $10::text[]
+             WHERE borehole_id = $11;",
             params = list(
               trimws(input$borehole_name),
               completion_date,
               maybe_num(input$latitude),
               maybe_num(input$longitude),
               maybe_num(input$depth_m),
-              maybe_num(input$depth_to_bedrock_m),
+              bedrock_reached,
+              depth_to_bedrock_m,
               suppressWarnings(as.integer(na_if_blank(input$drilled_by))),
               na_if_blank(input$borehole_notes),
               borehole_share,
@@ -620,6 +673,7 @@ editBoreholesWells <- function(id, language) {
         "latitude",
         "longitude",
         "depth_m",
+        "bedrock_reached",
         "depth_to_bedrock_m",
         "permafrost_present",
         "permafrost_top",
