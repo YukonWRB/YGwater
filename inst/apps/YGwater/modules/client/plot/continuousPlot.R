@@ -1,3 +1,5 @@
+# HEADS UP: this module is now deprecated in favor of 'continuousPlotAdaptive.R'. It is kept here just in case something doesn't work as expected in the new module. It will be removed in future and should no longer be worked on or updated.
+
 contPlotUI <- function(id) {
   ns <- NS(id)
   tagList(
