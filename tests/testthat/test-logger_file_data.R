@@ -46,7 +46,10 @@ test_that("logger file reader converts Solinst XLE data", {
   )
 
   expect_s3_class(res, "data.frame")
-  expect_named(res, c("datetime", "Level (m)", temperature_col, conductivity_col))
+  expect_named(
+    res,
+    c("datetime", "Level (m)", temperature_col, conductivity_col)
+  )
   expect_utc_datetime(res$datetime)
   expect_false(any(is.na(res$`Level (m)`)))
   expect_false(any(is.na(res[[temperature_col]])))
@@ -62,8 +65,7 @@ test_that("logger file reader converts VuSitu HTML data with UTC offset", {
   temperature_col <- "Temperature (\u00B0C)"
   html_file <- logger_fixture(
     paste0(
-      "VuSitu_Log_2025-08-25_18-00-00_YOWN-1609_Yukon_River_CG_",
-      "Log_2025-08-25_YOWN-1609"
+      "VuSitu_test"
     ),
     "html"
   )
@@ -72,12 +74,15 @@ test_that("logger file reader converts VuSitu HTML data with UTC offset", {
 
   expect_s3_class(res, "data.frame")
   expect_equal(nrow(res), 4923L)
-  expect_named(res, c(
-    "datetime",
-    "Pressure (m)",
-    temperature_col,
-    "Depth (m)"
-  ))
+  expect_named(
+    res,
+    c(
+      "datetime",
+      "Pressure (m)",
+      temperature_col,
+      "Depth (m)"
+    )
+  )
   expect_utc_datetime(res$datetime)
   expect_identical(
     format(res$datetime[[1L]], "%Y-%m-%d %H:%M:%S", tz = "UTC"),
@@ -169,12 +174,15 @@ test_that("logger file reader converts U24 HOBO low/full/temp data", {
   res <- read_logger_file_data(logger_fixture(stem, "hobo"))
 
   expect_s3_class(res, "data.frame")
-  expect_named(res, c(
-    "datetime",
-    low_col,
-    full_col,
-    temperature_col
-  ))
+  expect_named(
+    res,
+    c(
+      "datetime",
+      low_col,
+      full_col,
+      temperature_col
+    )
+  )
   expect_utc_datetime(res$datetime)
   expect_equal(nrow(res), nrow(csv))
   expect_rmse_below(
@@ -203,11 +211,14 @@ test_that("logger file reader converts U24 HOBO full/temp data", {
   res <- read_logger_file_data(logger_fixture(stem, "hobo"))
 
   expect_s3_class(res, "data.frame")
-  expect_named(res, c(
-    "datetime",
-    full_col,
-    temperature_col
-  ))
+  expect_named(
+    res,
+    c(
+      "datetime",
+      full_col,
+      temperature_col
+    )
+  )
   expect_utc_datetime(res$datetime)
   expect_equal(nrow(res), nrow(csv))
   expect_rmse_below(
