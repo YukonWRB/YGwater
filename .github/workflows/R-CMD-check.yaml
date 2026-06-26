@@ -39,8 +39,11 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::rcmdcheck, any::R.utils
+          extra-packages: |
+            any::rcmdcheck
+            any::R.utils
           needs: check
+          cache-version: 1
 
       - name: Set up PostgreSQL 18
         uses: ikalnytskyi/action-setup-postgres@v8
@@ -65,10 +68,6 @@ jobs:
       - name: Decompress CI seed database (Uses R for cross-platform functionality)
         run: |
           Rscript -e "R.utils::gunzip('tests/testthat/fixtures/test_db.sql.gz')"
-
-      - name: Install AquaCache package from GitHub
-        run: |
-          Rscript -e "remotes::install_github('YukonWRB/AquaCache')"
 
       - name: Load test database
         # env:
