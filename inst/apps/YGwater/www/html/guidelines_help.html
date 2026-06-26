@@ -44,6 +44,14 @@
   </ul>
 
   <h2>Useful Database Helpers</h2>
+  <p>
+    When a SQL scalar uses sample chemistry, list the same chemistry rows under
+    Rule inputs first, then use the Insert input button to add those helper
+    calls to the SQL editor. The admin form checks
+    <code>discrete.get_sample_val()</code> and
+    <code>criteria.get_sample_hardness()</code> calls against those rows before
+    saving.
+  </p>
   <table>
     <thead>
       <tr><th>Helper</th><th>Use</th><th>Example</th></tr>
