@@ -1657,7 +1657,6 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
-    ui_loaded$contPlotAdaptive <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -1748,7 +1747,6 @@ app_server <- function(input, output, session) {
     "home",
     "discPlot",
     "contPlot",
-    "contPlotAdaptive",
     "mapLocs",
     "mapParams",
     "mapRaster",
@@ -3084,74 +3082,22 @@ app_server <- function(input, output, session) {
               c(
                 "criteria.guidelines",
                 "criteria.guideline_value_rules",
-                "criteria.guideline_rule_coefficients",
                 "criteria.guideline_rule_inputs",
+                "criteria.guideline_rule_coefficients",
+                "criteria.guideline_narrative_values",
                 "criteria.guidelines_fractions",
                 "criteria.guidelines_media_types",
+                "criteria.guideline_locations",
                 "criteria.guideline_publishers",
                 "criteria.guideline_series",
-                "criteria.guideline_comparison_operators",
                 "criteria.guideline_jurisdictions",
                 "criteria.guideline_protection_goals",
                 "criteria.guideline_exposure_durations",
-                "criteria.guideline_averaging_periods",
-                "public.parameters",
-                "public.matrix_states",
-                "public.media_types",
-                "discrete.sample_fractions",
-                "discrete.result_speciations",
-                "discrete.samples",
-                "discrete.results"
+                "criteria.guideline_averaging_periods"
               ),
-              list(
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT"
-                ),
-                c(
-                  "SELECT",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "SELECT",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("INSERT"),
-                c("INSERT")
+              c(
+                rep(list(c("DELETE", "INSERT", "UPDATE")), 8),
+                rep(list(c("INSERT", "UPDATE")), 6)
               )
             ),
             addDocs = has_priv(
@@ -3719,25 +3665,11 @@ app_server <- function(input, output, session) {
     if (input$navbar == "contPlot") {
       # This is reached through a nav_menu
       if (!ui_loaded$contPlot) {
-        output$plotContinuous_ui <- renderUI(contPlotUI("contPlot"))
+        output$plotContinuous_ui <- renderUI(contPlotAdaptiveUI("contPlot"))
         ui_loaded$contPlot <- TRUE
         # Call the server
-        contPlot(
-          "contPlot",
-          language = languageSelection,
-          windowDims,
-          inputs = moduleOutputs$mapLocs
-        )
-      }
-    }
-    if (input$navbar == "contPlotAdaptive") {
-      if (!ui_loaded$contPlotAdaptive) {
-        output$plotContinuousAdaptive_ui <- renderUI(
-          contPlotAdaptiveUI("contPlotAdaptive")
-        )
-        ui_loaded$contPlotAdaptive <- TRUE
         contPlotAdaptive(
-          "contPlotAdaptive",
+          "contPlot",
           language = languageSelection,
           windowDims = windowDims,
           inputs = moduleOutputs$mapLocs

@@ -415,7 +415,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         ns = ns,
         lang = language$language,
         con = session$userData$AquaCache,
-        module_id = "contPlotAdaptive"
+        module_id = "contPlot"
       )
     })
 
@@ -2275,7 +2275,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       render_key = NULL,
       plot_ready = FALSE,
       last_trace_count = 0L,
-      ignore_relayout_key = NULL,
+      ignore_relayout_events = 0L,
+      ignore_relayout_until = NULL,
       data = NULL,
       meta = NULL,
       payload = NULL
@@ -2296,22 +2297,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
     adaptive_target_bins <- reactive({
       YGwater:::viewport_ribbon_target_bins(width_px = adaptive_plot_width_px())
     })
-
-    relayout_key <- function(relayout) {
-      if (is.null(relayout) || length(relayout) == 0L) {
-        return(NULL)
-      }
-      paste(
-        names(relayout),
-        vapply(
-          relayout,
-          function(value) paste(as.character(value), collapse = ","),
-          character(1)
-        ),
-        sep = "=",
-        collapse = "|"
-      )
-    }
 
     current_legend_orientation <- reactive({
       if (!is.null(windowDims()) && windowDims()$width <= windowDims()$height) {
@@ -2391,20 +2376,28 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       if (is.null(xaxis_names) || length(xaxis_names) == 0) {
         xaxis_names <- "xaxis"
       }
-      relayout_args <- stats::setNames(
+      relayout_args <- do.call(
+        c,
         lapply(xaxis_names, function(axis_name) {
           if (is.null(xlim)) {
-            list(autorange = TRUE)
-          } else {
-            list(range = xlim, autorange = FALSE)
+            return(stats::setNames(
+              list(TRUE),
+              paste0(axis_name, ".autorange")
+            ))
           }
-        }),
-        xaxis_names
+
+          stats::setNames(
+            list(xlim[[1]], xlim[[2]], FALSE),
+            paste0(axis_name, c(".range[0]", ".range[1]", ".autorange"))
+          )
+        })
       )
       do.call(
         plotly::plotlyProxyInvoke,
         c(list(p = proxy, method = "relayout"), relayout_args)
       )
+      adaptiveState$ignore_relayout_events <- 1L
+      adaptiveState$ignore_relayout_until <- Sys.time() + 2
     }
 
     # ExtendedTask that does the heavy plotting work
@@ -4040,7 +4033,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$render_key <- NULL
       adaptiveState$plot_ready <- FALSE
       adaptiveState$last_trace_count <- 0L
-      adaptiveState$ignore_relayout_key <- NULL
+      adaptiveState$ignore_relayout_events <- 0L
+      adaptiveState$ignore_relayout_until <- NULL
       adaptiveState$data <- NULL
       adaptiveState$meta <- NULL
       adaptiveState$payload <- NULL
@@ -4080,7 +4074,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         adaptiveState$render_key <- NULL
         adaptiveState$plot_ready <- FALSE
         adaptiveState$last_trace_count <- 0L
-        adaptiveState$ignore_relayout_key <- NULL
+        adaptiveState$ignore_relayout_events <- 0L
+        adaptiveState$ignore_relayout_until <- NULL
         adaptiveState$data <- result$data
         adaptiveState$meta <- result$adaptive$meta
         adaptiveState$payload <- result$adaptive$payload
@@ -4097,7 +4092,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         adaptiveState$render_key <- NULL
         adaptiveState$plot_ready <- FALSE
         adaptiveState$last_trace_count <- 0L
-        adaptiveState$ignore_relayout_key <- NULL
+        adaptiveState$ignore_relayout_events <- 0L
+        adaptiveState$ignore_relayout_until <- NULL
         adaptiveState$data <- NULL
         adaptiveState$meta <- NULL
         adaptiveState$payload <- NULL
@@ -4337,20 +4333,28 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           return()
         }
         relayout <- relayout_event()
-        event_key <- relayout_key(relayout)
-        if (
-          !is.null(event_key) &&
-            identical(event_key, adaptiveState$ignore_relayout_key)
-        ) {
-          adaptiveState$ignore_relayout_key <- NULL
-          return()
-        }
         has_xaxis_change <- any(grepl(
           "^xaxis[0-9]*\\.(range\\[[01]\\]|autorange)$",
           names(relayout)
         ))
         if (!has_xaxis_change) {
           return()
+        }
+        if (adaptiveState$ignore_relayout_events > 0L) {
+          if (
+            is.null(adaptiveState$ignore_relayout_until) ||
+              Sys.time() <= adaptiveState$ignore_relayout_until
+          ) {
+            adaptiveState$ignore_relayout_events <-
+              adaptiveState$ignore_relayout_events - 1L
+            if (adaptiveState$ignore_relayout_events == 0L) {
+              adaptiveState$ignore_relayout_until <- NULL
+            }
+            return()
+          }
+
+          adaptiveState$ignore_relayout_events <- 0L
+          adaptiveState$ignore_relayout_until <- NULL
         }
         xlim <- YGwater:::viewport_ribbon_relayout_xlim(relayout, tz = "UTC")
         render_adaptive_plot(xlim = xlim)
