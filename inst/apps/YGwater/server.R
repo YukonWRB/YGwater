@@ -98,7 +98,7 @@ app_server <- function(input, output, session) {
     "instrumentMaintenance",
     "addContData",
     "imputeMissing",
-    "grades_approvals_qualifiers",
+    "continuousDataReview",
     "addDiscData",
     "addSamples",
     "addGuidelines",
@@ -1028,7 +1028,7 @@ app_server <- function(input, output, session) {
         any(
           session$userData$admin_privs$addContData,
           session$userData$admin_privs$imputeMissing,
-          session$userData$admin_privs$grades_approvals_qualifiers,
+          session$userData$admin_privs$continuousDataReview,
           session$userData$admin_privs$addTimeseries,
           session$userData$admin_privs$addCompoundTimeseries,
           session$userData$admin_privs$syncCont
@@ -1041,8 +1041,8 @@ app_server <- function(input, output, session) {
         if (!isTRUE(session$userData$admin_privs$imputeMissing)) {
           nav_hide(id = "navbar", target = "imputeMissing")
         }
-        if (!isTRUE(session$userData$admin_privs$grades_approvals_qualifiers)) {
-          nav_hide(id = "navbar", target = "grades_approvals_qualifiers")
+        if (!isTRUE(session$userData$admin_privs$continuousDataReview)) {
+          nav_hide(id = "navbar", target = "continuousDataReview")
         }
         if (!isTRUE(session$userData$admin_privs$addTimeseries)) {
           nav_hide(id = "navbar", target = "addTimeseries")
@@ -1657,7 +1657,6 @@ app_server <- function(input, output, session) {
     ui_loaded$home <- FALSE
     ui_loaded$discPlot <- FALSE
     ui_loaded$contPlot <- FALSE
-    ui_loaded$contPlotAdaptive <- FALSE
     ui_loaded$paramValuesMap <- FALSE
     ui_loaded$rasterValuesMap <- FALSE
     ui_loaded$monitoringLocationsMap <- FALSE
@@ -1690,7 +1689,7 @@ app_server <- function(input, output, session) {
 
     ui_loaded$addContData <- FALSE
     ui_loaded$imputeMissing <- FALSE
-    ui_loaded$grades_approvals_qualifiers <- FALSE
+    ui_loaded$continuousDataReview <- FALSE
     ui_loaded$syncCont <- FALSE
     ui_loaded$addTimeseries <- FALSE
     ui_loaded$addCompoundTimeseries <- FALSE
@@ -1748,7 +1747,6 @@ app_server <- function(input, output, session) {
     "home",
     "discPlot",
     "contPlot",
-    "contPlotAdaptive",
     "mapLocs",
     "mapParams",
     "mapRaster",
@@ -1781,7 +1779,7 @@ app_server <- function(input, output, session) {
     "instrumentMaintenance",
     "addContData",
     "imputeMissing",
-    "grades_approvals_qualifiers",
+    "continuousDataReview",
     "addDiscData",
     "addSamples",
     "addSampleSeries",
@@ -2593,7 +2591,7 @@ app_server <- function(input, output, session) {
           FROM pg_class c
           JOIN pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p')
-            AND n.nspname IN ('public','continuous','discrete','boreholes','files','application','instruments', 'field')
+            AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field')
         )
         SELECT t.schema,
                t.table_name,
@@ -2938,7 +2936,7 @@ app_server <- function(input, output, session) {
               tbl = session$userData$table_privs,
               "continuous.measurements_continuous"
             ),
-            grades_approvals_qualifiers = any(
+            continuousDataReview = any(
               has_priv(
                 tbl = session$userData$table_privs,
                 "continuous.grades"
@@ -3082,18 +3080,24 @@ app_server <- function(input, output, session) {
             addGuidelines = has_priv(
               tbl = session$userData$table_privs,
               c(
-                "discrete.guidelines",
-                "discrete.samples",
-                "discrete.results"
+                "criteria.guidelines",
+                "criteria.guideline_value_rules",
+                "criteria.guideline_rule_inputs",
+                "criteria.guideline_rule_coefficients",
+                "criteria.guideline_narrative_values",
+                "criteria.guidelines_fractions",
+                "criteria.guidelines_media_types",
+                "criteria.guideline_locations",
+                "criteria.guideline_publishers",
+                "criteria.guideline_series",
+                "criteria.guideline_jurisdictions",
+                "criteria.guideline_protection_goals",
+                "criteria.guideline_exposure_durations",
+                "criteria.guideline_averaging_periods"
               ),
-              list(
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT"),
-                c("INSERT")
+              c(
+                rep(list(c("DELETE", "INSERT", "UPDATE")), 8),
+                rep(list(c("INSERT", "UPDATE")), 6)
               )
             ),
             addDocs = has_priv(
@@ -3661,25 +3665,11 @@ app_server <- function(input, output, session) {
     if (input$navbar == "contPlot") {
       # This is reached through a nav_menu
       if (!ui_loaded$contPlot) {
-        output$plotContinuous_ui <- renderUI(contPlotUI("contPlot"))
+        output$plotContinuous_ui <- renderUI(contPlotAdaptiveUI("contPlot"))
         ui_loaded$contPlot <- TRUE
         # Call the server
-        contPlot(
-          "contPlot",
-          language = languageSelection,
-          windowDims,
-          inputs = moduleOutputs$mapLocs
-        )
-      }
-    }
-    if (input$navbar == "contPlotAdaptive") {
-      if (!ui_loaded$contPlotAdaptive) {
-        output$plotContinuousAdaptive_ui <- renderUI(
-          contPlotAdaptiveUI("contPlotAdaptive")
-        )
-        ui_loaded$contPlotAdaptive <- TRUE
         contPlotAdaptive(
-          "contPlotAdaptive",
+          "contPlot",
           language = languageSelection,
           windowDims = windowDims,
           inputs = moduleOutputs$mapLocs
@@ -4038,14 +4028,14 @@ app_server <- function(input, output, session) {
         imputeMissing("imputeMissing", language = languageSelection) # Call the server
       }
     }
-    if (input$navbar == "grades_approvals_qualifiers") {
-      if (!ui_loaded$grades_approvals_qualifiers) {
-        output$grades_approvals_qualifiers_ui <- renderUI(continuousDataReviewUI(
-          "grades_approvals_qualifiers"
+    if (input$navbar == "continuousDataReview") {
+      if (!ui_loaded$continuousDataReview) {
+        output$continuousDataReview_ui <- renderUI(continuousDataReviewUI(
+          "continuousDataReview"
         )) # Render the UI
-        ui_loaded$grades_approvals_qualifiers <- TRUE
+        ui_loaded$continuousDataReview <- TRUE
         continuousDataReview(
-          "grades_approvals_qualifiers",
+          "continuousDataReview",
           language = languageSelection
         ) # Call the server
       }

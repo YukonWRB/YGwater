@@ -49,9 +49,295 @@ continuous_trace_uses_corrected_source <- function(
 #' @param stats_period One of "full" or "30yr".
 #' @return A normalized period string.
 #' @noRd
+#' @keywords internal
 normalize_daily_stats_period <- function(stats_period) {
   stats_period <- match.arg(stats_period, c("full", "30yr"))
   stats_period
+}
+
+#' Resolve the historic-statistics window shown in plot-data exports
+#' @param stats_period One of "full" or "30yr".
+#' @param trace_data Exported trace data with a datetime column.
+#' @param range_data Exported range data with a datetime column.
+#' @param timeseries_start Full record start datetime.
+#' @param timeseries_end Full record end datetime.
+#' @return A list with formatted start and end values.
+#' @noRd
+#' @keywords internal
+historic_stats_export_window <- function(
+  stats_period = "full",
+  trace_data = NULL,
+  range_data = NULL,
+  timeseries_start = NULL,
+  timeseries_end = NULL
+) {
+  stats_period <- normalize_daily_stats_period(stats_period)
+  na_posix <- as.POSIXct(NA_real_, origin = "1970-01-01", tz = "UTC")
+
+  as_utc_posix <- function(x) {
+    if (is.null(x) || length(x) == 0) {
+      return(na_posix)
+    }
+    x <- x[!is.na(x)]
+    if (length(x) == 0) {
+      return(na_posix)
+    }
+    out <- suppressWarnings(as.POSIXct(x, tz = "UTC"))
+    attr(out, "tzone") <- "UTC"
+    out[!is.na(out)]
+  }
+
+  min_datetime <- function(x) {
+    x <- as_utc_posix(x)
+    if (length(x) == 0 || all(is.na(x))) {
+      return(na_posix)
+    }
+    min(x)
+  }
+
+  max_datetime <- function(x) {
+    x <- as_utc_posix(x)
+    if (length(x) == 0 || all(is.na(x))) {
+      return(na_posix)
+    }
+    max(x)
+  }
+
+  full_start <- min_datetime(timeseries_start)
+  full_end <- max_datetime(timeseries_end)
+  export_start <- min_datetime(trace_data$datetime)
+  export_end <- max_datetime(trace_data$datetime)
+
+  if (is.data.frame(range_data) && "datetime" %in% names(range_data)) {
+    range_start <- min_datetime(range_data$datetime)
+    range_end <- max_datetime(range_data$datetime)
+    if (!is.na(range_start)) {
+      export_start <- range_start
+    }
+    if (!is.na(range_end)) {
+      export_end <- range_end
+    }
+  }
+
+  if (is.na(full_start)) {
+    full_start <- export_start
+  }
+  if (is.na(full_end)) {
+    full_end <- export_end
+  }
+
+  stats_start <- full_start
+  stats_end <- full_end
+  if (identical(stats_period, "30yr")) {
+    stats_start <- if (is.na(export_start)) {
+      full_start
+    } else {
+      lubridate::add_with_rollback(export_start, -lubridate::years(30))
+    }
+    if (!is.na(full_start) && !is.na(stats_start) && stats_start < full_start) {
+      stats_start <- full_start
+    }
+
+    stats_end <- export_end
+    if (!is.na(full_end) && !is.na(stats_end) && stats_end > full_end) {
+      stats_end <- full_end
+    }
+  }
+
+  start_text <- if (is.na(stats_start)) {
+    NA_character_
+  } else {
+    format(stats_start, "%Y-%m-%d %H:%M")
+  }
+  end_text <- if (is.na(stats_end)) {
+    NA_character_
+  } else {
+    format(stats_end, "%Y-%m-%d %H:%M")
+  }
+
+  list(
+    start = start_text,
+    end = end_text,
+    start_year = if (is.na(stats_start)) {
+      NA_character_
+    } else {
+      format(stats_start, "%Y")
+    },
+    end_year = if (is.na(stats_end)) {
+      NA_character_
+    } else {
+      format(stats_end, "%Y")
+    }
+  )
+}
+
+#' Prepare historic-range data for plot-data exports
+#' @param range_data Plot range data returned by continuous plotting helpers.
+#' @param units Unit label for exported historic-stat columns.
+#' @return A data frame ready for XLSX export, or NULL when no range exists.
+#' @noRd
+#' @keywords internal
+historic_range_data_for_export <- function(range_data, units) {
+  expected_cols <- c("datetime", "min", "max", "q75", "q25")
+  if (
+    !is.data.frame(range_data) ||
+      nrow(range_data) == 0L ||
+      !all(expected_cols %in% names(range_data))
+  ) {
+    return(NULL)
+  }
+
+  has_complete_stats <- Reduce(
+    `&`,
+    lapply(range_data[c("min", "max", "q75", "q25")], function(x) !is.na(x))
+  )
+  if (!any(has_complete_stats)) {
+    return(NULL)
+  }
+
+  range_data <- data.table::as.data.table(range_data)[, ..expected_cols]
+  data.table::setnames(
+    range_data,
+    expected_cols,
+    c(
+      "datetime_UTC",
+      paste0("historic_min_", units),
+      paste0("historic_max_", units),
+      paste0("historic_Q75_", units),
+      paste0("historic_Q25_", units)
+    )
+  )
+  as.data.frame(range_data)
+}
+
+#' Build the historic-statistics caption used below plot legends
+#' @param stats_period One of "full" or "30yr".
+#' @param plot_data Plot data returned by continuous plotting helpers.
+#' @param timeseries_ids Timeseries IDs included in the plot.
+#' @param timeseries_table Timeseries metadata with start/end datetimes.
+#' @param lang Plot language.
+#' @return Caption text, or NULL when no usable year range is available.
+#' @noRd
+#' @keywords internal
+historic_stats_caption_for_plot_data <- function(
+  stats_period = "full",
+  plot_data = NULL,
+  timeseries_ids = NULL,
+  timeseries_table = NULL,
+  lang = "en"
+) {
+  if (is.null(timeseries_ids) || length(timeseries_ids) == 0) {
+    return(NULL)
+  }
+  if (
+    is.null(timeseries_table) || !"timeseries_id" %in% names(timeseries_table)
+  ) {
+    return(NULL)
+  }
+
+  plot_data_for_id <- function(index, timeseries_id) {
+    if (
+      is.list(plot_data) &&
+        all(c("trace_data", "range_data") %in% names(plot_data))
+    ) {
+      return(plot_data)
+    }
+    if (!is.list(plot_data) || length(plot_data) == 0) {
+      return(list(trace_data = NULL, range_data = NULL))
+    }
+
+    plot_data_names <- names(plot_data)
+    if (
+      !is.null(plot_data_names) &&
+        as.character(timeseries_id) %in% plot_data_names
+    ) {
+      return(plot_data[[as.character(timeseries_id)]])
+    }
+    if (length(plot_data) >= index) {
+      return(plot_data[[index]])
+    }
+    list(trace_data = NULL, range_data = NULL)
+  }
+
+  windows <- lapply(seq_along(timeseries_ids), function(i) {
+    timeseries_id <- timeseries_ids[[i]]
+    row_index <- match(
+      as.character(timeseries_id),
+      as.character(timeseries_table[["timeseries_id"]])
+    )
+    if (is.na(row_index)) {
+      return(NULL)
+    }
+
+    item_data <- plot_data_for_id(i, timeseries_id)
+    historic_stats_export_window(
+      stats_period = stats_period,
+      trace_data = item_data$trace_data,
+      range_data = item_data$range_data,
+      timeseries_start = timeseries_table[["start_datetime"]][[row_index]],
+      timeseries_end = timeseries_table[["end_datetime"]][[row_index]]
+    )
+  })
+  windows <- Filter(Negate(is.null), windows)
+  if (length(windows) == 0) {
+    return(NULL)
+  }
+
+  start_years <- suppressWarnings(as.integer(vapply(
+    windows,
+    function(window) window$start_year,
+    character(1)
+  )))
+  end_years <- suppressWarnings(as.integer(vapply(
+    windows,
+    function(window) window$end_year,
+    character(1)
+  )))
+  start_years <- start_years[!is.na(start_years)]
+  end_years <- end_years[!is.na(end_years)]
+  if (length(start_years) == 0 || length(end_years) == 0) {
+    return(NULL)
+  }
+
+  start_year <- min(start_years)
+  end_year <- max(end_years)
+  varies <- length(unique(start_years)) > 1 || length(unique(end_years)) > 1
+
+  if (identical(lang, "fr")) {
+    caption <- if (start_year == end_year) {
+      sprintf(
+        "Plage historique calcul\u00E9e avec les donn\u00E9es de %s.",
+        start_year
+      )
+    } else {
+      sprintf(
+        "Plage historique calcul\u00E9e avec les donn\u00E9es de %s \u00E0 %s.",
+        start_year,
+        end_year
+      )
+    }
+    if (isTRUE(varies)) {
+      caption <- paste(
+        caption,
+        "La plage varie selon la s\u00E9rie chronologique."
+      )
+    }
+    return(caption)
+  }
+
+  caption <- if (start_year == end_year) {
+    sprintf("Historic range calculated with data from %s.", start_year)
+  } else {
+    sprintf(
+      "Historic range calculated with data from %s to %s.",
+      start_year,
+      end_year
+    )
+  }
+  if (isTRUE(varies)) {
+    caption <- paste(caption, "Range varies by timeseries.")
+  }
+  caption
 }
 
 #' Build stable daily-statistics SELECT expressions
@@ -61,6 +347,7 @@ normalize_daily_stats_period <- function(stats_period) {
 #' @param table_alias Optional table alias to prefix column references.
 #' @return A character vector of SQL SELECT expressions.
 #' @noRd
+#' @keywords internal
 daily_stats_select_sql <- function(
   con,
   stats_period = "full",
@@ -203,6 +490,7 @@ format_as_of_title <- function(as_of, tzone, lang = "en") {
 #' @param as_of An optional datetime (POSIXct, character, or Date) to fetch data as of a specific point in time, which will override the use_corrected_source parameter if provided.
 #' @return A data.table containing the hourly aggregated trace data, with columns for datetime, value, and optionally value_raw and imputed.
 #' @noRd
+#' @keywords internal
 fetch_hourly_trace_data <- function(
   con,
   timeseries_id,

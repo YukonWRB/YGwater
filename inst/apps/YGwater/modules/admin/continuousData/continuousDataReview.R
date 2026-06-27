@@ -64,6 +64,11 @@ continuousDataReviewUI <- function(id) {
                   timeFormat = "HH:mm"
                 )
               ),
+              actionButton(
+                ns("pick_start_dt"),
+                "Pick start from plot",
+                class = "btn-outline-primary btn-sm w-100 mb-2"
+              ),
               shinyWidgets::airDatepickerInput(
                 ns("end_dt"),
                 "End datetime",
@@ -78,6 +83,16 @@ continuousDataReviewUI <- function(id) {
                   timeFormat = "HH:mm"
                 )
               ),
+              actionButton(
+                ns("pick_end_dt"),
+                "Pick end from plot",
+                class = "btn-outline-primary btn-sm w-100 mb-2"
+              ),
+              actionButton(
+                ns("pick_range_dt"),
+                "Drag range on plot",
+                class = "btn-outline-primary btn-sm w-100 mb-2"
+              ),
               div(
                 class = "text-muted small",
                 textOutput(ns("range_feedback"))
@@ -91,6 +106,18 @@ continuousDataReviewUI <- function(id) {
                 ns("show_attribute_bands"),
                 "Show grades, approvals, qualifiers, and corrections",
                 value = TRUE
+              ),
+              selectizeInput(
+                ns("historic_range_period"),
+                "Historic range",
+                choices = c(
+                  "None" = "none",
+                  "All years" = "full",
+                  "Past 30 years" = "30yr"
+                ),
+                selected = "30yr",
+                multiple = FALSE,
+                width = "100%"
               ),
               checkboxInput(
                 ns("show_field_readings"),
@@ -116,7 +143,11 @@ continuousDataReviewUI <- function(id) {
             ),
             column(
               width = 8,
-              plotly::plotlyOutput(ns("ts_plot"), height = "520px")
+              plotly::plotlyOutput(ns("ts_plot"), height = "620px"),
+              div(
+                class = "text-muted small mt-2",
+                "Use the plot toolbar at the top right on hover to zoom, pan, reset, or zoom out. If you zoom beyond the loaded time window, the plot will load the wider range."
+              )
             )
           )
         )
@@ -250,7 +281,7 @@ continuousDataReview <- function(id, language) {
         ns = ns,
         lang = language$language,
         con = session$userData$AquaCache,
-        module_id = "grades_approvals_qualifiers"
+        module_id = "continuousDataReview"
       )
     })
 
@@ -318,6 +349,10 @@ continuousDataReview <- function(id, language) {
       set_datetime_input("start_dt", start_dt)
       set_datetime_input("end_dt", end_dt)
       next_edge("start")
+      plot_click_target(NULL)
+      plot_dragmode("zoom")
+      loaded_plot_range(NULL)
+      visible_plot_range(NULL)
     }
 
     load_privileges <- function() {
@@ -462,6 +497,28 @@ continuousDataReview <- function(id, language) {
     assignment_refresh <- reactiveVal(0)
     next_edge <- reactiveVal("start")
     pending_action <- reactiveVal(NULL)
+    plot_click_target <- reactiveVal(NULL)
+    plot_dragmode <- reactiveVal("zoom")
+    loaded_plot_range <- reactiveVal(NULL)
+    visible_plot_range <- reactiveVal(NULL)
+
+    reset_plot_view <- function(reset_mode = FALSE) {
+      loaded_plot_range(NULL)
+      visible_plot_range(NULL)
+      if (isTRUE(reset_mode)) {
+        plot_click_target(NULL)
+        plot_dragmode("zoom")
+      }
+    }
+
+    set_plot_dragmode <- function(mode) {
+      plot_dragmode(mode)
+      try(
+        plotly::plotlyProxy("ts_plot", session) |>
+          plotly::plotlyProxyInvoke("relayout", list(dragmode = mode)),
+        silent = TRUE
+      )
+    }
 
     observeEvent(
       input$ts_table_rows_selected,
@@ -606,7 +663,7 @@ continuousDataReview <- function(id, language) {
       )
     })
 
-    plot_range <- reactive({
+    context_plot_range <- reactive({
       rng <- selected_range()
       if (is.null(rng)) {
         return(NULL)
@@ -641,6 +698,37 @@ continuousDataReview <- function(id, language) {
       list(start = view_start, end = view_end)
     })
 
+    plot_range <- reactive({
+      context <- context_plot_range()
+      if (is.null(context)) {
+        return(NULL)
+      }
+      loaded <- loaded_plot_range()
+      if (is.null(loaded)) {
+        return(context)
+      }
+      list(
+        start = min(context$start, loaded$start, na.rm = TRUE),
+        end = max(context$end, loaded$end, na.rm = TRUE)
+      )
+    })
+
+    plot_visible_range <- reactive({
+      visible <- visible_plot_range()
+      if (!is.null(visible)) {
+        return(visible)
+      }
+      plot_range()
+    })
+
+    observeEvent(
+      list(input$start_dt, input$end_dt),
+      {
+        reset_plot_view()
+      },
+      ignoreInit = TRUE
+    )
+
     output$range_feedback <- renderText({
       msg <- range_error()
       if (is.null(msg)) "" else msg
@@ -650,11 +738,20 @@ continuousDataReview <- function(id, language) {
       if (is.null(selected_ts())) {
         return("")
       }
-      paste0(
-        "Click on the plot to set the ",
-        next_edge(),
-        " datetime. Drag across the plot to fill both start and end. The shaded band is the selected range."
-      )
+      target <- plot_click_target()
+      if (!is.null(target)) {
+        return(paste0(
+          "Click anywhere in the plot area to set the ",
+          target,
+          " datetime."
+        ))
+      }
+      if (identical(plot_dragmode(), "select")) {
+        return(
+          "Drag across the plot to set both start and end datetimes."
+        )
+      }
+      "Use Pick start, Pick end, or Drag range on plot to set datetimes from the plot. The shaded band is the selected range."
     })
 
     load_assignments <- function(kind, tsid) {
@@ -739,20 +836,24 @@ continuousDataReview <- function(id, language) {
       )
     })
 
-    ts_data <- reactive({
+    plot_payload <- reactive({
       if (is.null(selected_ts()) || !is.null(range_error())) {
-        return(data.frame())
+        return(NULL)
       }
       rng <- plot_range()
       if (is.null(rng)) {
-        return(data.frame())
+        return(NULL)
+      }
+      historic_period <- input$historic_range_period
+      if (is.null(historic_period) || !nzchar(historic_period)) {
+        historic_period <- "30yr"
       }
       payload <- tryCatch(
         plotTimeseries(
           timeseries_id = selected_ts(),
           start_date = rng$start,
           end_date = rng$end,
-          historic_range = FALSE,
+          historic_range = !identical(historic_period, "none"),
           raw = TRUE,
           unusable = TRUE,
           slider = FALSE,
@@ -760,13 +861,23 @@ continuousDataReview <- function(id, language) {
           tzone = "UTC",
           data = TRUE,
           build_plot = FALSE,
-          con = session$userData$AquaCache
+          con = session$userData$AquaCache,
+          stats_period = if (identical(historic_period, "30yr")) {
+            "30yr"
+          } else {
+            "full"
+          }
         ),
         error = function(e) {
           warning(conditionMessage(e))
           NULL
         }
       )
+      payload
+    })
+
+    ts_data <- reactive({
+      payload <- plot_payload()
       if (is.null(payload) || is.null(payload$data$trace_data)) {
         return(data.frame())
       }
@@ -781,6 +892,20 @@ continuousDataReview <- function(id, language) {
       if (!"value_raw" %in% names(df)) {
         df$value_raw <- NA_real_
       }
+      df
+    })
+
+    historic_range_data <- reactive({
+      payload <- plot_payload()
+      if (
+        is.null(payload) ||
+          is.null(payload$data$range_data) ||
+          !nrow(payload$data$range_data)
+      ) {
+        return(data.frame())
+      }
+      df <- as.data.frame(payload$data$range_data)
+      df$datetime <- as.POSIXct(df$datetime, tz = "UTC")
       df
     })
 
@@ -1074,7 +1199,11 @@ continuousDataReview <- function(id, language) {
         }
         updateNumericInput(session, "correction_value2", label = label)
       }
-      updateNumericInput(session, "correction_window", label = "Time window (seconds)")
+      updateNumericInput(
+        session,
+        "correction_window",
+        label = "Time window (seconds)"
+      )
 
       if (!is.null(record)) {
         updateNumericInput(session, "correction_value1", value = record$value1)
@@ -1093,9 +1222,13 @@ continuousDataReview <- function(id, language) {
       invisible(NULL)
     }
 
-    observeEvent(input$correction_type, {
-      update_correction_inputs()
-    }, ignoreNULL = TRUE)
+    observeEvent(
+      input$correction_type,
+      {
+        update_correction_inputs()
+      },
+      ignoreNULL = TRUE
+    )
 
     observeEvent(
       active_kind(),
@@ -1152,7 +1285,11 @@ continuousDataReview <- function(id, language) {
           format_number,
           character(1)
         )
-        display$Equation <- ifelse(is.na(display$equation), "", display$equation)
+        display$Equation <- ifelse(
+          is.na(display$equation),
+          "",
+          display$equation
+        )
         display <- display[, c(
           "record_id",
           "type_id",
@@ -1326,7 +1463,11 @@ continuousDataReview <- function(id, language) {
 
     output$corrections_table <- DT::renderDT({
       req(selected_ts())
-      render_overview_table(assignments()$corrections, "corrections", "correction")
+      render_overview_table(
+        assignments()$corrections,
+        "corrections",
+        "correction"
+      )
     })
 
     overlap_records <- function(df, start_dt, end_dt, exclude_id = NULL) {
@@ -1432,9 +1573,17 @@ continuousDataReview <- function(id, language) {
 
     observe({
       label <- if (is.null(selected_record())) {
-        if (identical(active_kind(), "correction")) "Add correction" else "Add attribute"
+        if (identical(active_kind(), "correction")) {
+          "Add correction"
+        } else {
+          "Add attribute"
+        }
       } else {
-        if (identical(active_kind(), "correction")) "Update correction" else "Update attribute"
+        if (identical(active_kind(), "correction")) {
+          "Update correction"
+        } else {
+          "Update attribute"
+        }
       }
       shiny::updateActionButton(session, "apply_attribute", label = label)
     })
@@ -1445,7 +1594,11 @@ continuousDataReview <- function(id, language) {
         stop("Select a correction type before applying.")
       }
 
-      value1 <- if (isTRUE(row$value1[[1]])) input$correction_value1 else NA_real_
+      value1 <- if (isTRUE(row$value1[[1]])) {
+        input$correction_value1
+      } else {
+        NA_real_
+      }
       value2 <- if (isTRUE(row$value2[[1]]) || is.na(row$value2[[1]])) {
         input$correction_value2
       } else {
@@ -1456,7 +1609,9 @@ continuousDataReview <- function(id, language) {
       } else {
         NA_integer_
       }
-      equation <- if (isTRUE(row$equation[[1]]) && nzchar(input$correction_equation)) {
+      equation <- if (
+        isTRUE(row$equation[[1]]) && nzchar(input$correction_equation)
+      ) {
         input$correction_equation
       } else {
         NA_character_
@@ -1514,7 +1669,11 @@ continuousDataReview <- function(id, language) {
         qualifier = data$qualifiers,
         correction = data$corrections
       )
-      exclude_id <- if (!is.null(action$record)) action$record$record_id else NULL
+      exclude_id <- if (!is.null(action$record)) {
+        action$record$record_id
+      } else {
+        NULL
+      }
       overlaps <- overlap_records(
         current,
         action$start_dt,
@@ -1538,7 +1697,9 @@ continuousDataReview <- function(id, language) {
           nrow(overlaps)
       ) {
         return(tagList(
-          p("Qualifiers can overlap. This will add another qualifier over a range that already has qualifiers."),
+          p(
+            "Qualifiers can overlap. This will add another qualifier over a range that already has qualifiers."
+          ),
           tags$ul(lapply(describe_overlaps(overlaps), tags$li))
         ))
       }
@@ -1689,7 +1850,11 @@ continuousDataReview <- function(id, language) {
       }
 
       showNotification(
-        if (is.null(record)) "Record added successfully." else "Record updated successfully.",
+        if (is.null(record)) {
+          "Record added successfully."
+        } else {
+          "Record updated successfully."
+        },
         type = "message"
       )
       assignment_refresh(assignment_refresh() + 1)
@@ -1960,7 +2125,28 @@ continuousDataReview <- function(id, language) {
       set_range_inputs(event$start_dt, event$end_dt)
     })
 
+    observeEvent(input$pick_start_dt, {
+      req(selected_ts())
+      plot_click_target("start")
+      set_plot_dragmode("zoom")
+    })
+
+    observeEvent(input$pick_end_dt, {
+      req(selected_ts())
+      plot_click_target("end")
+      set_plot_dragmode("zoom")
+    })
+
+    observeEvent(input$pick_range_dt, {
+      req(selected_ts())
+      plot_click_target(NULL)
+      set_plot_dragmode("select")
+    })
+
     handle_plot_selection <- function(selection) {
+      if (!identical(plot_dragmode(), "select")) {
+        return()
+      }
       if (is.null(selection) || !length(selection) || is.null(selection$x)) {
         return()
       }
@@ -1971,6 +2157,106 @@ continuousDataReview <- function(id, language) {
       }
       times <- sort(times)
       set_range_inputs(times[1], times[length(times)])
+      set_plot_dragmode("zoom")
+    }
+
+    update_datetime_from_plot_click <- function(click) {
+      target <- plot_click_target()
+      if (is.null(target)) {
+        return()
+      }
+      if (is.null(click) || is.null(click$x)) {
+        return()
+      }
+      dt <- to_posix_from_event(click$x)
+      if (is.na(dt)) {
+        return()
+      }
+      if (identical(target, "start")) {
+        set_datetime_input("start_dt", dt)
+      } else {
+        set_datetime_input("end_dt", dt)
+      }
+      plot_click_target(NULL)
+    }
+
+    relayout_x_range <- function(relayout) {
+      if (is.null(relayout) || !length(relayout)) {
+        return(NULL)
+      }
+      start_value <- relayout[["xaxis.range[0]"]]
+      end_value <- relayout[["xaxis.range[1]"]]
+      if (
+        (is.null(start_value) || is.null(end_value)) &&
+          !is.null(relayout[["xaxis.range"]]) &&
+          length(relayout[["xaxis.range"]]) >= 2
+      ) {
+        start_value <- relayout[["xaxis.range"]][[1]]
+        end_value <- relayout[["xaxis.range"]][[2]]
+      }
+      if (is.null(start_value) || is.null(end_value)) {
+        return(NULL)
+      }
+      start_dt <- to_posix_from_event(start_value)
+      end_dt <- to_posix_from_event(end_value)
+      if (is.na(start_dt) || is.na(end_dt)) {
+        return(NULL)
+      }
+      if (start_dt > end_dt) {
+        tmp <- start_dt
+        start_dt <- end_dt
+        end_dt <- tmp
+      }
+      list(start = start_dt, end = end_dt)
+    }
+
+    clamp_to_timeseries_range <- function(rng) {
+      if (is.null(rng)) {
+        return(NULL)
+      }
+      row <- ts_meta()[ts_meta()$timeseries_id == selected_ts(), ]
+      if (nrow(row)) {
+        if (!is.na(row$start_datetime[[1]])) {
+          ts_start <- as.POSIXct(row$start_datetime[[1]], tz = "UTC")
+          if (!is.na(ts_start) && rng$start < ts_start) {
+            rng$start <- ts_start
+          }
+        }
+        if (!is.na(row$end_datetime[[1]])) {
+          ts_end <- as.POSIXct(row$end_datetime[[1]], tz = "UTC")
+          if (!is.na(ts_end) && rng$end > ts_end) {
+            rng$end <- ts_end
+          }
+        }
+      }
+      if (rng$start >= rng$end) {
+        return(NULL)
+      }
+      rng
+    }
+
+    expand_loaded_plot_range <- function(requested) {
+      requested <- clamp_to_timeseries_range(requested)
+      if (is.null(requested)) {
+        return()
+      }
+      current <- plot_range()
+      if (is.null(current)) {
+        loaded_plot_range(requested)
+        return()
+      }
+      span <- as.numeric(difftime(current$end, current$start, units = "secs"))
+      tolerance <- if (is.finite(span)) max(span * 0.01, 60) else 60
+      outside <- requested$start < current$start - tolerance ||
+        requested$end > current$end + tolerance
+      if (!outside) {
+        return()
+      }
+      expanded <- list(
+        start = min(current$start, requested$start, na.rm = TRUE),
+        end = max(current$end, requested$end, na.rm = TRUE)
+      )
+      loaded_plot_range(clamp_to_timeseries_range(expanded))
     }
 
     observeEvent(
@@ -1996,24 +2282,35 @@ continuousDataReview <- function(id, language) {
     )
 
     observeEvent(
-      plotly::event_data("plotly_click", source = ns("ts_plot")),
+      input$plot_area_click,
       {
         req(selected_ts())
-        click <- plotly::event_data("plotly_click", source = ns("ts_plot"))
-        if (is.null(click) || is.null(click$x)) {
+        update_datetime_from_plot_click(input$plot_area_click)
+      },
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      plotly::event_data("plotly_relayout", source = ns("ts_plot")),
+      {
+        req(selected_ts())
+        relayout <- plotly::event_data(
+          "plotly_relayout",
+          source = ns("ts_plot")
+        )
+        if (is.null(relayout) || !length(relayout)) {
           return()
         }
-        dt <- to_posix_from_event(click$x)
-        if (is.na(dt)) {
+        if (isTRUE(relayout[["xaxis.autorange"]])) {
+          visible_plot_range(NULL)
           return()
         }
-        if (identical(next_edge(), "start")) {
-          set_datetime_input("start_dt", dt)
-          next_edge("end")
-        } else {
-          set_datetime_input("end_dt", dt)
-          next_edge("start")
+        rng <- relayout_x_range(relayout)
+        if (is.null(rng)) {
+          return()
         }
+        visible_plot_range(rng)
+        expand_loaded_plot_range(rng)
       },
       ignoreNULL = TRUE
     )
@@ -2029,7 +2326,9 @@ continuousDataReview <- function(id, language) {
         }
         fill_col <- tryCatch(
           grDevices::adjustcolor(row$color_code, alpha.f = opacity),
-          error = function(e) grDevices::adjustcolor("#cccccc", alpha.f = opacity)
+          error = function(e) {
+            grDevices::adjustcolor("#cccccc", alpha.f = opacity)
+          }
         )
         shapes[[length(shapes) + 1]] <- list(
           type = "rect",
@@ -2047,34 +2346,195 @@ continuousDataReview <- function(id, language) {
       shapes
     }
 
+    build_status_bands_plot <- function(assignments_list, plot_source) {
+      rng <- plot_range()
+      if (is.null(rng)) {
+        return(NULL)
+      }
+      bands <- plotly::plot_ly(source = plot_source)
+      rows <- data.frame(
+        kind = c("approval", "grade", "qualifier"),
+        label = c("Approval", "Grade", "Qualifier"),
+        y0 = c(2.2, 1.1, 0),
+        y1 = c(3.2, 2.1, 1),
+        stringsAsFactors = FALSE
+      )
+      polygons <- data.frame()
+
+      add_kind <- function(df, kind, y0, y1) {
+        if (is.null(df) || !nrow(df)) {
+          return(data.frame())
+        }
+        df <- df[
+          !is.na(df$start_dt) &
+            !is.na(df$end_dt) &
+            df$start_dt <= rng$end &
+            df$end_dt >= rng$start,
+          ,
+          drop = FALSE
+        ]
+        if (!nrow(df)) {
+          return(data.frame())
+        }
+        out <- data.frame()
+        for (i in seq_len(nrow(df))) {
+          start_dt <- max(df$start_dt[i], rng$start, na.rm = TRUE)
+          end_dt <- min(df$end_dt[i], rng$end, na.rm = TRUE)
+          if (start_dt >= end_dt) {
+            next
+          }
+          id <- paste(kind, i, sep = "_")
+          out <- rbind(
+            out,
+            data.frame(
+              id = id,
+              datetime = c(start_dt, start_dt, end_dt, end_dt),
+              y = c(y0, y1, y1, y0),
+              color = df$color_code[i],
+              text = paste0(
+                tools::toTitleCase(kind),
+                ": ",
+                df$description[i]
+              ),
+              stringsAsFactors = FALSE
+            )
+          )
+        }
+        out
+      }
+
+      for (i in seq_len(nrow(rows))) {
+        df <- switch(
+          rows$kind[i],
+          approval = assignments_list$approvals,
+          grade = assignments_list$grades,
+          qualifier = assignments_list$qualifiers
+        )
+        polygons <- rbind(
+          polygons,
+          add_kind(df, rows$kind[i], rows$y0[i], rows$y1[i])
+        )
+      }
+
+      if (nrow(polygons)) {
+        polygons$datetime <- as.POSIXct(polygons$datetime, tz = "UTC")
+        bands <- plotly::add_polygons(
+          bands,
+          data = polygons,
+          x = ~datetime,
+          y = ~y,
+          split = ~id,
+          fill = "toself",
+          fillcolor = ~color,
+          line = list(width = 1, color = "black"),
+          hoverinfo = "text",
+          hoveron = "fills",
+          text = ~text,
+          showlegend = FALSE
+        )
+      }
+
+      annotations <- lapply(seq_len(nrow(rows)), function(i) {
+        list(
+          x = 0,
+          y = (rows$y0[i] + rows$y1[i]) / 2,
+          xref = "paper",
+          yref = "y",
+          text = rows$label[i],
+          showarrow = FALSE,
+          xanchor = "right",
+          yanchor = "middle",
+          font = list(size = 10)
+        )
+      })
+
+      plotly::layout(
+        bands,
+        xaxis = list(title = "", showgrid = FALSE, zeroline = FALSE),
+        yaxis = list(
+          range = c(0, 3.2),
+          showticklabels = FALSE,
+          showgrid = FALSE,
+          zeroline = FALSE,
+          fixedrange = TRUE
+        ),
+        annotations = annotations,
+        margin = list(t = 0, b = 20),
+        font = list(family = "Nunito Sans")
+      )
+    }
+
+    add_plot_area_click_handler <- function(plot) {
+      htmlwidgets::onRender(
+        plot,
+        sprintf(
+          "function(el, x) {
+            if (el._ygPlotRangeClickBound) return;
+            el._ygPlotRangeClickBound = true;
+            var down = null;
+            el.addEventListener('mousedown', function(evt) {
+              down = {x: evt.clientX, y: evt.clientY};
+            }, true);
+            el.addEventListener('click', function(evt) {
+              if (!window.Shiny || !down) return;
+              if (evt.target && evt.target.closest && evt.target.closest('.modebar')) return;
+              if (Math.abs(evt.clientX - down.x) > 4 || Math.abs(evt.clientY - down.y) > 4) return;
+              var gd = document.getElementById(el.id);
+              if (!gd || !gd._fullLayout || !gd._fullLayout.xaxis) return;
+              var xaxis = gd._fullLayout.xaxis;
+              var rect = gd.getBoundingClientRect();
+              var offset = xaxis._offset || gd._fullLayout.margin.l || 0;
+              var length = xaxis._length || 0;
+              var px = evt.clientX - rect.left - offset;
+              if (px < 0 || px > length) return;
+              var value = null;
+              if (typeof xaxis.p2d === 'function') {
+                value = xaxis.p2d(px);
+              } else if (typeof xaxis.p2l === 'function') {
+                value = xaxis.p2l(px);
+              } else if (typeof xaxis.p2c === 'function') {
+                value = xaxis.p2c(px);
+              }
+              if (value === null || value === undefined) return;
+              Shiny.setInputValue('%s', {x: value, nonce: Date.now() + Math.random()}, {priority: 'event'});
+            }, true);
+          }",
+          ns("plot_area_click")
+        )
+      )
+    }
+
     output$ts_plot <- plotly::renderPlotly({
       req(selected_ts())
       err <- range_error()
       validate(need(is.null(err), err))
       rng <- selected_range()
-      view_rng <- plot_range()
+      view_rng <- plot_visible_range()
       df <- ts_data()
       plot_source <- ns("ts_plot")
 
       if (!nrow(df)) {
-        return(
-          plotly::plotly_empty(
-            type = "scatter",
-            mode = "lines",
-            source = plot_source
-          ) |>
-            plotly::layout(
-              title = NULL,
-              xaxis = list(title = "Datetime"),
-              yaxis = list(title = "Value"),
-              dragmode = "select"
-            )
-        )
+        empty_plot <- plotly::plotly_empty(
+          type = "scatter",
+          mode = "lines",
+          source = plot_source
+        ) |>
+          plotly::layout(
+            title = NULL,
+            xaxis = list(
+              title = "Datetime",
+              range = c(view_rng$start, view_rng$end)
+            ),
+            yaxis = list(title = "Value"),
+            dragmode = plot_dragmode()
+          )
+        return(add_plot_area_click_handler(empty_plot))
       }
 
       readings <- field_readings()
       events <- instrument_events()
       visits <- field_visits()
+      assignments_list <- assignments()
       y_vals <- c(df$value_raw, df$value_corrected, readings$value)
       y_range <- range(y_vals, na.rm = TRUE)
       if (!all(is.finite(y_range))) {
@@ -2099,11 +2559,11 @@ continuousDataReview <- function(id, language) {
       ))
 
       if (isTRUE(input$show_attribute_bands)) {
-        assignments_list <- assignments()
-        shapes <- add_interval_shapes(shapes, assignments_list$grades, 0.09)
-        shapes <- add_interval_shapes(shapes, assignments_list$approvals, 0.12)
-        shapes <- add_interval_shapes(shapes, assignments_list$qualifiers, 0.15)
-        shapes <- add_interval_shapes(shapes, assignments_list$corrections, 0.08)
+        shapes <- add_interval_shapes(
+          shapes,
+          assignments_list$corrections,
+          0.08
+        )
       }
 
       if (isTRUE(input$show_field_readings) && nrow(visits)) {
@@ -2129,6 +2589,54 @@ continuousDataReview <- function(id, language) {
       }
 
       p <- plotly::plot_ly(source = plot_source)
+      hist <- historic_range_data()
+      if (nrow(hist)) {
+        p <- plotly::add_ribbons(
+          p,
+          data = hist,
+          x = ~datetime,
+          ymin = ~min,
+          ymax = ~max,
+          name = "Min-Max",
+          fillcolor = "rgba(212, 236, 239, 0.85)",
+          line = list(color = "rgba(212, 236, 239, 1)", width = 0.2),
+          hoverinfo = "text",
+          text = ~ paste0(
+            "Min: ",
+            round(min, 2),
+            ", Max: ",
+            round(max, 2),
+            " (",
+            as.Date(datetime),
+            ")"
+          )
+        )
+        p <- plotly::add_ribbons(
+          p,
+          data = hist,
+          x = ~datetime,
+          ymin = ~q25,
+          ymax = ~q75,
+          name = if (identical(input$historic_range_period, "30yr")) {
+            "Typical 30 yrs"
+          } else {
+            "Typical"
+          },
+          fillcolor = "rgba(95, 157, 166, 0.45)",
+          line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2),
+          hoverinfo = "text",
+          text = ~ paste0(
+            "Q25: ",
+            round(q25, 2),
+            ", Q75: ",
+            round(q75, 2),
+            " (",
+            as.Date(datetime),
+            ")"
+          )
+        )
+      }
+
       if ("value_raw" %in% names(df) && any(!is.na(df$value_raw))) {
         p <- plotly::add_lines(
           p,
@@ -2138,7 +2646,7 @@ continuousDataReview <- function(id, language) {
           name = "Raw",
           line = list(color = "#6C757D"),
           hoverinfo = "text",
-          text = ~paste0("Raw: ", round(value_raw, 4), " (", datetime, ")")
+          text = ~ paste0("Raw: ", round(value_raw, 4), " (", datetime, ")")
         )
       }
       p <- plotly::add_lines(
@@ -2149,7 +2657,7 @@ continuousDataReview <- function(id, language) {
         name = "Corrected",
         line = list(color = "#0072B2"),
         hoverinfo = "text",
-        text = ~paste0(
+        text = ~ paste0(
           "Corrected: ",
           round(value_corrected, 4),
           " (",
@@ -2172,7 +2680,7 @@ continuousDataReview <- function(id, language) {
             line = list(width = 1, color = "#FFFFFF")
           ),
           hoverinfo = "text",
-          text = ~paste0("Field reading: ", value, " (", datetime, ")")
+          text = ~ paste0("Field reading: ", value, " (", datetime, ")")
         )
       }
 
@@ -2191,7 +2699,7 @@ continuousDataReview <- function(id, language) {
             line = list(width = 1, color = "#FFFFFF")
           ),
           hoverinfo = "text",
-          text = ~paste0(
+          text = ~ paste0(
             event_type,
             ": ",
             instrument,
@@ -2204,7 +2712,7 @@ continuousDataReview <- function(id, language) {
         )
       }
 
-      plotly::layout(
+      p <- plotly::layout(
         p,
         title = NULL,
         shapes = shapes,
@@ -2213,8 +2721,38 @@ continuousDataReview <- function(id, language) {
           range = c(view_rng$start, view_rng$end)
         ),
         yaxis = list(title = "Value"),
-        dragmode = "select",
-        legend = list(orientation = "h", yanchor = "bottom", y = 1.02)
+        dragmode = plot_dragmode(),
+        hovermode = "x unified",
+        legend = list(orientation = "h", yanchor = "bottom", y = 1.02),
+        margin = list(t = 30)
+      )
+
+      if (isTRUE(input$show_attribute_bands)) {
+        bands <- build_status_bands_plot(assignments_list, plot_source)
+        if (!is.null(bands)) {
+          p <- plotly::subplot(
+            p,
+            bands,
+            nrows = 2,
+            shareX = TRUE,
+            margin = 0,
+            heights = c(0.86, 0.14)
+          )
+          p <- plotly::layout(
+            p,
+            xaxis = list(range = c(view_rng$start, view_rng$end)),
+            xaxis2 = list(range = c(view_rng$start, view_rng$end))
+          )
+        }
+      }
+
+      add_plot_area_click_handler(
+        plotly::config(
+          p,
+          displaylogo = FALSE,
+          modeBarButtonsToAdd = list("select2d"),
+          modeBarButtonsToRemove = list("lasso2d")
+        )
       )
     })
   })

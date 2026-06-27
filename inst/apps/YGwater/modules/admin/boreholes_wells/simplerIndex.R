@@ -726,28 +726,36 @@ simplerIndexUI <- function(id) {
                 )
               )
             ),
-            fluidRow(
-              column(
-                8,
-                numericInput(
-                  ns("depth_to_bedrock"),
-                  "Depth to bedrock",
-                  value = NULL,
-                  min = 0,
-                  step = 0.1
-                ) |>
-                  tooltip(
-                    "If bedrock was not reached or if unknown, leave empty."
+            radioButtons(
+              ns("bedrock_reached"),
+              "Bedrock reached?",
+              choices = list("Yes" = "yes", "No" = "no", "Unknown" = "unknown"),
+              selected = "unknown",
+              inline = TRUE
+            ),
+            conditionalPanel(
+              condition = "input.bedrock_reached == 'yes'",
+              ns = ns,
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("depth_to_bedrock"),
+                    "Depth to bedrock",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
                   )
-              ),
-              column(
-                4,
-                radioButtons(
-                  ns("depth_to_bedrock_unit"),
-                  "",
-                  choices = list("m" = "m", "ft" = "ft"),
-                  selected = "m",
-                  inline = TRUE
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("depth_to_bedrock_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
                 )
               )
             ),
@@ -1055,6 +1063,7 @@ simplerIndexUI <- function(id) {
               'purpose_of_borehole',
               'purpose_borehole_inferred',
               'is_well',
+              'bedrock_reached',
               'depth_to_bedrock',
               'permafrost_top',
               'permafrost_bot',
@@ -1495,6 +1504,13 @@ simplerIndex <- function(id, language) {
         )
 
         # depth to bedrock
+        updateRadioButtons(
+          session,
+          "bedrock_reached",
+          selected = format_bedrock_reached_input(
+            target_metadata$bedrock_reached
+          )
+        )
         updateNumericInput(
           session,
           "depth_to_bedrock",
@@ -1640,6 +1656,7 @@ simplerIndex <- function(id, language) {
         selected = "public_reader"
       )
       updateRadioButtons(session, "coordinate_system", selected = "utm")
+      updateRadioButtons(session, "bedrock_reached", selected = "unknown")
       updateRadioButtons(session, "depth_to_bedrock_unit", selected = "m")
       updateRadioButtons(session, "permafrost_top_unit", selected = "m")
       updateRadioButtons(session, "permafrost_bot_unit", selected = "m")
@@ -1839,6 +1856,7 @@ simplerIndex <- function(id, language) {
       "associated_location",
       "purpose_of_borehole",
       "purpose_borehole_inferred",
+      "bedrock_reached",
       "depth_to_bedrock",
       "depth_to_bedrock_unit",
       "date_drilled",
@@ -1912,6 +1930,41 @@ simplerIndex <- function(id, language) {
         return(NULL)
       }
       x
+    }
+
+    format_bedrock_reached_input <- function(x) {
+      x <- null_if_empty(x)
+      if (is.null(x)) {
+        return("unknown")
+      }
+      if (is.logical(x)) {
+        return(if (isTRUE(x[1])) "yes" else "no")
+      }
+      if (is.numeric(x)) {
+        if (is.na(x[1])) {
+          return("unknown")
+        }
+        return(if (x[1] != 0) "yes" else "no")
+      }
+      val <- trimws(tolower(as.character(x[1])))
+      if (val %in% c("yes", "true", "t", "1", "y")) {
+        return("yes")
+      }
+      if (val %in% c("no", "false", "f", "0", "n")) {
+        return("no")
+      }
+      "unknown"
+    }
+
+    parse_bedrock_reached <- function(x) {
+      choice <- format_bedrock_reached_input(x)
+      if (identical(choice, "yes")) {
+        return(TRUE)
+      }
+      if (identical(choice, "no")) {
+        return(FALSE)
+      }
+      NULL
     }
 
     convert_utm_to_ll <- function(easting, northing, zone) {
@@ -2161,7 +2214,7 @@ simplerIndex <- function(id, language) {
         value
       }
 
-      convert_flow_to_lpm <- function(value, unit) {
+      convert_flow_to_lps <- function(value, unit) {
         value <- null_if_empty(value)
         if (is.null(value)) {
           return(NULL)
@@ -2171,11 +2224,21 @@ simplerIndex <- function(id, language) {
           return(value)
         }
         unit_lower <- tolower(unit_val)
-        if (unit_lower %in% c("l/s", "lps", "l per s", "l/sec")) {
-          return(value * 60)
+        if (
+          unit_lower %in%
+            c(
+              "l/s",
+              "lps",
+              "l per s",
+              "l/sec",
+              "liters per second",
+              "litres per second"
+            )
+        ) {
+          return(value)
         }
         if (unit_lower %in% c("l/min", "lpm", "l per min", "l/minute")) {
-          return(value)
+          return(value / 60)
         }
         if (
           unit_lower %in%
@@ -2188,10 +2251,10 @@ simplerIndex <- function(id, language) {
               "gallons per minute"
             )
         ) {
-          return(value * 3.785411784)
+          return(value * 3.785411784 / 60)
         }
-        if (unit_lower %in% c("g/s", "gal/s", "gallons per second")) {
-          return(value * 3.785411784 * 60)
+        if (unit_lower %in% c("g/s", "gal/s", "gallons per second", "gps")) {
+          return(value * 3.785411784)
         }
         value
       }
@@ -2252,6 +2315,9 @@ simplerIndex <- function(id, language) {
         default = sanitized$purpose_borehole_inferred
       )
 
+      sanitized$bedrock_reached <- parse_bedrock_reached(
+        metadata$bedrock_reached
+      )
       sanitized$permafrost_present <- parse_logical(
         metadata$permafrost_present,
         default = FALSE
@@ -2287,6 +2353,9 @@ simplerIndex <- function(id, language) {
         sanitized[["depth_to_bedrock"]],
         metadata$depth_to_bedrock_unit
       )
+      if (!isTRUE(sanitized$bedrock_reached)) {
+        sanitized$depth_to_bedrock <- NULL
+      }
       sanitized$permafrost_top <- convert_length_to_m(
         sanitized[["permafrost_top"]],
         metadata$permafrost_top_unit
@@ -2319,7 +2388,7 @@ simplerIndex <- function(id, language) {
         sanitized[["casing_od"]],
         metadata$casing_od_unit
       )
-      sanitized$estimated_yield <- convert_flow_to_lpm(
+      sanitized$estimated_yield <- convert_flow_to_lps(
         sanitized[["estimated_yield"]],
         metadata$estimated_yield_unit
       )
@@ -2360,6 +2429,18 @@ simplerIndex <- function(id, language) {
       if (is.null(metadata$latitude) || is.null(metadata$longitude)) {
         showNotification(
           "Latitude and longitude are required before uploading a borehole.",
+          type = "error",
+          duration = 5
+        )
+        return(FALSE)
+      }
+
+      if (
+        isTRUE(metadata$bedrock_reached) &&
+          is.null(metadata$depth_to_bedrock)
+      ) {
+        showNotification(
+          "Depth to bedrock is required when bedrock was reached.",
           type = "error",
           duration = 5
         )
@@ -2438,7 +2519,8 @@ simplerIndex <- function(id, language) {
 
       if (
         isTruthy(selected_id) &&
-          (is.null(choices) || !selected_id %in% names(choices))
+          (is.null(choices) ||
+            !as.character(selected_id[1]) %in% as.character(choices))
       ) {
         extra_location <- DBI::dbGetQuery(
           session$userData$AquaCache,
@@ -2835,7 +2917,6 @@ simplerIndex <- function(id, language) {
     observeEvent(
       input$share_with_borehole,
       {
-        req(input$share_with_borehole)
         # Reset it to 'public_reader' if length 0
         if (
           is.null(input$share_with_borehole) ||
@@ -2892,7 +2973,6 @@ simplerIndex <- function(id, language) {
     observeEvent(
       input$share_with_well,
       {
-        req(input$share_with_well)
         if (
           is.null(input$share_with_well) || length(input$share_with_well) == 0
         ) {
@@ -3187,7 +3267,10 @@ simplerIndex <- function(id, language) {
         pending_borehole_purpose_selection(existing_id[[1]])
         pending_borehole_purpose_new(NULL)
         removeModal()
-        showNotification("Existing borehole purpose selected.", type = "message")
+        showNotification(
+          "Existing borehole purpose selected.",
+          type = "message"
+        )
         return()
       }
 
@@ -4610,6 +4693,7 @@ simplerIndex <- function(id, language) {
         associated_location = input$associated_location,
         purpose_of_borehole = input$purpose_of_borehole,
         purpose_borehole_inferred = input$purpose_borehole_inferred,
+        bedrock_reached = input$bedrock_reached,
         depth_to_bedrock = input$depth_to_bedrock,
         depth_to_bedrock_unit = input$depth_to_bedrock_unit,
         permafrost_present = input$permafrost_present,
@@ -4732,6 +4816,17 @@ simplerIndex <- function(id, language) {
               "coordinate_system",
               metadata = metadata,
               default = "utm"
+            )
+          )
+          updateRadioButtons(
+            session,
+            "bedrock_reached",
+            selected = format_bedrock_reached_input(
+              get_meta_value(
+                "bedrock_reached",
+                metadata = metadata,
+                default = "unknown"
+              )
             )
           )
           updateRadioButtons(
@@ -5059,11 +5154,13 @@ simplerIndex <- function(id, language) {
               latitude = metadata[["latitude"]],
               longitude = metadata[["longitude"]],
               location_source = metadata[["location_source"]],
+              surveyed_ground_elev = metadata[["surveyed_ground_elev"]],
               ground_elev_m = metadata[["surveyed_ground_elev"]],
               purpose_of_borehole = metadata[["purpose_of_borehole"]],
               purpose_borehole_inferred = metadata[[
                 "purpose_borehole_inferred"
               ]],
+              bedrock_reached = metadata[["bedrock_reached"]],
               depth_to_bedrock = metadata[["depth_to_bedrock"]],
               permafrost_present = metadata[["permafrost_present"]],
               permafrost_top = metadata[["permafrost_top"]],
@@ -5203,6 +5300,9 @@ simplerIndex <- function(id, language) {
               latitude = metadata[["latitude"]],
               longitude = metadata[["longitude"]],
               location_source = metadata[["location_source"]],
+              ground_elev_m = metadata[[
+                "surveyed_ground_elev"
+              ]],
               surveyed_ground_elev = metadata[[
                 "surveyed_ground_elev"
               ]],
@@ -5210,6 +5310,7 @@ simplerIndex <- function(id, language) {
               purpose_borehole_inferred = metadata[[
                 "purpose_borehole_inferred"
               ]],
+              bedrock_reached = metadata[["bedrock_reached"]],
               depth_to_bedrock = metadata[["depth_to_bedrock"]],
               permafrost_present = metadata[["permafrost_present"]],
               permafrost_top = metadata[["permafrost_top"]],

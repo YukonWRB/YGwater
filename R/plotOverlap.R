@@ -1282,39 +1282,25 @@ plotOverlap <- function(
     NULL
   }
 
+  historic_band_name <- "Min-Max"
+  typical_band_name <- if (lang == "en") "Typical" else "Typique"
+  band_styles <- list()
+  band_styles[[historic_band_name]] <- list(
+    fillcolor = "rgba(212, 236, 239, 0.85)",
+    line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+  )
+  band_styles[[typical_band_name]] <- list(
+    fillcolor = "rgba(95, 157, 166, 0.45)",
+    line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+  )
+
   adaptive_meta <- list(
     hover = hover,
     band_names = list(
-      # historic = if (lang == "en") "Historic" else "Historique",
-      historic = if (stats_period == "full") {
-        "Min-Max"
-      } else {
-        if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
-      },
-      typical = if (stats_period == "full") {
-        if (lang == "en") "Typical" else "Typique"
-      } else {
-        if (lang == "en") "Typical 30 yrs" else "Typique 30 ann\u00E9es"
-      }
+      historic = historic_band_name,
+      typical = typical_band_name
     ),
-    band_styles = list(
-      Historic = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Historique = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Typical = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      ),
-      Typique = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      )
-    ),
+    band_styles = band_styles,
     layout = list(
       title = if (is.null(adaptive_title)) {
         NULL
@@ -1387,11 +1373,7 @@ plotOverlap <- function(
         x = ~datetime,
         ymin = ~q25,
         ymax = ~q75,
-        name = if (stats_period == "full") {
-          if (lang == "en") "Typical" else "Typique"
-        } else {
-          if (lang == "en") "Typical 30 yrs" else "Typique 30 ann\u00E9es"
-        },
+        name = if (lang == "en") "Typical" else "Typique",
         color = I("#5f9da6"),
         line = list(width = 0.2),
         hoverinfo = if (hover) "text" else "none",
@@ -1413,11 +1395,7 @@ plotOverlap <- function(
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,
-        name = if (stats_period == "full") {
-          "Min-Max"
-        } else {
-          if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
-        },
+        name = "Min-Max",
         color = I("#D4ECEF"),
         line = list(width = 0.2),
         hoverinfo = if (hover) "text" else "none",

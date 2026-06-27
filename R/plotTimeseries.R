@@ -1289,41 +1289,28 @@ plotTimeseries <- function(
     }
   }
 
+  historic_band_name <- "Min-Max"
+  typical_band_name <- if (lang == "en") "Typical" else "Typique"
+  band_styles <- list()
+  band_styles[[historic_band_name]] <- list(
+    fillcolor = "rgba(212, 236, 239, 0.85)",
+    line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+  )
+  band_styles[[typical_band_name]] <- list(
+    fillcolor = "rgba(95, 157, 166, 0.45)",
+    line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+  )
+
   adaptive_meta <- list(
     hover = hover,
     line_name = corrected_name,
     line_color = "#00454e",
     line_width = 2.5 * line_scale,
     band_names = list(
-      historic = if (stats_period == "full") {
-        "Min-Max"
-      } else {
-        if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
-      },
-      typical = if (stats_period == "full") {
-        if (lang == "en") "Typical" else "Typique"
-      } else {
-        if (lang == "en") "Typical 30 yrs" else "Typique 30 ann\u00E9es"
-      }
+      historic = historic_band_name,
+      typical = typical_band_name
     ),
-    band_styles = list(
-      Historic = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Historique = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Typical = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      ),
-      Typique = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      )
-    ),
+    band_styles = band_styles,
     layout = list(
       title = if (title) {
         list(
@@ -1615,11 +1602,7 @@ plotTimeseries <- function(
           x = ~datetime,
           ymin = ~min,
           ymax = ~max,
-          name = if (stats_period == "full") {
-            "Min-Max"
-          } else {
-            if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
-          },
+          name = "Min-Max",
           color = I("#D4ECEF"),
           line = list(width = 0.2),
           hoverinfo = if (hover) "text" else "none",
@@ -1645,11 +1628,7 @@ plotTimeseries <- function(
         ymin = ~q25,
         ymax = ~q75,
         # name = if (lang == "en") "Typical" else "Typique",
-        name = if (stats_period == "full") {
-          if (lang == "en") "Typical" else "Typique"
-        } else {
-          if (lang == "en") "Typical 30 yrs" else "Typique 30 ann\u00E9es"
-        },
+        name = if (lang == "en") "Typical" else "Typique",
         color = I("#5f9da6"),
         line = list(width = 0.2),
         hoverinfo = "none",
@@ -1660,11 +1639,7 @@ plotTimeseries <- function(
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,
-        name = if (stats_period == "full") {
-          "Min-Max"
-        } else {
-          if (lang == "en") "Min-Max 30 yrs" else "Min-Max 30 ann\u00E9es"
-        },
+        name = "Min-Max",
         color = I("#D4ECEF"),
         line = list(width = 0.2),
         hoverinfo = "none",
