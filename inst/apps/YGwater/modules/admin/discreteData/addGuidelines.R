@@ -8,7 +8,9 @@ addGuidelinesUI <- function(id) {
   ns <- NS(id)
   single_selectize_options <- function(placeholder, create = FALSE) {
     options <- list(maxItems = 1, placeholder = placeholder)
-    if (isTRUE(create)) options$create <- TRUE
+    if (isTRUE(create)) {
+      options$create <- TRUE
+    }
     options
   }
 
@@ -109,67 +111,132 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
         textInput(ns("guideline_code"), "Code", width = "100%"),
         textInput(ns("guideline_name"), "Name", width = "100%"),
         selectizeInput(
-          ns("publisher"), "Publisher", choices = NULL, width = "100%",
-          selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select or type a publisher...", create = TRUE)
+          ns("publisher"),
+          "Publisher",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options(
+            "Select or type to add publisher",
+            create = TRUE
+          )
         ),
         selectizeInput(
-          ns("series"), "Series", choices = NULL, width = "100%",
-          selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select or type a series...", create = TRUE)
+          ns("series"),
+          "Series",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options(
+            "Select or type to add series",
+            create = TRUE
+          )
         ),
         selectizeInput(
-          ns("parameter_id"), "Parameter", choices = NULL, width = "100%",
-          selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select a parameter...")
+          ns("parameter_id"),
+          "Parameter",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options("Select a parameter")
         ),
         selectizeInput(
-          ns("matrix_state"), "Matrix state", choices = NULL, width = "100%",
-          selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select a matrix state...")
+          ns("matrix_state"),
+          "Matrix state",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options("Select a matrix state")
         ),
         shinyjs::hidden(
           div(
             id = ns("result_speciation_section"),
             selectizeInput(
-              ns("result_speciation"), "Result speciation", choices = NULL,
-              width = "100%", selected = character(0), multiple = TRUE,
-              options = single_selectize_options("Select a speciation...")
+              ns("result_speciation"),
+              "Result speciation",
+              choices = NULL,
+              width = "100%",
+              selected = character(0),
+              multiple = TRUE,
+              options = single_selectize_options(
+                "Leave empty to apply to all speciations"
+              )
             )
           )
         ),
         selectizeInput(
-          ns("sample_fraction"), "Guideline fractions", choices = NULL,
-          width = "100%", selected = character(0), multiple = TRUE,
-          options = list(placeholder = "Select one or more fractions...")
+          ns("sample_fraction"),
+          "Guideline fractions",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = list(placeholder = "Leave empty to apply to all fractions")
         ),
+        uiOutput(ns("fraction_speciation_applicability_note")),
         selectizeInput(
-          ns("media_type"), "Guideline media types", choices = NULL,
-          width = "100%", selected = character(0), multiple = TRUE,
-          options = list(placeholder = "Select one or more media types...")
+          ns("media_type"),
+          "Guideline media types",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = list(placeholder = "Select one or more media types")
         ),
 
         h4("Applicability"),
         selectInput(ns("comparison_operator"), "Comparison", choices = NULL),
         selectizeInput(
-          ns("jurisdiction"), "Jurisdiction", choices = NULL, width = "100%",
-          selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select or type a jurisdiction...", create = TRUE)
+          ns("jurisdiction"),
+          "Jurisdiction",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options(
+            "Select or type to add a jurisdiction",
+            create = TRUE
+          )
         ),
         selectizeInput(
-          ns("protection_goal"), "Protection goal", choices = NULL,
-          width = "100%", selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select or type a protection goal...", create = TRUE)
+          ns("protection_goal"),
+          "Protection goal",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options(
+            "Select or type to add a protection goal",
+            create = TRUE
+          )
         ),
         selectizeInput(
-          ns("exposure_duration"), "Exposure duration", choices = NULL,
-          width = "100%", selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select or type an exposure duration...", create = TRUE)
+          ns("exposure_duration"),
+          "Exposure duration",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options(
+            "Select or type to add an exposure duration",
+            create = TRUE
+          )
         ),
         selectizeInput(
-          ns("averaging_period"), "Averaging period", choices = NULL,
-          width = "100%", selected = character(0), multiple = TRUE,
-          options = single_selectize_options("Select or type an averaging period...", create = TRUE)
+          ns("averaging_period"),
+          "Averaging period",
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = single_selectize_options(
+            "Select or type to add an averaging period",
+            create = TRUE
+          )
         ),
         selectizeInput(
           ns("specific_locations"),
@@ -177,20 +244,34 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
             tags$span("Specific locations"),
             "Optional. Leave blank for a generally applicable guideline; choose one or more locations when the guideline is location-specific."
           ),
-          choices = NULL, width = "100%",
-          selected = character(0), multiple = TRUE,
-          options = list(placeholder = "Applies at all locations unless selected...")
+          choices = NULL,
+          width = "100%",
+          selected = character(0),
+          multiple = TRUE,
+          options = list(
+            placeholder = "Applies at all locations unless selected"
+          )
         ),
         fluidRow(
-          column(6, dateInput(ns("valid_from"), "Valid from", value = Sys.Date())),
+          column(
+            6,
+            dateInput(ns("valid_from"), "Valid from", value = Sys.Date())
+          ),
           column(6, dateInput(ns("valid_to"), "Valid to", value = as.Date(NA)))
         ),
         fluidRow(
           column(
             6,
             selectInput(
-              ns("review_status"), "Review status",
-              choices = c("draft", "reviewed", "approved", "retired", "superseded")
+              ns("review_status"),
+              "Review status",
+              choices = c(
+                "draft",
+                "reviewed",
+                "approved",
+                "retired",
+                "superseded"
+              )
             )
           ),
           column(
@@ -201,7 +282,11 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
 
         h4("Source"),
         textInput(ns("reference"), "Reference", width = "100%"),
-        textInput(ns("source_document_title"), "Source document", width = "100%"),
+        textInput(
+          ns("source_document_title"),
+          "Source document",
+          width = "100%"
+        ),
         textInput(ns("source_url"), "Source URL", width = "100%"),
         fluidRow(
           column(4, textInput(ns("source_page"), "Page", width = "100%")),
@@ -211,24 +296,38 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
         fluidRow(
           column(
             6,
-            dateInput(ns("source_effective_date"), "Effective", value = as.Date(NA))
+            dateInput(
+              ns("source_effective_date"),
+              "Effective",
+              value = as.Date(NA)
+            )
           ),
           column(
             6,
-            dateInput(ns("source_retrieved_date"), "Retrieved", value = Sys.Date())
+            dateInput(
+              ns("source_retrieved_date"),
+              "Retrieved",
+              value = Sys.Date()
+            )
           )
         ),
         textAreaInput(
-          ns("general_notes"), "General notes", width = "100%", height = "70px"
+          ns("general_notes"),
+          "General notes",
+          width = "100%",
+          height = "70px"
         ),
         textAreaInput(
-          ns("applicability_notes"), "Applicability notes",
-          width = "100%", height = "70px"
+          ns("applicability_notes"),
+          "Applicability notes",
+          width = "100%",
+          height = "70px"
         ),
 
         h4("Value Rule"),
         selectInput(
-          ns("guideline_type"), "Type",
+          ns("guideline_type"),
+          "Type",
           choices = c(
             "Fixed upper value" = "constant_upper",
             "Fixed lower value" = "constant_lower",
@@ -250,8 +349,14 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           div(
             id = ns("range_value_section"),
             fluidRow(
-              column(6, numericInput(ns("lower_value"), "Lower", value = NA_real_)),
-              column(6, numericInput(ns("upper_value"), "Upper", value = NA_real_))
+              column(
+                6,
+                numericInput(ns("lower_value"), "Lower", value = NA_real_)
+              ),
+              column(
+                6,
+                numericInput(ns("upper_value"), "Upper", value = NA_real_)
+              )
             )
           )
         ),
@@ -259,7 +364,8 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           div(
             id = ns("bound_section"),
             selectInput(
-              ns("bound_code"), "Bound",
+              ns("bound_code"),
+              "Bound",
               choices = c("Upper limit" = "upper", "Lower limit" = "lower")
             )
           )
@@ -268,7 +374,8 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
           div(
             id = ns("formula_algorithm_section"),
             selectInput(
-              ns("formula_algorithm"), "Formula",
+              ns("formula_algorithm"),
+              "Formula",
               choices = c("Linear" = "linear", "Log-linear" = "log_linear")
             )
           )
@@ -304,7 +411,12 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
                       tags$span("Rounding method"),
                       "How the derived value is rounded when rounding digits are supplied."
                     ),
-                    choices = c("None" = "none", "Round" = "round", "Floor" = "floor", "Ceiling" = "ceiling")
+                    choices = c(
+                      "None" = "none",
+                      "Round" = "round",
+                      "Floor" = "floor",
+                      "Ceiling" = "ceiling"
+                    )
                   )
                 )
               ),
@@ -320,21 +432,40 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
                     choices = c("No value" = "no_value", "Error" = "error")
                   )
                 ),
-                column(4, numericInput(ns("min_output_value"), "Minimum output", value = NA_real_)),
-                column(4, numericInput(ns("max_output_value"), "Maximum output", value = NA_real_))
+                column(
+                  4,
+                  numericInput(
+                    ns("min_output_value"),
+                    "Minimum output",
+                    value = NA_real_
+                  )
+                ),
+                column(
+                  4,
+                  numericInput(
+                    ns("max_output_value"),
+                    "Maximum output",
+                    value = NA_real_
+                  )
+                )
               ),
               textInput(
                 ns("precision_note"),
                 bslib::tooltip(
                   tags$span("Precision note"),
                   "Optional note about rounding, significant figures, or source-document precision."
-                )
-                , width = "100%"
+                ),
+                width = "100%"
               )
             )
           )
         ),
-        textAreaInput(ns("rule_note"), "Rule note", width = "100%", height = "60px"),
+        textAreaInput(
+          ns("rule_note"),
+          "Rule note",
+          width = "100%",
+          height = "60px"
+        ),
 
         shinyjs::hidden(
           div(
@@ -347,19 +478,27 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
                   "Rows identify sample results used to derive a calculated guideline. Formula and SQL scalar rules can use one or more chemistry inputs."
                 )
               ),
-                  uiOutput(ns("rule_inputs_ui")),
-                  div(
-                    style = "display:flex; gap:8px; margin:8px 0;",
-                    bslib::tooltip(
-                      actionButton(ns("add_rule_input"), "Add input", class = "btn-sm"),
-                      "Add another sample result that this rule needs."
-                    ),
-                    bslib::tooltip(
-                      actionButton(ns("remove_rule_input"), "Remove last", class = "btn-sm"),
-                      "Remove the last sample input row."
-                    )
-                  )
+              uiOutput(ns("rule_inputs_ui")),
+              div(
+                style = "display:flex; gap:8px; margin:8px 0;",
+                bslib::tooltip(
+                  actionButton(
+                    ns("add_rule_input"),
+                    "Add input",
+                    class = "btn-sm"
+                  ),
+                  "Add another sample result that this rule needs."
+                ),
+                bslib::tooltip(
+                  actionButton(
+                    ns("remove_rule_input"),
+                    "Remove last",
+                    class = "btn-sm"
+                  ),
+                  "Remove the last sample input row."
                 )
+              )
+            )
           )
         ),
         shinyjs::hidden(
@@ -370,9 +509,18 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
               tags$summary("Coefficients"),
               div(
                 style = "display:flex; gap:8px; margin:8px 0;",
-                actionButton(ns("fill_coefficients_template"), "Template", class = "btn-sm")
+                actionButton(
+                  ns("fill_coefficients_template"),
+                  "Template",
+                  class = "btn-sm"
+                )
               ),
-              textAreaInput(ns("coefficients_text"), NULL, width = "100%", height = "100px")
+              textAreaInput(
+                ns("coefficients_text"),
+                NULL,
+                width = "100%",
+                height = "100px"
+              )
             )
           )
         ),
@@ -388,16 +536,26 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
                 )
               ),
               textAreaInput(
-                ns("narrative_values_text"), NULL, width = "100%", height = "150px",
+                ns("narrative_values_text"),
+                NULL,
+                width = "100%",
+                height = "150px",
                 placeholder = paste(
                   "Paste rows from a spreadsheet. Required columns:",
                   paste(
                     c(
-                      "value_code", "condition_label", "max_change_value",
-                      "max_change_percent", "change_unit",
-                      "background_lower_bound", "background_upper_bound",
-                      "background_unit", "duration_label", "flow_condition",
-                      "sort_order", "note"
+                      "value_code",
+                      "condition_label",
+                      "max_change_value",
+                      "max_change_percent",
+                      "change_unit",
+                      "background_lower_bound",
+                      "background_upper_bound",
+                      "background_unit",
+                      "duration_label",
+                      "flow_condition",
+                      "sort_order",
+                      "note"
                     ),
                     collapse = ", "
                   )
@@ -446,17 +604,28 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
                         ),
                         multiple = TRUE,
                         selected = character(0),
-                        options = list(maxItems = 1, placeholder = "Choose a template..."),
+                        options = list(
+                          maxItems = 1,
+                          placeholder = "Choose a template..."
+                        ),
                         width = "100%"
                       ),
                       "Replace the SQL editor contents with a starting template."
                     ),
                     bslib::tooltip(
-                      actionButton(ns("insert_sql_parameter"), "Insert input", class = "btn-sm"),
+                      actionButton(
+                        ns("insert_sql_parameter"),
+                        "Insert input",
+                        class = "btn-sm"
+                      ),
                       "Insert a SQL expression for one of the Rule inputs already listed above."
                     ),
                     bslib::tooltip(
-                      actionButton(ns("open_guideline_sql_help"), "SQL helper", class = "btn-sm"),
+                      actionButton(
+                        ns("open_guideline_sql_help"),
+                        "SQL helper",
+                        class = "btn-sm"
+                      ),
                       "Open examples and rules for writing database-driven SQL scalar guideline rules."
                     )
                   )
@@ -468,8 +637,16 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
 
         splitLayout(
           cellWidths = c("50%", "50%"),
-          actionButton(ns("save_guideline"), "Save guideline", class = "btn btn-primary"),
-          actionButton(ns("test_guideline"), "Test saved guideline", class = "btn btn-primary")
+          actionButton(
+            ns("save_guideline"),
+            "Save guideline",
+            class = "btn btn-primary"
+          ),
+          actionButton(
+            ns("test_guideline"),
+            "Test saved guideline",
+            class = "btn btn-primary"
+          )
         )
       ),
 
@@ -478,8 +655,16 @@ Shiny.addCustomMessageHandler('openGuidelineHelp', function(url) {
         br(),
         splitLayout(
           cellWidths = c("50%", "50%"),
-          actionButton(ns("add_guideline"), "Add new guideline", class = "btn btn-primary"),
-          actionButton(ns("delete_guideline"), "Delete selected guideline", class = "btn btn-primary")
+          actionButton(
+            ns("add_guideline"),
+            "Add new guideline",
+            class = "btn btn-primary"
+          ),
+          actionButton(
+            ns("delete_guideline"),
+            "Delete selected guideline",
+            class = "btn btn-primary"
+          )
         ),
         br(),
         h4("Selected Guideline Rules"),
@@ -502,10 +687,14 @@ addGuidelines <- function(id, language) {
       if (is.null(x) || !length(x) || all(is.na(x))) y else x
     }
     is_blank <- function(x) {
-      is.null(x) || !length(x) || all(is.na(x)) ||
+      is.null(x) ||
+        !length(x) ||
+        all(is.na(x)) ||
         !nzchar(trimws(as.character(x[[1]])))
     }
-    text_value <- function(x) if (is_blank(x)) "" else trimws(as.character(x[[1]]))
+    text_value <- function(x) {
+      if (is_blank(x)) "" else trimws(as.character(x[[1]]))
+    }
     text_or_na <- function(x) {
       val <- text_value(x)
       if (nzchar(val)) val else NA_character_
@@ -515,7 +704,11 @@ addGuidelines <- function(id, language) {
       if (nzchar(val)) val else default
     }
     sql_text_value <- function(x) {
-      if (is.null(x) || !length(x) || all(is.na(x))) "" else as.character(x[[1]])
+      if (is.null(x) || !length(x) || all(is.na(x))) {
+        ""
+      } else {
+        as.character(x[[1]])
+      }
     }
     clean_sql_scalar <- function(x) {
       gsub("(?m)[[:blank:]]+$", "", sql_text_value(x), perl = TRUE)
@@ -530,7 +723,11 @@ addGuidelines <- function(id, language) {
     normalize_code <- function(x) {
       val <- toupper(gsub("[^A-Za-z0-9]+", "-", text_value(x)))
       val <- gsub("(^-+|-+$)", "", val)
-      if (!nzchar(val)) paste0("GUIDELINE-", format(Sys.time(), "%Y%m%d%H%M%S")) else val
+      if (!nzchar(val)) {
+        paste0("GUIDELINE-", format(Sys.time(), "%Y%m%d%H%M%S"))
+      } else {
+        val
+      }
     }
     normalize_input_code <- function(x, fallback = "input") {
       val <- tolower(gsub("[^A-Za-z0-9]+", "_", text_value(x)))
@@ -538,17 +735,23 @@ addGuidelines <- function(id, language) {
       if (nzchar(val)) val else fallback
     }
     integer_or_na <- function(x) {
-      if (is_blank(x)) return(NA_integer_)
+      if (is_blank(x)) {
+        return(NA_integer_)
+      }
       out <- suppressWarnings(as.integer(as.character(x[[1]])))
       if (is.na(out)) NA_integer_ else out
     }
     numeric_or_na <- function(x) {
-      if (is_blank(x)) return(NA_real_)
+      if (is_blank(x)) {
+        return(NA_real_)
+      }
       out <- suppressWarnings(as.numeric(as.character(x[[1]])))
       if (is.na(out)) NA_real_ else out
     }
     date_or_na <- function(x) {
-      if (is.null(x) || !length(x) || is.na(x[[1]])) return(as.Date(NA))
+      if (is.null(x) || !length(x) || is.na(x[[1]])) {
+        return(as.Date(NA))
+      }
       as.Date(x[[1]])
     }
     update_nullable_date_input <- function(input_id, value, default = NULL) {
@@ -564,10 +767,16 @@ addGuidelines <- function(id, language) {
       }
     }
     bool_value <- function(x, default = FALSE) {
-      if (is_blank(x)) return(default)
+      if (is_blank(x)) {
+        return(default)
+      }
       val <- tolower(trimws(as.character(x[[1]])))
-      if (val %in% c("true", "t", "1", "yes", "y")) return(TRUE)
-      if (val %in% c("false", "f", "0", "no", "n")) return(FALSE)
+      if (val %in% c("true", "t", "1", "yes", "y")) {
+        return(TRUE)
+      }
+      if (val %in% c("false", "f", "0", "no", "n")) {
+        return(FALSE)
+      }
       default
     }
     parse_id_vector <- function(x) {
@@ -575,8 +784,13 @@ addGuidelines <- function(id, language) {
       unique(vals[!is.na(vals)])
     }
     parse_id_csv <- function(x) {
-      if (is_blank(x)) return(integer(0))
-      vals <- unlist(strsplit(as.character(x[[1]]), ",", fixed = TRUE), use.names = FALSE)
+      if (is_blank(x)) {
+        return(integer(0))
+      }
+      vals <- unlist(
+        strsplit(as.character(x[[1]]), ",", fixed = TRUE),
+        use.names = FALSE
+      )
       parse_id_vector(trimws(vals))
     }
     collapse_id_vector <- function(x) paste(parse_id_vector(x), collapse = ",")
@@ -585,29 +799,47 @@ addGuidelines <- function(id, language) {
       if (length(vals)) as.character(vals) else character(0)
     }
     choice_values <- function(df, id_col, label_col) {
-      if (is.null(df) || !nrow(df)) return(character(0))
+      if (is.null(df) || !nrow(df)) {
+        return(character(0))
+      }
       stats::setNames(as.character(df[[id_col]]), df[[label_col]])
     }
     lookup_id_from_text <- function(value, df, id_col, text_col) {
       value <- text_or_na(value)
-      if (is.na(value) || is.null(df) || !nrow(df)) return(NA_integer_)
+      if (is.na(value) || is.null(df) || !nrow(df)) {
+        return(NA_integer_)
+      }
       match_row <- match(
         tolower(trimws(value)),
         tolower(trimws(as.character(df[[text_col]])))
       )
-      if (is.na(match_row)) NA_integer_ else as.integer(df[[id_col]][[match_row]])
+      if (is.na(match_row)) {
+        NA_integer_
+      } else {
+        as.integer(df[[id_col]][[match_row]])
+      }
     }
     resolve_lookup_id <- function(
-      value, df, id_col, text_col, table_name, code_col, code_prefix
+      value,
+      df,
+      id_col,
+      text_col,
+      table_name,
+      code_col,
+      code_prefix
     ) {
       id <- integer_or_na(value)
       if (!is.na(id) && !is.null(df) && id %in% as.integer(df[[id_col]])) {
         return(id)
       }
       label <- text_or_na(value)
-      if (is.na(label)) return(NA_integer_)
+      if (is.na(label)) {
+        return(NA_integer_)
+      }
       existing_id <- lookup_id_from_text(label, df, id_col, text_col)
-      if (!is.na(existing_id)) return(existing_id)
+      if (!is.na(existing_id)) {
+        return(existing_id)
+      }
       resolved <- DBI::dbGetQuery(
         con,
         sprintf(
@@ -628,11 +860,16 @@ addGuidelines <- function(id, language) {
            UNION ALL
            SELECT %1$s FROM existing
            LIMIT 1",
-          id_col, table_name, text_col, code_col
+          id_col,
+          table_name,
+          text_col,
+          code_col
         ),
         params = list(label, code_prefix)
       )
-      if (nrow(resolved)) return(as.integer(resolved[[id_col]][[1]]))
+      if (nrow(resolved)) {
+        return(as.integer(resolved[[id_col]][[1]]))
+      }
 
       resolved <- DBI::dbGetQuery(
         con,
@@ -641,35 +878,59 @@ addGuidelines <- function(id, language) {
            FROM %2$s
            WHERE lower(btrim(%3$s)) = lower(btrim($1))
            LIMIT 1",
-          id_col, table_name, text_col
+          id_col,
+          table_name,
+          text_col
         ),
         params = list(label)
       )
-      if (nrow(resolved)) return(as.integer(resolved[[id_col]][[1]]))
+      if (nrow(resolved)) {
+        return(as.integer(resolved[[id_col]][[1]]))
+      }
       stop("Could not resolve reference value '", label, "'.", call. = FALSE)
     }
     resolve_jurisdiction_id <- function(value) {
       resolve_lookup_id(
-        value, moduleData$jurisdictions, "jurisdiction_id", "jurisdiction_name",
-        "criteria.guideline_jurisdictions", "jurisdiction_code", "JUR"
+        value,
+        moduleData$jurisdictions,
+        "jurisdiction_id",
+        "jurisdiction_name",
+        "criteria.guideline_jurisdictions",
+        "jurisdiction_code",
+        "JUR"
       )
     }
     resolve_protection_goal_id <- function(value) {
       resolve_lookup_id(
-        value, moduleData$protection_goals, "protection_goal_id", "protection_goal_name",
-        "criteria.guideline_protection_goals", "protection_goal_code", "GOAL"
+        value,
+        moduleData$protection_goals,
+        "protection_goal_id",
+        "protection_goal_name",
+        "criteria.guideline_protection_goals",
+        "protection_goal_code",
+        "GOAL"
       )
     }
     resolve_exposure_duration_id <- function(value) {
       resolve_lookup_id(
-        value, moduleData$exposure_durations, "exposure_duration_id", "exposure_duration_name",
-        "criteria.guideline_exposure_durations", "exposure_duration_code", "EXPOSURE"
+        value,
+        moduleData$exposure_durations,
+        "exposure_duration_id",
+        "exposure_duration_name",
+        "criteria.guideline_exposure_durations",
+        "exposure_duration_code",
+        "EXPOSURE"
       )
     }
     resolve_averaging_period_id <- function(value) {
       resolve_lookup_id(
-        value, moduleData$averaging_periods, "averaging_period_id", "averaging_period_name",
-        "criteria.guideline_averaging_periods", "averaging_period_code", "AVG"
+        value,
+        moduleData$averaging_periods,
+        "averaging_period_id",
+        "averaging_period_name",
+        "criteria.guideline_averaging_periods",
+        "averaging_period_code",
+        "AVG"
       )
     }
 
@@ -700,51 +961,107 @@ addGuidelines <- function(id, language) {
     }
 
     input_cols <- c(
-      "input_code", "input_name", "input_source", "parameter_id",
-      "matrix_state_id", "sample_fraction_id", "result_speciation_id",
-      "result_type", "result_type_preference", "aggregate_method",
-      "required", "allow_condition_value",
-      "lower_calibrated_bound", "upper_calibrated_bound", "bounds_action",
+      "input_code",
+      "input_name",
+      "input_source",
+      "parameter_id",
+      "matrix_state_id",
+      "sample_fraction_id",
+      "result_speciation_id",
+      "result_type",
+      "result_type_preference",
+      "aggregate_method",
+      "required",
+      "allow_condition_value",
+      "lower_calibrated_bound",
+      "upper_calibrated_bound",
+      "bounds_action",
       "note"
     )
     coef_cols <- c("coefficient_name", "coefficient_value", "note")
     fake_input_cols <- c(
-      "input_code", "input_source", "value", "result_type_id", "parameter_id",
-      "matrix_state_id", "sample_fraction_id", "result_speciation_id"
+      "input_code",
+      "input_source",
+      "value",
+      "result_type_id",
+      "parameter_id",
+      "matrix_state_id",
+      "sample_fraction_id",
+      "result_speciation_id"
     )
     narrative_cols <- c(
-      "value_code", "condition_label", "max_change_value", "max_change_percent",
-      "change_unit", "background_lower_bound", "background_upper_bound",
-      "background_unit", "duration_label", "flow_condition", "sort_order", "note"
+      "value_code",
+      "condition_label",
+      "max_change_value",
+      "max_change_percent",
+      "change_unit",
+      "background_lower_bound",
+      "background_upper_bound",
+      "background_unit",
+      "duration_label",
+      "flow_condition",
+      "sort_order",
+      "note"
     )
 
     empty_table_text <- function(cols) paste(cols, collapse = "\t")
     format_table_text <- function(df, cols) {
-      if (is.null(df) || !nrow(df)) return(empty_table_text(cols))
-      for (col in cols) if (!col %in% names(df)) df[[col]] <- NA
+      if (is.null(df) || !nrow(df)) {
+        return(empty_table_text(cols))
+      }
+      for (col in cols) {
+        if (!col %in% names(df)) df[[col]] <- NA
+      }
       rows <- apply(df[, cols, drop = FALSE], 1, function(row) {
-        paste(vapply(row, function(value) {
-          if (is.na(value)) "" else as.character(value)
-        }, character(1)), collapse = "\t")
+        paste(
+          vapply(
+            row,
+            function(value) {
+              if (is.na(value)) "" else as.character(value)
+            },
+            character(1)
+          ),
+          collapse = "\t"
+        )
       })
       paste(c(paste(cols, collapse = "\t"), rows), collapse = "\n")
     }
     parse_table_text <- function(x, required_cols, label) {
       txt <- text_value(x)
-      if (!nzchar(txt)) return(data.frame(stringsAsFactors = FALSE))
+      if (!nzchar(txt)) {
+        return(data.frame(stringsAsFactors = FALSE))
+      }
       sep <- if (grepl("\t", txt, fixed = TRUE)) "\t" else ","
       df <- tryCatch(
         utils::read.table(
-          text = txt, header = TRUE, sep = sep, stringsAsFactors = FALSE,
-          na.strings = c("", "NA", "NULL"), quote = "\"",
-          comment.char = "", fill = TRUE
+          text = txt,
+          header = TRUE,
+          sep = sep,
+          stringsAsFactors = FALSE,
+          na.strings = c("", "NA", "NULL"),
+          quote = "\"",
+          comment.char = "",
+          fill = TRUE
         ),
-        error = function(e) stop("Could not read ", label, ": ", conditionMessage(e), call. = FALSE)
+        error = function(e) {
+          stop(
+            "Could not read ",
+            label,
+            ": ",
+            conditionMessage(e),
+            call. = FALSE
+          )
+        }
       )
       names(df) <- trimws(names(df))
       missing_cols <- setdiff(required_cols, names(df))
       if (length(missing_cols)) {
-        stop(label, " is missing column(s): ", paste(missing_cols, collapse = ", "), call. = FALSE)
+        stop(
+          label,
+          " is missing column(s): ",
+          paste(missing_cols, collapse = ", "),
+          call. = FALSE
+        )
       }
       df
     }
@@ -756,7 +1073,12 @@ addGuidelines <- function(id, language) {
 
     selectize_single_options <- list(maxItems = 1)
     selected_or_empty <- function(x) {
-      if (is.null(x) || !length(x) || is.na(x[[1]]) || !nzchar(as.character(x[[1]]))) {
+      if (
+        is.null(x) ||
+          !length(x) ||
+          is.na(x[[1]]) ||
+          !nzchar(as.character(x[[1]]))
+      ) {
         character(0)
       } else {
         as.character(x[[1]])
@@ -773,14 +1095,22 @@ addGuidelines <- function(id, language) {
       labels <- moduleData$parameters$param_name
       units <- moduleData$parameters$unit_default
       has_units <- !is.na(units) & nzchar(units)
-      labels[has_units] <- paste0(labels[has_units], " (", units[has_units], ")")
+      labels[has_units] <- paste0(
+        labels[has_units],
+        " (",
+        units[has_units],
+        ")"
+      )
       labels
     }
     parameter_choices <- function() {
       if (is.null(moduleData$parameters) || !nrow(moduleData$parameters)) {
         return(character(0))
       }
-      stats::setNames(as.character(moduleData$parameters$parameter_id), parameter_choice_labels())
+      stats::setNames(
+        as.character(moduleData$parameters$parameter_id),
+        parameter_choice_labels()
+      )
     }
     hardness_helper_choice_value <- "helper:hardness_preferred"
     parameter_choices_with_helpers <- function() {
@@ -796,13 +1126,25 @@ addGuidelines <- function(id, language) {
       find_parameter_id("^hardness$")
     }
     matrix_state_choices <- function() {
-      choice_values(moduleData$matrix_states, "matrix_state_id", "matrix_state_name")
+      choice_values(
+        moduleData$matrix_states,
+        "matrix_state_id",
+        "matrix_state_name"
+      )
     }
     sample_fraction_choices <- function() {
-      choice_values(moduleData$sample_fractions, "sample_fraction_id", "sample_fraction")
+      choice_values(
+        moduleData$sample_fractions,
+        "sample_fraction_id",
+        "sample_fraction"
+      )
     }
     speciation_choices <- function() {
-      choice_values(moduleData$result_speciations, "result_speciation_id", "result_speciation")
+      choice_values(
+        moduleData$result_speciations,
+        "result_speciation_id",
+        "result_speciation"
+      )
     }
     result_type_choices <- function() {
       choice_values(moduleData$result_types, "result_type_id", "result_type")
@@ -823,14 +1165,19 @@ addGuidelines <- function(id, language) {
       ]
       if (nrow(row)) as.character(row$param_name[[1]]) else ""
     }
-    default_rule_input_name <- function(parameter_id, input_source = "sample_result") {
+    default_rule_input_name <- function(
+      parameter_id,
+      input_source = "sample_result"
+    ) {
       if (identical(text_value(input_source), "hardness_helper")) {
         return("Hardness as CaCO3 (preferred)")
       }
       parameter_name_for_id(parameter_id)
     }
     default_rule_input_code <- function(
-      parameter_id, input_source = "sample_result", fallback = "input"
+      parameter_id,
+      input_source = "sample_result",
+      fallback = "input"
     ) {
       if (identical(text_value(input_source), "hardness_helper")) {
         return("hardness_mg_l_caco3")
@@ -864,10 +1211,15 @@ addGuidelines <- function(id, language) {
       }
       out
     }
-    parameter_unit_for_id <- function(parameter_id, matrix_state_id = input$matrix_state) {
+    parameter_unit_for_id <- function(
+      parameter_id,
+      matrix_state_id = input$matrix_state
+    ) {
       parameter_id <- integer_or_na(parameter_id)
       matrix_state_id <- integer_or_na(matrix_state_id)
-      if (is.na(parameter_id)) return("")
+      if (is.na(parameter_id)) {
+        return("")
+      }
       unit_value <- tryCatch(
         DBI::dbGetQuery(
           con,
@@ -876,7 +1228,9 @@ addGuidelines <- function(id, language) {
         )$unit_name[[1]],
         error = function(e) NA_character_
       )
-      if (!is.na(unit_value) && nzchar(unit_value)) return(as.character(unit_value))
+      if (!is.na(unit_value) && nzchar(unit_value)) {
+        return(as.character(unit_value))
+      }
       row <- moduleData$parameters[
         moduleData$parameters$parameter_id == parameter_id,
         ,
@@ -889,7 +1243,9 @@ addGuidelines <- function(id, language) {
       }
     }
     parameter_requires_speciation <- function(parameter_id) {
-      if (is_hardness_helper_choice(parameter_id)) return(FALSE)
+      if (is_hardness_helper_choice(parameter_id)) {
+        return(FALSE)
+      }
       parameter_id <- integer_or_na(parameter_id)
       if (
         is.na(parameter_id) ||
@@ -907,7 +1263,9 @@ addGuidelines <- function(id, language) {
       nrow(row) && isTRUE(row$result_speciation[[1]])
     }
     parameter_requires_fraction <- function(parameter_id) {
-      if (is_hardness_helper_choice(parameter_id)) return(FALSE)
+      if (is_hardness_helper_choice(parameter_id)) {
+        return(FALSE)
+      }
       parameter_id <- integer_or_na(parameter_id)
       if (
         is.na(parameter_id) ||
@@ -924,11 +1282,34 @@ addGuidelines <- function(id, language) {
       ]
       nrow(row) && isTRUE(row$sample_fraction[[1]])
     }
-    update_result_speciation_visibility <- function(parameter_id = input$parameter_id) {
+    parameter_flag_value <- function(parameter_id, column) {
+      parameter_id <- integer_or_na(parameter_id)
+      if (
+        is.na(parameter_id) ||
+          is.null(moduleData$parameters) ||
+          !nrow(moduleData$parameters) ||
+          !(column %in% names(moduleData$parameters))
+      ) {
+        return(FALSE)
+      }
+      row <- moduleData$parameters[
+        moduleData$parameters$parameter_id == parameter_id,
+        ,
+        drop = FALSE
+      ]
+      nrow(row) && isTRUE(row[[column]][[1]])
+    }
+    update_result_speciation_visibility <- function(
+      parameter_id = input$parameter_id
+    ) {
       if (parameter_requires_speciation(parameter_id)) {
         shinyjs::show(id = "result_speciation_section", anim = FALSE)
       } else {
-        updateSelectizeInput(session, "result_speciation", selected = character(0))
+        updateSelectizeInput(
+          session,
+          "result_speciation",
+          selected = character(0)
+        )
         shinyjs::hide(id = "result_speciation_section", anim = FALSE)
       }
     }
@@ -954,20 +1335,37 @@ addGuidelines <- function(id, language) {
       )
     }
     normalize_rule_input_rows <- function(df) {
-      if (is.null(df) || !nrow(df)) return(blank_rule_input_rows(1L))
+      if (is.null(df) || !nrow(df)) {
+        return(blank_rule_input_rows(1L))
+      }
       for (col in input_cols) {
-        if (!col %in% names(df)) df[[col]] <- blank_rule_input_rows(1L)[[col]][[1]]
+        if (!col %in% names(df)) {
+          df[[col]] <- blank_rule_input_rows(1L)[[col]][[1]]
+        }
       }
       df <- df[, input_cols, drop = FALSE]
       df$input_code <- as.character(df$input_code %||% "")
       df$input_name <- as.character(df$input_name %||% "")
       df$input_source <- as.character(df$input_source %||% "sample_result")
-      df$input_source[is.na(df$input_source) | !nzchar(df$input_source)] <- "sample_result"
-      df$result_type_preference <- as.character(df$result_type_preference %||% "")
-      df$aggregate_method[is.na(df$aggregate_method) | !nzchar(df$aggregate_method)] <- "single"
-      df$bounds_action[is.na(df$bounds_action) | !nzchar(df$bounds_action)] <- "flag"
+      df$input_source[
+        is.na(df$input_source) | !nzchar(df$input_source)
+      ] <- "sample_result"
+      df$result_type_preference <- as.character(
+        df$result_type_preference %||% ""
+      )
+      df$aggregate_method[
+        is.na(df$aggregate_method) | !nzchar(df$aggregate_method)
+      ] <- "single"
+      df$bounds_action[
+        is.na(df$bounds_action) | !nzchar(df$bounds_action)
+      ] <- "flag"
       df$required <- vapply(df$required, bool_value, logical(1), default = TRUE)
-      df$allow_condition_value <- vapply(df$allow_condition_value, bool_value, logical(1), default = FALSE)
+      df$allow_condition_value <- vapply(
+        df$allow_condition_value,
+        bool_value,
+        logical(1),
+        default = FALSE
+      )
       df$note <- as.character(df$note %||% "")
       df
     }
@@ -979,7 +1377,9 @@ addGuidelines <- function(id, language) {
     rule_input_id <- function(field, row) paste0("rule_input_", field, "_", row)
     collect_rule_input_rows <- function(include_empty = FALSE) {
       n <- rule_input_count()
-      if (is.null(n) || !n) return(blank_rule_input_rows(0L))
+      if (is.null(n) || !n) {
+        return(blank_rule_input_rows(0L))
+      }
       rows <- lapply(seq_len(n), function(i) {
         parameter_choice <- input[[rule_input_id("parameter", i)]]
         input_source <- if (is_hardness_helper_choice(parameter_choice)) {
@@ -992,7 +1392,10 @@ addGuidelines <- function(id, language) {
         } else {
           integer_or_na(parameter_choice)
         }
-        matrix_state_id <- integer_or_na(input[[rule_input_id("matrix_state", i)]])
+        matrix_state_id <- integer_or_na(input[[rule_input_id(
+          "matrix_state",
+          i
+        )]])
         if (is.na(matrix_state_id)) {
           matrix_state_id <- integer_or_na(input$matrix_state)
         }
@@ -1014,7 +1417,9 @@ addGuidelines <- function(id, language) {
         }
         input_name <- default_rule_input_name(parameter_id, input_source)
         input_code <- default_rule_input_code(
-          parameter_id, input_source, fallback = paste0("input_", i)
+          parameter_id,
+          input_source,
+          fallback = paste0("input_", i)
         )
         data.frame(
           input_code = input_code,
@@ -1028,19 +1433,36 @@ addGuidelines <- function(id, language) {
           result_type_preference = collapse_id_vector(
             input[[rule_input_id("result_type_preference", i)]]
           ),
-          aggregate_method = text_default(input[[rule_input_id("aggregate_method", i)]], "single"),
+          aggregate_method = text_default(
+            input[[rule_input_id("aggregate_method", i)]],
+            "single"
+          ),
           required = isTRUE(input[[rule_input_id("required", i)]]),
-          allow_condition_value = isTRUE(input[[rule_input_id("allow_condition_value", i)]]),
-          lower_calibrated_bound = numeric_or_na(input[[rule_input_id("lower_calibrated_bound", i)]]),
-          upper_calibrated_bound = numeric_or_na(input[[rule_input_id("upper_calibrated_bound", i)]]),
-          bounds_action = text_default(input[[rule_input_id("bounds_action", i)]], "flag"),
+          allow_condition_value = isTRUE(input[[rule_input_id(
+            "allow_condition_value",
+            i
+          )]]),
+          lower_calibrated_bound = numeric_or_na(input[[rule_input_id(
+            "lower_calibrated_bound",
+            i
+          )]]),
+          upper_calibrated_bound = numeric_or_na(input[[rule_input_id(
+            "upper_calibrated_bound",
+            i
+          )]]),
+          bounds_action = text_default(
+            input[[rule_input_id("bounds_action", i)]],
+            "flag"
+          ),
           note = text_value(input[[rule_input_id("note", i)]]),
           stringsAsFactors = FALSE
         )
       })
       df <- do.call(rbind, rows)
       df$input_code <- make_unique_input_codes(df$input_code)
-      if (include_empty) return(df)
+      if (include_empty) {
+        return(df)
+      }
       has_content <- !is.na(df$parameter_id)
       df[has_content, , drop = FALSE]
     }
@@ -1206,25 +1628,150 @@ addGuidelines <- function(id, language) {
     update_choices <- function(clear = FALSE) {
       selected <- if (isTRUE(clear)) character(0) else NULL
       shiny::isolate({
-        updateSelectizeInput(session, "publisher", choices = choice_values(moduleData$publishers, "publisher_id", "publisher_name"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "series", choices = choice_values(moduleData$series, "series_id", "series_name"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "parameter_id", choices = parameter_choices(), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "matrix_state", choices = choice_values(moduleData$matrix_states, "matrix_state_id", "matrix_state_name"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "result_speciation", choices = choice_values(moduleData$result_speciations, "result_speciation_id", "result_speciation"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "sample_fraction", choices = choice_values(moduleData$sample_fractions, "sample_fraction_id", "sample_fraction"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "media_type", choices = choice_values(moduleData$media_types, "media_id", "media_type"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "specific_locations", choices = choice_values(moduleData$locations, "location_id", "location_label"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "jurisdiction", choices = choice_values(moduleData$jurisdictions, "jurisdiction_id", "jurisdiction_name"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "protection_goal", choices = choice_values(moduleData$protection_goals, "protection_goal_id", "protection_goal_name"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "exposure_duration", choices = choice_values(moduleData$exposure_durations, "exposure_duration_id", "exposure_duration_name"), selected = selected, server = TRUE)
-        updateSelectizeInput(session, "averaging_period", choices = choice_values(moduleData$averaging_periods, "averaging_period_id", "averaging_period_name"), selected = selected, server = TRUE)
+        updateSelectizeInput(
+          session,
+          "publisher",
+          choices = choice_values(
+            moduleData$publishers,
+            "publisher_id",
+            "publisher_name"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "series",
+          choices = choice_values(
+            moduleData$series,
+            "series_id",
+            "series_name"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "parameter_id",
+          choices = parameter_choices(),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "matrix_state",
+          choices = choice_values(
+            moduleData$matrix_states,
+            "matrix_state_id",
+            "matrix_state_name"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "result_speciation",
+          choices = choice_values(
+            moduleData$result_speciations,
+            "result_speciation_id",
+            "result_speciation"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "sample_fraction",
+          choices = choice_values(
+            moduleData$sample_fractions,
+            "sample_fraction_id",
+            "sample_fraction"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "media_type",
+          choices = choice_values(
+            moduleData$media_types,
+            "media_id",
+            "media_type"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "specific_locations",
+          choices = choice_values(
+            moduleData$locations,
+            "location_id",
+            "location_label"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "jurisdiction",
+          choices = choice_values(
+            moduleData$jurisdictions,
+            "jurisdiction_id",
+            "jurisdiction_name"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "protection_goal",
+          choices = choice_values(
+            moduleData$protection_goals,
+            "protection_goal_id",
+            "protection_goal_name"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "exposure_duration",
+          choices = choice_values(
+            moduleData$exposure_durations,
+            "exposure_duration_id",
+            "exposure_duration_name"
+          ),
+          selected = selected,
+          server = TRUE
+        )
+        updateSelectizeInput(
+          session,
+          "averaging_period",
+          choices = choice_values(
+            moduleData$averaging_periods,
+            "averaging_period_id",
+            "averaging_period_name"
+          ),
+          selected = selected,
+          server = TRUE
+        )
         updateSelectInput(
-          session, "comparison_operator",
+          session,
+          "comparison_operator",
           choices = stats::setNames(
             moduleData$operators$operator_code,
-            paste(moduleData$operators$operator_code, moduleData$operators$operator_name, sep = " - ")
+            paste(
+              moduleData$operators$operator_code,
+              moduleData$operators$operator_name,
+              sep = " - "
+            )
           ),
-          selected = if (isTRUE(clear)) "lte" else input$comparison_operator %||% "lte"
+          selected = if (isTRUE(clear)) {
+            "lte"
+          } else {
+            input$comparison_operator %||% "lte"
+          }
         )
       })
     }
@@ -1234,28 +1781,51 @@ addGuidelines <- function(id, language) {
       if (!selected %in% unname(choices)) {
         selected <- default_type_for_operator(operator)
       }
-      updateSelectInput(session, "guideline_type", choices = choices, selected = selected)
+      updateSelectInput(
+        session,
+        "guideline_type",
+        choices = choices,
+        selected = selected
+      )
       if (operator %in% c("lte", "gte", "eq")) {
-        updateSelectInput(session, "bound_code", selected = bound_for_operator(operator))
+        updateSelectInput(
+          session,
+          "bound_code",
+          selected = bound_for_operator(operator)
+        )
       }
       update_rule_field_visibility(selected)
       selected
     }
 
     load_reference_data()
-    session$onFlushed(function() {
-      update_choices(clear = TRUE)
-      set_rule_input_rows(blank_rule_input_rows(1L))
-      update_result_speciation_visibility(character(0))
-      updateTextAreaInput(session, "coefficients_text", value = empty_table_text(coef_cols))
-      updateTextAreaInput(session, "narrative_values_text", value = empty_table_text(narrative_cols))
-      update_guideline_type_choices("lte", "constant_upper")
-    }, once = TRUE)
+    session$onFlushed(
+      function() {
+        update_choices(clear = TRUE)
+        set_rule_input_rows(blank_rule_input_rows(1L))
+        update_result_speciation_visibility(character(0))
+        updateTextAreaInput(
+          session,
+          "coefficients_text",
+          value = empty_table_text(coef_cols)
+        )
+        updateTextAreaInput(
+          session,
+          "narrative_values_text",
+          value = empty_table_text(narrative_cols)
+        )
+        update_guideline_type_choices("lte", "constant_upper")
+      },
+      once = TRUE
+    )
 
     output$banner <- renderUI({
       req(language$language)
       application_notifications_ui(
-        ns = ns, lang = language$language, con = con, module_id = "addGuidelines"
+        ns = ns,
+        lang = language$language,
+        con = con,
+        module_id = "addGuidelines"
       )
     })
 
@@ -1279,7 +1849,12 @@ addGuidelines <- function(id, language) {
 
     output$calculation_source_ui <- renderUI({
       value_text <- function(x, fallback = "Not set") {
-        if (is.null(x) || !length(x) || is.na(x[[1]]) || !nzchar(as.character(x[[1]]))) {
+        if (
+          is.null(x) ||
+            !length(x) ||
+            is.na(x[[1]]) ||
+            !nzchar(as.character(x[[1]]))
+        ) {
           fallback
         } else {
           as.character(x[[1]])
@@ -1294,7 +1869,11 @@ addGuidelines <- function(id, language) {
         )
       }
       guideline_id <- selected_guideline_id()
-      rules <- if (is.na(guideline_id)) data.frame() else load_rules(guideline_id)
+      rules <- if (is.na(guideline_id)) {
+        data.frame()
+      } else {
+        load_rules(guideline_id)
+      }
       primary <- if (nrow(rules)) rules[1, , drop = FALSE] else NULL
       type <- input$guideline_type %||% "constant_upper"
       algorithm <- if (!is.null(primary)) {
@@ -1324,18 +1903,29 @@ addGuidelines <- function(id, language) {
 
       details <- list(item("Stored as", algorithm))
       if (algorithm %in% c("linear", "log_linear")) {
-        coef_count <- if (!is.null(primary)) nrow(load_coefficients(primary$rule_id[[1]])) else NA_integer_
+        coef_count <- if (!is.null(primary)) {
+          nrow(load_coefficients(primary$rule_id[[1]]))
+        } else {
+          NA_integer_
+        }
         rule_text <- if (!is.null(primary)) format_value_rule(primary) else ""
         details <- c(
           details,
           list(
             item("Value rule", rule_text),
-            item("Computed value", "Shown as lower_guideline_value or upper_guideline_value after testing a sample/result."),
+            item(
+              "Computed value",
+              "Shown as lower_guideline_value or upper_guideline_value after testing a sample/result."
+            ),
             item("Coefficient rows", coef_count)
           )
         )
       } else if (algorithm == "narrative") {
-        narrative_count <- if (is.na(guideline_id)) NA_integer_ else nrow(load_narrative_values(guideline_id))
+        narrative_count <- if (is.na(guideline_id)) {
+          NA_integer_
+        } else {
+          nrow(load_narrative_values(guideline_id))
+        }
         details <- c(
           details,
           list(
@@ -1344,7 +1934,10 @@ addGuidelines <- function(id, language) {
           )
         )
       } else if (algorithm == "sql_scalar") {
-        details <- c(details, list(item("SQL source", "Stored on this value rule")))
+        details <- c(
+          details,
+          list(item("SQL source", "Stored on this value rule"))
+        )
       }
 
       tags$div(
@@ -1355,26 +1948,36 @@ addGuidelines <- function(id, language) {
           "background:#fff;"
         ),
         tags$strong("Calculation source"),
-        tags$p(class = "text-muted", style = "margin:4px 0 8px 0;", summary_text),
+        tags$p(
+          class = "text-muted",
+          style = "margin:4px 0 8px 0;",
+          summary_text
+        ),
         details
       )
     })
 
     output$rule_inputs_ui <- renderUI({
       n <- rule_input_count()
-      if (is.null(n) || n < 1L) return(NULL)
+      if (is.null(n) || n < 1L) {
+        return(NULL)
+      }
       seed <- normalize_rule_input_rows(rule_input_seed())
       if (nrow(seed) < n) {
         seed <- rbind(seed, blank_rule_input_rows(n - nrow(seed)))
       }
       tagList(lapply(seq_len(n), function(i) {
         row <- seed[i, , drop = FALSE]
-        selected_parameter <- if (identical(row$input_source[[1]], "hardness_helper")) {
+        selected_parameter <- if (
+          identical(row$input_source[[1]], "hardness_helper")
+        ) {
           hardness_helper_choice_value
         } else {
           selected_or_empty(row$parameter_id)
         }
-        result_type_seed <- if (nzchar(text_value(row$result_type_preference))) {
+        result_type_seed <- if (
+          nzchar(text_value(row$result_type_preference))
+        ) {
           row$result_type_preference[[1]]
         } else {
           row$result_type[[1]]
@@ -1478,7 +2081,9 @@ addGuidelines <- function(id, language) {
                 choices = choices_with_any(result_type_choices()),
                 selected = selected_or_empty_vector(result_type_seed),
                 multiple = TRUE,
-                options = list(placeholder = "Any result type, or select fallback order..."),
+                options = list(
+                  placeholder = "Any result type, or select fallback order..."
+                ),
                 width = "100%"
               )
             )
@@ -1541,7 +2146,11 @@ addGuidelines <- function(id, language) {
                     tags$span("Out-of-range input"),
                     "For calibration limits: flag the value, clamp it to the limit, or reject the guideline calculation."
                   ),
-                  choices = c("Flag" = "flag", "Clamp" = "clamp", "Reject" = "reject"),
+                  choices = c(
+                    "Flag" = "flag",
+                    "Clamp" = "clamp",
+                    "Reject" = "reject"
+                  ),
                   selected = row$bounds_action[[1]] %||% "flag"
                 )
               ),
@@ -1563,12 +2172,19 @@ addGuidelines <- function(id, language) {
     update_rule_field_visibility <- function(type = "constant_upper") {
       type <- type %||% "constant_upper"
       sections <- c(
-        "fixed_value_section", "range_value_section", "bound_section",
-        "formula_algorithm_section", "advanced_rule_options_section",
-        "rule_inputs_section", "coefficients_section",
-        "narrative_values_section", "sql_scalar_section"
+        "fixed_value_section",
+        "range_value_section",
+        "bound_section",
+        "formula_algorithm_section",
+        "advanced_rule_options_section",
+        "rule_inputs_section",
+        "coefficients_section",
+        "narrative_values_section",
+        "sql_scalar_section"
       )
-      invisible(lapply(sections, function(id) shinyjs::hide(id = id, anim = FALSE)))
+      invisible(lapply(sections, function(id) {
+        shinyjs::hide(id = id, anim = FALSE)
+      }))
 
       if (type %in% c("constant_upper", "constant_lower")) {
         shinyjs::show(id = "fixed_value_section", anim = FALSE)
@@ -1595,35 +2211,101 @@ addGuidelines <- function(id, language) {
 
     last_comparison_operator <- reactiveVal(NULL)
 
-    observeEvent(input$guideline_type, {
-      type <- input$guideline_type %||% "constant_upper"
-      update_rule_field_visibility(type)
-      operator <- input$comparison_operator %||% "lte"
-      if (operator %in% c("lte", "gte", "eq")) {
-        updateSelectInput(session, "bound_code", selected = bound_for_operator(operator))
-      }
-    }, ignoreInit = FALSE)
+    observeEvent(
+      input$guideline_type,
+      {
+        type <- input$guideline_type %||% "constant_upper"
+        update_rule_field_visibility(type)
+        operator <- input$comparison_operator %||% "lte"
+        if (operator %in% c("lte", "gte", "eq")) {
+          updateSelectInput(
+            session,
+            "bound_code",
+            selected = bound_for_operator(operator)
+          )
+        }
+      },
+      ignoreInit = FALSE
+    )
 
-    observeEvent(input$comparison_operator, {
-      operator <- input$comparison_operator %||% "lte"
-      previous_operator <- last_comparison_operator()
-      selected <- update_guideline_type_choices(operator, input$guideline_type)
-      if (!is.null(previous_operator) && !identical(previous_operator, operator)) {
-        updateNumericInput(session, "fixed_value", value = NA_real_)
-        updateNumericInput(session, "lower_value", value = NA_real_)
-        updateNumericInput(session, "upper_value", value = NA_real_)
-      }
-      update_rule_field_visibility(selected)
-      last_comparison_operator(operator)
-    }, ignoreInit = FALSE)
+    observeEvent(
+      input$comparison_operator,
+      {
+        operator <- input$comparison_operator %||% "lte"
+        previous_operator <- last_comparison_operator()
+        selected <- update_guideline_type_choices(
+          operator,
+          input$guideline_type
+        )
+        if (
+          !is.null(previous_operator) && !identical(previous_operator, operator)
+        ) {
+          updateNumericInput(session, "fixed_value", value = NA_real_)
+          updateNumericInput(session, "lower_value", value = NA_real_)
+          updateNumericInput(session, "upper_value", value = NA_real_)
+        }
+        update_rule_field_visibility(selected)
+        last_comparison_operator(operator)
+      },
+      ignoreInit = FALSE
+    )
 
-    observeEvent(input$parameter_id, {
-      update_result_speciation_visibility(input$parameter_id)
-    }, ignoreInit = FALSE)
+    observeEvent(
+      input$parameter_id,
+      {
+        update_result_speciation_visibility(input$parameter_id)
+      },
+      ignoreInit = FALSE
+    )
+
+    output$fraction_speciation_applicability_note <- renderUI({
+      parameter_id <- integer_or_na(input$parameter_id)
+      if (is.na(parameter_id)) {
+        return(tags$small(
+          class = "text-muted",
+          "Leaving guideline fractions empty applies the guideline to all fractions, including results where fraction is empty. Leaving result speciation empty applies the guideline to all speciations, including results where speciation is empty."
+        ))
+      }
+
+      fraction_required <- parameter_flag_value(parameter_id, "sample_fraction")
+      speciation_required <- parameter_flag_value(
+        parameter_id,
+        "result_speciation"
+      )
+
+      notes <- c(
+        "Leave guideline fractions empty unless the source guideline applies only to named fractions. Empty means all fractions, including results where fraction is empty.",
+        "Leave result speciation empty unless the source guideline applies only to a named speciation. Empty means all speciations, including results where speciation is empty."
+      )
+      if (!fraction_required) {
+        notes <- c(
+          notes,
+          "This parameter is not marked as requiring sample fraction in public.parameters, so results for it commonly have no fraction."
+        )
+      }
+      if (!speciation_required) {
+        notes <- c(
+          notes,
+          "This parameter is not marked as requiring result speciation in public.parameters, so results for it commonly have no speciation."
+        )
+      }
+
+      tags$div(
+        class = "small text-muted",
+        style = paste(
+          "margin-top:-0.35rem;",
+          "margin-bottom:0.75rem;",
+          "line-height:1.35;"
+        ),
+        lapply(notes, tags$p)
+      )
+    })
 
     observe({
       n <- rule_input_count()
-      if (is.null(n) || n < 1L) return()
+      if (is.null(n) || n < 1L) {
+        return()
+      }
       for (i in seq_len(n)) {
         parameter_id <- input[[rule_input_id("parameter", i)]]
         if (parameter_requires_fraction(parameter_id)) {
@@ -1637,14 +2319,20 @@ addGuidelines <- function(id, language) {
           shinyjs::hide(id = rule_input_id("fraction_section", i), anim = FALSE)
         }
         if (parameter_requires_speciation(parameter_id)) {
-          shinyjs::show(id = rule_input_id("speciation_section", i), anim = FALSE)
+          shinyjs::show(
+            id = rule_input_id("speciation_section", i),
+            anim = FALSE
+          )
         } else {
           updateSelectizeInput(
             session,
             rule_input_id("speciation", i),
             selected = character(0)
           )
-          shinyjs::hide(id = rule_input_id("speciation_section", i), anim = FALSE)
+          shinyjs::hide(
+            id = rule_input_id("speciation_section", i),
+            anim = FALSE
+          )
         }
       }
     })
@@ -1663,25 +2351,47 @@ addGuidelines <- function(id, language) {
       }
     })
 
-    output$guidelines_table <- DT::renderDT({
-      cols <- c(
-        "guideline_id", "guideline_code", "guideline_name", "publisher",
-        "series", "parameter", "units", "matrix_state", "fractions",
-        "media_types", "locations", "comparison_operator_code", "exposure_duration",
-        "averaging_period", "review_status", "active", "rule_count", "rules"
-      )
-      df <- moduleData$guidelines
-      for (col in cols) if (!col %in% names(df)) df[[col]] <- NA
-      DT::datatable(
-        df[, cols, drop = FALSE], selection = "single", rownames = FALSE,
-        filter = "top",
-        options = list(
-          pageLength = 10, scrollX = TRUE,
-          columnDefs = list(list(targets = 0, visible = FALSE)),
-          layout = list(bottomStart = "info", bottomEnd = "paging")
+    output$guidelines_table <- DT::renderDT(
+      {
+        cols <- c(
+          "guideline_id",
+          "guideline_code",
+          "guideline_name",
+          "publisher",
+          "series",
+          "parameter",
+          "units",
+          "matrix_state",
+          "fractions",
+          "media_types",
+          "locations",
+          "comparison_operator_code",
+          "exposure_duration",
+          "averaging_period",
+          "review_status",
+          "active",
+          "rule_count",
+          "rules"
         )
-      )
-    }, server = FALSE)
+        df <- moduleData$guidelines
+        for (col in cols) {
+          if (!col %in% names(df)) df[[col]] <- NA
+        }
+        DT::datatable(
+          df[, cols, drop = FALSE],
+          selection = "single",
+          rownames = FALSE,
+          filter = "top",
+          options = list(
+            pageLength = 10,
+            scrollX = TRUE,
+            columnDefs = list(list(targets = 0, visible = FALSE)),
+            layout = list(bottomStart = "info", bottomEnd = "paging")
+          )
+        )
+      },
+      server = FALSE
+    )
 
     load_rules <- function(guideline_id) {
       DBI::dbGetQuery(
@@ -1723,23 +2433,37 @@ addGuidelines <- function(id, language) {
       )
     }
     coefficient_value <- function(coefficients, name) {
-      if (is.null(coefficients) || !nrow(coefficients)) return(NA_real_)
+      if (is.null(coefficients) || !nrow(coefficients)) {
+        return(NA_real_)
+      }
       hit <- coefficients$coefficient_name == name
-      if (!any(hit)) return(NA_real_)
+      if (!any(hit)) {
+        return(NA_real_)
+      }
       suppressWarnings(as.numeric(coefficients$coefficient_value[hit][[1]]))
     }
     formula_input_label <- function(inputs) {
-      if (is.null(inputs) || !nrow(inputs)) return("input_value")
+      if (is.null(inputs) || !nrow(inputs)) {
+        return("input_value")
+      }
       label <- inputs$input_name[[1]]
-      if (is.na(label) || !nzchar(label)) label <- inputs$input_code[[1]]
-      if (is.na(label) || !nzchar(label)) label <- "input_value"
+      if (is.na(label) || !nzchar(label)) {
+        label <- inputs$input_code[[1]]
+      }
+      if (is.na(label) || !nzchar(label)) {
+        label <- "input_value"
+      }
       label
     }
     format_value_rule <- function(rule) {
-      if (is.null(rule) || !nrow(rule)) return("")
+      if (is.null(rule) || !nrow(rule)) {
+        return("")
+      }
       algorithm <- rule$algorithm_code[[1]]
       bound <- rule$bound_code[[1]]
-      if (is.na(bound) || !nzchar(bound)) bound <- "value"
+      if (is.na(bound) || !nzchar(bound)) {
+        bound <- "value"
+      }
       if (identical(algorithm, "constant")) {
         return(paste0(bound, " = ", rule$fixed_value[[1]]))
       }
@@ -1750,9 +2474,26 @@ addGuidelines <- function(id, language) {
         intercept <- coefficient_value(coefficients, "intercept")
         slope <- coefficient_value(coefficients, "slope")
         if (identical(algorithm, "linear")) {
-          return(paste0(bound, " = ", intercept, " + ", slope, " * ", input_label))
+          return(paste0(
+            bound,
+            " = ",
+            intercept,
+            " + ",
+            slope,
+            " * ",
+            input_label
+          ))
         }
-        return(paste0(bound, " = exp(", intercept, " + ", slope, " * ln(", input_label, "))"))
+        return(paste0(
+          bound,
+          " = exp(",
+          intercept,
+          " + ",
+          slope,
+          " * ln(",
+          input_label,
+          "))"
+        ))
       }
       if (identical(algorithm, "sql_scalar")) {
         return(paste0(bound, " = SQL scalar result"))
@@ -1781,7 +2522,9 @@ addGuidelines <- function(id, language) {
 
     output$selected_rules_table <- DT::renderDT({
       guideline_id <- selected_guideline_id()
-      if (is.na(guideline_id)) return(DT::datatable(data.frame(), rownames = FALSE))
+      if (is.na(guideline_id)) {
+        return(DT::datatable(data.frame(), rownames = FALSE))
+      }
       rules <- load_rules(guideline_id)
       if (nrow(rules)) {
         rules$value_rule <- vapply(
@@ -1794,20 +2537,33 @@ addGuidelines <- function(id, language) {
     })
     output$selected_inputs_table <- DT::renderDT({
       guideline_id <- selected_guideline_id()
-      if (is.na(guideline_id)) return(DT::datatable(data.frame(), rownames = FALSE))
+      if (is.na(guideline_id)) {
+        return(DT::datatable(data.frame(), rownames = FALSE))
+      }
       rules <- load_rules(guideline_id)
-      if (!nrow(rules)) return(DT::datatable(data.frame(), rownames = FALSE))
-      inputs <- do.call(rbind, lapply(rules$rule_id, function(rule_id) {
-        out <- load_inputs(rule_id)
-        if (nrow(out)) out$rule_id <- rule_id
-        out
-      }))
-      if (is.null(inputs)) inputs <- data.frame()
+      if (!nrow(rules)) {
+        return(DT::datatable(data.frame(), rownames = FALSE))
+      }
+      inputs <- do.call(
+        rbind,
+        lapply(rules$rule_id, function(rule_id) {
+          out <- load_inputs(rule_id)
+          if (nrow(out)) {
+            out$rule_id <- rule_id
+          }
+          out
+        })
+      )
+      if (is.null(inputs)) {
+        inputs <- data.frame()
+      }
       DT::datatable(inputs, rownames = FALSE, options = list(scrollX = TRUE))
     })
 
     infer_guideline_type <- function(rules) {
-      if (!nrow(rules)) return("constant_upper")
+      if (!nrow(rules)) {
+        return("constant_upper")
+      }
       if (
         nrow(rules) == 2 &&
           all(rules$algorithm_code == "constant") &&
@@ -1816,9 +2572,15 @@ addGuidelines <- function(id, language) {
         return("constant_range")
       }
       first <- rules[1, , drop = FALSE]
-      if (first$algorithm_code == "constant" && first$bound_code == "lower") return("constant_lower")
-      if (first$algorithm_code == "constant") return("constant_upper")
-      if (first$algorithm_code %in% c("linear", "log_linear")) return("single_input_formula")
+      if (first$algorithm_code == "constant" && first$bound_code == "lower") {
+        return("constant_lower")
+      }
+      if (first$algorithm_code == "constant") {
+        return("constant_upper")
+      }
+      if (first$algorithm_code %in% c("linear", "log_linear")) {
+        return("single_input_formula")
+      }
       first$algorithm_code
     }
 
@@ -1830,15 +2592,27 @@ addGuidelines <- function(id, language) {
       updateSelectizeInput(session, "series", selected = character(0))
       updateSelectizeInput(session, "parameter_id", selected = character(0))
       updateSelectizeInput(session, "matrix_state", selected = character(0))
-      updateSelectizeInput(session, "result_speciation", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "result_speciation",
+        selected = character(0)
+      )
       updateSelectizeInput(session, "sample_fraction", selected = character(0))
       updateSelectizeInput(session, "media_type", selected = character(0))
       updateSelectInput(session, "comparison_operator", selected = "lte")
       updateSelectizeInput(session, "jurisdiction", selected = character(0))
       updateSelectizeInput(session, "protection_goal", selected = character(0))
-      updateSelectizeInput(session, "exposure_duration", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "exposure_duration",
+        selected = character(0)
+      )
       updateSelectizeInput(session, "averaging_period", selected = character(0))
-      updateSelectizeInput(session, "specific_locations", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "specific_locations",
+        selected = character(0)
+      )
       updateDateInput(session, "valid_from", value = Sys.Date())
       update_nullable_date_input("valid_to", NA)
       updateSelectInput(session, "review_status", selected = "draft")
@@ -1867,15 +2641,29 @@ addGuidelines <- function(id, language) {
       updateTextInput(session, "precision_note", value = "")
       updateTextAreaInput(session, "rule_note", value = "")
       set_rule_input_rows(blank_rule_input_rows(1L))
-      updateTextAreaInput(session, "coefficients_text", value = empty_table_text(coef_cols))
-      updateTextAreaInput(session, "narrative_values_text", value = empty_table_text(narrative_cols))
+      updateTextAreaInput(
+        session,
+        "coefficients_text",
+        value = empty_table_text(coef_cols)
+      )
+      updateTextAreaInput(
+        session,
+        "narrative_values_text",
+        value = empty_table_text(narrative_cols)
+      )
       update_formula_sql("")
       update_result_speciation_visibility(character(0))
     }
 
     load_form <- function(guideline_id) {
-      g <- moduleData$guidelines[moduleData$guidelines$guideline_id == guideline_id, , drop = FALSE]
-      if (!nrow(g)) return()
+      g <- moduleData$guidelines[
+        moduleData$guidelines$guideline_id == guideline_id,
+        ,
+        drop = FALSE
+      ]
+      if (!nrow(g)) {
+        return()
+      }
       selected_guideline_id(guideline_id)
       rules <- load_rules(guideline_id)
       type <- infer_guideline_type(rules)
@@ -1884,135 +2672,342 @@ addGuidelines <- function(id, language) {
       updateTextInput(session, "guideline_code", value = g$guideline_code[[1]])
       updateTextInput(session, "guideline_name", value = g$guideline_name[[1]])
       updateSelectizeInput(
-        session, "publisher",
-        choices = choice_values(moduleData$publishers, "publisher_id", "publisher_name"),
+        session,
+        "publisher",
+        choices = choice_values(
+          moduleData$publishers,
+          "publisher_id",
+          "publisher_name"
+        ),
         selected = as.character(g$publisher_id[[1]]),
         server = TRUE
       )
       updateSelectizeInput(
-        session, "series",
+        session,
+        "series",
         choices = choice_values(moduleData$series, "series_id", "series_name"),
-        selected = if (is.na(g$series_id[[1]])) character(0) else as.character(g$series_id[[1]]),
+        selected = if (is.na(g$series_id[[1]])) {
+          character(0)
+        } else {
+          as.character(g$series_id[[1]])
+        },
         server = TRUE
       )
       updateSelectizeInput(
-        session, "parameter_id",
+        session,
+        "parameter_id",
         choices = parameter_choices(),
         selected = as.character(g$parameter_id[[1]]),
         server = TRUE
       )
       updateSelectizeInput(
-        session, "matrix_state",
-        choices = choice_values(moduleData$matrix_states, "matrix_state_id", "matrix_state_name"),
+        session,
+        "matrix_state",
+        choices = choice_values(
+          moduleData$matrix_states,
+          "matrix_state_id",
+          "matrix_state_name"
+        ),
         selected = as.character(g$matrix_state_id[[1]]),
         server = TRUE
       )
       updateSelectizeInput(
-        session, "result_speciation",
-        choices = choice_values(moduleData$result_speciations, "result_speciation_id", "result_speciation"),
-        selected = if (is.na(g$result_speciation_id[[1]])) character(0) else as.character(g$result_speciation_id[[1]]),
+        session,
+        "result_speciation",
+        choices = choice_values(
+          moduleData$result_speciations,
+          "result_speciation_id",
+          "result_speciation"
+        ),
+        selected = if (is.na(g$result_speciation_id[[1]])) {
+          character(0)
+        } else {
+          as.character(g$result_speciation_id[[1]])
+        },
         server = TRUE
       )
       update_result_speciation_visibility(g$parameter_id[[1]])
       updateSelectizeInput(
-        session, "sample_fraction",
-        choices = choice_values(moduleData$sample_fractions, "sample_fraction_id", "sample_fraction"),
-        selected = if (is.na(g$fraction_ids[[1]])) character(0) else strsplit(g$fraction_ids[[1]], ",", fixed = TRUE)[[1]],
+        session,
+        "sample_fraction",
+        choices = choice_values(
+          moduleData$sample_fractions,
+          "sample_fraction_id",
+          "sample_fraction"
+        ),
+        selected = if (is.na(g$fraction_ids[[1]])) {
+          character(0)
+        } else {
+          strsplit(g$fraction_ids[[1]], ",", fixed = TRUE)[[1]]
+        },
         server = TRUE
       )
       updateSelectizeInput(
-        session, "media_type",
-        choices = choice_values(moduleData$media_types, "media_id", "media_type"),
-        selected = if (is.na(g$media_ids[[1]])) character(0) else strsplit(g$media_ids[[1]], ",", fixed = TRUE)[[1]],
+        session,
+        "media_type",
+        choices = choice_values(
+          moduleData$media_types,
+          "media_id",
+          "media_type"
+        ),
+        selected = if (is.na(g$media_ids[[1]])) {
+          character(0)
+        } else {
+          strsplit(g$media_ids[[1]], ",", fixed = TRUE)[[1]]
+        },
         server = TRUE
       )
-      updateSelectInput(session, "comparison_operator", selected = g$comparison_operator_code[[1]])
+      updateSelectInput(
+        session,
+        "comparison_operator",
+        selected = g$comparison_operator_code[[1]]
+      )
       update_guideline_type_choices(g$comparison_operator_code[[1]], type)
       last_comparison_operator(g$comparison_operator_code[[1]])
       updateSelectizeInput(
-        session, "jurisdiction",
-        choices = choice_values(moduleData$jurisdictions, "jurisdiction_id", "jurisdiction_name"),
-        selected = if (is.na(g$jurisdiction_id[[1]])) character(0) else as.character(g$jurisdiction_id[[1]]),
+        session,
+        "jurisdiction",
+        choices = choice_values(
+          moduleData$jurisdictions,
+          "jurisdiction_id",
+          "jurisdiction_name"
+        ),
+        selected = if (is.na(g$jurisdiction_id[[1]])) {
+          character(0)
+        } else {
+          as.character(g$jurisdiction_id[[1]])
+        },
         server = TRUE
       )
       updateSelectizeInput(
-        session, "protection_goal",
-        choices = choice_values(moduleData$protection_goals, "protection_goal_id", "protection_goal_name"),
-        selected = if (is.na(g$protection_goal_id[[1]])) character(0) else as.character(g$protection_goal_id[[1]]),
+        session,
+        "protection_goal",
+        choices = choice_values(
+          moduleData$protection_goals,
+          "protection_goal_id",
+          "protection_goal_name"
+        ),
+        selected = if (is.na(g$protection_goal_id[[1]])) {
+          character(0)
+        } else {
+          as.character(g$protection_goal_id[[1]])
+        },
         server = TRUE
       )
       updateSelectizeInput(
-        session, "exposure_duration",
-        choices = choice_values(moduleData$exposure_durations, "exposure_duration_id", "exposure_duration_name"),
-        selected = if (is.na(g$exposure_duration_id[[1]])) character(0) else as.character(g$exposure_duration_id[[1]]),
+        session,
+        "exposure_duration",
+        choices = choice_values(
+          moduleData$exposure_durations,
+          "exposure_duration_id",
+          "exposure_duration_name"
+        ),
+        selected = if (is.na(g$exposure_duration_id[[1]])) {
+          character(0)
+        } else {
+          as.character(g$exposure_duration_id[[1]])
+        },
         server = TRUE
       )
       updateSelectizeInput(
-        session, "averaging_period",
-        choices = choice_values(moduleData$averaging_periods, "averaging_period_id", "averaging_period_name"),
-        selected = if (is.na(g$averaging_period_id[[1]])) character(0) else as.character(g$averaging_period_id[[1]]),
+        session,
+        "averaging_period",
+        choices = choice_values(
+          moduleData$averaging_periods,
+          "averaging_period_id",
+          "averaging_period_name"
+        ),
+        selected = if (is.na(g$averaging_period_id[[1]])) {
+          character(0)
+        } else {
+          as.character(g$averaging_period_id[[1]])
+        },
         server = TRUE
       )
       updateSelectizeInput(
-        session, "specific_locations",
-        choices = choice_values(moduleData$locations, "location_id", "location_label"),
-        selected = if (is.na(g$location_ids[[1]])) character(0) else strsplit(g$location_ids[[1]], ",", fixed = TRUE)[[1]],
+        session,
+        "specific_locations",
+        choices = choice_values(
+          moduleData$locations,
+          "location_id",
+          "location_label"
+        ),
+        selected = if (is.na(g$location_ids[[1]])) {
+          character(0)
+        } else {
+          strsplit(g$location_ids[[1]], ",", fixed = TRUE)[[1]]
+        },
         server = TRUE
       )
-      update_nullable_date_input("valid_from", g$valid_from[[1]], default = Sys.Date())
+      update_nullable_date_input(
+        "valid_from",
+        g$valid_from[[1]],
+        default = Sys.Date()
+      )
       update_nullable_date_input("valid_to", g$valid_to[[1]])
-      updateSelectInput(session, "review_status", selected = g$review_status[[1]])
-      updateCheckboxInput(session, "active", value = bool_value(g$active[[1]], TRUE))
+      updateSelectInput(
+        session,
+        "review_status",
+        selected = g$review_status[[1]]
+      )
+      updateCheckboxInput(
+        session,
+        "active",
+        value = bool_value(g$active[[1]], TRUE)
+      )
       updateTextInput(session, "reference", value = g$reference[[1]] %||% "")
-      updateTextInput(session, "source_document_title", value = g$source_document_title[[1]] %||% "")
+      updateTextInput(
+        session,
+        "source_document_title",
+        value = g$source_document_title[[1]] %||% ""
+      )
       updateTextInput(session, "source_url", value = g$source_url[[1]] %||% "")
-      updateTextInput(session, "source_page", value = g$source_page[[1]] %||% "")
-      updateTextInput(session, "source_table", value = g$source_table[[1]] %||% "")
-      updateTextInput(session, "source_section", value = g$source_section[[1]] %||% "")
-      update_nullable_date_input("source_effective_date", g$source_effective_date[[1]])
-      update_nullable_date_input("source_retrieved_date", g$source_retrieved_date[[1]], default = Sys.Date())
-      updateTextAreaInput(session, "general_notes", value = g$general_notes[[1]] %||% "")
-      updateTextAreaInput(session, "applicability_notes", value = g$applicability_notes[[1]] %||% "")
+      updateTextInput(
+        session,
+        "source_page",
+        value = g$source_page[[1]] %||% ""
+      )
+      updateTextInput(
+        session,
+        "source_table",
+        value = g$source_table[[1]] %||% ""
+      )
+      updateTextInput(
+        session,
+        "source_section",
+        value = g$source_section[[1]] %||% ""
+      )
+      update_nullable_date_input(
+        "source_effective_date",
+        g$source_effective_date[[1]]
+      )
+      update_nullable_date_input(
+        "source_retrieved_date",
+        g$source_retrieved_date[[1]],
+        default = Sys.Date()
+      )
+      updateTextAreaInput(
+        session,
+        "general_notes",
+        value = g$general_notes[[1]] %||% ""
+      )
+      updateTextAreaInput(
+        session,
+        "applicability_notes",
+        value = g$applicability_notes[[1]] %||% ""
+      )
 
       updateNumericInput(session, "fixed_value", value = NA_real_)
       updateNumericInput(session, "lower_value", value = NA_real_)
       updateNumericInput(session, "upper_value", value = NA_real_)
       if (type == "constant_range") {
-        updateNumericInput(session, "lower_value", value = rules$fixed_value[rules$bound_code == "lower"][[1]])
-        updateNumericInput(session, "upper_value", value = rules$fixed_value[rules$bound_code == "upper"][[1]])
+        updateNumericInput(
+          session,
+          "lower_value",
+          value = rules$fixed_value[rules$bound_code == "lower"][[1]]
+        )
+        updateNumericInput(
+          session,
+          "upper_value",
+          value = rules$fixed_value[rules$bound_code == "upper"][[1]]
+        )
       } else if (!is.null(primary) && primary$algorithm_code == "constant") {
-        updateNumericInput(session, "fixed_value", value = primary$fixed_value[[1]])
+        updateNumericInput(
+          session,
+          "fixed_value",
+          value = primary$fixed_value[[1]]
+        )
       }
 
       if (!is.null(primary)) {
         updateSelectInput(
-          session, "bound_code",
-          selected = if (is.na(primary$bound_code[[1]])) "upper" else primary$bound_code[[1]]
+          session,
+          "bound_code",
+          selected = if (is.na(primary$bound_code[[1]])) {
+            "upper"
+          } else {
+            primary$bound_code[[1]]
+          }
         )
-        updateSelectInput(session, "formula_algorithm", selected = if (primary$algorithm_code[[1]] %in% c("linear", "log_linear")) primary$algorithm_code[[1]] else "linear")
-        updateNumericInput(session, "rounding_digits", value = primary$rounding_digits[[1]])
-        updateSelectInput(session, "rounding_method", selected = primary$rounding_method[[1]])
-        updateSelectInput(session, "missing_input_policy", selected = primary$missing_input_policy[[1]])
-        updateNumericInput(session, "min_output_value", value = primary$min_output_value[[1]])
-        updateNumericInput(session, "max_output_value", value = primary$max_output_value[[1]])
-        updateTextInput(session, "precision_note", value = primary$precision_note[[1]] %||% "")
-        updateTextAreaInput(session, "rule_note", value = primary$note[[1]] %||% "")
+        updateSelectInput(
+          session,
+          "formula_algorithm",
+          selected = if (
+            primary$algorithm_code[[1]] %in% c("linear", "log_linear")
+          ) {
+            primary$algorithm_code[[1]]
+          } else {
+            "linear"
+          }
+        )
+        updateNumericInput(
+          session,
+          "rounding_digits",
+          value = primary$rounding_digits[[1]]
+        )
+        updateSelectInput(
+          session,
+          "rounding_method",
+          selected = primary$rounding_method[[1]]
+        )
+        updateSelectInput(
+          session,
+          "missing_input_policy",
+          selected = primary$missing_input_policy[[1]]
+        )
+        updateNumericInput(
+          session,
+          "min_output_value",
+          value = primary$min_output_value[[1]]
+        )
+        updateNumericInput(
+          session,
+          "max_output_value",
+          value = primary$max_output_value[[1]]
+        )
+        updateTextInput(
+          session,
+          "precision_note",
+          value = primary$precision_note[[1]] %||% ""
+        )
+        updateTextAreaInput(
+          session,
+          "rule_note",
+          value = primary$note[[1]] %||% ""
+        )
         update_formula_sql(primary$formula_sql[[1]] %||% "")
         set_rule_input_rows(load_inputs(primary$rule_id[[1]]))
-        updateTextAreaInput(session, "coefficients_text", value = format_table_text(load_coefficients(primary$rule_id[[1]]), coef_cols))
         updateTextAreaInput(
-          session, "narrative_values_text",
-          value = format_table_text(load_narrative_values(guideline_id), narrative_cols)
+          session,
+          "coefficients_text",
+          value = format_table_text(
+            load_coefficients(primary$rule_id[[1]]),
+            coef_cols
+          )
+        )
+        updateTextAreaInput(
+          session,
+          "narrative_values_text",
+          value = format_table_text(
+            load_narrative_values(guideline_id),
+            narrative_cols
+          )
         )
       } else {
         set_rule_input_rows(blank_rule_input_rows(1L))
-        updateTextAreaInput(session, "narrative_values_text", value = empty_table_text(narrative_cols))
+        updateTextAreaInput(
+          session,
+          "narrative_values_text",
+          value = empty_table_text(narrative_cols)
+        )
       }
     }
 
     observeEvent(input$guidelines_table_rows_selected, {
       row <- input$guidelines_table_rows_selected
-      if (is.null(row) || !length(row)) return()
+      if (is.null(row) || !length(row)) {
+        return()
+      }
       load_form(moduleData$guidelines$guideline_id[[row]])
     })
     observeEvent(input$add_guideline, {
@@ -2020,16 +3015,40 @@ addGuidelines <- function(id, language) {
     })
 
     find_parameter_id <- function(pattern) {
-      hits <- grep(pattern, moduleData$parameters$param_name, ignore.case = TRUE)
-      if (length(hits)) moduleData$parameters$parameter_id[[hits[[1]]]] else NA_integer_
+      hits <- grep(
+        pattern,
+        moduleData$parameters$param_name,
+        ignore.case = TRUE
+      )
+      if (length(hits)) {
+        moduleData$parameters$parameter_id[[hits[[1]]]]
+      } else {
+        NA_integer_
+      }
     }
     find_fraction_id <- function(pattern) {
-      hits <- grep(pattern, moduleData$sample_fractions$sample_fraction, ignore.case = TRUE)
-      if (length(hits)) moduleData$sample_fractions$sample_fraction_id[[hits[[1]]]] else NA_integer_
+      hits <- grep(
+        pattern,
+        moduleData$sample_fractions$sample_fraction,
+        ignore.case = TRUE
+      )
+      if (length(hits)) {
+        moduleData$sample_fractions$sample_fraction_id[[hits[[1]]]]
+      } else {
+        NA_integer_
+      }
     }
     find_speciation_id <- function(pattern) {
-      hits <- grep(pattern, moduleData$result_speciations$result_speciation, ignore.case = TRUE)
-      if (length(hits)) moduleData$result_speciations$result_speciation_id[[hits[[1]]]] else NA_integer_
+      hits <- grep(
+        pattern,
+        moduleData$result_speciations$result_speciation,
+        ignore.case = TRUE
+      )
+      if (length(hits)) {
+        moduleData$result_speciations$result_speciation_id[[hits[[1]]]]
+      } else {
+        NA_integer_
+      }
     }
     first_id_from_csv <- function(x) {
       vals <- parse_id_csv(x)
@@ -2044,7 +3063,11 @@ addGuidelines <- function(id, language) {
         return(NA_integer_)
       }
       for (pattern in patterns) {
-        hits <- grep(pattern, moduleData$result_types$result_type, ignore.case = TRUE)
+        hits <- grep(
+          pattern,
+          moduleData$result_types$result_type,
+          ignore.case = TRUE
+        )
         if (length(hits)) {
           return(moduleData$result_types$result_type_id[[hits[[1]]]])
         }
@@ -2060,7 +3083,11 @@ addGuidelines <- function(id, language) {
          ORDER BY result_value_type_id
          LIMIT 1"
       )
-      if (nrow(value_type)) value_type$result_value_type_id[[1]] else NA_integer_
+      if (nrow(value_type)) {
+        value_type$result_value_type_id[[1]]
+      } else {
+        NA_integer_
+      }
     }
     format_fake_inputs_text <- function(rule_inputs) {
       if (is.null(rule_inputs) || !nrow(rule_inputs)) {
@@ -2070,33 +3097,59 @@ addGuidelines <- function(id, language) {
       caco3_speciation <- find_speciation_id("CaCO3|CaCO3 equivalent")
       df <- rule_inputs
       df$value <- NA_real_
-      df$result_type_id <- vapply(df$result_type_preference, first_result_type_preference, integer(1))
+      df$result_type_id <- vapply(
+        df$result_type_preference,
+        first_result_type_preference,
+        integer(1)
+      )
       missing_result_type <- is.na(df$result_type_id)
-      df$result_type_id[missing_result_type] <- suppressWarnings(as.integer(df$result_type[missing_result_type]))
+      df$result_type_id[
+        missing_result_type
+      ] <- suppressWarnings(as.integer(df$result_type[missing_result_type]))
       df$result_type_id[is.na(df$result_type_id)] <- default_result_type_id()
       hardness_rows <- df$input_source %in% "hardness_helper"
       if (any(hardness_rows)) {
-        df$sample_fraction_id[hardness_rows & is.na(df$sample_fraction_id)] <- total_fraction
-        df$result_speciation_id[hardness_rows & is.na(df$result_speciation_id)] <- caco3_speciation
+        df$sample_fraction_id[
+          hardness_rows & is.na(df$sample_fraction_id)
+        ] <- total_fraction
+        df$result_speciation_id[
+          hardness_rows & is.na(df$result_speciation_id)
+        ] <- caco3_speciation
       }
-      for (col in fake_input_cols) if (!col %in% names(df)) df[[col]] <- NA
+      for (col in fake_input_cols) {
+        if (!col %in% names(df)) df[[col]] <- NA
+      }
       format_table_text(df[, fake_input_cols, drop = FALSE], fake_input_cols)
     }
     parse_fake_inputs_text <- function(x) {
-      df <- parse_table_text(x, c("input_code", "value"), "temporary input results")
-      for (col in fake_input_cols) if (!col %in% names(df)) df[[col]] <- NA
+      df <- parse_table_text(
+        x,
+        c("input_code", "value"),
+        "temporary input results"
+      )
+      for (col in fake_input_cols) {
+        if (!col %in% names(df)) df[[col]] <- NA
+      }
       df <- df[, fake_input_cols, drop = FALSE]
       df$value <- suppressWarnings(as.numeric(df$value))
       df$result_type_id <- suppressWarnings(as.integer(df$result_type_id))
       df$parameter_id <- suppressWarnings(as.integer(df$parameter_id))
       df$matrix_state_id <- suppressWarnings(as.integer(df$matrix_state_id))
-      df$sample_fraction_id <- suppressWarnings(as.integer(df$sample_fraction_id))
-      df$result_speciation_id <- suppressWarnings(as.integer(df$result_speciation_id))
+      df$sample_fraction_id <- suppressWarnings(as.integer(
+        df$sample_fraction_id
+      ))
+      df$result_speciation_id <- suppressWarnings(as.integer(
+        df$result_speciation_id
+      ))
       df
     }
     liquid_matrix_state_id <- function() {
       hits <- which(moduleData$matrix_states$matrix_state_code == "liquid")
-      if (length(hits)) moduleData$matrix_states$matrix_state_id[[hits[[1]]]] else NA_integer_
+      if (length(hits)) {
+        moduleData$matrix_states$matrix_state_id[[hits[[1]]]]
+      } else {
+        NA_integer_
+      }
     }
 
     observeEvent(input$fill_coefficients_template, {
@@ -2105,7 +3158,11 @@ addGuidelines <- function(id, language) {
         coefficient_value = c(0, 1),
         note = ""
       )
-      updateTextAreaInput(session, "coefficients_text", value = format_table_text(df, coef_cols))
+      updateTextAreaInput(
+        session,
+        "coefficients_text",
+        value = format_table_text(df, coef_cols)
+      )
     })
 
     sql_insert_text <- function(text, eol_comment = NULL) {
@@ -2119,12 +3176,19 @@ addGuidelines <- function(id, language) {
       )
     }
     normalize_declared_rule_inputs <- function(df) {
-      if (is.null(df) || !nrow(df)) return(blank_rule_input_rows(0L))
+      if (is.null(df) || !nrow(df)) {
+        return(blank_rule_input_rows(0L))
+      }
       for (i in seq_len(nrow(df))) {
         df$input_source[i] <- text_default(df$input_source[i], "sample_result")
-        df$input_name[i] <- default_rule_input_name(df$parameter_id[i], df$input_source[i])
+        df$input_name[i] <- default_rule_input_name(
+          df$parameter_id[i],
+          df$input_source[i]
+        )
         df$input_code[i] <- default_rule_input_code(
-          df$parameter_id[i], df$input_source[i], fallback = paste0("input_", i)
+          df$parameter_id[i],
+          df$input_source[i],
+          fallback = paste0("input_", i)
         )
       }
       df$input_code <- make_unique_input_codes(df$input_code)
@@ -2136,7 +3200,12 @@ addGuidelines <- function(id, language) {
     }
     sql_input_expression <- function(row) {
       input_code <- normalize_input_code(row$input_code[[1]], "input_value")
-      if (identical(text_default(row$input_source[[1]], "sample_result"), "hardness_helper")) {
+      if (
+        identical(
+          text_default(row$input_source[[1]], "sample_result"),
+          "hardness_helper"
+        )
+      ) {
         return(paste0(
           "criteria.get_sample_hardness($1::INT) AS ",
           input_code
@@ -2145,75 +3214,122 @@ addGuidelines <- function(id, language) {
       paste0(
         "discrete.get_sample_val(\n",
         "  sample_id := $1::INT,\n",
-        "  parameter_id := ", null_or_int_sql(row$parameter_id[[1]]), ",\n",
-        "  sample_fraction_id := ", null_or_int_sql(row$sample_fraction_id[[1]]), ",\n",
-        "  result_speciation_id := ", null_or_int_sql(row$result_speciation_id[[1]]), "\n",
+        "  parameter_id := ",
+        null_or_int_sql(row$parameter_id[[1]]),
+        ",\n",
+        "  sample_fraction_id := ",
+        null_or_int_sql(row$sample_fraction_id[[1]]),
+        ",\n",
+        "  result_speciation_id := ",
+        null_or_int_sql(row$result_speciation_id[[1]]),
+        "\n",
         ") AS ",
         input_code
       )
     }
     declared_sql_input_choices <- function() {
       df <- normalize_declared_rule_inputs(collect_rule_input_rows())
-      if (!nrow(df)) return(character(0))
-      labels <- vapply(seq_len(nrow(df)), function(i) {
-        row <- df[i, , drop = FALSE]
-        name <- text_value(row$input_name[[1]])
-        code <- normalize_input_code(row$input_code[[1]], paste0("input_", i))
-        if (identical(text_default(row$input_source[[1]], "sample_result"), "hardness_helper")) {
-          return(paste0(name, " [", code, "]"))
-        }
-        meta <- paste0(
-          "parameter_id ", integer_or_na(row$parameter_id[[1]]),
-          ", fraction ",
-          ifelse(is.na(integer_or_na(row$sample_fraction_id[[1]])), "NULL", integer_or_na(row$sample_fraction_id[[1]])),
-          ", speciation ",
-          ifelse(is.na(integer_or_na(row$result_speciation_id[[1]])), "NULL", integer_or_na(row$result_speciation_id[[1]]))
-        )
-        paste0(name, " [", code, "; ", meta, "]")
-      }, character(1))
+      if (!nrow(df)) {
+        return(character(0))
+      }
+      labels <- vapply(
+        seq_len(nrow(df)),
+        function(i) {
+          row <- df[i, , drop = FALSE]
+          name <- text_value(row$input_name[[1]])
+          code <- normalize_input_code(row$input_code[[1]], paste0("input_", i))
+          if (
+            identical(
+              text_default(row$input_source[[1]], "sample_result"),
+              "hardness_helper"
+            )
+          ) {
+            return(paste0(name, " [", code, "]"))
+          }
+          meta <- paste0(
+            "parameter_id ",
+            integer_or_na(row$parameter_id[[1]]),
+            ", fraction ",
+            ifelse(
+              is.na(integer_or_na(row$sample_fraction_id[[1]])),
+              "NULL",
+              integer_or_na(row$sample_fraction_id[[1]])
+            ),
+            ", speciation ",
+            ifelse(
+              is.na(integer_or_na(row$result_speciation_id[[1]])),
+              "NULL",
+              integer_or_na(row$result_speciation_id[[1]])
+            )
+          )
+          paste0(name, " [", code, "; ", meta, "]")
+        },
+        character(1)
+      )
       stats::setNames(as.character(seq_len(nrow(df))), labels)
     }
-    observeEvent(input$insert_sql_parameter, {
-      choices <- declared_sql_input_choices()
-      if (!length(choices)) {
+    observeEvent(
+      input$insert_sql_parameter,
+      {
+        choices <- declared_sql_input_choices()
+        if (!length(choices)) {
+          showModal(modalDialog(
+            title = "No rule inputs",
+            "Add at least one Rule input before inserting sample chemistry into SQL.",
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
         showModal(modalDialog(
-          title = "No rule inputs",
-          "Add at least one Rule input before inserting sample chemistry into SQL.",
-          easyClose = TRUE,
-          footer = modalButton("Close")
+          size = "m",
+          title = "Choose a rule input",
+          selectizeInput(
+            ns("pick_sql_input"),
+            NULL,
+            choices = choices,
+            options = list(placeholder = "Type to search...")
+          ),
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("confirm_sql_input"),
+              "Insert",
+              class = "btn-primary"
+            )
+          )
         ))
-        return()
-      }
-      showModal(modalDialog(
-        size = "m",
-        title = "Choose a rule input",
-        selectizeInput(
-          ns("pick_sql_input"),
-          NULL,
-          choices = choices,
-          options = list(placeholder = "Type to search...")
-        ),
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("confirm_sql_input"), "Insert", class = "btn-primary")
+      },
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      input$confirm_sql_input,
+      {
+        req(input$pick_sql_input)
+        removeModal()
+        df <- normalize_declared_rule_inputs(collect_rule_input_rows())
+        row_number <- integer_or_na(input$pick_sql_input)
+        if (is.na(row_number) || row_number < 1L || row_number > nrow(df)) {
+          return()
+        }
+        row <- df[row_number, , drop = FALSE]
+        sql_insert_text(
+          paste0(sql_input_expression(row), "\n"),
+          paste0("rule input: ", text_value(row$input_name[[1]]))
         )
-      ))
-    }, ignoreInit = TRUE)
-    observeEvent(input$confirm_sql_input, {
-      req(input$pick_sql_input)
-      removeModal()
-      df <- normalize_declared_rule_inputs(collect_rule_input_rows())
-      row_number <- integer_or_na(input$pick_sql_input)
-      if (is.na(row_number) || row_number < 1L || row_number > nrow(df)) return()
-      row <- df[row_number, , drop = FALSE]
-      sql_insert_text(
-        paste0(sql_input_expression(row), "\n"),
-        paste0("rule input: ", text_value(row$input_name[[1]]))
-      )
-    }, ignoreInit = TRUE)
-    observeEvent(input$open_guideline_sql_help, {
-      session$sendCustomMessage("openGuidelineHelp", "html/guidelines_help.html")
-    }, ignoreInit = TRUE)
+      },
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      input$open_guideline_sql_help,
+      {
+        session$sendCustomMessage(
+          "openGuidelineHelp",
+          "html/guidelines_help.html"
+        )
+      },
+      ignoreInit = TRUE
+    )
     sql_scalar_template <- function(template_code) {
       switch(
         template_code,
@@ -2259,7 +3375,9 @@ FROM vals",
     add_hardness_template_input <- function() {
       df <- collect_rule_input_rows(include_empty = TRUE)
       df <- normalize_rule_input_rows(df)
-      if (any(df$input_source %in% "hardness_helper")) return(FALSE)
+      if (any(df$input_source %in% "hardness_helper")) {
+        return(FALSE)
+      }
 
       new_row <- blank_rule_input_rows(1L)
       new_row$input_source <- "hardness_helper"
@@ -2268,8 +3386,14 @@ FROM vals",
       if (is.na(new_row$matrix_state_id)) {
         new_row$matrix_state_id <- liquid_matrix_state_id()
       }
-      new_row$input_name <- default_rule_input_name(new_row$parameter_id, new_row$input_source)
-      new_row$input_code <- default_rule_input_code(new_row$parameter_id, new_row$input_source)
+      new_row$input_name <- default_rule_input_name(
+        new_row$parameter_id,
+        new_row$input_source
+      )
+      new_row$input_code <- default_rule_input_code(
+        new_row$parameter_id,
+        new_row$input_source
+      )
 
       has_existing_input <- !is.na(df$parameter_id)
       if (!any(has_existing_input)) {
@@ -2281,67 +3405,166 @@ FROM vals",
       TRUE
     }
     pending_sql_template <- reactiveVal(NULL)
-    observeEvent(input$sql_template, {
-      req(input$sql_template)
-      pending_sql_template(input$sql_template)
-      updateSelectizeInput(session, "sql_template", selected = character(0))
-      showModal(modalDialog(
-        "Inserting a template will overwrite the SQL scalar editor. You can edit the template after inserting it.",
-        easyClose = TRUE,
-        footer = tagList(
-          modalButton("Cancel"),
-          actionButton(ns("confirm_sql_template"), "Insert template", class = "btn-primary")
-        )
-      ))
-    }, ignoreInit = TRUE)
-    observeEvent(input$confirm_sql_template, {
-      req(pending_sql_template())
-      removeModal()
-      template_code <- pending_sql_template()
-      added_input <- FALSE
-      if (identical(template_code, "hardness")) {
-        added_input <- add_hardness_template_input()
-      }
-      update_formula_sql(sql_scalar_template(template_code))
-      pending_sql_template(NULL)
-      showModal(modalDialog(
-        paste(
-          "Template inserted. Replace placeholders marked with ***!...!*** and make sure the final query returns one numeric value.",
-          if (isTRUE(added_input)) "A matching hardness Rule input was also added." else ""
-        ),
-        easyClose = TRUE,
-        footer = modalButton("Close")
-      ))
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$sql_template,
+      {
+        req(input$sql_template)
+        pending_sql_template(input$sql_template)
+        updateSelectizeInput(session, "sql_template", selected = character(0))
+        showModal(modalDialog(
+          "Inserting a template will overwrite the SQL scalar editor. You can edit the template after inserting it.",
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("confirm_sql_template"),
+              "Insert template",
+              class = "btn-primary"
+            )
+          )
+        ))
+      },
+      ignoreInit = TRUE
+    )
+    observeEvent(
+      input$confirm_sql_template,
+      {
+        req(pending_sql_template())
+        removeModal()
+        template_code <- pending_sql_template()
+        added_input <- FALSE
+        if (identical(template_code, "hardness")) {
+          added_input <- add_hardness_template_input()
+        }
+        update_formula_sql(sql_scalar_template(template_code))
+        pending_sql_template(NULL)
+        showModal(modalDialog(
+          paste(
+            "Template inserted. Replace placeholders marked with ***!...!*** and make sure the final query returns one numeric value.",
+            if (isTRUE(added_input)) {
+              "A matching hardness Rule input was also added."
+            } else {
+              ""
+            }
+          ),
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+      },
+      ignoreInit = TRUE
+    )
 
     resolve_publisher_id <- function(value) {
-      if (is_blank(value)) stop("Publisher is required.", call. = FALSE)
+      if (is_blank(value)) {
+        stop("Publisher is required.", call. = FALSE)
+      }
       value <- text_value(value)
       existing <- suppressWarnings(as.integer(value))
-      if (!is.na(existing) && existing %in% moduleData$publishers$publisher_id) return(existing)
+      if (
+        !is.na(existing) && existing %in% moduleData$publishers$publisher_id
+      ) {
+        return(existing)
+      }
+
+      existing <- DBI::dbGetQuery(
+        con,
+        "SELECT publisher_id
+         FROM criteria.guideline_publishers
+         WHERE lower(btrim(publisher_name)) = lower(btrim($1))
+         ORDER BY publisher_id
+         LIMIT 1",
+        params = list(value)
+      )
+      if (nrow(existing)) {
+        return(existing$publisher_id[[1]])
+      }
+
+      inserted <- DBI::dbGetQuery(
+        con,
+        "WITH inserted AS (
+           INSERT INTO criteria.guideline_publishers (
+             publisher_code, publisher_name
+           )
+           VALUES ('PUB_' || upper(left(md5($1), 10)), btrim($1))
+           ON CONFLICT DO NOTHING
+           RETURNING publisher_id
+         )
+         SELECT publisher_id FROM inserted
+         UNION ALL
+         SELECT publisher_id
+         FROM criteria.guideline_publishers
+         WHERE lower(btrim(publisher_name)) = lower(btrim($1))
+         ORDER BY publisher_id
+         LIMIT 1",
+        params = list(value)
+      )
+      if (nrow(inserted)) {
+        return(inserted$publisher_id[[1]])
+      }
       DBI::dbGetQuery(
         con,
-        "INSERT INTO criteria.guideline_publishers (publisher_name)
-         VALUES ($1)
-         ON CONFLICT (publisher_name) DO UPDATE
-         SET publisher_name = EXCLUDED.publisher_name
-         RETURNING publisher_id",
+        "SELECT publisher_id
+         FROM criteria.guideline_publishers
+         WHERE lower(btrim(publisher_name)) = lower(btrim($1))
+         ORDER BY publisher_id
+         LIMIT 1",
         params = list(value)
       )$publisher_id[[1]]
     }
     resolve_series_id <- function(value, publisher_id) {
-      if (is_blank(value)) return(NA_integer_)
+      if (is_blank(value)) {
+        return(NA_integer_)
+      }
       value <- text_value(value)
       existing <- suppressWarnings(as.integer(value))
-      if (!is.na(existing) && existing %in% moduleData$series$series_id) return(existing)
+      if (!is.na(existing) && existing %in% moduleData$series$series_id) {
+        return(existing)
+      }
+
+      existing <- DBI::dbGetQuery(
+        con,
+        "SELECT series_id
+         FROM criteria.guideline_series
+         WHERE lower(btrim(series_name)) = lower(btrim($1))
+           AND publisher_id IS NOT DISTINCT FROM $2
+         ORDER BY series_id
+         LIMIT 1",
+        params = list(value, publisher_id)
+      )
+      if (nrow(existing)) {
+        return(existing$series_id[[1]])
+      }
+
+      inserted <- DBI::dbGetQuery(
+        con,
+        "WITH inserted AS (
+           INSERT INTO criteria.guideline_series (
+             series_code, series_name, publisher_id
+           )
+           VALUES ('SER_' || upper(left(md5($1), 10)), btrim($1), $2)
+           ON CONFLICT DO NOTHING
+           RETURNING series_id
+         )
+         SELECT series_id FROM inserted
+         UNION ALL
+         SELECT series_id
+         FROM criteria.guideline_series
+         WHERE lower(btrim(series_name)) = lower(btrim($1))
+         ORDER BY series_id
+         LIMIT 1",
+        params = list(value, publisher_id)
+      )
+      if (nrow(inserted)) {
+        return(inserted$series_id[[1]])
+      }
       DBI::dbGetQuery(
         con,
-        "INSERT INTO criteria.guideline_series (series_name, publisher_id)
-         VALUES ($1, $2)
-         ON CONFLICT (series_name) DO UPDATE
-         SET publisher_id = COALESCE(criteria.guideline_series.publisher_id, EXCLUDED.publisher_id)
-         RETURNING series_id",
-        params = list(value, publisher_id)
+        "SELECT series_id
+         FROM criteria.guideline_series
+         WHERE lower(btrim(series_name)) = lower(btrim($1))
+         ORDER BY series_id
+         LIMIT 1",
+        params = list(value)
       )$series_id[[1]]
     }
     target_operator <- function(type) {
@@ -2349,15 +3572,23 @@ FROM vals",
         type,
         constant_upper = "lte",
         constant_lower = "gte",
-        constant_range = if (identical(input$comparison_operator, "eq")) "eq" else "range",
+        constant_range = if (identical(input$comparison_operator, "eq")) {
+          "eq"
+        } else {
+          "range"
+        },
         narrative = "narrative",
         input$comparison_operator %||% "lte"
       )
     }
 
     insert_rule <- function(
-      guideline_id, bound_code, algorithm_code, fixed_value = NA_real_,
-      formula_sql = NA_character_, priority = 100L
+      guideline_id,
+      bound_code,
+      algorithm_code,
+      fixed_value = NA_real_,
+      formula_sql = NA_character_,
+      priority = 100L
     ) {
       DBI::dbGetQuery(
         con,
@@ -2370,12 +3601,19 @@ FROM vals",
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING rule_id",
         params = list(
-          guideline_id, text_or_na(bound_code), algorithm_code, fixed_value, text_or_na(formula_sql),
-          numeric_or_na(input$min_output_value), numeric_or_na(input$max_output_value),
-          integer_or_na(input$rounding_digits), input$rounding_method %||% "none",
+          guideline_id,
+          text_or_na(bound_code),
+          algorithm_code,
+          fixed_value,
+          text_or_na(formula_sql),
+          numeric_or_na(input$min_output_value),
+          numeric_or_na(input$max_output_value),
+          integer_or_na(input$rounding_digits),
+          input$rounding_method %||% "none",
           input$missing_input_policy %||% "no_value",
           if (is.na(priority)) 100L else priority,
-          text_or_na(input$precision_note), text_or_na(input$rule_note)
+          text_or_na(input$precision_note),
+          text_or_na(input$rule_note)
         )
       )$rule_id[[1]]
     }
@@ -2389,42 +3627,81 @@ FROM vals",
       scan
     }
     sql_int_literal <- function(x) {
-      if (is.null(x) || !length(x) || is.na(x)) return(NA_integer_)
+      if (is.null(x) || !length(x) || is.na(x)) {
+        return(NA_integer_)
+      }
       x <- trimws(as.character(x[[1]]))
-      x <- gsub("::\\s*(integer|int)\\b", "", x, ignore.case = TRUE, perl = TRUE)
+      x <- gsub(
+        "::\\s*(integer|int)\\b",
+        "",
+        x,
+        ignore.case = TRUE,
+        perl = TRUE
+      )
       x <- trimws(x)
-      if (!nzchar(x) || grepl("^null$", x, ignore.case = TRUE)) return(NA_integer_)
+      if (!nzchar(x) || grepl("^null$", x, ignore.case = TRUE)) {
+        return(NA_integer_)
+      }
       out <- suppressWarnings(as.integer(x))
       if (is.na(out)) NA_integer_ else out
     }
     sql_named_int_arg <- function(args, name) {
-      pattern <- paste0("\\b", name, "\\s*:=\\s*(NULL|-?[0-9]+\\s*(?:::?\\s*(?:integer|int))?)")
+      pattern <- paste0(
+        "\\b",
+        name,
+        "\\s*:=\\s*(NULL|-?[0-9]+\\s*(?:::?\\s*(?:integer|int))?)"
+      )
       hit <- regexec(pattern, args, perl = TRUE, ignore.case = TRUE)
       match <- regmatches(args, hit)[[1]]
-      if (length(match) < 2L) return(NULL)
+      if (length(match) < 2L) {
+        return(NULL)
+      }
       match[[2]]
     }
     sql_arg_value <- function(args, name, position) {
       named <- sql_named_int_arg(args, name)
-      if (!is.null(named)) return(sql_int_literal(named))
+      if (!is.null(named)) {
+        return(sql_int_literal(named))
+      }
       parts <- trimws(strsplit(args, ",", fixed = TRUE)[[1]])
-      if (length(parts) < position) return(NA_integer_)
+      if (length(parts) < position) {
+        return(NA_integer_)
+      }
       sql_int_literal(parts[[position]])
     }
-    sql_ref_key <- function(parameter_id, sample_fraction_id, result_speciation_id) {
+    sql_ref_key <- function(
+      parameter_id,
+      sample_fraction_id,
+      result_speciation_id
+    ) {
       paste(
-        ifelse(is.na(parameter_id), "NULL", as.character(as.integer(parameter_id))),
-        ifelse(is.na(sample_fraction_id), "NULL", as.character(as.integer(sample_fraction_id))),
-        ifelse(is.na(result_speciation_id), "NULL", as.character(as.integer(result_speciation_id))),
+        ifelse(
+          is.na(parameter_id),
+          "NULL",
+          as.character(as.integer(parameter_id))
+        ),
+        ifelse(
+          is.na(sample_fraction_id),
+          "NULL",
+          as.character(as.integer(sample_fraction_id))
+        ),
+        ifelse(
+          is.na(result_speciation_id),
+          "NULL",
+          as.character(as.integer(result_speciation_id))
+        ),
         sep = "|"
       )
     }
     format_sql_ref_key <- function(key) {
       parts <- strsplit(key, "|", fixed = TRUE)[[1]]
       paste0(
-        "parameter_id=", parts[[1]],
-        ", sample_fraction_id=", parts[[2]],
-        ", result_speciation_id=", parts[[3]]
+        "parameter_id=",
+        parts[[1]],
+        ", sample_fraction_id=",
+        parts[[2]],
+        ", result_speciation_id=",
+        parts[[3]]
       )
     }
     sql_scalar_input_refs <- function(sql) {
@@ -2436,17 +3713,23 @@ FROM vals",
         ignore.case = TRUE
       )
       calls <- regmatches(scan, call_hits)[[1]]
-      if (length(calls) == 1L && identical(calls, "-1")) calls <- character(0)
+      if (length(calls) == 1L && identical(calls, "-1")) {
+        calls <- character(0)
+      }
       sample_refs <- character(0)
       if (length(calls)) {
-        sample_refs <- vapply(calls, function(call) {
-          args <- sub("^.*?\\((.*)\\)\\s*$", "\\1", call, perl = TRUE)
-          sql_ref_key(
-            sql_arg_value(args, "parameter_id", 2L),
-            sql_arg_value(args, "sample_fraction_id", 3L),
-            sql_arg_value(args, "result_speciation_id", 4L)
-          )
-        }, character(1))
+        sample_refs <- vapply(
+          calls,
+          function(call) {
+            args <- sub("^.*?\\((.*)\\)\\s*$", "\\1", call, perl = TRUE)
+            sql_ref_key(
+              sql_arg_value(args, "parameter_id", 2L),
+              sql_arg_value(args, "sample_fraction_id", 3L),
+              sql_arg_value(args, "result_speciation_id", 4L)
+            )
+          },
+          character(1)
+        )
       }
       list(
         sample_refs = unique(sample_refs),
@@ -2475,7 +3758,11 @@ FROM vals",
       }
 
       declared_hardness <- any(inputs$input_source %in% "hardness_helper")
-      declared_samples <- inputs[inputs$input_source %in% "sample_result", , drop = FALSE]
+      declared_samples <- inputs[
+        inputs$input_source %in% "sample_result",
+        ,
+        drop = FALSE
+      ]
       declared_refs <- unique(sql_ref_key(
         declared_samples$parameter_id,
         declared_samples$sample_fraction_id,
@@ -2506,7 +3793,10 @@ FROM vals",
       if (length(extra_refs)) {
         stop(
           "SQL scalar uses sample input(s) that are not listed as Rule inputs: ",
-          paste(vapply(extra_refs, format_sql_ref_key, character(1)), collapse = "; "),
+          paste(
+            vapply(extra_refs, format_sql_ref_key, character(1)),
+            collapse = "; "
+          ),
           call. = FALSE
         )
       }
@@ -2515,39 +3805,67 @@ FROM vals",
       if (length(missing_refs)) {
         stop(
           "Rule input(s) are listed but not used by the SQL scalar: ",
-          paste(vapply(missing_refs, format_sql_ref_key, character(1)), collapse = "; "),
+          paste(
+            vapply(missing_refs, format_sql_ref_key, character(1)),
+            collapse = "; "
+          ),
           call. = FALSE
         )
       }
       invisible(NULL)
     }
 
-    save_rule_inputs <- function(rule_id, require_inputs = FALSE, formula_sql = NULL) {
+    save_rule_inputs <- function(
+      rule_id,
+      require_inputs = FALSE,
+      formula_sql = NULL
+    ) {
       df <- collect_rule_input_rows()
       if (!nrow(df)) {
-        if (!is.null(formula_sql)) validate_sql_scalar_inputs(formula_sql, df)
-        if (require_inputs) stop("At least one rule input is required.", call. = FALSE)
+        if (!is.null(formula_sql)) {
+          validate_sql_scalar_inputs(formula_sql, df)
+        }
+        if (require_inputs) {
+          stop("At least one rule input is required.", call. = FALSE)
+        }
         return(df)
       }
       for (i in seq_len(nrow(df))) {
         df$input_source[i] <- text_default(df$input_source[i], "sample_result")
-        df$input_name[i] <- default_rule_input_name(df$parameter_id[i], df$input_source[i])
+        df$input_name[i] <- default_rule_input_name(
+          df$parameter_id[i],
+          df$input_source[i]
+        )
         df$input_code[i] <- default_rule_input_code(
-          df$parameter_id[i], df$input_source[i], fallback = paste0("input_", i)
+          df$parameter_id[i],
+          df$input_source[i],
+          fallback = paste0("input_", i)
         )
       }
       df$input_code <- make_unique_input_codes(df$input_code)
       df <- df[!is.na(df$parameter_id), , drop = FALSE]
       if (!nrow(df)) {
-        if (!is.null(formula_sql)) validate_sql_scalar_inputs(formula_sql, df)
-        if (require_inputs) stop("At least one rule input is required.", call. = FALSE)
+        if (!is.null(formula_sql)) {
+          validate_sql_scalar_inputs(formula_sql, df)
+        }
+        if (require_inputs) {
+          stop("At least one rule input is required.", call. = FALSE)
+        }
         return(df)
       }
-      if (!is.null(formula_sql)) validate_sql_scalar_inputs(formula_sql, df)
+      if (!is.null(formula_sql)) {
+        validate_sql_scalar_inputs(formula_sql, df)
+      }
       for (i in seq_len(nrow(df))) {
-        is_helper <- identical(text_default(df$input_source[i], "sample_result"), "hardness_helper")
-        if (!is_helper && parameter_requires_fraction(df$parameter_id[i]) &&
-            is.na(integer_or_na(df$sample_fraction_id[i]))) {
+        is_helper <- identical(
+          text_default(df$input_source[i], "sample_result"),
+          "hardness_helper"
+        )
+        if (
+          !is_helper &&
+            parameter_requires_fraction(df$parameter_id[i]) &&
+            is.na(integer_or_na(df$sample_fraction_id[i]))
+        ) {
           stop(
             "Fraction is required for input '",
             df$input_name[i],
@@ -2555,8 +3873,11 @@ FROM vals",
             call. = FALSE
           )
         }
-        if (!is_helper && parameter_requires_speciation(df$parameter_id[i]) &&
-            is.na(integer_or_na(df$result_speciation_id[i]))) {
+        if (
+          !is_helper &&
+            parameter_requires_speciation(df$parameter_id[i]) &&
+            is.na(integer_or_na(df$result_speciation_id[i]))
+        ) {
           stop(
             "Speciation is required for input '",
             df$input_name[i],
@@ -2583,11 +3904,15 @@ FROM vals",
              $11, $12, $13, $14, $15, $16, $17
            )",
           params = list(
-            rule_id, text_value(df$input_code[i]), text_or_na(df$input_name[i]),
+            rule_id,
+            text_value(df$input_code[i]),
+            text_or_na(df$input_name[i]),
             text_default(df$input_source[i], "sample_result"),
-            integer_or_na(df$parameter_id[i]), integer_or_na(df$matrix_state_id[i]),
+            integer_or_na(df$parameter_id[i]),
+            integer_or_na(df$matrix_state_id[i]),
             integer_or_na(df$sample_fraction_id[i]),
-            integer_or_na(df$result_speciation_id[i]), integer_or_na(df$result_type[i]),
+            integer_or_na(df$result_speciation_id[i]),
+            integer_or_na(df$result_type[i]),
             text_value(df$result_type_preference[i]),
             text_default(df$aggregate_method[i], "single"),
             bool_value(df$required[i], TRUE),
@@ -2605,11 +3930,15 @@ FROM vals",
     save_coefficients <- function(rule_id, required = FALSE) {
       df <- parse_table_text(input$coefficients_text, coef_cols, "Coefficients")
       if (!nrow(df)) {
-        if (required) stop("This rule requires coefficients.", call. = FALSE)
+        if (required) {
+          stop("This rule requires coefficients.", call. = FALSE)
+        }
         return(invisible(NULL))
       }
       for (i in seq_len(nrow(df))) {
-        if (!nzchar(text_value(df$coefficient_name[i]))) next
+        if (!nzchar(text_value(df$coefficient_name[i]))) {
+          next
+        }
         DBI::dbExecute(
           con,
           "INSERT INTO criteria.guideline_rule_coefficients (
@@ -2617,27 +3946,40 @@ FROM vals",
            )
            VALUES ($1, $2, $3, $4)",
           params = list(
-            rule_id, text_value(df$coefficient_name[i]),
-            numeric_or_na(df$coefficient_value[i]), text_or_na(df$note[i])
+            rule_id,
+            text_value(df$coefficient_name[i]),
+            numeric_or_na(df$coefficient_value[i]),
+            text_or_na(df$note[i])
           )
         )
       }
     }
 
     save_narrative_values <- function(guideline_id) {
-      df <- parse_table_text(input$narrative_values_text, narrative_cols, "Narrative values")
+      df <- parse_table_text(
+        input$narrative_values_text,
+        narrative_cols,
+        "Narrative values"
+      )
       DBI::dbExecute(
         con,
         "DELETE FROM criteria.guideline_narrative_values WHERE guideline_id = $1",
         params = list(guideline_id)
       )
-      if (!nrow(df)) return(invisible(NULL))
+      if (!nrow(df)) {
+        return(invisible(NULL))
+      }
       for (i in seq_len(nrow(df))) {
         value_code <- text_value(df$value_code[i])
         condition_label <- text_value(df$condition_label[i])
-        if (!nzchar(value_code) && !nzchar(condition_label)) next
+        if (!nzchar(value_code) && !nzchar(condition_label)) {
+          next
+        }
         if (!nzchar(value_code) || !nzchar(condition_label)) {
-          stop("Narrative value rows require both value_code and condition_label.", call. = FALSE)
+          stop(
+            "Narrative value rows require both value_code and condition_label.",
+            call. = FALSE
+          )
         }
         DBI::dbExecute(
           con,
@@ -2649,7 +3991,9 @@ FROM vals",
            )
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
           params = list(
-            guideline_id, value_code, condition_label,
+            guideline_id,
+            value_code,
+            condition_label,
             numeric_or_na(df$max_change_value[i]),
             numeric_or_na(df$max_change_percent[i]),
             text_or_na(df$change_unit[i]),
@@ -2683,40 +4027,87 @@ FROM vals",
       }
       if (type == "constant_upper") {
         value <- numeric_or_na(input$fixed_value)
-        if (is.na(value)) stop("Fixed value is required.", call. = FALSE)
+        if (is.na(value)) {
+          stop("Fixed value is required.", call. = FALSE)
+        }
         insert_rule(guideline_id, "upper", "constant", fixed_value = value)
       } else if (type == "constant_lower") {
         value <- numeric_or_na(input$fixed_value)
-        if (is.na(value)) stop("Fixed value is required.", call. = FALSE)
+        if (is.na(value)) {
+          stop("Fixed value is required.", call. = FALSE)
+        }
         insert_rule(guideline_id, "lower", "constant", fixed_value = value)
       } else if (type == "constant_range") {
         lower <- numeric_or_na(input$lower_value)
         upper <- numeric_or_na(input$upper_value)
-        if (is.na(lower) || is.na(upper)) stop("Lower and upper values are required.", call. = FALSE)
-        insert_rule(guideline_id, "lower", "constant", fixed_value = lower, priority = 10L)
-        insert_rule(guideline_id, "upper", "constant", fixed_value = upper, priority = 20L)
+        if (is.na(lower) || is.na(upper)) {
+          stop("Lower and upper values are required.", call. = FALSE)
+        }
+        insert_rule(
+          guideline_id,
+          "lower",
+          "constant",
+          fixed_value = lower,
+          priority = 10L
+        )
+        insert_rule(
+          guideline_id,
+          "upper",
+          "constant",
+          fixed_value = upper,
+          priority = 20L
+        )
       } else if (type == "narrative") {
         insert_rule(guideline_id, NA_character_, "narrative")
         save_narrative_values(guideline_id)
       } else if (type == "sql_scalar") {
-        if (!nzchar(text_value(input$formula_sql))) stop("SQL scalar text is required.", call. = FALSE)
+        if (!nzchar(text_value(input$formula_sql))) {
+          stop("SQL scalar text is required.", call. = FALSE)
+        }
         if (identical(operator, "eq")) {
           lower_rule_id <- insert_rule(
-            guideline_id, "lower", "sql_scalar",
-            formula_sql = input$formula_sql, priority = 10L
+            guideline_id,
+            "lower",
+            "sql_scalar",
+            formula_sql = input$formula_sql,
+            priority = 10L
           )
           upper_rule_id <- insert_rule(
-            guideline_id, "upper", "sql_scalar",
-            formula_sql = input$formula_sql, priority = 20L
+            guideline_id,
+            "upper",
+            "sql_scalar",
+            formula_sql = input$formula_sql,
+            priority = 20L
           )
-          save_rule_inputs(lower_rule_id, require_inputs = FALSE, formula_sql = input$formula_sql)
-          save_rule_inputs(upper_rule_id, require_inputs = FALSE, formula_sql = input$formula_sql)
+          save_rule_inputs(
+            lower_rule_id,
+            require_inputs = FALSE,
+            formula_sql = input$formula_sql
+          )
+          save_rule_inputs(
+            upper_rule_id,
+            require_inputs = FALSE,
+            formula_sql = input$formula_sql
+          )
         } else {
-          rule_id <- insert_rule(guideline_id, rule_bound, "sql_scalar", formula_sql = input$formula_sql)
-          save_rule_inputs(rule_id, require_inputs = FALSE, formula_sql = input$formula_sql)
+          rule_id <- insert_rule(
+            guideline_id,
+            rule_bound,
+            "sql_scalar",
+            formula_sql = input$formula_sql
+          )
+          save_rule_inputs(
+            rule_id,
+            require_inputs = FALSE,
+            formula_sql = input$formula_sql
+          )
         }
       } else if (type == "single_input_formula") {
-        rule_id <- insert_rule(guideline_id, rule_bound, input$formula_algorithm %||% "linear")
+        rule_id <- insert_rule(
+          guideline_id,
+          rule_bound,
+          input$formula_algorithm %||% "linear"
+        )
         save_rule_inputs(rule_id, require_inputs = TRUE)
         save_coefficients(rule_id, required = TRUE)
       } else {
@@ -2731,24 +4122,31 @@ FROM vals",
         {
           parameter_id <- integer_or_na(input$parameter_id)
           matrix_state_id <- integer_or_na(input$matrix_state)
-          if (is.na(parameter_id)) stop("Parameter is required.", call. = FALSE)
-          if (is.na(matrix_state_id)) stop("Matrix state is required.", call. = FALSE)
-          result_speciation_id <- if (parameter_requires_speciation(parameter_id)) {
-            integer_or_na(input$result_speciation)
-          } else {
-            NA_integer_
+          if (is.na(parameter_id)) {
+            stop("Parameter is required.", call. = FALSE)
           }
-          if (parameter_requires_speciation(parameter_id) && is.na(result_speciation_id)) {
-            stop("Result speciation is required for the selected parameter.", call. = FALSE)
+          if (is.na(matrix_state_id)) {
+            stop("Matrix state is required.", call. = FALSE)
           }
-          if (!nzchar(text_value(input$guideline_name))) stop("Guideline name is required.", call. = FALSE)
+          result_speciation_id <- integer_or_na(input$result_speciation)
+          if (!nzchar(text_value(input$guideline_name))) {
+            stop("Guideline name is required.", call. = FALSE)
+          }
           operator <- target_operator(input$guideline_type)
           jurisdiction_id <- resolve_jurisdiction_id(input$jurisdiction)
-          protection_goal_id <- resolve_protection_goal_id(input$protection_goal)
-          exposure_duration_id <- resolve_exposure_duration_id(input$exposure_duration)
-          averaging_period_id <- resolve_averaging_period_id(input$averaging_period)
+          protection_goal_id <- resolve_protection_goal_id(
+            input$protection_goal
+          )
+          exposure_duration_id <- resolve_exposure_duration_id(
+            input$exposure_duration
+          )
+          averaging_period_id <- resolve_averaging_period_id(
+            input$averaging_period
+          )
           guideline_code <- text_value(input$guideline_code)
-          if (!nzchar(guideline_code)) guideline_code <- normalize_code(input$guideline_name)
+          if (!nzchar(guideline_code)) {
+            guideline_code <- normalize_code(input$guideline_name)
+          }
           guideline_id <- selected_guideline_id()
 
           DBI::dbWithTransaction(con, {
@@ -2776,17 +4174,31 @@ FROM vals",
                  )
                  RETURNING guideline_id",
                 params = list(
-                  guideline_code, text_value(input$guideline_name), publisher_id,
-                  series_id, text_or_na(input$reference), text_or_na(input$general_notes),
-                  text_or_na(input$applicability_notes), parameter_id, matrix_state_id,
-                  result_speciation_id, operator,
-                  jurisdiction_id, protection_goal_id,
-                  exposure_duration_id, averaging_period_id, text_or_na(input$source_document_title),
-                  text_or_na(input$source_url), text_or_na(input$source_page),
-                  text_or_na(input$source_table), text_or_na(input$source_section),
+                  guideline_code,
+                  text_value(input$guideline_name),
+                  publisher_id,
+                  series_id,
+                  text_or_na(input$reference),
+                  text_or_na(input$general_notes),
+                  text_or_na(input$applicability_notes),
+                  parameter_id,
+                  matrix_state_id,
+                  result_speciation_id,
+                  operator,
+                  jurisdiction_id,
+                  protection_goal_id,
+                  exposure_duration_id,
+                  averaging_period_id,
+                  text_or_na(input$source_document_title),
+                  text_or_na(input$source_url),
+                  text_or_na(input$source_page),
+                  text_or_na(input$source_table),
+                  text_or_na(input$source_section),
                   date_or_na(input$source_effective_date),
-                  date_or_na(input$source_retrieved_date), date_or_na(input$valid_from),
-                  date_or_na(input$valid_to), input$review_status %||% "draft",
+                  date_or_na(input$source_retrieved_date),
+                  date_or_na(input$valid_from),
+                  date_or_na(input$valid_to),
+                  input$review_status %||% "draft",
                   bool_value(input$active, TRUE)
                 )
               )$guideline_id[[1]]
@@ -2809,32 +4221,66 @@ FROM vals",
                      valid_to = $24, review_status = $25, active = $26
                  WHERE guideline_id = $27",
                 params = list(
-                  guideline_code, text_value(input$guideline_name), publisher_id,
-                  series_id, text_or_na(input$reference), text_or_na(input$general_notes),
-                  text_or_na(input$applicability_notes), parameter_id, matrix_state_id,
-                  result_speciation_id, operator,
-                  jurisdiction_id, protection_goal_id,
-                  exposure_duration_id, averaging_period_id, text_or_na(input$source_document_title),
-                  text_or_na(input$source_url), text_or_na(input$source_page),
-                  text_or_na(input$source_table), text_or_na(input$source_section),
+                  guideline_code,
+                  text_value(input$guideline_name),
+                  publisher_id,
+                  series_id,
+                  text_or_na(input$reference),
+                  text_or_na(input$general_notes),
+                  text_or_na(input$applicability_notes),
+                  parameter_id,
+                  matrix_state_id,
+                  result_speciation_id,
+                  operator,
+                  jurisdiction_id,
+                  protection_goal_id,
+                  exposure_duration_id,
+                  averaging_period_id,
+                  text_or_na(input$source_document_title),
+                  text_or_na(input$source_url),
+                  text_or_na(input$source_page),
+                  text_or_na(input$source_table),
+                  text_or_na(input$source_section),
                   date_or_na(input$source_effective_date),
-                  date_or_na(input$source_retrieved_date), date_or_na(input$valid_from),
-                  date_or_na(input$valid_to), input$review_status %||% "draft",
+                  date_or_na(input$source_retrieved_date),
+                  date_or_na(input$valid_from),
+                  date_or_na(input$valid_to),
+                  input$review_status %||% "draft",
                   bool_value(input$active, TRUE),
                   saved_id
                 )
               )
             }
 
-            DBI::dbExecute(con, "DELETE FROM criteria.guidelines_fractions WHERE guideline_id = $1", params = list(saved_id))
+            DBI::dbExecute(
+              con,
+              "DELETE FROM criteria.guidelines_fractions WHERE guideline_id = $1",
+              params = list(saved_id)
+            )
             for (fraction_id in parse_id_vector(input$sample_fraction)) {
-              DBI::dbExecute(con, "INSERT INTO criteria.guidelines_fractions (guideline_id, fraction_id) VALUES ($1, $2)", params = list(saved_id, fraction_id))
+              DBI::dbExecute(
+                con,
+                "INSERT INTO criteria.guidelines_fractions (guideline_id, fraction_id) VALUES ($1, $2)",
+                params = list(saved_id, fraction_id)
+              )
             }
-            DBI::dbExecute(con, "DELETE FROM criteria.guidelines_media_types WHERE guideline_id = $1", params = list(saved_id))
+            DBI::dbExecute(
+              con,
+              "DELETE FROM criteria.guidelines_media_types WHERE guideline_id = $1",
+              params = list(saved_id)
+            )
             for (media_id in parse_id_vector(input$media_type)) {
-              DBI::dbExecute(con, "INSERT INTO criteria.guidelines_media_types (guideline_id, media_id) VALUES ($1, $2)", params = list(saved_id, media_id))
+              DBI::dbExecute(
+                con,
+                "INSERT INTO criteria.guidelines_media_types (guideline_id, media_id) VALUES ($1, $2)",
+                params = list(saved_id, media_id)
+              )
             }
-            DBI::dbExecute(con, "DELETE FROM criteria.guideline_locations WHERE guideline_id = $1", params = list(saved_id))
+            DBI::dbExecute(
+              con,
+              "DELETE FROM criteria.guideline_locations WHERE guideline_id = $1",
+              params = list(saved_id)
+            )
             for (location_id in parse_id_vector(input$specific_locations)) {
               DBI::dbExecute(
                 con,
@@ -2853,7 +4299,9 @@ FROM vals",
       )
       if (!is.null(err)) {
         showModal(modalDialog(
-          title = "Guideline not saved", err, easyClose = TRUE,
+          title = "Guideline not saved",
+          err,
+          easyClose = TRUE,
           footer = modalButton("Close")
         ))
         return()
@@ -2872,22 +4320,34 @@ FROM vals",
 
     observeEvent(input$delete_guideline, {
       guideline_id <- selected_guideline_id()
-      if (is.na(guideline_id)) return()
-      g <- moduleData$guidelines[moduleData$guidelines$guideline_id == guideline_id, , drop = FALSE]
+      if (is.na(guideline_id)) {
+        return()
+      }
+      g <- moduleData$guidelines[
+        moduleData$guidelines$guideline_id == guideline_id,
+        ,
+        drop = FALSE
+      ]
       showModal(modalDialog(
         title = "Delete guideline",
         paste("Delete", g$guideline_code[[1]], "?"),
         easyClose = TRUE,
         footer = tagList(
           modalButton("Cancel"),
-          actionButton(ns("confirm_delete_guideline"), "Delete", class = "btn-danger")
+          actionButton(
+            ns("confirm_delete_guideline"),
+            "Delete",
+            class = "btn-danger"
+          )
         )
       ))
     })
     observeEvent(input$confirm_delete_guideline, {
       removeModal()
       guideline_id <- selected_guideline_id()
-      if (is.na(guideline_id)) return()
+      if (is.na(guideline_id)) {
+        return()
+      }
       tryCatch(
         {
           DBI::dbExecute(
@@ -2901,7 +4361,9 @@ FROM vals",
         },
         error = function(e) {
           showModal(modalDialog(
-            title = "Delete failed", conditionMessage(e), easyClose = TRUE,
+            title = "Delete failed",
+            conditionMessage(e),
+            easyClose = TRUE,
             footer = modalButton("Close")
           ))
         }
@@ -2925,8 +4387,16 @@ FROM vals",
         ,
         drop = FALSE
       ]
-      media_id <- if (nrow(g)) first_id_from_csv(g$media_ids[[1]]) else NA_integer_
-      location_id <- if (nrow(g)) first_id_from_csv(g$location_ids[[1]]) else NA_integer_
+      media_id <- if (nrow(g)) {
+        first_id_from_csv(g$media_ids[[1]])
+      } else {
+        NA_integer_
+      }
+      location_id <- if (nrow(g)) {
+        first_id_from_csv(g$location_ids[[1]])
+      } else {
+        NA_integer_
+      }
       template <- DBI::dbGetQuery(
         con,
         "SELECT COALESCE($1::integer, s.media_id) AS media_id,
@@ -2964,7 +4434,10 @@ FROM vals",
         )
       }
       if (!nrow(template)) {
-        stop("No existing sample was available to use as metadata for a temporary test sample.", call. = FALSE)
+        stop(
+          "No existing sample was available to use as metadata for a temporary test sample.",
+          call. = FALSE
+        )
       }
       template
     }
@@ -2993,27 +4466,50 @@ FROM vals",
          )
          RETURNING sample_id",
         params = list(
-          template$location_id[[1]], template$sub_location_id[[1]],
-          template$media_id[[1]], sample_datetime,
-          template$collection_method[[1]], template$sample_type[[1]],
-          template$sample_grade[[1]], template$sample_approval[[1]],
-          template$owner[[1]], template$contributor[[1]],
-          template$sampling_org[[1]], source_id
+          template$location_id[[1]],
+          template$sub_location_id[[1]],
+          template$media_id[[1]],
+          sample_datetime,
+          template$collection_method[[1]],
+          template$sample_type[[1]],
+          template$sample_grade[[1]],
+          template$sample_approval[[1]],
+          template$owner[[1]],
+          template$contributor[[1]],
+          template$sampling_org[[1]],
+          source_id
         )
       )$sample_id[[1]]
     }
     insert_temp_result <- function(
-      sample_id, parameter_id, matrix_state_id, sample_fraction_id,
-      result_speciation_id, result_value, result_type_id = NA_integer_,
+      sample_id,
+      parameter_id,
+      matrix_state_id,
+      sample_fraction_id,
+      result_speciation_id,
+      result_value,
+      result_type_id = NA_integer_,
       analysis_datetime = Sys.time()
     ) {
-      if (is.na(parameter_id) || is.na(matrix_state_id) || is.na(result_value)) {
-        stop("Temporary results require parameter_id, matrix_state_id, and value.", call. = FALSE)
+      if (
+        is.na(parameter_id) || is.na(matrix_state_id) || is.na(result_value)
+      ) {
+        stop(
+          "Temporary results require parameter_id, matrix_state_id, and value.",
+          call. = FALSE
+        )
       }
-      result_type_id <- if (is.na(result_type_id)) default_result_type_id() else result_type_id
+      result_type_id <- if (is.na(result_type_id)) {
+        default_result_type_id()
+      } else {
+        result_type_id
+      }
       result_value_type <- result_value_actual_id()
       if (is.na(result_type_id) || is.na(result_value_type)) {
-        stop("Could not resolve result type or result value type for temporary results.", call. = FALSE)
+        stop(
+          "Could not resolve result type or result value type for temporary results.",
+          call. = FALSE
+        )
       }
       DBI::dbGetQuery(
         con,
@@ -3029,9 +4525,15 @@ FROM vals",
          )
          RETURNING result_id",
         params = list(
-          sample_id, result_type_id, parameter_id, sample_fraction_id,
-          result_value, result_value_type, result_speciation_id,
-          analysis_datetime, matrix_state_id
+          sample_id,
+          result_type_id,
+          parameter_id,
+          sample_fraction_id,
+          result_value,
+          result_value_type,
+          result_speciation_id,
+          analysis_datetime,
+          matrix_state_id
         )
       )$result_id[[1]]
     }
@@ -3041,9 +4543,13 @@ FROM vals",
         ,
         drop = FALSE
       ]
-      if (!nrow(g)) stop("No selected guideline was found.", call. = FALSE)
+      if (!nrow(g)) {
+        stop("No selected guideline was found.", call. = FALSE)
+      }
       sample_date <- date_or_na(input$test_sample_date)
-      if (is.na(sample_date)) sample_date <- Sys.Date()
+      if (is.na(sample_date)) {
+        sample_date <- Sys.Date()
+      }
       sample_time <- text_default(input$test_sample_time, "12:00:00")
       sample_datetime <- as.POSIXct(
         paste(sample_date, sample_time),
@@ -3054,10 +4560,17 @@ FROM vals",
       }
       target_value <- numeric_or_na(input$test_target_value)
       if (is.na(target_value)) {
-        stop("Enter a target result value for the temporary result.", call. = FALSE)
+        stop(
+          "Enter a target result value for the temporary result.",
+          call. = FALSE
+        )
       }
       input_results <- parse_fake_inputs_text(input$test_fake_inputs_text)
-      input_results <- input_results[!is.na(input_results$value), , drop = FALSE]
+      input_results <- input_results[
+        !is.na(input_results$value),
+        ,
+        drop = FALSE
+      ]
       active <- FALSE
       tryCatch(
         {
@@ -3069,7 +4582,11 @@ FROM vals",
             parameter_id = as.integer(g$parameter_id[[1]]),
             matrix_state_id = as.integer(g$matrix_state_id[[1]]),
             sample_fraction_id = first_id_from_csv(g$fraction_ids[[1]]),
-            result_speciation_id = if (is.na(g$result_speciation_id[[1]])) NA_integer_ else as.integer(g$result_speciation_id[[1]]),
+            result_speciation_id = if (is.na(g$result_speciation_id[[1]])) {
+              NA_integer_
+            } else {
+              as.integer(g$result_speciation_id[[1]])
+            },
             result_value = target_value,
             result_type_id = default_result_type_id(c("^lab$", "^field$")),
             analysis_datetime = sample_datetime
@@ -3103,7 +4620,9 @@ FROM vals",
           result
         },
         error = function(e) {
-          if (active) try(DBI::dbRollback(con), silent = TRUE)
+          if (active) {
+            try(DBI::dbRollback(con), silent = TRUE)
+          }
           data.frame(error = conditionMessage(e), stringsAsFactors = FALSE)
         }
       )
@@ -3121,7 +4640,11 @@ FROM vals",
         return()
       }
       rules <- load_rules(guideline_id)
-      primary_inputs <- if (nrow(rules)) load_inputs(rules$rule_id[[1]]) else data.frame()
+      primary_inputs <- if (nrow(rules)) {
+        load_inputs(rules$rule_id[[1]])
+      } else {
+        data.frame()
+      }
       showModal(modalDialog(
         title = "Test saved guideline",
         radioButtons(
@@ -3137,11 +4660,34 @@ FROM vals",
         tags$details(
           open = TRUE,
           tags$summary("Temporary sample/results"),
-          helpText("Rows entered here are inserted only inside the test transaction and rolled back after the guideline is evaluated."),
+          helpText(
+            "Rows entered here are inserted only inside the test transaction and rolled back after the guideline is evaluated."
+          ),
           fluidRow(
-            column(4, numericInput(ns("test_target_value"), "Target result value", value = 0)),
-            column(4, dateInput(ns("test_sample_date"), "Sample date", value = Sys.Date())),
-            column(4, textInput(ns("test_sample_time"), "Sample time UTC", value = "12:00:00"))
+            column(
+              4,
+              numericInput(
+                ns("test_target_value"),
+                "Target result value",
+                value = 0
+              )
+            ),
+            column(
+              4,
+              dateInput(
+                ns("test_sample_date"),
+                "Sample date",
+                value = Sys.Date()
+              )
+            ),
+            column(
+              4,
+              textInput(
+                ns("test_sample_time"),
+                "Sample time UTC",
+                value = "12:00:00"
+              )
+            )
           ),
           textAreaInput(
             ns("test_fake_inputs_text"),
@@ -3150,15 +4696,23 @@ FROM vals",
             width = "100%",
             height = "180px"
           ),
-          helpText("Use input rows for formulas and SQL scalar rules that depend on other chemistry results.")
+          helpText(
+            "Use input rows for formulas and SQL scalar rules that depend on other chemistry results."
+          )
         ),
         tags$details(
           open = FALSE,
           tags$summary("Existing database result"),
-          numericInput(ns("test_result_id"), "Result ID", value = NA_integer_, min = 1)
+          numericInput(
+            ns("test_result_id"),
+            "Result ID",
+            value = NA_integer_,
+            min = 1
+          )
         ),
         actionButton(ns("run_guideline_test"), "Run", class = "btn-primary"),
-        br(), br(),
+        br(),
+        br(),
         DT::DTOutput(ns("test_guideline_modal_table")),
         easyClose = TRUE,
         footer = modalButton("Close"),
@@ -3167,13 +4721,19 @@ FROM vals",
     })
     observeEvent(input$run_guideline_test, {
       guideline_id <- selected_guideline_id()
-      if (is.na(guideline_id)) return()
+      if (is.na(guideline_id)) {
+        return()
+      }
       result <- if (identical(input$test_mode, "existing")) {
         result_id <- integer_or_na(input$test_result_id)
-        if (is.na(result_id)) return()
+        if (is.na(result_id)) {
+          return()
+        }
         tryCatch(
           guideline_test_query(result_id, guideline_id),
-          error = function(e) data.frame(error = conditionMessage(e), stringsAsFactors = FALSE)
+          error = function(e) {
+            data.frame(error = conditionMessage(e), stringsAsFactors = FALSE)
+          }
         )
       } else {
         run_fake_guideline_test(guideline_id)
