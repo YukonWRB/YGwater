@@ -1381,7 +1381,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       selected <- selected[selected %in% unname(choices)]
       selectizeInput(
         ns("guidelines_AC"),
-        "AquaCache guidelines",
+        tr("disc_ac_guidelines", language$language),
         choices = choices,
         selected = selected,
         multiple = TRUE

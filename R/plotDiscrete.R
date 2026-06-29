@@ -743,6 +743,9 @@ SELECT
   ag.protection_goal,
   ag.exposure_duration,
   ag.averaging_period,
+  ag.parameter_id AS guideline_parameter_id,
+  ag.parameter_name AS guideline_param_name,
+  ag.units AS guideline_units,
   ag.comparison_symbol,
   ag.lower_guideline_value AS std_min,
   ag.upper_guideline_value AS std_max,
@@ -764,11 +767,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
 
     guideline_values <- DBI::dbGetQuery(con, guideline_sql)
     if (nrow(guideline_values) == 0) {
-      msg <- paste(
-        "No AquaCache guideline values matched the selected results.",
-        "Check guideline applicability filters such as media, sample fraction,",
-        "matrix state, valid dates, review status, and specific locations."
-      )
+      msg <- if (lang == "fr") {
+        "Aucune valeur de ligne directrice ne correspond aux résultats sélectionnés. Vérifiez les filtres d'applicabilité des lignes directrices tels que la fraction d'échantillon, la matrice, les dates, le statut de révision et les emplacements spécifiques."
+      } else {
+        "No guideline values matched the selected results. Check guideline applicability filters such as media, sample fraction, matrix state, valid dates, review status, and specific locations."
+      }
       warning(msg)
       attr(df, "guideline_warning") <- msg
       return(df)
@@ -2224,68 +2227,124 @@ AND s.datetime > '",
           rep("Standard", nrow(df))
         }
         df$standard_label <- standard_label
-        if (length(df$std_max[!is.na(df$std_max)]) > 1) {
-          p <- plotly::add_trace(
-            p,
-            data = df,
-            x = ~datetime,
-            y = ~std_max,
-            type = 'scatter',
-            mode = 'markers',
-            color = ~ get(color_by),
-            colors = custom_colors,
-            marker = list(
-              opacity = 1,
-              symbol = "line-ew",
-              size = guideline_scale * 10, # Controls line length
-              line = list(width = guideline_scale * 2, color = NULL)
-            ), # controls the actual line width and clor
-            showlegend = FALSE,
-            hoverinfo = 'text',
-            text = ~ paste(
-              get(color_by),
-              "<br>", # Name or parameter of trace,
-              standard_label,
-              "<br>",
-              datetime,
-              "<br>", # Datetime
-              ifelse(standard_label == "Standard", "Standard Max:", "Guideline Upper:"),
-              round(std_max, 6),
-              units
-            )
+
+        standard_color_levels <- as.character(df[[color_by]])
+        if (
+          color_by == "param_name" &&
+            "guideline_parameter_id" %in% names(df) &&
+            "parameter_id" %in% names(data)
+        ) {
+          parameter_color_levels <- stats::setNames(
+            as.character(data[[color_by]]),
+            as.character(data$parameter_id)
           )
-        }
-        if (length(df$std_min[!is.na(df$std_min)]) > 1) {
-          p <- plotly::add_trace(
-            p,
-            data = df,
-            x = ~datetime,
-            y = ~std_min,
-            type = 'scatter',
-            mode = 'markers',
-            color = ~ get(color_by),
-            colors = custom_colors,
-            marker = list(
-              opacity = 1,
-              symbol = "line-ew",
-              size = guideline_scale * 10,
-              line = list(width = guideline_scale * 2, color = NULL)
-            ),
-            showlegend = FALSE,
-            hoverinfo = 'text',
-            text = ~ paste(
-              get(color_by),
-              "<br>", # Name or parameter of trace,
-              standard_label,
-              "<br>",
-              datetime,
-              "<br>", # Datetime
-              ifelse(standard_label == "Standard", "Standard Min:", "Guideline Lower:"),
-              round(std_min, 6),
-              units
-            )
+          guideline_color_levels <- unname(
+            parameter_color_levels[as.character(df$guideline_parameter_id)]
           )
+          use_guideline_color <- !is.na(guideline_color_levels) &
+            nzchar(guideline_color_levels)
+          standard_color_levels[use_guideline_color] <-
+            guideline_color_levels[use_guideline_color]
         }
+        df$standard_color <- custom_colors[
+          match(standard_color_levels, color_levels)
+        ]
+        df$standard_trace_label <- standard_color_levels
+        df$standard_units <- if ("guideline_units" %in% names(df)) {
+          data.table::fifelse(
+            is.na(df$guideline_units) | !nzchar(df$guideline_units),
+            df$units,
+            df$guideline_units
+          )
+        } else {
+          df$units
+        }
+
+        add_standard_markers <- function(
+          p,
+          plot_data,
+          value_col,
+          standard_bound_label,
+          guideline_bound_label
+        ) {
+          plot_data <- plot_data[
+            !is.na(plot_data[[value_col]]) &
+              !is.na(plot_data$standard_color),
+            ,
+            drop = FALSE
+          ]
+          if (nrow(plot_data) <= 1) {
+            return(p)
+          }
+
+          plot_data$standard_value <- plot_data[[value_col]]
+          plot_data$standard_bound_label <- data.table::fifelse(
+            plot_data$standard_label == "Standard",
+            standard_bound_label,
+            guideline_bound_label
+          )
+
+          for (standard_color in unique(plot_data$standard_color)) {
+            trace_data <- plot_data[
+              plot_data$standard_color == standard_color,
+              ,
+              drop = FALSE
+            ]
+            if (nrow(trace_data) == 0) {
+              next
+            }
+
+            p <- plotly::add_trace(
+              p,
+              data = trace_data,
+              x = ~datetime,
+              y = ~standard_value,
+              type = 'scatter',
+              mode = 'markers',
+              legendgroup = as.character(trace_data$standard_trace_label[[1]]),
+              marker = list(
+                color = standard_color,
+                opacity = 1,
+                symbol = "line-ew",
+                size = guideline_scale * 10, # Controls line length
+                line = list(
+                  width = guideline_scale * 2,
+                  color = standard_color
+                )
+              ), # controls the actual line width and color
+              showlegend = FALSE,
+              hoverinfo = 'text',
+              text = ~ paste(
+                standard_trace_label,
+                "<br>", # Name or parameter of trace,
+                standard_label,
+                "<br>",
+                datetime,
+                "<br>", # Datetime
+                standard_bound_label,
+                round(standard_value, 6),
+                standard_units
+              )
+            )
+          }
+
+          p
+        }
+
+        p <- add_standard_markers(
+          p,
+          df,
+          "std_max",
+          "Standard Max:",
+          "Guideline Upper:"
+        )
+        p <- add_standard_markers(
+          p,
+          df,
+          "std_min",
+          "Standard Min:",
+          "Guideline Lower:"
+        )
       }
 
       return(p)
