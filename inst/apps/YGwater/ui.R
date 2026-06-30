@@ -512,14 +512,14 @@ app_ui <- function(request) {
             title = "Discrete data",
             value = "discreteDataTasks",
             nav_panel(
-              title = "Add discrete data",
+              title = "Add samples and results",
               value = "addDiscData",
               uiOutput("addDiscData_ui")
             ),
             nav_panel(
-              title = "Add / edit samples",
-              value = "addSamples",
-              uiOutput("addSamples_ui")
+              title = "Edit samples and results",
+              value = "editSamples",
+              uiOutput("editSamples_ui")
             ),
             nav_panel(
               title = "Add / modify guidelines",

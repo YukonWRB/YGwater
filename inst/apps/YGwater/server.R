@@ -100,7 +100,7 @@ app_server <- function(input, output, session) {
     "imputeMissing",
     "continuousDataReview",
     "addDiscData",
-    "addSamples",
+    "editSamples",
     "addGuidelines",
     "addSampleSeries",
     "addDocs",
@@ -179,7 +179,7 @@ app_server <- function(input, output, session) {
     "manageInstruments",
     "manageSensors",
     "instrumentMaintenance",
-    "addSamples",
+    "editSamples",
     "addSampleSeries",
     "syncCont",
     "syncDisc"
@@ -1061,7 +1061,7 @@ app_server <- function(input, output, session) {
       if (
         any(
           session$userData$admin_privs$addDiscData,
-          session$userData$admin_privs$addSamples,
+          session$userData$admin_privs$editSamples,
           session$userData$admin_privs$addSampleSeries,
           session$userData$admin_privs$syncDisc,
           session$userData$admin_privs$addGuidelines
@@ -1071,8 +1071,8 @@ app_server <- function(input, output, session) {
         if (!isTRUE(session$userData$admin_privs$addDiscData)) {
           nav_hide(id = "navbar", target = "addDiscData")
         }
-        if (!isTRUE(session$userData$admin_privs$addSamples)) {
-          nav_hide(id = "navbar", target = "addSamples")
+        if (!isTRUE(session$userData$admin_privs$editSamples)) {
+          nav_hide(id = "navbar", target = "editSamples")
         }
         if (!isTRUE(session$userData$admin_privs$addSampleSeries)) {
           nav_hide(id = "navbar", target = "addSampleSeries")
@@ -1695,7 +1695,7 @@ app_server <- function(input, output, session) {
     ui_loaded$addCompoundTimeseries <- FALSE
 
     ui_loaded$addDiscData <- FALSE
-    ui_loaded$addSamples <- FALSE
+    ui_loaded$editSamples <- FALSE
     ui_loaded$addGuidelines <- FALSE
     ui_loaded$addSampleSeries <- FALSE
     ui_loaded$syncDisc <- FALSE
@@ -1781,7 +1781,7 @@ app_server <- function(input, output, session) {
     "imputeMissing",
     "continuousDataReview",
     "addDiscData",
-    "addSamples",
+    "editSamples",
     "addSampleSeries",
     "addGuidelines",
     "addDocs",
@@ -2607,7 +2607,6 @@ app_server <- function(input, output, session) {
             session$userData$AquaCache,
             sql
           )
-          out <<- session$userData$table_privs
           # Create a qualified name column for easier filtering
           session$userData$table_privs$qual_name <- paste0(
             session$userData$table_privs$schema,
@@ -3037,7 +3036,7 @@ app_server <- function(input, output, session) {
                 c("INSERT")
               )
             ),
-            addSamples = has_priv(
+            editSamples = has_priv(
               tbl = session$userData$table_privs,
               "discrete.samples",
               list(c(
@@ -4061,11 +4060,11 @@ app_server <- function(input, output, session) {
         }
       })
     }
-    if (input$navbar == "addSamples") {
-      if (!ui_loaded$addSamples) {
-        output$addSamples_ui <- renderUI(addSamplesUI("addSamples"))
-        ui_loaded$addSamples <- TRUE
-        addSamples("addSamples", language = languageSelection)
+    if (input$navbar == "editSamples") {
+      if (!ui_loaded$editSamples) {
+        output$editSamples_ui <- renderUI(editSamplesUI("editSamples"))
+        ui_loaded$editSamples <- TRUE
+        editSamples("editSamples", language = languageSelection)
       }
     }
     if (input$navbar == "addGuidelines") {

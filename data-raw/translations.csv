@@ -524,6 +524,7 @@ one,Number word one,One,Un
 two,Number word two,Two,Deux
 three,Number word three,Three,Trois
 four,Number word four,Four,Quatre
+disc_ac_guidelines,Discrete plot AquaCache guideline selector,AquaCache guidelines,Lignes directrices AquaCache
 season,Season label,Season,Saison
 collection_method(s),Collection method selector,Collection method(s),Méthode(s) de prélèvement
 result_speciation(s),Result speciation selector,Result speciation(s),Spéciation(s) du résultat

@@ -547,6 +547,51 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       ac_query(sql, data.frame())
     })
 
+    ac_selected_plot_parameter_ids <- reactive({
+      if (!identical(input$data_source, "AC")) {
+        return(numeric(0))
+      }
+      if (identical(input$AC_selector_mode, "browse")) {
+        selected <- ac_numeric_values(input$browse_plot_parameters_AC)
+        if (length(selected) > 0) {
+          return(selected)
+        }
+        choices <- ac_browse_plot_parameter_choices()
+        if (is.null(choices) || !"parameter_id" %in% names(choices)) {
+          return(numeric(0))
+        }
+        return(unique(choices$parameter_id[!is.na(choices$parameter_id)]))
+      }
+      ac_numeric_values(input$parameters_AC, include_all = TRUE)
+    })
+
+    ac_available_guidelines <- reactive({
+      parameter_ids <- ac_selected_plot_parameter_ids()
+      if (length(parameter_ids) == 0) {
+        return(data.frame())
+      }
+
+      sql <- paste0(
+        "SELECT g.guideline_id, g.guideline_code, g.guideline_name,",
+        " p.param_name, gp.publisher_name, gs.series_name",
+        " FROM criteria.guidelines AS g",
+        " INNER JOIN parameters AS p ON p.parameter_id = g.parameter_id",
+        " LEFT JOIN criteria.guideline_publishers AS gp",
+        " ON gp.publisher_id = g.publisher_id",
+        " LEFT JOIN criteria.guideline_series AS gs",
+        " ON gs.series_id = g.series_id",
+        " WHERE g.active",
+        " AND g.review_status = 'approved'",
+        " AND (g.valid_from IS NULL OR CURRENT_DATE >= g.valid_from)",
+        " AND (g.valid_to IS NULL OR CURRENT_DATE <= g.valid_to)",
+        " AND g.parameter_id IN (",
+        paste(parameter_ids, collapse = ", "),
+        ")",
+        " ORDER BY p.param_name, g.guideline_code, g.guideline_name"
+      )
+      ac_query(sql, data.frame())
+    })
+
     ensure_discrete_plot_function <- function() {
       new_args <- c(
         "sub_location_ids",
@@ -561,7 +606,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "duplicate_action",
         "sample_ids",
         "season_ranges",
-        "season_highlight_ranges"
+        "season_highlight_ranges",
+        "guidelines"
       )
       if (all(new_args %in% names(formals(plotDiscrete)))) {
         return(invisible(TRUE))
@@ -798,6 +844,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
           ),
           uiOutput(ns("AC_browse_plot_parameter_ui"))
         ),
+        uiOutput(ns("AC_guidelines_ui")),
         radioButtons(
           ns("facet_on"),
           label = tooltip(
@@ -1292,6 +1339,61 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         input$media_AC,
         input$date_range_AC,
         input$parameters_AC,
+        ignoreNULL = FALSE
+      )
+
+    output$AC_guidelines_ui <- renderUI({
+      req(input$data_source == "AC")
+
+      guidelines <- ac_available_guidelines()
+      if (
+        is.null(guidelines) ||
+          nrow(guidelines) == 0 ||
+          !"guideline_id" %in% names(guidelines)
+      ) {
+        return(NULL)
+      }
+
+      code <- ifelse(
+        is.na(guidelines$guideline_code) |
+          !nzchar(guidelines$guideline_code),
+        "",
+        paste0(guidelines$guideline_code, " - ")
+      )
+      labels <- paste0(
+        code,
+        guidelines$guideline_name,
+        " (",
+        guidelines$param_name,
+        ")"
+      )
+      if ("publisher_name" %in% names(guidelines)) {
+        labels <- ifelse(
+          is.na(guidelines$publisher_name) |
+            !nzchar(guidelines$publisher_name),
+          labels,
+          paste0(labels, " | ", guidelines$publisher_name)
+        )
+      }
+
+      choices <- stats::setNames(as.character(guidelines$guideline_id), labels)
+      selected <- input$guidelines_AC
+      selected <- selected[selected %in% unname(choices)]
+      selectizeInput(
+        ns("guidelines_AC"),
+        tr("disc_ac_guidelines", language$language),
+        choices = choices,
+        selected = selected,
+        multiple = TRUE
+      )
+    }) %>%
+      bindEvent(
+        language$language,
+        input$data_source,
+        input$AC_selector_mode,
+        input$parameters_AC,
+        input$browse_plot_parameters_AC,
+        browse_selected_sample_ids(),
         ignoreNULL = FALSE
       )
 
@@ -1894,7 +1996,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "result_value_types_AC",
         "result_types_AC",
         "browse_sample_parameters_AC",
-        "browse_plot_parameters_AC"
+        "browse_plot_parameters_AC",
+        "guidelines_AC"
       )) {
         updateSelectizeInput(
           session,
@@ -2147,6 +2250,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         parameters,
         paramGrp,
         standard,
+        guidelines,
         log,
         facet_on,
         loc_code,
@@ -2207,6 +2311,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
                 parameters = parameters,
                 paramGrp = paramGrp,
                 standard = standard,
+                guidelines = guidelines,
                 log = log,
                 facet_on = facet_on,
                 loc_code = loc_code,
@@ -2396,6 +2501,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             } else {
               input$standard
             },
+            guidelines = NULL,
             log = input$log_scale,
             facet_on = input$facet_on,
             loc_code = input$loc_code,
@@ -2464,6 +2570,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             } else {
               input$standard
             },
+            guidelines = NULL,
             log = input$log_scale,
             facet_on = input$facet_on,
             loc_code = input$loc_code,
@@ -2589,7 +2696,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               as.numeric(input$parameters_AC)
             },
             paramGrp = NULL,
-            standard = NULL, # No standards in AquaCache yet
+            standard = NULL,
+            guidelines = if (length(input$guidelines_AC) == 0) {
+              NULL
+            } else {
+              input$guidelines_AC
+            },
             log = input$log_scale,
             facet_on = input$facet_on,
             loc_code = input$loc_code,
@@ -2801,6 +2913,14 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       plotData(plot_output_discrete$result()$data)
       plotSeasonMetadata(pendingSeasonMetadata())
       plot_created(TRUE)
+
+      guideline_warning <- attr(
+        plot_output_discrete$result()$data,
+        "guideline_warning"
+      )
+      if (!is.null(guideline_warning) && nzchar(guideline_warning)) {
+        showNotification(guideline_warning, type = "warning", duration = 15)
+      }
 
       shinyjs::show("full_screen")
       shinyjs::show("download_data")

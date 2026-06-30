@@ -1852,6 +1852,147 @@ fetch_parameter_relationship_choices <- function(con) {
   )
 }
 
+parameter_unit_fields <- function() {
+  data.frame(
+    unit_column = c("units_liquid", "units_solid", "units_gas"),
+    unit_label = c("Liquid unit", "Solid unit", "Gas unit"),
+    matrix_state_code = c("liquid", "solid", "gas"),
+    stringsAsFactors = FALSE
+  )
+}
+
+parameter_unit_value_key <- function(value) {
+  if (is.null(value) || !length(value) || all(is.na(value))) {
+    return(NA_character_)
+  }
+
+  as.character(value[[1]])
+}
+
+fetch_parameter_unit_values <- function(con, parameter_id) {
+  DBI::dbGetQuery(
+    con,
+    paste(
+      "SELECT units_liquid, units_solid, units_gas",
+      "FROM public.parameters",
+      "WHERE parameter_id = $1"
+    ),
+    params = list(as.integer(parameter_id))
+  )
+}
+
+parameter_changed_assigned_unit_fields <- function(old_values, new_values) {
+  fields <- parameter_unit_fields()
+  if (is.null(old_values) || !nrow(old_values)) {
+    return(fields[FALSE, , drop = FALSE])
+  }
+
+  changed <- vapply(
+    fields$unit_column,
+    function(unit_column) {
+      old_key <- parameter_unit_value_key(old_values[[unit_column]])
+      new_key <- parameter_unit_value_key(new_values[[unit_column]])
+
+      !is.na(old_key) && !identical(old_key, new_key)
+    },
+    logical(1)
+  )
+
+  fields[changed, , drop = FALSE]
+}
+
+fetch_parameter_unit_usage <- function(con, parameter_id, changed_units) {
+  if (is.null(changed_units) || !nrow(changed_units)) {
+    return(data.frame())
+  }
+
+  usage <- lapply(seq_len(nrow(changed_units)), function(row_idx) {
+    row <- changed_units[row_idx, , drop = FALSE]
+    result <- DBI::dbGetQuery(
+      con,
+      paste(
+        "SELECT",
+        "  ms.matrix_state_id,",
+        "  COALESCE(ms.matrix_state_name, ms.matrix_state_code) AS matrix_state_name,",
+        "  EXISTS (",
+        "    SELECT 1",
+        "    FROM discrete.results AS r",
+        "    WHERE r.parameter_id = $1",
+        "      AND r.matrix_state_id = ms.matrix_state_id",
+        "  ) AS has_discrete_results,",
+        "  EXISTS (",
+        "    SELECT 1",
+        "    FROM continuous.timeseries AS ts",
+        "    WHERE ts.parameter_id = $1",
+        "      AND ts.matrix_state_id = ms.matrix_state_id",
+        "      AND EXISTS (",
+        "        SELECT 1",
+        "        FROM continuous.measurements_continuous AS mc",
+        "        WHERE mc.timeseries_id = ts.timeseries_id",
+        "      )",
+        "  ) AS has_continuous_results",
+        "FROM public.matrix_states AS ms",
+        "WHERE ms.matrix_state_code = $2"
+      ),
+      params = list(
+        as.integer(parameter_id),
+        as.character(row$matrix_state_code)
+      )
+    )
+
+    if (!nrow(result)) {
+      return(result)
+    }
+
+    result$unit_column <- row$unit_column
+    result$unit_label <- row$unit_label
+    result$matrix_state_code <- row$matrix_state_code
+    result
+  })
+
+  do.call(rbind, usage)
+}
+
+parameter_unit_usage_messages <- function(usage) {
+  if (is.null(usage) || !nrow(usage)) {
+    return(character(0))
+  }
+
+  blocked <- usage[
+    usage$has_discrete_results %in% TRUE |
+      usage$has_continuous_results %in% TRUE,
+    ,
+    drop = FALSE
+  ]
+  if (!nrow(blocked)) {
+    return(character(0))
+  }
+
+  apply(
+    blocked,
+    1,
+    function(row) {
+      sources <- character(0)
+      if (isTRUE(as.logical(row[["has_discrete_results"]]))) {
+        sources <- c(sources, "discrete results")
+      }
+      if (isTRUE(as.logical(row[["has_continuous_results"]]))) {
+        sources <- c(sources, "continuous measurements")
+      }
+
+      paste0(
+        "Cannot change ",
+        row[["unit_label"]],
+        " because parameter/matrix state ",
+        row[["matrix_state_name"]],
+        " already has ",
+        paste(sources, collapse = " and "),
+        ". Update or convert those results before changing the unit."
+      )
+    }
+  )
+}
+
 parameterManagerUI <- function(id) {
   ns <- NS(id)
   config <- reference_table_configs()[["parameters"]]
@@ -2295,6 +2436,32 @@ manageParameters <- function(id, language) {
 
         tryCatch(
           {
+            if (!is.null(current_record_id())) {
+              existing_units <- fetch_parameter_unit_values(
+                con,
+                current_record_id()
+              )
+              changed_units <- parameter_changed_assigned_unit_fields(
+                existing_units,
+                values
+              )
+              unit_usage <- fetch_parameter_unit_usage(
+                con,
+                current_record_id(),
+                changed_units
+              )
+              unit_usage_messages <- parameter_unit_usage_messages(unit_usage)
+
+              if (length(unit_usage_messages)) {
+                showNotification(
+                  paste(unit_usage_messages, collapse = " "),
+                  type = "error",
+                  duration = 15
+                )
+                return()
+              }
+            }
+
             saved_id <- DBI::dbWithTransaction(con, {
               saved_parameter_id <- reference_save_record(
                 con = con,
