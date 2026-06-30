@@ -7,7 +7,7 @@
 read_logger_file_data(file, file_type = NULL, default_tz = "UTC")
 }
 \arguments{
-\item{file}{Full path to a \code{.xle} or \code{.html} logger file.}
+\item{file}{Full path to a \code{.xle}, \code{.html}, or \code{.hobo} logger file.}
 
 \item{file_type}{Optional file extension override. This is useful for Shiny
 uploads where the temporary \code{datapath} may not keep the original extension.}
@@ -24,8 +24,8 @@ A data frame with \code{datetime} in UTC and one column per logger
 measurement.
 }
 \description{
-Converts Solinst \code{.xle} and In-Situ/VuSitu \code{.html} logger exports to a
-tabular data frame for continuous data upload. The returned \code{datetime}
-column is converted to UTC. This function does not upload, move, copy, or
-track files.
+Converts Solinst \code{.xle}, In-Situ/VuSitu \code{.html}, and supported Onset HOBO
+\code{.hobo} logger files to a tabular data frame for continuous data upload. The
+returned \code{datetime} column is converted to UTC. This function does not upload,
+move, copy, or track files.
 }

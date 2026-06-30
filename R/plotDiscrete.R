@@ -768,7 +768,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
     guideline_values <- DBI::dbGetQuery(con, guideline_sql)
     if (nrow(guideline_values) == 0) {
       msg <- if (lang == "fr") {
-        "Aucune valeur de ligne directrice ne correspond aux résultats sélectionnés. Vérifiez les filtres d'applicabilité des lignes directrices tels que la fraction d'échantillon, la matrice, les dates, le statut de révision et les emplacements spécifiques."
+        "Aucune valeur de ligne directrice ne correspond aux r\u00E9sultats s\u00E9lectionn\u00E9s. V\u00E9rifiez les filtres d'applicabilit\u00E9 des lignes directrices tels que la fraction d'\u00E9chantillon, la matrice, les dates, le statut de r\u00E9vision et les emplacements sp\u00E9cifiques."
       } else {
         "No guideline values matched the selected results. Check guideline applicability filters such as media, sample fraction, matrix state, valid dates, review status, and specific locations."
       }
@@ -1860,6 +1860,7 @@ AND s.datetime > '",
     }
 
     if (!is.null(guidelines)) {
+      guidelines <- tolower(guidelines)
       data <- add_ac_guideline_values(AC, data, guidelines)
     }
 
@@ -1868,7 +1869,7 @@ AND s.datetime > '",
     }
   }
 
-  #Plot the data ####################################################################################################
+  # Plot the data ####################################################################################################
 
   if (log) {
     if (any(data[!is.na(data$result), "result"] <= 0)) {
