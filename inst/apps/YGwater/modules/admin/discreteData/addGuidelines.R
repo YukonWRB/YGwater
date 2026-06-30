@@ -5902,7 +5902,7 @@ FROM vals",
               } else {
                 int_or_na(result_type_id)
               }
-              DBI::dbGetQuery(
+              query <- DBI::sqlInterpolate(
                 con,
                 "INSERT INTO discrete.results (
                    sample_id, result_type, parameter_id, sample_fraction_id,
@@ -5911,22 +5911,24 @@ FROM vals",
                    analysis_datetime, share_with, no_update, matrix_state_id
                  )
                  VALUES (
-                   $1, $2, $3, $4, $5, NULL, NULL, $6, $7,
-                   $8::timestamptz, ARRAY['public_reader'], false, $9
+                   ?sample_id, ?result_type_id, ?parameter_id,
+                   ?sample_fraction_id, ?value, NULL, NULL,
+                   ?result_value_type_id, ?result_speciation_id,
+                   CAST(?analysis_datetime AS timestamptz),
+                   ARRAY['public_reader'], false, ?matrix_state_id
                  )
                  RETURNING result_id",
-                params = list(
-                  sample_id,
-                  result_type_id,
-                  parameter_id,
-                  sample_fraction_id,
-                  value,
-                  actual_value_type_id(),
-                  result_speciation_id,
-                  analysis_datetime,
-                  matrix_state_id
-                )
-              )$result_id[[1]]
+                sample_id = sample_id,
+                result_type_id = result_type_id,
+                parameter_id = parameter_id,
+                sample_fraction_id = sample_fraction_id,
+                value = value,
+                result_value_type_id = actual_value_type_id(),
+                result_speciation_id = result_speciation_id,
+                analysis_datetime = analysis_datetime,
+                matrix_state_id = matrix_state_id
+              )
+              DBI::dbGetQuery(con, query)$result_id[[1]]
             }
 
             if (identical(req$mode, "existing")) {

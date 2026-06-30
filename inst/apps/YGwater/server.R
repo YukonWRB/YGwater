@@ -2607,7 +2607,6 @@ app_server <- function(input, output, session) {
             session$userData$AquaCache,
             sql
           )
-          out <<- session$userData$table_privs
           # Create a qualified name column for easier filtering
           session$userData$table_privs$qual_name <- paste0(
             session$userData$table_privs$schema,
