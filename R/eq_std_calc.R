@@ -155,10 +155,16 @@ eq_std_calc <- function(sampledata, calcs) {
   hardx <- floor(hardx)
 
   lookup_mn <- data$eq_std_calc_CCME_Mn
-  `CCME_Mn-D_lt` <- dplyr::pull(dplyr::filter(
-    lookup_mn,
-    hardx > "Min" & hardx <= "Max"
-  )[which(colnames(lookup_mn) == as.character(pHx))])
+  lookup_mn_row <- lookup_mn[
+    hardx > lookup_mn$Min & hardx <= lookup_mn$Max,
+    ,
+    drop = FALSE
+  ]
+  `CCME_Mn-D_lt` <- if (nrow(lookup_mn_row) > 0) {
+    lookup_mn_row[[as.character(pHx)]][[1]]
+  } else {
+    NA_real_
+  }
   if (is.element("CCME_Mn-D_lt", calcs$MaxVal)) {
     calcs$MaxVal[which(calcs$MaxVal == "CCME_Mn-D_lt")] <- `CCME_Mn-D_lt`
   }
@@ -184,9 +190,12 @@ eq_std_calc <- function(sampledata, calcs) {
   }
 
   lookup_nh4 <- data$eq_std_calc_CCME_NH4
-  CCME_NH4_lt <- dplyr::pull(dplyr::filter(lookup_nh4, "Temp" == tempx)[which(
-    colnames(lookup_nh4) == as.character(pHx)
-  )])
+  lookup_nh4_row <- lookup_nh4[lookup_nh4$Temp == tempx, , drop = FALSE]
+  CCME_NH4_lt <- if (nrow(lookup_nh4_row) > 0) {
+    lookup_nh4_row[[as.character(pHx)]][[1]]
+  } else {
+    NA_real_
+  }
   if (is.element("CCME_NH4_lt", calcs$MaxVal)) {
     calcs$MaxVal[which(calcs$MaxVal == "CCME_NH4_lt")] <- CCME_NH4_lt
   }
@@ -513,9 +522,9 @@ eq_std_calc <- function(sampledata, calcs) {
     C3AWNH4SW <- 18500 / 1000
   } else if (pH <= 8 & pH > 7.5) {
     C3AWNH4SW <- 11300 / 1000
-  } else if (pH <= 8 & pH > 8.5) {
+  } else if (pH > 8 & pH <= 8.5) {
     C3AWNH4SW <- 3700 / 1000
-  } else if (pH <= 8.5) {
+  } else if (pH > 8.5) {
     C3AWNH4SW <- 1310 / 1000
   }
   if (is.element("C3AWNH4SW", calcs$MaxVal)) {

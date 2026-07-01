@@ -74,17 +74,26 @@ visit <- function(id, language) {
       } else {
         NA_character_
       }
-      precip_type <- if (nchar(input$precip > 0) && !is.na(input$precip)) {
-        input$precip
+      precip <- input$precip
+      precip_type <- if (
+        !is.null(precip) &&
+          length(precip) &&
+          !is.na(precip[[1]]) &&
+          nzchar(as.character(precip[[1]]))
+      ) {
+        as.character(precip[[1]])
       } else {
         "None"
       }
+      precip_rate_input <- input$precip_rate
       precip_rate <- if (
-        !is.null(input$precip_rate) &&
-          !is.na(precip_rate) &&
+        !is.null(precip_rate_input) &&
+          length(precip_rate_input) &&
+          !is.na(precip_rate_input[[1]]) &&
+          nzchar(as.character(precip_rate_input[[1]])) &&
           !identical(precip_type, "None")
       ) {
-        input$precip_rate
+        as.character(precip_rate_input[[1]])
       } else {
         "None"
       }

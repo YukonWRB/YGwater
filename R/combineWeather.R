@@ -53,7 +53,7 @@ combineWeather <- function(
     stop("The 'stations' parameter must be a list.")
   }
 
-  if (length(data) < 2) {
+  if (length(stations) < 2) {
     stop("The 'stations' parameter must be a list with two or more elements.")
   }
 
@@ -214,7 +214,8 @@ combineWeather <- function(
       } else {
         interval <- calculate_period(stn1, datetime_col = datetime_col) %>%
           dplyr::count(.data$period, name = "count") %>%
-          dplyr::filter("count" == max("count")) %>%
+          dplyr::filter(.data$count == max(.data$count)) %>%
+          dplyr::slice(1) %>%
           dplyr::pull("period")
         interval <- as.numeric(lubridate::period(interval))
         all_dates <- seq.POSIXt(

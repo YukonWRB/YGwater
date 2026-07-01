@@ -24,10 +24,15 @@ read_logger_file_data <- function(file, file_type = NULL, default_tz = "UTC") {
     stop("Logger file not found: ", file, call. = FALSE)
   }
 
-  ext <- if (is.null(file_type) || is.na(file_type) || !nzchar(file_type)) {
+  ext <- if (
+    is.null(file_type) ||
+      length(file_type) == 0L ||
+      is.na(file_type[[1]]) ||
+      !nzchar(file_type[[1]])
+  ) {
     tools::file_ext(file)
   } else {
-    file_type
+    file_type[[1]]
   }
   ext <- tolower(ext)
   if (identical(ext, "xle")) {

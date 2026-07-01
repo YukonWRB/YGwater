@@ -61,6 +61,20 @@ test_that("logger file reader converts Solinst XLE data", {
   )
 })
 
+test_that("logger file reader falls back when file_type override is empty", {
+  temperature_col <- "Temperature (\u00B0C)"
+  conductivity_col <- "Conductivity (\u00B5S/cm)"
+  res <- read_logger_file_data(
+    test_path("fixtures/logger_reads/1071079_YOWN-0000_TEST_2020_05_07.xle"),
+    file_type = character(0)
+  )
+
+  expect_named(
+    res,
+    c("datetime", "Level (m)", temperature_col, conductivity_col)
+  )
+})
+
 test_that("logger file reader converts VuSitu HTML data with UTC offset", {
   temperature_col <- "Temperature (\u00B0C)"
   html_file <- logger_fixture(

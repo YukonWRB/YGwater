@@ -459,8 +459,8 @@ v2_client_request_format <- function(client_id) {
 
 v2_public_credentials <- function() {
   list(
-    user = Sys.getenv("APIaquacacheUser", "public_reader"),
-    password = Sys.getenv("APIaquacachePass", "aquacache"),
+    user = Sys.getenv("APIaquacachePublicUser", "public_reader"),
+    password = Sys.getenv("APIaquacachePublicPass", "aquacache"),
     authenticated = FALSE
   )
 }
@@ -1826,15 +1826,21 @@ function(client_id, query) {
            WHERE st.timeseries_type <> 'basic'",
     compound_modified_filter_sql,
     "
+         ),
+         limited_measurement_rows AS MATERIALIZED (
+           SELECT *
+           FROM measurement_rows
+           ORDER BY datetime ASC, timeseries_id ASC
+           LIMIT ",
+    limit_param,
+    "
          )
          ",
-    measurement_select_sql,
-    "
-         FROM measurement_rows m",
-    measurement_join_sql,
-    "ORDER BY m.datetime ASC
-         LIMIT ",
-    limit_param
+     measurement_select_sql,
+     "
+         FROM limited_measurement_rows m",
+     measurement_join_sql,
+    "ORDER BY m.datetime ASC, m.timeseries_id ASC"
   )
   out <- DBI::dbGetQuery(
     ctx$con,

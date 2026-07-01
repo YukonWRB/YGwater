@@ -134,6 +134,12 @@ api_run_with_httpuv_retry <- function(expr, env = parent.frame()) {
 #' @param dbPort The port number of the PostgreSQL database. Default is taken from the environment variable 'aquacachePort'.
 #' @param dbUser The username for the PostgreSQL database. Default is taken from the environment variable 'aquacacheUser'.
 #' @param dbPass The password for the PostgreSQL database. Default is taken from the environment variable 'aquacachePass'.
+#' @param publicDbUser The username for anonymous public API requests. Default
+#'   is taken from the environment variable 'aquacachePublicUser', falling back
+#'   to 'public_reader'.
+#' @param publicDbPass The password for anonymous public API requests. Default
+#'   is taken from the environment variable 'aquacachePublicPass', falling back
+#'   to 'aquacache'.
 #' @param workers The number of worker processes to use for the API server. Default is parallel::detectCores(-2). This parameter is only applicable when using plumber2, as plumber v1 does not support multiple workers.
 #' @param run Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.
 #' @return Runs the API server.
@@ -159,6 +165,8 @@ api <- function(
   dbPort = Sys.getenv("aquacachePort"),
   dbUser = Sys.getenv("aquacacheUser"),
   dbPass = Sys.getenv("aquacachePass"),
+  publicDbUser = Sys.getenv("aquacachePublicUser", "public_reader"),
+  publicDbPass = Sys.getenv("aquacachePublicPass", "aquacache"),
   workers = parallel::detectCores(-2),
   run = TRUE
 ) {
@@ -183,12 +191,15 @@ api <- function(
   }
 
   # Set environment variables for database connection
-  # username and password are handled via Basic Authentication or use the default read-only user
+  # Authenticated requests use Basic Authentication credentials. Anonymous
+  # public routes use the separate read-only public credentials.
   Sys.setenv(APIaquacacheName = dbName)
   Sys.setenv(APIaquacacheHost = dbHost)
   Sys.setenv(APIaquacachePort = dbPort)
   Sys.setenv(APIaquacacheUser = dbUser)
   Sys.setenv(APIaquacachePass = dbPass)
+  Sys.setenv(APIaquacachePublicUser = publicDbUser)
+  Sys.setenv(APIaquacachePublicPass = publicDbPass)
 
   # Launch the plumber2 API using the appropriate engine and implementation
   if (identical(api_target$engine, "plumber2")) {
