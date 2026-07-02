@@ -10,6 +10,7 @@
 #' @param parameters A vector of parameter names or codes. If dbSource == 'AC': from aquacache 'parameters' table use column 'param_name' or 'param_name_fr' (character vector) or 'parameter_id' (numeric vector). If dbSource == 'EQ' use EQWin 'eqparams' table, column 'ParamCode' or leave NULL to use `paramGrp` instead.
 #' @param paramGrp Only used if `dbSource` is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use `parameters` instead.
 #' @param standard A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if `dbSource` is 'EQ'.
+#' @param guidelines AquaCache guideline IDs, codes, or names to plot. Leave NULL to exclude AquaCache guidelines. Only valid if `dbSource` is 'AC'.
 #' @param log Should the y-axis be log-transformed?
 #' @param facet_on Should the plot be faceted by locations or by parameters? Specify one of 'locs' or 'params'. Default is 'locs'.
 #' @param loc_code Should the location code be used instead of the full location name? Options are 'code', 'name', 'codeName', 'nameCode'. Default is 'name'.
@@ -57,6 +58,7 @@ plotDiscrete <- function(
   parameters = NULL,
   paramGrp = NULL,
   standard = NULL,
+  guidelines = NULL,
   log = FALSE,
   facet_on = 'params',
   loc_code = 'name',
@@ -91,6 +93,46 @@ plotDiscrete <- function(
   dbPath = eqwin_db_path(),
   data = FALSE
 ) {
+  # testing params
+  # start = "2010-05-12"
+  # end = "2026-10-31"
+  # locations <- "(EG)W9"
+  # locGrp <- NULL
+  # parameters <- "As-T"
+  # paramGrp <- NULL
+  # standard <- NULL
+  # guidelines <- NULL
+  # log = FALSE
+  # loc_code = "name"
+  # shareX = TRUE
+  # shareY = FALSE
+  # rows = "auto"
+  # target_datetime = FALSE
+  # colorblind = FALSE
+  # lang = "en"
+  # point_scale = 1
+  # guideline_scale = 1
+  # axis_scale = 1
+  # legend_scale = 1
+  # legend_position = 'v'
+  # gridx = FALSE
+  # gridy = FALSE
+  # sub_location_ids = NULL
+  # media = NULL
+  # sample_types = NULL
+  # collection_methods = NULL
+  # result_types = NULL
+  # sample_fractions = NULL
+  # result_value_types = NULL
+  # result_speciations = NULL
+  # include_blanks = TRUE
+  # duplicate_action = "show"
+  # sample_ids = NULL
+  # season_ranges = NULL
+  # season_highlight_ranges = NULL
+  # dbSource = "EQ"
+  # dbPath = "//env-fs/env-data/corp/water/Data/Databases_virtual_machines/databases/EQWinDB/WaterResourcesEG.mdb"
+  # dbCon = NULL
   # initial checks, connection, and validations #######################################################################################
 
   return_data <- data # data is used as an object in this function, but keeping the function argument as 'data' keeps things consistent with other functions for calling purposes.
@@ -180,7 +222,9 @@ plotDiscrete <- function(
   # check for proper call of standards
   if (!is.null(standard)) {
     if (dbSource == "AC") {
-      warning("Parameter 'standard' is only used when 'dbSource' is 'EQ'")
+      warning(
+        "Parameter 'standard' is only used when 'dbSource' is 'EQ'. Use 'guidelines' for AquaCache guidelines."
+      )
       standard <- NULL
     } else {
       if (length(standard) > 1) {
@@ -189,6 +233,10 @@ plotDiscrete <- function(
         )
       }
     }
+  }
+  if (!is.null(guidelines) && dbSource == "EQ") {
+    warning("Parameter 'guidelines' is only used when 'dbSource' is 'AC'")
+    guidelines <- NULL
   }
 
   facet_on <- tolower(facet_on)
@@ -470,7 +518,13 @@ plotDiscrete <- function(
           c(span$x0, span$x1, span$x1, span$x0, span$x0),
           tz = "UTC"
         ),
-        y = c(y_range[[1]], y_range[[1]], y_range[[2]], y_range[[2]], y_range[[1]])
+        y = c(
+          y_range[[1]],
+          y_range[[1]],
+          y_range[[2]],
+          y_range[[2]],
+          y_range[[1]]
+        )
       )
       p <- plotly::add_trace(
         p,
@@ -519,7 +573,9 @@ plotDiscrete <- function(
         "result_speciation",
         "result_type",
         "result_value_type",
-        "matrix_state"
+        "matrix_state",
+        "guideline_id",
+        "guideline_label"
       ),
       names(df)
     )
@@ -576,6 +632,14 @@ plotDiscrete <- function(
       if ("sample_type" %in% names(out)) {
         out$sample_type <- paste0("Average of ", nrow(rows), " samples")
       }
+      for (col in intersect(c("std_min", "std_max"), names(out))) {
+        vals <- rows[[col]]
+        if (all(is.na(vals))) {
+          out[[col]] <- NA_real_
+        } else {
+          out[[col]] <- mean(vals, na.rm = TRUE)
+        }
+      }
       for (col in intersect(
         c(
           "collection_method",
@@ -592,6 +656,139 @@ plotDiscrete <- function(
     })
 
     dplyr::bind_rows(averaged)
+  }
+
+  ac_guideline_filter_sql <- function(con, selected_guidelines, table_alias) {
+    if (is.null(selected_guidelines) || length(selected_guidelines) == 0) {
+      return("")
+    }
+
+    selected_guidelines <- selected_guidelines[
+      !is.na(selected_guidelines) & nzchar(as.character(selected_guidelines))
+    ]
+    if (length(selected_guidelines) == 0) {
+      return("")
+    }
+
+    selected_chr <- as.character(selected_guidelines)
+    selected_ids <- suppressWarnings(as.integer(selected_chr))
+    if (all(!is.na(selected_ids))) {
+      return(paste0(
+        " AND ",
+        table_alias,
+        ".guideline_id IN (",
+        paste(unique(selected_ids), collapse = ", "),
+        ")"
+      ))
+    }
+
+    quoted <- DBI::dbQuoteString(con, tolower(selected_chr))
+    paste0(
+      " AND (LOWER(",
+      table_alias,
+      ".guideline_code) IN (",
+      paste(quoted, collapse = ", "),
+      ") OR LOWER(",
+      table_alias,
+      ".guideline_name) IN (",
+      paste(quoted, collapse = ", "),
+      "))"
+    )
+  }
+
+  add_ac_guideline_values <- function(con, df, selected_guidelines) {
+    if (is.null(selected_guidelines) || nrow(df) == 0) {
+      return(df)
+    }
+    if (!"result_id" %in% names(df)) {
+      msg <- "AquaCache guidelines could not be fetched because result_id is not present."
+      warning(msg)
+      attr(df, "guideline_warning") <- msg
+      return(df)
+    }
+
+    result_ids <- unique(suppressWarnings(as.integer(df$result_id)))
+    result_ids <- result_ids[!is.na(result_ids)]
+    if (length(result_ids) == 0) {
+      return(df)
+    }
+
+    engine_exists <- DBI::dbGetQuery(
+      con,
+      "SELECT to_regprocedure('criteria.applicable_guidelines_for_result(integer,date,boolean,boolean)') IS NOT NULL AS exists"
+    )$exists[[1]]
+    if (!isTRUE(engine_exists)) {
+      msg <- "The AquaCache guideline engine is not installed in this database."
+      warning(msg)
+      attr(df, "guideline_warning") <- msg
+      return(df)
+    }
+
+    guideline_filter <- ac_guideline_filter_sql(con, selected_guidelines, "ag")
+    guideline_sql <- paste0(
+      "
+WITH selected_results AS (
+  SELECT unnest(ARRAY[",
+      paste(result_ids, collapse = ", "),
+      "]::INTEGER[]) AS result_id
+)
+SELECT
+  ag.result_id,
+  ag.guideline_id,
+  ag.guideline_code,
+  ag.guideline_name,
+  ag.publisher_name,
+  ag.series_name,
+  ag.jurisdiction,
+  ag.protection_goal,
+  ag.exposure_duration,
+  ag.averaging_period,
+  ag.parameter_id AS guideline_parameter_id,
+  ag.parameter_name AS guideline_param_name,
+  ag.units AS guideline_units,
+  ag.comparison_symbol,
+  ag.lower_guideline_value AS std_min,
+  ag.upper_guideline_value AS std_max,
+  ag.comparison_status,
+  ag.source_document_title,
+  ag.source_url,
+  ag.source_page,
+  ag.source_table,
+  ag.source_section
+FROM selected_results sr
+CROSS JOIN LATERAL criteria.applicable_guidelines_for_result(
+  sr.result_id, CURRENT_DATE, FALSE, FALSE
+) ag
+WHERE TRUE",
+      guideline_filter,
+      "
+ORDER BY ag.result_id, ag.guideline_id;"
+    )
+
+    guideline_values <- DBI::dbGetQuery(con, guideline_sql)
+    if (nrow(guideline_values) == 0) {
+      msg <- if (lang == "fr") {
+        "Aucune valeur de ligne directrice ne correspond aux r\u00E9sultats s\u00E9lectionn\u00E9s. V\u00E9rifiez les filtres d'applicabilit\u00E9 des lignes directrices tels que la fraction d'\u00E9chantillon, la matrice, les dates, le statut de r\u00E9vision et les emplacements sp\u00E9cifiques."
+      } else {
+        "No guideline values matched the selected results. Check guideline applicability filters such as media, sample fraction, matrix state, valid dates, review status, and specific locations."
+      }
+      warning(msg)
+      attr(df, "guideline_warning") <- msg
+      return(df)
+    }
+
+    guideline_values$guideline_label <- data.table::fifelse(
+      is.na(guideline_values$guideline_code) |
+        !nzchar(guideline_values$guideline_code),
+      guideline_values$guideline_name,
+      paste0(
+        guideline_values$guideline_code,
+        " - ",
+        guideline_values$guideline_name
+      )
+    )
+
+    merge(df, guideline_values, by = "result_id", all.x = TRUE)
   }
 
   # Fetch the data ##############################################################################################################
@@ -755,9 +952,9 @@ plotDiscrete <- function(
         "SELECT eqsampls.StnId, eqsampls.SampleId, eqsampls.CollectDateTime FROM eqsampls INNER JOIN eqcodes ON eqsampls.SampleClass = eqcodes.CodeValue WHERE eqcodes.CodeField = 'eqsampls.SampleClass' AND eqsampls.StnId IN (",
         paste0(StnIds, collapse = ", "),
         ") AND eqsampls.CollectDateTime > #",
-        as.character(start),
+        as.character(lubridate::floor_date(start)),
         "# AND eqsampls.CollectDateTime < #",
-        as.character(end),
+        as.character(lubridate::ceiling_date(end)),
         "# AND eqcodes.CodeValue <> 'D';"
       )
     )
@@ -1662,12 +1859,17 @@ AND s.datetime > '",
       )
     }
 
+    if (!is.null(guidelines)) {
+      guidelines <- tolower(guidelines)
+      data <- add_ac_guideline_values(AC, data, guidelines)
+    }
+
     if (duplicate_action == "average") {
       data <- average_discrete_duplicates(data)
     }
   }
 
-  #Plot the data ####################################################################################################
+  # Plot the data ####################################################################################################
 
   if (log) {
     if (any(data[!is.na(data$result), "result"] <= 0)) {
@@ -2014,66 +2216,136 @@ AND s.datetime > '",
         )
       }
 
-      # Now add points (actually lines) for the standard values where applicable
-      if (!is.null(standard)) {
-        if (length(df$std_max[!is.na(df$std_max)]) > 1) {
-          p <- plotly::add_trace(
-            p,
-            data = df,
-            x = ~datetime,
-            y = ~std_max,
-            type = 'scatter',
-            mode = 'markers',
-            color = ~ get(color_by),
-            colors = custom_colors,
-            marker = list(
-              opacity = 1,
-              symbol = "line-ew",
-              size = guideline_scale * 10, # Controls line length
-              line = list(width = guideline_scale * 2, color = NULL)
-            ), # controls the actual line width and clor
-            showlegend = FALSE,
-            hoverinfo = 'text',
-            text = ~ paste(
-              get(color_by),
-              "<br>", # Name or parameter of trace,
-              datetime,
-              "<br>", # Datetime
-              "Standard Max:",
-              round(std_max, 6),
-              units
-            )
+      # Now add points (actually lines) for standard/guideline values where applicable
+      if (any(c("std_max", "std_min") %in% names(df))) {
+        standard_label <- if ("guideline_label" %in% names(df)) {
+          data.table::fifelse(
+            is.na(df$guideline_label) | !nzchar(df$guideline_label),
+            "Standard",
+            df$guideline_label
           )
+        } else {
+          rep("Standard", nrow(df))
         }
-        if (length(df$std_min[!is.na(df$std_min)]) > 1) {
-          p <- plotly::add_trace(
-            p,
-            data = df,
-            x = ~datetime,
-            y = ~std_min,
-            type = 'scatter',
-            mode = 'markers',
-            color = ~ get(color_by),
-            colors = custom_colors,
-            marker = list(
-              opacity = 1,
-              symbol = "line-ew",
-              size = guideline_scale * 10,
-              line = list(width = guideline_scale * 2, color = NULL)
-            ),
-            showlegend = FALSE,
-            hoverinfo = 'text',
-            text = ~ paste(
-              get(color_by),
-              "<br>", # Name or parameter of trace,
-              datetime,
-              "<br>", # Datetime
-              "Standard Min:",
-              round(std_min, 6),
-              units
-            )
+        df$standard_label <- standard_label
+
+        standard_color_levels <- as.character(df[[color_by]])
+        if (
+          color_by == "param_name" &&
+            "guideline_parameter_id" %in% names(df) &&
+            "parameter_id" %in% names(data)
+        ) {
+          parameter_color_levels <- stats::setNames(
+            as.character(data[[color_by]]),
+            as.character(data$parameter_id)
           )
+          guideline_color_levels <- unname(
+            parameter_color_levels[as.character(df$guideline_parameter_id)]
+          )
+          use_guideline_color <- !is.na(guideline_color_levels) &
+            nzchar(guideline_color_levels)
+          standard_color_levels[use_guideline_color] <-
+            guideline_color_levels[use_guideline_color]
         }
+        df$standard_color <- custom_colors[
+          match(standard_color_levels, color_levels)
+        ]
+        df$standard_trace_label <- standard_color_levels
+        df$standard_units <- if ("guideline_units" %in% names(df)) {
+          data.table::fifelse(
+            is.na(df$guideline_units) | !nzchar(df$guideline_units),
+            df$units,
+            df$guideline_units
+          )
+        } else {
+          df$units
+        }
+
+        add_standard_markers <- function(
+          p,
+          plot_data,
+          value_col,
+          standard_bound_label,
+          guideline_bound_label
+        ) {
+          plot_data <- plot_data[
+            !is.na(plot_data[[value_col]]) &
+              !is.na(plot_data$standard_color),
+            ,
+            drop = FALSE
+          ]
+          if (nrow(plot_data) <= 1) {
+            return(p)
+          }
+
+          plot_data$standard_value <- plot_data[[value_col]]
+          plot_data$standard_bound_label <- data.table::fifelse(
+            plot_data$standard_label == "Standard",
+            standard_bound_label,
+            guideline_bound_label
+          )
+
+          for (standard_color in unique(plot_data$standard_color)) {
+            trace_data <- plot_data[
+              plot_data$standard_color == standard_color,
+              ,
+              drop = FALSE
+            ]
+            if (nrow(trace_data) == 0) {
+              next
+            }
+
+            p <- plotly::add_trace(
+              p,
+              data = trace_data,
+              x = ~datetime,
+              y = ~standard_value,
+              type = 'scatter',
+              mode = 'markers',
+              legendgroup = as.character(trace_data$standard_trace_label[[1]]),
+              marker = list(
+                color = standard_color,
+                opacity = 1,
+                symbol = "line-ew",
+                size = guideline_scale * 10, # Controls line length
+                line = list(
+                  width = guideline_scale * 2,
+                  color = standard_color
+                )
+              ), # controls the actual line width and color
+              showlegend = FALSE,
+              hoverinfo = 'text',
+              text = ~ paste(
+                standard_trace_label,
+                "<br>", # Name or parameter of trace,
+                standard_label,
+                "<br>",
+                datetime,
+                "<br>", # Datetime
+                standard_bound_label,
+                round(standard_value, 6),
+                standard_units
+              )
+            )
+          }
+
+          p
+        }
+
+        p <- add_standard_markers(
+          p,
+          df,
+          "std_max",
+          "Standard Max:",
+          "Guideline Upper:"
+        )
+        p <- add_standard_markers(
+          p,
+          df,
+          "std_min",
+          "Standard Min:",
+          "Guideline Lower:"
+        )
       }
 
       return(p)

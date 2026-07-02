@@ -13,3 +13,5 @@ $cran-comments\.md$
 ^\.data$
 ^\.vscode$
 ^codex$
+^\.git$
+^\.git/

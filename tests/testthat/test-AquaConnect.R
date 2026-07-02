@@ -2,7 +2,7 @@ test_that("Connection can be made", {
   skip_on_cran()
 
   expect_message({
-    con <- AquaConnect()
+    con <- test_AquaConnect(silent = FALSE)
     on.exit(DBI::dbDisconnect(con))
   })
 

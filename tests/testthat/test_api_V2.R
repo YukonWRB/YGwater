@@ -146,7 +146,9 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   pr <- api(
     version = 2,
     run = FALSE,
-    dbName = "aquacache_test"
+    dbName = "aquacache_test",
+    publicDbUser = "api_public",
+    publicDbPass = "api_public_pass"
   )
 
   expect_s3_class(pr, "Plumber2")
@@ -179,6 +181,8 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   expect_equal(Sys.getenv("APIaquacacheName"), "aquacache_test")
   expect_equal(Sys.getenv("APIaquacacheHost"), Sys.getenv("aquacacheHost"))
   expect_equal(Sys.getenv("APIaquacachePort"), Sys.getenv("aquacachePort"))
+  expect_equal(Sys.getenv("APIaquacachePublicUser"), "api_public")
+  expect_equal(Sys.getenv("APIaquacachePublicPass"), "api_public_pass")
 })
 
 test_that("API V2 async annotations are limited to long-running endpoints", {
@@ -188,6 +192,7 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
   async_routes <- c(
     "/timeseries/measurements",
+    "/images/download",
     "/samples",
     "/samples/results",
     "/snow-bulletin/leaflet",
@@ -253,6 +258,42 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
     length(unexpected_then) == 0L,
     info = paste(unexpected_then, collapse = ", ")
   )
+})
+
+test_that("API measurement SQL limits rows before metadata range joins", {
+  for (route_file in c(v2_route_file(), system.file("plumber/v1.R", package = "YGwater"))) {
+    lines <- readLines(route_file, warn = FALSE)
+    measurement_start <- grep(
+      "^#\\* @get\\s+/timeseries/measurements\\s*$",
+      lines
+    )[[1L]]
+    next_route <- grep("^#\\* @get\\s+", lines)
+    measurement_end <- next_route[next_route > measurement_start][[1L]] - 1L
+    block <- paste(lines[measurement_start:measurement_end], collapse = "\n")
+
+    expect_match(block, "limited_measurement_rows AS MATERIALIZED", fixed = TRUE)
+    expect_match(block, "FROM limited_measurement_rows m", fixed = TRUE)
+    expect_match(block, "ORDER BY m.datetime ASC, m.timeseries_id ASC", fixed = TRUE)
+    expect_false(grepl("FROM measurement_rows m", block, fixed = TRUE))
+  }
+})
+
+test_that("API V2 anonymous requests use public credentials", {
+  env <- new.env(parent = globalenv())
+  sys.source(v2_route_file(), envir = env)
+
+  withr::local_envvar(c(
+    APIaquacacheUser = "service_user",
+    APIaquacachePass = "service_pass",
+    APIaquacachePublicUser = "public_user",
+    APIaquacachePublicPass = "public_pass"
+  ))
+
+  credentials <- env$v2_public_credentials()
+
+  expect_equal(credentials$user, "public_user")
+  expect_equal(credentials$password, "public_pass")
+  expect_false(credentials$authenticated)
 })
 
 test_that("API V2 file cache reuses values and waits on in-flight work", {

@@ -5,7 +5,13 @@ test_that("api() builds a router and sets OpenAPI bits without running", {
     aquacachePort = NA
   ))
 
-  pr <- api(run = FALSE, server = "/water-data/api", dbName = "aquacache_test")
+  pr <- api(
+    run = FALSE,
+    server = "/water-data/api",
+    dbName = "aquacache_test",
+    publicDbUser = "api_public",
+    publicDbPass = "api_public_pass"
+  )
   expect_s3_class(pr, "Plumber")
 
   spec <- pr$getApiSpec()
@@ -15,6 +21,8 @@ test_that("api() builds a router and sets OpenAPI bits without running", {
 
   # check env vars were set
   expect_equal(Sys.getenv("APIaquacacheName"), "aquacache_test")
-  expect_equal(Sys.getenv("APIaquacheHost"), Sys.getenv("aquacacheHost"))
+  expect_equal(Sys.getenv("APIaquacacheHost"), Sys.getenv("aquacacheHost"))
   expect_equal(Sys.getenv("APIaquacachePort"), Sys.getenv("aquacachePort"))
+  expect_equal(Sys.getenv("APIaquacachePublicUser"), "api_public")
+  expect_equal(Sys.getenv("APIaquacachePublicPass"), "api_public_pass")
 })

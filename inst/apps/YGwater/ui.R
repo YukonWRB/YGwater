@@ -14,6 +14,7 @@ app_ui <- function(request) {
 
   tagList(
     shinyjs::useShinyjs(),
+
     div(id = "keep_alive", style = "display:none;", textOutput("keep_alive")), # Used for a heartbeat every 5 seconds to keep app alive, which occasionally gives issues on mobile devices.
 
     # Define a JavaScript function to change the background color of an element. If used within a module, MUST refer to variables with ns().
@@ -343,14 +344,7 @@ app_ui <- function(request) {
             title = uiOutput("plotsNavContTitle"),
             value = "contPlot",
             uiOutput("plotContinuous_ui")
-          ),
-          if (!config$public) {
-            nav_panel(
-              title = uiOutput("plotsNavContAdaptiveTitle"),
-              value = "contPlotAdaptive",
-              uiOutput("plotContinuousAdaptive_ui")
-            )
-          }
+          )
         ), # End plot nav_menu
 
         # Reports nav menu
@@ -492,8 +486,8 @@ app_ui <- function(request) {
             ),
             nav_panel(
               title = "Review / edit timeseries",
-              value = "grades_approvals_qualifiers",
-              uiOutput("grades_approvals_qualifiers_ui")
+              value = "continuousDataReview",
+              uiOutput("continuousDataReview_ui")
             ),
             nav_panel(
               title = "Add / edit timeseries",
@@ -518,14 +512,14 @@ app_ui <- function(request) {
             title = "Discrete data",
             value = "discreteDataTasks",
             nav_panel(
-              title = "Add discrete data",
+              title = "Add samples and results",
               value = "addDiscData",
               uiOutput("addDiscData_ui")
             ),
             nav_panel(
-              title = "Add / edit samples",
-              value = "addSamples",
-              uiOutput("addSamples_ui")
+              title = "Edit samples and results",
+              value = "editSamples",
+              uiOutput("editSamples_ui")
             ),
             nav_panel(
               title = "Add / modify guidelines",

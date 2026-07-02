@@ -70,7 +70,9 @@ AquaConnect <- function(
 
       if (!silent) {
         message(
-          "Connected to the aquacache database with the timezone set to UTC."
+          "Connected to the ",
+          name,
+          " database with the timezone set to UTC."
         )
         message(
           "Remember to disconnect using DBI::dbDisconnect() when finished."

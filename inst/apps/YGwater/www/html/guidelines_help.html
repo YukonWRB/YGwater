@@ -2,301 +2,137 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <title>Guideline SQL — Help</title>
+  <title>Guideline SQL Helper</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<style>
-  body { margin: 2rem auto; max-width: 1500px; font: 16px/1.5 system-ui, sans-serif; }
-  h1,h2,h3 { margin-top: 1.5rem; }
-  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  pre { background: #f6f8fa; padding: 1rem; overflow: auto; border-radius: 8px; }
-  .tip { background: #eef6ff; padding: .75rem 1rem; border-left: 4px solid #6aaefc; border-radius: 6px; }
-
-  /* Table styling */
-  table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 1rem 0;
-  }
-  th, td {
-    border: 1px solid #ccc;   /* vertical + horizontal lines */
-    padding: 0.5rem 0.75rem;
-    text-align: left;
-  }
-  th {
-    background: #f2f2f2;
-  }
-  thead tr {
-    border-bottom: 2px solid #999; /* stronger separator under header */
-  }
-  code {
-  font-size: 1em;   /* targets in-line code */
-  }
-   /* Improve readability for code inside table cells */
-  table pre {
-    white-space: pre-wrap;     /* allow wrapping */
-    word-break: break-word;    /* break long tokens */
-  }
-  table pre code {
-  font-size: 0.8em;   /* smaller than normal */
-  line-height: 1;   /* tighten vertical spacing */
-  }
-
-</style>
-
+  <style>
+    body { margin: 1.5rem auto; max-width: 1200px; font: 16px/1.5 system-ui, sans-serif; color: #202124; }
+    h1, h2, h3 { margin-top: 1.4rem; }
+    code, pre { font-family: Consolas, "Courier New", monospace; }
+    pre { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 1rem; overflow: auto; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+    th, td { border: 1px solid #d0d7de; padding: .5rem .65rem; vertical-align: top; }
+    th { background: #f2f4f7; }
+    .tip { background: #eef6ff; border-left: 4px solid #4f9ad7; border-radius: 4px; padding: .75rem 1rem; }
+    .warn { background: #fff7ed; border-left: 4px solid #d97706; border-radius: 4px; padding: .75rem 1rem; }
+  </style>
 </head>
 <body>
-  <h1>How to Enter a New Guideline</h1>
-  <h3>(Or edit an existing one)</h3>
-  <br>
-  <h2>Guideline storage and retrieval in AquaCache</h2>
-  <p>Guidelines are stored in the database formatted as standard SQL language, and stored in a table along with information such as the guideline name, the organization it was issued by, the parameter it pertains to, and whether that parameter is total, dissolved, etc.</p>
-  <p>Simple, fixed guidelines and calculation-based guidelines are stored in the same table, and both leverage SQL language to return their value directly from the database. This storage system makes it simple to select the guideline you want and ensures that all guidelines are called in the same way regardless of their derivation process.</p>
-  <p>Here is a simplified example of guideline storage:</p>
+  <h1>Guideline SQL Helper</h1>
 
-<table>
-  <thead>
-  <tr>
-    <th>id</th>
-    <th>name</th>
-    <th>organization</th>
-    <th>parameter</th>
-    <th>fraction</th>
-    <th>guideline SQL</th>
-  </tr>
-  </thead>
-  <tbody>
-  <tr>
-  <td>1</td>
-    <td>Arsenic, long term, PAL, freshwater</td>
-    <td>CCME</td>
-    <td>Arsenic</td>
-    <td>Dissolved</td>
-    <td>
-    <pre><code>SELECT 0.005::numeric</code></pre>
-    <i>Returns 0.005 mg/l (database units) = 5 ug/l</i>
-    </td>
-  </tr>
-  <tr>
-  <td>2</td>
-  <td>Aluminium, long term, PAL, freshwater</td>
-  <td>CCME</td>
-  <td>Aluminium</td>
-  <td>Dissolved</td>
-  <td>
-    <pre><code>WITH ph AS (
-  SELECT MAX(result) AS ph FROM results
-  WHERE {parameter} = {pH} AND {sample} = {sample_id}
-)
-SELECT CASE
-  WHEN ph &lt; 6.5 THEN 0.005::numeric
-  ELSE               0.1::numeric
-END
-FROM ph;</code></pre>
-    <i>Fetches pH for the target sample and returns the appropriate value (database units of mg/l). Note that the { } denote placeholders for reading convenience here - the true SQL contains numeric ids.</i>
-  </td>
-</tr>
-  </tbody>
-</table>
+  <p>
+    AquaCache stores water quality guideline values in the <code>criteria</code>
+    schema. Most guidelines should use fixed values, lookup ranges, lookup
+    grids, one-input formulas, narrative rows, or external model result rows.
+    Use an <strong>SQL scalar</strong> rule only when the guideline derivation
+    cannot be represented cleanly by those structured rule types.
+  </p>
 
-<p>Guidelines are retrieved by querying the 'guidelines' table directly, filtering on any of the table columns; evaluation is done by processing the SQL code in the database using a custom function, <code>get_guideline_value(guideline_id, sample_id)</code>. This setup has several benefits:</p>
-<ul>
-  <li>Guideline calculation are completely independent of the software used to call them.</li>
+  <div class="tip">
+    SQL scalar rules are still database-driven. The Shiny app stores the SQL in
+    <code>criteria.guideline_value_rules.formula_sql</code>, and the database
+    evaluates it through the same guideline views and functions used by reports,
+    plots, and scripts.
+  </div>
+
+  <h2>Rules for SQL Scalar Rules</h2>
   <ul>
-    <li>Each application gets the same result, no matter what.</li>
-    <li>Scripts are created once, edited in a single place, and held in a standardized container.</li>
+    <li>Write one PostgreSQL statement beginning with <code>SELECT</code> or <code>WITH ... SELECT</code>.</li>
+    <li>Return exactly one numeric value in the database units for the target parameter.</li>
+    <li>Use <code>$1::integer</code> when the expression needs the current <code>sample_id</code>.</li>
+    <li>Do not include a semicolon, inserts, updates, deletes, DDL, temp tables, or session changes.</li>
+    <li>Return <code>NULL::numeric</code> when required sample inputs are missing and no valid guideline value can be derived.</li>
   </ul>
-  <li>Simple and calculated guidelines are stored together and retrieved using the same process, simplifying usage.</li>
-  <li>Calculated guideline application only requires a sample id and auto-fetches relevant sample results.</li>
-  <li>It leverages the evaluation speed of SQL language and further improves calculation speed by performing fetch operations in database.</li>
-</ul>
 
-  <br>
-  
-  <h2>Adding guidelines</h2>
-  <p>Guidelines can be added or modified in the database by directly editing the 'discrete.guidelines' table - either using R, Python, or an interactive database explorer - or via a purpose-built module in the YGwater Shiny application. Strict database checks are applied for any new entries or edits to existing entries to ensure that:</p>
-  
-  <li>You can only reference existing parameters and sample fractions</li>
-  <li>No two guidelines exist for the same parameter/fraction/organization/name combination</li>
-  <li>The SQL you enter is safe to run and returns only a single value</li>
-  <li>The SQL only references allowed schemas and tables.</li>
-  
-  <h3>General Rules</h3>
-  <ul>
-    <li>Start with <code>SELECT</code> (or <code>WITH … SELECT</code>).</li>
-    <li>Return exactly one numeric value (e.g., <code>SELECT 0.05::numeric</code> or <code>SELECT 0.05</code></li>
-    <li>For calculated guidelines that require a sample_id to select results for calculations, use <code>$1</code> as a placeholder for the sample_id.  You'll populated that when calling the function so that it can work with any sample.</li>
-    <li>If you use <code>$1</code> (the <em>sample_id</em>), you <strong>must cast it as an integer</strong> (e.g., <code>$1::integer</code>).</li>
-    <li>No semicolons or data-modifying statements are allowed.</li>
-    <li>Proper SQL syntax must be used (enforced by a check function)</li>
-  </ul>
-  
-  <h3>Examples</h3>
-  <h4>Sample-Independent (<a href="https://ccme.ca/en/chemical/225">CCME PAL long term for uranium</a>)</h4>
-  <pre><code>SELECT 0.015::numeric</code></pre>
-  <p>This very simple guideline returns a fixed value, 0.015; units should be the database standard units for the relevant parameter. Of course, since the database entry (record) for this SQL statement is on a common row with the target parameter_id, we can find out the target parameter and its units by consulting the 'parameters' table. Note that there is no dependency here on a sample_id!</p>
+  <h2>Useful Database Helpers</h2>
+  <p>
+    When a SQL scalar uses sample chemistry, list the same chemistry rows under
+    Rule inputs first, then use the Insert input button to add those helper
+    calls to the SQL editor. The admin form checks
+    <code>discrete.get_sample_val()</code> and
+    <code>criteria.get_sample_hardness()</code> calls against those rows before
+    saving.
+  </p>
+  <table>
+    <thead>
+      <tr><th>Helper</th><th>Use</th><th>Example</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>criteria.get_sample_hardness(sample_id)</code></td>
+        <td>Returns preferred hardness as mg/L CaCO3 using the database's standard priority order.</td>
+        <td><code>criteria.get_sample_hardness($1::integer)</code></td>
+      </tr>
+      <tr>
+        <td><code>discrete.get_sample_val(...)</code></td>
+        <td>Fetches a sample result by parameter, fraction, and optional speciation.</td>
+        <td><code>discrete.get_sample_val(sample_id := $1::integer, parameter_id := 1190::integer, sample_fraction_id := NULL::integer)</code></td>
+      </tr>
+    </tbody>
+  </table>
 
-  <h4>Sample-Dependent Example 1 (<a href="https://ccme.ca/en/chemical/71">CCME PAL long term for copper</a>)</h4>
-  <p>Note: it's better (and called for in some guideline documents) to calculate hardness from calcium and magnesium concentrations rather than use the reported hardness. This bypasses the ambiguity in how hardness can be reported, since that value varies according to the methodology used. Hardness is still coded in as a backup in case either calcium or magnesium concentrations are missing.</p>
-  
-  <pre><code>-- get_sample_hardness() calculates hardness using preferred variable order
-WITH vals AS (
-SELECT discrete.get_sample_hardness($1::INTEGER) AS h
-)
--- Return Copper CWQG in mg/L
-SELECT CASE
-  WHEN h IS NULL OR h < 82
-    THEN 0.002::numeric -- 2 µg/L, the minimum and fallback value
-  WHEN h <= 180
-    THEN (0.2 * exp(0.8545*ln(h) - 1.465) / 1000)::numeric  -- convert µg/L → mg/L
-  ELSE
-    0.004::numeric  -- 4 µg/L, the maximum value which is only ever valid if the calculations could be run
-END
-FROM vals
-</code></pre>
+  <h2>Fixed Value</h2>
+  <p>
+    Prefer the structured fixed-value rule type for this case, but this is the
+    equivalent SQL scalar form:
+  </p>
+  <pre><code>SELECT 0.230::numeric</code></pre>
 
-<p>This guideline can be broken down into two parts:
-<ol>
-<li>The <code>WITH vals AS (...)</code> portion fetches results from the database's 'discrete.results' table using a special function that searches for several parameters and calculates hardness using a prefered order of available variables (see Appendix for the function's definition).</li>
-<li>The <code>SELECT CASE ...</code> portion returns the appropriate guideline value based on the calculated hardness OR a fallback value if hardness could not be calculated.</li>
-</ol>
-<p>There are several things of note:</p>
-<ul>
-<li>The sample_id is passed in as <code>$1</code> and cast to an integer</li>
-<li>get_sample_hardness uses := as an assignment opsrator, not =, and input values must be cast as INTEGER types to match the function's inputs</li>
-<li>The SQL returns a single numeric value, explicitly cast as numeric.</li>
-<li>The returned value is converted to mg/l to align with database units for copper.</li>
-</ul>
-
-<h4>Sample-Dependent Example 2 (<a href="https://ccme.ca/en/chemical/4">CCME PAL long term for aluminium</a>)</h4>
-  <p>Note: it's better (and called for in some guideline documents) to calculate hardness from calcium and magnesium concentrations rather than use the reported hardness. This bypasses the ambiguity in how hardness can be reported, since that value varies according to the methodology used. Hardness is still coded in as a backup in case either calcium or magnesium concentrations are missing.</p>
-  
-  <pre><code>-- get_sample_val() fetches parameter values
-WITH vals AS (
-SELECT discrete.get_sample_val(
-  sample_id := $1::INTEGER,
-  parameter_id := 1189::INTEGER,
-  sample_fraction_id := NULL::INTEGER) AS ph_field
-SELECT discrete.get_sample_val(
-  sample_id := $1::INTEGER,
-  parameter_id := 1190::INTEGER,
-  sample_fraction_id := NULL::INTEGER) AS ph_lab
-)
--- Return aluminium CWQG in mg/L
-SELECT CASE
-  WHEN ph_field IS NOT NULL THEN
-    CASE WHEN ph_field < 6.5 THEN 0.005::numeric ELSE 0.1::numeric
-  WHEN IF ph_lab IS NOT NULL
-    CASE WHEN ph_field < 6.5 THEN 0.005::numeric ELSE 0.1::numeric
-  ELSE
-    NULL::numeric  -- no pH available, cannot calculate guideline
-END
-FROM vals
-</code></pre>
-
-<p>This guideline can be broken down into two parts:
-<ol>
-<li>The <code>WITH vals AS (...)</code> portion fetches results from the database's 'discrete.results' table using the helper function get_sample_val() (see Appendix for more details)</li>
-<li>The <code>SELECT CASE ...</code> portion returns the appropriate guideline value based on the pH with a preference for field pH, returning a fallback NULL if neither pH values are available.</li>
-</ol>
-<p>There are several things of note:</p>
-<ul>
-<li>The sample_id is passed in as <code>$1</code> and cast to an integer</li>
-<li>get_sample_val uses := as an assignment operator, not =, and input values must be cast as INTEGER types to match the function's inputs</li>
-<li>The SQL returns a single numeric value, explicitly cast as numeric.</li>
-<li>The returned value is in mg/L to align with the database units for aluminium.</li>
-</ul>
-<br>
-<h3>Secret sauce for generating calculated guideline SQL</h3>
-<p>
-It can seem daunting to translate CCME (or other) guidelines into SQL, but you don’t have to start from scratch. 
-Large Language Models (LLMs) like ChatGPT can generate valid SQL if you give them the right instructions. 
-Below is a “prompt template” you can use when asking an LLM to draft guideline SQL for this database.
-</p>
-<h4>Prompt template</h4>
-<pre><code>Write a single PostgreSQL SELECT (or WITH … SELECT) that returns one numeric guideline value 
-in mg/L for a given sample_id. This SQL will be stored in a database table and called using a function as needed.
-
-Constraints you MUST follow:
-- Functions will be called using function get_guideline_value(guideline_id, sample_id DEFAULT NULL)
-- guideline_id is auto-generated when the function is saved to the database
-- Guidelines which do not require values from a sample do not use sample_id, they are only called using the guideline_id
-- Use $1 as the sample_id placeholder.
-- fetch sample result values using function discrete.get_param_val(sample_id, parameter_id, sample_fraction_id, result_speciation_id)
-  *sample_fraction_id might be NULL and result_speciation_id is default NULL
-- Special case: fetch hardness using discrete.get_sample_hardness(sample_id)
-- One statement only, no semicolons, no data modification.
-- Return exactly one numeric.
-- The returned value MUST be in mg/L.
-- Relevant IDs: <strong>ADJUST FOR YOUR NEEDS</strong> Calcium=1061, Magnesium=1103, Hardness=100; 
-- Relevant fractions: <strong>ADJUST FOR YOUR NEEDS</strong> Dissolved=19, Total=5.
-
-Return an SQL statement that computes the guideline for 
-<strong>[insert the guideline description or formula here]</strong>
-</code></pre>
-
-<p>
-👉 With this context, an LLM can usually draft valid guideline SQL. Always review the SQL for accuracy and  test the generated query against real data.
-</p>
-  <div class="tip"><strong>Tip:</strong> If you enter guidelines using the Shiny application, make use of the helper buttons to insert your desired parameters and sample fractions into the SQL text. You also insert a function skeleton to help you write your guideline faster!</div>
-
-<br>
-<h2>Appendix</h2>
-<h3>Hardness calculation function</h3>
-<p>Hardness can be measured using a variety of different means and reported in several different ways. For guideline calculations, we usually want hardness as mg/L CaCO3 equivalent, but sometimes we have not way of knowing exactly how hardness was measured. Also, if the measurement was to a titration end point (common), some user interpretation of the end true end point can always skew results. A safer way to achieve a hardness value is to use the measured calcium and magnesium concentrations - dissolved if possible since that's what matters to aquatic toxicity. A full SQL expression to achieve this value looks like this:</p>
-<pre><code>
-WITH vals AS (
-SELECT
-  MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 5)  AS ca_d,
-  MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 5)  AS mg_d,
-  MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 5  AND result_speciation_id = 3) AS hard_d,
-  MAX(result) FILTER (WHERE parameter_id = 1061 AND sample_fraction_id = 19) AS ca_t,
-  MAX(result) FILTER (WHERE parameter_id = 1103 AND sample_fraction_id = 19) AS mg_t,
-  MAX(result) FILTER (WHERE parameter_id = 100  AND sample_fraction_id = 19 AND result_speciation_id = 3) AS hard_t
-FROM discrete.results
-WHERE sample_id = $1
+  <h2>Hardness-Dependent Example</h2>
+  <p>
+    This pattern is useful for guidelines that depend on hardness and cannot be
+    represented by the one-input formula rule.
+  </p>
+  <pre><code>WITH vals AS (
+  SELECT criteria.get_sample_hardness($1::integer) AS hardness_mg_l_caco3
 )
 SELECT CASE
-  WHEN ca_d IS NOT NULL AND mg_d IS NOT NULL AND ca_d > 0 AND mg_d > 0 
-    THEN 2.497*ca_d + 4.118*mg_d
-  WHEN hard_d IS NOT NULL AND hard_d > 0 
-    THEN hard_d
-  WHEN ca_t IS NOT NULL AND mg_t IS NOT NULL AND ca_t > 0 AND mg_t > 0 
-    THEN 2.497*ca_t + 4.118*mg_t
-  WHEN hard_t IS NOT NULL AND hard_t > 0 
-    THEN hard_t
+  WHEN hardness_mg_l_caco3 IS NULL THEN NULL::numeric
+  WHEN hardness_mg_l_caco3 &lt; 82 THEN 0.002::numeric
+  WHEN hardness_mg_l_caco3 &lt;= 180 THEN
+    (0.2 * exp(0.8545 * ln(hardness_mg_l_caco3) - 1.465) / 1000)::numeric
+  ELSE 0.004::numeric
 END
-FROM vals;
-)</code></pre>
-<p>This would be tedious and repetitive to call each time hardness is needed in a guideline calculation, and it's also advantageous to always have a common way to get hardness to prevent typos or other variations on this calculation. Therefore, an SQL function was created in the database that can be used directly in your guideline SQL code and called as such:</p>
-<code>SELECT discrete.get_sample_hardness($1::integer);</code>
-<p>Usage of this function is show in the calculated guideline example above.</p>
-<h3>Value fetching function</h3>
-<p>Fetching values typically takes the form of:</p>
-<pre><code>
-SELECT 
-  MAX(result) FILTER (WHERE parameter_id = 100 AND sample_fraction_id = 5 AND result_speciation_id = 3)  AS hard_d
-FROM discrete.results
-WHERE sample_id = $1;
-</code></pre>
-<p>This is also tedious and repetitive to write each time a value is needed in a guideline calculation, and it's also advantageous to always have a common way to get values to prevent typos or other variations on this calculation. Therefore, an SQL function was created in the database to keep things clean:</p>
-<pre><code>
-discrete.get_sample_val(
-  sample_id INTEGER,
-  parameter_id INTEGER,
-  sample_fraction_id INTEGER,
-  result_speciation_id INTEGER DEFAULT NULL
-) RETURNS numeric
-LANGUAGE sql STABLE SET search_path = discrete, public AS $$
-SELECT MAX(result)::numeric
-FROM discrete.results
-WHERE sample_id = $1
-  AND parameter_id = $2
-  AND sample_fraction_id IS NOT DISTINCT FROM $3 -- allows match on NULL
-  AND result_speciation_id IS NOT DISTINCT FROM $4; -- allows match on NULL
-$$;
-</code></pre>
-<p>This function can be used directly in your guideline SQL code and called as such:</p>
-<code>SELECT discrete.get_sample_val(sample_id, parameter_id, sample_fraction_id, result_speciation_id);</code>
-<p>Note that sample_fraction_id can be NULL (though it's usually needed) and result_speciation_id is by default NULL.</p>
+FROM vals</code></pre>
+
+  <h2>Multiple Sample Inputs</h2>
+  <p>
+    SQL scalar rules can combine several inputs. Keep parameter, fraction, and
+    speciation IDs explicit so the stored rule remains reproducible.
+  </p>
+  <pre><code>WITH vals AS (
+  SELECT
+    criteria.get_sample_hardness($1::integer) AS hardness_mg_l_caco3,
+    discrete.get_sample_val(
+      sample_id := $1::integer,
+      parameter_id := 538::integer,
+      sample_fraction_id := 2::integer,
+      result_speciation_id := NULL::integer
+    ) AS doc_mg_l
+)
+SELECT CASE
+  WHEN hardness_mg_l_caco3 IS NULL OR doc_mg_l IS NULL THEN NULL::numeric
+  ELSE (0.001 + 0.00002 * hardness_mg_l_caco3 + 0.0001 * doc_mg_l)::numeric
+END
+FROM vals</code></pre>
+
+  <h2>Testing SQL Scalar Rules</h2>
+  <p>
+    The Shiny tester can evaluate a saved guideline against either an existing
+    result ID or a temporary sample. Temporary tests insert a synthetic sample
+    and result rows inside a transaction, run
+    <code>criteria.applicable_guidelines_for_result()</code>, and then roll the
+    transaction back.
+  </p>
+  <p>
+    For BLM or other external-model guidelines, enter the sample chemistry in
+    the temporary input table and optionally enter an external model output. The
+    app stores that model output only for the duration of the test transaction.
+  </p>
+
+  <div class="warn">
+    SQL scalar rules are intentionally powerful. Use structured rule types first
+    when they fit, and keep SQL scalar expressions short, reviewed, and tied to
+    source documentation.
+  </div>
 </body>
 </html>

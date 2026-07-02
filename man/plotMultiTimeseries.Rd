@@ -40,7 +40,8 @@ plotMultiTimeseries(
   tzone = "auto",
   data = FALSE,
   con = NULL,
-  as_of = NULL
+  as_of = NULL,
+  stats_period = "full"
 )
 }
 \arguments{
@@ -119,6 +120,10 @@ to FALSE to force standard scatter traces.}
 stored daily summaries should be reconstructed. Character, Date, and
 POSIXct inputs are supported. Date-like inputs are interpreted as the end
 of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
+
+\item{stats_period}{Historical range statistics period. Use "full" for
+full-record statistics or "30yr" for the most recent 30-year statistics
+when the connected database provides them. Default is "full".}
 }
 \value{
 A plotly object and a data frame with the data used to create the plot (if \code{data} is TRUE).

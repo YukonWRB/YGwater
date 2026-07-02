@@ -688,7 +688,11 @@ getVector <- function(
     if (length(attr_raw) > 0) {
       attr_frames <- lapply(seq_along(attr_raw), function(idx) {
         raw_value <- attr_raw[idx]
-        if (is.na(raw_value)) {
+        if (
+          all(is.na(raw_value)) ||
+            !is.character(raw_value) ||
+            !nzchar(raw_value)
+        ) {
           return(data.frame(.row_id = idx))
         }
 

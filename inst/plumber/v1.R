@@ -23,7 +23,7 @@ function(req, res) {
     "^/openapi.json$", # <-- needed for the UI to load without auth
     "^/openapi.yaml$", # <-- sometimes used
     "^/timeseries/measurements$",
-    "^/samples/results$/",
+    "^/samples/results$",
     "^/csw-layer$"
   )
   is_public_ok <- identical(req$REQUEST_METHOD, "GET") &&
@@ -37,17 +37,29 @@ function(req, res) {
       res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
       return(list(error = "Authentication required"))
     }
-    req$user <- Sys.getenv("APIaquacacheUser", "public_reader") # default to public_reader if not set. Set on CI to run with test database, otherwise uses public_reader.
-    req$password <- Sys.getenv("APIaquacachePass", "aquacache")
+    req$user <- Sys.getenv("APIaquacachePublicUser", "public_reader")
+    req$password <- Sys.getenv("APIaquacachePublicPass", "aquacache")
     return(plumber::forward())
+  }
+
+  if (!grepl("^Basic\\s+", hdr)) {
+    res$status <- 401
+    res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
+    return(list(error = "Invalid authentication header"))
   }
 
   # Parse Basic user:pass (split on first :)
   b64 <- sub("^Basic\\s+", "", hdr)
-  cred <- rawToChar(jsonlite::base64_dec(b64))
+  cred <- try(rawToChar(jsonlite::base64_dec(b64)), silent = TRUE)
+  if (inherits(cred, "try-error")) {
+    res$status <- 401
+    res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
+    return(list(error = "Invalid authentication header"))
+  }
   i <- regexpr(":", cred, fixed = TRUE)
   if (i < 1) {
     res$status <- 401
+    res$setHeader("WWW-Authenticate", 'Basic realm="AquaCache"')
     return(list(error = "Invalid authentication header"))
   }
   req$user <- substr(cred, 1, i - 1)
@@ -840,15 +852,21 @@ function(
            WHERE st.timeseries_type <> 'basic'",
         compound_modified_filter_sql,
         "
+         ),
+         limited_measurement_rows AS MATERIALIZED (
+           SELECT *
+           FROM measurement_rows
+           ORDER BY datetime ASC, timeseries_id ASC
+           LIMIT ",
+    limit_param,
+    "
          )
          ",
-        measurement_select_sql,
-        "
-         FROM measurement_rows m",
-        measurement_join_sql,
-        "ORDER BY m.datetime ASC
-         LIMIT ",
-    limit_param
+         measurement_select_sql,
+         "
+         FROM limited_measurement_rows m",
+         measurement_join_sql,
+         "ORDER BY m.datetime ASC, m.timeseries_id ASC"
   )
   out <- DBI::dbGetQuery(
     con,
@@ -1303,7 +1321,7 @@ get_snowbull_stamp <- function(
     "SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent'"
   )[1, 1]
 
-  if (is.na(param_id) | is.null(year) | is.null(month)) {
+  if (is.null(year) || is.null(month) || is.na(param_id)) {
     return("none")
   }
 

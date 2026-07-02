@@ -50,6 +50,19 @@ addContDataUI <- function(id) {
           id = ns("ts_panel"),
           title = "Timeseries selection",
           actionButton(ns("addNewTS"), "Click here to add a new timeseries"),
+          p(
+            "For a file containing more than one timeseries, select all target basic timeseries from the same location."
+          ),
+          div(
+            style = "margin-bottom: 8px;",
+            actionButton(
+              ns("reset_timeseries_selection"),
+              "Reset timeseries selection",
+              icon = icon("rotate-left"),
+              class = "btn-secondary"
+            )
+          ),
+          uiOutput(ns("selected_upload_targets")),
           DT::DTOutput(ns("ts_table"))
         )
       ),
@@ -68,47 +81,30 @@ addContDataUI <- function(id) {
             choices = c("File" = "file", "Manual" = "manual"),
             inline = TRUE
           ),
-          conditionalPanel(
-            condition = "input.entry_mode == 'file'",
-            ns = ns,
-            fileInput(
-              ns("file"),
-              "Upload .csv or .xlsx",
-              accept = c(".csv", ".xlsx")
-            )
-          ),
-          conditionalPanel(
-            condition = "input.entry_mode == 'manual'",
-            ns = ns,
-            div(
-              actionButton(ns("add_row"), "Add row to end"),
-              actionButton(ns("add_row_above"), "Add row above selection"),
-              actionButton(ns("add_row_below"), "Add row below selection"),
-              actionButton(ns("delete_rows_table"), "Delete selected rows")
-            ),
-            tags$br()
-          ),
-
-          DT::DTOutput(ns("data_table")),
-
-          uiOutput(ns("data_table_note")),
-          tags$br(),
-          splitLayout(
-            cellWidths = c("70%", "30%"),
-            selectizeInput(
-              ns("UTC_offset"),
-              "UTC offset of data",
-              choices = input_timezone_choices(),
-              selected = format_utc_offset(0L),
-              multiple = FALSE
+          div(
+            style = "display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;",
+            conditionalPanel(
+              condition = "input.entry_mode == 'file'",
+              ns = ns,
+              div(
+                style = "flex: 1 1 520px; min-width: 320px;",
+                fileInput(
+                  ns("file"),
+                  "Upload .csv, .xlsx, Solinst .xle, InSite .html, or Onset .hobo files",
+                  accept = c(".csv", ".xlsx", ".xle", ".html", ".htm", ".hobo"),
+                  width = "100%"
+                )
+              )
             ),
             div(
-              style = "padding-top: 25px;",
-              actionButton(
-                ns("open_unit_conversion"),
-                "Convert units",
-                icon = icon("calculator"),
-                class = "btn-warning"
+              style = "flex: 0 0 260px;",
+              selectizeInput(
+                ns("UTC_offset"),
+                "UTC offset (applied to all uploaded data)",
+                choices = input_timezone_choices(),
+                selected = format_utc_offset(0L),
+                multiple = FALSE,
+                width = "100%"
               )
             )
           ),
@@ -133,124 +129,63 @@ addContDataUI <- function(id) {
           ),
           radioButtons(
             ns("no_update"),
-            "Prevent updates to these data by automatic processes?",
+            "Prevent updates to these data by automatic processes, such as import scripts?",
             choices = c("Yes" = "yes", "No" = "no"),
             inline = TRUE,
-            selected = "no"
+            selected = "yes"
           ),
           tags$div(
             "Note: data visibility is controlled by the timeseries visibility parameters."
+          ),
+          uiOutput(ns("multi_upload_note")),
+          conditionalPanel(
+            condition = "input.entry_mode == 'manual'",
+            ns = ns,
+            div(
+              actionButton(ns("add_row"), "Add row to end"),
+              actionButton(ns("add_row_above"), "Add row above selection"),
+              actionButton(ns("add_row_below"), "Add row below selection"),
+              actionButton(ns("delete_rows_table"), "Delete selected rows")
+            ),
+            tags$br()
+          ),
+
+          uiOutput(ns("data_tables_ui")),
+          uiOutput(ns("data_table_note")),
+          tags$br(),
+          div(
+            style = "margin-top: 8px;",
+            actionButton(
+              ns("open_unit_conversion"),
+              "Convert units",
+              icon = icon("calculator"),
+              class = "btn-warning"
+            )
           )
-        ),
-        # accordion to hold a plotly plot of the uploaded/added data for quick visual checks before upload
+        ), # End of data entry accordion panel
+        # accordion to hold uploaded/added data plots and deletion controls
         accordion_panel(
           id = ns("preview_panel"),
-          title = "Preview data",
+          title = "Preview and delete data",
           icon = icon("chart-line"),
           checkboxInput(
             ns("preview_historic_range"),
             "Show historic range",
             value = TRUE
           ),
-          splitLayout(
-            cellWidths = c("33%", "33%", "33%"),
-            selectizeInput(
-              ns("preview_utc_offset"),
-              "Preview UTC offset",
-              choices = input_timezone_choices(),
-              selected = format_utc_offset(0L),
-              multiple = FALSE,
-              width = "100%"
-            ),
-            shinyWidgets::airDatepickerInput(
-              ns("preview_start_datetime"),
-              "Preview start datetime",
-              value = NULL,
-              range = FALSE,
-              multiple = FALSE,
-              timepicker = TRUE,
-              update_on = "change",
-              tz = air_datetime_widget_timezone(format_utc_offset(0L)),
-              timepickerOpts = shinyWidgets::timepickerOptions(
-                minutesStep = 15,
-                timeFormat = "HH:mm"
-              )
-            ),
-            shinyWidgets::airDatepickerInput(
-              ns("preview_end_datetime"),
-              "Preview end datetime",
-              value = NULL,
-              range = FALSE,
-              multiple = FALSE,
-              timepicker = TRUE,
-              update_on = "change",
-              tz = air_datetime_widget_timezone(format_utc_offset(0L)),
-              timepickerOpts = shinyWidgets::timepickerOptions(
-                minutesStep = 15,
-                timeFormat = "HH:mm"
-              )
-            )
-          ),
-          bslib::input_task_button(
-            ns("make_plot"),
-            "Refresh plot",
-            icon = icon("refresh")
-          ),
-          uiOutput(ns("plot_refresh_warning")),
-          plotly::plotlyOutput(ns("data_preview"))
-        ),
-
-        # Add delete/grade/approval/qualifier functionality within accordions
-        # Delete regions panel
-        accordion_panel(
-          id = ns("delete_panel"),
-          title = "Delete data",
-          icon = icon("trash"),
           selectizeInput(
-            ns("delete_utc_offset"),
-            "Delete UTC offset",
+            ns("preview_utc_offset"),
+            "Preview UTC offset",
             choices = input_timezone_choices(),
             selected = format_utc_offset(0L),
             multiple = FALSE,
-            width = "100%"
+            width = "33%"
           ),
-          shinyWidgets::airDatepickerInput(
-            ns("delete_cutoff_datetime"),
-            "Delete data before/after datetime",
-            value = NULL,
-            range = FALSE,
-            multiple = FALSE,
-            timepicker = TRUE,
-            update_on = "change",
-            tz = air_datetime_widget_timezone(format_utc_offset(0L)),
-            timepickerOpts = shinyWidgets::timepickerOptions(
-              minutesStep = 15,
-              timeFormat = "HH:mm"
-            )
-          ),
-          div(
-            conditionalPanel(
-              condition = "input.entry_mode == 'manual'",
-              ns = ns,
-              actionButton(ns("delete_rows_accordion"), "Delete selected rows")
-            ),
-            actionButton(
-              ns("delete_before_datetime"),
-              "Delete rows before datetime"
-            ) |>
-              tooltip(
-                "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
-              ),
-            actionButton(
-              ns("delete_after_datetime"),
-              "Delete rows after datetime"
-            ) |>
-              tooltip(
-                "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
-              )
-          )
-        ), # end delete accordion panel
+          uiOutput(ns("plot_generation_status")),
+          uiOutput(ns("preview_plot_tabs"))
+        ),
 
+        # Add delete/grade/approval/qualifier functionality within accordions
         # Add approvals panel
         accordion_panel(
           id = ns("approval_panel"),
@@ -264,12 +199,13 @@ addContDataUI <- function(id) {
             multiple = FALSE,
             width = "100%"
           ),
+          uiOutput(ns("approval_apply_all_ui")),
           div(
             actionButton(ns("add_approval_range"), "Add approval range"),
             actionButton(ns("edit_approval_range"), "Edit selected"),
             actionButton(ns("delete_approval_range"), "Delete selected")
           ),
-          DT::DTOutput(ns("approval_ranges_table")),
+          uiOutput(ns("approval_ranges_ui")),
           uiOutput(ns("approval_ranges_warning"))
         ), # End approval panel
 
@@ -286,12 +222,13 @@ addContDataUI <- function(id) {
             multiple = FALSE,
             width = "100%"
           ),
+          uiOutput(ns("grade_apply_all_ui")),
           div(
             actionButton(ns("add_grade_range"), "Add grade range"),
             actionButton(ns("edit_grade_range"), "Edit selected"),
             actionButton(ns("delete_grade_range"), "Delete selected")
           ),
-          DT::DTOutput(ns("grade_ranges_table")),
+          uiOutput(ns("grade_ranges_ui")),
           uiOutput(ns("grade_ranges_warning"))
         ), # end grade accordion panel
 
@@ -308,18 +245,20 @@ addContDataUI <- function(id) {
             multiple = FALSE,
             width = "100%"
           ),
+          uiOutput(ns("qualifier_apply_all_ui")),
           div(
             actionButton(ns("add_qualifier_range"), "Add qualifier range"),
             actionButton(ns("edit_qualifier_range"), "Edit selected"),
             actionButton(ns("delete_qualifier_range"), "Delete selected")
           ),
-          DT::DTOutput(ns("qualifier_ranges_table")),
+          uiOutput(ns("qualifier_ranges_ui")),
           uiOutput(ns("qualifier_ranges_warning"))
         ) # End qualifiers accordion panel
       ), # end accordion for data manipulation options
 
       br(),
       uiOutput(ns("selected_units_warning_last")),
+      uiOutput(ns("upload_target_checkboxes")),
 
       bslib::input_task_button(
         ns("upload"),
@@ -349,6 +288,21 @@ addContDataUI <- function(id) {
 addContData <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    ensure_background_future_plan <- function() {
+      current_plan <- future::plan()
+      if (!inherits(current_plan, "sequential")) {
+        return(invisible(FALSE))
+      }
+      if (identical(Sys.info()[["sysname"]], "Windows") || interactive()) {
+        future::plan("multisession")
+      } else {
+        future::plan("multicore")
+      }
+      invisible(TRUE)
+    }
+
+    ensure_background_future_plan()
 
     output$banner <- renderUI({
       req(language$language)
@@ -418,6 +372,7 @@ addContData <- function(id, language) {
            md.timeseries_type,
            ts.active,
            ts.publicly_visible,
+           ts.default_owner,
            md.sensor_priority,
            md.start_datetime,
            md.end_datetime
@@ -555,13 +510,15 @@ addContData <- function(id, language) {
       df$active <- as.factor(df$active)
       df$publicly_visible <- as.factor(df$publicly_visible)
       df$sensor_priority <- as.factor(df$sensor_priority)
+      df$default_owner <- as.factor(df$default_owner)
 
       hidden_columns <- which(
         names(df) %in% c("timeseries_id", "timeseries_type_code")
-      ) - 1L
+      ) -
+        1L
       DT::datatable(
         df,
-        selection = 'single',
+        selection = list(mode = "multiple", target = "row"),
         options = list(
           columnDefs = list(list(targets = hidden_columns, visible = FALSE)),
           scrollX = TRUE,
@@ -585,14 +542,95 @@ addContData <- function(id, language) {
 
     # Observe timeseries selection and assign to reactiveVal
     timeseries <- reactiveVal(NULL)
-    observeEvent(input$ts_table_rows_selected, {
-      sel <- input$ts_table_rows_selected
+    upload_timeseries_ids <- reactiveVal(integer())
+    suppress_ts_table_selection <- reactiveVal(FALSE)
+    sync_ts_table_selection <- function(ids = integer()) {
+      meta <- ts_meta()
+      rows <- match(as.integer(ids), meta$timeseries_id)
+      rows <- rows[!is.na(rows)]
+      current_rows <- isolate(input$ts_table_rows_selected)
+      if (setequal(rows, as.integer(current_rows))) {
+        return(invisible(FALSE))
+      }
+      suppress_ts_table_selection(TRUE)
+      DT::dataTableProxy("ts_table", session = session) |>
+        DT::selectRows(rows)
+      invisible(TRUE)
+    }
+
+    accepted_timeseries_ids_from_selection <- function(sel) {
+      if (length(sel) == 0) {
+        return(integer())
+      }
+      selected <- ts_meta()[sel, , drop = FALSE]
+      basic <- selected[
+        selected$timeseries_type_code == "basic",
+        ,
+        drop = FALSE
+      ]
+      if (nrow(basic) == 0) {
+        return(integer())
+      }
+      location <- basic$location[[1]]
+      basic <- basic[basic$location == location, , drop = FALSE]
+      as.integer(basic$timeseries_id)
+    }
+
+    staged_upload_data_exists <- function() {
+      jobs <- isolate(upload_jobs())
+      validation_jobs <- isolate(upload_validation$jobs)
+      nrow(isolate(data$df)) > 0 ||
+        (!is.null(jobs) && length(jobs) > 0) ||
+        (!is.null(validation_jobs) && length(validation_jobs) > 0)
+    }
+
+    selection_change_requires_data_reset <- function(sel) {
+      if (!staged_upload_data_exists()) {
+        return(FALSE)
+      }
+      current_ids <- as.integer(upload_timeseries_ids())
+      proposed_ids <- accepted_timeseries_ids_from_selection(sel)
+      !setequal(current_ids, proposed_ids)
+    }
+
+    pending_ts_table_selection <- reactiveVal(NULL)
+
+    show_selection_reset_modal <- function() {
+      showModal(modalDialog(
+        title = "Reset uploaded data?",
+        tags$p(
+          "Changing the selected timeseries after data have been loaded will reset the uploaded data, preview plots, grades, approvals, and qualifiers."
+        ),
+        tags$p(
+          "This prevents data mapped for one set of targets from being uploaded to a different set of targets."
+        ),
+        easyClose = FALSE,
+        footer = tagList(
+          actionButton(
+            ns("cancel_timeseries_selection_reset"),
+            "Keep current selection"
+          ),
+          actionButton(
+            ns("confirm_timeseries_selection_reset"),
+            "Reset data and change selection",
+            class = "btn-danger"
+          )
+        )
+      ))
+    }
+
+    apply_ts_table_selection <- function(sel) {
+      upload_jobs(NULL)
+      upload_validation$jobs <- NULL
       if (length(sel) > 0) {
         selected <- ts_meta()[sel, , drop = FALSE]
-        if (identical(selected$timeseries_type_code[[1]], "basic")) {
-          timeseries(selected$timeseries_id[[1]])
-        } else {
+        if (
+          length(sel) == 1 &&
+            !identical(selected$timeseries_type_code[[1]], "basic")
+        ) {
           timeseries(NULL)
+          upload_timeseries_ids(integer())
+          sync_ts_table_selection()
           nonbasic_member_options(
             load_nonbasic_member_options(selected$timeseries_id[[1]])
           )
@@ -621,10 +659,94 @@ addContData <- function(id, language) {
               )
             )
           ))
+        } else {
+          basic <- selected[
+            selected$timeseries_type_code == "basic",
+            ,
+            drop = FALSE
+          ]
+          ignored_nonbasic <- nrow(basic) < nrow(selected)
+          if (nrow(basic) == 0) {
+            timeseries(NULL)
+            upload_timeseries_ids(integer())
+            sync_ts_table_selection()
+            showNotification(
+              "Select at least one Basic timeseries for direct data upload.",
+              type = "error",
+              duration = 8
+            )
+            return()
+          }
+
+          location <- basic$location[[1]]
+          same_location <- basic$location == location
+          if (!all(same_location)) {
+            showNotification(
+              "Multi-timeseries uploads must target Basic timeseries from the same location. Keeping only selections from the first selected location.",
+              type = "warning",
+              duration = 10
+            )
+            basic <- basic[same_location, , drop = FALSE]
+          }
+          if (ignored_nonbasic) {
+            showNotification(
+              "Only Basic timeseries can accept direct uploads. Non-basic selections were ignored.",
+              type = "warning",
+              duration = 8
+            )
+          }
+
+          ids <- as.integer(basic$timeseries_id)
+          timeseries(ids[[1]])
+          upload_timeseries_ids(ids)
+          sync_ts_table_selection(ids)
         }
       } else {
         timeseries(NULL)
+        upload_timeseries_ids(integer())
       }
+    }
+
+    observeEvent(input$ts_table_rows_selected, {
+      if (isTRUE(suppress_ts_table_selection())) {
+        suppress_ts_table_selection(FALSE)
+        return()
+      }
+
+      sel <- input$ts_table_rows_selected
+      if (selection_change_requires_data_reset(sel)) {
+        pending_ts_table_selection(sel)
+        sync_ts_table_selection(upload_timeseries_ids())
+        show_selection_reset_modal()
+        return()
+      }
+
+      apply_ts_table_selection(sel)
+    })
+
+    observeEvent(input$cancel_timeseries_selection_reset, {
+      pending_ts_table_selection(NULL)
+      sync_ts_table_selection(upload_timeseries_ids())
+      removeModal()
+    })
+
+    observeEvent(input$confirm_timeseries_selection_reset, {
+      sel <- pending_ts_table_selection()
+      pending_ts_table_selection(NULL)
+      removeModal()
+      reset_upload_state()
+      apply_ts_table_selection(sel)
+    })
+
+    observeEvent(input$reset_timeseries_selection, {
+      timeseries(NULL)
+      upload_timeseries_ids(integer())
+      reset_upload_state()
+      sync_ts_table_selection()
+      showNotification(
+        "Timeseries selection and uploaded data reset.",
+        type = "message"
+      )
     })
 
     output$nonbasic_members_table <- DT::renderDT({
@@ -648,7 +770,10 @@ addContData <- function(id, language) {
         selection = "single",
         options = list(
           columnDefs = list(
-            list(targets = which(names(df) == "timeseries_type_code") - 1L, visible = FALSE)
+            list(
+              targets = which(names(df) == "timeseries_type_code") - 1L,
+              visible = FALSE
+            )
           ),
           pageLength = 10,
           scrollX = TRUE
@@ -691,8 +816,10 @@ addContData <- function(id, language) {
       }
 
       timeseries(target_id)
-      DT::dataTableProxy("ts_table", session = session) |>
-        DT::selectRows(main_row)
+      upload_timeseries_ids(as.integer(target_id))
+      upload_jobs(NULL)
+      upload_validation$jobs <- NULL
+      sync_ts_table_selection(target_id)
       removeModal()
       showNotification(
         paste("Selected timeseries", target_id, "for data entry."),
@@ -706,6 +833,84 @@ addContData <- function(id, language) {
       meta[meta$timeseries_id == timeseries(), , drop = FALSE]
     })
 
+    selected_upload_timeseries_meta <- reactive({
+      ids <- upload_timeseries_ids()
+      if (length(ids) == 0 && !is.null(timeseries())) {
+        ids <- as.integer(timeseries())
+      }
+      meta <- ts_meta()
+      out <- meta[match(ids, meta$timeseries_id), , drop = FALSE]
+      out[!is.na(out$timeseries_id), , drop = FALSE]
+    })
+
+    multi_upload_active <- reactive({
+      nrow(selected_upload_timeseries_meta()) > 1
+    })
+
+    upload_include_input_id <- function(timeseries_id) {
+      paste0("upload_include_", as.integer(timeseries_id))
+    }
+
+    class_apply_all_input_id <- function(class_name) {
+      paste0(class_name, "_apply_all_timeseries")
+    }
+
+    target_output_id <- function(prefix, timeseries_id) {
+      paste0(prefix, "_", as.integer(timeseries_id))
+    }
+
+    class_ranges_tabset_id <- function(class_name) {
+      paste0(class_name, "_ranges_tabset")
+    }
+
+    class_range_output_id <- function(class_name, timeseries_id) {
+      paste0(class_name, "_ranges_table_", as.integer(timeseries_id))
+    }
+
+    target_label <- function(target, include_id = TRUE) {
+      parts <- c(
+        as.character(target$location[[1]]),
+        as.character(target$parameter[[1]]),
+        as.character(target$units[[1]]),
+        paste0(as.character(target$record_rate_minutes[[1]]), " min")
+      )
+      parts <- parts[!is.na(parts) & nzchar(parts)]
+      label <- paste(parts, collapse = " | ")
+      if (isTRUE(include_id)) {
+        label <- paste0("Timeseries ", target$timeseries_id[[1]], ": ", label)
+      }
+      label
+    }
+
+    output$selected_upload_targets <- renderUI({
+      targets <- selected_upload_timeseries_meta()
+      if (nrow(targets) == 0) {
+        return(NULL)
+      }
+      div(
+        class = "alert alert-info",
+        style = "padding: 8px; margin: 8px 0;",
+        tags$strong(
+          "Selected upload target",
+          if (nrow(targets) > 1) "s" else ""
+        ),
+        tags$ul(lapply(seq_len(nrow(targets)), function(i) {
+          tags$li(target_label(targets[i, , drop = FALSE]))
+        }))
+      )
+    })
+
+    output$multi_upload_note <- renderUI({
+      if (!isTRUE(multi_upload_active())) {
+        return(NULL)
+      }
+      div(
+        class = "alert alert-info",
+        style = "padding: 8px; margin-top: 10px;",
+        "Multiple upload targets are selected. Review each mapped target below and choose which targets to upload before clicking an upload button."
+      )
+    })
+
     selected_timeseries_is_basic <- reactive({
       if (is.null(timeseries())) {
         return(FALSE)
@@ -714,8 +919,13 @@ addContData <- function(id, language) {
       nrow(meta) == 1 && identical(meta$timeseries_type_code[[1]], "basic")
     })
 
-    selected_timeseries_units <- reactive({
-      meta <- selected_timeseries_meta()
+    timeseries_units <- function(timeseries_id) {
+      meta <- ts_meta()
+      meta <- meta[
+        meta$timeseries_id == as.integer(timeseries_id),
+        ,
+        drop = FALSE
+      ]
       if (!nrow(meta)) {
         return(NA_character_)
       }
@@ -724,6 +934,11 @@ addContData <- function(id, language) {
         return(NA_character_)
       }
       unit
+    }
+
+    selected_timeseries_units <- reactive({
+      req(timeseries())
+      timeseries_units(timeseries())
     })
 
     selected_units_warning_tag <- function() {
@@ -734,6 +949,9 @@ addContData <- function(id, language) {
           tags$strong("Select a timeseries before entering or uploading data."),
         ))
       }
+      if (isTRUE(multi_upload_active())) {
+        return(NULL)
+      }
 
       unit <- selected_timeseries_units()
       unit_text <- if (is.na(unit)) {
@@ -741,7 +959,7 @@ addContData <- function(id, language) {
       } else {
         paste0("Database unit for this timeseries: ", unit)
       }
-      detail <- "Enter or convert values to this unit before upload."
+      detail <- "Enter or convert values to this unit before upload (see yellow 'Convert units' button if needed)."
 
       div(
         class = if (is.na(unit)) {
@@ -1048,10 +1266,12 @@ addContData <- function(id, language) {
       parsed_datetime = NULL,
       parsed_value = NULL
     )
+    upload_jobs <- reactiveVal(NULL)
+    upload_validation <- reactiveValues(jobs = NULL)
 
     unit_conversion_state <- reactiveValues(
-      previous_values = NULL,
-      previous_label = NULL
+      previous_values = list(),
+      previous_label = list()
     )
 
     table_render_tick <- reactiveVal(0L)
@@ -1060,13 +1280,12 @@ addContData <- function(id, language) {
     }
 
     observeEvent(timeseries(), {
-      unit_conversion_state$previous_values <- NULL
-      unit_conversion_state$previous_label <- NULL
+      unit_conversion_state$previous_values <- list()
+      unit_conversion_state$previous_label <- list()
     })
 
-    unit_conversion_choices <- reactive({
+    unit_conversion_choices_for_unit <- function(unit) {
       req(moduleData$unit_conversions)
-      unit <- selected_timeseries_units()
       if (is.na(unit)) {
         return(moduleData$unit_conversions[0, , drop = FALSE])
       }
@@ -1076,11 +1295,43 @@ addContData <- function(id, language) {
         ,
         drop = FALSE
       ]
+    }
+
+    active_unit_conversion_timeseries <- reactive({
+      jobs <- upload_review_jobs()
+      if (length(jobs) > 0) {
+        job_ids <- vapply(
+          jobs,
+          function(job) as.integer(job$timeseries_id),
+          integer(1)
+        )
+        selected <- input$data_table_tabset
+        if (isTruthy(selected)) {
+          selected_id <- as.integer(sub("^timeseries_", "", selected[[1]]))
+          if (!is.na(selected_id) && selected_id %in% job_ids) {
+            return(selected_id)
+          }
+        }
+        return(job_ids[[1]])
+      }
+
+      if (!is.null(timeseries())) {
+        return(as.integer(timeseries()))
+      }
+
+      NA_integer_
+    })
+
+    unit_conversion_choices <- reactive({
+      unit_conversion_choices_for_unit(
+        timeseries_units(active_unit_conversion_timeseries())
+      )
     })
 
     unit_conversion_controls <- function() {
       req(timeseries())
-      unit <- selected_timeseries_units()
+      target_id <- active_unit_conversion_timeseries()
+      unit <- timeseries_units(target_id)
       if (is.na(unit)) {
         return(div(
           class = "alert alert-danger",
@@ -1118,7 +1369,7 @@ addContData <- function(id, language) {
           tags$div(
             class = "text-muted small",
             paste0(
-              "Use this if the value column is not already in ",
+              "Use this if the selected value column is not already in ",
               unit,
               ". Only the value column is changed."
             )
@@ -1166,6 +1417,7 @@ addContData <- function(id, language) {
             actionButton(ns("convert_units"), "Convert value column"),
             actionButton(ns("rollback_unit_conversion"), "Roll back conversion")
           ),
+          uiOutput(ns("unit_conversion_preview")),
           uiOutput(ns("unit_conversion_status"))
         )
       )
@@ -1193,33 +1445,151 @@ addContData <- function(id, language) {
       ))
     })
 
+    build_unit_conversion <- function(values, unit) {
+      if (identical(input$unit_conversion_mode, "custom")) {
+        factor <- suppressWarnings(as.numeric(input$custom_unit_factor))
+        if (length(factor) != 1 || is.na(factor) || factor <= 0) {
+          return(list(
+            ok = FALSE,
+            message = "Enter a positive custom conversion factor."
+          ))
+        }
+        return(list(
+          ok = TRUE,
+          values = values * factor,
+          label = paste0("custom factor ", signif(factor, 8), " to ", unit)
+        ))
+      }
+
+      if (!isTruthy(input$unit_conversion_id)) {
+        return(list(
+          ok = FALSE,
+          message = paste0("No database conversion to ", unit, " is selected.")
+        ))
+      }
+      choices_df <- unit_conversion_choices()
+      idx <- match(
+        as.integer(input$unit_conversion_id),
+        choices_df$conversion_id
+      )
+      if (is.na(idx)) {
+        return(list(
+          ok = FALSE,
+          message = paste0("No database conversion to ", unit, " is selected.")
+        ))
+      }
+
+      list(
+        ok = TRUE,
+        values = as.numeric(choices_df$scale_a[[idx]]) *
+          values +
+          as.numeric(choices_df$scale_b[[idx]]),
+        label = paste0(
+          choices_df$from_unit[[idx]],
+          " to ",
+          choices_df$to_unit[[idx]]
+        )
+      )
+    }
+
+    output$unit_conversion_preview <- renderUI({
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
+        return(NULL)
+      }
+      df <- active_job_data(target_id)
+      if (nrow(df) == 0) {
+        return(NULL)
+      }
+
+      values <- suppressWarnings(as.numeric(df$value))
+      if (any(is.na(values))) {
+        return(div(
+          class = "alert alert-warning",
+          style = "padding: 8px; margin-top: 10px;",
+          "Value column must be numeric with no missing values before conversion."
+        ))
+      }
+
+      unit <- timeseries_units(target_id)
+      if (is.na(unit)) {
+        return(NULL)
+      }
+      conversion <- build_unit_conversion(values, unit)
+      if (!isTRUE(conversion$ok)) {
+        return(div(
+          class = "text-muted small",
+          style = "margin-top: 10px;",
+          conversion$message
+        ))
+      }
+
+      row_idx <- seq_len(min(5L, nrow(df)))
+      tags$div(
+        style = "margin-top: 10px;",
+        tags$strong("Converted value preview"),
+        tags$table(
+          class = "table table-sm table-bordered",
+          style = "font-size: 12px; margin-top: 4px;",
+          tags$thead(tags$tr(
+            tags$th("datetime"),
+            tags$th("uploaded value"),
+            tags$th("converted value")
+          )),
+          tags$tbody(lapply(row_idx, function(i) {
+            tags$tr(
+              tags$td(as.character(df$datetime[[i]])),
+              tags$td(as.character(df$value[[i]])),
+              tags$td(signif(conversion$values[[i]], 8))
+            )
+          }))
+        )
+      )
+    })
+
     output$unit_conversion_status <- renderUI({
-      if (is.null(unit_conversion_state$previous_values)) {
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
+        return(NULL)
+      }
+      target_key <- as.character(target_id)
+      label <- unit_conversion_state$previous_label[[target_key]]
+      if (is.null(label)) {
         return(NULL)
       }
 
       div(
         class = "text-muted small",
-        paste("Last conversion:", unit_conversion_state$previous_label)
+        paste("Last conversion for this timeseries:", label)
       )
     })
 
     observeEvent(input$convert_units, {
-      if (!is.null(unit_conversion_state$previous_values)) {
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
         showNotification(
-          "Values have already been converted. Roll back before converting again.",
+          "Select a timeseries before converting units.",
+          type = "error"
+        )
+        return()
+      }
+      target_key <- as.character(target_id)
+      if (!is.null(unit_conversion_state$previous_values[[target_key]])) {
+        showNotification(
+          "Values for this timeseries have already been converted. Roll back before converting again.",
           type = "error",
           duration = 8
         )
         return()
       }
 
-      if (nrow(data$df) == 0) {
+      target_df <- active_job_data(target_id)
+      if (nrow(target_df) == 0) {
         showNotification("No table values to convert.", type = "error")
         return()
       }
 
-      values <- suppressWarnings(as.numeric(data$df$value))
+      values <- suppressWarnings(as.numeric(target_df$value))
       if (any(is.na(values))) {
         showNotification(
           "Value column must be numeric with no missing values before conversion.",
@@ -1229,7 +1599,7 @@ addContData <- function(id, language) {
         return()
       }
 
-      unit <- selected_timeseries_units()
+      unit <- timeseries_units(target_id)
       if (is.na(unit)) {
         showNotification(
           "No database unit is set for the selected timeseries.",
@@ -1239,66 +1609,46 @@ addContData <- function(id, language) {
         return()
       }
 
-      if (identical(input$unit_conversion_mode, "custom")) {
-        factor <- suppressWarnings(as.numeric(input$custom_unit_factor))
-        if (length(factor) != 1 || is.na(factor) || factor <= 0) {
-          showNotification(
-            "Enter a positive custom conversion factor.",
-            type = "error"
-          )
-          return()
-        }
-        new_values <- values * factor
-        label <- paste0("custom factor ", signif(factor, 8), " to ", unit)
-      } else {
-        if (!isTruthy(input$unit_conversion_id)) {
-          showNotification(
-            paste0("No database conversion to ", unit, " is selected."),
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
-        choices_df <- unit_conversion_choices()
-        idx <- match(
-          as.integer(input$unit_conversion_id),
-          choices_df$conversion_id
-        )
-        if (is.na(idx)) {
-          showNotification(
-            paste0("No database conversion to ", unit, " is selected."),
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
-        new_values <- as.numeric(choices_df$scale_a[[idx]]) *
-          values +
-          as.numeric(choices_df$scale_b[[idx]])
-        label <- paste0(
-          choices_df$from_unit[[idx]],
-          " to ",
-          choices_df$to_unit[[idx]]
-        )
+      conversion <- build_unit_conversion(values, unit)
+      if (!isTRUE(conversion$ok)) {
+        showNotification(conversion$message, type = "error", duration = 8)
+        return()
       }
 
-      unit_conversion_state$previous_values <- data$df$value
-      unit_conversion_state$previous_label <- label
-      data$df$value <- new_values
-      refresh_data_table()
+      previous_values <- unit_conversion_state$previous_values
+      previous_labels <- unit_conversion_state$previous_label
+      previous_values[[target_key]] <- target_df$value
+      previous_labels[[target_key]] <- conversion$label
+      unit_conversion_state$previous_values <- previous_values
+      unit_conversion_state$previous_label <- previous_labels
+
+      target_df$value <- conversion$values
+      set_upload_job_data(target_id, target_df)
       showNotification(
-        paste("Converted value column:", label),
+        paste("Converted value column:", conversion$label),
         type = "message"
       )
     })
 
     observeEvent(input$rollback_unit_conversion, {
-      if (is.null(unit_conversion_state$previous_values)) {
+      target_id <- active_unit_conversion_timeseries()
+      if (is.na(target_id)) {
+        showNotification(
+          "Select a timeseries before rolling back a conversion.",
+          type = "error"
+        )
+        return()
+      }
+      target_key <- as.character(target_id)
+      previous_values <- unit_conversion_state$previous_values[[target_key]]
+      previous_label <- unit_conversion_state$previous_label[[target_key]]
+      if (is.null(previous_values)) {
         showNotification("No unit conversion to roll back.", type = "message")
         return()
       }
 
-      if (length(unit_conversion_state$previous_values) != nrow(data$df)) {
+      target_df <- active_job_data(target_id)
+      if (length(previous_values) != nrow(target_df)) {
         showNotification(
           "Cannot roll back because the table row count has changed.",
           type = "error",
@@ -1307,18 +1657,107 @@ addContData <- function(id, language) {
         return()
       }
 
-      data$df$value <- unit_conversion_state$previous_values
-      refresh_data_table()
+      target_df$value <- previous_values
+      set_upload_job_data(target_id, target_df)
       showNotification(
-        paste("Rolled back conversion:", unit_conversion_state$previous_label),
+        paste("Rolled back conversion:", previous_label),
         type = "message"
       )
-      unit_conversion_state$previous_values <- NULL
-      unit_conversion_state$previous_label <- NULL
+      previous_values_list <- unit_conversion_state$previous_values
+      previous_labels <- unit_conversion_state$previous_label
+      previous_values_list[[target_key]] <- NULL
+      previous_labels[[target_key]] <- NULL
+      unit_conversion_state$previous_values <- previous_values_list
+      unit_conversion_state$previous_label <- previous_labels
+    })
+
+    uploaded_file_ext <- reactive({
+      req(input$file)
+      tolower(tools::file_ext(input$file$name))
+    })
+
+    uploaded_file_is_logger <- reactive({
+      uploaded_file_ext() %in% c("xle", "html", "htm", "hobo")
+    })
+
+    logger_upload_message <- reactive({
+      req(input$file)
+      if (!uploaded_file_is_logger()) {
+        return(NULL)
+      }
+
+      note <- attr(upload_raw(), "logger_timezone_note")
+      if (is.character(note) && length(note) == 1 && nzchar(note)) {
+        return(note)
+      }
+
+      "Logger datetimes were prepared as UTC for upload."
+    })
+
+    raw_file_preview <- reactive({
+      req(input$file)
+      ext <- uploaded_file_ext()
+      if (ext %in% c("xle", "html", "htm", "hobo")) {
+        out <- utils::head(upload_raw(), 100)
+        return(data.frame(Row = seq_len(nrow(out)), out, check.names = FALSE))
+      }
+
+      if (ext == "xlsx") {
+        out <- readxl::read_xlsx(
+          input$file$datapath,
+          sheet = 1,
+          col_names = FALSE,
+          n_max = 100
+        ) |>
+          as.data.frame()
+      } else if (ext == "csv") {
+        lines <- readLines(input$file$datapath, n = 100, warn = FALSE)
+        if (length(lines) == 0) {
+          return(data.frame())
+        }
+        rows <- lapply(lines, function(line) {
+          if (!nzchar(line)) {
+            return("")
+          }
+          tryCatch(
+            read.csv(
+              text = line,
+              header = FALSE,
+              stringsAsFactors = FALSE,
+              check.names = FALSE
+            ) |>
+              unlist(use.names = FALSE),
+            error = function(e) line
+          )
+        })
+        max_cols <- max(lengths(rows), 1L)
+        out <- as.data.frame(
+          do.call(
+            rbind,
+            lapply(rows, function(row) {
+              length(row) <- max_cols
+              row
+            })
+          ),
+          stringsAsFactors = FALSE,
+          check.names = FALSE
+        )
+      } else {
+        return(NULL)
+      }
+
+      names(out) <- paste0("Column ", seq_len(ncol(out)))
+      data.frame(Line = seq_len(nrow(out)), out, check.names = FALSE)
     })
 
     upload_raw <- reactive({
       req(input$file)
+      ext <- uploaded_file_ext()
+
+      if (uploaded_file_is_logger()) {
+        return(read_logger_file_data(input$file$datapath, file_type = ext))
+      }
+
       req(input$raw_start_row)
       # Set starting row to 1 if input is null, so we don't have to catch empty inputs in validate
       starting_row <- ifelse(
@@ -1326,8 +1765,6 @@ addContData <- function(id, language) {
         1,
         input$raw_start_row
       )
-
-      ext <- tools::file_ext(input$file$name)
       if (ext == 'xlsx') {
         out <- readxl::read_xlsx(
           input$file$datapath,
@@ -1362,6 +1799,8 @@ addContData <- function(id, language) {
 
         return(out)
       }
+
+      stop("Unsupported file extension: .", ext, call. = FALSE)
     })
 
     class_type_choices <- reactive({
@@ -1384,6 +1823,7 @@ addContData <- function(id, language) {
     map_modal_state <- reactiveValues(
       step = "columns",
       pending_df = NULL,
+      pending_jobs = NULL,
       class_values = list(
         grade = character(),
         approval = character(),
@@ -1391,54 +1831,164 @@ addContData <- function(id, language) {
       )
     )
 
-    build_df_from_column_mapping <- function() {
-      req(input$upload_datetime_col, input$upload_value_col)
+    upload_mapping_input_id <- function(field, timeseries_id) {
+      paste0("upload_", field, "_col_", as.integer(timeseries_id))
+    }
 
-      df_mapped <- data.frame(
-        datetime = upload_raw()[[input$upload_datetime_col]],
-        value = upload_raw()[[input$upload_value_col]]
+    pick_uploaded_col <- function(candidates, default = "") {
+      uploaded_names <- names(upload_raw())
+      out <- uploaded_names[tolower(uploaded_names) %in% tolower(candidates)]
+      if (length(out) > 0) out[[1]] else default
+    }
+
+    guess_value_col <- function(target, used_cols = character()) {
+      uploaded_names <- names(upload_raw())
+      candidates <- uploaded_names[!uploaded_names %in% used_cols]
+      candidates <- candidates[
+        !grepl("date|time", candidates, ignore.case = TRUE)
+      ]
+      if (length(candidates) == 0) {
+        return("")
+      }
+
+      parameter <- tolower(as.character(target$parameter[[1]]))
+      patterns <- character()
+      if (grepl("temperature|temp", parameter)) {
+        patterns <- c(patterns, "temperature|temp")
+      }
+      if (grepl("conduct|specific conductance|spc", parameter)) {
+        patterns <- c(patterns, "conduct|spc|specific")
+      }
+      if (grepl("level|water level", parameter)) {
+        patterns <- c(patterns, "level")
+      }
+      if (grepl("pressure", parameter)) {
+        patterns <- c(patterns, "pressure")
+      }
+      if (grepl("depth", parameter)) {
+        patterns <- c(patterns, "depth")
+      }
+
+      for (pattern in patterns) {
+        match <- candidates[grepl(pattern, candidates, ignore.case = TRUE)]
+        if (length(match) > 0) {
+          return(match[[1]])
+        }
+      }
+
+      ""
+    }
+
+    missing_upload_value <- function(x) {
+      if (is.factor(x)) {
+        x <- as.character(x)
+      }
+      out <- is.na(x)
+      if (is.character(x)) {
+        value_text <- trimws(x)
+        out <- out |
+          !nzchar(value_text) |
+          tolower(value_text) %in% c("na", "n/a", "nan", "null")
+      }
+      out
+    }
+
+    source_rows_for_modal <- function(raw, row_idx) {
+      if (!length(row_idx)) {
+        return(raw[0, , drop = FALSE])
+      }
+      data.frame(
+        uploaded_row = row_idx,
+        raw[row_idx, , drop = FALSE],
+        check.names = FALSE,
+        stringsAsFactors = FALSE
       )
+    }
 
-      if (
-        isTruthy(input$upload_grade_col) &&
-          input$upload_grade_col %in% names(upload_raw())
-      ) {
-        df_mapped$grade <- upload_raw()[[input$upload_grade_col]]
-      } else {
-        df_mapped$grade <- NULL
-      }
-      if (
-        isTruthy(input$upload_approval_col) &&
-          input$upload_approval_col %in% names(upload_raw())
-      ) {
-        df_mapped$approval <- upload_raw()[[input$upload_approval_col]]
-      } else {
-        df_mapped$approval <- NULL
-      }
-      if (
-        isTruthy(input$upload_qualifier_col) &&
-          input$upload_qualifier_col %in% names(upload_raw())
-      ) {
-        df_mapped$qualifier <- upload_raw()[[input$upload_qualifier_col]]
-      } else {
-        df_mapped$qualifier <- NULL
+    build_upload_jobs_from_column_mapping <- function() {
+      targets <- selected_upload_timeseries_meta()
+      req(nrow(targets) > 0)
+      multi_target <- nrow(targets) > 1
+      raw <- upload_raw()
+
+      jobs <- vector("list", nrow(targets))
+      for (i in seq_len(nrow(targets))) {
+        target <- targets[i, , drop = FALSE]
+        tsid <- as.integer(target$timeseries_id[[1]])
+        datetime_input <- if (multi_target) {
+          input[[upload_mapping_input_id("datetime", tsid)]]
+        } else {
+          input$upload_datetime_col
+        }
+        value_input <- if (multi_target) {
+          input[[upload_mapping_input_id("value", tsid)]]
+        } else {
+          input$upload_value_col
+        }
+        req(datetime_input, value_input)
+
+        df_mapped <- data.frame(
+          datetime = raw[[datetime_input]],
+          value = raw[[value_input]]
+        )
+
+        for (class_name in c("grade", "approval", "qualifier")) {
+          class_input <- if (multi_target) {
+            input[[upload_mapping_input_id(class_name, tsid)]]
+          } else {
+            input[[paste0("upload_", class_name, "_col")]]
+          }
+          if (isTruthy(class_input) && class_input %in% names(raw)) {
+            df_mapped[[class_name]] <- raw[[class_input]]
+          }
+        }
+
+        missing_value_rows <- which(missing_upload_value(df_mapped$value))
+        dropped_missing_value <- source_rows_for_modal(raw, missing_value_rows)
+        if (length(missing_value_rows) > 0) {
+          df_mapped <- df_mapped[
+            -missing_value_rows,
+            ,
+            drop = FALSE
+          ]
+        }
+
+        jobs[[i]] <- list(
+          timeseries_id = tsid,
+          label = target_label(target),
+          data = df_mapped,
+          dropped_missing_value = dropped_missing_value
+        )
       }
 
-      df_mapped
+      jobs
     }
 
     selected_class_cols <- reactive({
       cols <- c()
-      if (isTruthy(input$upload_grade_col)) {
-        cols <- c(cols, "grade")
+      if (isTRUE(multi_upload_active())) {
+        targets <- selected_upload_timeseries_meta()
+        for (target_id in targets$timeseries_id) {
+          for (class_name in c("grade", "approval", "qualifier")) {
+            if (
+              isTruthy(input[[upload_mapping_input_id(class_name, target_id)]])
+            ) {
+              cols <- c(cols, class_name)
+            }
+          }
+        }
+      } else {
+        if (isTruthy(input$upload_grade_col)) {
+          cols <- c(cols, "grade")
+        }
+        if (isTruthy(input$upload_approval_col)) {
+          cols <- c(cols, "approval")
+        }
+        if (isTruthy(input$upload_qualifier_col)) {
+          cols <- c(cols, "qualifier")
+        }
       }
-      if (isTruthy(input$upload_approval_col)) {
-        cols <- c(cols, "approval")
-      }
-      if (isTruthy(input$upload_qualifier_col)) {
-        cols <- c(cols, "qualifier")
-      }
-      cols
+      unique(cols)
     })
 
     # Error checking, all possible conditions of start row and upload_raw
@@ -1454,7 +2004,9 @@ addContData <- function(id, language) {
         "confirm_mapping"
       }
 
-      if (is.null(input$raw_start_row)) {
+      if (uploaded_file_is_logger()) {
+        shinyjs::enable(target_id)
+      } else if (is.null(input$raw_start_row)) {
         shinyjs::disable(target_id)
       } else if (is.na(input$raw_start_row)) {
         shinyjs::disable(target_id)
@@ -1496,7 +2048,7 @@ addContData <- function(id, language) {
     output$map_col_inputs <- renderUI({
       validate(
         need(
-          input$raw_start_row > 0,
+          uploaded_file_is_logger() || input$raw_start_row > 0,
           'Invalid header row'
         ),
         need(
@@ -1506,20 +2058,96 @@ addContData <- function(id, language) {
       )
 
       uploaded_names <- names(upload_raw())
+      choices_optional <- stats::setNames(uploaded_names, uploaded_names)
 
-      pick_col <- function(candidates, default = "") {
-        out <- uploaded_names[tolower(uploaded_names) %in% tolower(candidates)]
-        if (length(out) > 0) out[[1]] else default
+      targets <- selected_upload_timeseries_meta()
+      if (nrow(targets) > 1) {
+        datetime_default <- pick_uploaded_col(
+          c("datetime", "date_time", "date time", "timestamp", "date"),
+          uploaded_names[[1]]
+        )
+        used_values <- character()
+        mapping_rows <- lapply(seq_len(nrow(targets)), function(i) {
+          target <- targets[i, , drop = FALSE]
+          tsid <- as.integer(target$timeseries_id[[1]])
+          value_default <- guess_value_col(target, used_values)
+          if (!nzchar(value_default) && length(uploaded_names) >= i + 1) {
+            value_default <- uploaded_names[[i + 1]]
+          }
+          if (nzchar(value_default)) {
+            used_values <<- c(used_values, value_default)
+          }
+
+          tags$tr(
+            tags$td(paste0(
+              tsid,
+              ": ",
+              target$parameter[[1]],
+              " (",
+              target$units[[1]],
+              ")"
+            )),
+            tags$td(selectizeInput(
+              ns(upload_mapping_input_id("datetime", tsid)),
+              NULL,
+              choices = uploaded_names,
+              selected = datetime_default,
+              width = "100%"
+            )),
+            tags$td(selectizeInput(
+              ns(upload_mapping_input_id("value", tsid)),
+              NULL,
+              choices = uploaded_names,
+              selected = value_default,
+              width = "100%"
+            )),
+            tags$td(selectizeInput(
+              ns(upload_mapping_input_id("grade", tsid)),
+              NULL,
+              choices = c("None" = "", choices_optional),
+              selected = "",
+              width = "100%"
+            )),
+            tags$td(selectizeInput(
+              ns(upload_mapping_input_id("approval", tsid)),
+              NULL,
+              choices = c("None" = "", choices_optional),
+              selected = "",
+              width = "100%"
+            )),
+            tags$td(selectizeInput(
+              ns(upload_mapping_input_id("qualifier", tsid)),
+              NULL,
+              choices = c("None" = "", choices_optional),
+              selected = "",
+              width = "100%"
+            ))
+          )
+        })
+
+        return(tags$div(
+          class = "table-responsive",
+          tags$table(
+            class = "table table-sm table-striped align-middle",
+            tags$thead(tags$tr(
+              tags$th("Timeseries"),
+              tags$th("Datetime"),
+              tags$th("Value"),
+              tags$th("Grade"),
+              tags$th("Approval"),
+              tags$th("Qualifier")
+            )),
+            tags$tbody(mapping_rows)
+          )
+        ))
       }
-
-      choices_optional <- uploaded_names
 
       tagList(
         selectizeInput(
           ns('upload_datetime_col'),
           'Select the column for datetime:',
           choices = uploaded_names,
-          selected = pick_col(
+          selected = pick_uploaded_col(
             c('datetime', 'date_time', 'date', 'time'),
             uploaded_names[[1]]
           )
@@ -1528,7 +2156,7 @@ addContData <- function(id, language) {
           ns('upload_value_col'),
           'Select the column for values:',
           choices = uploaded_names,
-          selected = pick_col(
+          selected = pick_uploaded_col(
             c('value', 'values', 'measurement', 'measured_value'),
             uploaded_names[[2]]
           )
@@ -1538,24 +2166,69 @@ addContData <- function(id, language) {
             selectizeInput(
               ns('upload_grade_col'),
               'Optional: select the column for grades:',
-              choices = choices_optional,
-              selected = pick_col(c('grade', 'grades'))
+              choices = c("None" = "", choices_optional),
+              selected = ""
             ),
             selectizeInput(
               ns('upload_approval_col'),
               'Optional: select the column for approvals:',
-              choices = choices_optional,
-              selected = pick_col(c('approval', 'approvals'))
+              choices = c("None" = "", choices_optional),
+              selected = ""
             ),
             selectizeInput(
               ns('upload_qualifier_col'),
               'Optional: select the column for qualifiers:',
-              choices = choices_optional,
-              selected = pick_col(c('qualifier', 'qualifiers'))
+              choices = c("None" = "", choices_optional),
+              selected = ""
             )
           )
         }
       )
+    })
+
+    output$raw_file_preview <- DT::renderDT({
+      preview <- raw_file_preview()
+      validate(
+        need(
+          !is.null(preview) && nrow(preview) > 0,
+          "No preview is available for this file."
+        )
+      )
+
+      selected_row <- if (
+        uploaded_file_is_logger() ||
+          is.null(input$raw_start_row) ||
+          is.na(input$raw_start_row) ||
+          input$raw_start_row < 1
+      ) {
+        NA_integer_
+      } else {
+        as.integer(input$raw_start_row)
+      }
+
+      preview_table <- DT::datatable(
+        preview,
+        rownames = FALSE,
+        class = "compact stripe",
+        options = list(
+          pageLength = 10,
+          lengthMenu = c(5, 10, 25, 50, 100),
+          scrollX = TRUE,
+          autoWidth = TRUE
+        )
+      )
+
+      if (!uploaded_file_is_logger() && "Line" %in% names(preview)) {
+        preview_table <- preview_table |>
+          DT::formatStyle(
+            "Line",
+            target = "row",
+            backgroundColor = DT::styleEqual(selected_row, "#fff3cd"),
+            fontWeight = DT::styleEqual(selected_row, "bold")
+          )
+      }
+
+      preview_table
     })
 
     parse_datetime <- function(x) {
@@ -1590,7 +2263,9 @@ addContData <- function(id, language) {
           "Ymd IMS p",
           "mdY IMS p",
           "Ymd IM p",
-          "mdY IM p"
+          "mdY IM p",
+          "Ymd",
+          "mdY"
         ),
         exact = FALSE,
         train = TRUE,
@@ -1741,12 +2416,12 @@ addContData <- function(id, language) {
       out
     }
 
-    uploaded_data_bounds <- function(tz_name = input$UTC_offset) {
-      if (nrow(data$df) == 0 || !("datetime" %in% names(data$df))) {
+    uploaded_data_bounds <- function(tz_name = input$UTC_offset, df = data$df) {
+      if (nrow(df) == 0 || !("datetime" %in% names(df))) {
         return(NULL)
       }
 
-      utc_values <- table_datetimes_to_utc(data$df$datetime, input$UTC_offset)
+      utc_values <- table_datetimes_to_utc(df$datetime, input$UTC_offset)
       valid_values <- utc_values[!is.na(utc_values)]
       if (!length(valid_values)) {
         return(NULL)
@@ -1765,57 +2440,25 @@ addContData <- function(id, language) {
       )
     }
 
-    last_preview_bounds_signature <- reactiveVal(NULL)
-
-    update_preview_datetime_bounds <- function() {
-      bounds <- uploaded_data_bounds(input$preview_utc_offset)
-      if (is.null(bounds)) {
-        last_preview_bounds_signature(NULL)
-        for (input_id in c("preview_start_datetime", "preview_end_datetime")) {
-          shinyWidgets::updateAirDateInput(
-            session,
-            inputId = input_id,
-            clear = TRUE,
-            options = list(minDate = FALSE, maxDate = FALSE)
-          )
-        }
-        return(invisible(NULL))
+    active_preview_timeseries <- function() {
+      if (!isTRUE(multi_upload_active())) {
+        return(as.integer(timeseries()))
       }
-
-      bounds_signature <- paste(
-        as.numeric(bounds$start_utc),
-        as.numeric(bounds$end_utc),
-        bounds$tz,
-        sep = "|"
-      )
-      if (identical(last_preview_bounds_signature(), bounds_signature)) {
-        return(invisible(NULL))
+      jobs <- upload_review_jobs()
+      if (length(jobs) == 0) {
+        return(as.integer(timeseries()))
       }
-
-      date_options <- list(
-        minDate = bounds$start_utc,
-        maxDate = bounds$end_utc
-      )
-      shinyWidgets::updateAirDateInput(
-        session,
-        inputId = "preview_start_datetime",
-        value = bounds$start_utc,
-        tz = air_datetime_widget_timezone(bounds$tz),
-        options = date_options
-      )
-      shinyWidgets::updateAirDateInput(
-        session,
-        inputId = "preview_end_datetime",
-        value = bounds$end_utc,
-        tz = air_datetime_widget_timezone(bounds$tz),
-        options = date_options
-      )
-      last_preview_bounds_signature(bounds_signature)
-      invisible(NULL)
+      selected <- input$preview_timeseries_tabset
+      if (
+        is.null(selected) || length(selected) == 0 || !nzchar(selected[[1]])
+      ) {
+        return(as.integer(jobs[[1]]$timeseries_id))
+      }
+      as.integer(sub("^timeseries_", "", selected[[1]]))
     }
 
     uploaded_data_bounds_ui <- function(class_name) {
-      bounds <- uploaded_data_bounds(class_offset_tz(class_name))
+      bounds <- class_modal_bounds(class_name)
       if (is.null(bounds)) {
         return(tags$p(
           class = "text-muted small",
@@ -1828,7 +2471,34 @@ addContData <- function(id, language) {
         tags$div(tags$strong("Uploaded data range")),
         tags$div(paste("Start:", bounds$start_display)),
         tags$div(paste("End:", bounds$end_display)),
-        tags$div(paste("UTC offset:", bounds$tz))
+        tags$div(paste("UTC offset:", bounds$tz)),
+        if (!is.null(bounds$per_target)) {
+          tags$div(
+            style = "margin-top: 8px;",
+            tags$div(
+              tags$strong("Selected timeseries data ranges")
+            ),
+            tags$div(
+              "These ranges reflect the current rows after any deletions."
+            ),
+            tags$table(
+              class = "table table-sm table-bordered",
+              style = "font-size: 12px; margin-top: 4px;",
+              tags$thead(tags$tr(
+                tags$th("Timeseries"),
+                tags$th("Start"),
+                tags$th("End")
+              )),
+              tags$tbody(lapply(seq_len(nrow(bounds$per_target)), function(i) {
+                tags$tr(
+                  tags$td(bounds$per_target$target[[i]]),
+                  tags$td(bounds$per_target$start[[i]]),
+                  tags$td(bounds$per_target$end[[i]])
+                )
+              }))
+            )
+          )
+        }
       )
     }
 
@@ -1851,11 +2521,8 @@ addContData <- function(id, language) {
       }
 
       previous_data_timezone(master_tz)
-      shift_datetime_inputs("delete_cutoff_datetime", master_tz)
-
       for (input_id in c(
         "preview_utc_offset",
-        "delete_utc_offset",
         "approval_utc_offset",
         "grade_utc_offset",
         "qualifier_utc_offset"
@@ -1863,36 +2530,6 @@ addContData <- function(id, language) {
         updateSelectizeInput(session, input_id, selected = master_tz)
       }
     })
-
-    observeEvent(
-      input$preview_utc_offset,
-      {
-        update_preview_datetime_bounds()
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(
-      data$df,
-      {
-        update_preview_datetime_bounds()
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(
-      input$delete_utc_offset,
-      {
-        shift_datetime_inputs(
-          "delete_cutoff_datetime",
-          selected_offset_tz(
-            input$delete_utc_offset,
-            default = input$UTC_offset
-          )
-        )
-      },
-      ignoreInit = TRUE
-    )
 
     observeEvent(
       input$approval_utc_offset,
@@ -1918,29 +2555,87 @@ addContData <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    class_ranges <- reactiveValues(
-      grade = data.frame(
-        code = character(),
-        description = character(),
-        start_datetime = character(),
-        end_datetime = character(),
-        stringsAsFactors = FALSE
-      ),
-      approval = data.frame(
-        code = character(),
-        description = character(),
-        start_datetime = character(),
-        end_datetime = character(),
-        stringsAsFactors = FALSE
-      ),
-      qualifier = data.frame(
+    empty_class_range_df <- function() {
+      data.frame(
         code = character(),
         description = character(),
         start_datetime = character(),
         end_datetime = character(),
         stringsAsFactors = FALSE
       )
+    }
+
+    class_ranges <- reactiveValues(
+      grade = empty_class_range_df(),
+      approval = empty_class_range_df(),
+      qualifier = empty_class_range_df()
     )
+
+    target_class_ranges <- reactiveValues(
+      grade = list(),
+      approval = list(),
+      qualifier = list()
+    )
+
+    class_apply_all <- function(class_name) {
+      !isTRUE(multi_upload_active()) ||
+        checkbox_current_value(
+          class_apply_all_input_id(class_name),
+          class_apply_all_default(class_name)
+        )
+    }
+
+    class_apply_all_default <- function(class_name) {
+      ranges <- target_class_ranges[[class_name]]
+      if (!length(ranges)) {
+        return(TRUE)
+      }
+      !any(vapply(ranges, function(x) nrow(x) > 0, logical(1)))
+    }
+
+    active_class_timeseries <- function(class_name) {
+      if (!isTRUE(multi_upload_active())) {
+        return(as.integer(timeseries()))
+      }
+      selected <- input[[class_ranges_tabset_id(class_name)]]
+      if (
+        is.null(selected) || length(selected) == 0 || !nzchar(selected[[1]])
+      ) {
+        targets <- selected_upload_timeseries_meta()
+        if (nrow(targets) == 0) {
+          return(as.integer(timeseries()))
+        }
+        return(as.integer(targets$timeseries_id[[1]]))
+      }
+      as.integer(sub("^timeseries_", "", selected[[1]]))
+    }
+
+    get_class_ranges <- function(class_name, timeseries_id = NULL) {
+      if (class_apply_all(class_name) || is.null(timeseries_id)) {
+        return(class_ranges[[class_name]])
+      }
+      ranges <- target_class_ranges[[class_name]]
+      out <- ranges[[as.character(as.integer(timeseries_id))]]
+      if (is.null(out)) {
+        out <- empty_class_range_df()
+      }
+      out
+    }
+
+    set_class_ranges <- function(class_name, value, timeseries_id = NULL) {
+      if (class_apply_all(class_name) || is.null(timeseries_id)) {
+        class_ranges[[class_name]] <- value
+        return(invisible(NULL))
+      }
+      ranges <- target_class_ranges[[class_name]]
+      ranges[[as.character(as.integer(timeseries_id))]] <- value
+      target_class_ranges[[class_name]] <- ranges
+      invisible(NULL)
+    }
+
+    active_class_ranges <- function(class_name) {
+      get_class_ranges(class_name, active_class_timeseries(class_name))
+    }
 
     ensure_class_cols <- function() {
       for (nm in c("grade", "approval", "qualifier")) {
@@ -1982,6 +2677,111 @@ addContData <- function(id, language) {
       as.data.frame(out[, .(code, description, start_datetime, end_datetime)])
     }
 
+    normalize_class_ranges <- function(df) {
+      if (is.null(df) || nrow(df) == 0) {
+        return(data.frame(
+          code = character(),
+          start_datetime = character(),
+          end_datetime = character(),
+          stringsAsFactors = FALSE
+        ))
+      }
+      out <- data.frame(
+        code = as.character(df$code),
+        start_datetime = as.character(df$start_datetime),
+        end_datetime = as.character(df$end_datetime),
+        stringsAsFactors = FALSE
+      )
+      out <- out[order(out$start_datetime, out$end_datetime, out$code), ]
+      row.names(out) <- NULL
+      out
+    }
+
+    class_ranges_identical <- function(a, b) {
+      identical(normalize_class_ranges(a), normalize_class_ranges(b))
+    }
+
+    stored_or_data_target_class_ranges <- function(class_name, timeseries_id) {
+      ranges <- target_class_ranges[[class_name]][[
+        as.character(as.integer(timeseries_id))
+      ]]
+      job <- upload_review_job(timeseries_id)
+      if (
+        !is.null(job) &&
+          class_name %in% names(job$data) &&
+          (is.null(ranges) || nrow(ranges) == 0)
+      ) {
+        ranges <- ranges_from_table_classes(job$data, class_name)
+      }
+      if (is.null(ranges)) {
+        ranges <- empty_class_range_df()
+      }
+      ranges
+    }
+
+    target_class_range_list <- function(class_name) {
+      targets <- selected_upload_timeseries_meta()
+      if (nrow(targets) == 0) {
+        return(list())
+      }
+      stats::setNames(
+        lapply(
+          targets$timeseries_id,
+          function(target_id) {
+            stored_or_data_target_class_ranges(class_name, target_id)
+          }
+        ),
+        as.character(as.integer(targets$timeseries_id))
+      )
+    }
+
+    target_class_ranges_disagree <- function(class_name) {
+      ranges <- target_class_range_list(class_name)
+      if (length(ranges) <= 1) {
+        return(FALSE)
+      }
+      first <- ranges[[1]]
+      any(vapply(
+        ranges[-1],
+        function(x) !class_ranges_identical(first, x),
+        logical(1)
+      ))
+    }
+
+    promote_target_ranges_to_shared <- function(class_name) {
+      ranges <- target_class_range_list(class_name)
+      if (length(ranges) == 0) {
+        class_ranges[[class_name]] <- empty_class_range_df()
+        return(invisible(NULL))
+      }
+      common_ranges <- ranges[[1]]
+      common_ranges$description <- code_to_desc(class_name, common_ranges$code)
+      class_ranges[[class_name]] <- common_ranges
+      invisible(NULL)
+    }
+
+    populate_target_ranges_from_table_data <- function(class_name) {
+      jobs <- upload_review_jobs()
+      ranges <- target_class_ranges[[class_name]]
+      for (job in jobs) {
+        target_id <- as.character(as.integer(job$timeseries_id))
+        ranges[[target_id]] <- ranges_from_table_classes(job$data, class_name)
+      }
+      target_class_ranges[[class_name]] <- ranges
+      invisible(NULL)
+    }
+
+    clear_class_ranges_for_all_targets <- function(class_name) {
+      targets <- selected_upload_timeseries_meta()
+      ranges <- list()
+      for (target_id in targets$timeseries_id) {
+        ranges[[as.character(as.integer(target_id))]] <- empty_class_range_df()
+      }
+      target_class_ranges[[class_name]] <- ranges
+      class_ranges[[class_name]] <- empty_class_range_df()
+      invisible(NULL)
+    }
+
     validate_ranges <- function(df, class_name) {
       if (nrow(df) == 0) {
         return(character())
@@ -2020,11 +2820,37 @@ addContData <- function(id, language) {
       unique(msgs)
     }
 
+    class_range_validation_messages <- function(class_name) {
+      if (class_apply_all(class_name) || !isTRUE(multi_upload_active())) {
+        return(validate_ranges(class_ranges[[class_name]], class_name))
+      }
+      targets <- selected_upload_timeseries_meta()
+      msgs <- character()
+      for (i in seq_len(nrow(targets))) {
+        target_id <- as.integer(targets$timeseries_id[[i]])
+        target_msgs <- validate_ranges(
+          get_class_ranges(class_name, target_id),
+          class_name
+        )
+        if (length(target_msgs) > 0) {
+          msgs <- c(
+            msgs,
+            paste0(
+              target_label(targets[i, , drop = FALSE]),
+              ": ",
+              paste(target_msgs, collapse = " ")
+            )
+          )
+        }
+      }
+      msgs
+    }
+
     ranges_valid <- reactive({
       vapply(
         c("grade", "approval", "qualifier"),
         function(nm) {
-          length(validate_ranges(class_ranges[[nm]], nm)) == 0
+          length(class_range_validation_messages(nm)) == 0
         },
         logical(1)
       )
@@ -2055,32 +2881,32 @@ addContData <- function(id, language) {
     })
 
     output$grade_ranges_warning <- renderUI({
-      msgs <- validate_ranges(class_ranges$grade, "grade")
+      msgs <- class_range_validation_messages("grade")
       if (length(msgs) == 0) {
         return(NULL)
       }
       div(style = "color:#b30000;", paste(msgs, collapse = " "))
     })
     output$approval_ranges_warning <- renderUI({
-      msgs <- validate_ranges(class_ranges$approval, "approval")
+      msgs <- class_range_validation_messages("approval")
       if (length(msgs) == 0) {
         return(NULL)
       }
       div(style = "color:#b30000;", paste(msgs, collapse = " "))
     })
     output$qualifier_ranges_warning <- renderUI({
-      msgs <- validate_ranges(class_ranges$qualifier, "qualifier")
+      msgs <- class_range_validation_messages("qualifier")
       if (length(msgs) == 0) {
         return(NULL)
       }
       div(style = "color:#b30000;", paste(msgs, collapse = " "))
     })
 
-    sync_table_classes_from_ranges <- function() {
-      if (nrow(data$df) == 0) {
-        return()
+    apply_class_ranges_to_df <- function(df, ranges_by_class) {
+      if (nrow(df) == 0) {
+        return(df)
       }
-      new_df <- data$df
+      new_df <- df
       for (nm in c("grade", "approval", "qualifier")) {
         if (!(nm %in% names(new_df))) {
           new_df[[nm]] <- ""
@@ -2088,13 +2914,11 @@ addContData <- function(id, language) {
       }
       dt <- table_datetimes_to_utc(new_df$datetime, input$UTC_offset)
       if (!any(!is.na(dt))) {
-        data$df <- new_df
-        refresh_data_table()
-        return()
+        return(new_df)
       }
       for (nm in c("grade", "approval", "qualifier")) {
         new_df[[nm]] <- ""
-        rr <- class_ranges[[nm]]
+        rr <- ranges_by_class[[nm]]
         if (nrow(rr) == 0) {
           next
         }
@@ -2120,14 +2944,46 @@ addContData <- function(id, language) {
           }
         }
       }
-      if (!isTRUE(all.equal(data$df, new_df, check.attributes = FALSE))) {
-        data$df <- new_df
-        refresh_data_table()
+      new_df
+    }
+
+    class_ranges_for_target <- function(timeseries_id) {
+      list(
+        grade = get_class_ranges("grade", timeseries_id),
+        approval = get_class_ranges("approval", timeseries_id),
+        qualifier = get_class_ranges("qualifier", timeseries_id)
+      )
+    }
+
+    sync_table_classes_from_ranges <- function() {
+      jobs <- upload_review_jobs()
+      if (length(jobs) == 0) {
+        if (nrow(data$df) == 0) {
+          return()
+        }
+        new_df <- apply_class_ranges_to_df(
+          data$df,
+          class_ranges_for_target(timeseries())
+        )
+        if (!isTRUE(all.equal(data$df, new_df, check.attributes = FALSE))) {
+          data$df <- new_df
+          refresh_data_table()
+        }
+        return()
+      }
+
+      for (job in jobs) {
+        target_id <- as.integer(job$timeseries_id)
+        new_df <- apply_class_ranges_to_df(
+          job$data,
+          class_ranges_for_target(target_id)
+        )
+        set_upload_job_data(target_id, new_df)
       }
     }
 
-    range_table <- function(class_name) {
-      out <- class_ranges[[class_name]]
+    range_table <- function(class_name, timeseries_id = NULL) {
+      out <- get_class_ranges(class_name, timeseries_id)
       out$description <- code_to_desc(class_name, out$code)
       if (nrow(out) > 0) {
         tz_name <- class_offset_tz(class_name)
@@ -2143,42 +2999,254 @@ addContData <- function(id, language) {
       out
     }
 
+    render_range_table <- function(class_name, timeseries_id = NULL) {
+      DT::datatable(
+        range_table(class_name, timeseries_id),
+        selection = "single",
+        rownames = FALSE,
+        options = list(scrollX = TRUE)
+      )
+    }
+
     output$grade_ranges_table <- DT::renderDT(
       {
-        DT::datatable(
-          range_table("grade"),
-          selection = "single",
-          rownames = FALSE,
-          options = list(scrollX = TRUE)
-        )
+        render_range_table("grade")
       },
       server = FALSE
     )
     output$approval_ranges_table <- DT::renderDT(
       {
-        DT::datatable(
-          range_table("approval"),
-          selection = "single",
-          rownames = FALSE,
-          options = list(scrollX = TRUE)
-        )
+        render_range_table("approval")
       },
       server = FALSE
     )
     output$qualifier_ranges_table <- DT::renderDT(
       {
-        DT::datatable(
-          range_table("qualifier"),
-          selection = "single",
-          rownames = FALSE,
-          options = list(scrollX = TRUE)
-        )
+        render_range_table("qualifier")
       },
       server = FALSE
     )
 
+    suppress_class_apply_all_observer <- reactiveValues(
+      grade = FALSE,
+      approval = FALSE,
+      qualifier = FALSE
+    )
+
+    show_apply_all_reset_modal <- function(class_name) {
+      label <- tools::toTitleCase(class_name)
+      showModal(modalDialog(
+        title = paste("Apply", class_name, "to all timeseries?"),
+        tags$p(
+          paste(
+            label,
+            "ranges are not currently the same for every selected timeseries."
+          )
+        ),
+        tags$p(
+          paste(
+            "Switching to 'Apply to all timeseries' will erase the already",
+            "applied",
+            paste0(class_name, "s"),
+            "for all selected timeseries."
+          )
+        ),
+        easyClose = TRUE,
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(
+            ns(paste0("confirm_apply_all_", class_name)),
+            paste("Erase", paste0(class_name, "s"), "and apply to all"),
+            class = "btn-danger"
+          )
+        )
+      ))
+    }
+
+    for (nm in c("grade", "approval", "qualifier")) {
+      local({
+        class_name <- nm
+        output[[paste0(class_name, "_apply_all_ui")]] <- renderUI({
+          if (!isTRUE(multi_upload_active())) {
+            return(NULL)
+          }
+          checkboxInput(
+            ns(class_apply_all_input_id(class_name)),
+            "Apply to all timeseries",
+            value = checkbox_current_value(
+              class_apply_all_input_id(class_name),
+              class_apply_all_default(class_name)
+            )
+          )
+        })
+
+        output[[paste0(class_name, "_ranges_ui")]] <- renderUI({
+          targets <- selected_upload_timeseries_meta()
+          if (!isTRUE(multi_upload_active()) || nrow(targets) <= 1) {
+            return(DT::DTOutput(ns(paste0(class_name, "_ranges_table"))))
+          }
+          if (class_apply_all(class_name)) {
+            return(tagList(
+              tags$p(
+                class = "text-muted small",
+                paste(
+                  tools::toTitleCase(class_name),
+                  "ranges will be applied to every selected upload target."
+                )
+              ),
+              DT::DTOutput(ns(paste0(class_name, "_ranges_table")))
+            ))
+          }
+          tabs <- lapply(seq_len(nrow(targets)), function(i) {
+            target <- targets[i, , drop = FALSE]
+            target_id <- as.integer(target$timeseries_id[[1]])
+            tabPanel(
+              title = target_label(target),
+              value = paste0("timeseries_", target_id),
+              DT::DTOutput(ns(class_range_output_id(class_name, target_id)))
+            )
+          })
+          do.call(
+            tabsetPanel,
+            c(list(id = ns(class_ranges_tabset_id(class_name))), tabs)
+          )
+        })
+        observeEvent(
+          input[[class_apply_all_input_id(class_name)]],
+          {
+            if (isTRUE(suppress_class_apply_all_observer[[class_name]])) {
+              suppress_class_apply_all_observer[[class_name]] <- FALSE
+              sync_table_classes_from_ranges()
+              update_class_modal_datetime_limits(class_name)
+              return()
+            }
+
+            apply_all <- isTRUE(input[[class_apply_all_input_id(class_name)]])
+            if (isTRUE(apply_all)) {
+              if (target_class_ranges_disagree(class_name)) {
+                updateCheckboxInput(
+                  session,
+                  class_apply_all_input_id(class_name),
+                  value = FALSE
+                )
+                show_apply_all_reset_modal(class_name)
+                return()
+              }
+              promote_target_ranges_to_shared(class_name)
+            } else {
+              populate_target_ranges_from_table_data(class_name)
+            }
+
+            sync_table_classes_from_ranges()
+            update_class_modal_datetime_limits(class_name)
+          },
+          ignoreInit = TRUE
+        )
+
+        observeEvent(
+          input[[paste0("confirm_apply_all_", class_name)]],
+          {
+            removeModal()
+            clear_class_ranges_for_all_targets(class_name)
+            sync_table_classes_from_ranges()
+            suppress_class_apply_all_observer[[class_name]] <- TRUE
+            updateCheckboxInput(
+              session,
+              class_apply_all_input_id(class_name),
+              value = TRUE
+            )
+          },
+          ignoreInit = TRUE
+        )
+      })
+    }
+
+    observe({
+      targets <- selected_upload_timeseries_meta()
+      if (nrow(targets) == 0) {
+        return()
+      }
+      for (class_name in c("grade", "approval", "qualifier")) {
+        for (target_id in targets$timeseries_id) {
+          local({
+            class_name_local <- class_name
+            target_id_local <- as.integer(target_id)
+            output_id <- class_range_output_id(
+              class_name_local,
+              target_id_local
+            )
+            output[[output_id]] <- DT::renderDT(
+              {
+                render_range_table(class_name_local, target_id_local)
+              },
+              server = FALSE
+            )
+          })
+        }
+      }
+    })
+
     class_modal_bounds <- function(class_name) {
-      uploaded_data_bounds(class_offset_tz(class_name))
+      tz_name <- class_offset_tz(class_name)
+      if (!isTRUE(multi_upload_active()) || !class_apply_all(class_name)) {
+        return(uploaded_data_bounds(
+          tz_name,
+          active_job_data(active_class_timeseries(class_name))
+        ))
+      }
+
+      jobs <- upload_review_jobs()
+      if (length(jobs) == 0) {
+        return(NULL)
+      }
+
+      target_rows <- lapply(jobs, function(job) {
+        bounds <- uploaded_data_bounds(tz_name, job$data)
+        if (is.null(bounds)) {
+          return(data.frame(
+            target = job$label,
+            start = "No valid datetimes",
+            end = "No valid datetimes",
+            start_utc = NA_real_,
+            end_utc = NA_real_,
+            stringsAsFactors = FALSE
+          ))
+        }
+        data.frame(
+          target = job$label,
+          start = bounds$start_display,
+          end = bounds$end_display,
+          start_utc = as.numeric(bounds$start_utc),
+          end_utc = as.numeric(bounds$end_utc),
+          stringsAsFactors = FALSE
+        )
+      })
+      per_target <- do.call(rbind, target_rows)
+      valid <- !is.na(per_target$start_utc) & !is.na(per_target$end_utc)
+      if (!any(valid)) {
+        return(NULL)
+      }
+
+      tz_name <- selected_offset_tz(tz_name, default = input$UTC_offset)
+      start_utc <- as.POSIXct(
+        min(per_target$start_utc[valid], na.rm = TRUE),
+        origin = "1970-01-01",
+        tz = "UTC"
+      )
+      end_utc <- as.POSIXct(
+        max(per_target$end_utc[valid], na.rm = TRUE),
+        origin = "1970-01-01",
+        tz = "UTC"
+      )
+
+      list(
+        start_utc = start_utc,
+        end_utc = end_utc,
+        start_display = format_utc_datetimes_for_display(start_utc, tz_name),
+        end_display = format_utc_datetimes_for_display(end_utc, tz_name),
+        tz = tz_name,
+        per_target = per_target[, c("target", "start", "end"), drop = FALSE]
+      )
     }
 
     class_modal_date_options <- function(bounds) {
@@ -2243,7 +3311,7 @@ addContData <- function(id, language) {
       row_idx = NULL
     ) {
       mode <- match.arg(mode)
-      rows <- class_ranges[[class_name]]
+      rows <- active_class_ranges(class_name)
       edit_row <- if (
         mode == "edit" && !is.null(row_idx) && nrow(rows) >= row_idx
       ) {
@@ -2346,22 +3414,43 @@ addContData <- function(id, language) {
           open_range_modal(class_name, "add")
         })
         observeEvent(input[[paste0("edit_", class_name, "_range")]], {
-          idx <- input[[paste0(class_name, "_ranges_table_rows_selected")]]
+          target_id <- active_class_timeseries(class_name)
+          table_id <- if (
+            isTRUE(multi_upload_active()) && !class_apply_all(class_name)
+          ) {
+            class_range_output_id(class_name, target_id)
+          } else {
+            paste0(class_name, "_ranges_table")
+          }
+          idx <- input[[paste0(table_id, "_rows_selected")]]
           req(length(idx) == 1)
           open_range_modal(class_name, "edit", idx[[1]])
         })
         observeEvent(input[[paste0("delete_", class_name, "_range")]], {
-          idx <- input[[paste0(class_name, "_ranges_table_rows_selected")]]
+          target_id <- active_class_timeseries(class_name)
+          table_id <- if (
+            isTRUE(multi_upload_active()) && !class_apply_all(class_name)
+          ) {
+            class_range_output_id(class_name, target_id)
+          } else {
+            paste0(class_name, "_ranges_table")
+          }
+          idx <- input[[paste0(table_id, "_rows_selected")]]
           req(length(idx) == 1)
-          class_ranges[[class_name]] <- class_ranges[[class_name]][
-            -idx[[1]],
-            ,
-            drop = FALSE
-          ]
+          rows <- active_class_ranges(class_name)
+          set_class_ranges(
+            class_name,
+            rows[
+              -idx[[1]],
+              ,
+              drop = FALSE
+            ],
+            target_id
+          )
           sync_table_classes_from_ranges()
         })
         observeEvent(input[[paste0(class_name, "_modal_use_data_start")]], {
-          bounds <- uploaded_data_bounds(class_offset_tz(class_name))
+          bounds <- class_modal_bounds(class_name)
           if (is.null(bounds)) {
             return()
           }
@@ -2374,7 +3463,7 @@ addContData <- function(id, language) {
           )
         })
         observeEvent(input[[paste0(class_name, "_modal_use_data_end")]], {
-          bounds <- uploaded_data_bounds(class_offset_tz(class_name))
+          bounds <- class_modal_bounds(class_name)
           if (is.null(bounds)) {
             return()
           }
@@ -2441,7 +3530,8 @@ addContData <- function(id, language) {
             end_datetime = en,
             stringsAsFactors = FALSE
           )
-          rows <- class_ranges[[class_name]]
+          target_id <- active_class_timeseries(class_name)
+          rows <- active_class_ranges(class_name)
           edit_idx <- session$userData[[paste0("edit_", class_name, "_row")]]
           if (
             !is.null(edit_idx) && !is.na(edit_idx) && nrow(rows) >= edit_idx
@@ -2461,7 +3551,7 @@ addContData <- function(id, language) {
             return()
           }
 
-          class_ranges[[class_name]] <- rows
+          set_class_ranges(class_name, rows, target_id)
           removeModal()
           sync_table_classes_from_ranges()
         })
@@ -2471,10 +3561,33 @@ addContData <- function(id, language) {
     output$map_modal_body <- renderUI({
       if (map_modal_state$step == "columns") {
         tagList(
-          'Identify which columns represent date-time and value (and optionally grade/approval/qualifier):',
+          'Identify which columns represent date-time and value (and optionally grade/approval/qualifier)',
+          br(),
+          'Hint: if this file contains more than one timeseries, go back to the timeseries selection menu and select all applicable timeseries before uploading the file.',
           hr(),
-          numericInput(ns('raw_start_row'), label = 'Header Row', value = 1) |>
-            tooltip("The row number which contains your data's column names"),
+          if (uploaded_file_is_logger()) {
+            div(
+              class = "alert alert-info",
+              style = "padding: 8px; margin-bottom: 10px;",
+              logger_upload_message()
+            )
+          },
+          if (!uploaded_file_is_logger()) {
+            tagList(
+              numericInput(
+                ns('raw_start_row'),
+                label = 'Header Row',
+                value = 1
+              ) |>
+                tooltip(
+                  "The row number which contains your data's column names"
+                )
+            )
+          },
+          tags$div(
+            style = "font-size: 11px; line-height: 1.15; margin-bottom: 10px;",
+            DT::DTOutput(ns("raw_file_preview"))
+          ),
           uiOutput(ns('map_col_inputs'))
         )
       } else {
@@ -2547,38 +3660,70 @@ addContData <- function(id, language) {
       }
     })
 
-    # Store modal to be shown upon user uploading .csv or .xlsx
-    map_col_modal <- modalDialog(
-      title = 'Identify columns',
-      uiOutput(ns('map_modal_body')),
-      easyClose = FALSE,
-      footer = uiOutput(ns('map_modal_footer'))
-    )
-
     # Show modal when user adds file
     observeEvent(input$file, {
       req(input$file)
       map_modal_state$step <- "columns"
       map_modal_state$pending_df <- NULL
+      map_modal_state$pending_jobs <- NULL
+      upload_jobs(NULL)
+      upload_validation$jobs <- NULL
       map_modal_state$class_values <- list(
         grade = character(),
         approval = character(),
         qualifier = character()
       )
+      if (
+        tolower(tools::file_ext(input$file$name)) %in%
+          c("xle", "html", "htm", "hobo")
+      ) {
+        updateSelectizeInput(
+          session,
+          "UTC_offset",
+          selected = format_utc_offset(0L)
+        )
+        showNotification(
+          logger_upload_message(),
+          type = "message",
+          duration = 8
+        )
+      }
       showModal(map_col_modal)
     })
 
+    # Store modal to be shown upon user uploading a tabular or logger file
+    map_col_modal <- modalDialog(
+      title = 'Identify columns',
+      uiOutput(ns('map_modal_body')),
+      easyClose = FALSE,
+      size = "xl",
+      footer = uiOutput(ns('map_modal_footer'))
+    )
+
     observeEvent(input$next_mapping, {
-      df_mapped <- build_df_from_column_mapping()
-      map_modal_state$pending_df <- df_mapped
+      jobs <- build_upload_jobs_from_column_mapping()
+      map_modal_state$pending_jobs <- jobs
+      map_modal_state$pending_df <- jobs[[1]]$data
       sanitize_class_vals <- function(x) {
         vals <- trimws(as.character(x))
         sort(unique(vals[!is.na(vals) & nzchar(vals)]))
       }
+      job_values <- function(class_name) {
+        unlist(
+          lapply(jobs, function(job) {
+            if (class_name %in% names(job$data)) {
+              job$data[[class_name]]
+            } else {
+              character()
+            }
+          }),
+          use.names = FALSE
+        )
+      }
       map_modal_state$class_values <- list(
-        grade = sanitize_class_vals(df_mapped$grade),
-        approval = sanitize_class_vals(df_mapped$approval),
-        qualifier = sanitize_class_vals(df_mapped$qualifier)
+        grade = sanitize_class_vals(job_values("grade")),
+        approval = sanitize_class_vals(job_values("approval")),
+        qualifier = sanitize_class_vals(job_values("qualifier"))
       )
       map_modal_state$step <- "class_mapping"
     })
@@ -2587,13 +3732,13 @@ addContData <- function(id, language) {
       input$confirm_mapping,
       {
         removeModal() # Close the modal dialog
-        df_mapped <- if (map_modal_state$step == "class_mapping") {
-          req(map_modal_state$pending_df)
-          out <- map_modal_state$pending_df
+        jobs <- if (map_modal_state$step == "class_mapping") {
+          req(map_modal_state$pending_jobs)
+          out_jobs <- map_modal_state$pending_jobs
 
           for (class_name in names(map_modal_state$class_values)) {
             class_vals <- map_modal_state$class_values[[class_name]]
-            if (length(class_vals) == 0 || !(class_name %in% names(out))) {
+            if (length(class_vals) == 0) {
               next
             }
 
@@ -2606,19 +3751,31 @@ addContData <- function(id, language) {
             )
             names(mapped_values) <- class_vals
 
-            current_vals <- trimws(as.character(out[[class_name]]))
-            non_missing <- !is.na(current_vals) & nzchar(current_vals)
-            out[[class_name]][non_missing] <- unname(
-              mapped_values[current_vals[non_missing]]
-            )
+            for (job_idx in seq_along(out_jobs)) {
+              if (!(class_name %in% names(out_jobs[[job_idx]]$data))) {
+                next
+              }
+              current_vals <- trimws(as.character(out_jobs[[job_idx]]$data[[
+                class_name
+              ]]))
+              non_missing <- !is.na(current_vals) & nzchar(current_vals)
+              out_jobs[[job_idx]]$data[[class_name]][non_missing] <- unname(
+                mapped_values[current_vals[non_missing]]
+              )
+            }
           }
-          out
+          out_jobs
         } else {
-          build_df_from_column_mapping()
+          build_upload_jobs_from_column_mapping()
         }
 
-        unit_conversion_state$previous_values <- NULL
-        unit_conversion_state$previous_label <- NULL
+        upload_jobs(jobs)
+        clear_all_preview_plots()
+        preview_plot_queue(empty_preview_queue())
+        plot_generation_status(NULL)
+        df_mapped <- jobs[[1]]$data
+        unit_conversion_state$previous_values <- list()
+        unit_conversion_state$previous_label <- list()
         data$df <- prepare_table_data(df_mapped)
         if ("grade" %in% names(df_mapped)) {
           data$df$grade <- as.character(df_mapped$grade)
@@ -2628,6 +3785,14 @@ addContData <- function(id, language) {
         }
         if ("qualifier" %in% names(df_mapped)) {
           data$df$qualifier <- as.character(df_mapped$qualifier)
+        }
+        for (class_name in c("grade", "approval", "qualifier")) {
+          ranges_by_target <- list()
+          for (job in jobs) {
+            ranges_by_target[[as.character(as.integer(job$timeseries_id))]] <-
+              ranges_from_table_classes(job$data, class_name)
+          }
+          target_class_ranges[[class_name]] <- ranges_by_target
         }
         class_ranges$grade <- ranges_from_table_classes(data$df, "grade")
         class_ranges$approval <- ranges_from_table_classes(data$df, "approval")
@@ -2728,16 +3893,8 @@ addContData <- function(id, language) {
     })
 
     observeEvent(
-      list(input$delete_rows_table, input$delete_rows_accordion),
+      input$delete_rows_table,
       {
-        click_count <- sum(
-          as.numeric(c(input$delete_rows_table, input$delete_rows_accordion)),
-          na.rm = TRUE
-        )
-        if (click_count < 1) {
-          return()
-        }
-
         if (!identical(input$entry_mode, "manual")) {
           showNotification(
             "Selected row deletion is available for manual entry only.",
@@ -2752,14 +3909,35 @@ addContData <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    apply_datetime_cutoff <- function(mode = c("before", "after")) {
+    delete_cutoff_input_id <- function(timeseries_id) {
+      target_output_id("delete_cutoff_datetime", timeseries_id)
+    }
+
+    delete_button_input_id <- function(mode, timeseries_id) {
+      target_output_id(paste0("delete_", mode, "_datetime"), timeseries_id)
+    }
+
+    generate_plot_input_id <- function(timeseries_id) {
+      target_output_id("generate_preview_plot", timeseries_id)
+    }
+
+    apply_datetime_cutoff <- function(
+      timeseries_id,
+      mode = c("before", "after")
+    ) {
       mode <- match.arg(mode)
-      if (nrow(data$df) == 0) {
+      target_id <- as.integer(timeseries_id)
+      target_df <- active_job_data(target_id)
+      if (nrow(target_df) == 0) {
         showNotification("No rows to delete.", type = "message")
         return(invisible(NULL))
       }
 
-      cutoff <- scalar_utc_datetime(input$delete_cutoff_datetime)
+      cutoff_input <- input[[delete_cutoff_input_id(target_id)]]
+      cutoff <- scalar_display_datetime_to_utc(
+        cutoff_input,
+        input$preview_utc_offset
+      )
       if (is.na(cutoff)) {
         showNotification(
           "Invalid cutoff datetime.",
@@ -2768,7 +3946,7 @@ addContData <- function(id, language) {
         return(invisible(NULL))
       }
 
-      parsed_dt <- table_datetimes_to_utc(data$df$datetime, input$UTC_offset)
+      parsed_dt <- table_datetimes_to_utc(target_df$datetime, input$UTC_offset)
       if (any(is.na(parsed_dt))) {
         showNotification(
           "Cannot apply cutoff: one or more datetime values in the table are invalid.",
@@ -2783,21 +3961,18 @@ addContData <- function(id, language) {
         parsed_dt <= cutoff
       }
       removed_n <- sum(!keep_idx)
-      data$df <- data$df[keep_idx, , drop = FALSE]
-      refresh_data_table()
+      set_upload_job_data(target_id, target_df[keep_idx, , drop = FALSE])
+      target_job <- upload_review_job(target_id)
+      target_label_text <- if (is.null(target_job)) {
+        paste("timeseries", target_id)
+      } else {
+        target_job$label
+      }
       showNotification(
-        sprintf("Removed %s row(s).", removed_n),
+        sprintf("Removed %s row(s) from %s.", removed_n, target_label_text),
         type = "message"
       )
     }
-
-    observeEvent(input$delete_before_datetime, {
-      apply_datetime_cutoff("before")
-    })
-
-    observeEvent(input$delete_after_datetime, {
-      apply_datetime_cutoff("after")
-    })
 
     class_code_choices <- function(class_name) {
       types <- class_type_choices()[[class_name]]
@@ -2868,18 +4043,16 @@ addContData <- function(id, language) {
       )
     }
 
-    display_table_data <- reactive({
-      table_render_tick()
-      df <- isolate(data$df)
+    table_state_from_df <- function(df, editable) {
       if (nrow(df) == 0) {
         return(list(
           data = df,
-          editable = identical(input$entry_mode, "manual"),
+          editable = editable,
           preview = FALSE
         ))
       }
 
-      if (!identical(input$entry_mode, "manual")) {
+      if (!isTRUE(editable)) {
         preview_rows_per_end <- 10L
         total_rows <- nrow(df)
         row_idx <- if (total_rows <= preview_rows_per_end * 2L) {
@@ -2920,10 +4093,271 @@ addContData <- function(id, language) {
         editable = TRUE,
         preview = FALSE
       )
+    }
+
+    display_table_data <- reactive({
+      table_render_tick()
+      df <- isolate(data$df)
+      table_state_from_df(df, identical(input$entry_mode, "manual"))
+    })
+
+    upload_review_jobs <- reactive({
+      jobs <- upload_jobs()
+      if (is.null(jobs) || length(jobs) == 0) {
+        if (is.null(timeseries()) || nrow(data$df) == 0) {
+          return(list())
+        }
+        meta <- selected_timeseries_meta()
+        label <- paste("Timeseries", timeseries())
+        if (nrow(meta) == 1) {
+          label <- target_label(meta)
+        }
+        return(list(list(
+          timeseries_id = as.integer(timeseries()),
+          label = label,
+          data = data$df
+        )))
+      }
+
+      active_idx <- which(vapply(
+        jobs,
+        function(job) {
+          identical(as.integer(job$timeseries_id), as.integer(timeseries()))
+        },
+        logical(1)
+      ))
+      if (length(active_idx) > 0) {
+        jobs[[active_idx[[1]]]]$data <- data$df
+      }
+      jobs
+    })
+
+    upload_review_job <- function(timeseries_id) {
+      jobs <- upload_review_jobs()
+      idx <- which(vapply(
+        jobs,
+        function(job) {
+          identical(
+            as.integer(job$timeseries_id),
+            as.integer(timeseries_id)
+          )
+        },
+        logical(1)
+      ))
+      if (length(idx) == 0) {
+        return(NULL)
+      }
+      jobs[[idx[[1]]]]
+    }
+
+    set_upload_job_data <- function(timeseries_id, df) {
+      tsid <- as.integer(timeseries_id)
+      if (identical(tsid, as.integer(timeseries()))) {
+        data$df <- df
+      }
+      jobs <- upload_jobs()
+      if (!is.null(jobs) && length(jobs) > 0) {
+        for (i in seq_along(jobs)) {
+          if (identical(as.integer(jobs[[i]]$timeseries_id), tsid)) {
+            jobs[[i]]$data <- df
+            break
+          }
+        }
+        upload_jobs(jobs)
+      }
+      refresh_data_table()
+    }
+
+    active_job_data <- function(timeseries_id) {
+      job <- upload_review_job(timeseries_id)
+      if (!is.null(job)) {
+        return(job$data)
+      }
+      data$df
+    }
+
+    render_data_table <- function(table_state) {
+      DT::datatable(
+        table_state$data,
+        escape = !isTRUE(table_state$editable),
+        selection = if (isTRUE(table_state$editable)) {
+          list(
+            mode = "multiple",
+            target = "row",
+            selector = "td:first-child"
+          )
+        } else {
+          "none"
+        },
+        options = list(
+          scrollX = TRUE,
+          ordering = FALSE,
+          columnDefs = list(list(targets = "_all", orderable = FALSE))
+        ),
+        callback = if (isTRUE(table_state$editable)) {
+          htmlwidgets::JS(
+            sprintf(
+              "var ns = '%s';
+              table.on('change', '.cont-data-cell', function() {
+                Shiny.setInputValue(ns + 'data_table_cell_update', {
+                  row: parseInt(this.dataset.row, 10),
+                  col: this.dataset.col,
+                  value: this.value,
+                  nonce: Math.random()
+                }, {priority: 'event'});
+              });
+              table.on('keydown', '.cont-data-cell', function(e) {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  $(this).trigger('change');
+                  this.blur();
+                }
+              });",
+              ns("")
+            ),
+            "table.on('draw.dt', function() {",
+            "  table.$('.cont-data-cell').css({",
+            "    'width': '100%',",
+            "    'min-width': '110px',",
+            "    'box-sizing': 'border-box'",
+            "  });",
+            "});"
+          )
+        } else {
+          htmlwidgets::JS("")
+        },
+        rownames = FALSE
+      )
+    }
+
+    missing_value_note_ui <- function(job) {
+      if (is.null(job) || is.null(job$dropped_missing_value)) {
+        return(NULL)
+      }
+
+      removed_n <- nrow(job$dropped_missing_value)
+      if (removed_n == 0) {
+        return(tags$div(
+          class = "text-muted small",
+          style = "margin: 6px 0;",
+          "0 rows were removed because of missing values for this timeseries."
+        ))
+      }
+
+      tags$div(
+        class = "alert alert-warning",
+        style = "padding: 8px; margin: 8px 0;",
+        tags$span(sprintf(
+          "%s row%s removed because the mapped value was missing for this timeseries.",
+          format(removed_n, big.mark = ","),
+          if (removed_n == 1) " was" else "s were"
+        )),
+        tags$span(
+          style = "margin-left: 8px;",
+          actionButton(
+            ns(target_output_id(
+              "show_missing_value_rows",
+              job$timeseries_id
+            )),
+            "View removed rows",
+            icon = icon("table"),
+            class = "btn-warning btn-sm"
+          )
+        )
+      )
+    }
+
+    output$missing_value_note <- renderUI({
+      jobs <- upload_review_jobs()
+      if (length(jobs) == 0) {
+        return(NULL)
+      }
+      active <- upload_review_job(timeseries())
+      if (is.null(active)) {
+        active <- jobs[[1]]
+      }
+      missing_value_note_ui(active)
+    })
+
+    show_missing_value_rows_modal <- function(timeseries_id) {
+      job <- upload_review_job(timeseries_id)
+      if (is.null(job) || is.null(job$dropped_missing_value)) {
+        return(invisible(NULL))
+      }
+
+      dropped <- job$dropped_missing_value
+      if (nrow(dropped) == 0) {
+        showNotification(
+          "No rows were removed because of missing values for this timeseries.",
+          type = "message"
+        )
+        return(invisible(NULL))
+      }
+
+      output$missing_value_rows_modal <- DT::renderDT({
+        DT::datatable(
+          dropped,
+          rownames = FALSE,
+          class = "compact stripe",
+          options = list(
+            pageLength = 25,
+            lengthMenu = c(10, 25, 50, 100),
+            scrollX = TRUE,
+            autoWidth = TRUE
+          )
+        )
+      })
+
+      showModal(modalDialog(
+        title = paste("Rows removed for", job$label),
+        tags$p(
+          "These are the original uploaded rows where the mapped value column was missing."
+        ),
+        DT::DTOutput(ns("missing_value_rows_modal")),
+        easyClose = TRUE,
+        footer = modalButton("Close"),
+        size = "xl"
+      ))
+      invisible(NULL)
+    }
+
+    missing_value_button_observers <- reactiveVal(character())
+    observe({
+      jobs <- upload_review_jobs()
+      button_ids <- vapply(
+        jobs,
+        function(job) {
+          target_output_id("show_missing_value_rows", job$timeseries_id)
+        },
+        character(1)
+      )
+      registered <- missing_value_button_observers()
+      new_ids <- setdiff(button_ids, registered)
+      for (button_id in new_ids) {
+        local({
+          id_local <- button_id
+          tsid <- as.integer(sub("^show_missing_value_rows_", "", id_local))
+          observeEvent(
+            input[[id_local]],
+            {
+              show_missing_value_rows_modal(tsid)
+            },
+            ignoreInit = TRUE
+          )
+        })
+      }
+      if (length(new_ids) > 0) {
+        missing_value_button_observers(c(registered, new_ids))
+      }
     })
 
     output$data_table_note <- renderUI({
-      table_state <- display_table_data()
+      jobs <- upload_review_jobs()
+      table_state <- if (isTRUE(multi_upload_active()) && length(jobs) > 1) {
+        table_state_from_df(jobs[[1]]$data, FALSE)
+      } else {
+        display_table_data()
+      }
       if (isTRUE(table_state$editable)) {
         return(tags$div(
           "Hint: type directly in the table cells. Press Enter or leave the cell to save."
@@ -2950,63 +4384,92 @@ addContData <- function(id, language) {
       )
     })
 
+    output$data_tables_ui <- renderUI({
+      jobs <- upload_review_jobs()
+      if (!isTRUE(multi_upload_active()) || length(jobs) <= 1) {
+        return(tagList(
+          uiOutput(ns("missing_value_note")),
+          DT::DTOutput(ns("data_table"))
+        ))
+      }
+      tabs <- lapply(jobs, function(job) {
+        tabPanel(
+          title = job$label,
+          value = paste0("timeseries_", as.integer(job$timeseries_id)),
+          uiOutput(ns(target_output_id(
+            "missing_value_note",
+            job$timeseries_id
+          ))),
+          DT::DTOutput(ns(target_output_id("data_table", job$timeseries_id)))
+        )
+      })
+      do.call(
+        tabsetPanel,
+        c(list(id = ns("data_table_tabset")), tabs)
+      )
+    })
+
     output$data_table <- DT::renderDT(
       {
         table_state <- display_table_data()
-        DT::datatable(
-          table_state$data,
-          escape = !isTRUE(table_state$editable),
-          selection = if (isTRUE(table_state$editable)) {
-            list(
-              mode = "multiple",
-              target = "row",
-              selector = "td:first-child"
-            )
-          } else {
-            "none"
-          },
-          options = list(
-            scrollX = TRUE,
-            ordering = FALSE,
-            columnDefs = list(list(targets = "_all", orderable = FALSE))
-          ),
-          callback = if (isTRUE(table_state$editable)) {
-            htmlwidgets::JS(
-              sprintf(
-                "var ns = '%s';
-                table.on('change', '.cont-data-cell', function() {
-                  Shiny.setInputValue(ns + 'data_table_cell_update', {
-                    row: parseInt(this.dataset.row, 10),
-                    col: this.dataset.col,
-                    value: this.value,
-                    nonce: Math.random()
-                  }, {priority: 'event'});
-                });
-                table.on('keydown', '.cont-data-cell', function(e) {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    $(this).trigger('change');
-                    this.blur();
-                  }
-                });",
-                ns("")
-              ),
-              "table.on('draw.dt', function() {",
-              "  table.$('.cont-data-cell').css({",
-              "    'width': '100%',",
-              "    'min-width': '110px',",
-              "    'box-sizing': 'border-box'",
-              "  });",
-              "});"
-            )
-          } else {
-            htmlwidgets::JS("")
-          },
-          rownames = FALSE
-        )
+        render_data_table(table_state)
       },
       server = FALSE
     )
+
+    checkbox_current_value <- function(input_id, default = TRUE) {
+      value <- input[[input_id]]
+      if (is.null(value)) {
+        return(default)
+      }
+      isTRUE(value)
+    }
+
+    observe({
+      jobs <- upload_review_jobs()
+      for (job in jobs) {
+        local({
+          tsid <- as.integer(job$timeseries_id)
+          table_id <- target_output_id("data_table", tsid)
+          output[[table_id]] <- DT::renderDT(
+            {
+              current_job <- upload_review_job(tsid)
+              req(current_job)
+              render_data_table(table_state_from_df(current_job$data, FALSE))
+            },
+            server = FALSE
+          )
+          note_id <- target_output_id("missing_value_note", tsid)
+          output[[note_id]] <- renderUI({
+            current_job <- upload_review_job(tsid)
+            missing_value_note_ui(current_job)
+          })
+        })
+      }
+    })
+
+    output$upload_target_checkboxes <- renderUI({
+      jobs <- upload_review_jobs()
+      if (length(jobs) == 0) {
+        return(NULL)
+      }
+      div(
+        class = "alert alert-secondary",
+        style = "padding: 8px; margin: 8px 0;",
+        tags$strong("Upload these targets"),
+        div(
+          style = "display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 2px 16px;",
+          lapply(jobs, function(job) {
+            input_id <- upload_include_input_id(job$timeseries_id)
+            checkboxInput(
+              ns(input_id),
+              job$label,
+              value = checkbox_current_value(input_id, TRUE)
+            )
+          })
+        )
+      )
+    })
 
     observeEvent(input$data_table_cell_update, {
       if (!identical(input$entry_mode, "manual")) {
@@ -3038,35 +4501,196 @@ addContData <- function(id, language) {
       }
     })
 
-    plot_data <- reactiveVal(NULL)
-    last_plot_signature <- reactiveVal(NULL)
+    plot_data <- reactiveValues()
+    plot_data_keys <- reactiveVal(character())
+    last_plot_signature <- reactiveVal(list())
+    plot_generation_status <- reactiveVal(NULL)
+    preview_plot_busy <- reactiveVal(FALSE)
+    active_preview_plot_button <- reactiveVal(NULL)
+    preview_plot_queue <- reactiveVal(data.frame(
+      timeseries_id = integer(),
+      force = logical()
+    ))
 
-    current_plot_signature <- reactive({
-      list(
-        timeseries_id = timeseries(),
-        df = data$df,
-        grade = class_ranges$grade,
-        approval = class_ranges$approval,
-        qualifier = class_ranges$qualifier,
-        preview_historic_range = input$preview_historic_range,
-        preview_start_datetime = input$preview_start_datetime,
-        preview_end_datetime = input$preview_end_datetime,
-        preview_utc_offset = input$preview_utc_offset
+    output$plot_generation_status <- renderUI({
+      status <- plot_generation_status()
+      if (is.null(status) || !nzchar(status)) {
+        return(NULL)
+      }
+      div(
+        class = "alert alert-info",
+        style = "padding: 8px; margin: 8px 0;",
+        status
       )
     })
 
-    preview_request <- reactive({
-      req(timeseries())
-      req(nrow(data$df) > 0)
+    plot_request_changed <- function(req, force = FALSE) {
+      if (isTRUE(force)) {
+        return(TRUE)
+      }
+      target_key <- as.character(as.integer(req$timeseries_id))
+      signatures <- isolate(last_plot_signature())
+      is.null(signatures[[target_key]]) ||
+        !isTRUE(all.equal(
+          signatures[[target_key]],
+          req$signature,
+          check.attributes = FALSE
+        ))
+    }
 
-      parsed_dt <- table_datetimes_to_utc(data$df$datetime, input$UTC_offset)
-      parsed_val <- suppressWarnings(as.numeric(data$df$value))
+    plot_key <- function(timeseries_id) {
+      paste0("timeseries_", as.integer(timeseries_id))
+    }
+
+    preview_plot_value <- function(timeseries_id) {
+      plot_data[[plot_key(timeseries_id)]]
+    }
+
+    preview_plot_available <- function(timeseries_id) {
+      plot_key(timeseries_id) %in% plot_data_keys()
+    }
+
+    set_preview_plot <- function(timeseries_id, plot) {
+      key <- plot_key(timeseries_id)
+      plot_data[[key]] <- plot
+      keys <- isolate(plot_data_keys())
+      if (!(key %in% keys)) {
+        plot_data_keys(c(keys, key))
+      }
+      invisible(TRUE)
+    }
+
+    clear_all_preview_plots <- function() {
+      keys <- isolate(plot_data_keys())
+      for (key in keys) {
+        plot_data[[key]] <- NULL
+      }
+      plot_data_keys(character())
+      last_plot_signature(list())
+      invisible(TRUE)
+    }
+
+    clear_preview_plot <- function(timeseries_id) {
+      key <- plot_key(timeseries_id)
+      signatures <- isolate(last_plot_signature())
+      changed <- FALSE
+      if (!is.null(isolate(plot_data[[key]]))) {
+        plot_data[[key]] <- NULL
+        plot_data_keys(setdiff(isolate(plot_data_keys()), key))
+        changed <- TRUE
+      }
+      target_key <- as.character(as.integer(timeseries_id))
+      if (!is.null(signatures[[target_key]])) {
+        signatures[[target_key]] <- NULL
+        changed <- TRUE
+      }
+      if (isTRUE(changed)) {
+        last_plot_signature(signatures)
+      }
+      invisible(changed)
+    }
+
+    preview_label <- function(timeseries_id) {
+      job <- upload_review_job(as.integer(timeseries_id))
+      if (is.null(job)) {
+        return(paste("timeseries", as.integer(timeseries_id)))
+      }
+      job$label
+    }
+
+    empty_preview_queue <- function() {
+      data.frame(
+        timeseries_id = integer(),
+        force = logical()
+      )
+    }
+
+    enqueue_preview_plots <- function(timeseries_ids, force = FALSE) {
+      timeseries_ids <- unique(as.integer(timeseries_ids))
+      timeseries_ids <- timeseries_ids[!is.na(timeseries_ids)]
+      if (!length(timeseries_ids)) {
+        return(invisible(FALSE))
+      }
+
+      current <- isolate(preview_plot_queue())
+      add <- data.frame(
+        timeseries_id = timeseries_ids,
+        force = rep(isTRUE(force), length(timeseries_ids))
+      )
+      queue <- rbind(current, add)
+      keep <- !duplicated(queue$timeseries_id)
+      out <- queue[keep, , drop = FALSE]
+      out$force <- vapply(
+        out$timeseries_id,
+        function(target_id) {
+          any(queue$force[queue$timeseries_id == target_id])
+        },
+        logical(1)
+      )
+      preview_plot_queue(out)
+      invisible(TRUE)
+    }
+
+    preview_effective_data <- function(target_df) {
+      if (nrow(target_df) == 0) {
+        return(NULL)
+      }
+      parsed_dt <- table_datetimes_to_utc(
+        target_df$datetime,
+        input$UTC_offset
+      )
+      parsed_val <- suppressWarnings(as.numeric(target_df$value))
       valid_idx <- !(is.na(parsed_dt) | is.na(parsed_val))
-      req(any(valid_idx))
+      if (!any(valid_idx)) {
+        return(NULL)
+      }
 
-      df_new <- data$df[valid_idx, , drop = FALSE]
-      df_new$datetime <- parsed_dt[valid_idx]
-      df_new$value <- parsed_val[valid_idx]
+      valid_dt <- parsed_dt[valid_idx]
+      data_start <- min(valid_dt, na.rm = TRUE)
+      data_end <- max(valid_dt, na.rm = TRUE)
+
+      list(
+        parsed_datetime = parsed_dt,
+        parsed_value = parsed_val,
+        valid_idx = valid_idx,
+        range_start = data_start,
+        range_end = data_end
+      )
+    }
+
+    current_plot_signature <- function(timeseries_id) {
+      target_id <- as.integer(timeseries_id)
+      target_df <- active_job_data(target_id)
+      effective <- preview_effective_data(target_df)
+      list(
+        timeseries_id = target_id,
+        df = target_df,
+        class_ranges = class_ranges_for_target(target_id),
+        preview_historic_range = isTRUE(input$preview_historic_range),
+        range_start = if (is.null(effective)) {
+          NA_real_
+        } else {
+          effective$range_start
+        },
+        range_end = if (is.null(effective)) {
+          NA_real_
+        } else {
+          effective$range_end
+        },
+        preview_utc_offset = input$preview_utc_offset
+      )
+    }
+
+    preview_request <- function(timeseries_id = active_preview_timeseries()) {
+      target_id <- as.integer(timeseries_id)
+      req(target_id)
+      target_df <- active_job_data(target_id)
+      effective <- preview_effective_data(target_df)
+      req(!is.null(effective))
+
+      df_new <- target_df[effective$valid_idx, , drop = FALSE]
+      df_new$datetime <- effective$parsed_datetime[effective$valid_idx]
+      df_new$value <- effective$parsed_value[effective$valid_idx]
       df_new$source <- "New upload"
       preview_offset_seconds <- selected_offset_seconds(
         input$preview_utc_offset,
@@ -3087,81 +4711,58 @@ addContData <- function(id, language) {
         df_new$qualifier <- as.character(df_new$qualifier)
       }
 
-      data_start <- min(df_new$datetime, na.rm = TRUE)
-      data_end <- max(df_new$datetime, na.rm = TRUE)
-      range_start <- data_start
-      range_end <- data_end
-
-      custom_start <- scalar_utc_datetime_value(input$preview_start_datetime)
-      if (!is.na(custom_start)) {
-        range_start <- min(max(custom_start, data_start), data_end)
-      }
-      custom_end <- scalar_utc_datetime_value(input$preview_end_datetime)
-      if (!is.na(custom_end)) {
-        range_end <- min(max(custom_end, data_start), data_end)
-      }
-      if (range_end < range_start) {
-        range_start <- data_start
-        range_end <- data_end
-      }
-
+      range_start <- effective$range_start
+      range_end <- effective$range_end
       in_preview_range <- df_new$datetime >= range_start &
         df_new$datetime <= range_end
       df_new <- df_new[in_preview_range, , drop = FALSE]
       req(nrow(df_new) > 0)
 
       list(
-        timeseries_id = timeseries(),
+        timeseries_id = target_id,
         new_data = df_new,
         range_start = range_start,
         range_end = range_end,
         display_offset_seconds = preview_offset_seconds,
         display_tz = preview_tz,
         show_historic_range = isTRUE(input$preview_historic_range),
-        class_ranges = list(
-          grade = class_ranges$grade,
-          approval = class_ranges$approval,
-          qualifier = class_ranges$qualifier
-        ),
+        class_ranges = class_ranges_for_target(target_id),
         class_types = class_type_choices(),
         config = session$userData$config,
-        signature = current_plot_signature()
+        signature = current_plot_signature(target_id)
       )
-    })
+    }
 
-    output$plot_refresh_warning <- renderUI({
-      if (is.null(last_plot_signature())) {
-        return(NULL)
+    thin_plot_data <- function(df, max_points = 5000L) {
+      if (is.null(df) || nrow(df) <= max_points) {
+        return(df)
       }
-      changed <- !isTRUE(all.equal(
-        last_plot_signature(),
-        current_plot_signature(),
-        check.attributes = FALSE
-      ))
-      if (!changed) {
-        return(NULL)
-      }
-      div(
-        style = "color:#b30000;margin-top:6px;",
-        "Newly entered data or preview settings have changed since the last refresh plot action."
-      )
-    })
+      idx <- unique(as.integer(round(seq(
+        1,
+        nrow(df),
+        length.out = max_points
+      ))))
+      df[idx, , drop = FALSE]
+    }
 
-    make_preview_plot <- function(pv) {
+    make_preview_plot <- function(pv, con = NULL) {
       db_config <- pv$config
       pv$config <- NULL
-      con <- AquaConnect(
-        name = db_config$dbName,
-        host = db_config$dbHost,
-        port = db_config$dbPort,
-        username = db_config$dbUser,
-        password = db_config$dbPass,
-        silent = TRUE
-      )
+      owns_connection <- is.null(con)
+      if (owns_connection) {
+        con <- AquaConnect(
+          name = db_config$dbName,
+          host = db_config$dbHost,
+          port = db_config$dbPort,
+          username = db_config$dbUser,
+          password = db_config$dbPass,
+          silent = TRUE
+        )
+      }
       db_config <- NULL
       on.exit(
         {
-          if (!is.null(con) && DBI::dbIsValid(con)) {
+          if (owns_connection && !is.null(con) && DBI::dbIsValid(con)) {
             DBI::dbDisconnect(con)
           }
         },
@@ -3197,6 +4798,8 @@ addContData <- function(id, language) {
         hist_out$datetime <- coerce_utc_datetime(hist_out$datetime) +
           pv$display_offset_seconds
       }
+      new_data_trace <- thin_plot_data(pv$new_data)
+      existing_trace <- thin_plot_data(extra)
 
       parameter <- dbGetQueryDT(
         con,
@@ -3217,7 +4820,7 @@ addContData <- function(id, language) {
         params = list(pv$timeseries_id)
       )
 
-      pv$db <- extra
+      pv$db <- existing_trace
       pv$historic <- hist_out
       pv$parameter <- parameter
       class_ranges <- pv$class_ranges
@@ -3273,7 +4876,7 @@ addContData <- function(id, language) {
               x = ~datetime,
               ymin = ~min,
               ymax = ~max,
-              name = "Historic",
+              name = "Min-Max",
               color = I("#D4ECEF"),
               line = list(width = 0.2),
               hoverinfo = "text",
@@ -3310,7 +4913,7 @@ addContData <- function(id, language) {
             x = ~datetime,
             ymin = ~min,
             ymax = ~max,
-            name = "Historic",
+            name = "Min-Max",
             color = I("#D4ECEF"),
             line = list(width = 0.2),
             hoverinfo = "none",
@@ -3325,7 +4928,7 @@ addContData <- function(id, language) {
             data = pv$db,
             x = ~datetime,
             y = ~value,
-            type = "scatter",
+            type = if (nrow(pv$db) > 1000) "scattergl" else "scatter",
             mode = "lines",
             line = list(width = 2.5),
             name = "Existing corrected",
@@ -3345,10 +4948,10 @@ addContData <- function(id, language) {
       # Finally, add the new data
       plot <- plot |>
         plotly::add_trace(
-          data = pv$new_data,
+          data = new_data_trace,
           x = ~datetime,
           y = ~value,
-          type = "scatter",
+          type = if (nrow(new_data_trace) > 1000) "scattergl" else "scatter",
           mode = "lines",
           line = list(width = 2.5),
           name = "New upload",
@@ -3610,52 +5213,427 @@ addContData <- function(id, language) {
       plot
     }
 
-    preview_plot_task <- ExtendedTask$new(function(pv) {
+    preview_plot_task <- ExtendedTask$new(function(req) {
       promises::future_promise({
         tryCatch(
           {
             list(
-              plot = make_preview_plot(pv),
-              signature = pv$signature
+              ok = TRUE,
+              timeseries_id = req$timeseries_id,
+              plot = make_preview_plot(req),
+              signature = req$signature
             )
           },
           error = function(e) {
-            conditionMessage(e)
+            list(
+              ok = FALSE,
+              timeseries_id = req$timeseries_id,
+              message = conditionMessage(e)
+            )
           }
         )
       })
-    }) |>
-      bslib::bind_task_button("make_plot")
-
-    observeEvent(input$make_plot, {
-      req(timeseries())
-      preview_plot_task$invoke(preview_request())
     })
+
+    next_preview_request <- function() {
+      queue <- isolate(preview_plot_queue())
+      while (nrow(queue) > 0) {
+        item <- queue[1, , drop = FALSE]
+        target_id <- item$timeseries_id[[1]]
+        force <- isTRUE(item$force[[1]])
+        queue <- queue[-1, , drop = FALSE]
+        preview_plot_queue(queue)
+
+        req <- tryCatch(
+          preview_request(target_id),
+          error = function(e) NULL
+        )
+        if (is.null(req)) {
+          clear_preview_plot(target_id)
+          next
+        }
+        if (plot_request_changed(req, force = force)) {
+          return(req)
+        }
+      }
+      NULL
+    }
+
+    run_next_preview_plot <- function() {
+      if (isTRUE(isolate(preview_plot_busy()))) {
+        return(invisible(FALSE))
+      }
+
+      req <- next_preview_request()
+      if (is.null(req)) {
+        plot_generation_status(NULL)
+        return(invisible(FALSE))
+      }
+
+      remaining <- nrow(isolate(preview_plot_queue()))
+      preview_plot_busy(TRUE)
+      plot_generation_status(sprintf(
+        "Generating preview plot for %s%s...",
+        preview_label(req$timeseries_id),
+        if (remaining > 0) {
+          sprintf(" (%s remaining)", remaining)
+        } else {
+          ""
+        }
+      ))
+      active_button_id <- generate_plot_input_id(req$timeseries_id)
+      active_preview_plot_button(active_button_id)
+      bslib::update_task_button(active_button_id, state = "busy")
+      preview_plot_task$invoke(req)
+      invisible(TRUE)
+    }
+
+    generate_preview_plot <- function(timeseries_id, force = TRUE) {
+      target_id <- as.integer(timeseries_id)
+      job <- upload_review_job(target_id)
+      if (is.null(job)) {
+        showNotification(
+          "No upload data are available for plotting.",
+          type = "message"
+        )
+        return(invisible(FALSE))
+      }
+
+      enqueued <- enqueue_preview_plots(target_id, force = force)
+      if (!isTRUE(enqueued)) {
+        return(invisible(FALSE))
+      }
+      run_next_preview_plot()
+      invisible(TRUE)
+    }
 
     observeEvent(preview_plot_task$result(), {
       result <- preview_plot_task$result()
-      if (inherits(result, "character")) {
+      preview_plot_busy(FALSE)
+      button_id <- active_preview_plot_button()
+      if (!is.null(button_id)) {
+        bslib::update_task_button(button_id, state = "ready")
+        active_preview_plot_button(NULL)
+      }
+
+      signatures <- last_plot_signature()
+      target_key <- as.character(as.integer(result$timeseries_id))
+      if (!isTRUE(result$ok)) {
         showNotification(
-          paste("Preview plot failed:", result),
+          paste("Preview plot failed:", result$message),
           type = "error",
           duration = 10
         )
-        return()
+      } else {
+        set_preview_plot(result$timeseries_id, result$plot)
+        signatures[[target_key]] <- result$signature
+        last_plot_signature(signatures)
+      }
+      session$onFlushed(
+        function() {
+          run_next_preview_plot()
+        },
+        once = TRUE
+      )
+    })
+
+    preview_plot_stale <- function(timeseries_id) {
+      target_key <- as.character(as.integer(timeseries_id))
+      signatures <- last_plot_signature()
+      if (is.null(signatures[[target_key]])) {
+        return(FALSE)
+      }
+      current_sig <- tryCatch(
+        current_plot_signature(timeseries_id),
+        error = function(e) NULL
+      )
+      !is.null(current_sig) &&
+        !isTRUE(all.equal(
+          signatures[[target_key]],
+          current_sig,
+          check.attributes = FALSE
+        ))
+    }
+
+    preview_plot_controls_ui <- function(job) {
+      if (is.null(job)) {
+        return(NULL)
       }
 
-      plot_data(result$plot)
-      last_plot_signature(result$signature)
+      target_id <- as.integer(job$timeseries_id)
+      plotted <- preview_plot_available(target_id)
+      stale <- preview_plot_stale(target_id)
+      message <- if (!plotted) {
+        "Click Generate plot to create this preview."
+      } else if (isTRUE(stale)) {
+        paste(
+          "The upload data, classifications, or preview settings have",
+          "changed since this plot was generated."
+        )
+      } else {
+        NULL
+      }
+
+      div(
+        style = "margin: 8px 0;",
+        if (!is.null(message)) {
+          div(
+            class = if (isTRUE(stale)) {
+              "alert alert-warning"
+            } else {
+              "alert alert-info"
+            },
+            style = "padding: 8px; margin-bottom: 8px;",
+            message
+          )
+        },
+        bslib::input_task_button(
+          ns(generate_plot_input_id(target_id)),
+          if (plotted) "Regenerate plot" else "Generate plot",
+          icon = icon("refresh"),
+          label_busy = "Generating...",
+          class = if (isTRUE(stale)) "btn-warning" else "btn-default"
+        )
+      )
+    }
+
+    preview_delete_controls_ui <- function(job) {
+      if (is.null(job)) {
+        return(NULL)
+      }
+
+      target_id <- as.integer(job$timeseries_id)
+      tz_name <- selected_offset_tz(input$preview_utc_offset)
+      bounds <- uploaded_data_bounds(
+        input$preview_utc_offset,
+        active_job_data(target_id)
+      )
+      date_value <- if (is.null(bounds)) NULL else bounds$end_utc
+
+      div(
+        class = "well",
+        style = "padding: 10px; margin-top: 10px;",
+        tags$strong(
+          "Delete rows from this plotted timeseries. This prevents rows from being uploaded to the database, so use with caution and only when there is absolutely no foreseable use for the data such as pre/post deployment data. You can also apply a delete region *correction* to suppress data without deleting it, or grade it as unusable."
+        ),
+        tags$div(
+          class = "text-muted small",
+          paste("Cutoff datetime uses", tz_name, "to match the plot.")
+        ),
+        shinyWidgets::airDatepickerInput(
+          ns(delete_cutoff_input_id(target_id)),
+          "Delete data before/after datetime",
+          value = date_value,
+          range = FALSE,
+          multiple = FALSE,
+          timepicker = TRUE,
+          update_on = "change",
+          tz = air_datetime_widget_timezone(tz_name),
+          minDate = if (is.null(bounds)) NULL else bounds$start_utc,
+          maxDate = if (is.null(bounds)) NULL else bounds$end_utc,
+          timepickerOpts = shinyWidgets::timepickerOptions(
+            minutesStep = 15,
+            timeFormat = "HH:mm"
+          )
+        ),
+        div(
+          actionButton(
+            ns(delete_button_input_id("before", target_id)),
+            "Delete rows before datetime"
+          ) |>
+            tooltip(
+              "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
+            ),
+          actionButton(
+            ns(delete_button_input_id("after", target_id)),
+            "Delete rows after datetime"
+          ) |>
+            tooltip(
+              "Only delete data that has no possible later use, such as pre/post deployment data. Data that has a non-zero chance of being useful later should be uploaded and can be suppressed using a delete region correction or graded/qualified appropriately."
+            )
+        )
+      )
+    }
+
+    delete_button_observers <- reactiveVal(character())
+    observe({
+      jobs <- upload_review_jobs()
+      button_ids <- unlist(
+        lapply(jobs, function(job) {
+          target_id <- as.integer(job$timeseries_id)
+          c(
+            delete_button_input_id("before", target_id),
+            delete_button_input_id("after", target_id)
+          )
+        }),
+        use.names = FALSE
+      )
+      registered <- delete_button_observers()
+      new_ids <- setdiff(button_ids, registered)
+      for (button_id in new_ids) {
+        local({
+          id_local <- button_id
+          mode <- if (grepl("^delete_before_datetime_", id_local)) {
+            "before"
+          } else {
+            "after"
+          }
+          tsid <- as.integer(sub(
+            "^delete_(before|after)_datetime_",
+            "",
+            id_local
+          ))
+          observeEvent(
+            input[[id_local]],
+            {
+              apply_datetime_cutoff(tsid, mode)
+            },
+            ignoreInit = TRUE
+          )
+        })
+      }
+      if (length(new_ids) > 0) {
+        delete_button_observers(c(registered, new_ids))
+      }
+    })
+
+    generate_plot_button_observers <- reactiveVal(character())
+    observe({
+      jobs <- upload_review_jobs()
+      button_ids <- vapply(
+        jobs,
+        function(job) {
+          generate_plot_input_id(job$timeseries_id)
+        },
+        character(1)
+      )
+      registered <- generate_plot_button_observers()
+      new_ids <- setdiff(button_ids, registered)
+      for (button_id in new_ids) {
+        local({
+          id_local <- button_id
+          tsid <- as.integer(sub("^generate_preview_plot_", "", id_local))
+          observeEvent(
+            input[[id_local]],
+            {
+              generate_preview_plot(tsid, force = TRUE)
+            },
+            ignoreInit = TRUE
+          )
+        })
+      }
+      if (length(new_ids) > 0) {
+        generate_plot_button_observers(c(registered, new_ids))
+      }
+    })
+
+    output$preview_plot_tabs <- renderUI({
+      jobs <- upload_review_jobs()
+      if (!isTRUE(multi_upload_active()) || length(jobs) <= 1) {
+        job <- if (length(jobs) == 0) NULL else jobs[[1]]
+        return(tagList(
+          preview_plot_controls_ui(job),
+          plotly::plotlyOutput(ns("data_preview")) |>
+            shinycssloaders::withSpinner(
+              type = 5,
+              color = "#244C5A"
+            ),
+          preview_delete_controls_ui(job)
+        ))
+      }
+      tabs <- lapply(jobs, function(job) {
+        tabPanel(
+          title = job$label,
+          value = paste0("timeseries_", as.integer(job$timeseries_id)),
+          preview_plot_controls_ui(job),
+          plotly::plotlyOutput(
+            ns(target_output_id("data_preview", job$timeseries_id))
+          ) |>
+            shinycssloaders::withSpinner(
+              type = 5,
+              color = "#244C5A"
+            ),
+          preview_delete_controls_ui(job)
+        )
+      })
+      do.call(
+        tabsetPanel,
+        c(list(id = ns("preview_timeseries_tabset")), tabs)
+      )
+    })
+
+    observe({
+      jobs <- upload_review_jobs()
+      for (job in jobs) {
+        local({
+          tsid <- as.integer(job$timeseries_id)
+          output_id <- target_output_id("data_preview", tsid)
+          output[[output_id]] <- plotly::renderPlotly({
+            preview_plot_value(tsid)
+          })
+        })
+      }
     })
 
     output$data_preview <- plotly::renderPlotly({
-      plot_data()
+      target_id <- active_preview_timeseries()
+      req(target_id)
+      preview_plot_value(target_id)
     })
 
-    # function to check data validity before upload
-    check_fx <- function() {
+    current_upload_jobs <- function() {
+      jobs <- upload_jobs()
+      if (is.null(jobs) || length(jobs) == 0) {
+        label <- paste("Timeseries", timeseries())
+        meta <- selected_timeseries_meta()
+        if (nrow(meta) == 1) {
+          label <- target_label(meta)
+        }
+        jobs <- list(list(
+          timeseries_id = as.integer(timeseries()),
+          label = label,
+          data = data$df
+        ))
+      } else {
+        active_idx <- which(vapply(
+          jobs,
+          function(job) {
+            identical(as.integer(job$timeseries_id), as.integer(timeseries()))
+          },
+          logical(1)
+        ))
+        if (length(active_idx) > 0) {
+          jobs[[active_idx[[1]]]]$data <- data$df
+        }
+      }
+
+      jobs <- Filter(
+        function(job) {
+          checkbox_current_value(
+            upload_include_input_id(job$timeseries_id),
+            TRUE
+          )
+        },
+        jobs
+      )
+      if (length(jobs) == 0) {
+        return(jobs)
+      }
+
+      for (i in seq_along(jobs)) {
+        target_id <- as.integer(jobs[[i]]$timeseries_id)
+        jobs[[i]]$data <- apply_class_ranges_to_df(
+          jobs[[i]]$data,
+          class_ranges_for_target(target_id)
+        )
+      }
+      jobs
+    }
+
+    validate_upload_jobs <- function() {
       if (is.null(timeseries())) {
         showNotification('Please select a timeseries first.', type = 'error')
-        return(FALSE)
+        return(NULL)
       }
       if (!isTRUE(selected_timeseries_is_basic())) {
         showNotification(
@@ -3663,73 +5641,142 @@ addContData <- function(id, language) {
           type = 'error',
           duration = 8
         )
-        return(FALSE)
+        return(NULL)
       }
-      if (nrow(data$df) == 0) {
-        showNotification('Empty data table!', type = 'error')
-        return(FALSE)
-      }
-
       if (is.null(input$owner) || is.null(input$contributor)) {
         showNotification(
           'Please select owner and contributor organizations.',
           type = 'error'
         )
-        return(FALSE)
+        return(NULL)
       }
 
-      # Check for duplicated rows and drop them; warn the user
-      duplicated_rows <- duplicated(data$df)
-      if (any(duplicated_rows)) {
-        data$df <- data$df[!duplicated_rows, ]
+      jobs <- current_upload_jobs()
+      if (length(jobs) == 0) {
         showNotification(
-          paste0(
-            'There were ',
-            sum(duplicated_rows),
-            ' duplicated (completely identical) rows. Only the first occurence of each unique row was retained'
-          ),
-          type = 'message',
-          duration = 8
+          'No upload targets are selected for upload.',
+          type = 'error'
         )
-      }
-      duplicated_datetimes <- data$df$datetime[duplicated(data$df$datetime)]
-      if (length(duplicated_datetimes) > 0) {
-        showNotification(
-          paste0(
-            'There is more than one datetime for ',
-            paste(unique(duplicated_datetimes), collapse = ", ")
-          ),
-          type = 'error',
-          duration = 10
-        )
-        return(FALSE)
+        return(NULL)
       }
 
-      parsed_value <- suppressWarnings(as.numeric(data$df$value))
-      if (any(is.na(parsed_value))) {
-        showNotification(
-          'Value column must be numeric with no missing values.',
-          type = 'error',
-          duration = 8
+      for (i in seq_along(jobs)) {
+        df <- jobs[[i]]$data
+        label <- jobs[[i]]$label
+        if (nrow(df) == 0) {
+          showNotification(
+            paste(label, "has an empty data table."),
+            type = 'error'
+          )
+          return(NULL)
+        }
+
+        parsed_datetime <- table_datetimes_to_utc(df$datetime, input$UTC_offset)
+        if (any(is.na(parsed_datetime))) {
+          bad_values <- unique(trimws(as.character(
+            df$datetime[is.na(parsed_datetime)]
+          )))
+          bad_values <- bad_values[!is.na(bad_values) & nzchar(bad_values)]
+          bad_preview <- if (length(bad_values)) {
+            paste(head(bad_values, 5), collapse = ", ")
+          } else {
+            "blank datetime value(s)"
+          }
+          showNotification(
+            paste0(
+              label,
+              ": datetime column has ",
+              sum(is.na(parsed_datetime)),
+              " value(s) that could not be parsed. Examples: ",
+              bad_preview,
+              ". Expected formats include YYYY-MM-DD, YYYY-MM-DD HH:MM, or ISO 8601 timestamps."
+            ),
+            type = 'error',
+            duration = 12
+          )
+          return(NULL)
+        }
+        df$datetime <- parsed_datetime
+
+        duplicated_rows <- duplicated(df[, c("datetime", "value")])
+        if (any(duplicated_rows)) {
+          df <- df[!duplicated_rows, , drop = FALSE]
+          parsed_datetime <- df$datetime
+          showNotification(
+            paste0(
+              label,
+              ": ",
+              sum(duplicated_rows),
+              ' duplicated row(s) were removed.'
+            ),
+            type = 'message',
+            duration = 8
+          )
+        }
+
+        parsed_value <- suppressWarnings(as.numeric(df$value))
+        if (any(is.na(parsed_value))) {
+          showNotification(
+            paste(
+              label,
+              'value column must be numeric with no missing values.'
+            ),
+            type = 'error',
+            duration = 8
+          )
+          return(NULL)
+        }
+
+        duplicated_datetimes <- parsed_datetime[duplicated(parsed_datetime)]
+        if (length(duplicated_datetimes) > 0) {
+          showNotification(
+            paste0(
+              label,
+              ': there is more than one value for ',
+              paste(
+                unique(format(duplicated_datetimes, "%Y-%m-%d %H:%M:%S")),
+                collapse = ', '
+              )
+            ),
+            type = 'error',
+            duration = 10
+          )
+          return(NULL)
+        }
+
+        df$value <- parsed_value
+        df$owner <- as.integer(input$owner)
+        df$contributor <- as.integer(input$contributor)
+        df$no_update <- data.table::fifelse(
+          input$no_update == "yes",
+          TRUE,
+          FALSE
         )
+        jobs[[i]]$data <- df
+
+        if (
+          identical(
+            as.integer(jobs[[i]]$timeseries_id),
+            as.integer(timeseries())
+          )
+        ) {
+          data$parsed_datetime <- parsed_datetime
+          data$parsed_value <- parsed_value
+        }
+      }
+
+      jobs
+    }
+
+    # function to check data validity before upload
+    check_fx <- function() {
+      jobs <- validate_upload_jobs()
+      if (is.null(jobs)) {
+        upload_validation$jobs <- NULL
         return(FALSE)
       }
-      # Make sure datetime is in POSIXct format or can be converted to it
-      parsed_datetime <- table_datetimes_to_utc(
-        data$df$datetime,
-        input$UTC_offset
-      )
-      if (any(is.na(parsed_datetime))) {
-        showNotification(
-          'Datetime column is not in the correct format. Please check your data: it should be of form YYYY-MM-DD HH:MM.',
-          type = 'error',
-          duration = 10
-        )
-        return(FALSE)
-      }
-      data$parsed_datetime <- parsed_datetime
-      data$parsed_value <- parsed_value
-      return(TRUE)
+      upload_validation$jobs <- jobs
+      TRUE
     }
 
     empty_continuous_upload_df <- function() {
@@ -3747,31 +5794,29 @@ addContData <- function(id, language) {
       data$df <- empty_continuous_upload_df()
       data$parsed_datetime <- NULL
       data$parsed_value <- NULL
-      unit_conversion_state$previous_values <- NULL
-      unit_conversion_state$previous_label <- NULL
+      upload_jobs(NULL)
+      upload_validation$jobs <- NULL
+      unit_conversion_state$previous_values <- list()
+      unit_conversion_state$previous_label <- list()
       class_ranges$grade <- class_ranges$grade[0, , drop = FALSE]
       class_ranges$approval <- class_ranges$approval[0, , drop = FALSE]
       class_ranges$qualifier <- class_ranges$qualifier[0, , drop = FALSE]
-      plot_data(NULL)
-      last_plot_signature(NULL)
+      target_class_ranges$grade <- list()
+      target_class_ranges$approval <- list()
+      target_class_ranges$qualifier <- list()
+      clear_all_preview_plots()
+      plot_generation_status(NULL)
+      preview_plot_busy(FALSE)
+      active_preview_plot_button(NULL)
+      preview_plot_queue(empty_preview_queue())
       refresh_data_table()
     }
 
     build_upload_request <- function(overwrite) {
-      upload_data <- data$df
-      upload_data$datetime <- data$parsed_datetime
-      upload_data$value <- data$parsed_value
-      upload_data$owner <- as.integer(input$owner)
-      upload_data$contributor <- as.integer(input$contributor)
-      upload_data$no_update <- data.table::fifelse(
-        input$no_update == "yes",
-        TRUE,
-        FALSE
-      )
+      req(upload_validation$jobs)
 
       list(
-        timeseries_id = timeseries(),
-        data = upload_data,
+        jobs = upload_validation$jobs,
         overwrite = overwrite,
         config = session$userData$config
       )
@@ -3794,26 +5839,48 @@ addContData <- function(id, language) {
             )
             on.exit(DBI::dbDisconnect(con), add = TRUE)
 
-            withCallingHandlers(
-              AquaCache::addNewContinuous(
-                tsid = req$timeseries_id,
-                df = req$data,
-                con = con,
-                overwrite = req$overwrite
-              ),
-              warning = function(w) {
-                warnings <<- c(warnings, conditionMessage(w))
-                invokeRestart("muffleWarning")
+            DBI::dbBegin(con)
+            committed <- FALSE
+            on.exit(
+              {
+                if (!committed) {
+                  try(DBI::dbRollback(con), silent = TRUE)
+                }
               },
-              message = function(m) {
-                messages <<- c(messages, conditionMessage(m))
-                invokeRestart("muffleMessage")
-              }
+              add = TRUE
             )
+
+            for (job in req$jobs) {
+              withCallingHandlers(
+                AquaCache::addNewContinuous(
+                  tsid = job$timeseries_id,
+                  df = job$data,
+                  con = con,
+                  overwrite = req$overwrite
+                ),
+                warning = function(w) {
+                  warnings <<- c(
+                    warnings,
+                    paste(job$label, conditionMessage(w), sep = ": ")
+                  )
+                  invokeRestart("muffleWarning")
+                },
+                message = function(m) {
+                  messages <<- c(
+                    messages,
+                    paste(job$label, conditionMessage(m), sep = ": ")
+                  )
+                  invokeRestart("muffleMessage")
+                }
+              )
+            }
+            DBI::dbCommit(con)
+            committed <- TRUE
 
             list(
               ok = TRUE,
               overwrite = req$overwrite,
+              n_jobs = length(req$jobs),
               warnings = unique(warnings),
               messages = unique(messages)
             )
@@ -3829,7 +5896,72 @@ addContData <- function(id, language) {
     }) |>
       bslib::bind_task_button("upload") |>
       bslib::bind_task_button("upload_overwrite_all") |>
-      bslib::bind_task_button("upload_overwrite_some")
+      bslib::bind_task_button("upload_overwrite_some") |>
+      bslib::bind_task_button("confirm_upload_reminder")
+
+    pending_upload_request <- reactiveVal(NULL)
+
+    set_upload_action_buttons_enabled <- function(enabled = TRUE) {
+      button_ids <- c(
+        "upload",
+        "upload_overwrite_all",
+        "upload_overwrite_some"
+      )
+      for (button_id in button_ids) {
+        if (isTRUE(enabled)) {
+          shinyjs::enable(button_id)
+        } else {
+          shinyjs::disable(button_id)
+        }
+      }
+    }
+
+    show_upload_reminder_modal <- function(req) {
+      target_labels <- vapply(
+        req$jobs,
+        function(job) job$label,
+        character(1)
+      )
+      showModal(modalDialog(
+        title = "Confirm upload details",
+        tags$p(
+          "Before uploading these data to AquaCache, confirm:"
+        ),
+        tags$ol(
+          tags$li(
+            tags$strong("UTC offset: "),
+            "the data are being interpreted with the correct UTC offset.",
+            tags$div(
+              class = "text-muted small",
+              paste("Current selection:", selected_offset_tz(input$UTC_offset))
+            )
+          ),
+          tags$li(
+            tags$strong("Units: "),
+            "the values are already in, or have been converted to, the units expected by the database for the selected timeseries."
+          )
+        ),
+        tags$div(
+          class = "text-muted small",
+          tags$strong("Upload target(s):"),
+          tags$ul(lapply(target_labels, tags$li))
+        ),
+        easyClose = FALSE,
+        footer = tagList(
+          actionButton(
+            ns("cancel_upload_reminder"),
+            "Cancel",
+            class = "btn-default"
+          ),
+          bslib::input_task_button(
+            ns("confirm_upload_reminder"),
+            "Upload data",
+            label_busy = "Uploading...",
+            class = "btn-primary"
+          )
+        )
+      ))
+    }
 
     invoke_upload_task <- function(overwrite) {
       check <- check_fx()
@@ -3837,15 +5969,37 @@ addContData <- function(id, language) {
         return()
       }
 
-      upload_task$invoke(build_upload_request(overwrite))
+      req <- build_upload_request(overwrite)
+      pending_upload_request(req)
+      set_upload_action_buttons_enabled(FALSE)
+      show_upload_reminder_modal(req)
     }
 
     observeEvent(input$upload, {
       invoke_upload_task("no")
     })
 
+    observeEvent(input$cancel_upload_reminder, {
+      pending_upload_request(NULL)
+      removeModal()
+      set_upload_action_buttons_enabled(TRUE)
+    })
+
+    observeEvent(input$confirm_upload_reminder, {
+      req <- pending_upload_request()
+      if (is.null(req)) {
+        removeModal()
+        set_upload_action_buttons_enabled(TRUE)
+        return()
+      }
+      pending_upload_request(NULL)
+      upload_task$invoke(req)
+    })
+
     observeEvent(upload_task$result(), {
       result <- upload_task$result()
+      removeModal()
+      set_upload_action_buttons_enabled(TRUE)
 
       if (!isTRUE(result$ok)) {
         showNotification(
@@ -3877,6 +6031,14 @@ addContData <- function(id, language) {
         conflict = 'Data added with selective overwrite.',
         'Data added.'
       )
+      if (!is.null(result$n_jobs) && result$n_jobs > 1) {
+        notification <- paste0(
+          notification,
+          " Uploaded ",
+          result$n_jobs,
+          " timeseries."
+        )
+      }
       showNotification(notification, type = 'message')
       reset_upload_state()
     })

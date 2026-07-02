@@ -60,7 +60,7 @@ test_that("make_snowbull_map runs and returns expected type", {
     skip_if_not_installed("YGwater")
     skip_if_not_installed("sf")
     skip_if_not_installed("leaflet")
-    con <- tryCatch(YGwater::AquaConnect(silent = TRUE), error = function(e) {
+    con <- tryCatch(AquaConnect(silent = TRUE), error = function(e) {
         NULL
     })
     # Look for the 'spatial' schema to confirm connection is valid. Might be missing on CI

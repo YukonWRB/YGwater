@@ -13,6 +13,7 @@ plotDiscrete(
   parameters = NULL,
   paramGrp = NULL,
   standard = NULL,
+  guidelines = NULL,
   log = FALSE,
   facet_on = "params",
   loc_code = "name",
@@ -64,6 +65,8 @@ plotDiscrete(
 \item{paramGrp}{Only used if \code{dbSource} is 'EQ'. A parameter group as listed in the EQWin 'eqgroups' table, column 'groupname.' Leave NULL to use \code{parameters} instead.}
 
 \item{standard}{A standard or guideline name as listed in the EQWin eqstds table, column StdCode. Leave NULL to exclude standards. Only valid if \code{dbSource} is 'EQ'.}
+
+\item{guidelines}{AquaCache guideline IDs, codes, or names to plot. Leave NULL to exclude AquaCache guidelines. Only valid if \code{dbSource} is 'AC'.}
 
 \item{log}{Should the y-axis be log-transformed?}
 

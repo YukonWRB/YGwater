@@ -40,6 +40,9 @@
 #'   stored daily summaries should be reconstructed. Character, Date, and
 #'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
 #'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param stats_period Historical range statistics period. Use "full" for
+#'   full-record statistics or "30yr" for the most recent 30-year statistics
+#'   when the connected database provides them. Default is "full".
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param build_plot Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.
@@ -87,7 +90,8 @@ plotTimeseries <- function(
   data = FALSE,
   build_plot = TRUE,
   con = NULL,
-  as_of = NULL
+  as_of = NULL,
+  stats_period = "full"
 ) {
   # timeseries_id = 1222
   # location <- NULL
@@ -148,6 +152,8 @@ plotTimeseries <- function(
     con <- AquaConnect(silent = TRUE)
     on.exit(DBI::dbDisconnect(con))
   }
+
+  stats_period <- normalize_daily_stats_period(stats_period)
 
   if (tzone == "auto") {
     tzone <- Sys.timezone()
@@ -537,6 +543,7 @@ plotTimeseries <- function(
         )
       }
     } else if (nrow(exist_check) > 1) {
+      temp <- exist_check
       if (is.null(record_rate)) {
         warning(
           "There is more than one entry in the database for location ",
@@ -923,20 +930,35 @@ plotTimeseries <- function(
 
   # Range data
   if (historic_range) {
+    range_select <- paste(
+      c(
+        "date AS datetime",
+        daily_stats_select_sql(
+          con,
+          stats_period = stats_period,
+          columns = c("min", "max", "q75", "q25")
+        )
+      ),
+      collapse = ", "
+    )
     # get data from the measurements_calculated_daily table for historic ranges plus values from the measurements_continuous_corrected function. Where there isn't any data in the table fill in with the value from the daily table.
     range_end <- end_date + 1 * 24 * 60 * 60
     range_start <- start_date - 1 * 24 * 60 * 60
     if (is.null(as_of)) {
       range_data <- dbGetQueryDT(
         con,
-        "SELECT date AS datetime, min, max, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;",
+        paste0(
+          "SELECT ",
+          range_select,
+          " FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
+        ),
         params = list(tsid, range_start, range_end)
       )
     } else {
       range_data <- dbGetQueryDT(
         con,
         paste(
-          "SELECT date AS datetime, min, max, q75, q25",
+          paste0("SELECT ", range_select),
           "FROM continuous.measurements_calculated_daily_at(",
           "  $1,",
           "  ARRAY[$2]::INTEGER[],",
@@ -1267,33 +1289,28 @@ plotTimeseries <- function(
     }
   }
 
+  historic_band_name <- "Min-Max"
+  typical_band_name <- if (lang == "en") "Typical" else "Typique"
+  band_styles <- list()
+  band_styles[[historic_band_name]] <- list(
+    fillcolor = "rgba(212, 236, 239, 0.85)",
+    line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
+  )
+  band_styles[[typical_band_name]] <- list(
+    fillcolor = "rgba(95, 157, 166, 0.45)",
+    line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
+  )
+
   adaptive_meta <- list(
     hover = hover,
     line_name = corrected_name,
     line_color = "#00454e",
     line_width = 2.5 * line_scale,
     band_names = list(
-      historic = if (lang == "en") "Historic" else "Historique",
-      typical = if (lang == "en") "Typical" else "Typique"
+      historic = historic_band_name,
+      typical = typical_band_name
     ),
-    band_styles = list(
-      Historic = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Historique = list(
-        fillcolor = "rgba(212, 236, 239, 0.85)",
-        line = list(color = "rgba(212, 236, 239, 1)", width = 0.2)
-      ),
-      Typical = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      ),
-      Typique = list(
-        fillcolor = "rgba(95, 157, 166, 0.45)",
-        line = list(color = "rgba(95, 157, 166, 0.85)", width = 0.2)
-      )
-    ),
+    band_styles = band_styles,
     layout = list(
       title = if (title) {
         list(
@@ -1409,8 +1426,7 @@ plotTimeseries <- function(
       }
 
       dt[, id := paste0(prefix, "_", .I)]
-      dt[
-        ,
+      dt[,
         .(
           datetime = c(start_dt[1L], start_dt[1L], end_dt[1L], end_dt[1L]),
           y = y_set,
@@ -1559,48 +1575,6 @@ plotTimeseries <- function(
 
   plot <- plotly::plot_ly()
   if (historic_range) {
-    # Commented out code used to add all range data at once, but in plotly this results in linking across gaps in the data. Instead we now we add each continuous run of range data separately.
-    # plot <- plot |>
-    #   plotly::add_ribbons(
-    #     data = range_data,
-    #     x = ~datetime,
-    #     ymin = ~q25,
-    #     ymax = ~q75,
-    #     # name = if (lang == "en") "IQR" else "EIQ",
-    #     name = if (lang == "en") "Typical" else "Typique",
-    #     color = I("#5f9da6"),
-    #     line = list(width = 0.2),
-    #     hoverinfo = if (hover) "text" else "none",
-    #     text = ~ paste0(
-    #       "Q25: ",
-    #       round(q25, 2),
-    #       ", Q75: ",
-    #       round(q75, 2),
-    #       " (",
-    #       as.Date(datetime),
-    #       ")"
-    #     )
-    #   ) |>
-    #   plotly::add_ribbons(
-    #     data = range_data,
-    #     x = ~datetime,
-    #     ymin = ~min,
-    #     ymax = ~max,
-    #     # name = "Min-Max",
-    #     name = if (lang == "en") "Historic" else "Historique",
-    #     color = I("#D4ECEF"),
-    #     line = list(width = 0.2),
-    #     hoverinfo = if (hover) "text" else "none",
-    #     text = ~ paste0(
-    #       "Min: ",
-    #       round(.data$min, 2),
-    #       ", Max: ",
-    #       round(.data$max, 2),
-    #       " (",
-    #       as.Date(.data$datetime),
-    #       ")"
-    #     )
-    #   )
     for (rd in range_runs) {
       plot <- plot |>
         plotly::add_ribbons(
@@ -1628,7 +1602,7 @@ plotTimeseries <- function(
           x = ~datetime,
           ymin = ~min,
           ymax = ~max,
-          name = if (lang == "en") "Historic" else "Historique",
+          name = "Min-Max",
           color = I("#D4ECEF"),
           line = list(width = 0.2),
           hoverinfo = if (hover) "text" else "none",
@@ -1653,6 +1627,7 @@ plotTimeseries <- function(
         x = ~datetime,
         ymin = ~q25,
         ymax = ~q75,
+        # name = if (lang == "en") "Typical" else "Typique",
         name = if (lang == "en") "Typical" else "Typique",
         color = I("#5f9da6"),
         line = list(width = 0.2),
@@ -1664,7 +1639,7 @@ plotTimeseries <- function(
         x = ~datetime,
         ymin = ~min,
         ymax = ~max,
-        name = if (lang == "en") "Historic" else "Historique",
+        name = "Min-Max",
         color = I("#D4ECEF"),
         line = list(width = 0.2),
         hoverinfo = "none",

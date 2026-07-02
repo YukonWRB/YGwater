@@ -373,6 +373,11 @@ wellRegistry <- function(id, language) {
             )
           )]
           unknown_label <- tr("unknown", language$language)
+          bedrock_not_reached_label <- if (identical(language$abbrev, "fr")) {
+            "Non atteint"
+          } else {
+            "Not reached"
+          }
           docs_by_borehole <- data.table::copy(moduleData$boreholes_docs)[
             moduleData$documents,
             on = .(document_id),
@@ -460,6 +465,7 @@ wellRegistry <- function(id, language) {
             on = .(borehole_id),
             `:=`(
               depth_m = i.depth_m,
+              bedrock_reached = i.bedrock_reached,
               depth_to_bedrock_m = i.depth_to_bedrock_m,
               static_water_level_m = i.static_water_level_m,
               estimated_yield_lps = i.estimated_yield_lps,
@@ -488,6 +494,15 @@ wellRegistry <- function(id, language) {
             document_links := i.document_links
           ]
           tmp[is.na(document_count), document_count := 0]
+          tmp[,
+            depth_to_bedrock_display := data.table::fcase(
+              !is.na(depth_to_bedrock_m),
+              as.character(round(depth_to_bedrock_m, 4)),
+              !is.na(bedrock_reached) & !bedrock_reached,
+              bedrock_not_reached_label,
+              default = unknown_label
+            )
+          ]
 
           tmp[,
             popup_html := paste0(
@@ -512,11 +527,7 @@ wellRegistry <- function(id, language) {
               ),
               "</div>",
               "<div><strong>Depth to bedrock (m):</strong> ",
-              data.table::fifelse(
-                is.na(depth_to_bedrock_m),
-                unknown_label,
-                as.character(round(depth_to_bedrock_m, 4))
-              ),
+              depth_to_bedrock_display,
               "</div>",
               "<div><strong>Static water level (m):</strong> ",
               data.table::fifelse(
