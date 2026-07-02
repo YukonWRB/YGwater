@@ -2,9 +2,13 @@ con <- YGwater::AquaConnect(
     name = "aquacache",
     host = Sys.getenv("aquacacheHostDev"),
     port = Sys.getenv("aquacachePortDev"),
-    user = Sys.getenv("aquacacheAdminUser"),
-    password = Sys.getenv("aquacacheAdminPass"),
+    user = "postgres",
+    password = Sys.getenv("aquacachePostgresPass"),
 )
+
+# ITERATIVE RUN ONLY: remove this block when you no longer want each run to
+# rebuild the commentary schema from scratch.
+DBI::dbExecute(con, "DROP SCHEMA IF EXISTS commentary CASCADE;")
 
 # Create new schema 'commentary' in the database
 DBI::dbExecute(con, "CREATE SCHEMA IF NOT EXISTS commentary;")
@@ -39,7 +43,7 @@ DBI::dbExecute(
     con,
     "CREATE TABLE IF NOT EXISTS commentary.comment_categories (
     id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     description TEXT,
     created TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     created_by TEXT DEFAULT CURRENT_USER NOT NULL,
@@ -50,13 +54,25 @@ DBI::dbExecute(
 
 DBI::dbExecute(
     con,
+    "DROP TRIGGER IF EXISTS trg_user_audit ON commentary.comment_categories;"
+)
+DBI::dbExecute(
+    con,
     "create trigger trg_user_audit before update on commentary.comment_categories for each row execute function user_modified()"
+)
+DBI::dbExecute(
+    con,
+    "DROP TRIGGER IF EXISTS update_modify_time ON commentary.comment_categories;"
 )
 DBI::dbExecute(
     con,
     "create trigger update_modify_time before update on commentary.comment_categories for each row execute function update_modified()"
 )
 
+DBI::dbExecute(
+    con,
+    "DROP TRIGGER IF EXISTS update_comments_modified ON commentary.comment_categories;"
+)
 DBI::dbExecute(
     con,
     "CREATE TRIGGER update_comments_modified BEFORE UPDATE ON commentary.comment_categories FOR EACH ROW EXECUTE FUNCTION public.update_modified()"
@@ -85,6 +101,71 @@ DBI::dbExecute(
     "COMMENT ON TABLE commentary.comment_categories IS 'Table to hold categories for comments, used to classify and organize comments.';"
 )
 
+# Create table to hold author names and titles
+DBI::dbExecute(
+    con,
+    "CREATE TABLE IF NOT EXISTS commentary.authors (
+                author_id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+                first_name TEXT NOT NULL,
+                last_name TEXT NOT NULL,
+                title TEXT
+                );"
+)
+
+# Migrate existing commentary.authors schema from full-name field to split name fields
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.authors ADD COLUMN IF NOT EXISTS first_name TEXT;"
+)
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.authors ADD COLUMN IF NOT EXISTS last_name TEXT;"
+)
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.authors DROP COLUMN IF EXISTS author;"
+)
+
+DBI::dbExecute(
+    con,
+    "COMMENT ON TABLE commentary.authors IS 'Table to hold author names and titles for commentary content.';"
+)
+DBI::dbExecute(
+    con,
+    "COMMENT ON COLUMN commentary.authors.author_id IS 'Unique identifier for each author.';"
+)
+DBI::dbExecute(
+    con,
+    "COMMENT ON COLUMN commentary.authors.first_name IS 'Author first name or preferred first-name form.';"
+)
+DBI::dbExecute(
+    con,
+    "COMMENT ON COLUMN commentary.authors.last_name IS 'Author last name or surname.';"
+)
+DBI::dbExecute(
+    con,
+    "COMMENT ON COLUMN commentary.authors.title IS 'Author title or role.';"
+)
+DBI::dbExecute(
+    con,
+    "DROP INDEX IF EXISTS commentary.idx_commentary_authors_author_unique;"
+)
+DBI::dbExecute(
+    con,
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_commentary_authors_first_last_unique ON commentary.authors (first_name, last_name);"
+)
+DBI::dbExecute(
+    con,
+    "INSERT INTO commentary.authors (first_name, last_name, title) VALUES
+    ('Anthony', 'Bier', 'Hydrologist'),
+    ('EJ', 'Bercier', 'Hydrologist'),
+    ('Holly', 'Goulding', 'Senior Scientist, Hydrology'),
+    ('Tyler', 'Williams', 'Water Resources Scientist'),
+    ('Everett', 'Snieder', 'Water and Climate Data Scientist'),
+    ('Ghislain', 'de Laplante', 'Water and Climate Data Scientist')
+    ON CONFLICT (first_name, last_name) DO NOTHING;"
+)
+
 # Create table to hold text for the application
 DBI::dbExecute(
     con,
@@ -97,7 +178,11 @@ DBI::dbExecute(
                 location_id INTEGER REFERENCES public.locations(location_id),
                 comment_category_id INTEGER REFERENCES commentary.comment_categories(id),
                 public BOOLEAN NOT NULL DEFAULT FALSE,
-                author TEXT,
+                raw_author TEXT,
+                author_id INTEGER REFERENCES commentary.authors(author_id),
+                second_author_id INTEGER REFERENCES commentary.authors(author_id),
+                third_author_id INTEGER REFERENCES commentary.authors(author_id),
+                fourth_author_id INTEGER REFERENCES commentary.authors(author_id),
                 timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 created TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
                 created_by TEXT DEFAULT CURRENT_USER NOT NULL,
@@ -106,17 +191,55 @@ DBI::dbExecute(
                 );"
 )
 
+# Migrate existing commentary.comments schema from text authors to FK authors
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.comments DROP COLUMN IF EXISTS author;"
+)
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.comments ADD COLUMN IF NOT EXISTS raw_author TEXT;"
+)
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.comments ADD COLUMN IF NOT EXISTS author_id INTEGER REFERENCES commentary.authors(author_id);"
+)
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.comments ADD COLUMN IF NOT EXISTS second_author_id INTEGER REFERENCES commentary.authors(author_id);"
+)
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.comments ADD COLUMN IF NOT EXISTS third_author_id INTEGER REFERENCES commentary.authors(author_id);"
+)
+DBI::dbExecute(
+    con,
+    "ALTER TABLE commentary.comments ADD COLUMN IF NOT EXISTS fourth_author_id INTEGER REFERENCES commentary.authors(author_id);"
+)
+
 # poly on table restrict share_with
 
+DBI::dbExecute(
+    con,
+    "DROP TRIGGER IF EXISTS trg_user_audit ON commentary.comments;"
+)
 DBI::dbExecute(
     con,
     "create trigger trg_user_audit before update on commentary.comments for each row execute function user_modified()"
 )
 DBI::dbExecute(
     con,
+    "DROP TRIGGER IF EXISTS update_modify_time ON commentary.comments;"
+)
+DBI::dbExecute(
+    con,
     "create trigger update_modify_time before update on commentary.comments for each row execute function update_modified()"
 )
 
+DBI::dbExecute(
+    con,
+    "DROP TRIGGER IF EXISTS update_comments_modified ON commentary.comments;"
+)
 DBI::dbExecute(
     con,
     "CREATE TRIGGER update_comments_modified BEFORE UPDATE ON commentary.comments FOR EACH ROW EXECUTE FUNCTION public.update_modified()"
@@ -134,163 +257,105 @@ DBI::dbExecute(
 
 DBI::dbExecute(
     con,
+    "COMMENT ON COLUMN commentary.comments.raw_author IS 'Raw, unparsed author string as read from the source workbook cell.';"
+)
+DBI::dbExecute(
+    con,
     "COMMENT ON COLUMN commentary.comments.timestamp IS 'Timestamp for the comments; might differ from the created timestamp.';"
 )
 
-
 archive_dir <- "//env-fs/env-data/corp/water/Hydrology/03_Reporting/Conditions/tabular_internal_reports/Archive"
 
-folders <- list.dirs(archive_dir, full.names = FALSE, recursive = FALSE)
 
+#' Run archive comment upload workflow
+#'
+#' @param con DBI connection.
+#' @param archive_dir Character path to archive root directory.
+#' @param remaining_upload_slots Integer or Inf maximum rows to upload.
+#' @param show_progress Logical; display progress bar when TRUE.
+#'
+#' @return List containing scrape workflow results.
+#' @noRd
+run_archived_comment_upload_workflow <- function(
+    con,
+    archive_dir,
+    remaining_upload_slots = Inf,
+    show_progress = TRUE
+) {
+    comment_category_lookup <- DBI::dbGetQuery(
+        con,
+        "SELECT id, lower(name) AS category_key FROM commentary.comment_categories;"
+    )
+    comment_category_lookup$category_key <- as.character(
+        comment_category_lookup$category_key
+    )
 
-standardize_param_name <- function(name) {
-    # replace spaces with underscores and convert to lowercase
-    if (name %in% c("bridges", "bridge")) {
-        ret <- "bridges"
-    } else {
-        ret <- name
+    document_type_lookup <- DBI::dbGetQuery(
+        con,
+        "SELECT document_type_id
+         FROM files.document_types
+         WHERE lower(document_type_en) LIKE '%hydrometric%'
+            OR lower(document_type_en) LIKE '%report%'
+         ORDER BY CASE
+             WHEN lower(document_type_en) LIKE '%hydrometric%' THEN 1
+             WHEN lower(document_type_en) LIKE '%report%' THEN 2
+             ELSE 3
+         END,
+         document_type_id
+         LIMIT 1;"
+    )
+
+    if (nrow(document_type_lookup) == 0) {
+        stop(
+            "Unable to find a matching document type for HydrometricReport comments."
+        )
     }
-    return(ret)
-}
 
+    author_lookup <- DBI::dbGetQuery(
+        con,
+        "SELECT
+            author_id,
+            trim(concat_ws(' ', first_name, last_name)) AS author,
+            first_name,
+            last_name
+         FROM commentary.authors
+         ORDER BY author_id;"
+    )
+    author_lookup$author <- as.character(author_lookup$author)
 
-comments <- data.frame(
-    timestamp = as.POSIXct(character()),
-    author = character(),
-    comment = character(),
-    category = character(),
-    stringsAsFactors = FALSE
-)
-
-for (j in folders) {
-    # open workbook
-    workbook <- openxlsx::loadWorkbook(
-        paste(
-            archive_dir,
-            j,
-            paste0("HydrometricReport_", j, ".xlsx"),
-            sep = "/"
+    existing_comments <- DBI::dbGetQuery(
+        con,
+        paste0(
+            "SELECT text_en, document_type_id, comment_category_id, public, ",
+            "author_id, second_author_id, third_author_id, fourth_author_id, timestamp ",
+            "FROM commentary.comments ",
+            "WHERE document_type_id = ",
+            document_type_lookup$document_type_id[1],
+            ";"
         )
     )
-    # for each sheet in workbook
-    for (k in names(workbook)) {
-        # standardize param name to handle variations in sheet naming (e.g. "precipitation" vs "precip", "bridges" vs "bridge", etc.)
-
-        param_name <- standardize_param_name(k)
-
-        # get author name - often newer sheets only have author name in 'comments' sheet, so we'll check there if we don't find it in the current sheet
-        author_name <- as.character(openxlsx::read.xlsx(
-            workbook,
-            sheet = k,
-            rows = 1,
-            cols = 5,
-            colNames = FALSE
-        ))
-
-        # if no author name is found, check the "comments" sheet (available in newer reports) for an author name
-        if (length(author_name) == 0 && "comments" %in% names(workbook)) {
-            author_name <- as.character(openxlsx::read.xlsx(
-                workbook,
-                sheet = "comments",
-                rows = 1,
-                cols = 5,
-                colNames = FALSE
-            ))
-        }
-
-        if (length(author_name) == 0) {
-            author_name <- NA_character_
-        }
-
-        # if the sheet is "comments", look for comments in the standard location (row 3, column 13) for forecast conditions and (row 12, column 2) for current conditions
-        if (param_name == "comments") {
-            comment_text <- as.character(openxlsx::read.xlsx(
-                workbook,
-                sheet = k,
-                rows = 12,
-                cols = 2,
-                colNames = FALSE
-            ))
-            if (length(comment_text) > 0 && !all(is.na(comment_text))) {
-                comments <- rbind(
-                    comments,
-                    data.frame(
-                        timestamp = j,
-                        author = author_name,
-                        comment = comment_text,
-                        category = "current conditions",
-                        stringsAsFactors = FALSE
-                    )
-                )
-            }
-
-            comment_text <- as.character(openxlsx::read.xlsx(
-                workbook,
-                sheet = k,
-                rows = 3,
-                cols = 13,
-                colNames = FALSE
-            ))
-            if (length(comment_text) > 0 && !all(is.na(comment_text))) {
-                comments <- rbind(
-                    comments,
-                    data.frame(
-                        timestamp = j,
-                        author = author_name,
-                        comment = comment_text,
-                        category = "forecast conditions",
-                        stringsAsFactors = FALSE
-                    )
-                )
-            }
-        } else {
-            # if the sheet is not "comments", look for comments in the standard location (row 3, column 2)
-            comment_text <- as.character(openxlsx::read.xlsx(
-                workbook,
-                sheet = k,
-                rows = 3,
-                cols = 2,
-                colNames = FALSE
-            ))
-
-            if (length(comment_text) == 0) {
-                comment_text <- NA_character_
-            }
-
-            if (length(comment_text) > 0 && !all(is.na(comment_text))) {
-                comments <- rbind(
-                    comments,
-                    data.frame(
-                        timestamp = j,
-                        author = author_name,
-                        comment = comment_text,
-                        category = param_name,
-                        stringsAsFactors = FALSE
-                    )
-                )
-            }
-        }
+    existing_keys <- if (nrow(existing_comments) > 0) {
+        build_comment_key(existing_comments)
+    } else {
+        character(0)
     }
+
+    scrape_comments_from_archived_conditions(
+        archive_dir = archive_dir,
+        con = con,
+        comment_category_lookup = comment_category_lookup,
+        document_type_id = document_type_lookup$document_type_id[1],
+        author_lookup = author_lookup,
+        existing_keys = existing_keys,
+        remaining_upload_slots = remaining_upload_slots,
+        show_progress = show_progress
+    )
 }
 
-author_counts <- as.data.frame(
-    sort(table(comments$author), decreasing = TRUE),
-    stringsAsFactors = FALSE
-)
-names(author_counts) <- c("author", "n")
-author_counts <- author_counts[
-    !is.na(author_counts$author) & author_counts$author != "",
-]
 
-author_histogram <- ggplot2::ggplot(
-    author_counts,
-    ggplot2::aes(x = stats::reorder(author, n), y = n)
-) +
-    ggplot2::geom_col(fill = "#2C7FB8") +
-    ggplot2::coord_flip() +
-    ggplot2::labs(
-        title = "Comments by author",
-        x = "Author",
-        y = "Number of comments"
-    ) +
-    ggplot2::theme_minimal()
+run_archived_comment_upload_workflow(
+    con = con,
+    archive_dir = archive_dir,
+    remaining_upload_slots = Inf,
+    show_progress = TRUE
+)

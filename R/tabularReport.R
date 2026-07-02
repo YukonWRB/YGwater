@@ -325,9 +325,9 @@ tabularReport <- function(
   #Set the days for which to generate tables
   if (past < 8) {
     past <- 7
-  } else if (past >= 8 & past < 15) {
+  } else if (past >= 8 && past < 15) {
     past <- 14
-  } else if (past >= 15 & past < 22) {
+  } else if (past >= 15 && past < 22) {
     past <- 21
   } else if (past >= 22) {
     past <- 28
@@ -598,6 +598,49 @@ WITH temperature_values AS (
     AND td.datetime >= CURRENT_DATE - INTERVAL '7 day'
     AND td.datetime < CURRENT_DATE
 ),
+historical_daily_aggregates AS (
+  SELECT
+    l.location_code,
+    l.name AS location_name,
+    ts.timeseries_id,
+    td.datetime::date AS date,
+    MIN(td.value) AS daily_min,
+    AVG(td.value) AS daily_mean,
+    MAX(td.value) AS daily_max
+  FROM locations l
+  INNER JOIN timeseries ts
+    ON ts.location_id = l.location_id
+  INNER JOIN parameters p
+    ON p.parameter_id = ts.parameter_id
+  INNER JOIN locations_networks ln
+    ON ln.location_id = l.location_id
+  INNER JOIN networks n
+    ON n.network_id = ln.network_id
+  INNER JOIN measurements_continuous td
+    ON td.timeseries_id = ts.timeseries_id
+  WHERE l.name ILIKE $1
+    AND p.param_name ILIKE $2
+    AND n.name ILIKE $3
+    AND ts.record_rate = '01:00:00'
+    AND EXTRACT(YEAR FROM td.datetime) BETWEEN 1990 AND 2020
+    AND EXTRACT(DOY FROM td.datetime) = EXTRACT(DOY FROM CURRENT_DATE - INTERVAL '1 day')
+    AND NOT (
+      EXTRACT(MONTH FROM td.datetime) = 2
+      AND EXTRACT(DAY FROM td.datetime) = 29
+    )
+  GROUP BY l.location_code, l.name, ts.timeseries_id, td.datetime::date
+),
+historical_daily_stats AS (
+  SELECT
+    hda.location_code,
+    hda.location_name,
+    hda.timeseries_id,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY hda.daily_min) AS historical_daily_min,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY hda.daily_mean) AS historical_daily_mean,
+    percentile_cont(0.5) WITHIN GROUP (ORDER BY hda.daily_max) AS historical_daily_max
+  FROM historical_daily_aggregates hda
+  GROUP BY hda.location_code, hda.location_name, hda.timeseries_id
+),
 week_history AS (
   SELECT
     l.location_code,
@@ -641,6 +684,9 @@ SELECT
     WHERE v.datetime >= CURRENT_DATE - INTERVAL '1 day'
       AND v.datetime < CURRENT_DATE
   ) AS max_value,
+  ROUND(hds.historical_daily_min::numeric, 1) AS historical_daily_min,
+  ROUND(hds.historical_daily_mean::numeric, 1) AS historical_daily_mean,
+  ROUND(hds.historical_daily_max::numeric, 1) AS historical_daily_max,
   ROUND(MIN(v.value)::numeric, 1) AS week_min,
   ROUND(MAX(v.value)::numeric, 1) AS week_max,
   ROUND(AVG(v.value)::numeric, 1) AS week_mean,
@@ -649,12 +695,18 @@ SELECT
     1
   ) AS week_difference_historical_mean
 FROM temperature_values v
+LEFT JOIN historical_daily_stats hds
+  ON hds.location_code = v.location_code
+  AND hds.timeseries_id = v.timeseries_id
 LEFT JOIN week_history wh
   ON wh.location_code = v.location_code
   AND wh.timeseries_id = v.timeseries_id
 GROUP BY
   v.location_code,
   v.location_name,
+  hds.historical_daily_min,
+  hds.historical_daily_mean,
+  hds.historical_daily_max,
   wh.week_hist_mean,
   v.timeseries_id
 ORDER BY v.location_name, v.timeseries_id;
@@ -682,6 +734,15 @@ ORDER BY v.location_name, v.timeseries_id;
     names(temperature)[
       names(temperature) == "max_value"
     ] <- "y'day Tmax (\u2103)"
+    names(temperature)[
+      names(temperature) == "historical_daily_min"
+    ] <- "hist daily Tmin (\u2103)"
+    names(temperature)[
+      names(temperature) == "historical_daily_mean"
+    ] <- "hist daily Tmean (\u2103)"
+    names(temperature)[
+      names(temperature) == "historical_daily_max"
+    ] <- "hist daily Tmax (\u2103)"
     names(temperature)[names(temperature) == "week_min"] <- "1 wk Tmin (\u2103)"
     names(temperature)[names(temperature) == "week_max"] <- "1 wk Tmax (\u2103)"
     names(temperature)[
@@ -752,7 +813,7 @@ ORDER BY v.location_name, v.timeseries_id;
       if (nrow(rt) > 0) {
         level_rt[[level_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) > 0) {
+      if (nrow(rt) > 0 || nrow(daily) > 0) {
         names_level[level_locations[
           i,
           "location"
@@ -812,7 +873,7 @@ ORDER BY v.location_name, v.timeseries_id;
       if (nrow(rt) > 0) {
         flow_rt[[flow_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) > 0) {
+      if (nrow(rt) > 0 || nrow(daily) > 0) {
         names_flow[flow_locations[
           i,
           "location"
@@ -872,7 +933,7 @@ ORDER BY v.location_name, v.timeseries_id;
       if (nrow(rt) > 0) {
         snow_rt[[snow_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) > 0) {
+      if (nrow(rt) > 0 || nrow(daily) > 0) {
         names_snow[snow_locations[
           i,
           "location"
@@ -932,7 +993,7 @@ ORDER BY v.location_name, v.timeseries_id;
       if (nrow(rt) > 0) {
         bridges_rt[[bridge_locations[i, "location"]]] <- rt
       }
-      if (nrow(rt) > 0 | nrow(daily) > 0) {
+      if (nrow(rt) > 0 || nrow(daily) > 0) {
         names_bridges[bridge_locations[
           i,
           "location"
@@ -1055,7 +1116,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 7 & past <= 14) {
+      if (past > 7 && past <= 14) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -1106,7 +1167,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 14 & past <= 21) {
+      if (past > 14 && past <= 21) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -1297,7 +1358,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 7 & past <= 14) {
+    if (past > 7 && past <= 14) {
       colnames(levels) <- c(
         "Location",
         "Name",
@@ -1315,7 +1376,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 14 & past <= 21) {
+    if (past > 14 && past <= 21) {
       colnames(levels) <- c(
         "Location",
         "Name",
@@ -1451,7 +1512,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 7 & past <= 14) {
+      if (past > 7 && past <= 14) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -1501,7 +1562,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 14 & past <= 21) {
+      if (past > 14 && past <= 21) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -1676,7 +1737,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 7 & past <= 14) {
+    if (past > 7 && past <= 14) {
       colnames(flows) <- c(
         "Location",
         "Name",
@@ -1694,7 +1755,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 14 & past <= 21) {
+    if (past > 14 && past <= 21) {
       colnames(flows) <- c(
         "Location",
         "Name",
@@ -1830,7 +1891,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 7 & past <= 14) {
+      if (past > 7 && past <= 14) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -1880,7 +1941,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 14 & past <= 21) {
+      if (past > 14 && past <= 21) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -2055,7 +2116,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 7 & past <= 14) {
+    if (past > 7 && past <= 14) {
       colnames(snow) <- c(
         "Location",
         "Name",
@@ -2073,7 +2134,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 14 & past <= 21) {
+    if (past > 14 && past <= 21) {
       colnames(snow) <- c(
         "Location",
         "Name",
@@ -2222,7 +2283,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 7 & past <= 14) {
+      if (past > 7 && past <= 14) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -2280,7 +2341,7 @@ ORDER BY v.location_name, v.timeseries_id;
           )
         )
       }
-      if (past > 14 & past <= 21) {
+      if (past > 14 && past <= 21) {
         twoweek <- stats::median(
           rt[
             rt$datetime <= last_time - 60 * 60 * 335 &
@@ -2471,7 +2532,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 7 & past <= 14) {
+    if (past > 7 && past <= 14) {
       colnames(bridges) <- c(
         "Location",
         "Name",
@@ -2489,7 +2550,7 @@ ORDER BY v.location_name, v.timeseries_id;
         "Yesterday's comments"
       )
     }
-    if (past > 14 & past <= 21) {
+    if (past > 14 && past <= 21) {
       colnames(bridges) <- c(
         "Location",
         "Name",
@@ -3451,23 +3512,23 @@ ORDER BY v.location_name, v.timeseries_id;
     openxlsx::setColWidths(
       wb,
       "temperature",
-      cols = c(1:11),
-      widths = c(10, 30, 14, 14, 14, 12, 12, 12, 24, 60, 60)
+      cols = c(1:14),
+      widths = c(10, 30, 14, 14, 14, 12, 12, 12, 12, 12, 12, 12, 60, 60)
     )
-    openxlsx::addStyle(wb, "temperature", headStyle, rows = 6, cols = c(1:11))
+    openxlsx::addStyle(wb, "temperature", headStyle, rows = 6, cols = c(1:14))
     openxlsx::addStyle(
       wb,
       "temperature",
       fodCommentStyle,
       rows = 1:nrow(tables[["temperature"]]) + 6,
-      cols = 10
+      cols = 13
     )
     openxlsx::addStyle(
       wb,
       "temperature",
       yesterdayFodCommentStyle,
       rows = 1:nrow(tables[["temperature"]]) + 6,
-      cols = 11
+      cols = 14
     )
   }
 
@@ -3769,4 +3830,852 @@ ORDER BY v.location_name, v.timeseries_id;
 
   message("Tabular report created and saved at ", save_path, "\n")
   return(save_path)
+}
+
+
+#' Extract and Upload Comments
+#'
+#' Extracts comments from Excel workbook sheets and uploads them to the database.
+#'
+#' @param workbook_path Character. Path to the Excel workbook file.
+#' @param report_date Date or POSIXct. The report date to associate with comments.
+#' @param con DBI connection. Database connection object.
+#' @param comment_category_lookup Data frame. Lookup table with columns \code{id} and \code{category_key}.
+#' @param document_type_id Integer. ID of the document type to associate with comments.
+#' @param author_lookup Data frame. Lookup table for resolving author information.
+#' @param existing_keys Character vector. Keys of comments already in the database.
+#' @param remaining_upload_slots Integer. Maximum number of comments left to upload.
+#' @param chunk_size Integer. Number of records to upload per batch. Default is 500L.
+#'
+#' @return A list containing:
+#'   \item{existing_keys}{Updated character vector of existing comment keys.}
+#'   \item{remaining_upload_slots}{Updated count of remaining upload slots.}
+#'
+#' @details
+#' This function iterates through all sheets in a workbook, extracts comment text from
+#' specific cells based on sheet type, and uploads new comments to the database.
+#' Comments are identified by their content hash to avoid duplicates.
+#'
+#' @export
+extract_and_upload_comments <- function(
+  workbook_path,
+  report_date,
+  con,
+  comment_category_lookup,
+  document_type_id,
+  author_lookup,
+  existing_keys,
+  remaining_upload_slots,
+  chunk_size = 500L
+) {
+  workbook <- openxlsx::loadWorkbook(workbook_path)
+
+  comments <- data.frame(
+    timestamp = as.POSIXct(character()),
+    raw_author = character(),
+    author = character(),
+    comment = character(),
+    category = character(),
+    stringsAsFactors = FALSE
+  )
+
+  for (sheet_name in names(workbook)) {
+    param_name <- standardize_param_name(sheet_name)
+
+    author_cell_value <- openxlsx::read.xlsx(
+      workbook,
+      sheet = sheet_name,
+      rows = 1,
+      cols = 5,
+      colNames = FALSE
+    )
+    author_details <- resolve_author_details(
+      author_cell_value,
+      author_lookup
+    )
+
+    if (all(is.na(author_details$author)) && "comments" %in% names(workbook)) {
+      author_cell_value <- openxlsx::read.xlsx(
+        workbook,
+        sheet = "comments",
+        rows = 1,
+        cols = 5,
+        colNames = FALSE
+      )
+      author_details <- resolve_author_details(
+        author_cell_value,
+        author_lookup
+      )
+    }
+
+    if (length(author_details$author) == 0) {
+      author_details$author <- NA_character_
+    }
+
+    if (param_name == "comments") {
+      comment_text <- as.character(openxlsx::read.xlsx(
+        workbook,
+        sheet = sheet_name,
+        rows = 12,
+        cols = 2,
+        colNames = FALSE
+      ))
+      if (length(comment_text) > 0 && !all(is.na(comment_text))) {
+        comments <- rbind(
+          comments,
+          data.frame(
+            timestamp = report_date,
+            raw_author = author_details$raw_author,
+            author = author_details$author,
+            comment = comment_text,
+            category = "current conditions",
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+
+      comment_text <- as.character(openxlsx::read.xlsx(
+        workbook,
+        sheet = sheet_name,
+        rows = 3,
+        cols = 13,
+        colNames = FALSE
+      ))
+      if (length(comment_text) > 0 && !all(is.na(comment_text))) {
+        comments <- rbind(
+          comments,
+          data.frame(
+            timestamp = report_date,
+            raw_author = author_details$raw_author,
+            author = author_details$author,
+            comment = comment_text,
+            category = "forecast conditions",
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+    } else {
+      comment_text <- as.character(openxlsx::read.xlsx(
+        workbook,
+        sheet = sheet_name,
+        rows = 3,
+        cols = 2,
+        colNames = FALSE
+      ))
+
+      if (length(comment_text) == 0) {
+        comment_text <- NA_character_
+      }
+
+      if (length(comment_text) > 0 && !all(is.na(comment_text))) {
+        comments <- rbind(
+          comments,
+          data.frame(
+            timestamp = report_date,
+            raw_author = author_details$raw_author,
+            author = author_details$author,
+            comment = comment_text,
+            category = param_name,
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+    }
+  }
+
+  if (nrow(comments) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  comments <- unique(comments)
+  comments$timestamp <- as.POSIXct(
+    comments$timestamp,
+    format = "%Y-%m-%d",
+    tz = "UTC"
+  )
+
+  comments$category_key <- tolower(comments$category)
+  comments$category_key[
+    comments$category_key == "forecast conditions"
+  ] <- "future conditions"
+  comments$category_key[
+    comments$category_key == "current conditions"
+  ] <- "current conditions"
+  comments$comment_category_id <- comment_category_lookup$id[match(
+    comments$category_key,
+    comment_category_lookup$category_key
+  )]
+
+  missing_categories <- unique(comments$category[is.na(
+    comments$comment_category_id
+  )])
+  if (length(missing_categories) > 0) {
+    stop(
+      paste(
+        "Unable to map comment categories in",
+        basename(workbook_path),
+        ":",
+        paste(missing_categories, collapse = ", ")
+      )
+    )
+  }
+
+  author_id_matrix <- t(vapply(
+    comments$author,
+    map_author_ids,
+    FUN.VALUE = rep(NA_integer_, 4),
+    author_lookup = author_lookup,
+    max_authors = 4L
+  ))
+  colnames(author_id_matrix) <- c(
+    "author_id",
+    "second_author_id",
+    "third_author_id",
+    "fourth_author_id"
+  )
+
+  # Prevent named vectors from being interpreted as row names in data.frame
+  comments <- as.data.frame(
+    lapply(comments, function(x) {
+      names(x) <- NULL
+      x
+    }),
+    stringsAsFactors = FALSE
+  )
+
+  comments_to_upload <- data.frame(
+    text_en = comments$comment,
+    text_fr = NA_character_,
+    link = NA_character_,
+    document_type_id = document_type_id,
+    location_id = NA_integer_,
+    comment_category_id = comments$comment_category_id,
+    public = FALSE,
+    raw_author = comments$raw_author,
+    author_id = author_id_matrix[, "author_id"],
+    second_author_id = author_id_matrix[, "second_author_id"],
+    third_author_id = author_id_matrix[, "third_author_id"],
+    fourth_author_id = author_id_matrix[, "fourth_author_id"],
+    timestamp = comments$timestamp,
+    stringsAsFactors = FALSE,
+    row.names = NULL
+  )
+
+  comments_to_upload <- comments_to_upload[
+    !is.na(comments_to_upload$text_en) & nzchar(comments_to_upload$text_en),
+  ]
+  comments_to_upload <- comments_to_upload[!duplicated(comments_to_upload), ]
+
+  if (nrow(comments_to_upload) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  comment_keys <- build_comment_key(comments_to_upload)
+  comments_to_upload <- comments_to_upload[!comment_keys %in% existing_keys, ]
+
+  if (nrow(comments_to_upload) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  comments_to_upload <- utils::head(
+    comments_to_upload,
+    remaining_upload_slots
+  )
+
+  if (nrow(comments_to_upload) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  upload_batches <- split(
+    seq_len(nrow(comments_to_upload)),
+    ceiling(seq_len(nrow(comments_to_upload)) / chunk_size)
+  )
+
+  for (batch_index in seq_along(upload_batches)) {
+    DBI::dbWriteTable(
+      con,
+      DBI::Id(schema = "commentary", table = "comments"),
+      comments_to_upload[upload_batches[[batch_index]], ],
+      append = TRUE,
+      row.names = FALSE
+    )
+  }
+
+  list(
+    existing_keys = c(existing_keys, build_comment_key(comments_to_upload)),
+    remaining_upload_slots = remaining_upload_slots -
+      nrow(comments_to_upload)
+  )
+}
+
+
+#' Standardize workbook sheet category name
+#'
+#' @param name Character sheet name from archived workbook.
+#'
+#' @return Character parameter category key used by the comments workflow.
+#' @noRd
+standardize_param_name <- function(name) {
+  # replace spaces with underscores and convert to lowercase
+  if (name %in% c("bridges", "bridge")) {
+    ret <- "bridges"
+  } else {
+    ret <- name
+  }
+  return(ret)
+}
+
+#' Sanitize author names extracted from workbook cells
+#'
+#' @param author_name Character vector or scalar author text.
+#'
+#' @return Character scalar normalized author string, or NA.
+#' @noRd
+sanitize_author_name <- function(author_name) {
+  if (is.null(author_name) || length(author_name) == 0) {
+    return(NA_character_)
+  }
+
+  author_name <- as.character(author_name)
+  author_name <- author_name[!is.na(author_name)]
+  author_name <- trimws(author_name)
+  author_name <- author_name[nzchar(author_name)]
+
+  if (!length(author_name)) {
+    return(NA_character_)
+  }
+
+  parts <- split_author_names(author_name)
+
+  if (!length(parts)) {
+    return(NA_character_)
+  }
+
+  paste(parts, collapse = " and ")
+}
+
+#' Extract raw author text
+#'
+#' @param author_name Character vector or scalar author text.
+#'
+#' @return Character scalar raw author value, or NA.
+#' @noRd
+extract_raw_author_name <- function(author_name) {
+  if (is.null(author_name) || length(author_name) == 0) {
+    return(NA_character_)
+  }
+
+  raw_values <- as.character(author_name)
+  raw_values <- raw_values[!is.na(raw_values)]
+
+  if (!length(raw_values)) {
+    return(NA_character_)
+  }
+
+  raw_values[[1]]
+}
+
+#' Split author text into individual names
+#'
+#' @param author_name Character vector or scalar author text.
+#'
+#' @return Character vector of unique parsed author names.
+#' @noRd
+split_author_names <- function(author_name) {
+  if (
+    is.null(author_name) ||
+      length(author_name) == 0 ||
+      all(is.na(author_name))
+  ) {
+    return(character(0))
+  }
+
+  raw_text <- paste(as.character(author_name), collapse = " ")
+  raw_text <- gsub("[[:space:]]+", " ", raw_text)
+
+  # Parse author lists using common delimiters: and, /, \\, &
+  parts <- unlist(strsplit(
+    raw_text,
+    "(?i)\\s*(?:\\band\\b|/|\\\\|&)\\s*",
+    perl = TRUE
+  ))
+  parts <- trimws(parts)
+  parts <- parts[nzchar(parts)]
+  unique(parts)
+}
+
+#' Map author names to author IDs
+#'
+#' @param author_name Character scalar with one or multiple author names.
+#' @param author_lookup Data frame containing columns author and author_id.
+#' @param max_authors Integer maximum number of authors to map.
+#'
+#' @return Integer vector of length max_authors containing matched IDs or NA.
+#' @noRd
+map_author_ids <- function(author_name, author_lookup, max_authors = 4L) {
+  ids <- rep(NA_integer_, max_authors)
+  author_parts <- split_author_names(author_name)
+
+  if (!length(author_parts)) {
+    return(ids)
+  }
+
+  matched_ids <- author_lookup$author_id[match(
+    author_parts,
+    author_lookup$author
+  )]
+  matched_ids <- matched_ids[!is.na(matched_ids)]
+
+  if (!length(matched_ids)) {
+    return(ids)
+  }
+
+  keep_n <- min(length(matched_ids), max_authors)
+  ids[seq_len(keep_n)] <- as.integer(matched_ids[seq_len(keep_n)])
+  ids
+}
+
+#' Resolve parsed author details
+#'
+#' @param author_cell_value Character value read from workbook author cell.
+#' @param author_lookup Data frame containing columns author and author_id.
+#'
+#' @return List with raw_author, author, and author_ids.
+#' @noRd
+resolve_author_details <- function(author_cell_value, author_lookup) {
+  raw_author <- extract_raw_author_name(author_cell_value)
+  sanitized_author <- sanitize_author_name(author_cell_value)
+  author_ids <- map_author_ids(sanitized_author, author_lookup)
+
+  list(
+    raw_author = raw_author,
+    author = sanitized_author,
+    author_ids = author_ids
+  )
+}
+
+key_columns <- c(
+  "text_en",
+  "document_type_id",
+  "comment_category_id",
+  "public",
+  "author_id",
+  "second_author_id",
+  "third_author_id",
+  "fourth_author_id",
+  "timestamp"
+)
+
+#' Build deduplication key for comment rows
+#'
+#' @param data Data frame of comments upload rows.
+#'
+#' @return Character vector of row-level deduplication keys.
+#' @noRd
+build_comment_key <- function(data) {
+  apply(data[, key_columns, drop = FALSE], 1, function(row) {
+    paste(
+      ifelse(is.na(row), "<NA>", as.character(row)),
+      collapse = "||"
+    )
+  })
+}
+
+#' Extract and upload comments from one workbook
+#'
+#' @param workbook_path Character path to workbook.
+#' @param report_date Character, Date, or POSIXct report date.
+#' @param con DBI connection.
+#' @param comment_category_lookup Data frame with id and category_key.
+#' @param document_type_id Integer document type ID.
+#' @param author_lookup Data frame with author lookup values.
+#' @param existing_keys Character vector of existing dedupe keys.
+#' @param remaining_upload_slots Integer or Inf upload budget.
+#' @param chunk_size Integer batch size for dbWriteTable.
+#'
+#' @return List with updated existing_keys and remaining_upload_slots.
+#' @noRd
+extract_and_upload_comments <- function(
+  workbook_path,
+  report_date,
+  con,
+  comment_category_lookup,
+  document_type_id,
+  author_lookup,
+  existing_keys,
+  remaining_upload_slots,
+  chunk_size = 500L
+) {
+  workbook <- openxlsx::loadWorkbook(workbook_path)
+
+  comments <- data.frame(
+    timestamp = as.POSIXct(character()),
+    raw_author = character(),
+    author = character(),
+    comment = character(),
+    category = character(),
+    stringsAsFactors = FALSE
+  )
+
+  for (sheet_name in names(workbook)) {
+    param_name <- standardize_param_name(sheet_name)
+
+    author_cell_value <- openxlsx::read.xlsx(
+      workbook,
+      sheet = sheet_name,
+      rows = 1,
+      cols = 5,
+      colNames = FALSE
+    )
+    author_details <- resolve_author_details(
+      author_cell_value,
+      author_lookup
+    )
+
+    if (all(is.na(author_details$author)) && "comments" %in% names(workbook)) {
+      author_cell_value <- openxlsx::read.xlsx(
+        workbook,
+        sheet = "comments",
+        rows = 1,
+        cols = 5,
+        colNames = FALSE
+      )
+      author_details <- resolve_author_details(
+        author_cell_value,
+        author_lookup
+      )
+    }
+
+    if (length(author_details$author) == 0) {
+      author_details$author <- NA_character_
+    }
+
+    if (param_name == "comments") {
+      comment_text <- as.character(openxlsx::read.xlsx(
+        workbook,
+        sheet = sheet_name,
+        rows = 12,
+        cols = 2,
+        colNames = FALSE
+      ))
+      if (length(comment_text) > 0 && !all(is.na(comment_text))) {
+        comments <- rbind(
+          comments,
+          data.frame(
+            timestamp = report_date,
+            raw_author = author_details$raw_author,
+            author = author_details$author,
+            comment = comment_text,
+            category = "current conditions",
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+
+      comment_text <- as.character(openxlsx::read.xlsx(
+        workbook,
+        sheet = sheet_name,
+        rows = 3,
+        cols = 13,
+        colNames = FALSE
+      ))
+      if (length(comment_text) > 0 && !all(is.na(comment_text))) {
+        comments <- rbind(
+          comments,
+          data.frame(
+            timestamp = report_date,
+            raw_author = author_details$raw_author,
+            author = author_details$author,
+            comment = comment_text,
+            category = "forecast conditions",
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+    } else {
+      comment_text <- as.character(openxlsx::read.xlsx(
+        workbook,
+        sheet = sheet_name,
+        rows = 3,
+        cols = 2,
+        colNames = FALSE
+      ))
+
+      if (length(comment_text) == 0) {
+        comment_text <- NA_character_
+      }
+
+      if (length(comment_text) > 0 && !all(is.na(comment_text))) {
+        comments <- rbind(
+          comments,
+          data.frame(
+            timestamp = report_date,
+            raw_author = author_details$raw_author,
+            author = author_details$author,
+            comment = comment_text,
+            category = param_name,
+            stringsAsFactors = FALSE
+          )
+        )
+      }
+    }
+  }
+
+  if (nrow(comments) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  comments <- unique(comments)
+  comments$timestamp <- as.POSIXct(
+    comments$timestamp,
+    format = "%Y-%m-%d",
+    tz = "UTC"
+  )
+
+  comments$category_key <- tolower(comments$category)
+  comments$category_key[
+    comments$category_key == "forecast conditions"
+  ] <- "future conditions"
+  comments$category_key[
+    comments$category_key == "current conditions"
+  ] <- "current conditions"
+  comments$comment_category_id <- comment_category_lookup$id[match(
+    comments$category_key,
+    comment_category_lookup$category_key
+  )]
+
+  missing_categories <- unique(comments$category[is.na(
+    comments$comment_category_id
+  )])
+  if (length(missing_categories) > 0) {
+    stop(
+      paste(
+        "Unable to map comment categories in",
+        basename(workbook_path),
+        ":",
+        paste(missing_categories, collapse = ", ")
+      )
+    )
+  }
+
+  author_id_matrix <- t(vapply(
+    comments$author,
+    map_author_ids,
+    FUN.VALUE = rep(NA_integer_, 4),
+    author_lookup = author_lookup,
+    max_authors = 4L
+  ))
+  colnames(author_id_matrix) <- c(
+    "author_id",
+    "second_author_id",
+    "third_author_id",
+    "fourth_author_id"
+  )
+
+  comments <- as.data.frame(
+    lapply(comments, function(x) {
+      names(x) <- NULL
+      x
+    }),
+    stringsAsFactors = FALSE
+  )
+
+  comments_to_upload <- data.frame(
+    text_en = comments$comment,
+    text_fr = NA_character_,
+    link = NA_character_,
+    document_type_id = document_type_id,
+    location_id = NA_integer_,
+    comment_category_id = comments$comment_category_id,
+    public = FALSE,
+    raw_author = comments$raw_author,
+    author_id = author_id_matrix[, "author_id"],
+    second_author_id = author_id_matrix[, "second_author_id"],
+    third_author_id = author_id_matrix[, "third_author_id"],
+    fourth_author_id = author_id_matrix[, "fourth_author_id"],
+    timestamp = comments$timestamp,
+    stringsAsFactors = FALSE,
+    row.names = NULL
+  )
+
+  comments_to_upload <- comments_to_upload[
+    !is.na(comments_to_upload$text_en) & nzchar(comments_to_upload$text_en),
+  ]
+  comments_to_upload <- comments_to_upload[!duplicated(comments_to_upload), ]
+
+  if (nrow(comments_to_upload) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  comment_keys <- build_comment_key(comments_to_upload)
+  comments_to_upload <- comments_to_upload[!comment_keys %in% existing_keys, ]
+
+  if (nrow(comments_to_upload) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  if (is.finite(remaining_upload_slots)) {
+    comments_to_upload <- utils::head(
+      comments_to_upload,
+      remaining_upload_slots
+    )
+  }
+
+  if (nrow(comments_to_upload) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    ))
+  }
+
+  upload_batches <- split(
+    seq_len(nrow(comments_to_upload)),
+    ceiling(seq_len(nrow(comments_to_upload)) / chunk_size)
+  )
+
+  for (batch_index in seq_along(upload_batches)) {
+    DBI::dbWriteTable(
+      con,
+      DBI::Id(schema = "commentary", table = "comments"),
+      comments_to_upload[upload_batches[[batch_index]], ],
+      append = TRUE,
+      row.names = FALSE
+    )
+  }
+
+  list(
+    existing_keys = c(existing_keys, build_comment_key(comments_to_upload)),
+    remaining_upload_slots = if (is.finite(remaining_upload_slots)) {
+      remaining_upload_slots - nrow(comments_to_upload)
+    } else {
+      remaining_upload_slots
+    }
+  )
+}
+
+
+#' Scrape Comments From Archived Conditions
+#'
+#' Iterates through archived tabular hydrometric condition workbooks and uploads
+#' comments using \\code{extract_and_upload_comments}.
+#'
+#' @param archive_dir Character. Root archive directory that contains one
+#'   subfolder per report date.
+#' @param con DBI connection. Database connection object.
+#' @param comment_category_lookup Data frame. Lookup table with columns
+#'   \\code{id} and \\code{category_key}.
+#' @param document_type_id Integer. ID of the document type to associate with
+#'   uploaded comments.
+#' @param author_lookup Data frame. Lookup table for resolving author
+#'   information.
+#' @param existing_keys Character vector. Keys of comments already in the
+#'   database.
+#' @param remaining_upload_slots Integer. Maximum number of comments left to
+#'   upload.
+#' @param show_progress Logical. If \\code{TRUE}, displays a text progress bar.
+#'
+#' @return A list containing:
+#'   \\item{existing_keys}{Updated character vector of existing comment keys.}
+#'   \\item{remaining_upload_slots}{Updated count of remaining upload slots.}
+#'   \\item{processed_workbooks}{Integer count of archive workbooks processed.}
+#' @noRd
+scrape_comments_from_archived_conditions <- function(
+  archive_dir,
+  con,
+  comment_category_lookup,
+  document_type_id,
+  author_lookup,
+  existing_keys,
+  remaining_upload_slots,
+  show_progress = TRUE
+) {
+  folders <- list.dirs(archive_dir, full.names = FALSE, recursive = FALSE)
+  workbook_paths <- file.path(
+    archive_dir,
+    folders,
+    paste0("HydrometricReport_", folders, ".xlsx")
+  )
+  valid_workbook_idx <- which(file.exists(workbook_paths))
+  workbook_paths <- workbook_paths[valid_workbook_idx]
+  folders <- folders[valid_workbook_idx]
+
+  if (length(workbook_paths) == 0) {
+    return(list(
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots,
+      processed_workbooks = 0L
+    ))
+  }
+
+  processed_workbooks <- 0L
+  folder_progress <- NULL
+  if (isTRUE(show_progress)) {
+    folder_progress <- utils::txtProgressBar(
+      min = 0,
+      max = length(workbook_paths),
+      style = 3,
+      initial = 0
+    )
+  }
+
+  on.exit(
+    {
+      if (!is.null(folder_progress)) {
+        close(folder_progress)
+      }
+    },
+    add = TRUE
+  )
+
+  for (workbook_index in seq_along(workbook_paths)) {
+    if (remaining_upload_slots <= 0) {
+      break
+    }
+
+    upload_result <- extract_and_upload_comments(
+      workbook_path = workbook_paths[[workbook_index]],
+      report_date = folders[[workbook_index]],
+      con = con,
+      comment_category_lookup = comment_category_lookup,
+      document_type_id = document_type_id,
+      author_lookup = author_lookup,
+      existing_keys = existing_keys,
+      remaining_upload_slots = remaining_upload_slots
+    )
+
+    existing_keys <- upload_result$existing_keys
+    remaining_upload_slots <- upload_result$remaining_upload_slots
+    processed_workbooks <- processed_workbooks + 1L
+
+    if (!is.null(folder_progress)) {
+      utils::setTxtProgressBar(folder_progress, workbook_index)
+    }
+  }
+
+  list(
+    existing_keys = existing_keys,
+    remaining_upload_slots = remaining_upload_slots,
+    processed_workbooks = processed_workbooks
+  )
 }

@@ -3,6 +3,55 @@
 #' @description
 #' This function retrieves raster data from a PostGIS-enabled database and returns it as a terra object. It allows for filtering of the raster data using SQL clauses, spatial boundaries, and selection of specific raster bands.
 #'
+#' @param raster_reference_ids A vector of raster reference IDs to filter the raster data and return the results. For example, c(1, 2, 3). If NULL, all raster data is returned.
+#' @param boundary Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector c(top, bottom, right, left) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.
+#' @param bands The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.
+#' @param tbl_name The name of the schema and table containing the raster data. Default is c("spatial", "rasters").
+#' @param col_name The name of the column containing the raster data. Default is "rast".
+#' @param con A connection to the target database. If NULL, a new connection is created using [AquaConnect()] and automatically closed when the function exits.
+#' @param stack Logical indicating whether to stack the retrieved rasters into a single terra::rast object. Default is TRUE.
+#' @return A terra::rast or list of terra::rast objects containing the raster data.
+#' @export
+#'
+
+getRasters <- function(
+  raster_reference_ids = NULL,
+  boundary = NULL,
+  bands = 1,
+  tbl_name = c("spatial", "rasters"),
+  col_name = "rast",
+  con = NULL,
+  stack = TRUE
+) {
+  for (raster_count in raster_reference_ids) {
+    clauses <- paste0("WHERE reference_id = ", raster_count)
+    # print(clauses)
+    rast <- getRaster(
+      clauses = clauses,
+      boundary = boundary,
+      tbl_name = tbl_name,
+      col_name = col_name,
+      bands = bands,
+      con = con
+    )
+    if (raster_count == raster_reference_ids[1]) {
+      rb <- rast
+    } else {
+      rb <- c(rb, rast)
+    }
+  }
+  if (stack) {
+    rb <- terra::rast(rb)
+  }
+  return(rb)
+}
+
+
+#' Retrieve raster files from the database
+#'
+#' @description
+#' This function retrieves raster data from a PostGIS-enabled database and returns it as a terra object. It allows for filtering of the raster data using SQL clauses, spatial boundaries, and selection of specific raster bands.
+#'
 #' @param clauses Character SQL clauses to filter the raster data and return the results. Must begin with 'WHERE' and be formatted as a valid SQL WHERE clause. For example, 'WHERE reference_id = 1'. If NULL, all raster data is returned.
 #' @param boundary Optional spatial boundary to limit the extent of the raster data returned, as a terra::spatVector object or a numeric vector c(top, bottom, right, left) indicating the projection-specific limits with which to clip the raste (by default, decimal degree lat/long).  If NULL, the full extent of the raster data is returned.
 #' @param bands The raster bands to return. Default is 1, which returns the first band of the raster data. If you want to return all bands, set this to TRUE.
@@ -93,7 +142,11 @@ getRaster <- function(
   name1 <- dbTableNameFix(con, tbl_name)
 
   nameque <- paste(name1, collapse = ".")
-  namechar <- gsub("'", "''", paste(gsub("^\"|\"$", "", name1), collapse = "."))
+  namechar <- gsub(
+    "'",
+    "''",
+    paste(gsub("^\"|\"$", "", name1), collapse = ".")
+  )
   rastque <- DBI::dbQuoteIdentifier(con, col_name)
   clauses2 <- sub("^where", "AND", clauses, ignore.case = TRUE)
   tmp.query <- paste0(
