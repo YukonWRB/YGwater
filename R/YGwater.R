@@ -64,6 +64,10 @@ YGwater <- function(
   rlang::check_installed("htmlwidgets", reason = "to use YGwater app")
   rlang::check_installed("jsonlite", reason = "to use YGwater app")
   rlang::check_installed(
+    "rmarkdown",
+    reason = "to use report modules in YGwater app"
+  )
+  rlang::check_installed(
     "base64enc",
     reason = "to create base64-encoded plot images"
   )
