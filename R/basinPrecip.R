@@ -278,18 +278,22 @@ basinPrecip <- function(
         if (nrow(hrdpa_refs) > 0) {
           # Build clause using reference IDs and their valid times
           ref_ids <- paste0("'", hrdpa_refs$reference_id, "'", collapse = ", ")
-          clauses_hrdpa <- paste0(
-            "WHERE reference_id IN (",
-            ref_ids,
-            ")"
-          )
+          # clauses_hrdpa <- paste0(
+          #   "WHERE reference_id IN (",
+          #   ref_ids,
+          #   ")"
+          # )
 
-          hrdpa_rasters_db <- getRaster(
-            clauses = clauses_hrdpa,
+          hrdpa_rasters_db <- getRasters(
+            raster_reference_ids = hrdpa_refs$reference_id,
             tbl_name = c("spatial", "rasters"),
             col_name = "rast",
-            con = con
+            con = con,
+            stack = FALSE
           )
+
+          # print(hrdpa_rasters_db)
+
           if (!is.null(hrdpa_rasters_db)) {
             hrdpa_files <- list(hrdpa_rasters_db)
             actual_times_hrdpa <- c(
@@ -362,18 +366,23 @@ basinPrecip <- function(
             ")"
           )
 
-          forecast_precip <- getRaster(
-            clauses = clauses_hrdps,
+          forecast_precip <- getRasters(
+            raster_reference_ids = hrdps_refs$reference_id,
             tbl_name = c("spatial", "rasters"),
             col_name = "rast",
-            con = con
+            con = con,
+            stack = FALSE
           )
           if (!is.null(forecast_precip)) {
             forecast_precip <- terra::project(
               forecast_precip,
               "+proj=longlat +EPSG:3347"
             )
-            names(forecast_precip) <- "precip"
+
+            names(forecast_precip) <- rep(
+              "precip",
+              terra::nlyr(forecast_precip)
+            )
             actual_times_hrdps <- c(
               min(hrdps_refs$valid_from),
               max(hrdps_refs$valid_to)
@@ -411,18 +420,19 @@ basinPrecip <- function(
 
     tryCatch(
       {
-        forecast_precip <- getRaster(
-          clauses = clauses_hrdps,
+        forecast_precip <- getRasters(
+          raster_reference_ids = hrdps_refs$reference_id,
           tbl_name = c("rasters", "precipitations"),
           col_name = "rast",
-          con = con
+          con = con,
+          stack = FALSE
         )
         if (!is.null(forecast_precip)) {
           forecast_precip <- terra::project(
             forecast_precip,
             "+proj=longlat +EPSG:3347"
           )
-          names(forecast_precip) <- "precip"
+          names(forecast_precip) <- rep("precip", terra::nlyr(forecast_precip))
           actual_times_hrdps <- c(start_hrdps, end_hrdps)
         } else {
           hrdps <- FALSE
@@ -476,7 +486,8 @@ basinPrecip <- function(
     } else {
       cli::cli_abort("No HRDPA rasters available for the requested time range.")
     }
-    names(total) <- "precip"
+    names(total) <- rep("precip", terra::nlyr(total))
+
     total <- terra::project(total, "+proj=longlat +EPSG:3347")
     actual_times <- actual_times_hrdpa
   }
@@ -527,7 +538,7 @@ basinPrecip <- function(
     } else {
       cli::cli_abort("No HRDPA rasters available for the requested time range.")
     }
-    names(total_hrdpa) <- "precip"
+    names(total_hrdpa) <- rep("precip", terra::nlyr(total_hrdpa))
     total_hrdpa <- terra::project(total_hrdpa, "+proj=longlat +EPSG:3347")
     actual_times <- c(min(actual_times_hrdpa), max(actual_times_hrdps))
 

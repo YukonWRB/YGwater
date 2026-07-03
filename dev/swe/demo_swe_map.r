@@ -8,21 +8,38 @@ con <- YGwater::AquaConnect(
     password = Sys.getenv("aquacacheAdminPass"),
 )
 
+location <- "09BC001"
 
-i <- "08AA003"
-ok <- basinPrecip(
-    location = i,
-    start = Sys.time() - 60 * 60 * 24 * 7,
+two_day_rain <- basinPrecip(
+    location = location,
+    start = Sys.time() - 60 * 60 * 24 * 2,
     end = Sys.time(),
     silent = TRUE,
     map = FALSE,
     con = con
 )
 
+
+raster_ids <- "
+    SELECT 
+        r.reference_id,
+        rr.valid_from as datetime
+    FROM spatial.raster_series_index rsi
+    JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
+    JOIN spatial.rasters r ON r.reference_id = rr.reference_id
+    WHERE rsi.model = 'HRDPS'
+    ORDER BY rr.valid_from, r.reference_id"
+raster_ids <- DBI::dbGetQuery(con, raster_ids)
+
+rid <- raster_ids[length(raster_ids$reference_id) - 1, ]$reference_id
+
+raster <- getRaster(clauses = paste0("WHERE reference_id = ", rid), con = con)
+terra::plot(raster)
+
+
 tabularReport(
     save_path = "C:\\Users\\esniede\\Documents",
     archive_path = NULL,
-    precip_locations = NULL,
     snow_locations = NULL,
     flow_locations = NULL
 )
@@ -293,29 +310,55 @@ get_today_percentile <- function(
     param_name,
     station_name,
     con,
-    start_year = 1991,
+    start_year = 1990,
     end_year = 2020,
     query_date = Sys.Date()
 ) {
+    query_date <- as.Date(query_date)
     today_doy <- lubridate::yday(query_date)
 
     query_hist <- sprintf(
         "
-        SELECT
-            m.value,
-            EXTRACT(DOY FROM m.date) AS doy,
-            m.date
-        FROM measurements_calculated_daily_corrected m
-            INNER JOIN timeseries ts ON m.timeseries_id = ts.timeseries_id
+        WITH requested_timeseries AS (
+            SELECT
+                ts.timeseries_id,
+                COALESCE(at.aggregation_type, 'mean') AS aggregation_type
+            FROM timeseries ts
             INNER JOIN locations l ON ts.location_id = l.location_id
             INNER JOIN parameters p ON ts.parameter_id = p.parameter_id
-        WHERE l.name = '%s'
-          AND p.param_name = '%s'
-          AND m.date >= '%d-01-01'
-          AND m.date <= '%d-12-31'
-          AND m.value IS NOT NULL
-          AND EXTRACT(DOY FROM m.date) = %d
-          AND NOT (EXTRACT(MONTH FROM m.date) = 2 AND EXTRACT(DAY FROM m.date) = 29)
+            LEFT JOIN aggregation_types at ON ts.aggregation_type_id = at.aggregation_type_id
+            WHERE l.name = '%s'
+              AND p.param_name = '%s'
+            ORDER BY ts.timeseries_id DESC
+            LIMIT 1
+        ),
+        daily_values AS (
+            SELECT
+                m.datetime::date AS date,
+                CASE
+                    WHEN rt.aggregation_type = 'sum' THEN SUM(m.value_corrected)
+                    WHEN rt.aggregation_type = 'median' THEN percentile_cont(0.5) WITHIN GROUP (ORDER BY m.value_corrected)
+                    WHEN rt.aggregation_type IN ('min', 'minimum') THEN MIN(m.value_corrected)
+                    WHEN rt.aggregation_type IN ('max', 'maximum') THEN MAX(m.value_corrected)
+                    WHEN rt.aggregation_type = '(min+max)/2' THEN (MIN(m.value_corrected) + MAX(m.value_corrected)) / 2.0
+                    ELSE AVG(m.value_corrected)
+                END AS value
+            FROM requested_timeseries rt
+            INNER JOIN LATERAL continuous.measurements_continuous_corrected(
+                rt.timeseries_id,
+                '%d-01-01'::timestamptz,
+                '%d-12-31 23:59:59'::timestamptz
+            ) m ON TRUE
+            WHERE m.value_corrected IS NOT NULL
+            GROUP BY m.datetime::date, rt.aggregation_type
+        )
+        SELECT
+            dv.value,
+            EXTRACT(DOY FROM dv.date) AS doy,
+            dv.date
+        FROM daily_values dv
+        WHERE EXTRACT(DOY FROM dv.date) = %d
+          AND NOT (EXTRACT(MONTH FROM dv.date) = 2 AND EXTRACT(DAY FROM dv.date) = 29)
         ",
         station_name,
         param_name,
@@ -328,20 +371,59 @@ get_today_percentile <- function(
     # Get the most recent available value up to and including query_date
     query_today <- sprintf(
         "
-        SELECT m.value, l.longitude, l.latitude, l.location_code, m.date
-        FROM measurements_calculated_daily_corrected m
-            INNER JOIN timeseries ts ON m.timeseries_id = ts.timeseries_id
+        WITH requested_timeseries AS (
+            SELECT
+                ts.timeseries_id,
+                COALESCE(at.aggregation_type, 'mean') AS aggregation_type,
+                l.longitude,
+                l.latitude,
+                l.location_code
+            FROM timeseries ts
             INNER JOIN locations l ON ts.location_id = l.location_id
             INNER JOIN parameters p ON ts.parameter_id = p.parameter_id
-        WHERE l.name = '%s'
-          AND p.param_name = '%s'
-          AND m.value IS NOT NULL
-          AND m.date <= '%s'
-        ORDER BY m.date DESC
+            LEFT JOIN aggregation_types at ON ts.aggregation_type_id = at.aggregation_type_id
+            WHERE l.name = '%s'
+              AND p.param_name = '%s'
+            ORDER BY ts.timeseries_id DESC
+            LIMIT 1
+        ),
+        daily_values AS (
+            SELECT
+                m.datetime::date AS date,
+                CASE
+                    WHEN rt.aggregation_type = 'sum' THEN SUM(m.value_corrected)
+                    WHEN rt.aggregation_type = 'median' THEN percentile_cont(0.5) WITHIN GROUP (ORDER BY m.value_corrected)
+                    WHEN rt.aggregation_type IN ('min', 'minimum') THEN MIN(m.value_corrected)
+                    WHEN rt.aggregation_type IN ('max', 'maximum') THEN MAX(m.value_corrected)
+                    WHEN rt.aggregation_type = '(min+max)/2' THEN (MIN(m.value_corrected) + MAX(m.value_corrected)) / 2.0
+                    ELSE AVG(m.value_corrected)
+                END AS value,
+                rt.longitude,
+                rt.latitude,
+                rt.location_code
+            FROM requested_timeseries rt
+            INNER JOIN LATERAL continuous.measurements_continuous_corrected(
+                rt.timeseries_id,
+                NULL::timestamptz,
+                '%s 23:59:59'::timestamptz
+            ) m ON TRUE
+            WHERE m.value_corrected IS NOT NULL
+            GROUP BY m.datetime::date, rt.aggregation_type, rt.longitude, rt.latitude, rt.location_code
+        )
+        SELECT
+            dv.value,
+            dv.longitude,
+            dv.latitude,
+            dv.location_code,
+            dv.date
+        FROM daily_values dv
+        WHERE dv.date <= '%s'::date
+        ORDER BY dv.date DESC
         LIMIT 1
         ",
         station_name,
         param_name,
+        query_date,
         query_date
     )
     today_res <- DBI::dbGetQuery(con, query_today)
@@ -363,36 +445,76 @@ get_today_percentile <- function(
     )
 }
 
-for (i in seq_len(nrow(station_dt))) {
-    res <- get_today_percentile(
-        param_name = station_dt$parameter[i],
-        station_name = station_dt$name[i],
-        con = con,
-        query_date = "2026-04-01"
-    )
-    station_dt$date[i] <- res$date
-    station_dt$percentile[i] <- res$percentile
-    station_dt$value[i] <- if (
-        !is.null(res$today_value) && length(res$today_value) > 0
-    ) {
-        res$today_value
-    } else {
-        NA
+get_station_percentiles <- function(
+    stations,
+    con,
+    query_date = Sys.Date(),
+    start_year = 1990,
+    end_year = 2020
+) {
+    stations <- data.table::as.data.table(stations)
+
+    if (!all(c("name", "parameter") %in% names(stations))) {
+        stop("stations must include columns 'name' and 'parameter'")
     }
-    station_dt$longitude[i] <- if (!is.null(res$longitude)) {
-        res$longitude
-    } else {
-        NA
+
+    stations[, `:=`(
+        longitude = NA_real_,
+        latitude = NA_real_,
+        percentile = NA_real_,
+        date = as.Date(NA),
+        value = NA_real_,
+        historical_median = NA_real_
+    )]
+
+    for (i in seq_len(nrow(stations))) {
+        res <- get_today_percentile(
+            param_name = stations$parameter[i],
+            station_name = stations$name[i],
+            con = con,
+            start_year = start_year,
+            end_year = end_year,
+            query_date = query_date
+        )
+
+        stations$date[i] <- res$date
+        stations$percentile[i] <- res$percentile
+        stations$value[i] <- if (
+            !is.null(res$today_value) && length(res$today_value) > 0
+        ) {
+            res$today_value
+        } else {
+            NA
+        }
+        stations$longitude[i] <- if (!is.null(res$longitude)) {
+            res$longitude
+        } else {
+            NA
+        }
+        stations$latitude[i] <- if (!is.null(res$latitude)) {
+            res$latitude
+        } else {
+            NA
+        }
+        stations$historical_median[i] <- if (
+            !is.null(res$hist_values) && length(res$hist_values) > 0
+        ) {
+            median(res$hist_values, na.rm = TRUE)
+        } else {
+            NA
+        }
     }
-    station_dt$latitude[i] <- if (!is.null(res$latitude)) res$latitude else NA
-    station_dt$historical_median[i] <- if (
-        !is.null(res$hist_values) && length(res$hist_values) > 0
-    ) {
-        median(res$hist_values, na.rm = TRUE)
-    } else {
-        NA
-    }
+
+    stations[]
 }
+
+station_dt <- get_station_percentiles(
+    stations = station_dt[, .(name, parameter)],
+    con = con,
+    query_date = as.Date("2026-04-01"),
+    start_year = 1990,
+    end_year = 2020
+)
 
 library(ggplot2)
 library(sf)
@@ -414,7 +536,7 @@ stations_sf_transformed$y <- st_coordinates(stations_sf_transformed)[, 2]
 # Plot with symbol based on parameter
 
 shps <- load_bulletin_shapefiles(con = con, epsg = 3579)
-shp
+
 
 library(scales)
 
