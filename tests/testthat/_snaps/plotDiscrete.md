@@ -5,12 +5,15 @@
     Output
       [[1]]
       [[1]]$x
-      [1] "2023-06-01 UTC"
+      [1] "2023-06-02 UTC"
       
       [[1]]$y
       [1] -Inf
       attr(,"apiSrc")
       [1] TRUE
+      
+      [[1]]$type
+      [1] "scatter"
       
       [[1]]$mode
       [1] "markers"
@@ -50,10 +53,7 @@
       [1] "text"
       
       [[1]]$text
-      [1] "Haggart Ck Below Eagle Ck <br> 2023-06-01 <br>  -Inf mg/L    "
-      
-      [[1]]$type
-      [1] "scatter"
+      [1] "Haggart Ck Below Eagle Ck <br> 2023-06-02 <br>  -Inf mg/L           "
       
       [[1]]$name
       [1] "Haggart Ck Below Eagle Ck"
@@ -96,11 +96,11 @@
       [[2]]
       [[2]]$x
        [1] "2023-06-17 UTC" "2023-06-22 UTC" "2023-06-23 UTC" "2023-06-24 UTC"
-       [5] "2023-06-25 UTC" "2023-06-01 UTC" "2023-06-04 UTC" "2023-06-03 UTC"
-       [9] "2023-06-02 UTC" "2023-06-09 UTC" "2023-06-07 UTC" "2023-06-05 UTC"
-      [13] "2023-06-08 UTC" "2023-06-14 UTC" "2023-06-12 UTC" "2023-06-06 UTC"
-      [17] "2023-06-18 UTC" "2023-06-20 UTC" "2023-06-15 UTC" "2023-06-13 UTC"
-      [21] "2023-06-10 UTC" "2023-06-21 UTC" "2023-06-11 UTC" "2023-06-16 UTC"
+       [5] "2023-06-25 UTC" "2023-06-04 UTC" "2023-06-03 UTC" "2023-06-02 UTC"
+       [9] "2023-06-09 UTC" "2023-06-07 UTC" "2023-06-05 UTC" "2023-06-08 UTC"
+      [13] "2023-06-14 UTC" "2023-06-12 UTC" "2023-06-06 UTC" "2023-06-18 UTC"
+      [17] "2023-06-20 UTC" "2023-06-15 UTC" "2023-06-13 UTC" "2023-06-10 UTC"
+      [21] "2023-07-01 UTC" "2023-06-21 UTC" "2023-06-11 UTC" "2023-06-16 UTC"
       [25] "2023-06-19 UTC"
       
       [[2]]$y
@@ -110,15 +110,15 @@
       attr(,"apiSrc")
       [1] TRUE
       
+      [[2]]$type
+      [1] "scatter"
+      
       [[2]]$mode
       [1] "markers"
       
       [[2]]$legendgroup
       [1] Haggart Ck Below Eagle Ck
       Levels: Haggart Ck Below Eagle Ck
-      
-      [[2]]$showlegend
-      [1] FALSE
       
       [[2]]$marker
       [[2]]$marker$color
@@ -137,14 +137,15 @@
       
       [[2]]$marker$line
       [[2]]$marker$line$color
-      [1] "rgba(255,0,0,1)"
-      attr(,"class")
-      [1] "plotly_default" "character"     
+      list()
       
       [[2]]$marker$line$width
       [1] 1
       
       
+      
+      [[2]]$showlegend
+      [1] FALSE
       
       [[2]]$hoverinfo
        [1] "text" "text" "text" "text" "text" "text" "text" "text" "text" "text"
@@ -154,36 +155,33 @@
       [1] TRUE
       
       [[2]]$text
-       [1] "Haggart Ck Below Eagle Ck <br> 2023-06-17 <br>  < DL of 0.005 mg/L    "
-       [2] "Haggart Ck Below Eagle Ck <br> 2023-06-22 <br>  < DL of 0.005 mg/L    "
-       [3] "Haggart Ck Below Eagle Ck <br> 2023-06-23 <br>  < DL of 0.005 mg/L    "
-       [4] "Haggart Ck Below Eagle Ck <br> 2023-06-24 <br>  < DL of 0.005 mg/L    "
-       [5] "Haggart Ck Below Eagle Ck <br> 2023-06-25 <br>  < DL of 0.005 mg/L    "
-       [6] "Haggart Ck Below Eagle Ck <br> 2023-06-01 <br>  < DL of 0.005 mg/L    "
-       [7] "Haggart Ck Below Eagle Ck <br> 2023-06-04 <br>  < DL of 0.005 mg/L    "
-       [8] "Haggart Ck Below Eagle Ck <br> 2023-06-03 <br>  < DL of 0.005 mg/L    "
-       [9] "Haggart Ck Below Eagle Ck <br> 2023-06-02 <br>  < DL of 0.005 mg/L    "
-      [10] "Haggart Ck Below Eagle Ck <br> 2023-06-09 <br>  < DL of 0.005 mg/L    "
-      [11] "Haggart Ck Below Eagle Ck <br> 2023-06-07 <br>  < DL of 0.005 mg/L    "
-      [12] "Haggart Ck Below Eagle Ck <br> 2023-06-05 <br>  < DL of 0.005 mg/L    "
-      [13] "Haggart Ck Below Eagle Ck <br> 2023-06-08 <br>  < DL of 0.005 mg/L    "
-      [14] "Haggart Ck Below Eagle Ck <br> 2023-06-14 <br>  < DL of 0.005 mg/L    "
-      [15] "Haggart Ck Below Eagle Ck <br> 2023-06-12 <br>  < DL of 0.005 mg/L    "
-      [16] "Haggart Ck Below Eagle Ck <br> 2023-06-06 <br>  < DL of 0.005 mg/L    "
-      [17] "Haggart Ck Below Eagle Ck <br> 2023-06-18 <br>  < DL of 0.005 mg/L    "
-      [18] "Haggart Ck Below Eagle Ck <br> 2023-06-20 <br>  < DL of 0.005 mg/L    "
-      [19] "Haggart Ck Below Eagle Ck <br> 2023-06-15 <br>  < DL of 0.005 mg/L    "
-      [20] "Haggart Ck Below Eagle Ck <br> 2023-06-13 <br>  < DL of 0.005 mg/L    "
-      [21] "Haggart Ck Below Eagle Ck <br> 2023-06-10 <br>  < DL of 0.005 mg/L    "
-      [22] "Haggart Ck Below Eagle Ck <br> 2023-06-21 <br>  < DL of 0.005 mg/L    "
-      [23] "Haggart Ck Below Eagle Ck <br> 2023-06-11 <br>  < DL of 0.005 mg/L    "
-      [24] "Haggart Ck Below Eagle Ck <br> 2023-06-16 <br>  < DL of 0.005 mg/L    "
-      [25] "Haggart Ck Below Eagle Ck <br> 2023-06-19 <br>  < DL of 0.005 mg/L    "
+       [1] "Haggart Ck Below Eagle Ck <br> 2023-06-17 <br>  < DL of 0.005 mg/L           "
+       [2] "Haggart Ck Below Eagle Ck <br> 2023-06-22 <br>  < DL of 0.005 mg/L           "
+       [3] "Haggart Ck Below Eagle Ck <br> 2023-06-23 <br>  < DL of 0.005 mg/L           "
+       [4] "Haggart Ck Below Eagle Ck <br> 2023-06-24 <br>  < DL of 0.005 mg/L           "
+       [5] "Haggart Ck Below Eagle Ck <br> 2023-06-25 <br>  < DL of 0.005 mg/L           "
+       [6] "Haggart Ck Below Eagle Ck <br> 2023-06-04 <br>  < DL of 0.005 mg/L           "
+       [7] "Haggart Ck Below Eagle Ck <br> 2023-06-03 <br>  < DL of 0.005 mg/L           "
+       [8] "Haggart Ck Below Eagle Ck <br> 2023-06-02 <br>  < DL of 0.005 mg/L           "
+       [9] "Haggart Ck Below Eagle Ck <br> 2023-06-09 <br>  < DL of 0.005 mg/L           "
+      [10] "Haggart Ck Below Eagle Ck <br> 2023-06-07 <br>  < DL of 0.005 mg/L           "
+      [11] "Haggart Ck Below Eagle Ck <br> 2023-06-05 <br>  < DL of 0.005 mg/L           "
+      [12] "Haggart Ck Below Eagle Ck <br> 2023-06-08 <br>  < DL of 0.005 mg/L           "
+      [13] "Haggart Ck Below Eagle Ck <br> 2023-06-14 <br>  < DL of 0.005 mg/L           "
+      [14] "Haggart Ck Below Eagle Ck <br> 2023-06-12 <br>  < DL of 0.005 mg/L           "
+      [15] "Haggart Ck Below Eagle Ck <br> 2023-06-06 <br>  < DL of 0.005 mg/L           "
+      [16] "Haggart Ck Below Eagle Ck <br> 2023-06-18 <br>  < DL of 0.005 mg/L           "
+      [17] "Haggart Ck Below Eagle Ck <br> 2023-06-20 <br>  < DL of 0.005 mg/L           "
+      [18] "Haggart Ck Below Eagle Ck <br> 2023-06-15 <br>  < DL of 0.005 mg/L           "
+      [19] "Haggart Ck Below Eagle Ck <br> 2023-06-13 <br>  < DL of 0.005 mg/L           "
+      [20] "Haggart Ck Below Eagle Ck <br> 2023-06-10 <br>  < DL of 0.005 mg/L           "
+      [21] "Haggart Ck Below Eagle Ck <br> 2023-07-01 <br>  < DL of 0.005 mg/L           "
+      [22] "Haggart Ck Below Eagle Ck <br> 2023-06-21 <br>  < DL of 0.005 mg/L           "
+      [23] "Haggart Ck Below Eagle Ck <br> 2023-06-11 <br>  < DL of 0.005 mg/L           "
+      [24] "Haggart Ck Below Eagle Ck <br> 2023-06-16 <br>  < DL of 0.005 mg/L           "
+      [25] "Haggart Ck Below Eagle Ck <br> 2023-06-19 <br>  < DL of 0.005 mg/L           "
       attr(,"apiSrc")
       [1] TRUE
-      
-      [[2]]$type
-      [1] "scatter"
       
       [[2]]$name
       [1] "Haggart Ck Below Eagle Ck"
@@ -225,12 +223,15 @@
       
       [[3]]
       [[3]]$x
-      [1] "2023-06-05 UTC" "2023-06-19 UTC" "2023-06-12 UTC"
+      [1] "2023-06-05 UTC" "2023-06-12 UTC" "2023-06-19 UTC" "2023-07-01 UTC"
       
       [[3]]$y
-      [1] 0.00017 0.00014 0.00018
+      [1] 0.00017 0.00018 0.00014 0.00031
       attr(,"apiSrc")
       [1] TRUE
+      
+      [[3]]$type
+      [1] "scatter"
       
       [[3]]$mode
       [1] "markers"
@@ -267,19 +268,17 @@
       
       
       [[3]]$hoverinfo
-      [1] "text" "text" "text"
+      [1] "text" "text" "text" "text"
       attr(,"apiSrc")
       [1] TRUE
       
       [[3]]$text
-      [1] "Haggart Ck Below Eagle Ck <br> 2023-06-05 <br>  0.00017 mg/L    "
-      [2] "Haggart Ck Below Eagle Ck <br> 2023-06-19 <br>  0.00014 mg/L    "
-      [3] "Haggart Ck Below Eagle Ck <br> 2023-06-12 <br>  0.00018 mg/L    "
+      [1] "Haggart Ck Below Eagle Ck <br> 2023-06-05 <br>  0.00017 mg/L           "
+      [2] "Haggart Ck Below Eagle Ck <br> 2023-06-12 <br>  0.00018 mg/L           "
+      [3] "Haggart Ck Below Eagle Ck <br> 2023-06-19 <br>  0.00014 mg/L           "
+      [4] "Haggart Ck Below Eagle Ck <br> 2023-07-01 <br>  0.00031 mg/L           "
       attr(,"apiSrc")
       [1] TRUE
-      
-      [[3]]$type
-      [1] "scatter"
       
       [[3]]$name
       [1] "Haggart Ck Below Eagle Ck"
@@ -321,12 +320,15 @@
       
       [[4]]
       [[4]]$x
-      [1] "2023-06-05 UTC" "2023-06-12 UTC" "2023-06-19 UTC"
+      [1] "2023-06-05 UTC" "2023-06-19 UTC" "2023-07-01 UTC" "2023-06-12 UTC"
       
       [[4]]$y
-      [1] 0.00067 0.00063 0.00054
+      [1] 0.00067 0.00054 0.00141 0.00063
       attr(,"apiSrc")
       [1] TRUE
+      
+      [[4]]$type
+      [1] "scatter"
       
       [[4]]$mode
       [1] "markers"
@@ -363,19 +365,17 @@
       
       
       [[4]]$hoverinfo
-      [1] "text" "text" "text"
+      [1] "text" "text" "text" "text"
       attr(,"apiSrc")
       [1] TRUE
       
       [[4]]$text
-      [1] "Haggart Ck Below Eagle Ck <br> 2023-06-05 <br>  0.00067 mg/L    "
-      [2] "Haggart Ck Below Eagle Ck <br> 2023-06-12 <br>  0.00063 mg/L    "
-      [3] "Haggart Ck Below Eagle Ck <br> 2023-06-19 <br>  0.00054 mg/L    "
+      [1] "Haggart Ck Below Eagle Ck <br> 2023-06-05 <br>  0.00067 mg/L           "
+      [2] "Haggart Ck Below Eagle Ck <br> 2023-06-19 <br>  0.00054 mg/L           "
+      [3] "Haggart Ck Below Eagle Ck <br> 2023-07-01 <br>  0.00141 mg/L           "
+      [4] "Haggart Ck Below Eagle Ck <br> 2023-06-12 <br>  0.00063 mg/L           "
       attr(,"apiSrc")
       [1] TRUE
-      
-      [[4]]$type
-      [1] "scatter"
       
       [[4]]$name
       [1] "Haggart Ck Below Eagle Ck"
