@@ -60,14 +60,14 @@ chooseWeather <-
       reason = "to update dependencies for this function."
     )
     if (!rlang::is_installed("weathercan")) {
-      #This is here because getWeather is not a 'depends' of this package; it is only necessary for this function and is therefore in "suggests"
+      # This is here because weathercan is only necessary for this function.
       message("Installing dependency 'weathercan'...")
       remotes::install_github("ropensci/weathercan")
       if (rlang::is_installed("weathercan")) {
         message("Package weathercan successfully installed.")
       } else {
         stop(
-          "Failed to install package weathercan. You could troubleshoot by running 'remotes::install_github('ropensci/weathercan')' by itself."
+          "Failed to install package weathercan. You could troubleshoot by running remotes::install_github('ropensci/weathercan') by itself."
         )
       }
     }

@@ -74,6 +74,10 @@ freshetReport <-
       "knitr",
       reason = "necessary to create a report using Rmarkdown."
     )
+    rlang::check_installed(
+      "rmarkdown",
+      reason = "necessary to render the report."
+    )
     rlang::check_installed("purrr", reason = "necessary for the report to run.")
 
     #####Selection of image path and save path#####

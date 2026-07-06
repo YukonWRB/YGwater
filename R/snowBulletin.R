@@ -61,6 +61,10 @@ snowBulletin <- function(
     reason = "necessary to create a report using Rmarkdown."
   )
   rlang::check_installed(
+    "rmarkdown",
+    reason = "necessary to render the report."
+  )
+  rlang::check_installed(
     "flextable",
     reason = "necessary to create report tables."
   )

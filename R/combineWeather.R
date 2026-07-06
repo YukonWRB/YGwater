@@ -113,7 +113,7 @@ combineWeather <- function(
       # Transform to long format
       station <- station %>%
         tidyr::pivot_longer(
-          cols = variables,
+          cols = dplyr::any_of(variables),
           names_to = "variable",
           values_to = "value"
         )
@@ -258,8 +258,13 @@ combineWeather <- function(
             .data$station_stn2
           )
         ) %>%
-        dplyr::select(datetime_col, "value", "variable", "station") %>%
-        dplyr::arrange(datetime_col)
+        dplyr::select(
+          dplyr::all_of(datetime_col),
+          "value",
+          "variable",
+          "station"
+        ) %>%
+        dplyr::arrange(.data[[datetime_col]])
 
       message("Gaps filled")
 

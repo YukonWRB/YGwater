@@ -158,7 +158,9 @@ test_that("api(version = 2) builds a plumber2 router without running", {
     version = 2,
     run = FALSE,
     server = "/water-data/api/v2",
-    dbName = "aquacache_test"
+    dbName = "aquacache_test",
+    publicDbUser = "api_public",
+    publicDbPass = "api_public_pass"
   )
 
   expect_equal(
@@ -261,7 +263,10 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
 })
 
 test_that("API measurement SQL limits rows before metadata range joins", {
-  for (route_file in c(v2_route_file(), system.file("plumber/v1.R", package = "YGwater"))) {
+  for (route_file in c(
+    v2_route_file(),
+    system.file("plumber/v1.R", package = "YGwater")
+  )) {
     lines <- readLines(route_file, warn = FALSE)
     measurement_start <- grep(
       "^#\\* @get\\s+/timeseries/measurements\\s*$",
@@ -271,9 +276,17 @@ test_that("API measurement SQL limits rows before metadata range joins", {
     measurement_end <- next_route[next_route > measurement_start][[1L]] - 1L
     block <- paste(lines[measurement_start:measurement_end], collapse = "\n")
 
-    expect_match(block, "limited_measurement_rows AS MATERIALIZED", fixed = TRUE)
+    expect_match(
+      block,
+      "limited_measurement_rows AS MATERIALIZED",
+      fixed = TRUE
+    )
     expect_match(block, "FROM limited_measurement_rows m", fixed = TRUE)
-    expect_match(block, "ORDER BY m.datetime ASC, m.timeseries_id ASC", fixed = TRUE)
+    expect_match(
+      block,
+      "ORDER BY m.datetime ASC, m.timeseries_id ASC",
+      fixed = TRUE
+    )
     expect_false(grepl("FROM measurement_rows m", block, fixed = TRUE))
   }
 })
@@ -351,7 +364,9 @@ test_that("API V2 metadata and lookup endpoints return expected CSV and JSON", {
     dbHost = Sys.getenv("aquacacheHost", "localhost"),
     dbPort = Sys.getenv("aquacachePort", "5432"),
     dbUser = Sys.getenv("aquacacheUser", "runner"),
-    dbPass = Sys.getenv("aquacachePass", "runner")
+    dbPass = Sys.getenv("aquacachePass", "runner"),
+    publicDbUser = Sys.getenv("aquacacheUser", "runner"),
+    publicDbPass = Sys.getenv("aquacachePass", "runner")
   )
 
   get_v2 <- function(url, headers = list()) {
@@ -583,7 +598,9 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
     dbHost = Sys.getenv("aquacacheHost", "localhost"),
     dbPort = Sys.getenv("aquacachePort", "5432"),
     dbUser = Sys.getenv("aquacacheUser", "runner"),
-    dbPass = Sys.getenv("aquacachePass", "runner")
+    dbPass = Sys.getenv("aquacachePass", "runner"),
+    publicDbUser = Sys.getenv("aquacacheUser", "runner"),
+    publicDbPass = Sys.getenv("aquacachePass", "runner")
   )
 
   get_v2 <- function(url) {
@@ -885,7 +902,9 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
     dbHost = Sys.getenv("aquacacheHost", "localhost"),
     dbPort = Sys.getenv("aquacachePort", "5432"),
     dbUser = Sys.getenv("aquacacheUser", "runner"),
-    dbPass = Sys.getenv("aquacachePass", "runner")
+    dbPass = Sys.getenv("aquacachePass", "runner"),
+    publicDbUser = Sys.getenv("aquacacheUser", "runner"),
+    publicDbPass = Sys.getenv("aquacachePass", "runner")
   )
 
   get_v2 <- function(url) {
@@ -1098,7 +1117,9 @@ test_that("API V2 snow bulletin map endpoint returns HTML", {
     dbHost = Sys.getenv("aquacacheHost", "localhost"),
     dbPort = Sys.getenv("aquacachePort", "5432"),
     dbUser = Sys.getenv("aquacacheUser", "runner"),
-    dbPass = Sys.getenv("aquacachePass", "runner")
+    dbPass = Sys.getenv("aquacachePass", "runner"),
+    publicDbUser = Sys.getenv("aquacacheUser", "runner"),
+    publicDbPass = Sys.getenv("aquacachePass", "runner")
   )
 
   res <- v2_resolve_request(pr$test_request(reqres:::mock_rook(

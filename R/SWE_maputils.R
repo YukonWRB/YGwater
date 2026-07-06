@@ -32,7 +32,7 @@
 #' @keywords internal
 #'
 snowbull_months <- function(month = NULL, short = FALSE) {
-    months = c(
+    months <- c(
         "January",
         "February",
         "March",
@@ -47,7 +47,7 @@ snowbull_months <- function(month = NULL, short = FALSE) {
         "December"
     )
     if (short) {
-        months = tolower(substr(months, 1, 3))
+        months <- tolower(substr(months, 1, 3))
     }
 
     if (!is.null(month)) {
@@ -215,7 +215,7 @@ get_static_style_elements <- function() {
         iconHeight = static_style_elements$communities$iconHeight
     )
 
-    static_style_elements$communities$labelOptions = leaflet::labelOptions(
+    static_style_elements$communities$labelOptions <- leaflet::labelOptions(
         noHide = TRUE,
         direction = "top",
         textOnly = TRUE,
@@ -278,7 +278,7 @@ get_dynamic_style_elements <- function(
     #     )
     # }
 
-    param_name <- standardize_param_name(param_name)
+    param_name <- standardize_swe_param_name(param_name)
 
     # standardize parameter name for upcoming switch case
     # param_name <- standardize_param_name(param_name)
@@ -426,7 +426,7 @@ get_dynamic_style_elements <- function(
         percentile_labels <- unlist(percentile_labels)
     }
 
-    style_choices = list(
+    style_choices <- list(
         relative_to_med = list(
             bins = relative_bins,
             colors = relative_colors,
@@ -858,7 +858,7 @@ standardize_epsg <- function(epsg) {
 #' @param con (Optional) AquaCache connection
 #' @return parameter name
 #' @noRd
-standardize_param_name <- function(param_name, con = NULL) {
+standardize_swe_param_name <- function(param_name, con = NULL) {
     if (is.null(param_name)) {
         stop("param_name must be provided and non-null")
     }
@@ -1514,7 +1514,7 @@ download_continuous_ts <- function(
     resolution = "daily",
     epsg = 4326
 ) {
-    param_name <- standardize_param_name(
+    param_name <- standardize_swe_param_name(
         con = con,
         param_name = param_name
     )
@@ -1761,7 +1761,7 @@ download_discrete_ts <- function(
     param_name = NULL,
     epsg = 4326
 ) {
-    param_name <- standardize_param_name(
+    param_name <- standardize_swe_param_name(
         con = con,
         param_name = param_name
     )
