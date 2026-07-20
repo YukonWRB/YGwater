@@ -490,7 +490,7 @@ app_ui <- function(request) {
               uiOutput("continuousDataReview_ui")
             ),
             nav_panel(
-              title = "Add / edit timeseries",
+              title = "Add / edit basic timeseries",
               value = "addTimeseries",
               uiOutput("addTimeseries_ui")
             ),
