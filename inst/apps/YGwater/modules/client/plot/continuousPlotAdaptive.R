@@ -2580,9 +2580,20 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             }
 
             date_range_xlim <- function(start_date, end_date, tz) {
-              start <- as.POSIXct(as.Date(start_date), tz = tz)
-              end <- as.POSIXct(as.Date(end_date), tz = tz) + 24 * 60 * 60
-              c(start, end)
+              c(
+                YGwater:::normalize_plot_datetime_bound(
+                  start_date,
+                  tz,
+                  bound = "start",
+                  arg_name = "start_date"
+                ),
+                YGwater:::normalize_plot_datetime_bound(
+                  end_date,
+                  tz,
+                  bound = "end",
+                  arg_name = "end_date"
+                )
+              )
             }
 
             fetch_timeseries_plot_metadata <- function(ids) {
@@ -3024,17 +3035,17 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               )
             }
 
-            normalize_timeseries_datetime <- function(value) {
-              if (inherits(value, "character")) {
-                value <- as.Date(value)
-              }
-              if (inherits(value, "Date") && !inherits(value, "POSIXt")) {
-                value <- as.POSIXct(value, tz = plot_timezone) + 24 * 60 * 60
-              } else {
-                value <- as.POSIXct(value, tz = plot_timezone)
-              }
-              attr(value, "tzone") <- "UTC"
-              value
+            normalize_timeseries_datetime <- function(
+              value,
+              bound = c("start", "end")
+            ) {
+              bound <- match.arg(bound)
+              YGwater:::normalize_plot_datetime_bound(
+                value,
+                plot_timezone,
+                bound = bound,
+                arg_name = paste0(bound, "_date")
+              )
             }
 
             correction_interval_seconds <- function(value) {
@@ -3261,12 +3272,12 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               }
 
               start_dt <- max(
-                normalize_timeseries_datetime(req$start_date),
+                normalize_timeseries_datetime(req$start_date, bound = "start"),
                 as.POSIXct(ts_meta$start_datetime[[1]], tz = "UTC"),
                 na.rm = TRUE
               )
               end_dt <- min(
-                normalize_timeseries_datetime(req$end_date),
+                normalize_timeseries_datetime(req$end_date, bound = "end"),
                 as.POSIXct(ts_meta$end_datetime[[1]], tz = "UTC"),
                 na.rm = TRUE
               )
@@ -4418,249 +4429,22 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         paste0(
           "continuous_plot_data_",
           gsub("-", "", gsub(" ", "_", gsub(":", "", substr(time, 0, 16)))),
-          "_UTC.xlsx"
+          "_UTC.zip"
         )
       },
+      contentType = "application/zip",
       content = function(file) {
         req <- isolate(plot_request())
         out <- long_ts_plot$result()$data
 
-        wb <- openxlsx::createWorkbook()
-
-        existing_sheets <- character(0)
-        unique_sheet_name <- function(name) {
-          clean_name <- gsub("[\\\\/?*\\[\\]:]", "_", name)
-          clean_name <- gsub("^'+|'+$", "", clean_name)
-          clean_name <- trimws(clean_name)
-          if (!nzchar(clean_name)) {
-            clean_name <- "sheet"
-          }
-          clean_name <- substr(clean_name, 1, 31)
-
-          candidate <- clean_name
-          suffix <- 1L
-          while (candidate %in% existing_sheets) {
-            suffix_text <- paste0("_", suffix)
-            candidate <- paste0(
-              substr(clean_name, 1, max(1, 31 - nchar(suffix_text))),
-              suffix_text
-            )
-            suffix <- suffix + 1L
-          }
-
-          existing_sheets <<- c(existing_sheets, candidate)
-          candidate
-        }
-
-        write_data_recursive <- function(x, prefix = "data") {
-          if (is.null(x)) {
-            return(invisible(NULL))
-          }
-
-          if (is.data.frame(x)) {
-            sheet_name <- unique_sheet_name(prefix)
-            openxlsx::addWorksheet(wb, sheetName = sheet_name)
-            openxlsx::writeData(
-              wb,
-              sheet = sheet_name,
-              x = x,
-              colNames = TRUE
-            )
-            return(invisible(NULL))
-          }
-
-          if (is.list(x)) {
-            nm <- names(x)
-            if (is.null(nm) || any(!nzchar(nm))) {
-              nm <- paste0("item", seq_along(x))
-            }
-
-            for (i in seq_along(x)) {
-              write_data_recursive(
-                x[[i]],
-                prefix = paste(prefix, nm[[i]], sep = "_")
-              )
-            }
-          }
-        }
-
-        base_metadata <- data.frame(
-          Attribute = c(
-            "Generated on:",
-            "Plot type:",
-            "Timeseries IDs:",
-            "Plot language:",
-            "Plot timezone:",
-            "Plot resolution:"
+        YGwater:::write_continuous_plot_csv_zip(
+          YGwater:::continuous_plot_export_tables(
+            req = req,
+            out = out,
+            module_data = moduleData,
+            language = language
           ),
-          Value = c(
-            paste0(
-              substr(.POSIXct(Sys.time(), tz = "UTC"), 1, 16),
-              " UTC"
-            ),
-            req$plot_type,
-            paste(req$timeseries_ids, collapse = ", "),
-            req$lang,
-            req$plot_timezone,
-            if (!is.null(req$plot_resolution)) {
-              req$plot_resolution
-            } else {
-              NA_character_
-            }
-          ),
-          stringsAsFactors = FALSE,
-          check.names = FALSE
-        )
-
-        if (
-          length(req$timeseries_ids) == 1 &&
-            is.list(out) &&
-            is.data.frame(out$trace_data) &&
-            is.data.frame(out$range_data)
-        ) {
-          timeseries <- req$timeseries_id
-          loc_id <- moduleData$timeseries[
-            timeseries_id == timeseries,
-            location_id
-          ]
-          location <- moduleData$locs[
-            location_id == loc_id,
-            get(tr("generic_name_col", language$language))
-          ]
-          sloc_id <- moduleData$timeseries[
-            timeseries_id == timeseries,
-            sub_location_id
-          ]
-          if (!is.na(sloc_id)) {
-            sub_location <- moduleData$sub_locs[
-              sub_location_id == sloc_id,
-              get(tr("sub_location_col", language$language))
-            ]
-          } else {
-            sub_location <- NA
-          }
-          pid <- moduleData$timeseries[
-            timeseries_id == timeseries,
-            parameter_id
-          ]
-          parameter <- moduleData$params[
-            parameter_id == pid,
-            get(tr("param_name_col", language$language))
-          ]
-          units <- moduleData$params[
-            parameter_id == pid,
-            get("unit")
-          ]
-          date_range_start <- format(
-            min(out$trace_data$datetime, na.rm = TRUE),
-            "%Y-%m-%d %H:%M"
-          )
-          date_range_end <- format(
-            max(out$trace_data$datetime, na.rm = TRUE),
-            "%Y-%m-%d %H:%M"
-          )
-          range_data <- YGwater:::historic_range_data_for_export(
-            out$range_data,
-            units
-          )
-          if (is.null(range_data)) {
-            hist_range_start <- NA_character_
-            hist_range_end <- NA_character_
-          } else {
-            hist_window <- historic_stats_export_window(
-              stats_period = req$stats_period,
-              trace_data = out$trace_data,
-              range_data = out$range_data,
-              timeseries_start = moduleData$timeseries[
-                timeseries_id == timeseries,
-                start_datetime
-              ],
-              timeseries_end = moduleData$timeseries[
-                timeseries_id == timeseries,
-                end_datetime
-              ]
-            )
-            hist_range_start <- hist_window$start
-            hist_range_end <- hist_window$end
-          }
-
-          metadata <- rbind(
-            base_metadata,
-            data.frame(
-              Attribute = c(
-                "Location:",
-                "Sub-location:",
-                "Parameter:",
-                "Units:",
-                "Start of exported data:",
-                "End of exported data:",
-                "Start historic record for stats calculations:",
-                "End historic record for stats calculations:"
-              ),
-              Value = c(
-                location,
-                sub_location,
-                parameter,
-                units,
-                date_range_start,
-                date_range_end,
-                hist_range_start,
-                hist_range_end
-              ),
-              stringsAsFactors = FALSE,
-              check.names = FALSE
-            )
-          )
-
-          openxlsx::addWorksheet(wb, sheetName = "metadata")
-          existing_sheets <- c(existing_sheets, "metadata")
-          openxlsx::writeData(
-            wb,
-            sheet = "metadata",
-            x = metadata,
-            colNames = TRUE
-          )
-
-          trace_data <- out$trace_data
-          names(trace_data)[1:2] <- c(
-            "datetime_UTC",
-            paste0(parameter, "_", units)
-          )
-          openxlsx::addWorksheet(wb, sheetName = "trace_data")
-          existing_sheets <- c(existing_sheets, "trace_data")
-          openxlsx::writeData(
-            wb,
-            sheet = "trace_data",
-            x = trace_data,
-            colNames = TRUE
-          )
-
-          if (!is.null(range_data)) {
-            openxlsx::addWorksheet(wb, sheetName = "historic_range_data")
-            existing_sheets <- c(existing_sheets, "historic_range_data")
-            openxlsx::writeData(
-              wb,
-              sheet = "historic_range_data",
-              x = range_data,
-              colNames = TRUE
-            )
-          }
-        } else {
-          openxlsx::addWorksheet(wb, sheetName = "metadata")
-          existing_sheets <- c(existing_sheets, "metadata")
-          openxlsx::writeData(
-            wb,
-            sheet = "metadata",
-            x = base_metadata,
-            colNames = TRUE
-          )
-          write_data_recursive(out)
-        }
-
-        openxlsx::saveWorkbook(
-          wb,
-          file,
-          overwrite = TRUE
+          file
         )
       } # End content
     ) # End downloadHandler

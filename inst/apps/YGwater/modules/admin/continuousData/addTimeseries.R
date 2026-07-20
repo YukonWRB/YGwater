@@ -2905,15 +2905,6 @@ addTimeseries <- function(id, language) {
                     "Could not find any data for this timeseries. Try different parameters."
                   )
                 }
-
-                # Now calculate stats
-                if (lubridate::period(rate) <= lubridate::period("1 day")) {
-                  AquaCache::calculate_stats(
-                    timeseries_id = new_timeseries_id,
-                    con = con,
-                    start_recalc = NULL
-                  )
-                }
                 DBI::dbCommit(con)
                 return("success")
               } else {
@@ -3282,15 +3273,14 @@ addTimeseries <- function(id, language) {
               }
             }
 
-            # If a change is made to tz, AquaCache::calculate_stats will need to be rerun from the beginning of the timeseries
-            recalc_stats <- FALSE
+            refresh_daily_stats <- FALSE
             if (input$tz != selected_timeseries$timezone_daily_calc) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET timezone_daily_calc = $1 WHERE timeseries_id = $2;",
+                "UPDATE continuous.timeseries SET timezone_daily_calc = $1 WHERE timeseries_id = $2;",
                 params = list(input$tz, selected_timeseries$timeseries_id)
               )
-              recalc_stats <- TRUE
+              refresh_daily_stats <- TRUE
             }
 
             if (!is.na(input_z_value)) {
@@ -3629,22 +3619,16 @@ addTimeseries <- function(id, language) {
               deployment_metadata_id = input$instrument_deployment
             )
 
-            # If recalc_stats is TRUE, we need to recalculate stats from the beginning of the timeseries
-            if (recalc_stats) {
+            if (refresh_daily_stats) {
               showNotification(
-                "Recalculating statistics from the beginning of the timeseries due to timezone change. Please be patient.",
+                "Refreshing daily calculations from the beginning of the timeseries due to timezone change. Please be patient.",
                 type = "message",
                 duration = 8
               )
-              earliest <- DBI::dbGetQuery(
+              DBI::dbGetQuery(
                 session$userData$AquaCache,
-                "SELECT MIN(datetime) FROM continuous.measurements_continuous WHERE timeseries_id = $1",
+                "SELECT continuous.refresh_calculated_daily($1::integer, NULL::date, NULL::date);",
                 params = list(selected_timeseries$timeseries_id)
-              )[1, 1]
-              AquaCache::calculate_stats(
-                timeseries_id = selected_timeseries$timeseries_id,
-                con = session$userData$AquaCache,
-                start_recalc = earliest
               )
             }
 
