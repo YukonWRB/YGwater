@@ -187,9 +187,10 @@ historic_range_data_for_export <- function(range_data, units) {
     return(NULL)
   }
 
+  stat_cols <- c("min", "max", "q75", "q25")
   has_complete_stats <- Reduce(
     `&`,
-    lapply(range_data[c("min", "max", "q75", "q25")], function(x) !is.na(x))
+    lapply(stat_cols, function(col) !is.na(range_data[[col]]))
   )
   if (!any(has_complete_stats)) {
     return(NULL)
@@ -208,6 +209,295 @@ historic_range_data_for_export <- function(range_data, units) {
     )
   )
   as.data.frame(range_data)
+}
+
+#' Build CSV tables for continuous plot data downloads
+#' @param req Plot request list created by the Shiny module.
+#' @param out Plot data returned by the plotting task.
+#' @param module_data Module lookup data used for metadata labels.
+#' @param language Current application language object.
+#' @return A named list of data frames ready for CSV export.
+#' @noRd
+#' @keywords internal
+continuous_plot_export_tables <- function(req, out, module_data, language) {
+  safe_first_value <- function(data, key_col, key_value, value_col) {
+    if (
+      is.null(data) ||
+        !all(c(key_col, value_col) %in% names(data)) ||
+        is.null(key_value) ||
+        length(key_value) == 0L ||
+        all(is.na(key_value))
+    ) {
+      return(NA)
+    }
+
+    rows <- which(data[[key_col]] %in% key_value)
+    if (length(rows) == 0L) {
+      return(NA)
+    }
+
+    value <- data[[value_col]][[rows[[1L]]]]
+    if (length(value) == 0L || is.null(value)) {
+      return(NA)
+    }
+    value
+  }
+
+  format_range_datetime <- function(x, range_fn) {
+    if (is.null(x) || length(x) == 0L) {
+      return(NA_character_)
+    }
+    x <- x[!is.na(x)]
+    if (length(x) == 0L) {
+      return(NA_character_)
+    }
+    format(range_fn(x), "%Y-%m-%d %H:%M")
+  }
+
+  base_metadata <- data.frame(
+    Attribute = c(
+      "Generated on:",
+      "Plot type:",
+      "Timeseries IDs:",
+      "Plot language:",
+      "Plot timezone:",
+      "Plot resolution:"
+    ),
+    Value = c(
+      paste0(substr(.POSIXct(Sys.time(), tz = "UTC"), 1, 16), " UTC"),
+      req$plot_type,
+      paste(req$timeseries_ids, collapse = ", "),
+      req$lang,
+      req$plot_timezone,
+      if (!is.null(req$plot_resolution)) {
+        req$plot_resolution
+      } else {
+        NA_character_
+      }
+    ),
+    stringsAsFactors = FALSE,
+    check.names = FALSE
+  )
+
+  tables <- list()
+  used_names <- character(0)
+  add_table <- function(name, data) {
+    if (is.null(data) || !is.data.frame(data)) {
+      return(invisible(NULL))
+    }
+
+    clean_name <- gsub("[^A-Za-z0-9._-]+", "_", name)
+    clean_name <- gsub("_+", "_", clean_name)
+    clean_name <- gsub("^_+|_+$", "", clean_name)
+    if (!nzchar(clean_name)) {
+      clean_name <- "data"
+    }
+    clean_name <- sub("\\.csv$", "", clean_name, ignore.case = TRUE)
+
+    candidate <- clean_name
+    suffix <- 1L
+    while (candidate %in% used_names) {
+      candidate <- paste0(clean_name, "_", suffix)
+      suffix <- suffix + 1L
+    }
+
+    used_names <<- c(used_names, candidate)
+    tables[[candidate]] <<- as.data.frame(data)
+    invisible(NULL)
+  }
+
+  add_data_recursive <- function(x, prefix = "data") {
+    if (is.null(x)) {
+      return(invisible(NULL))
+    }
+
+    if (is.data.frame(x)) {
+      add_table(prefix, x)
+      return(invisible(NULL))
+    }
+
+    if (is.list(x)) {
+      nm <- names(x)
+      if (is.null(nm) || any(!nzchar(nm))) {
+        nm <- paste0("item", seq_along(x))
+      }
+      for (i in seq_along(x)) {
+        add_data_recursive(x[[i]], prefix = paste(prefix, nm[[i]], sep = "_"))
+      }
+    }
+
+    invisible(NULL)
+  }
+
+  if (
+    length(req$timeseries_ids) == 1L &&
+      is.list(out) &&
+      is.data.frame(out$trace_data)
+  ) {
+    timeseries <- req$timeseries_id
+    loc_id <- safe_first_value(
+      module_data$timeseries,
+      "timeseries_id",
+      timeseries,
+      "location_id"
+    )
+    location <- safe_first_value(
+      module_data$locs,
+      "location_id",
+      loc_id,
+      tr("generic_name_col", language$language)
+    )
+    sloc_id <- safe_first_value(
+      module_data$timeseries,
+      "timeseries_id",
+      timeseries,
+      "sub_location_id"
+    )
+    sub_location <- if (!is.na(sloc_id)) {
+      safe_first_value(
+        module_data$sub_locs,
+        "sub_location_id",
+        sloc_id,
+        tr("sub_location_col", language$language)
+      )
+    } else {
+      NA
+    }
+    pid <- safe_first_value(
+      module_data$timeseries,
+      "timeseries_id",
+      timeseries,
+      "parameter_id"
+    )
+    parameter <- safe_first_value(
+      module_data$params,
+      "parameter_id",
+      pid,
+      tr("param_name_col", language$language)
+    )
+    units <- safe_first_value(module_data$params, "parameter_id", pid, "unit")
+    date_range_start <- format_range_datetime(out$trace_data$datetime, min)
+    date_range_end <- format_range_datetime(out$trace_data$datetime, max)
+    range_data <- historic_range_data_for_export(out$range_data, units)
+
+    if (is.null(range_data)) {
+      hist_range_start <- NA_character_
+      hist_range_end <- NA_character_
+    } else {
+      hist_window <- historic_stats_export_window(
+        stats_period = if (is.null(req$stats_period)) {
+          "full"
+        } else {
+          req$stats_period
+        },
+        trace_data = out$trace_data,
+        range_data = out$range_data,
+        timeseries_start = safe_first_value(
+          module_data$timeseries,
+          "timeseries_id",
+          timeseries,
+          "start_datetime"
+        ),
+        timeseries_end = safe_first_value(
+          module_data$timeseries,
+          "timeseries_id",
+          timeseries,
+          "end_datetime"
+        )
+      )
+      hist_range_start <- hist_window$start
+      hist_range_end <- hist_window$end
+    }
+
+    metadata <- rbind(
+      base_metadata,
+      data.frame(
+        Attribute = c(
+          "Location:",
+          "Sub-location:",
+          "Parameter:",
+          "Units:",
+          "Start of exported data:",
+          "End of exported data:",
+          "Start historic record for stats calculations:",
+          "End historic record for stats calculations:"
+        ),
+        Value = c(
+          location,
+          sub_location,
+          parameter,
+          units,
+          date_range_start,
+          date_range_end,
+          hist_range_start,
+          hist_range_end
+        ),
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      )
+    )
+
+    trace_data <- as.data.frame(out$trace_data)
+    if (ncol(trace_data) >= 2L) {
+      names(trace_data)[1:2] <- c(
+        "datetime_UTC",
+        paste0(parameter, "_", units)
+      )
+    }
+
+    add_table("metadata", metadata)
+    add_table("trace_data", trace_data)
+    add_table("historic_range_data", range_data)
+    return(tables)
+  }
+
+  add_table("metadata", base_metadata)
+  add_data_recursive(out)
+  tables
+}
+
+#' Write continuous plot export tables to a zipped CSV bundle
+#' @param tables Named list of data frames.
+#' @param file Output zip file path supplied by Shiny.
+#' @return Invisibly returns the output file path.
+#' @noRd
+#' @keywords internal
+write_continuous_plot_csv_zip <- function(tables, file) {
+  rlang::check_installed("zip", reason = "to download continuous plot data")
+
+  if (!is.list(tables) || length(tables) == 0L) {
+    stop("No continuous plot data tables are available for download.")
+  }
+
+  file <- file.path(
+    normalizePath(dirname(file), winslash = "/", mustWork = FALSE),
+    basename(file)
+  )
+  export_dir <- tempfile("continuous_plot_export_")
+  dir.create(export_dir)
+  on.exit(unlink(export_dir, recursive = TRUE, force = TRUE), add = TRUE)
+
+  csv_files <- character(0)
+  for (name in names(tables)) {
+    table <- tables[[name]]
+    if (is.null(table) || !is.data.frame(table)) {
+      next
+    }
+
+    csv_file <- file.path(export_dir, paste0(name, ".csv"))
+    data.table::fwrite(table, csv_file, na = "")
+    csv_files <- c(csv_files, csv_file)
+  }
+
+  if (length(csv_files) == 0L) {
+    stop("No continuous plot data tables are available for download.")
+  }
+
+  if (file.exists(file)) {
+    unlink(file)
+  }
+  zip::zipr(zipfile = file, files = basename(csv_files), root = export_dir)
+  invisible(file)
 }
 
 #' Build the historic-statistics caption used below plot legends
@@ -458,6 +748,75 @@ normalize_as_of_input <- function(as_of, tzone) {
 
   attr(as_of, "tzone") <- "UTC"
   as_of
+}
+
+#' Normalize a plot date or datetime range bound
+#' @param value Single character, Date, or POSIXct range bound.
+#' @param tzone Timezone used to interpret date-only values.
+#' @param bound Either "start" or "end". Date-only start bounds resolve to the
+#'   start of the selected day; date-only end bounds resolve to the start of
+#'   the following day so the selected end day is included.
+#' @param arg_name Argument name used in error messages.
+#' @return A POSIXct datetime with UTC timezone metadata.
+#' @noRd
+#' @keywords internal
+normalize_plot_datetime_bound <- function(
+  value,
+  tzone,
+  bound = c("start", "end"),
+  arg_name = NULL
+) {
+  bound <- match.arg(bound)
+  if (is.null(arg_name)) {
+    arg_name <- paste0(bound, "_date")
+  }
+
+  if (is.null(value) || length(value) != 1L || is.na(value[[1L]])) {
+    stop("`", arg_name, "` must be a single date/datetime value.")
+  }
+
+  date_only <- FALSE
+  if (inherits(value, "character")) {
+    value_text <- trimws(as.character(value[[1L]]))
+    has_time_component <- grepl("[ T]\\d{1,2}:\\d{2}", value_text) ||
+      grepl("(Z|[+-]\\d{2}:?\\d{2})$", value_text)
+
+    if (has_time_component) {
+      value <- suppressWarnings(as.POSIXct(value_text, tz = tzone))
+    } else {
+      value <- suppressWarnings(as.Date(value_text))
+      if (!is.na(value)) {
+        date_only <- TRUE
+        value <- as.POSIXct(
+          paste(value, "00:00:00"),
+          tz = tzone
+        )
+      }
+    }
+  } else if (inherits(value, "Date") && !inherits(value, "POSIXt")) {
+    date_only <- TRUE
+    value <- as.POSIXct(
+      paste(value, "00:00:00"),
+      tz = tzone
+    )
+  } else if (inherits(value, "POSIXt")) {
+    value <- as.POSIXct(value, tz = tzone)
+  }
+
+  if (!inherits(value, "POSIXt") || is.na(value)) {
+    stop(
+      "`",
+      arg_name,
+      "` must be a single character, Date, or POSIXct value."
+    )
+  }
+
+  if (date_only && bound == "end") {
+    value <- value + 24 * 60 * 60
+  }
+
+  attr(value, "tzone") <- "UTC"
+  value
 }
 
 #' Format the as_of value for use in plot titles, respecting the specified timezone and language

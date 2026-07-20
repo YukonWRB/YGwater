@@ -63,9 +63,9 @@ plotMultiTimeseries(
 
 \item{z_approx}{Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.}
 
-\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.}
+\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Date-only values start at the beginning of that day in \code{tzone}. Default is one year ago.}
 
-\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.}
+\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Date-only values include the full selected day in \code{tzone}. Default is today.}
 
 \item{lead_lag}{The number of \strong{hours} to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for \code{type} 'subplots'.}
 

@@ -12,8 +12,8 @@
 #' @param aggregation_types The period type(s) for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes (you can also specify the numeric entry from the aggregation_types AquaCache table). NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max' in that order. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.
-#' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
-#' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
+#' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Date-only values start at the beginning of that day in `tzone`. Default is one year ago.
+#' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Date-only values include the full selected day in `tzone`. Default is today.
 #' @param lead_lag The number of **hours** to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for `type` 'subplots'.
 #' @param log Should any/all y axes use a logarithmic scale? Specify as a logical (TRUE/FALSE) vector of length 1 or of length equal to the number of traces you wish to plot. Default is FALSE.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as NULL to use the database default. Specify as logical vector of same length as 'locations' and 'parameters', or a single value that gets recycled for all. Default is NULL.
@@ -419,24 +419,18 @@ plotMultiTimeseries <- function(
 
   as_of <- normalize_as_of_input(as_of, tzone)
 
-  if (inherits(start_date, "character")) {
-    start_date <- as.Date(start_date)
-  }
-  if (inherits(start_date, "Date")) {
-    start_date <- as.POSIXct(start_date, tz = tzone)
-    start_date <- start_date + 24 * 60 * 60
-  }
-  if (inherits(end_date, "character")) {
-    end_date <- as.Date(end_date)
-  }
-  if (inherits(end_date, "Date")) {
-    end_date <- as.POSIXct(end_date, tz = tzone)
-    end_date <- end_date + 24 * 60 * 60
-  }
-
-  # back to UTC because DB queries are in UTC
-  attr(start_date, "tzone") <- "UTC"
-  attr(end_date, "tzone") <- "UTC"
+  start_date <- normalize_plot_datetime_bound(
+    start_date,
+    tzone,
+    bound = "start",
+    arg_name = "start_date"
+  )
+  end_date <- normalize_plot_datetime_bound(
+    end_date,
+    tzone,
+    bound = "end",
+    arg_name = "end_date"
+  )
 
   if (!is.null(historic_range)) {
     if (!inherits(historic_range, "logical")) {

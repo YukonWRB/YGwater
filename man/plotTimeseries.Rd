@@ -63,9 +63,9 @@ plotTimeseries(
 
 \item{z_approx}{Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.}
 
-\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.}
+\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Date-only values start at the beginning of that day in \code{tzone}. Default is one year ago.}
 
-\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.}
+\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Date-only values include the full selected day in \code{tzone}. Default is today.}
 
 \item{invert}{Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.}
 
