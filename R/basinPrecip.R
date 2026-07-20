@@ -22,6 +22,8 @@
 #' @param con A connection to the aquacache database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param hrdpa_loc The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.
 #' @param hrdps_loc The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.
+#' @param .raster_cache Internal parameter for caching rasters between multiple calls to basinPrecip. Do not set this parameter manually.
+#' @param .return_result_and_cache Internal parameter for returning both the result and the raster cache. Do not set this parameter manually.
 #'
 #' @return For a single location, returns a list containing precipitation statistics and optional map output. For multiple locations, returns a list of per-location outputs in the same order as the input. Output includes `raster_time_vector_UTC`, the vector of raster timestamps used.
 #' @export
