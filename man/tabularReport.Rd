@@ -14,6 +14,7 @@ tabularReport(
   past = 28,
   save_path = NULL,
   archive_path = NULL,
+  log_level = "INFO",
   con = NULL
 )
 }
@@ -35,6 +36,8 @@ tabularReport(
 \item{save_path}{The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.}
 
 \item{archive_path}{The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.}
+
+\item{log_level}{Logging threshold for file logging. One of "DEBUG", "INFO", "WARN", or "ERROR". Default is "INFO".}
 
 \item{con}{A connection to the aquacache database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 }

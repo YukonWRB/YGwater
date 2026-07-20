@@ -15,11 +15,13 @@ basinPrecip(
   silent = FALSE,
   con = NULL,
   hrdpa_loc = NULL,
-  hrdps_loc = NULL
+  hrdps_loc = NULL,
+  .raster_cache = NULL,
+  .return_result_and_cache = FALSE
 )
 }
 \arguments{
-\item{location}{The location above which you wish to calculate precipitation. Specify either a WSC or WSC-like station ID (e.g. \code{"09AB004"}) for which there is a database entry, or coordinates in signed decimal degrees in form latitude, longitude (\code{"60.1234 -139.1234"}; note the space, negative sign, and lack of comma). See details for more info if specifying coordinates.}
+\item{location}{The location above which you wish to calculate precipitation. Specify either a WSC or WSC-like station ID (e.g. \code{"09AB004"}) for which there is a database entry, or coordinates in signed decimal degrees in form latitude, longitude (\code{"60.1234 -139.1234"}; note the space, negative sign, and lack of comma). Multiple locations are also supported as a character vector/list of WSC IDs, or as a list/matrix/data.frame of coordinate pairs (latitude, longitude).}
 
 \item{start}{The start of the time period over which to accumulate precipitation. Use format \code{"yyyy-mm-dd hh:mm"} (character vector) in UTC time, or a POSIXct object (e.g. \code{Sys.time()-60*60*24} for one day in the past). In the case of a POSIXct object, the timezone is converted to UTC without modifying the time. See details if requesting earlier than 30 days prior to now.}
 
@@ -42,7 +44,7 @@ basinPrecip(
 \item{hrdps_loc}{The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.}
 }
 \value{
-The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in \code{location} printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either grDevices::png() or grDevices::dev.print(), or use the graphical device export functionality.
+For a single location, returns a list containing precipitation statistics and optional map output. For multiple locations, returns a list of per-location outputs in the same order as the input. Output includes \code{raster_time_vector_UTC}, the vector of raster timestamps used.
 }
 \description{
 Calculates accumulated precipitation above defined basins or immediately surrounding a specified point. If possible, make sure to specify a location in parameters hrdpa_loc and hrdps_loc to speed things up! Uses functions \code{\link[=getHRDPA]{getHRDPA()}} and \code{\link[=getHRDPS]{getHRDPS()}} to bring in precipi rasters if any need to be downloaded.
