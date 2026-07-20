@@ -28,12 +28,6 @@
 #' @return For a single location, returns a list containing precipitation statistics and optional map output. For multiple locations, returns a list of per-location outputs in the same order as the input. Output includes `raster_time_vector_UTC`, the vector of raster timestamps used.
 #' @export
 
-#TODO Update function to work directly with DB, with terra object, or with shapefiles, or with gpkg files.
-#TODO: problem with extents not matching. reproduce by first calling a map for somewhere in YT, then in Ontario. will get Error:[sds] extents do not match, which means that the DL and/or file selection process didn't work properly
-#IDEA: Allow multiple plots to be fetched, or a time-lapse of plots (better). Allow setting increments and number of plots.
-#IDEA: use leaflet to display maps
-#TODO: Get precip further in future using RDPS beyond HRDPS range.
-
 basinPrecip <- function(
   location,
   start = Sys.time() - 60 * 60 * 24,
