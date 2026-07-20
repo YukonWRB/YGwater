@@ -8,42 +8,67 @@ con <- YGwater::AquaConnect(
     password = Sys.getenv("aquacacheAdminPass"),
 )
 
-location <- "09BC001"
+location <- "08AA010"
 
 two_day_rain <- basinPrecip(
     location = location,
-    start = Sys.time() - 60 * 60 * 24 * 2,
-    end = Sys.time(),
+    start = Sys.time(),
+    end = Sys.time() + 60 * 60 * 24 * 2,
     silent = TRUE,
     map = FALSE,
     con = con
 )
 
 
+# Fetch all rasters from now until +48 hours
 raster_ids <- "
-    SELECT 
-        r.reference_id,
-        rr.valid_from as datetime
-    FROM spatial.raster_series_index rsi
-    JOIN spatial.rasters_reference rr ON rsi.raster_series_id = rr.raster_series_id
-    JOIN spatial.rasters r ON r.reference_id = rr.reference_id
-    WHERE rsi.model = 'HRDPS'
-    ORDER BY rr.valid_from, r.reference_id"
+  SELECT 
+    r.reference_id,
+    rr.valid_from as datetime
+  FROM spatial.raster_series_index rsi
+  JOIN spatial.rasters_reference rr 
+    ON rsi.raster_series_id = rr.raster_series_id
+  JOIN spatial.rasters r 
+    ON r.reference_id = rr.reference_id
+  WHERE rsi.model = 'HRDPS'
+    AND rsi.parameter = 'accumulated precip (all types) 1 hour'
+    AND rr.valid_from >= now()
+    AND rr.valid_from < now() + interval '48 hours'
+  ORDER BY rr.valid_from, r.reference_id"
 raster_ids <- DBI::dbGetQuery(con, raster_ids)
 
-rid <- raster_ids[length(raster_ids$reference_id) - 1, ]$reference_id
+# Load all rasters
+raster_list <- lapply(raster_ids$reference_id, function(rid) {
+    getRaster(
+        clauses = paste0("WHERE reference_id = ", rid),
+        con = con
+    )
+})
 
-raster <- getRaster(clauses = paste0("WHERE reference_id = ", rid), con = con)
-terra::plot(raster)
+# Extract values at arbitrary coordinate (lon, lat)
+coord <- c(-130.4, 62.5) # Example: Whitehorse area
+point_values <- sapply(raster_list, function(r) {
+    terra::extract(r, matrix(coord, nrow = 1))
+})
 
+# Plot time series
+plot(
+    raster_ids$datetime,
+    point_values,
+    type = "l",
+    main = "Time series at coordinate point",
+    xlab = "Time",
+    ylab = "Value",
+    col = "red"
+)
 
 tabularReport(
     save_path = "C:\\Users\\esniede\\Documents",
     archive_path = NULL,
     snow_locations = NULL,
-    flow_locations = NULL
+    flow_locations = NULL,
+    log_level = "DEBUG"
 )
-
 
 rid <- DBI::dbGetQuery(
     con,
@@ -53,7 +78,6 @@ rid <- DBI::dbGetQuery(
         "'::timestamp with time zone)) LIMIT 1"
     )
 )
-
 
 # load_all()
 

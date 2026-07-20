@@ -14,6 +14,7 @@
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
 #' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
 #' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
+#' @param log_level Logging threshold for file logging. One of "DEBUG", "INFO", "WARN", or "ERROR". Default is "INFO".
 
 #' @param con A connection to the aquacache database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
@@ -32,6 +33,7 @@ tabularReport <- function(
   past = 28,
   save_path = NULL,
   archive_path = NULL,
+  log_level = "INFO",
   con = NULL
 ) {
   # level_locations = "all"
@@ -63,6 +65,224 @@ tabularReport <- function(
 
   report_time <- as.POSIXct(report_datetime, tz = "UTC")
   report_day <- as.Date(report_time)
+
+  # Logging setup: one log file per function call, reset each run.
+  report_dir <- save_path
+  if (!dir.exists(report_dir)) {
+    dir.create(report_dir, recursive = TRUE, showWarnings = FALSE)
+  }
+  log_path <- file.path(report_dir, "HydrometricReport.log")
+  writeLines(character(0), log_path)
+  .log_levels <- c(DEBUG = 10, INFO = 20, WARN = 30, ERROR = 40)
+  log_level <- toupper(log_level)
+  if (!(log_level %in% names(.log_levels))) {
+    warning(paste0(
+      "Invalid log_level '",
+      log_level,
+      "'. Falling back to INFO."
+    ))
+    log_level <- "INFO"
+  }
+  .log_threshold <- .log_levels[[log_level]]
+  .log_event <- function(level, message_text) {
+    if (.log_levels[[level]] < .log_threshold) {
+      return(invisible(NULL))
+    }
+    line <- paste0(
+      format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+      " [",
+      level,
+      "] ",
+      message_text
+    )
+    write(line, file = log_path, append = TRUE)
+    invisible(line)
+  }
+  log_debug <- function(message_text) .log_event("DEBUG", message_text)
+  log_info <- function(message_text) .log_event("INFO", message_text)
+  log_warn <- function(message_text) .log_event("WARN", message_text)
+  log_error <- function(message_text) .log_event("ERROR", message_text)
+  format_log_time <- function(time_value) {
+    format(as.POSIXct(time_value, tz = "UTC"), "%Y-%m-%d %H:%M:%S %Z")
+  }
+  summarize_precip_result <- function(result) {
+    pieces <- c(
+      paste0("class=", paste(class(result), collapse = ",")),
+      paste0("length=", length(result))
+    )
+    if (is.data.frame(result)) {
+      pieces <- c(
+        pieces,
+        paste0("rows=", nrow(result)),
+        paste0("cols=", ncol(result)),
+        paste0("names=", paste(names(result), collapse = ","))
+      )
+    } else if (!is.null(names(result))) {
+      pieces <- c(
+        pieces,
+        paste0("names=", paste(names(result), collapse = ","))
+      )
+    }
+    if (!is.null(result$mean_precip)) {
+      pieces <- c(
+        pieces,
+        paste0("mean_precip=", paste(result$mean_precip, collapse = ","))
+      )
+    }
+    paste(pieces, collapse = "; ")
+  }
+  run_precip_window <- function(
+    location_codes,
+    window_name,
+    start_time,
+    end_time,
+    con
+  ) {
+    log_debug(paste0(
+      "[precip] Starting ",
+      window_name,
+      " basinPrecip batch call for ",
+      length(location_codes),
+      " locations: start=",
+      format_log_time(start_time),
+      ", end=",
+      format_log_time(end_time),
+      ", duration_hours=",
+      round(as.numeric(difftime(end_time, start_time, units = "hours")), 2)
+    ))
+    started_at <- Sys.time()
+    warning_messages <- character()
+    result <- tryCatch(
+      withCallingHandlers(
+        suppressMessages(basinPrecip(
+          location = location_codes,
+          start = start_time,
+          end = end_time,
+          silent = TRUE,
+          map = FALSE,
+          con = con
+        )),
+        warning = function(w) {
+          warning_messages <<- c(warning_messages, conditionMessage(w))
+          invokeRestart("muffleWarning")
+        }
+      ),
+      error = function(e) {
+        log_error(paste0(
+          "[precip] ",
+          window_name,
+          " basinPrecip batch failed: ",
+          conditionMessage(e)
+        ))
+        stop(e)
+      }
+    )
+    elapsed_seconds <- round(
+      as.numeric(difftime(Sys.time(), started_at, units = "secs")),
+      2
+    )
+    log_debug(paste0(
+      "[precip] Completed ",
+      window_name,
+      " basinPrecip batch call in ",
+      elapsed_seconds,
+      " s; ",
+      summarize_precip_result(result)
+    ))
+    if (length(warning_messages) > 0) {
+      log_warn(paste0(
+        "[precip] ",
+        window_name,
+        " batch warnings: ",
+        paste(warning_messages, collapse = " | ")
+      ))
+    }
+
+    if (!is.list(result)) {
+      log_error(paste0(
+        "[precip] ",
+        window_name,
+        " batch did not return a list. Result summary: ",
+        summarize_precip_result(result)
+      ))
+      stop(paste0(
+        "basinPrecip batch result for ",
+        window_name,
+        " is not a list"
+      ))
+    }
+
+    if (length(result) != length(location_codes)) {
+      log_error(paste0(
+        "[precip] ",
+        window_name,
+        " batch length mismatch: expected ",
+        length(location_codes),
+        ", got ",
+        length(result),
+        "."
+      ))
+      stop(paste0(
+        "basinPrecip batch result for ",
+        window_name,
+        " has length mismatch"
+      ))
+    }
+
+    for (loc in location_codes) {
+      loc_result <- if (!is.null(names(result)) && loc %in% names(result)) {
+        result[[loc]]
+      } else {
+        result[[which(location_codes == loc)[1]]]
+      }
+
+      if (!is.list(loc_result) || !"mean_precip" %in% names(loc_result)) {
+        log_error(paste0(
+          "[precip] [",
+          loc,
+          "] ",
+          window_name,
+          " result is missing mean_precip."
+        ))
+        stop(paste0(
+          "basinPrecip result for ",
+          loc,
+          " in ",
+          window_name,
+          " is missing mean_precip"
+        ))
+      }
+      if (length(loc_result$mean_precip) < 1) {
+        log_error(paste0(
+          "[precip] [",
+          loc,
+          "] ",
+          window_name,
+          " returned empty mean_precip."
+        ))
+        stop(paste0(
+          "basinPrecip result for ",
+          loc,
+          " in ",
+          window_name,
+          " has empty mean_precip"
+        ))
+      }
+      if (is.na(loc_result$mean_precip[[1]])) {
+        log_warn(paste0(
+          "[precip] [",
+          loc,
+          "] ",
+          window_name,
+          " returned NA mean_precip."
+        ))
+      }
+    }
+    result
+  }
+  log_info(paste0("Starting tabularReport for report_day=", report_day, "."))
+  log_info(paste0("Log level set to ", log_level, "."))
+  log_info(paste0("Log file initialized at ", log_path, "."))
 
   if (!is.null(level_locations)) {
     if (level_locations[1] == "default") {
@@ -269,8 +489,11 @@ tabularReport <- function(
     }
   }
 
+  precip_location_mode <- "none"
   if (!is.null(precip_locations)) {
+    log_info("[precip] Resolving precipitation locations.")
     if (precip_locations[1] == "default") {
+      precip_location_mode <- "default"
       precip_locations <- c(
         "08AA003",
         "08AA010",
@@ -314,12 +537,30 @@ tabularReport <- function(
       )[, 1]
       precip_locations <- unique(precip_locations)
     } else if (precip_locations[1] == "all") {
+      precip_location_mode <- "all"
       precip_locations <- DBI::dbGetQuery(
         con,
         "SELECT l.location_code AS location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id IN (1165, 1150) ORDER BY l.location_code;"
       )[, 1]
       precip_locations <- unique(precip_locations)
+    } else {
+      precip_location_mode <- "custom"
     }
+    log_info(paste0(
+      "[precip] Resolved ",
+      length(precip_locations),
+      " locations (mode=",
+      precip_location_mode,
+      ")."
+    ))
+    if (length(precip_locations) > 0) {
+      log_debug(paste0(
+        "[precip] Location codes: ",
+        paste(precip_locations, collapse = ", ")
+      ))
+    }
+  } else {
+    log_info("[precip] Precipitation locations are NULL.")
   }
 
   #Set the days for which to generate tables
@@ -332,6 +573,7 @@ tabularReport <- function(
   } else if (past >= 22) {
     past <- 28
   }
+  log_debug(paste0("Normalized past window to ", past, " days."))
 
   #Load yesterday's workbook -----------------
   yesterday <- list(
@@ -340,6 +582,11 @@ tabularReport <- function(
     yesterday_public_comments = NULL
   )
   if (!is.null(archive_path)) {
+    log_info(paste0(
+      "Attempting to load archive workbook from ",
+      archive_path,
+      "."
+    ))
     tryCatch(
       {
         yesterday_workbook <- openxlsx::loadWorkbook(archive_path)
@@ -403,23 +650,45 @@ tabularReport <- function(
           }
         }
         yesterday_comments <- TRUE
+        log_info("Archive workbook loaded successfully.")
       },
       error = function(e) {
         warning(
           "Could not fetch information from yesterday's workbooks. Perhaps the file path you specified is incorrect; check the function help again."
         )
         yesterday_comments <- FALSE
+        log_warn(paste0("Archive workbook load failed: ", conditionMessage(e)))
       }
     )
   } else {
     yesterday_comments <- FALSE
+    log_info("No archive workbook provided; yesterday comments disabled.")
   }
 
   # Get the data -------------------------
   tables <- list()
   ## Precipitation -----------------------
   precip <- data.frame()
-  if (!is.null(precip_locations) && report_day == Sys.Date()) {
+
+  log_info(paste0(
+    "[precip] Precipitation locations: ",
+    paste(precip_locations, collapse = ", ")
+  ))
+
+  log_info(paste0("Report day is ", report_day, "."))
+
+  # ES: ensure timezone is set to GMT+7, as no tz was generating error after 17:00 (was returning next day, causing precip routine to skip)
+  if (
+    !is.null(precip_locations) &&
+      report_day == as.Date(Sys.time(), tz = "Etc/GMT+7")
+  ) {
+    log_info(paste0(
+      "[precip] Starting precipitation summaries for ",
+      length(precip_locations),
+      " locations on ",
+      report_day,
+      "."
+    ))
     #This one is special: get the data and make the table at the same time, before other data as this is the time consuming step. This keeps the more important data more recent. Others get the data then process it later on.
     if (!yesterday_comments) {
       yesterday_comment_precip <- NA
@@ -427,74 +696,149 @@ tabularReport <- function(
     message(
       "Fetching precipitation rasters and calculating a per-basin average. This could take a while."
     )
-    for (i in precip_locations) {
-      name <- stringr::str_to_title(unique(DBI::dbGetQuery(
+    precip_reference_time <- Sys.time()
+    log_debug(paste0(
+      "[precip] Using shared precip_reference_time=",
+      format_log_time(precip_reference_time)
+    ))
+
+    lastWeek_all <- run_precip_window(
+      location_codes = precip_locations,
+      window_name = "lastWeek",
+      start_time = precip_reference_time - 60 * 60 * 24 * 7,
+      end_time = precip_reference_time,
+      con = con
+    )
+    lastThree_all <- run_precip_window(
+      location_codes = precip_locations,
+      window_name = "lastThree",
+      start_time = precip_reference_time - 60 * 60 * 24 * 3,
+      end_time = precip_reference_time,
+      con = con
+    )
+    lastTwo_all <- run_precip_window(
+      location_codes = precip_locations,
+      window_name = "lastTwo",
+      start_time = precip_reference_time - 60 * 60 * 24 * 2,
+      end_time = precip_reference_time,
+      con = con
+    )
+    lastOne_all <- run_precip_window(
+      location_codes = precip_locations,
+      window_name = "lastOne",
+      start_time = precip_reference_time - 60 * 60 * 24,
+      end_time = precip_reference_time,
+      con = con
+    )
+    next24_all <- run_precip_window(
+      location_codes = precip_locations,
+      window_name = "next24",
+      start_time = precip_reference_time,
+      end_time = precip_reference_time + 60 * 60 * 24,
+      con = con
+    )
+    next48_all <- run_precip_window(
+      location_codes = precip_locations,
+      window_name = "next48",
+      start_time = precip_reference_time,
+      end_time = precip_reference_time + 60 * 60 * 48,
+      con = con
+    )
+
+    extract_loc_result <- function(batch_result, loc_code) {
+      if (!is.null(names(batch_result)) && loc_code %in% names(batch_result)) {
+        return(batch_result[[loc_code]])
+      }
+      idx <- which(precip_locations == loc_code)[1]
+      batch_result[[idx]]
+    }
+
+    for (idx in seq_along(precip_locations)) {
+      i <- precip_locations[idx]
+      location_started_at <- Sys.time()
+      log_info(paste0(
+        "[precip] (",
+        idx,
+        "/",
+        length(precip_locations),
+        ") Building precipitation row for ",
+        i,
+        " from batch results."
+      ))
+      log_debug(paste0("[precip] [", i, "] Station index=", idx, "."))
+      name_query <- DBI::dbGetQuery(
         con,
         paste0("SELECT name FROM locations WHERE location_code = '", i, "'")
-      )))
+      )
+      log_debug(paste0(
+        "[precip] [",
+        i,
+        "] Location name query rows=",
+        nrow(name_query),
+        ", cols=",
+        ncol(name_query),
+        ", names=",
+        paste(names(name_query), collapse = ",")
+      ))
+      if (nrow(name_query) == 0) {
+        log_warn(paste0(
+          "[precip] [",
+          i,
+          "] Location name query returned no rows."
+        ))
+      }
+      name <- stringr::str_to_title(unique(name_query))
+      log_debug(paste0(
+        "[precip] [",
+        i,
+        "] Location name lookup returned: ",
+        paste(name, collapse = " | ")
+      ))
       yesterday_comment_precip <- if (yesterday_comments) {
-        yesterday$yesterday_locs$precipitation[
-          yesterday$yesterday_locs$precipitation$Location == i,
-          "Location.specific.comments"
-        ]
+        if (!is.null(yesterday$yesterday_locs$precipitation)) {
+          yesterday$yesterday_locs$precipitation[
+            yesterday$yesterday_locs$precipitation$Location == i,
+            "Location.specific.comments"
+          ]
+        } else {
+          log_warn(
+            "[precip] Yesterday workbook loaded but precipitation sheet data is missing."
+          )
+          NA
+        }
       } else {
         NA
       }
+      log_debug(paste0(
+        "[precip] [",
+        i,
+        "] Yesterday comment count=",
+        length(yesterday_comment_precip),
+        "; has_value=",
+        !is.null(yesterday_comment_precip) &&
+          length(yesterday_comment_precip) > 0 &&
+          !all(is.na(yesterday_comment_precip))
+      ))
       tryCatch(
         {
-          lastWeek <- suppressMessages(basinPrecip(
-            location = i,
-            start = Sys.time() - 60 * 60 * 24 * 7,
-            end = Sys.time(),
-            silent = TRUE,
-            map = FALSE,
-            con = con
-          ))
-          lastThree <- suppressMessages(basinPrecip(
-            location = i,
-            start = Sys.time() - 60 * 60 * 24 * 3,
-            end = Sys.time(),
-            silent = TRUE,
-            map = FALSE,
-            con = con
-          ))
-          lastTwo <- suppressMessages(basinPrecip(
-            location = i,
-            start = Sys.time() - 60 * 60 * 24 * 2,
-            end = Sys.time(),
-            silent = TRUE,
-            map = FALSE,
-            con = con
-          ))
-          lastOne <- suppressMessages(basinPrecip(
-            location = i,
-            start = Sys.time() - 60 * 60 * 24 * 1,
-            end = Sys.time(),
-            silent = TRUE,
-            map = FALSE,
-            con = con
-          ))
-          next24 <- suppressMessages(basinPrecip(
-            location = i,
-            start = Sys.time(),
-            end = Sys.time() + 60 * 60 * 24,
-            silent = TRUE,
-            map = FALSE,
-            con = con
-          ))
-          next48 <- suppressMessages(basinPrecip(
-            location = i,
-            start = Sys.time(),
-            end = Sys.time() + 60 * 60 * 48,
-            silent = TRUE,
-            map = FALSE,
-            con = con
-          ))
+          lastWeek <- extract_loc_result(lastWeek_all, i)
+          lastThree <- extract_loc_result(lastThree_all, i)
+          lastTwo <- extract_loc_result(lastTwo_all, i)
+          lastOne <- extract_loc_result(lastOne_all, i)
+          next24 <- extract_loc_result(next24_all, i)
+          next48 <- extract_loc_result(next48_all, i)
           yesterday_comment_precip <- if (yesterday_comments) {
-            yesterday$yesterday_locs$precipitation[
-              yesterday$yesterday_locs$precipitation$Location == i,
-              "Location.specific.comments"
-            ]
+            if (!is.null(yesterday$yesterday_locs$precipitation)) {
+              yesterday$yesterday_locs$precipitation[
+                yesterday$yesterday_locs$precipitation$Location == i,
+                "Location.specific.comments"
+              ]
+            } else {
+              log_warn(
+                "[precip] Yesterday workbook loaded but precipitation sheet data is missing."
+              )
+              NA
+            }
           } else {
             NA
           }
@@ -521,6 +865,36 @@ tabularReport <- function(
               }
             )
           )
+          log_debug(paste0(
+            "[precip] Values for ",
+            i,
+            ": lastWeek=",
+            round(lastWeek$mean_precip, 1),
+            ", lastThree=",
+            round(lastThree$mean_precip, 1),
+            ", lastTwo=",
+            round(lastTwo$mean_precip, 1),
+            ", lastOne=",
+            round(lastOne$mean_precip, 1),
+            ", next24=",
+            round(next24$mean_precip, 1),
+            ", next48=",
+            round(next48$mean_precip, 1)
+          ))
+          log_info(paste0(
+            "[precip] Completed precipitation summary for ",
+            i,
+            "; elapsed_s=",
+            round(
+              as.numeric(difftime(
+                Sys.time(),
+                location_started_at,
+                units = "secs"
+              )),
+              2
+            ),
+            "."
+          ))
         },
         error = function(e) {
           precip <<- rbind(
@@ -545,9 +919,46 @@ tabularReport <- function(
               }
             )
           )
+          log_error(paste0(
+            "[precip] Failed precipitation summary for ",
+            i,
+            ": ",
+            conditionMessage(e)
+          ))
+          log_debug(paste0(
+            "[precip] [",
+            i,
+            "] Failure context: location_name=",
+            paste(name, collapse = " | "),
+            "; yesterday_comment_count=",
+            length(yesterday_comment_precip),
+            "; elapsed_s=",
+            round(
+              as.numeric(difftime(
+                Sys.time(),
+                location_started_at,
+                units = "secs"
+              )),
+              2
+            )
+          ))
+          log_debug(paste0(
+            "[precip] [",
+            i,
+            "] Call stack: ",
+            paste(
+              vapply(
+                sys.calls(),
+                function(call) paste(deparse(call), collapse = " "),
+                character(1)
+              ),
+              collapse = " -> "
+            )
+          ))
         }
       )
     }
+    log_info("[precip] Finished precipitation station loop.")
     colnames(precip) <- c(
       "Location",
       "Name",
@@ -563,10 +974,27 @@ tabularReport <- function(
     precip <- inf_to_na(precip)
     if (nrow(precip) > 0) {
       tables$precipitation <- precip
+      log_info(paste0(
+        "[precip] Added precipitation table with ",
+        nrow(precip),
+        " rows."
+      ))
+      log_info(paste0(
+        "[precip] Table contains ",
+        sum(
+          precip$`Location specific comments` ==
+            "Failed to fetch precipitation for this station.",
+          na.rm = TRUE
+        ),
+        " failed station rows."
+      ))
     }
     #End of precip fetch loop
   } else {
     yesterday_comment_precip <- NA
+    log_info(
+      "[precip] Skipping precipitation summaries (locations missing or report date is not today)."
+    )
   }
 
   ## Air temperature (ECCC Meteorology Network) -----------------------
@@ -2908,6 +3336,7 @@ ORDER BY v.location_name, v.timeseries_id;
   )
   openxlsx::mergeCells(wb, "comments", cols = c(2:7), rows = 9)
   if ("precipitation" %in% names(tables)) {
+    log_info("[precip] Writing precipitation comment rows in comments sheet.")
     openxlsx::writeData(
       wb,
       "comments",
@@ -3533,6 +3962,7 @@ ORDER BY v.location_name, v.timeseries_id;
   }
 
   if ("precipitation" %in% names(tables)) {
+    log_info("[precip] Creating and formatting precipitation worksheet.")
     openxlsx::addWorksheet(wb, "precipitation")
     #Create/format the header
     openxlsx::writeData(
@@ -3822,11 +4252,14 @@ ORDER BY v.location_name, v.timeseries_id;
       row = 8,
       comment = weekComment
     )
+    log_info("[precip] Completed precipitation worksheet formatting.")
   }
 
   save_path <- paste0(save_path, "/HydrometricReport_", report_day, ".xlsx")
+  log_info(paste0("Saving workbook to ", save_path, "."))
   # Save the workbook ----------------------------
   openxlsx::saveWorkbook(wb, save_path, overwrite = TRUE)
+  log_info("Workbook save completed successfully.")
 
   message("Tabular report created and saved at ", save_path, "\n")
   return(save_path)
