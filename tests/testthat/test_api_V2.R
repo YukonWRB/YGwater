@@ -185,6 +185,7 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   expect_equal(Sys.getenv("APIaquacachePort"), Sys.getenv("aquacachePort"))
   expect_equal(Sys.getenv("APIaquacachePublicUser"), "api_public")
   expect_equal(Sys.getenv("APIaquacachePublicPass"), "api_public_pass")
+  expect_equal(Sys.getenv("APIaquacacheLogRequests"), "TRUE")
 })
 
 test_that("API V2 async annotations are limited to long-running endpoints", {

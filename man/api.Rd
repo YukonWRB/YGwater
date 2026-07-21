@@ -16,6 +16,7 @@ api(
   dbPass = Sys.getenv("aquacachePass"),
   publicDbUser = Sys.getenv("aquacachePublicUser", "public_reader"),
   publicDbPass = Sys.getenv("aquacachePublicPass", "aquacache"),
+  logRequests = TRUE,
   workers = parallel::detectCores(-2),
   run = TRUE
 )
@@ -51,6 +52,10 @@ to 'public_reader'.}
 \item{publicDbPass}{The password for anonymous public API requests. Default
 is taken from the environment variable 'aquacachePublicPass', falling back
 to 'aquacache'.}
+
+\item{logRequests}{Whether to log API requests to
+\code{application.api_requests}. Logging failures are ignored so API responses
+are not blocked by logging table, schema, or privilege problems.}
 
 \item{workers}{The number of worker processes to use for the API server. Default is parallel::detectCores(-2). This parameter is only applicable when using plumber2, as plumber v1 does not support multiple workers.}
 
