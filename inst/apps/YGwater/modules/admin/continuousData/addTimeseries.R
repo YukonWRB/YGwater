@@ -1516,9 +1516,7 @@ addTimeseries <- function(id, language) {
             maxItems = 1,
             placeholder = "Optional",
             create = TRUE,
-            createFilter = htmlwidgets::JS(
-              "function(input) { return /^-?(?:\\d+|\\d*\\.\\d+)$/.test($.trim(input)); }"
-            ),
+            createFilter = "^-?(?:[0-9]+|[0-9]*[.][0-9]+)$",
             createOnBlur = TRUE,
             persist = FALSE,
             plugins = list("clear_button")
