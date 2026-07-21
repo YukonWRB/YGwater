@@ -511,7 +511,7 @@ contPlot <- function(id, language, windowDims, inputs) {
               choices = stats::setNames(
                 c("timeseries", "overlap_yrs", "histogram"),
                 c(
-                  tr("timeseries", language$language),
+                  tr("timeseries_label", language$language),
                   tr("plot_type_overlap", language$language),
                   tr("plot_type_histogram", language$language)
                 )
@@ -920,7 +920,7 @@ contPlot <- function(id, language, windowDims, inputs) {
         stats::setNames(
           c("timeseries", "overlap_yrs", "histogram"),
           c(
-            tr("timeseries", language$language),
+            tr("timeseries_label", language$language),
             tr("plot_type_overlap", language$language),
             tr("plot_type_histogram", language$language)
           )
