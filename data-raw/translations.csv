@@ -167,7 +167,6 @@ plot_resolution_hourly,,Hourly,Horaire
 plot_resolution_daily,,Daily,Journalière
 plot_timezone_offset,,Plot time zone (UTC offset),Fuseau horaire du graphique (décalage UTC)
 plot_timezone_offset_placeholder,,Select UTC offset,Choisir le décalage UTC
-plot_type_ts,,Timeseries,Série temporelle
 plot_type_ts_many,,Timeseries (one per plot),Série temporelle (une par graphique)
 plot_type_ts_all,,Timeseries (all on one plot),Séries temporelles (tous sur un graphique)
 plot_type_overlap,,Overlapping years,Années superposées
@@ -200,6 +199,34 @@ timeseries_metadata_heading,,Timeseries metadata,Métadonnées de la série chro
 ownership_history_heading,,Ownership history,Historique de propriété
 metadata_select_prompt,,Select a timeseries to view metadata.,Sélectionnez une série chronologique pour voir les métadonnées.
 attribute,,Attribute,Attribut
+timeseries_label,,Timeseries,Série chronologique
+timeseries_id_label,,Timeseries ID,ID de la série chronologique
+timeseries_type_label,,Timeseries type,Type de série chronologique
+timeseries_type_description,,Timeseries type description,Description du type de série chronologique
+expression_sql,,Expression SQL,Expression SQL
+constituent_count,,Constituent count,Nombre de constituants
+show_compound_timeseries_details,,Show composite/derived timeseries details,Afficher les détails de la série chronologique composite/dérivée
+show_compound_timeseries_details_for,,Show composite/derived timeseries details for,Afficher les détails de la série chronologique composite/dérivée pour
+compound_details_modal_title_for,,Composite/derived timeseries details for,Détails de la série chronologique composite/dérivée pour
+compound_metadata_heading,,Composite/derived timeseries metadata,Métadonnées de la série chronologique composite/dérivée
+constituents,,Constituents,Constituants
+yes,,Yes,Oui
+no,,No,Non
+active,,Active,Actif
+publicly_visible,,Publicly visible,Visible publiquement
+depth,,Depth,Profondeur
+path,,Path,Chemin
+alias,,Alias,Alias
+priority,,Priority,Priorité
+use_from_utc,,Use from (UTC),Utiliser à partir de (UTC)
+use_to_utc,,Use to (UTC),Utiliser jusqu'à (UTC)
+alignment_tolerance,,Alignment tolerance,Tolérance d’alignement
+reuse_values,,Reuse values,Réutiliser les valeurs
+member_timeseries_id,,Member timeseries ID,ID de la série chronologique membre
+alias_name,,Alias name,Nom d’alias
+sensor_priority,,Sensor priority,Priorité du capteur
+start_datetime_utc,,Start datetime (UTC),Date/heure de début (UTC)
+end_datetime_utc,,End datetime (UTC),Date/heure de fin (UTC)
 location_code_label,,Location code,Code du site
 latitude,,Latitude,Latitude
 longitude,,Longitude,Longitude

@@ -42,7 +42,26 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       )
       timeseries <- dbGetQueryDT(
         con,
-        "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id, loc.location_code AS loc_code, ts.media_id, ts.parameter_id, ts.aggregation_type_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id LEFT JOIN locations loc ON ts.location_id = loc.location_id;"
+        "SELECT
+           ts.timeseries_id,
+           ts.location_id,
+           ts.sub_location_id,
+           loc.location_code AS loc_code,
+           ts.media_id,
+           ts.parameter_id,
+           ts.aggregation_type_id,
+           EXTRACT(EPOCH FROM ts.record_rate) AS record_rate,
+           lz.z_meters AS z,
+           ts.start_datetime,
+           ts.end_datetime,
+           ts.timeseries_type AS timeseries_type_code,
+           tt.timeseries_type_name AS timeseries_type_name,
+           tt.timeseries_type_name_fr AS timeseries_type_name_fr
+         FROM timeseries ts
+         LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
+         LEFT JOIN locations loc ON ts.location_id = loc.location_id
+         LEFT JOIN timeseries_types tt
+           ON ts.timeseries_type = tt.timeseries_type;"
       )
 
       rates <- data.frame(

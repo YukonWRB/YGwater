@@ -873,14 +873,7 @@ addCompoundTimeseries <- function(id, language) {
             ),
             tags$p(
               class = "text-muted small",
-              paste(
-                "Alignment tolerance uses the nearest member measurement",
-                "within the tolerance window. If 'Reuse matched values' is",
-                "checked, the same member measurement can be matched to",
-                "multiple derived timestamps. Consider this when combining",
-                "different recording rates, such as hourly and 5-minute",
-                "timeseries."
-              )
+              "Alignment tolerance uses the nearest member measurement within the tolerance window. If 'Reuse matched values' is checked, the same member measurement can be matched to multiple derived timestamps. Consider this when combining different recording rates, such as hourly and 5-minute timeseries."
             ),
             div(
               actionButton(ns("add_member"), "Add member"),
