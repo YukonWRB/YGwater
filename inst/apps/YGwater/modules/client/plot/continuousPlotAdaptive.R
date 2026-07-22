@@ -173,6 +173,28 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ids
     })
 
+    selected_timeseries_date_bounds <- reactive({
+      ids <- selected_timeseries_ids()
+      if (is.null(ids)) {
+        return(NULL)
+      }
+
+      selected_ts <- moduleData$timeseries[timeseries_id %in% ids]
+      start_dates <- as.Date(selected_ts$start_datetime)
+      end_dates <- as.Date(selected_ts$end_datetime)
+      start_dates <- start_dates[!is.na(start_dates)]
+      end_dates <- end_dates[!is.na(end_dates)]
+
+      if (length(start_dates) == 0 || length(end_dates) == 0) {
+        return(NULL)
+      }
+
+      list(
+        start = min(start_dates),
+        end = max(end_dates)
+      )
+    })
+
     selected_timeseries_id_active <- reactive({
       slots <- selected_timeseries_slots()
       if (length(slots) == 0) {
@@ -183,14 +205,16 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         is.null(idx) ||
           is.na(idx) ||
           idx < 1 ||
-          idx > length(slots) ||
-          is.na(slots[[idx]])
+          idx > length(slots)
       ) {
         filled_idx <- which(!is.na(slots))
         if (length(filled_idx) == 0) {
           return(NULL)
         }
         idx <- filled_idx[[1]]
+      }
+      if (is.na(slots[[idx]])) {
+        return(NULL)
       }
       as.numeric(slots[[idx]])
     })
@@ -1335,7 +1359,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ignoreNULL = FALSE
     )
 
-    # Update active slot when a row is selected in the table
+    proxy <- DT::dataTableProxy("timeseries_table")
+
+    # Fill the active slot when a row is selected in the table
     observeEvent(input$timeseries_table_rows_selected, {
       ts <- timeseries_table_reactive()
       if (
@@ -1353,34 +1379,58 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
         duplicate_idx <- which(!is.na(slots) & slots == selected_id)
         if (length(duplicate_idx) > 0 && duplicate_idx[[1]] != idx) {
-          active_timeseries_slot(duplicate_idx[[1]])
+          duplicate_message <- if (language$abbrev == "fr") {
+            paste(
+              "La série chronologique",
+              selected_id,
+              "est déjà sélectionnée. Choisissez-en une autre."
+            )
+          } else {
+            paste(
+              "Timeseries",
+              selected_id,
+              "is already selected. Choose a different timeseries."
+            )
+          }
+          showNotification(
+            duplicate_message,
+            type = "warning"
+          )
+
+          active_id <- slots[[idx]]
+          active_row <- if (is.na(active_id)) {
+            NULL
+          } else {
+            which(ts$timeseries_id == active_id)
+          }
+          DT::selectRows(proxy, active_row)
         } else {
           slots[[idx]] <- as.numeric(selected_id)
           selected_timeseries_slots(as.numeric(slots))
           active_timeseries_slot(idx)
         }
       }
+    })
 
-      # Update the date range input to reflect the active selected timeseries
-      selected_id <- selected_timeseries_id_active()
-      if (is.null(selected_id)) {
-        return()
-      }
-      # In some cases the min date is not a year after the max date, so take the max one to prevent a blank date range.
+    # Use the full availability envelope across all selected timeseries.
+    observeEvent(selected_timeseries_date_bounds(), {
+      bounds <- selected_timeseries_date_bounds()
+      req(bounds)
+
+      # Prevent a blank default range when the record is less than one year long.
       safe_min <- max(
-        ts$end_date[ts$timeseries_id == selected_id] - 365,
-        ts$start_date[ts$timeseries_id == selected_id],
-        na.rm = TRUE
+        bounds$end - 365,
+        bounds$start
       )
       updateDateRangeInput(
         session,
         "date_range",
         start = safe_min,
-        end = ts$end_date[ts$timeseries_id == selected_id],
-        min = ts$start_date[ts$timeseries_id == selected_id],
-        max = ts$end_date[ts$timeseries_id == selected_id]
+        end = bounds$end,
+        min = bounds$start,
+        max = bounds$end
       )
-    })
+    }, ignoreNULL = TRUE)
 
     # Render the timeseries table
     output$timeseries_table <- DT::renderDataTable({
@@ -2199,8 +2249,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       )
     })
 
-    proxy <- DT::dataTableProxy("timeseries_table")
-
     # Keep table highlight in sync with active selected timeseries slot
     observeEvent(
       list(
@@ -2227,46 +2275,30 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
     # Observe buttons to update date range
     observeEvent(input$last_30, {
-      ts <- timeseries_table_reactive()
-      selected_id <- selected_timeseries_id_active()
-      if (is.null(selected_id)) {
-        return()
-      }
-      selected_row <- which(ts$timeseries_id == selected_id)
-      if (length(selected_row) == 0) {
-        return()
-      }
-      end_date <- ts$end_date[selected_row]
+      bounds <- selected_timeseries_date_bounds()
+      req(bounds)
+
       safe_start_date <- max(
-        end_date - 30,
-        ts$start_date[selected_row],
-        na.rm = TRUE
+        bounds$end - 30,
+        bounds$start
       )
       updateDateRangeInput(
         session,
         "date_range",
         start = safe_start_date,
-        end = end_date
+        end = bounds$end
       )
     })
 
     observeEvent(input$entire_record, {
-      ts <- timeseries_table_reactive()
-      selected_id <- selected_timeseries_id_active()
-      if (is.null(selected_id)) {
-        return()
-      }
-      selected_row <- which(ts$timeseries_id == selected_id)
-      if (length(selected_row) == 0) {
-        return()
-      }
-      start_date <- ts$start_date[selected_row]
-      end_date <- ts$end_date[selected_row]
+      bounds <- selected_timeseries_date_bounds()
+      req(bounds)
+
       updateDateRangeInput(
         session,
         "date_range",
-        start = start_date,
-        end = end_date
+        start = bounds$start,
+        end = bounds$end
       )
     })
 
