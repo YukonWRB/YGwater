@@ -1281,6 +1281,22 @@ addCompoundTimeseries <- function(id, language) {
           "Expression SQL must be a single expression without comments or semicolons."
         )
       }
+      if (!is.na(expression_sql)) {
+        expression_error <- tryCatch(
+          {
+            YGwater:::validate_numeric_sql_expression(
+              expression_sql,
+              allowed_identifiers = rows$member_alias,
+              label = "Expression SQL"
+            )
+            NULL
+          },
+          error = function(e) e$message
+        )
+        if (!is.null(expression_error)) {
+          errors <- c(errors, expression_error)
+        }
+      }
 
       unique(errors)
     }

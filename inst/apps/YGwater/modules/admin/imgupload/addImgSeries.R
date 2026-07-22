@@ -757,13 +757,33 @@ addImgSeries <- function(id, language) {
             }
 
             # Changes to source_fx
-            if (input$source_fx != selected_series$source_fx) {
+            submitted_source_fx <- if (
+              !length(input$source_fx) ||
+                is.na(input$source_fx[[1]]) ||
+                !nzchar(input$source_fx[[1]])
+            ) {
+              NA_character_
+            } else {
+              input$source_fx[[1]]
+            }
+            if (
+              length(input$source_fx) > 1L ||
+                (!is.na(submitted_source_fx) &&
+                  !submitted_source_fx %in% moduleData$source_fx)
+            ) {
+              stop("Select a valid AquaCache image source function.")
+            }
+            existing_source_fx <- if (is.na(selected_series$source_fx)) {
+              NA_character_
+            } else {
+              as.character(selected_series$source_fx)
+            }
+            if (!identical(submitted_source_fx, existing_source_fx)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE files.image_series SET source_fx = '",
-                  input$source_fx,
-                  "' WHERE img_series_id = ",
+                "UPDATE files.image_series SET source_fx = $1 WHERE img_series_id = $2",
+                params = list(
+                  submitted_source_fx,
                   selected_series$img_series_id
                 )
               )
@@ -820,12 +840,8 @@ addImgSeries <- function(id, language) {
 
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  paste0(
-                    "UPDATE files.image_series SET source_fx_args = '",
-                    args,
-                    "' WHERE img_series_id = ",
-                    selected_series$img_series_id
-                  )
+                  "UPDATE files.image_series SET source_fx_args = $1::jsonb WHERE img_series_id = $2",
+                  params = list(args, selected_series$img_series_id)
                 )
               }
             } else {
@@ -855,12 +871,8 @@ addImgSeries <- function(id, language) {
               args <- jsonlite::toJSON(args, auto_unbox = TRUE)
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE files.image_series SET source_fx_args = '",
-                  args,
-                  "' WHERE img_series_id = ",
-                  selected_series$img_series_id
-                )
+                "UPDATE files.image_series SET source_fx_args = $1::jsonb WHERE img_series_id = $2",
+                params = list(args, selected_series$img_series_id)
               )
             }
 

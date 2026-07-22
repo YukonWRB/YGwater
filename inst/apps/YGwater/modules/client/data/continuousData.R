@@ -2599,12 +2599,9 @@ contData <- function(id, language, inputs) {
               paste0(
                 "SELECT COUNT(*) FROM continuous.measurements_calculated_daily WHERE timeseries_id IN (",
                 paste(selected_tsids, collapse = ", "),
-                ") AND date > '",
-                input$modal_date_range[1],
-                "' AND date < '",
-                input$modal_date_range[2],
-                "';"
-              )
+                ") AND date > $1::date AND date < $2::date;"
+              ),
+              params = list(input$modal_date_range[1], input$modal_date_range[2])
             )[[1]]
 
             #   query <- paste0("WITH extremes AS (
@@ -2699,11 +2696,7 @@ contData <- function(id, language, inputs) {
           WHERE timeseries_id IN (",
             paste(selected_tsids, collapse = ", "),
             ")
-          AND date >= '",
-            input$modal_date_range[1],
-            "' AND date <= '",
-            input$modal_date_range[2],
-            "'
+          AND date >= $1::date AND date <= $2::date
           GROUP BY timeseries_id
         )
         SELECT
@@ -2721,7 +2714,11 @@ contData <- function(id, language, inputs) {
         m.doy_count;
         "
           )
-          subset <- dbGetQueryDT(session$userData$AquaCache, query)
+          subset <- dbGetQueryDT(
+            session$userData$AquaCache,
+            query,
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
+          )
           round_cols <- names(subset)[seq.int(3L, ncol(subset))]
           subset[, (round_cols) := lapply(.SD, round, 2), .SDcols = round_cols]
 
@@ -2884,12 +2881,9 @@ contData <- function(id, language, inputs) {
               missing_30yr_select,
               " FROM continuous.measurements_calculated_daily AS m WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND date >= '",
-              input$modal_date_range[1],
-              "' AND date <= '",
-              input$modal_date_range[2],
-              "';"
-            )
+              ") AND date >= $1::date AND date <= $2::date;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           grades = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2902,12 +2896,9 @@ contData <- function(id, language, inputs) {
               end_dt_expr,
               " FROM continuous.grades g JOIN public.grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "'ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           approvals = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2920,12 +2911,9 @@ contData <- function(id, language, inputs) {
               end_dt_expr,
               " FROM continuous.approvals a JOIN public.approval_types at ON a.approval_type_id = at.approval_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "' ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           qualifiers = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2938,12 +2926,9 @@ contData <- function(id, language, inputs) {
               end_dt_expr,
               " FROM continuous.qualifiers q JOIN public.qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "'ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           owners = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2956,12 +2941,9 @@ contData <- function(id, language, inputs) {
               end_dt_expr,
               " FROM continuous.owners o JOIN public.organizations orgs ON o.organization_id = orgs.organization_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "'ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           )
         )
 

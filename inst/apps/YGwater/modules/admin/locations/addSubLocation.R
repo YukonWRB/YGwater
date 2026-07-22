@@ -786,21 +786,15 @@ addSubLocation <- function(id, inputs, language) {
                 ) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    sprintf(
-                      "UPDATE public.sub_locations SET note = '%s' WHERE sub_location_id = %d",
-                      input$subloc_note,
-                      selected_sub_loc()
-                    )
+                    "UPDATE public.sub_locations SET note = $1 WHERE sub_location_id = $2",
+                    params = list(input$subloc_note, selected_sub_loc())
                   )
                 }
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE public.sub_locations SET note = '%s' WHERE sub_location_id = %d",
-                    input$subloc_note,
-                    selected_sub_loc()
-                  )
+                  "UPDATE public.sub_locations SET note = $1 WHERE sub_location_id = $2",
+                  params = list(input$subloc_note, selected_sub_loc())
                 )
               }
             }

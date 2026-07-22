@@ -5,6 +5,9 @@
 #* @version 2.0.0
 "_API"
 
+api_request_budget <- YGwater:::api_request_budget
+api_set_query_timeout <- YGwater:::api_set_query_timeout
+
 # Helper function to create a simple serializer that converts R objects to character strings, handling NULL values gracefully
 v2_identity_serializer <- function(...) {
   function(value) {
@@ -1281,7 +1284,7 @@ function(request, response, query) {
 #* @query id:string* Timeseries IDs to target, separated by commas.
 #* @query start:string* Start date/time, inclusive, in ISO 8601 format.
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
-#* @query limit:integer(100000) Maximum number of records to return.
+#* @query limit:integer(100000) Maximum number of records to return; capped at 1000000.
 #* @query modifiedSince:string Only return measurements created or modified since this ISO 8601 date/time.
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -1338,11 +1341,6 @@ function(client_id, query) {
     }
   }
 
-  lim <- suppressWarnings(as.integer(v2_query_value(query, "limit", "100000")))
-  if (is.na(lim) || lim <= 0L) {
-    lim <- 100000L
-  }
-
   ids <- v2_parse_integer_csv(id)
   if (length(ids) == 0L) {
     return(v2_response(
@@ -1354,11 +1352,28 @@ function(client_id, query) {
     ))
   }
 
+  budget <- api_request_budget(
+    limit = v2_query_value(query, "limit", "100000"),
+    id_groups = list(id = ids),
+    start = start,
+    end = end,
+    max_rows = 1000000L
+  )
+  if (!budget$valid) {
+    return(v2_response(
+      v2_error_df(budget$message),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+  lim <- budget$limit
+
   ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+  api_set_query_timeout(ctx$con)
 
   include_private <- !v2_request_cache_allowed(ctx$credentials)
   measurement_join_sql <- "
@@ -1873,7 +1888,7 @@ v2_finalize_tabular_response
 #* @query id:string* Timeseries IDs to target, separated by commas.
 #* @query start:string* Start date, inclusive, in ISO 8601 date format.
 #* @query end:string End date, inclusive, in ISO 8601 date format.
-#* @query limit:integer(100000) Maximum number of records to return.
+#* @query limit:integer(100000) Maximum number of records to return; capped at 1000000.
 #* @query modifiedSince:string Only return daily measurements created or modified since this ISO 8601 date/time.
 #* @query stats:boolean(false) Include historical range statistics.
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
@@ -1941,11 +1956,6 @@ function(client_id, query) {
   }
   include_stats <- identical(stats, "true")
 
-  lim <- suppressWarnings(as.integer(v2_query_value(query, "limit", "100000")))
-  if (is.na(lim) || lim <= 0L) {
-    lim <- 100000L
-  }
-
   ids <- v2_parse_integer_csv(id)
   if (length(ids) == 0L) {
     return(v2_response(
@@ -1957,11 +1967,28 @@ function(client_id, query) {
     ))
   }
 
+  budget <- api_request_budget(
+    limit = v2_query_value(query, "limit", "100000"),
+    id_groups = list(id = ids),
+    start = start,
+    end = end,
+    max_rows = 1000000L
+  )
+  if (!budget$valid) {
+    return(v2_response(
+      v2_error_df(budget$message),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+  lim <- budget$limit
+
   ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+  api_set_query_timeout(ctx$con)
 
   stats_select_sql <- ""
   if (include_stats) {
@@ -2233,6 +2260,7 @@ function(request, response, query) {
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
 #* @query locations:string Location IDs to target, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
+#* @query limit:integer(100000) Maximum number of records to return.
 #* @query modifiedSince:string Only return samples created or modified since this ISO 8601 date/time.
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2279,6 +2307,9 @@ function(client_id, query) {
       ))
     }
   }
+
+  location_ids <- integer()
+  parameter_ids <- integer()
 
   sql <- "SELECT
     sm.*
@@ -2328,21 +2359,44 @@ function(client_id, query) {
       "))"
     )
   }
+
+  budget <- api_request_budget(
+    limit = v2_query_value(query, "limit", "100000"),
+    id_groups = list(
+      locations = location_ids,
+      parameters = parameter_ids
+    ),
+    start = start,
+    end = end
+  )
+  if (!budget$valid) {
+    return(v2_response(
+      v2_error_df(budget$message),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+  lim <- budget$limit
+
   query_params <- list(start, end)
+  limit_param <- "$3"
   if (!is.null(modified_since)) {
     sql <- paste0(
       sql,
       " AND (sm.created >= $3 OR sm.modified >= $3)"
     )
     query_params <- list(start, end, modified_since)
+    limit_param <- "$4"
   }
-  sql <- paste0(sql, " ORDER BY sm.datetime ASC")
+  sql <- paste0(sql, " ORDER BY sm.datetime ASC LIMIT ", limit_param)
+  query_params <- c(query_params, list(lim))
 
   ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+  api_set_query_timeout(ctx$con)
 
   out <- DBI::dbGetQuery(ctx$con, sql, params = query_params)
 
@@ -2367,8 +2421,9 @@ v2_finalize_tabular_response
 
 #* Return sample results
 #* @get /samples/results
-#* @query sample_ids:string* Sample IDs to target, separated by commas.
+#* @query sample_ids:string* Up to 100000 sample IDs, separated by commas.
 #* @query parameters:string Parameter IDs to target, separated by commas.
+#* @query limit:integer(100000) Maximum number of records to return.
 #* @query modifiedSince:string Only return results created or modified since this ISO 8601 date/time.
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
@@ -2393,6 +2448,8 @@ function(client_id, query) {
       headers = list("X-Status" = "error")
     ))
   }
+
+  parameter_ids <- integer()
 
   sql <- paste0(
     "SELECT
@@ -2422,6 +2479,24 @@ function(client_id, query) {
       ")"
     )
   }
+
+  budget <- api_request_budget(
+    limit = v2_query_value(query, "limit", "100000"),
+    id_groups = list(
+      sample_ids = sample_ids,
+      parameters = parameter_ids
+    ),
+    max_ids = 100000L
+  )
+  if (!budget$valid) {
+    return(v2_response(
+      v2_error_df(budget$message),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+  lim <- budget$limit
+
   modified_since <- v2_query_value(query, "modifiedSince")
   if (!is.null(modified_since)) {
     modified_since <- v2_parse_datetime(modified_since)
@@ -2439,18 +2514,24 @@ function(client_id, query) {
       " AND (r.created >= $1 OR r.modified >= $1)"
     )
   }
-  sql <- paste0(sql, " ORDER BY r.parameter_id")
+  limit_param <- if (is.null(modified_since)) "$1" else "$2"
+  sql <- paste0(sql, " ORDER BY r.parameter_id LIMIT ", limit_param)
 
   ctx <- v2_context(client_id)
   if (!is.null(ctx$error)) {
     return(ctx$error)
   }
   on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+  api_set_query_timeout(ctx$con)
 
   if (is.null(modified_since)) {
-    out <- DBI::dbGetQuery(ctx$con, sql)
+    out <- DBI::dbGetQuery(ctx$con, sql, params = list(lim))
   } else {
-    out <- DBI::dbGetQuery(ctx$con, sql, params = list(modified_since))
+    out <- DBI::dbGetQuery(
+      ctx$con,
+      sql,
+      params = list(modified_since, lim)
+    )
   }
 
   if (nrow(out) == 0L) {

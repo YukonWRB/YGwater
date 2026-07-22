@@ -683,7 +683,7 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
     }
     paste0(
       "http://example.com/samples",
-      "?start=1900-01-01&end=3000-01-01",
+      "?start=1900-01-01&end=2099-12-31",
       suffix
     )
   }
@@ -790,7 +790,7 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
 
   invalid_samples_since <- get_v2(paste0(
     "http://example.com/samples",
-    "?start=1900-01-01&end=3000-01-01&modifiedSince=not-a-date"
+    "?start=1900-01-01&end=2099-12-31&modifiedSince=not-a-date"
   ))
 
   expect_equal(invalid_samples_since$status, 400)

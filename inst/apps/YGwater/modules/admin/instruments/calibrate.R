@@ -4965,24 +4965,18 @@ table.on("click", "tr", function() {
             if (input$depth_changes_ok != "Not Checked") {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE instruments.calibrate_depth SET depth_check_ok = '",
+                "UPDATE instruments.calibrate_depth SET depth_check_ok = $1, depth_changes_ok = $2 WHERE calibration_id = $3",
+                params = list(
                   input$depth_check_ok,
-                  "', depth_changes_ok ='",
                   input$depth_changes_ok,
-                  "' WHERE calibration_id = ",
                   calibration_data$next_id
                 )
               )
             } else {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE instruments.calibrate_depth SET depth_check_ok = '",
-                  input$depth_check_ok,
-                  "', depth_changes_ok = NULL WHERE calibration_id = ",
-                  calibration_data$next_id
-                )
+                "UPDATE instruments.calibrate_depth SET depth_check_ok = $1, depth_changes_ok = NULL WHERE calibration_id = $2",
+                params = list(input$depth_check_ok, calibration_data$next_id)
               )
             }
           }

@@ -2540,22 +2540,16 @@ addLocation <- function(id, inputs, language) {
                 ) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    sprintf(
-                      "UPDATE public.locations SET contact = '%s' WHERE location_id = %d",
-                      input$loc_contact,
-                      selected_loc()
-                    )
+                    "UPDATE public.locations SET contact = $1 WHERE location_id = $2",
+                    params = list(input$loc_contact, selected_loc())
                   )
                 }
               } else {
                 # If the contact is empty, insert it
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE public.locations SET contact = '%s' WHERE location_id = %d",
-                    input$loc_contact,
-                    selected_loc()
-                  )
+                  "UPDATE public.locations SET contact = $1 WHERE location_id = $2",
+                  params = list(input$loc_contact, selected_loc())
                 )
               }
             }
@@ -2686,9 +2680,9 @@ addLocation <- function(id, inputs, language) {
               ) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE public.locations SET jurisdictional_relevance = %s WHERE location_id = %d",
-                    input$loc_jurisdictional_relevance,
+                  "UPDATE public.locations SET jurisdictional_relevance = $1 WHERE location_id = $2",
+                  params = list(
+                    as.logical(input$loc_jurisdictional_relevance),
                     selected_loc()
                   )
                 )
@@ -2708,9 +2702,9 @@ addLocation <- function(id, inputs, language) {
               ) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE public.locations SET anthropogenic_influence = %s WHERE location_id = %d",
-                    input$loc_anthropogenic_influence,
+                  "UPDATE public.locations SET anthropogenic_influence = $1 WHERE location_id = $2",
+                  params = list(
+                    as.logical(input$loc_anthropogenic_influence),
                     selected_loc()
                   )
                 )
@@ -2737,22 +2731,16 @@ addLocation <- function(id, inputs, language) {
                 ) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    sprintf(
-                      "UPDATE public.locations SET install_purpose = '%s' WHERE location_id = %d",
-                      input$loc_install_purpose,
-                      selected_loc()
-                    )
+                    "UPDATE public.locations SET install_purpose = $1 WHERE location_id = $2",
+                    params = list(input$loc_install_purpose, selected_loc())
                   )
                 }
               } else {
                 # If the install_purpose was NA, just set it
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE public.locations SET install_purpose = '%s' WHERE location_id = %d",
-                    input$loc_install_purpose,
-                    selected_loc()
-                  )
+                  "UPDATE public.locations SET install_purpose = $1 WHERE location_id = $2",
+                  params = list(input$loc_install_purpose, selected_loc())
                 )
               }
             }
@@ -2777,22 +2765,16 @@ addLocation <- function(id, inputs, language) {
                 ) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    sprintf(
-                      "UPDATE public.locations SET current_purpose = '%s' WHERE location_id = %d",
-                      input$loc_current_purpose,
-                      selected_loc()
-                    )
+                    "UPDATE public.locations SET current_purpose = $1 WHERE location_id = $2",
+                    params = list(input$loc_current_purpose, selected_loc())
                   )
                 }
               } else {
                 # If the current purpose was NA, just set it
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE public.locations SET current_purpose = '%s' WHERE location_id = %d",
-                    input$loc_current_purpose,
-                    selected_loc()
-                  )
+                  "UPDATE public.locations SET current_purpose = $1 WHERE location_id = $2",
+                  params = list(input$loc_current_purpose, selected_loc())
                 )
               }
             }
@@ -2817,21 +2799,15 @@ addLocation <- function(id, inputs, language) {
                 ) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    sprintf(
-                      "UPDATE public.locations SET note = '%s' WHERE location_id = %d",
-                      input$loc_note,
-                      selected_loc()
-                    )
+                    "UPDATE public.locations SET note = $1 WHERE location_id = $2",
+                    params = list(input$loc_note, selected_loc())
                   )
                 }
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  sprintf(
-                    "UPDATE public.locations SET note = '%s' WHERE location_id = %d",
-                    input$loc_note,
-                    selected_loc()
-                  )
+                  "UPDATE public.locations SET note = $1 WHERE location_id = $2",
+                  params = list(input$loc_note, selected_loc())
                 )
               }
             }

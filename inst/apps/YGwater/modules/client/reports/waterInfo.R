@@ -344,6 +344,11 @@ waterInfoMod <- function(id, language) {
           issues,
           "Select at least one location, or choose 'All locations'."
         )
+      } else {
+        allowed_locations <- c("all", as.character(moduleData$locs$location))
+        if (length(setdiff(as.character(selections$loc), allowed_locations))) {
+          issues <- c(issues, "One or more selected locations are invalid.")
+        }
       }
 
       end_date <- as.Date(selections$end)

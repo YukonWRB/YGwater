@@ -542,7 +542,9 @@ mapLocs <- function(id, language, outputs = NULL) {
           # Get location names
           popup_names <- moduleData$locations[, .(
             location_id,
-            popup_name = get(tr("generic_name_col", language$language))
+            popup_name = YGwater:::escape_html_text(
+              get(tr("generic_name_col", language$language))
+            )
           )]
           # Aggregate time range for each location
           time_range <- moduleData$timeseries[,
@@ -558,7 +560,7 @@ mapLocs <- function(id, language, outputs = NULL) {
           tmp <- moduleData$timeseries
           tmp[,
             formatted_param := paste(
-              get(param_name_col),
+              YGwater:::escape_html_text(get(param_name_col)),
               " (",
               format(as.Date(start_datetime), "%Y-%m-%d"),
               " ",
@@ -581,7 +583,7 @@ mapLocs <- function(id, language, outputs = NULL) {
             allow.cartesian = TRUE
           ]
           tmp[,
-            formatted_network := get(network_col)
+            formatted_network := YGwater:::escape_html_text(get(network_col))
           ]
           location_networks <- tmp[,
             .(networks = paste(formatted_network, collapse = "<br/>")),
@@ -595,7 +597,7 @@ mapLocs <- function(id, language, outputs = NULL) {
             allow.cartesian = TRUE
           ]
           tmp[,
-            formatted_project := get(projects_col)
+            formatted_project := YGwater:::escape_html_text(get(projects_col))
           ]
           location_projects <- tmp[,
             .(projects = paste(formatted_project, collapse = "<br/>")),

@@ -91,10 +91,11 @@ waterInfo <- function(
       paste0(
         "SELECT * FROM continuous.timeseries WHERE parameter_id IN (",
         paste(params$parameter_id, collapse = ", "),
-        ") AND location IN ('",
-        paste(locations, collapse = "', '"),
-        "');"
-      )
+        ") AND location IN (
+          SELECT jsonb_array_elements_text($1::jsonb)
+        );"
+      ),
+      params = list(jsonlite::toJSON(as.character(locations), auto_unbox = FALSE))
     )
   }
 

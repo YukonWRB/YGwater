@@ -79,14 +79,20 @@ imgMapView <- function(id, language) {
     selected_colour = rgb(0, 1, 1, 0.8) # Cyan with 0.5 transparency for the selected image in the mini timeline plot
 
     renderSelectedImage <- function(id) {
-      if (is.na(id)) {
+      id <- suppressWarnings(as.integer(id))
+      if (
+        length(id) != 1L ||
+          is.na(id) ||
+          !id %in% images$images$image_id
+      ) {
         return(NULL)
       } else {
         output$img <- renderImage(
           {
             image <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              paste0("SELECT format, file FROM files.images WHERE image_id = ", id)
+              "SELECT format, file FROM files.images WHERE image_id = $1",
+              params = list(id)
             )
             if (nrow(image) == 1 && !is.null(image$file)) {
               outfile <- tempfile(fileext = paste0(".", image$format))
@@ -538,11 +544,11 @@ imgMapView <- function(id, language) {
       {
         images$images <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          paste0(
-            "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '",
-            as.POSIXct(input$dates[1], tz = "MST") - 7 * 60,
-            "';"
-          )
+          "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type
+           FROM files.images i
+           LEFT JOIN files.image_types it ON i.image_type = it.image_type_id
+           WHERE datetime > $1",
+          params = list(as.POSIXct(input$dates[1], tz = "MST") - 7 * 60)
         )
         attr(images$images$datetime, "tzone") <- "MST"
         images$unique_types <- images$images[
@@ -587,11 +593,11 @@ imgMapView <- function(id, language) {
         ) {
           images$images <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            paste0(
-              "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type FROM files.images i LEFT JOIN files.image_types it on i.image_type = it.image_type_id WHERE datetime > '",
-              as.POSIXct(input$dates[1], tz = "MST") - 7 * 60,
-              "';"
-            )
+            "SELECT i.image_id, i.img_series_id, i.datetime, i.latitude, i.longitude, i.location_id, i.tags, i.image_type AS image_type_id, it.image_type
+             FROM files.images i
+             LEFT JOIN files.image_types it ON i.image_type = it.image_type_id
+             WHERE datetime > $1",
+            params = list(as.POSIXct(input$dates[1], tz = "MST") - 7 * 60)
           )
           attr(images$images$datetime, "tzone") <- "MST"
           images$unique_types <- images$images[

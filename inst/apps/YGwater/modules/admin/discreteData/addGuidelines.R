@@ -4534,6 +4534,9 @@ FROM vals",
       type <- input$guideline_type %||% "constant_upper"
       operator <- target_operator(type)
       formula_sql <- clean_sql_scalar(input$formula_sql)
+      if (identical(type, "sql_scalar")) {
+        YGwater:::validate_guideline_sql_scalar(formula_sql)
+      }
       rule_inputs <- if (type %in% c("sql_scalar", "single_input_formula")) {
         save_rule_inputs_snapshot(
           formula_sql = if (identical(type, "sql_scalar")) formula_sql else NULL

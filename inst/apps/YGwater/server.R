@@ -3806,7 +3806,12 @@ app_server <- function(input, output, session) {
         )
       }
     }
-    if (input$navbar == "WQReport") {
+    if (
+      input$navbar == "WQReport" &&
+        !isTRUE(config$public) &&
+        isTRUE(config$network_check) &&
+        isTRUE(session$userData$user_logged_in)
+    ) {
       if (!ui_loaded$WQReport) {
         output$WQReport_ui <- renderUI(WQReportUI("WQReport"))
         ui_loaded$WQReport <- TRUE

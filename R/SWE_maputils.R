@@ -4486,6 +4486,8 @@ generate_popup_content <- function(
     continuity = "discrete"
 ) {
     language <- lengthenLanguage(language)
+    name <- escape_html_text(name)
+    location <- escape_html_text(location)
 
     # Get acronym: first letter of each word in param_name, lowercased
     parameter_accronym <- tolower(paste(
@@ -4760,6 +4762,9 @@ get_display_data <- function(
         "anomalies" = "mm",
         "%"
     )
+
+    dataset_state$annotation_en <- escape_html_text(dataset_state$annotation_en)
+    dataset_state$annotation_fr <- escape_html_text(dataset_state$annotation_fr)
 
     dataset_state$annotation_fr <- paste0(
         dataset_state$annotation_fr,
@@ -5156,7 +5161,11 @@ make_leaflet_map <- function(
                 opacity = static_style_elements$surveys$opacity,
                 fillOpacity = static_style_elements$surveys$fillOpacity,
                 label = ~ lapply(
-                    paste0(name, "<br>", location),
+                    paste0(
+                        escape_html_text(name),
+                        "<br>",
+                        escape_html_text(location)
+                    ),
                     htmltools::HTML
                 ),
                 popup = ~ lapply(popup_content, htmltools::HTML),
@@ -5190,7 +5199,11 @@ make_leaflet_map <- function(
                     iconHeight = 2.7 * static_style_elements$pillows$radius
                 ),
                 label = ~ lapply(
-                    paste0(name, "<br>", location),
+                    paste0(
+                        escape_html_text(name),
+                        "<br>",
+                        escape_html_text(location)
+                    ),
                     htmltools::HTML
                 ),
                 popup = ~ lapply(popup_content, htmltools::HTML),

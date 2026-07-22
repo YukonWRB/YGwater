@@ -1,5 +1,8 @@
 # !IMPORTANT! Some helper functions are located at the bottom of this file.
 
+api_request_budget <- YGwater:::api_request_budget
+api_set_query_timeout <- YGwater:::api_set_query_timeout
+
 #' @apiTitle AquaCache API version 1
 #' @apiDescription API for programmatic access to the aquacache database.
 #' @apiVersion 1.0.1
@@ -70,6 +73,42 @@ function(req, res) {
 
 request_cache_allowed <- function(req) {
   !isTRUE(req$is_authenticated)
+}
+
+request_budget_error <- function(message, req, res, format = NULL) {
+  res$status <- 400
+  res$setHeader("X-Status", "error")
+  serialize_tabular(
+    data.frame(
+      status = "error",
+      message = message,
+      stringsAsFactors = FALSE
+    ),
+    req,
+    res,
+    format
+  )
+}
+
+request_integer_csv <- function(value) {
+  if (
+    length(value) == 0L ||
+      is.na(value[[1L]]) ||
+      !nzchar(trimws(as.character(value[[1L]])))
+  ) {
+    return(NULL)
+  }
+
+  values <- trimws(strsplit(
+    as.character(value[[1L]]),
+    ",",
+    fixed = TRUE
+  )[[1L]])
+  parsed <- suppressWarnings(as.integer(values))
+  if (anyNA(parsed)) {
+    return(integer())
+  }
+  parsed
 }
 
 #' List available locations
@@ -268,7 +307,7 @@ function(req, res, lang = "en", format = NULL) {
 #* @param id Timeseries IDs to target, separated by commas (required).
 #* @param start Start date/time, inclusive (required, ISO 8601 i.e. 2025-01-01 00:00).
 #* @param end End date/time, inclusive (optional; defaults to now, ISO 8601).
-#* @param limit Maximum number of records to return (optional; defaults to 100000).
+#* @param limit Maximum number of records to return (optional; defaults to 100000, maximum 1000000).
 #* @param modifiedSince Only return measurements created or modified since this ISO 8601 date/time.
 #* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /timeseries/measurements
@@ -346,10 +385,30 @@ function(
     modifiedSince <- NULL
   }
 
-  lim <- suppressWarnings(as.integer(limit))
-  if (is.na(lim) || lim <= 0) {
-    lim <- 100000
+  ids <- suppressWarnings(as.integer(
+    unlist(strsplit(id, ",", fixed = TRUE))
+  ))
+  ids <- ids[!is.na(ids)]
+  if (length(ids) == 0L) {
+    return(request_budget_error(
+      "Invalid 'id' parameter. Must contain at least one integer timeseries_id.",
+      req,
+      res,
+      format
+    ))
   }
+
+  budget <- api_request_budget(
+    limit = limit,
+    id_groups = list(id = ids),
+    start = start,
+    end = end,
+    max_rows = 1000000L
+  )
+  if (!budget$valid) {
+    return(request_budget_error(budget$message, req, res, format))
+  }
+  lim <- budget$limit
 
   con <- try(
     YGwater::AquaConnect(
@@ -373,20 +432,7 @@ function(
     return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-
-  # Break id apart by comma and convert to integer vector
-  id <- unlist(strsplit(id, ","))
-  id <- as.integer(id)
-  id <- id[!is.na(id)]
-  if (length(id) == 0) {
-    res$setHeader("X-Status", "error")
-    response <- data.frame(
-      status = "error",
-      message = "Invalid 'id' parameter. Must contain at least one integer timeseries_id.",
-      stringsAsFactors = FALSE
-    )
-    return(serialize_tabular(response, req, res, format))
-  }
+  api_set_query_timeout(con)
   include_private <- !request_cache_allowed(req)
   measurement_join_sql <- "
     LEFT JOIN LATERAL (
@@ -504,7 +550,7 @@ function(
   sql <- paste0(
     "WITH RECURSIVE requested_timeseries(timeseries_id) AS (
            SELECT unnest(ARRAY[",
-    paste(id, collapse = ","),
+    paste(ids, collapse = ","),
     "]::integer[])
          ),
          selected_timeseries AS MATERIALIZED (
@@ -892,7 +938,7 @@ function(
 #* @param id Timeseries IDs to target, separated by commas (required).
 #* @param start Start date, inclusive (required, ISO 8601 date).
 #* @param end End date, inclusive (optional; defaults to today).
-#* @param limit Maximum number of records to return (optional; defaults to 100000).
+#* @param limit Maximum number of records to return (optional; defaults to 100000, maximum 1000000).
 #* @param modifiedSince Only return daily measurements created or modified since this ISO 8601 date/time.
 #* @param stats Include historical range statistics (optional; defaults to false).
 #* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
@@ -963,11 +1009,6 @@ function(
   }
   include_stats <- identical(stats_value, "true")
 
-  lim <- suppressWarnings(as.integer(limit))
-  if (is.na(lim) || lim <= 0L) {
-    lim <- 100000L
-  }
-
   ids <- suppressWarnings(as.integer(unlist(strsplit(id, ",", fixed = TRUE))))
   ids <- ids[!is.na(ids)]
   if (length(ids) == 0L) {
@@ -975,6 +1016,18 @@ function(
       "Invalid 'id' parameter. Must contain at least one integer timeseries_id."
     ))
   }
+
+  budget <- api_request_budget(
+    limit = limit,
+    id_groups = list(id = ids),
+    start = start,
+    end = end,
+    max_rows = 1000000L
+  )
+  if (!budget$valid) {
+    return(error_response(budget$message))
+  }
+  lim <- budget$limit
 
   con <- try(
     YGwater::AquaConnect(
@@ -1000,6 +1053,7 @@ function(
     ))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+  api_set_query_timeout(con)
 
   stats_select_sql <- ""
   if (include_stats) {
@@ -1267,6 +1321,7 @@ function(req, res, format = NULL) {
 #* @param end End date (optional, ISO 8601 format, defaults to current date/time).
 #* @param locations Location ID (optional, integer string separated by commas). If provided, filters samples to these locations.
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters samples to only those which include these parameters.
+#* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @param modifiedSince Only return samples created or modified since this ISO 8601 date/time.
 #* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /samples
@@ -1278,6 +1333,7 @@ function(
   end = NA,
   locations = NA,
   parameters = NA,
+  limit = 100000,
   modifiedSince = NA,
   format = NULL
 ) {
@@ -1333,6 +1389,39 @@ function(
     modifiedSince <- NULL
   }
 
+  location_ids <- request_integer_csv(locations)
+  if (!is.null(location_ids) && length(location_ids) == 0L) {
+    return(request_budget_error(
+      "Invalid 'locations' parameter. Must contain integer location_id values.",
+      req,
+      res,
+      format
+    ))
+  }
+  parameter_ids <- request_integer_csv(parameters)
+  if (!is.null(parameter_ids) && length(parameter_ids) == 0L) {
+    return(request_budget_error(
+      "Invalid 'parameters' parameter. Must contain integer parameter_id values.",
+      req,
+      res,
+      format
+    ))
+  }
+
+  budget <- api_request_budget(
+    limit = limit,
+    id_groups = list(
+      locations = location_ids %||% integer(),
+      parameters = parameter_ids %||% integer()
+    ),
+    start = start,
+    end = end
+  )
+  if (!budget$valid) {
+    return(request_budget_error(budget$message, req, res, format))
+  }
+  lim <- budget$limit
+
   con <- try(
     YGwater::AquaConnect(
       username = req$user,
@@ -1355,21 +1444,22 @@ function(
     return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
+  api_set_query_timeout(con)
 
   sql <- "SELECT
     sm.*
   FROM discrete.samples_metadata_en sm
   WHERE sm.datetime >= $1 AND sm.datetime <= $2"
 
-  if (!is.na(locations[1])) {
+  if (!is.null(location_ids)) {
     sql <- paste0(
       sql,
       " AND sm.location_id IN (",
-      paste(as.integer(strsplit(locations, ",")[[1]]), collapse = ","),
+      paste(location_ids, collapse = ","),
       ")"
     )
   }
-  if (!is.na(parameters[1])) {
+  if (!is.null(parameter_ids)) {
     sql <- paste0(
       sql,
       " AND EXISTS (
@@ -1377,19 +1467,22 @@ function(
         FROM discrete.results r
         WHERE r.sample_id = sm.sample_id
           AND r.parameter_id IN (",
-      paste(as.integer(strsplit(parameters, ",")[[1]]), collapse = ","),
+      paste(parameter_ids, collapse = ","),
       "))"
     )
   }
   query_params <- list(start, end)
+  limit_param <- "$3"
   if (!is.null(modifiedSince)) {
     sql <- paste0(
       sql,
       " AND (sm.created >= $3 OR sm.modified >= $3)"
     )
     query_params <- list(start, end, modifiedSince)
+    limit_param <- "$4"
   }
-  sql <- paste0(sql, " ORDER BY sm.datetime ASC")
+  sql <- paste0(sql, " ORDER BY sm.datetime ASC LIMIT ", limit_param)
+  query_params <- c(query_params, list(lim))
 
   out <- DBI::dbGetQuery(
     con,
@@ -1410,8 +1503,9 @@ function(
 }
 
 #' Return sample results
-#* @param sample_ids Sample ID (required, integer string separated by commas).
+#* @param sample_ids Sample IDs (required, up to 100000 integers separated by commas).
 #* @param parameters Parameter ID (optional, integer string separated by commas). If provided, filters results to these parameters.
+#* @param limit Maximum number of records to return (optional; defaults to 100000).
 #* @param modifiedSince Only return results created or modified since this ISO 8601 date/time.
 #* @param format Response format, either "csv" (default) or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @get /samples/results
@@ -1421,6 +1515,7 @@ function(
   res,
   sample_ids,
   parameters = NA,
+  limit = 100000,
   modifiedSince = NA,
   format = NULL
 ) {
@@ -1433,6 +1528,56 @@ function(
     )
     return(serialize_tabular(response, req, res, format))
   }
+  sids <- request_integer_csv(sample_ids)
+  if (is.null(sids) || length(sids) == 0L) {
+    return(request_budget_error(
+      "Invalid 'sample_ids' parameter. Must contain integer sample_id values.",
+      req,
+      res,
+      format
+    ))
+  }
+  parameter_ids <- request_integer_csv(parameters)
+  if (!is.null(parameter_ids) && length(parameter_ids) == 0L) {
+    return(request_budget_error(
+      "Invalid 'parameters' parameter. Must contain integer parameter_id values.",
+      req,
+      res,
+      format
+    ))
+  }
+
+  budget <- api_request_budget(
+    limit = limit,
+    id_groups = list(
+      sample_ids = sids,
+      parameters = parameter_ids %||% integer()
+    ),
+    max_ids = 100000L
+  )
+  if (!budget$valid) {
+    return(request_budget_error(budget$message, req, res, format))
+  }
+  lim <- budget$limit
+
+  modified_since_missing <- missing(modifiedSince) ||
+    length(modifiedSince) == 0L ||
+    is.na(modifiedSince[1])
+  if (!modified_since_missing) {
+    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
+    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
+      res$setHeader("X-Status", "error")
+      response <- data.frame(
+        status = "error",
+        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
+        stringsAsFactors = FALSE
+      )
+      return(serialize_tabular(response, req, res, format))
+    }
+  } else {
+    modifiedSince <- NULL
+  }
+
   con <- try(
     YGwater::AquaConnect(
       username = req$user,
@@ -1455,25 +1600,7 @@ function(
     return(serialize_tabular(response, req, res, format))
   }
   on.exit(DBI::dbDisconnect(con), add = TRUE)
-
-  sids <- as.integer(strsplit(sample_ids, ",")[[1]])
-  modified_since_missing <- missing(modifiedSince) ||
-    length(modifiedSince) == 0L ||
-    is.na(modifiedSince[1])
-  if (!modified_since_missing) {
-    modifiedSince <- try(as.POSIXct(modifiedSince, tz = "UTC"), silent = TRUE)
-    if (inherits(modifiedSince, "try-error") || is.na(modifiedSince)) {
-      res$setHeader("X-Status", "error")
-      response <- data.frame(
-        status = "error",
-        message = "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format.",
-        stringsAsFactors = FALSE
-      )
-      return(serialize_tabular(response, req, res, format))
-    }
-  } else {
-    modifiedSince <- NULL
-  }
+  api_set_query_timeout(con)
 
   sql <- paste0(
     "SELECT
@@ -1484,29 +1611,28 @@ function(
     ")"
   )
 
-  if (!is.na(parameters[1])) {
+  if (!is.null(parameter_ids)) {
     sql <- paste0(
       sql,
       " AND r.parameter_id IN (",
-      paste(as.integer(strsplit(parameters, ",")[[1]]), collapse = ","),
+      paste(parameter_ids, collapse = ","),
       ")"
     )
   }
   query_params <- list()
+  limit_param <- "$1"
   if (!is.null(modifiedSince)) {
     sql <- paste0(
       sql,
       " AND (r.created >= $1 OR r.modified >= $1)"
     )
     query_params <- list(modifiedSince)
+    limit_param <- "$2"
   }
-  sql <- paste0(sql, " ORDER BY r.parameter_id")
+  sql <- paste0(sql, " ORDER BY r.parameter_id LIMIT ", limit_param)
+  query_params <- c(query_params, list(lim))
 
-  if (is.null(modifiedSince)) {
-    out <- DBI::dbGetQuery(con, sql)
-  } else {
-    out <- DBI::dbGetQuery(con, sql, params = query_params)
-  }
+  out <- DBI::dbGetQuery(con, sql, params = query_params)
 
   if (nrow(out) == 0) {
     res$setHeader("X-Status", "info")
