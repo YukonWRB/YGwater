@@ -2588,8 +2588,8 @@ app_server <- function(input, output, session) {
           sql <- "
         WITH tbls AS (
           SELECT n.nspname AS schema, c.relname AS table_name, c.oid AS tbl_oid
-          FROM pg_class c
-          JOIN pg_namespace n ON n.oid = c.relnamespace
+          FROM pg_catalog.pg_class c
+          JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
           WHERE c.relkind IN ('r','p')
             AND n.nspname IN ('public','continuous','discrete','criteria','boreholes','files','application','instruments', 'field')
         )
@@ -3379,7 +3379,7 @@ app_server <- function(input, output, session) {
             # Check if the user has CREATE ROLE privileges, used to determine if the 'manage users' tab should be shown in admin mode
             session$userData$can_create_role <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              'SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user;'
+              'SELECT rolcreaterole FROM pg_catalog.pg_roles WHERE rolname = current_user;'
             )[1, 1]
           } # else the button just won't be created/shown
 

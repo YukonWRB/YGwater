@@ -41,11 +41,11 @@ addSubLocation <- function(id, inputs, language) {
     getModuleData <- function() {
       moduleData$exist_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, name, latitude, longitude FROM locations ORDER BY name"
+        "SELECT location_id, name, latitude, longitude FROM public.locations ORDER BY name"
       )
       moduleData$exist_sub_locs = DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT sub_location_id, location_id, sub_location_name, sub_location_name_fr, latitude, longitude, note, share_with FROM sub_locations ORDER BY sub_location_name;"
+        "SELECT sub_location_id, location_id, sub_location_name, sub_location_name_fr, latitude, longitude, note, share_with FROM public.sub_locations ORDER BY sub_location_name;"
       )
       moduleData$users = DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -684,7 +684,7 @@ addSubLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 glue::glue_sql(
-                  "UPDATE sub_locations SET sub_location_name = {input$subloc_name} WHERE sub_location_id = {selected_sub_loc()};",
+                  "UPDATE public.sub_locations SET sub_location_name = {input$subloc_name} WHERE sub_location_id = {selected_sub_loc()};",
                   .con = session$userData$AquaCache
                 )
               )
@@ -704,7 +704,7 @@ addSubLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 glue::glue_sql(
-                  "UPDATE sub_locations SET sub_location_name_fr = {input$subloc_name_fr} WHERE sub_location_id = {selected_sub_loc()};",
+                  "UPDATE public.sub_locations SET sub_location_name_fr = {input$subloc_name_fr} WHERE sub_location_id = {selected_sub_loc()};",
                   .con = session$userData$AquaCache
                 )
               )
@@ -724,7 +724,7 @@ addSubLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
-                  "UPDATE sub_locations SET latitude = %f WHERE sub_location_id = %d",
+                  "UPDATE public.sub_locations SET latitude = %f WHERE sub_location_id = %d",
                   input$lat,
                   selected_sub_loc()
                 )
@@ -743,7 +743,7 @@ addSubLocation <- function(id, inputs, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 sprintf(
-                  "UPDATE sub_locations SET longitude = %f WHERE sub_location_id = %d",
+                  "UPDATE public.sub_locations SET longitude = %f WHERE sub_location_id = %d",
                   input$lon,
                   selected_sub_loc()
                 )
@@ -787,7 +787,7 @@ addSubLocation <- function(id, inputs, language) {
                   DBI::dbExecute(
                     session$userData$AquaCache,
                     sprintf(
-                      "UPDATE sub_locations SET note = '%s' WHERE sub_location_id = %d",
+                      "UPDATE public.sub_locations SET note = '%s' WHERE sub_location_id = %d",
                       input$subloc_note,
                       selected_sub_loc()
                     )
@@ -797,7 +797,7 @@ addSubLocation <- function(id, inputs, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   sprintf(
-                    "UPDATE sub_locations SET note = '%s' WHERE sub_location_id = %d",
+                    "UPDATE public.sub_locations SET note = '%s' WHERE sub_location_id = %d",
                     input$subloc_note,
                     selected_sub_loc()
                   )
@@ -867,7 +867,7 @@ addSubLocation <- function(id, inputs, language) {
         {
           DBI::dbExecute(
             session$userData$AquaCache,
-            "INSERT INTO sub_locations (location_id, sub_location_name, sub_location_name_fr, latitude, longitude, share_with, note) VALUES ($1, $2, $3, $4, $5, $6, $7);",
+            "INSERT INTO public.sub_locations (location_id, sub_location_name, sub_location_name_fr, latitude, longitude, share_with, note) VALUES ($1, $2, $3, $4, $5, $6, $7);",
             params = list(
               input$location,
               input$subloc_name,

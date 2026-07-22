@@ -182,7 +182,7 @@ app_server <- function(input, output, session) {
         # Find the years of record for the location
         tsid <- DBI::dbGetQuery(
           session$userData$con,
-          "SELECT t.timeseries_id FROM timeseries t INNER JOIN locations l ON t.location_id = l.location_id WHERE (l.location_code = $1 OR l.alias = $2 OR l.name = $3 OR l.name_fr = $4) AND t.parameter_id = $5;",
+          "SELECT t.timeseries_id FROM continuous.timeseries t INNER JOIN public.locations l ON t.location_id = l.location_id WHERE (l.location_code = $1 OR l.alias = $2 OR l.name = $3 OR l.name_fr = $4) AND t.parameter_id = $5;",
           params = list(
             params$loc_code,
             params$loc_code,
@@ -193,7 +193,7 @@ app_server <- function(input, output, session) {
         )[1, 1]
         yrs <- DBI::dbGetQuery(
           session$userData$con,
-          "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM measurements_calculated_daily WHERE timeseries_id = $1 ORDER BY year DESC;",
+          "SELECT DISTINCT EXTRACT(YEAR FROM date) AS year FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 ORDER BY year DESC;",
           params = list(tsid)
         )
         updateSelectizeInput(
@@ -298,7 +298,7 @@ app_server <- function(input, output, session) {
           paste0(
             "SELECT ",
             if (lang == "en") "name" else "name_fr",
-            " FROM locations WHERE location_code = $1;"
+            " FROM public.locations WHERE location_code = $1;"
           ),
           params = list(
             loc

@@ -53,13 +53,13 @@ createSnowTemplate <- function(
   }
 
   if (circuits[1] == "all") {
-    circuits <- DBI::dbGetQuery(snowCon, "SELECT * FROM circuits")
+    circuits <- DBI::dbGetQuery(snowCon, "SELECT * FROM public.circuits")
   } else {
     # Make sure that the requested circuit exists in the database
     avail_circuits <- DBI::dbGetQuery(
       snowCon,
       paste0(
-        "SELECT * FROM circuits WHERE circuit_name IN ('",
+        "SELECT * FROM public.circuits WHERE circuit_name IN ('",
         paste(circuits, collapse = "', '"),
         "')"
       )
@@ -67,7 +67,7 @@ createSnowTemplate <- function(
     if (nrow(avail_circuits) != length(circuits)) {
       valid_circuits <- DBI::dbGetQuery(
         snowCon,
-        "SELECT circuit_name FROM circuits"
+        "SELECT circuit_name FROM public.circuits"
       )
       stop(
         "One or more circuits not found in snow database. Please enter a valid circuit name. Valid names are ",
@@ -92,7 +92,7 @@ createSnowTemplate <- function(
     courses <- DBI::dbGetQuery(
       snowCon,
       paste0(
-        "SELECT name FROM locations WHERE circuit = '",
+        "SELECT name FROM public.locations WHERE circuit = '",
         circuit_id,
         "' AND active IS TRUE;"
       )
@@ -102,7 +102,7 @@ createSnowTemplate <- function(
     maintenance <- DBI::dbGetQuery(
       snowCon,
       paste0(
-        "SELECT maintenance.maintenance, locations.location, locations.name FROM maintenance INNER JOIN locations ON maintenance.location = locations.location WHERE maintenance.completed = FALSE AND locations.name IN ('",
+        "SELECT maintenance.maintenance, locations.location, locations.name FROM public.maintenance INNER JOIN public.locations ON maintenance.location = locations.location WHERE maintenance.completed = FALSE AND locations.name IN ('",
         paste(courses, collapse = "', '"),
         "') AND maintenance.completed = FALSE"
       )
@@ -207,7 +207,7 @@ createSnowTemplate <- function(
     ids <- DBI::dbGetQuery(
       snowCon,
       paste0(
-        "SELECT location FROM locations WHERE name IN ('",
+        "SELECT location FROM public.locations WHERE name IN ('",
         paste(locs, collapse = "', '"),
         "')"
       )

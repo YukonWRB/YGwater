@@ -8,37 +8,37 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
     fetch_fun = function() {
       locs <- dbGetQueryDT(
         con,
-        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM public.locations AS loc INNER JOIN continuous.timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
       )
       sub_locs <- dbGetQueryDT(
         con,
-        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM timeseries) ORDER BY sub_location_name ASC;"
+        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM public.sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM continuous.timeseries) ORDER BY sub_location_name ASC;"
       )
       params <- dbGetQueryDT(
         con,
         paste(
           "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
           ac_parameter_unit_select_sql(con, "p", "unit"),
-          "FROM parameters p",
-          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM timeseries)",
+          "FROM public.parameters p",
+          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM continuous.timeseries)",
           "ORDER BY p.param_name ASC;"
         )
       )
       media <- dbGetQueryDT(
         con,
-        "SELECT m.media_id, m.media_type, m.media_type_fr FROM media_types as m WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE m.media_id = t.media_id);"
+        "SELECT m.media_id, m.media_type, m.media_type_fr FROM public.media_types as m WHERE EXISTS (SELECT 1 FROM continuous.timeseries AS t WHERE m.media_id = t.media_id);"
       )
       aggregation_types <- dbGetQueryDT(
         con,
-        "SELECT aggregation_type_id, aggregation_type, aggregation_type_fr FROM aggregation_types WHERE aggregation_type_id IN (SELECT DISTINCT aggregation_type_id FROM timeseries);"
+        "SELECT aggregation_type_id, aggregation_type, aggregation_type_fr FROM continuous.aggregation_types WHERE aggregation_type_id IN (SELECT DISTINCT aggregation_type_id FROM continuous.timeseries);"
       )
       parameter_relationships <- dbGetQueryDT(
         con,
-        "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM timeseries AS t WHERE p.parameter_id = t.parameter_id) ;"
+        "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM continuous.timeseries AS t WHERE p.parameter_id = t.parameter_id) ;"
       )
       range <- dbGetQueryDT(
         con,
-        "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM timeseries;"
+        "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM continuous.timeseries;"
       )
       timeseries <- dbGetQueryDT(
         con,
@@ -57,10 +57,10 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
            ts.timeseries_type AS timeseries_type_code,
            tt.timeseries_type_name AS timeseries_type_name,
            tt.timeseries_type_name_fr AS timeseries_type_name_fr
-         FROM timeseries ts
+         FROM continuous.timeseries ts
          LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
-         LEFT JOIN locations loc ON ts.location_id = loc.location_id
-         LEFT JOIN timeseries_types tt
+         LEFT JOIN public.locations loc ON ts.location_id = loc.location_id
+         LEFT JOIN continuous.timeseries_types tt
            ON ts.timeseries_type = tt.timeseries_type;"
       )
 
@@ -75,7 +75,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       locations_projects <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT project_id, location_id FROM locations_projects WHERE location_id IN (",
+          "SELECT project_id, location_id FROM public.locations_projects WHERE location_id IN (",
           paste(locs$location_id, collapse = ", "),
           ");"
         )
@@ -84,7 +84,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         projects <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT project_id, name, name_fr FROM projects WHERE project_id IN (",
+            "SELECT project_id, name, name_fr FROM public.projects WHERE project_id IN (",
             paste(locations_projects$project_id, collapse = ", "),
             ");"
           )
@@ -104,7 +104,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       locations_networks <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT network_id, location_id FROM locations_networks WHERE location_id IN (",
+          "SELECT network_id, location_id FROM public.locations_networks WHERE location_id IN (",
           paste(locs$location_id, collapse = ", "),
           ");"
         )
@@ -113,7 +113,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         networks <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT network_id, name, name_fr FROM networks WHERE network_id IN (",
+            "SELECT network_id, name, name_fr FROM public.networks WHERE network_id IN (",
             paste(locations_networks$network_id, collapse = ", "),
             ");"
           )
@@ -129,7 +129,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         param_groups <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT group_id, group_name, group_name_fr FROM parameter_groups WHERE group_id IN (",
+            "SELECT group_id, group_name, group_name_fr FROM public.parameter_groups WHERE group_id IN (",
             paste(groups, collapse = ", "),
             ");"
           )
@@ -150,7 +150,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         param_sub_groups <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT sub_group_id, sub_group_name, sub_group_name_fr FROM parameter_sub_groups WHERE sub_group_id IN (",
+            "SELECT sub_group_id, sub_group_name, sub_group_name_fr FROM public.parameter_sub_groups WHERE sub_group_id IN (",
             paste(sub_groups, collapse = ", "),
             ");"
           )
@@ -206,7 +206,7 @@ disc_plot_table_signature <- function(con, table, id_col) {
     con,
     paste(
       "SELECT n_tup_ins::text, n_tup_upd::text, n_tup_del::text",
-      "FROM pg_stat_all_tables",
+      "FROM pg_catalog.pg_stat_all_tables",
       "WHERE relid = to_regclass(",
       DBI::dbQuoteLiteral(con, table),
       ")"
@@ -254,9 +254,9 @@ disc_plot_module_data <- function(con, env = .GlobalEnv) {
         locs = DBI::dbGetQuery(
           con,
           "SELECT loc.location_id, loc.name, loc.name_fr
-           FROM locations AS loc
+           FROM public.locations AS loc
            WHERE EXISTS (
-             SELECT 1 FROM samples AS s WHERE s.location_id = loc.location_id
+             SELECT 1 FROM discrete.samples AS s WHERE s.location_id = loc.location_id
            )
            ORDER BY loc.name ASC"
         ),
@@ -265,57 +265,57 @@ disc_plot_module_data <- function(con, env = .GlobalEnv) {
           paste(
             "SELECT p.parameter_id, p.param_name,",
             ac_parameter_unit_select_sql(con, "p", "unit"),
-            "FROM parameters p",
+            "FROM public.parameters p",
             "ORDER BY p.param_name ASC"
           )
         ),
         sub_locs = DBI::dbGetQuery(
           con,
           "SELECT sub_location_id, sub_location_name, sub_location_name_fr
-           FROM sub_locations
+           FROM public.sub_locations
            ORDER BY sub_location_name ASC;"
         ),
         media = DBI::dbGetQuery(
           con,
           "SELECT media_id, media_type, media_type_fr
-           FROM media_types
+           FROM public.media_types
            ORDER BY media_type ASC;"
         ),
         sample_types = DBI::dbGetQuery(
           con,
           "SELECT sample_type_id, sample_type,
                   COALESCE(sample_type_fr, sample_type) AS sample_type_fr
-           FROM sample_types
+           FROM discrete.sample_types
            ORDER BY sample_type ASC;"
         ),
         collection_methods = DBI::dbGetQuery(
           con,
           "SELECT collection_method_id, collection_method
-           FROM collection_methods
+           FROM discrete.collection_methods
            ORDER BY collection_method ASC;"
         ),
         result_types = DBI::dbGetQuery(
           con,
           "SELECT result_type_id, result_type
-           FROM result_types
+           FROM discrete.result_types
            ORDER BY result_type ASC;"
         ),
         sample_fractions = DBI::dbGetQuery(
           con,
           "SELECT sample_fraction_id, sample_fraction
-           FROM sample_fractions
+           FROM discrete.sample_fractions
            ORDER BY sample_fraction ASC;"
         ),
         result_value_types = DBI::dbGetQuery(
           con,
           "SELECT result_value_type_id, result_value_type
-           FROM result_value_types
+           FROM discrete.result_value_types
            ORDER BY result_value_type ASC;"
         ),
         result_speciations = DBI::dbGetQuery(
           con,
           "SELECT result_speciation_id, result_speciation
-           FROM result_speciations
+           FROM discrete.result_speciations
            ORDER BY result_speciation ASC;"
         )
       )
@@ -344,47 +344,47 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
     fetch_fun = function() {
       locs <- DBI::dbGetQuery(
         con,
-        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM locations AS loc INNER JOIN samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
+        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM public.locations AS loc INNER JOIN discrete.samples ON loc.location_id = samples.location_id ORDER BY loc.name ASC"
       )
       sub_locs <- DBI::dbGetQuery(
         con,
-        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM samples) ORDER BY sub_location_name ASC;"
+        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM public.sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM discrete.samples) ORDER BY sub_location_name ASC;"
       )
       params <- DBI::dbGetQuery(
         con,
         paste(
           "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
           ac_parameter_unit_select_sql(con, "p", "unit"),
-          "FROM parameters p",
-          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM results)",
+          "FROM public.parameters p",
+          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM discrete.results)",
           "ORDER BY p.param_name ASC;"
         )
       )
       media <- DBI::dbGetQuery(
         con,
-        "SELECT m.media_id, m.media_type, m.media_type_fr FROM media_types as m WHERE EXISTS (SELECT 1 FROM samples AS s WHERE m.media_id = s.media_id);"
+        "SELECT m.media_id, m.media_type, m.media_type_fr FROM public.media_types as m WHERE EXISTS (SELECT 1 FROM discrete.samples AS s WHERE m.media_id = s.media_id);"
       )
       parameter_relationships <- DBI::dbGetQuery(
         con,
-        "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id) ;"
+        "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id) ;"
       )
       range <- DBI::dbGetQuery(
         con,
-        "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM samples;"
+        "SELECT MIN(datetime) AS min_date, MAX(datetime) AS max_date FROM discrete.samples;"
       )
       sample_types <- DBI::dbGetQuery(
         con,
-        "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM sample_types AS st WHERE EXISTS (SELECT 1 FROM samples AS s WHERE st.sample_type_id = s.sample_type);"
+        "SELECT st.sample_type_id, st.sample_type, COALESCE(st.sample_type_fr, st.sample_type) AS sample_type_fr FROM discrete.sample_types AS st WHERE EXISTS (SELECT 1 FROM discrete.samples AS s WHERE st.sample_type_id = s.sample_type);"
       )
       samples <- DBI::dbGetQuery(
         con,
-        "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type FROM samples;"
+        "SELECT sample_id, location_id, sub_location_id, media_id, datetime, sample_type FROM discrete.samples;"
       )
 
       locations_projects <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT project_id, location_id FROM locations_projects WHERE location_id IN (",
+          "SELECT project_id, location_id FROM public.locations_projects WHERE location_id IN (",
           paste(locs$location_id, collapse = ", "),
           ");"
         )
@@ -393,7 +393,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
         projects <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT project_id, name, name_fr FROM projects WHERE project_id IN (",
+            "SELECT project_id, name, name_fr FROM public.projects WHERE project_id IN (",
             paste(locations_projects$project_id, collapse = ", "),
             ");"
           )
@@ -413,7 +413,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
       locations_networks <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT network_id, location_id FROM locations_networks WHERE location_id IN (",
+          "SELECT network_id, location_id FROM public.locations_networks WHERE location_id IN (",
           paste(locs$location_id, collapse = ", "),
           ");"
         )
@@ -422,7 +422,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
         networks <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT network_id, name, name_fr FROM networks WHERE network_id IN (",
+            "SELECT network_id, name, name_fr FROM public.networks WHERE network_id IN (",
             paste(locations_networks$network_id, collapse = ", "),
             ");"
           )
@@ -438,7 +438,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
         param_groups <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT group_id, group_name, group_name_fr FROM parameter_groups WHERE group_id IN (",
+            "SELECT group_id, group_name, group_name_fr FROM public.parameter_groups WHERE group_id IN (",
             paste(groups, collapse = ", "),
             ");"
           )
@@ -459,7 +459,7 @@ disc_data_module_data <- function(con, env = .GlobalEnv) {
         param_sub_groups <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT sub_group_id, sub_group_name, sub_group_name_fr FROM parameter_sub_groups WHERE sub_group_id IN (",
+            "SELECT sub_group_id, sub_group_name, sub_group_name_fr FROM public.parameter_sub_groups WHERE sub_group_id IN (",
             paste(sub_groups, collapse = ", "),
             ");"
           )
@@ -505,7 +505,7 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT location_code AS location, name, name_fr, latitude, longitude, location_id FROM locations"
+          "SELECT location_code AS location, name, name_fr, latitude, longitude, location_id FROM public.locations"
         ),
         timeseries = dbGetQueryDT(
           con,
@@ -564,7 +564,7 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT l.location_code AS location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM locations l JOIN location_types lt ON l.location_type = lt.type_id;"
+          "SELECT l.location_code AS location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM public.locations l JOIN public.location_types lt ON l.location_type = lt.type_id;"
         ),
         timeseries = dbGetQueryDT(
           con,
@@ -615,19 +615,19 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
         ),
         projects = dbGetQueryDT(
           con,
-          "SELECT p.project_id, p.name, p.name_fr FROM projects AS p WHERE EXISTS (SELECT 1 FROM locations_projects lp WHERE lp.project_id = p.project_id);"
+          "SELECT p.project_id, p.name, p.name_fr FROM public.projects AS p WHERE EXISTS (SELECT 1 FROM public.locations_projects lp WHERE lp.project_id = p.project_id);"
         ),
         networks = dbGetQueryDT(
           con,
-          "SELECT n.network_id, n.name, n.name_fr FROM networks AS n WHERE EXISTS (SELECT 1 FROM locations_networks ln WHERE ln.network_id = n.network_id);"
+          "SELECT n.network_id, n.name, n.name_fr FROM public.networks AS n WHERE EXISTS (SELECT 1 FROM public.locations_networks ln WHERE ln.network_id = n.network_id);"
         ),
         locations_projects = dbGetQueryDT(
           con,
-          "SELECT project_id, location_id FROM locations_projects;"
+          "SELECT project_id, location_id FROM public.locations_projects;"
         ),
         locations_networks = dbGetQueryDT(
           con,
-          "SELECT network_id, location_id FROM locations_networks;"
+          "SELECT network_id, location_id FROM public.locations_networks;"
         ),
         media_types = dbGetQueryDT(
           con,
@@ -687,9 +687,9 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
         # Only get borehole purposes that are used in the wells table
         purposes = dbGetQueryDT(
           con,
-          "SELECT p.borehole_well_purpose_id, p.purpose_name, p.purpose_name_fr, p.description FROM borehole_well_purposes AS p WHERE p.borehole_well_purpose_id IN (SELECT DISTINCT well_purpose_id FROM wells);"
+          "SELECT p.borehole_well_purpose_id, p.purpose_name, p.purpose_name_fr, p.description FROM boreholes.borehole_well_purposes AS p WHERE p.borehole_well_purpose_id IN (SELECT DISTINCT well_purpose_id FROM boreholes.wells);"
         ),
-        boreholes_docs = dbGetQueryDT(con, "SELECT * FROM boreholes_documents"),
+        boreholes_docs = dbGetQueryDT(con, "SELECT * FROM boreholes.boreholes_documents"),
         documents = dbGetQueryDT(
           con,
           "SELECT document_id, name, format FROM files.documents"
@@ -697,7 +697,7 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
         # Merge boreholes and wells tables on borehole_id, discarding boreholes with no wells
         wells = dbGetQueryDT(
           con,
-          "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.bedrock_reached, b.depth_to_bedrock_m, b.borehole_id FROM boreholes AS b JOIN wells AS w ON b.borehole_id = w.borehole_id"
+          "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.bedrock_reached, b.depth_to_bedrock_m, b.borehole_id FROM boreholes.boreholes AS b JOIN boreholes.wells AS w ON b.borehole_id = w.borehole_id"
         )
       )
       res$wells[, completion_year := lubridate::year(completion_date)]

@@ -61,11 +61,11 @@ bridgeReport <- function(
       con,
       "
     SELECT l.location_code AS location, t.timeseries_id, l.name 
-    FROM timeseries AS t 
-    JOIN parameters AS p ON t.parameter_id = p.parameter_id 
-    JOIN locations_networks AS ln ON t.location_id = ln.location_id 
-    JOIN networks AS n ON ln.network_id = n.network_id 
-    JOIN locations AS l ON t.location_id = l.location_id
+    FROM continuous.timeseries AS t
+    JOIN public.parameters AS p ON t.parameter_id = p.parameter_id
+    JOIN public.locations_networks AS ln ON t.location_id = ln.location_id
+    JOIN public.networks AS n ON ln.network_id = n.network_id
+    JOIN public.locations AS l ON t.location_id = l.location_id
     WHERE p.parameter_id = 1160
     AND n.name = 'Highway Observation Network';
 "
@@ -75,11 +75,11 @@ bridgeReport <- function(
       con,
       "
     SELECT l.location_code AS location, t.timeseries_id, l.name 
-    FROM timeseries AS t 
-    JOIN parameters AS p ON t.parameter_id = p.parameter_id 
-    JOIN locations_networks AS ln ON t.location_id = ln.location_id 
-    JOIN networks AS n ON ln.network_id = n.network_id 
-    JOIN locations AS l ON t.location_id = l.location_id
+    FROM continuous.timeseries AS t
+    JOIN public.parameters AS p ON t.parameter_id = p.parameter_id
+    JOIN public.locations_networks AS ln ON t.location_id = ln.location_id
+    JOIN public.networks AS n ON ln.network_id = n.network_id
+    JOIN public.locations AS l ON t.location_id = l.location_id
     WHERE p.parameter_id = 1160
     AND n.name = 'Highway Observation Network'
     AND l.location_code IN ('",

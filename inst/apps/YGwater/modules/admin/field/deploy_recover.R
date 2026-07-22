@@ -1833,7 +1833,7 @@ deploy_recover <- function(id, language) {
     replace_deployment_timeseries <- function(metadata_id, timeseries_ids) {
       metadata_id <- as_nullable_integer(metadata_id)
       if (is.na(metadata_id)) {
-        stop("A deployment metadata_id is required to update timeseries links.")
+        stop("A deployment metadata_id is required to update continuous.timeseries links.")
       }
 
       timeseries_ids <- normalize_integer_vector(timeseries_ids)

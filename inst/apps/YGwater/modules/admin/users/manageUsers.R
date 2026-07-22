@@ -379,7 +379,7 @@ WHERE schema_name NOT LIKE 'pg_%'
       roles <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT rolname, rolcanlogin
-FROM pg_roles
+FROM pg_catalog.pg_roles
 WHERE rolname !~ '^pg_'
   AND rolname <> 'public'
 ORDER BY rolname"
@@ -474,7 +474,7 @@ ORDER BY table_schema, table_name;",
         session$userData$AquaCache,
         sprintf(
           "SELECT parent.rolname
-FROM pg_roles parent
+FROM pg_catalog.pg_roles parent
 WHERE parent.rolname <> %s
   AND NOT parent.rolcanlogin
   AND pg_has_role(%s, parent.oid, 'member')
@@ -503,18 +503,18 @@ ORDER BY parent.rolname;",
 ),
 role_direct AS (
   SELECT n.nspname AS schema_name
-  FROM pg_namespace n
+  FROM pg_catalog.pg_namespace n
   CROSS JOIN LATERAL aclexplode(n.nspacl) acl
-  JOIN pg_roles grantee ON grantee.oid = acl.grantee
+  JOIN pg_catalog.pg_roles grantee ON grantee.oid = acl.grantee
   WHERE grantee.rolname = %s
     AND acl.privilege_type = 'USAGE'
 ),
 inherited AS (
   SELECT n.nspname AS schema_name,
          string_agg(DISTINCT grantee.rolname, ', ' ORDER BY grantee.rolname) AS inherited_from
-  FROM pg_namespace n
+  FROM pg_catalog.pg_namespace n
   CROSS JOIN LATERAL aclexplode(n.nspacl) acl
-  JOIN pg_roles grantee ON grantee.oid = acl.grantee
+  JOIN pg_catalog.pg_roles grantee ON grantee.oid = acl.grantee
   WHERE grantee.rolname IN (%s)
     AND acl.privilege_type = 'USAGE'
   GROUP BY n.nspname
@@ -574,10 +574,10 @@ role_direct AS (
   SELECT n.nspname AS table_schema,
          c.relname AS table_name,
          acl.privilege_type AS privilege
-  FROM pg_class c
-  JOIN pg_namespace n ON n.oid = c.relnamespace
+  FROM pg_catalog.pg_class c
+  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
   CROSS JOIN LATERAL aclexplode(c.relacl) acl
-  JOIN pg_roles grantee ON grantee.oid = acl.grantee
+  JOIN pg_catalog.pg_roles grantee ON grantee.oid = acl.grantee
   WHERE c.relkind IN ('r', 'p')
     AND grantee.rolname = %s
 ),
@@ -586,10 +586,10 @@ inherited AS (
          c.relname AS table_name,
          acl.privilege_type AS privilege,
          string_agg(DISTINCT grantee.rolname, ', ' ORDER BY grantee.rolname) AS inherited_from
-  FROM pg_class c
-  JOIN pg_namespace n ON n.oid = c.relnamespace
+  FROM pg_catalog.pg_class c
+  JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
   CROSS JOIN LATERAL aclexplode(c.relacl) acl
-  JOIN pg_roles grantee ON grantee.oid = acl.grantee
+  JOIN pg_catalog.pg_roles grantee ON grantee.oid = acl.grantee
   WHERE c.relkind IN ('r', 'p')
     AND grantee.rolname IN (%s)
   GROUP BY n.nspname, c.relname, acl.privilege_type
@@ -917,7 +917,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
         input$group_name %in%
           (DBI::dbGetQuery(
             session$userData$AquaCache,
-            "SELECT rolname FROM pg_roles"
+            "SELECT rolname FROM pg_catalog.pg_roles"
           )$rolname)
       ) {
         set_status(sprintf(

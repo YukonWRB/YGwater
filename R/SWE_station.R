@@ -110,7 +110,7 @@ SWE_station <- function(
   }
   loc_basin <- DBI::dbGetQuery(
     snowCon,
-    "SELECT location AS location_id, sub_basin, active FROM locations"
+    "SELECT location AS location_id, sub_basin, active FROM public.locations"
   )
 
   # Create list of stations
@@ -132,12 +132,12 @@ SWE_station <- function(
       aquaCon,
       paste0(
         "SELECT l.name, l.name_fr, l.location_code AS location, res.result, samp.target_datetime, samp.datetime, p.param_name, dc.conversion_m, rvt.result_value_type
-           FROM results as res
-           INNER JOIN samples as samp ON res.sample_id = samp.sample_id
-           INNER JOIN locations as l ON samp.location_id = l.location_id
-           INNER JOIN parameters as p ON res.parameter_id = p.parameter_id
-           INNER JOIN datum_conversions as dc ON l.location_id = dc.location_id
-           INNER JOIN result_value_types as rvt ON res.result_value_type = rvt.result_value_type_id
+           FROM discrete.results as res
+           INNER JOIN discrete.samples as samp ON res.sample_id = samp.sample_id
+           INNER JOIN public.locations as l ON samp.location_id = l.location_id
+           INNER JOIN public.parameters as p ON res.parameter_id = p.parameter_id
+           INNER JOIN public.datum_conversions as dc ON l.location_id = dc.location_id
+           INNER JOIN discrete.result_value_types as rvt ON res.result_value_type = rvt.result_value_type_id
            WHERE p.param_name IN ('snow water equivalent', 'snow depth') AND l.location_code IN ('",
         paste0(stations, collapse = "', '"),
         "')"
@@ -188,8 +188,8 @@ SWE_station <- function(
       paste0(
         "SELECT means.name, means.location, means.swe, means.depth, means.target_date,
                          means.survey_date, locations.elevation, means.estimate_flag
-                         FROM means
-                         INNER JOIN locations ON means.location = locations.location
+                         FROM public.means
+                         INNER JOIN public.locations ON means.location = locations.location
                          WHERE means.location IN ('",
         paste0(stations, collapse = "', '"),
         "')"

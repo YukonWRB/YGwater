@@ -1441,7 +1441,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
         FROM discrete.samples s
         JOIN discrete.results r ON s.sample_id = r.sample_id
         JOIN public.locations l ON s.location_id = l.location_id
-        LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
+        LEFT JOIN public.datum_conversions dc ON l.location_id = dc.location_id
         WHERE r.parameter_id = 
             (SELECT parameter_id FROM public.parameters
              WHERE param_name = $1)",

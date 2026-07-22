@@ -10,24 +10,24 @@ on.exit(DBI::dbDisconnect(test_con), add = TRUE)
 
 wlevel <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'water level';"
 )$parameter_id[[1]]
 
 flow <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'water flow';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'water flow';"
 )$parameter_id[[1]]
 
 swe <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'snow water equivalent';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'snow water equivalent';"
 )$parameter_id[[1]]
 
 # Find the first water level timeseries in the DB
 wlevel_ts <- DBI::dbGetQuery(
   test_con,
   paste0(
-    "SELECT location_id, parameter_id, timeseries_id FROM timeseries WHERE parameter_id = ",
+    "SELECT location_id, parameter_id, timeseries_id FROM continuous.timeseries WHERE parameter_id = ",
     wlevel,
     " LIMIT 1;"
   )
@@ -36,7 +36,7 @@ wlevel_ts <- DBI::dbGetQuery(
 flow_ts <- DBI::dbGetQuery(
   test_con,
   paste0(
-    "SELECT location_id, parameter_id, timeseries_id FROM timeseries WHERE parameter_id = ",
+    "SELECT location_id, parameter_id, timeseries_id FROM continuous.timeseries WHERE parameter_id = ",
     flow,
     " LIMIT 1;"
   )
@@ -45,7 +45,7 @@ flow_ts <- DBI::dbGetQuery(
 swe_ts <- DBI::dbGetQuery(
   test_con,
   paste0(
-    "SELECT location_id, parameter_id, timeseries_id FROM timeseries WHERE parameter_id = ",
+    "SELECT location_id, parameter_id, timeseries_id FROM continuous.timeseries WHERE parameter_id = ",
     swe,
     " LIMIT 1;"
   )
@@ -222,7 +222,7 @@ test_that("overlaping year plot throws no error when years is NULL", {
   start_day <- DBI::dbGetQuery(
     test_con,
     paste0(
-      "SELECT start_datetime FROM timeseries WHERE timeseries_id = ",
+      "SELECT start_datetime FROM continuous.timeseries WHERE timeseries_id = ",
       swe_ts$timeseries_id[1],
       ";"
     )
@@ -230,7 +230,7 @@ test_that("overlaping year plot throws no error when years is NULL", {
   end_day <- DBI::dbGetQuery(
     test_con,
     paste0(
-      "SELECT end_datetime FROM timeseries WHERE timeseries_id = ",
+      "SELECT end_datetime FROM continuous.timeseries WHERE timeseries_id = ",
       swe_ts$timeseries_id[1],
       ";"
     )
@@ -339,7 +339,7 @@ test_that("ggplotOverlap can show data in the past", {
   # Check if the connection can access function 'measurements_calculated_daily_at' which is used for historical queries. If not, skip the test.
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1;"
+    "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM public.locations WHERE location_code = '09EA004') LIMIT 1;"
   )$timeseries_id[[1]]
 
   yes <- FALSE

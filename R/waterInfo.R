@@ -72,7 +72,7 @@ waterInfo <- function(
 
   params <- DBI::dbGetQuery(
     con,
-    "SELECT parameter_id, param_name FROM parameters WHERE param_name IN ('water level', 'water flow')"
+    "SELECT parameter_id, param_name FROM public.parameters WHERE param_name IN ('water level', 'water flow')"
   )
 
   #select the locations
@@ -80,7 +80,7 @@ waterInfo <- function(
     locs <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT * FROM timeseries WHERE parameter_id IN (",
+        "SELECT * FROM continuous.timeseries WHERE parameter_id IN (",
         paste(params$parameter_id, collapse = ", "),
         ");"
       )
@@ -89,7 +89,7 @@ waterInfo <- function(
     locs <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT * FROM timeseries WHERE parameter_id IN (",
+        "SELECT * FROM continuous.timeseries WHERE parameter_id IN (",
         paste(params$parameter_id, collapse = ", "),
         ") AND location IN ('",
         paste(locations, collapse = "', '"),
@@ -148,7 +148,7 @@ waterInfo <- function(
     daily <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT date, value FROM measurements_calculated_daily WHERE timeseries_id = '",
+        "SELECT date, value FROM continuous.measurements_calculated_daily WHERE timeseries_id = '",
         locs[i, "timeseries_id"],
         "' AND date < '",
         as.character(end_date),
@@ -201,7 +201,7 @@ waterInfo <- function(
     }
     name <- DBI::dbGetQuery(
       con,
-      "SELECT name FROM locations where location_id = $1;",
+      "SELECT name FROM public.locations where location_id = $1;",
       params = list(location_id)
     )[1, 1]
     #metadata
@@ -213,12 +213,12 @@ waterInfo <- function(
         "parameter" = sub(".*_", "", i),
         "latitude" = DBI::dbGetQuery(
           con,
-          "SELECT latitude FROM locations where location_id = $1;",
+          "SELECT latitude FROM public.locations where location_id = $1;",
           params = list(location_id)
         )[1, 1],
         "longitude" = DBI::dbGetQuery(
           con,
-          "SELECT longitude FROM locations where location_id = $1;",
+          "SELECT longitude FROM public.locations where location_id = $1;",
           params = list(location_id)
         )[1, 1],
         "active" = max(data[[i]]$date) > as.Date(end_date) - 365,

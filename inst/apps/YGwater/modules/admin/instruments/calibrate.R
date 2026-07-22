@@ -599,7 +599,7 @@ table.on("click", "tr", function() {
     refresh_observer_choices <- function() {
       instruments_data$observers <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT * FROM observers"
+        "SELECT * FROM instruments.observers"
       )
       instruments_data$observers$observer_string <- paste0(
         instruments_data$observers$observer_first,
@@ -1173,7 +1173,7 @@ table.on("click", "tr", function() {
     calibrations <- reactiveValues()
     calibrations$calibrations <- DBI::dbGetQuery(
       session$userData$AquaCache,
-      "SELECT * FROM calibrations"
+      "SELECT * FROM instruments.calibrations"
     ) # This will be used to check if there are any incomplete calibrations
 
     refresh_observer_choices()
@@ -1320,7 +1320,7 @@ table.on("click", "tr", function() {
         # Add the new observer to the database
         DBI::dbExecute(
           session$userData$AquaCache,
-          "INSERT INTO observers (observer_first, observer_last, organization) VALUES ($1, $2, $3)",
+          "INSERT INTO instruments.observers (observer_first, observer_last, organization) VALUES ($1, $2, $3)",
           params = list(
             input$new_observer_first,
             input$new_observer_last,
@@ -2917,7 +2917,7 @@ table.on("click", "tr", function() {
           DBI::dbExecute(
             session$userData$AquaCache,
             paste0(
-              "DELETE FROM calibrations WHERE calibration_id = ",
+              "DELETE FROM instruments.calibrations WHERE calibration_id = ",
               delete_ID
             )
           ) # Cascades to all other sheets where the id is referenced
@@ -2925,7 +2925,7 @@ table.on("click", "tr", function() {
           # Reload the calibrations table and re-create incomplete_calibrations
           calibrations$calibrations <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            "SELECT * FROM calibrations"
+            "SELECT * FROM instruments.calibrations"
           ) # This will be used to check if there are any incomplete calibrations
           calibrations$incomplete_calibrations <- calibrations$calibrations[
             calibrations$calibrations$complete == FALSE,
@@ -3326,12 +3326,12 @@ table.on("click", "tr", function() {
           # New entry
           DBI::dbAppendTable(
             session$userData$AquaCache,
-            "calibrations",
+            DBI::Id(schema = "instruments", table = "calibrations"),
             calibration_data$basic
           )
           calibration_data$next_id <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            "SELECT MAX(calibration_id) FROM calibrations"
+            "SELECT MAX(calibration_id) FROM instruments.calibrations"
           )[[1]]
           complete$basic <- TRUE
         } else {
@@ -3339,7 +3339,7 @@ table.on("click", "tr", function() {
           DBI::dbExecute(
             session$userData$AquaCache,
             paste0(
-              "UPDATE calibrations SET observer = ",
+              "UPDATE instruments.calibrations SET observer = ",
               sql_string_or_null(input$observer),
               ", obs_datetime = ",
               sql_string_or_null(as.character(dt)),
@@ -3579,7 +3579,7 @@ table.on("click", "tr", function() {
           if (!complete$ph) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
-              "calibrate_ph",
+              DBI::Id(schema = "instruments", table = "calibrate_ph"),
               calibration_data$ph
             )
 
@@ -3589,7 +3589,7 @@ table.on("click", "tr", function() {
             DBI::dbExecute(
               session$userData$AquaCache,
               paste0(
-                "UPDATE calibrate_ph SET ph1_std = ",
+                "UPDATE instruments.calibrate_ph SET ph1_std = ",
                 input$ph1_std,
                 ", ph2_std = ",
                 input$ph2_std,
@@ -3661,7 +3661,7 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "DELETE FROM calibrate_ph WHERE calibration_id = ",
+            "DELETE FROM instruments.calibrate_ph WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
@@ -3775,7 +3775,7 @@ table.on("click", "tr", function() {
           if (!complete$temperature) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
-              "calibrate_temperature",
+              DBI::Id(schema = "instruments", table = "calibrate_temperature"),
               calibration_data$temp
             )
             complete$temperature <- TRUE
@@ -3784,7 +3784,7 @@ table.on("click", "tr", function() {
             DBI::dbExecute(
               session$userData$AquaCache,
               paste0(
-                "UPDATE calibrate_temperature SET temp_reference_desc = ",
+                "UPDATE instruments.calibrate_temperature SET temp_reference_desc = ",
                 sql_string_or_null(input$temp_reference_desc),
                 ", temp_reference = ",
                 input$temp_reference,
@@ -3838,7 +3838,7 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "DELETE FROM calibrate_temperature WHERE calibration_id = ",
+            "DELETE FROM instruments.calibrate_temperature WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
@@ -3962,7 +3962,7 @@ table.on("click", "tr", function() {
           if (!complete$orp) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
-              "calibrate_orp",
+              DBI::Id(schema = "instruments", table = "calibrate_orp"),
               calibration_data$orp
             )
             complete$orp <- TRUE
@@ -3971,7 +3971,7 @@ table.on("click", "tr", function() {
             DBI::dbExecute(
               session$userData$AquaCache,
               paste0(
-                "UPDATE calibrate_orp SET orp_std = ",
+                "UPDATE instruments.calibrate_orp SET orp_std = ",
                 input$orp_std,
                 ", orp_pre_mv = ",
                 input$orp_pre_mv,
@@ -4024,7 +4024,7 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "DELETE FROM calibrate_orp WHERE calibration_id = ",
+            "DELETE FROM instruments.calibrate_orp WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
@@ -4266,7 +4266,10 @@ table.on("click", "tr", function() {
               {
                 DBI::dbAppendTable(
                   session$userData$AquaCache,
-                  "calibrate_specific_conductance",
+                  DBI::Id(
+                    schema = "instruments",
+                    table = "calibrate_specific_conductance"
+                  ),
                   calibration_data$spc
                 )
 
@@ -4321,7 +4324,7 @@ table.on("click", "tr", function() {
                   DBI::dbExecute(
                     session$userData$AquaCache,
                     paste(
-                      "UPDATE calibrate_specific_conductance",
+                      "UPDATE instruments.calibrate_specific_conductance",
                       "SET calibration_points = $1,",
                       "    spc1_std = $2,",
                       "    spc2_std = $3,",
@@ -4356,7 +4359,7 @@ table.on("click", "tr", function() {
                   DBI::dbExecute(
                     session$userData$AquaCache,
                     paste(
-                      "UPDATE calibrate_specific_conductance",
+                      "UPDATE instruments.calibrate_specific_conductance",
                       "SET spc1_std = $1,",
                       "    spc1_pre = $2,",
                       "    spc1_post = $3,",
@@ -4431,7 +4434,7 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "DELETE FROM calibrate_specific_conductance WHERE calibration_id = ",
+            "DELETE FROM instruments.calibrate_specific_conductance WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
@@ -4570,7 +4573,7 @@ table.on("click", "tr", function() {
           if (!complete$turbidity) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
-              "calibrate_turbidity",
+              DBI::Id(schema = "instruments", table = "calibrate_turbidity"),
               calibration_data$turb
             )
             complete$turbidity <- TRUE
@@ -4579,7 +4582,7 @@ table.on("click", "tr", function() {
             DBI::dbExecute(
               session$userData$AquaCache,
               paste0(
-                "UPDATE calibrate_turbidity SET turb1_std = ",
+                "UPDATE instruments.calibrate_turbidity SET turb1_std = ",
                 input$turb1_std,
                 ", turb1_pre = ",
                 input$turb1_pre,
@@ -4642,7 +4645,7 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "DELETE FROM calibrate_turbidity WHERE calibration_id = ",
+            "DELETE FROM instruments.calibrate_turbidity WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
@@ -4784,7 +4787,10 @@ table.on("click", "tr", function() {
           if (!complete$do) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
-              "calibrate_dissolved_oxygen",
+              DBI::Id(
+                schema = "instruments",
+                table = "calibrate_dissolved_oxygen"
+              ),
               calibration_data$do
             )
 
@@ -4794,7 +4800,7 @@ table.on("click", "tr", function() {
             DBI::dbExecute(
               session$userData$AquaCache,
               paste0(
-                "UPDATE calibrate_dissolved_oxygen SET baro_press_pre = ",
+                "UPDATE instruments.calibrate_dissolved_oxygen SET baro_press_pre = ",
                 input$baro_press_pre,
                 ", baro_press_post = ",
                 sql_numeric_or_null(calibration_data$do$baro_press_post),
@@ -4851,7 +4857,7 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "DELETE FROM calibrate_dissolved_oxygen WHERE calibration_id = ",
+            "DELETE FROM instruments.calibrate_dissolved_oxygen WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
@@ -4950,7 +4956,7 @@ table.on("click", "tr", function() {
           if (!complete$depth) {
             DBI::dbAppendTable(
               session$userData$AquaCache,
-              "calibrate_depth",
+              DBI::Id(schema = "instruments", table = "calibrate_depth"),
               calibration_data$depth
             )
             complete$depth <- TRUE
@@ -4960,7 +4966,7 @@ table.on("click", "tr", function() {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 paste0(
-                  "UPDATE calibrate_depth SET depth_check_ok = '",
+                  "UPDATE instruments.calibrate_depth SET depth_check_ok = '",
                   input$depth_check_ok,
                   "', depth_changes_ok ='",
                   input$depth_changes_ok,
@@ -4972,7 +4978,7 @@ table.on("click", "tr", function() {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 paste0(
-                  "UPDATE calibrate_depth SET depth_check_ok = '",
+                  "UPDATE instruments.calibrate_depth SET depth_check_ok = '",
                   input$depth_check_ok,
                   "', depth_changes_ok = NULL WHERE calibration_id = ",
                   calibration_data$next_id
@@ -5020,7 +5026,7 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "DELETE FROM calibrate_depth WHERE calibration_id = ",
+            "DELETE FROM instruments.calibrate_depth WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
@@ -5111,13 +5117,13 @@ table.on("click", "tr", function() {
         DBI::dbExecute(
           session$userData$AquaCache,
           paste0(
-            "UPDATE calibrations SET complete = 'TRUE' WHERE calibration_id = ",
+            "UPDATE instruments.calibrations SET complete = 'TRUE' WHERE calibration_id = ",
             calibration_data$next_id
           )
         )
         calibrations$calibrations <- DBI::dbReadTable(
           session$userData$AquaCache,
-          "calibrations"
+          DBI::Id(schema = "instruments", table = "calibrations")
         )
 
         calibrations$calibrations[

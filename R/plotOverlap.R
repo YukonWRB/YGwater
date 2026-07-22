@@ -184,7 +184,7 @@ plotOverlap <- function(
         aggregation_type <- DBI::dbGetQuery(
           con,
           glue::glue_sql(
-            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = {aggregation_type};",
+            "SELECT aggregation_type_id FROM continuous.aggregation_types WHERE aggregation_type = {aggregation_type};",
             .con = con
           )
         )[1, 1]
@@ -195,7 +195,7 @@ plotOverlap <- function(
         aggregation_type <- DBI::dbGetQuery(
           con,
           glue::glue_sql(
-            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = {aggregation_type};",
+            "SELECT aggregation_type_id FROM continuous.aggregation_types WHERE aggregation_type_id = {aggregation_type};",
             .con = con
           )
         )[1, 1]
@@ -355,7 +355,7 @@ plotOverlap <- function(
       con,
       glue::glue_sql(
         "SELECT p.parameter_id, p.param_name, p.param_name_fr, p.plot_default_y_orientation, {unit_sql}
-         FROM parameters p
+         FROM public.parameters p
          WHERE LOWER(p.param_name) = {parameter_txt}
            OR LOWER(p.param_name_fr) = {parameter_txt}
            OR p.parameter_id::text = {parameter_txt}
@@ -386,7 +386,7 @@ plotOverlap <- function(
       sub_loc_check <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT sub_location_id FROM timeseries WHERE location_id = ",
+          "SELECT sub_location_id FROM continuous.timeseries WHERE location_id = ",
           location_id,
           " AND parameter_id = ",
           parameter_code,
@@ -406,7 +406,7 @@ plotOverlap <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.parameter_id = ",
               parameter_code,
@@ -418,7 +418,7 @@ plotOverlap <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.parameter_id = ",
               parameter_code,
@@ -433,7 +433,7 @@ plotOverlap <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
@@ -447,7 +447,7 @@ plotOverlap <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
             parameter_code,
@@ -466,7 +466,7 @@ plotOverlap <- function(
       sub_location_id <- DBI::dbGetQuery(
         con,
         glue::glue_sql(
-          "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;",
+          "SELECT sub_location_id FROM public.sub_locations WHERE sub_location_name = {sub_loc_txt} OR sub_location_name_fr = {sub_loc_txt} OR sub_location_id::text = {sub_loc_txt} LIMIT 1;",
           .con = con
         )
       )[[1]]
@@ -480,7 +480,7 @@ plotOverlap <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.sub_location_id = ",
               sub_location_id,
@@ -494,7 +494,7 @@ plotOverlap <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.sub_location_id = ",
               sub_location_id,
@@ -511,7 +511,7 @@ plotOverlap <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -527,7 +527,7 @@ plotOverlap <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -604,7 +604,7 @@ plotOverlap <- function(
           )
           agg_types <- DBI::dbGetQuery(
             con,
-            "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;"
+            "SELECT aggregation_type_id, aggregation_type FROM continuous.aggregation_types;"
           )
 
           exist_check <- exist_check[
@@ -666,7 +666,7 @@ plotOverlap <- function(
     tsid <- timeseries_id
     exist_check <- DBI::dbGetQuery(
       con,
-      "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
+      "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
       params = list(tsid)
     )
 
@@ -682,7 +682,7 @@ plotOverlap <- function(
         "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
         "p.plot_default_y_orientation,",
         ac_parameter_unit_select_sql(con, "p", "unit_default"),
-        "FROM parameters p WHERE p.parameter_id = $1;"
+        "FROM public.parameters p WHERE p.parameter_id = $1;"
       ),
       params = list(parameter_code)
     )
@@ -715,7 +715,7 @@ plotOverlap <- function(
       datum_m <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT conversion_m FROM datum_conversions WHERE location_id = ",
+          "SELECT conversion_m FROM public.datum_conversions WHERE location_id = ",
           location_id,
           " AND current = TRUE"
         )
@@ -781,7 +781,7 @@ plotOverlap <- function(
     daily <- dbGetQueryDT(
       con,
       glue::glue_sql(
-        "SELECT {DBI::SQL(daily_select)} FROM measurements_calculated_daily WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
+        "SELECT {DBI::SQL(daily_select)} FROM continuous.measurements_calculated_daily WHERE timeseries_id = {tsid} AND date BETWEEN {daily_start} AND {daily_end} ORDER BY date ASC;",
         .con = con
       )
     )
@@ -1209,7 +1209,7 @@ plotOverlap <- function(
     grades_dt <- dbGetQueryDT(
       con,
       glue::glue_sql(
-        "SELECT g.start_dt, g.end_dt FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = {tsid} AND g.end_dt >= {startDay} AND g.start_dt <= {endDay} AND gt.grade_type_code = 'N' ORDER BY start_dt;",
+        "SELECT g.start_dt, g.end_dt FROM continuous.grades g LEFT JOIN public.grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = {tsid} AND g.end_dt >= {startDay} AND g.start_dt <= {endDay} AND gt.grade_type_code = 'N' ORDER BY start_dt;",
         .con = con
       )
     )
@@ -1249,7 +1249,7 @@ plotOverlap <- function(
         stn_name <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name_fr FROM locations where location_id = '",
+            "SELECT name_fr FROM public.locations where location_id = '",
             location_id,
             "'"
           )
@@ -1259,7 +1259,7 @@ plotOverlap <- function(
         stn_name <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations where location_id = '",
+            "SELECT name FROM public.locations where location_id = '",
             location_id,
             "'"
           )
@@ -1461,7 +1461,7 @@ plotOverlap <- function(
         stn_name <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name_fr FROM locations where location_id = '",
+            "SELECT name_fr FROM public.locations where location_id = '",
             location_id,
             "'"
           )
@@ -1471,7 +1471,7 @@ plotOverlap <- function(
         stn_name <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations where location_id = '",
+            "SELECT name FROM public.locations where location_id = '",
             location_id,
             "'"
           )

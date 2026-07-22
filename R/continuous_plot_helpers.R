@@ -28,14 +28,17 @@ continuous_trace_uses_corrected_source <- function(
     return(TRUE)
   }
 
-  if (!DBI::dbExistsTable(con, "measurements_continuous")) {
+  if (!DBI::dbExistsTable(
+    con,
+    DBI::Id(schema = "continuous", table = "measurements_continuous")
+  )) {
     return(TRUE)
   }
 
   corrections_apply <- DBI::dbGetQuery(
     con,
     paste0(
-      "SELECT correction_id FROM corrections ",
+      "SELECT correction_id FROM continuous.corrections ",
       "WHERE timeseries_id = $1 AND start_dt <= $2 AND end_dt >= $3 ",
       "LIMIT 1;"
     ),
@@ -927,8 +930,8 @@ fetch_hourly_trace_data <- function(
     "FROM ",
     source_table,
     " m ",
-    "LEFT JOIN timeseries ts ON m.timeseries_id = ts.timeseries_id ",
-    "LEFT JOIN aggregation_types at ",
+    "LEFT JOIN continuous.timeseries ts ON m.timeseries_id = ts.timeseries_id ",
+    "LEFT JOIN continuous.aggregation_types at ",
     "ON ts.aggregation_type_id = at.aggregation_type_id ",
     where_sql,
     "GROUP BY date_trunc('hour', m.datetime), at.aggregation_type ",

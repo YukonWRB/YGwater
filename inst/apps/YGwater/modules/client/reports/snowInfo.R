@@ -36,10 +36,10 @@ snowInfoMod <- function(id, language) {
       locs = dbGetQueryDT(
         session$userData$AquaCache,
         "SELECT DISTINCT l.location_id, l.location_code AS location, l.name, l.name_fr
-         FROM locations AS l
-         JOIN locations_networks AS ln ON l.location_id = ln.location_id
-         JOIN networks AS n ON ln.network_id = n.network_id
-         JOIN samples AS s ON l.location_id = s.location_id
+         FROM public.locations AS l
+         JOIN public.locations_networks AS ln ON l.location_id = ln.location_id
+         JOIN public.networks AS n ON ln.network_id = n.network_id
+         JOIN discrete.samples AS s ON l.location_id = s.location_id
          WHERE n.name = 'Yukon Snow Survey Network'
          ORDER BY l.name;"
       )

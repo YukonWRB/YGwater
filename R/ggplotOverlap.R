@@ -409,13 +409,13 @@ ggplotOverlap <- function(
 
     instantaneous <- DBI::dbGetQuery(
       con,
-      "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';"
+      "SELECT aggregation_type_id FROM continuous.aggregation_types WHERE aggregation_type = 'instantaneous';"
     )[1, 1]
     if (is.null(record_rate)) {
       exist_check <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ",
+          "SELECT timeseries_id, record_rate FROM continuous.timeseries WHERE location_id = ",
           location_id,
           " AND parameter_id = ",
           parameter_code,
@@ -426,7 +426,7 @@ ggplotOverlap <- function(
       exist_check <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT timeseries_id FROM timeseries WHERE location_id = ",
+          "SELECT timeseries_id FROM continuous.timeseries WHERE location_id = ",
           location_id,
           " AND parameter_id = ",
           parameter_code,
@@ -484,7 +484,7 @@ ggplotOverlap <- function(
         datum <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT conversion_m FROM datum_conversions WHERE location_id = ",
+            "SELECT conversion_m FROM public.datum_conversions WHERE location_id = ",
             location_id,
             " AND current = TRUE"
           )
@@ -513,7 +513,7 @@ ggplotOverlap <- function(
         daily <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ",
+            "SELECT date, value, max, min, q75, q25 FROM continuous.measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date <= '",
             daily_end,
@@ -550,7 +550,7 @@ ggplotOverlap <- function(
         daily <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ",
+            "SELECT date, value, max, min, q75, q25 FROM continuous.measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date <= '",
             daily_end,
@@ -1964,7 +1964,7 @@ ggplotOverlap <- function(
           dbGetQueryDT(
             con,
             paste0(
-              "SELECT name_fr FROM locations where location_id = '",
+              "SELECT name_fr FROM public.locations where location_id = '",
               location_id,
               "'"
             )
@@ -1978,7 +1978,7 @@ ggplotOverlap <- function(
           dbGetQueryDT(
             con,
             paste0(
-              "SELECT name FROM locations where location_id = '",
+              "SELECT name FROM public.locations where location_id = '",
               location_id,
               "'"
             )

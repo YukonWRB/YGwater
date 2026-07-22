@@ -41,7 +41,7 @@ estimateFlowStats <- function(
 
   flow_paramId <- DBI::dbGetQuery(
     con,
-    "SELECT parameter_id FROM parameters WHERE param_name = 'water flow'"
+    "SELECT parameter_id FROM public.parameters WHERE param_name = 'water flow'"
   )$parameter_id
 
   flow_all <- DBI::dbGetQuery(
@@ -53,9 +53,9 @@ estimateFlowStats <- function(
         measurements_calculated_daily.date, 
         measurements_calculated_daily.value, 
         locations.geom_id 
-      FROM measurements_calculated_daily 
-      INNER JOIN timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id 
-      INNER JOIN locations ON timeseries.location_id = locations.location_id WHERE (locations.location_code IN ('",
+      FROM continuous.measurements_calculated_daily
+      INNER JOIN continuous.timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id
+      INNER JOIN public.locations ON timeseries.location_id = locations.location_id WHERE (locations.location_code IN ('",
       paste0(gauged_stations, collapse = "', '"),
       "') OR locations.alias IN ('",
       paste0(gauged_stations, collapse = "', '"),

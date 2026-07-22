@@ -88,7 +88,10 @@ calculate_period <- function(
       }
 
       use_corrected_function <- TRUE
-      if (DBI::dbExistsTable(con, "measurements_continuous")) {
+      if (DBI::dbExistsTable(
+        con,
+        DBI::Id(schema = "continuous", table = "measurements_continuous")
+      )) {
         ts_type <- DBI::dbGetQuery(
           con,
           "SELECT timeseries_type FROM continuous.timeseries WHERE timeseries_id = $1",
@@ -148,7 +151,7 @@ calculate_period <- function(
         query <- paste0(
           "SELECT ",
           paste(names, collapse = ', '),
-          " FROM measurements_continuous WHERE timeseries_id = ",
+          " FROM continuous.measurements_continuous WHERE timeseries_id = ",
           timeseries_id,
           not_in_clause,
           " ORDER BY datetime DESC LIMIT 10;"

@@ -150,7 +150,7 @@ getRaster <- function(
   rastque <- DBI::dbQuoteIdentifier(con, col_name)
   clauses2 <- sub("^where", "AND", clauses, ignore.case = TRUE)
   tmp.query <- paste0(
-    "SELECT r_raster_column AS geo FROM raster_columns\n  WHERE (r_table_schema||'.'||r_table_name) = '",
+    "SELECT r_raster_column AS geo FROM spatial.raster_columns\n  WHERE (r_table_schema||'.'||r_table_name) = '",
     namechar,
     "';"
   )
@@ -206,7 +206,7 @@ getRaster <- function(
   try(db.proj4 <- DBI::dbGetQuery(con, tmp.query.sr)$p4s, silent = TRUE)
   if (!exists("db.proj4")) {
     tmp.query.sr <- paste0(
-      "SELECT proj4text AS p4s FROM spatial_ref_sys WHERE srid = ",
+      "SELECT proj4text AS p4s FROM spatial.spatial_ref_sys WHERE srid = ",
       srid$st_srid,
       ";"
     )

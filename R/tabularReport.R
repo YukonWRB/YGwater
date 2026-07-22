@@ -306,7 +306,7 @@ tabularReport <- function(
       level_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 AND (l.location_code IN ('",
           paste(level_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(level_locations, collapse = "', '"),
@@ -320,13 +320,13 @@ tabularReport <- function(
     } else if (level_locations[1] == "all") {
       level_locations <- DBI::dbGetQuery(
         con,
-        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 ORDER BY l.location_code;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 ORDER BY l.location_code;"
       )
     } else {
       level_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1165 AND (l.location_code IN ('",
           paste(level_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(level_locations, collapse = "', '"),
@@ -362,7 +362,7 @@ tabularReport <- function(
       flow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 AND (l.location_code IN ('",
           paste(flow_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(flow_locations, collapse = "', '"),
@@ -376,13 +376,13 @@ tabularReport <- function(
     } else if (flow_locations[1] == "all") {
       flow_locations <- DBI::dbGetQuery(
         con,
-        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 ORDER BY l.location_code;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 ORDER BY l.location_code;"
       )
     } else {
       flow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1150 AND (l.location_code IN ('",
           paste(flow_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(flow_locations, collapse = "', '"),
@@ -409,7 +409,7 @@ tabularReport <- function(
       snow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 AND (l.location_code IN ('",
           paste(snow_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(snow_locations, collapse = "', '"),
@@ -423,13 +423,13 @@ tabularReport <- function(
     } else if (snow_locations[1] == "all") {
       snow_locations <- DBI::dbGetQuery(
         con,
-        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 ORDER BY l.location_code;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 ORDER BY l.location_code;"
       )
     } else {
       snow_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 21 AND (l.location_code IN ('",
           paste(snow_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(snow_locations, collapse = "', '"),
@@ -455,7 +455,7 @@ tabularReport <- function(
       bridge_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 AND (l.location_code IN ('",
           paste(bridge_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(bridge_locations, collapse = "', '"),
@@ -469,13 +469,13 @@ tabularReport <- function(
     } else if (bridge_locations[1] == "all") {
       bridge_locations <- DBI::dbGetQuery(
         con,
-        "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 ORDER BY l.location_code;"
+        "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 ORDER BY l.location_code;"
       )
     } else {
       bridge_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location, t.timeseries_id FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 AND (l.location_code IN ('",
+          "SELECT l.location_code AS location, t.timeseries_id FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id = 1160 AND (l.location_code IN ('",
           paste(bridge_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(bridge_locations, collapse = "', '"),
@@ -524,7 +524,7 @@ tabularReport <- function(
       precip_locations <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT l.location_code AS location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id IN (1165, 1150) AND (l.location_code IN ('",
+          "SELECT l.location_code AS location FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id IN (1165, 1150) AND (l.location_code IN ('",
           paste(precip_locations, collapse = "', '"),
           "') OR l.alias IN ('",
           paste(precip_locations, collapse = "', '"),
@@ -540,7 +540,7 @@ tabularReport <- function(
       precip_location_mode <- "all"
       precip_locations <- DBI::dbGetQuery(
         con,
-        "SELECT l.location_code AS location FROM timeseries AS t JOIN parameters AS p ON t.parameter_id = p.parameter_id JOIN locations AS l ON t.location_id = l.location_id WHERE p.parameter_id IN (1165, 1150) ORDER BY l.location_code;"
+        "SELECT l.location_code AS location FROM continuous.timeseries AS t JOIN public.parameters AS p ON t.parameter_id = p.parameter_id JOIN public.locations AS l ON t.location_id = l.location_id WHERE p.parameter_id IN (1165, 1150) ORDER BY l.location_code;"
       )[, 1]
       precip_locations <- unique(precip_locations)
     } else {
@@ -768,7 +768,7 @@ tabularReport <- function(
       log_debug(paste0("[precip] [", i, "] Station index=", idx, "."))
       name_query <- DBI::dbGetQuery(
         con,
-        paste0("SELECT name FROM locations WHERE location_code = '", i, "'")
+        paste0("SELECT name FROM public.locations WHERE location_code = '", i, "'")
       )
       log_debug(paste0(
         "[precip] [",
@@ -1008,16 +1008,16 @@ WITH temperature_values AS (
     ts.timeseries_id,
     td.datetime,
     td.value
-  FROM locations l
-  INNER JOIN timeseries ts
+  FROM public.locations l
+  INNER JOIN continuous.timeseries ts
     ON ts.location_id = l.location_id
-  INNER JOIN parameters p
+  INNER JOIN public.parameters p
     ON p.parameter_id = ts.parameter_id
-  INNER JOIN locations_networks ln
+  INNER JOIN public.locations_networks ln
     ON ln.location_id = l.location_id
-  INNER JOIN networks n
+  INNER JOIN public.networks n
     ON n.network_id = ln.network_id
-  INNER JOIN measurements_continuous td
+  INNER JOIN continuous.measurements_continuous td
     ON td.timeseries_id = ts.timeseries_id
   WHERE l.name ILIKE $1
     AND p.param_name ILIKE $2
@@ -1035,16 +1035,16 @@ historical_daily_aggregates AS (
     MIN(td.value) AS daily_min,
     AVG(td.value) AS daily_mean,
     MAX(td.value) AS daily_max
-  FROM locations l
-  INNER JOIN timeseries ts
+  FROM public.locations l
+  INNER JOIN continuous.timeseries ts
     ON ts.location_id = l.location_id
-  INNER JOIN parameters p
+  INNER JOIN public.parameters p
     ON p.parameter_id = ts.parameter_id
-  INNER JOIN locations_networks ln
+  INNER JOIN public.locations_networks ln
     ON ln.location_id = l.location_id
-  INNER JOIN networks n
+  INNER JOIN public.networks n
     ON n.network_id = ln.network_id
-  INNER JOIN measurements_continuous td
+  INNER JOIN continuous.measurements_continuous td
     ON td.timeseries_id = ts.timeseries_id
   WHERE l.name ILIKE $1
     AND p.param_name ILIKE $2
@@ -1075,16 +1075,16 @@ week_history AS (
     l.name AS location_name,
     ts.timeseries_id,
     AVG(md.q50) AS week_hist_mean
-  FROM locations l
-  INNER JOIN timeseries ts
+  FROM public.locations l
+  INNER JOIN continuous.timeseries ts
     ON ts.location_id = l.location_id
-  INNER JOIN parameters p
+  INNER JOIN public.parameters p
     ON p.parameter_id = ts.parameter_id
-  INNER JOIN locations_networks ln
+  INNER JOIN public.locations_networks ln
     ON ln.location_id = l.location_id
-  INNER JOIN networks n
+  INNER JOIN public.networks n
     ON n.network_id = ln.network_id
-  INNER JOIN measurements_calculated_daily md
+  INNER JOIN continuous.measurements_calculated_daily md
     ON md.timeseries_id = ts.timeseries_id
   WHERE l.name ILIKE $1
     AND p.param_name ILIKE $2
@@ -1206,7 +1206,7 @@ ORDER BY v.location_name, v.timeseries_id;
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           level_locations[i, "timeseries_id"],
@@ -1217,7 +1217,7 @@ ORDER BY v.location_name, v.timeseries_id;
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             level_locations[i, "timeseries_id"],
@@ -1248,7 +1248,7 @@ ORDER BY v.location_name, v.timeseries_id;
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location_code = '",
+            "SELECT name FROM public.locations WHERE location_code = '",
             level_locations[i, "location"],
             "'"
           )
@@ -1266,7 +1266,7 @@ ORDER BY v.location_name, v.timeseries_id;
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           flow_locations[i, "timeseries_id"],
@@ -1277,7 +1277,7 @@ ORDER BY v.location_name, v.timeseries_id;
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             flow_locations[i, "timeseries_id"],
@@ -1308,7 +1308,7 @@ ORDER BY v.location_name, v.timeseries_id;
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location_code = '",
+            "SELECT name FROM public.locations WHERE location_code = '",
             flow_locations[i, "location"],
             "'"
           )
@@ -1326,7 +1326,7 @@ ORDER BY v.location_name, v.timeseries_id;
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           snow_locations[i, "timeseries_id"],
@@ -1337,7 +1337,7 @@ ORDER BY v.location_name, v.timeseries_id;
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             snow_locations[i, "timeseries_id"],
@@ -1368,7 +1368,7 @@ ORDER BY v.location_name, v.timeseries_id;
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location_code = '",
+            "SELECT name FROM public.locations WHERE location_code = '",
             snow_locations[i, "location"],
             "'"
           )
@@ -1386,7 +1386,7 @@ ORDER BY v.location_name, v.timeseries_id;
       daily <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+          "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
           report_day,
           "' AND timeseries_id = ",
           bridge_locations[i, "timeseries_id"],
@@ -1397,7 +1397,7 @@ ORDER BY v.location_name, v.timeseries_id;
         daily <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT value, date, percent_historic_range, max, min, q50 FROM measurements_calculated_daily WHERE date = '",
+            "SELECT value, date, percent_historic_range, max, min, q50 FROM continuous.measurements_calculated_daily WHERE date = '",
             report_day - 1,
             "'AND timeseries_id = ",
             bridge_locations[i, "timeseries_id"],
@@ -1428,7 +1428,7 @@ ORDER BY v.location_name, v.timeseries_id;
         ]] <- stringr::str_to_title(unique(DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT name FROM locations WHERE location_code = '",
+            "SELECT name FROM public.locations WHERE location_code = '",
             bridge_locations[i, "location"],
             "'"
           )

@@ -256,7 +256,7 @@ basinPrecip <- function(
   } else if (!is.na(location_id)) {
     location_metadata <- DBI::dbGetQuery(
       con,
-      "SELECT location_code, longitude, latitude FROM locations WHERE location_id = $1 LIMIT 1;",
+      "SELECT location_code, longitude, latitude FROM public.locations WHERE location_id = $1 LIMIT 1;",
       params = list(location_id)
     )
 
@@ -384,8 +384,8 @@ basinPrecip <- function(
       # Query rasters_reference to get valid times for HRDPA
       ref_query_hrdpa <- paste0(
         "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
-        "FROM rasters_reference rr ",
-        "JOIN raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
         "WHERE rr.model = 'HRDPA' ",
         "AND rsi.parameter = 'accumulated precipitation (all types) at surface' ",
         "AND rr.valid_from <= '",
@@ -479,8 +479,8 @@ basinPrecip <- function(
       # Query rasters_reference to get valid times for HRDPS
       ref_query_hrdps <- paste0(
         "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
-        "FROM rasters_reference rr ",
-        "JOIN raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
         "WHERE rr.model = 'HRDPS' ",
         "AND rsi.parameter = 'accumulated precip (all types) 1 hour' ",
         "AND rr.valid_from <= '",
@@ -572,8 +572,8 @@ basinPrecip <- function(
 
       ref_query_hrdps <- paste0(
         "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
-        "FROM rasters_reference rr ",
-        "JOIN raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
         "WHERE rr.model = 'HRDPS' ",
         "AND rsi.parameter = 'accumulated precip (all types) 1 hour' ",
         "AND rr.valid_from <= '",

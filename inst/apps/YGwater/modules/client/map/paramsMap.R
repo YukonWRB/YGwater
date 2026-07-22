@@ -579,7 +579,7 @@ mapParams <- function(id, language) {
             ",
                                               ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                           FROM 
-                                              measurements_calculated_daily
+                                              continuous.measurements_calculated_daily
                                           WHERE 
                                               ",
             stats_filter_count,
@@ -620,7 +620,7 @@ mapParams <- function(id, language) {
               c("timeseries_id", "date", "value", stats_select),
               collapse = ", "
             ),
-            " FROM measurements_calculated_daily WHERE ",
+            " FROM continuous.measurements_calculated_daily WHERE ",
             stats_filter_count,
             " >= ",
             as.numeric(map_params$yrs1),
@@ -718,7 +718,7 @@ mapParams <- function(id, language) {
               ",
                                                 ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                             FROM 
-                                                measurements_calculated_daily
+                                                continuous.measurements_calculated_daily
                                             WHERE 
                                                 ",
               stats_filter_count,
@@ -758,7 +758,7 @@ mapParams <- function(id, language) {
                 c("timeseries_id", "date", "value", stats_select),
                 collapse = ", "
               ),
-              " FROM measurements_calculated_daily WHERE ",
+              " FROM continuous.measurements_calculated_daily WHERE ",
               stats_filter_count,
               " >= ",
               as.numeric(map_params$yrs2),

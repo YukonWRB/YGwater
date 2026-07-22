@@ -32,7 +32,7 @@ adminLandingUI <- function(id) {
         ),
         tags$li(
           tags$strong("Manage reference data"),
-          " — update organizations, networks, projects, and shared lookup tables used across the app."
+          " — update public.organizations, networks, projects, and shared lookup tables used across the app."
         ),
         tags$li(
           tags$strong("Manage users"),

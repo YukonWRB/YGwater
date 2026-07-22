@@ -86,7 +86,7 @@ imgMapView <- function(id, language) {
           {
             image <- DBI::dbGetQuery(
               session$userData$AquaCache,
-              paste0("SELECT format, file FROM images WHERE image_id = ", id)
+              paste0("SELECT format, file FROM files.images WHERE image_id = ", id)
             )
             if (nrow(image) == 1 && !is.null(image$file)) {
               outfile <- tempfile(fileext = paste0(".", image$format))

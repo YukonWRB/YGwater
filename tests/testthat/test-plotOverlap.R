@@ -8,14 +8,14 @@ on.exit(DBI::dbDisconnect(test_con), add = TRUE)
 
 wlevel <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'water level';"
 )$parameter_id[[1]]
 
 # Find the first water level timeseries in the DB
 wlevel_ts <- DBI::dbGetQuery(
   test_con,
   paste0(
-    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id, start_datetime, end_datetime FROM timeseries ts WHERE parameter_id = ",
+    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id, start_datetime, end_datetime FROM continuous.timeseries ts WHERE parameter_id = ",
     wlevel,
     " LIMIT 1;"
   )
@@ -267,15 +267,15 @@ test_that("plotOverlap can show data in the past", {
 
   wl <- DBI::dbGetQuery(
     con,
-    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
+    "SELECT parameter_id FROM public.parameters WHERE param_name = 'water level' LIMIT 1;"
   )[1, 1]
   loc_id <- DBI::dbGetQuery(
     con,
-    "SELECT location_id FROM locations WHERE location_code = '09AB004';"
+    "SELECT location_id FROM public.locations WHERE location_code = '09AB004';"
   )[1, 1]
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2 LIMIT 1;",
+    "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = $1 AND location_id = $2 LIMIT 1;",
     params = list(wl, loc_id)
   )[1, 1]
 

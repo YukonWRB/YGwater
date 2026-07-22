@@ -288,8 +288,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       }
       sql <- paste(
         "SELECT DISTINCT m.media_id, m.media_type, m.media_type_fr",
-        "FROM media_types AS m",
-        "INNER JOIN samples AS s ON m.media_id = s.media_id",
+        "FROM public.media_types AS m",
+        "INNER JOIN discrete.samples AS s ON m.media_id = s.media_id",
         ac_where(locations = input$locations_AC),
         "ORDER BY m.media_type ASC"
       )
@@ -303,7 +303,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       sql <- paste(
         "SELECT MIN(s.datetime)::date AS start_date,",
         "MAX(s.datetime)::date AS end_date",
-        "FROM samples AS s",
+        "FROM discrete.samples AS s",
         ac_where(
           locations = input$locations_AC,
           media = input$media_AC
@@ -329,9 +329,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       }
       sql <- paste(
         "SELECT DISTINCT p.parameter_id, p.param_name",
-        "FROM parameters AS p",
-        "INNER JOIN results AS r ON p.parameter_id = r.parameter_id",
-        "INNER JOIN samples AS s ON r.sample_id = s.sample_id",
+        "FROM public.parameters AS p",
+        "INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id",
+        "INNER JOIN discrete.samples AS s ON r.sample_id = s.sample_id",
         ac_where(
           locations = input$locations_AC,
           media = input$media_AC,
@@ -356,8 +356,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "s.sub_location_id, s.media_id, s.sample_type, s.collection_method,",
         "r.result_type, r.sample_fraction_id, r.result_value_type,",
         "r.result_speciation_id",
-        "FROM samples AS s",
-        "INNER JOIN results AS r ON s.sample_id = r.sample_id",
+        "FROM discrete.samples AS s",
+        "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
         ac_where(
           locations = input$locations_AC,
           media = input$media_AC,
@@ -386,7 +386,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       if (identical(input$browse_sample_parameter_match, "all")) {
         paste0(
           "(SELECT COUNT(DISTINCT rpf.parameter_id)",
-          " FROM results AS rpf",
+          " FROM discrete.results AS rpf",
           " WHERE rpf.sample_id = s.sample_id",
           " AND rpf.parameter_id IN (",
           ids_sql,
@@ -395,7 +395,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         )
       } else {
         paste0(
-          "EXISTS (SELECT 1 FROM results AS rpf",
+          "EXISTS (SELECT 1 FROM discrete.results AS rpf",
           " WHERE rpf.sample_id = s.sample_id",
           " AND rpf.parameter_id IN (",
           ids_sql,
@@ -429,12 +429,12 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "s.media_id, mt.media_type AS media,",
         "s.sample_type AS sample_type_id, st.sample_type,",
         "s.collection_method AS collection_method_id, cm.collection_method",
-        "FROM samples AS s",
-        "INNER JOIN locations AS l ON s.location_id = l.location_id",
-        "LEFT JOIN sub_locations AS sl ON s.sub_location_id = sl.sub_location_id",
-        "LEFT JOIN media_types AS mt ON s.media_id = mt.media_id",
-        "LEFT JOIN sample_types AS st ON s.sample_type = st.sample_type_id",
-        "LEFT JOIN collection_methods AS cm ON",
+        "FROM discrete.samples AS s",
+        "INNER JOIN public.locations AS l ON s.location_id = l.location_id",
+        "LEFT JOIN public.sub_locations AS sl ON s.sub_location_id = sl.sub_location_id",
+        "LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id",
+        "LEFT JOIN discrete.sample_types AS st ON s.sample_type = st.sample_type_id",
+        "LEFT JOIN discrete.collection_methods AS cm ON",
         "s.collection_method = cm.collection_method_id",
         ac_browse_where(include_parameter_filter = TRUE),
         "ORDER BY s.datetime DESC",
@@ -449,8 +449,8 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "SELECT COUNT(*) AS result_count,",
         "STRING_AGG(DISTINCT p.param_name, ', ' ORDER BY p.param_name)",
         "AS parameters",
-        "FROM results AS r",
-        "INNER JOIN parameters AS p ON r.parameter_id = p.parameter_id",
+        "FROM discrete.results AS r",
+        "INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id",
         "WHERE r.sample_id = base.sample_id",
         ") AS params ON TRUE",
         "ORDER BY base.datetime DESC"
@@ -472,9 +472,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
       sql <- paste(
         "SELECT p.parameter_id, p.param_name, COUNT(DISTINCT s.sample_id) AS n",
-        "FROM samples AS s",
-        "INNER JOIN results AS r ON s.sample_id = r.sample_id",
-        "INNER JOIN parameters AS p ON r.parameter_id = p.parameter_id",
+        "FROM discrete.samples AS s",
+        "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
+        "INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id",
         ac_browse_where(include_parameter_filter = FALSE),
         "GROUP BY p.parameter_id, p.param_name",
         "ORDER BY p.param_name ASC"
@@ -511,9 +511,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
       sql <- paste(
         "SELECT p.parameter_id, p.param_name, COUNT(DISTINCT s.sample_id) AS n",
-        "FROM samples AS s",
-        "INNER JOIN results AS r ON s.sample_id = r.sample_id",
-        "INNER JOIN parameters AS p ON r.parameter_id = p.parameter_id",
+        "FROM discrete.samples AS s",
+        "INNER JOIN discrete.results AS r ON s.sample_id = r.sample_id",
+        "INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id",
         where,
         "GROUP BY p.parameter_id, p.param_name",
         "ORDER BY p.param_name ASC"
@@ -537,9 +537,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       sql <- paste(
         "SELECT s.sample_id, l.name AS location,",
         "s.datetime::date AS sample_date, mt.media_type AS media",
-        "FROM samples AS s",
-        "INNER JOIN locations AS l ON s.location_id = l.location_id",
-        "LEFT JOIN media_types AS mt ON s.media_id = mt.media_id",
+        "FROM discrete.samples AS s",
+        "INNER JOIN public.locations AS l ON s.location_id = l.location_id",
+        "LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id",
         "WHERE",
         sample_clause,
         "ORDER BY s.datetime DESC"
@@ -575,7 +575,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         "SELECT g.guideline_id, g.guideline_code, g.guideline_name,",
         " p.param_name, gp.publisher_name, gs.series_name",
         " FROM criteria.guidelines AS g",
-        " INNER JOIN parameters AS p ON p.parameter_id = g.parameter_id",
+        " INNER JOIN public.parameters AS p ON p.parameter_id = g.parameter_id",
         " LEFT JOIN criteria.guideline_publishers AS gp",
         " ON gp.publisher_id = g.publisher_id",
         " LEFT JOIN criteria.guideline_series AS gs",

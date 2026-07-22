@@ -2590,7 +2590,7 @@ simplerIndex <- function(id, language) {
                     ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography,
                     ST_SetSRID(ST_MakePoint({coords$longitude}, {coords$latitude}), 4326)::geography
                   ) AS distance_m
-           FROM locations
+           FROM public.locations
            WHERE latitude IS NOT NULL
              AND longitude IS NOT NULL
              AND ST_DWithin(
