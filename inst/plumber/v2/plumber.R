@@ -1067,6 +1067,7 @@ function(request, response, client_id) {
 #* Store V2 request format for async tabular handlers
 #* @header
 #* @any /timeseries/measurements
+#* @any /timeseries/measurementsDaily
 #* @any /samples
 #* @any /samples/results
 function(request, response, client_id) {
@@ -1836,10 +1837,10 @@ function(client_id, query) {
     "
          )
          ",
-     measurement_select_sql,
-     "
+    measurement_select_sql,
+    "
          FROM limited_measurement_rows m",
-     measurement_join_sql,
+    measurement_join_sql,
     "ORDER BY m.datetime ASC, m.timeseries_id ASC"
   )
   out <- DBI::dbGetQuery(
@@ -1852,6 +1853,232 @@ function(client_id, query) {
     return(v2_response(
       v2_error_df(
         "No measurements found for the specified timeseries and date range.",
+        status = "info"
+      ),
+      headers = list("X-Status" = "info")
+    ))
+  }
+
+  v2_make_serialized_tabular_response(
+    out,
+    client_id = client_id,
+    query = query
+  )
+}
+#* @then
+v2_finalize_tabular_response
+
+#* Return daily calculated measurements for a timeseries
+#* @get /timeseries/measurementsDaily
+#* @query id:string* Timeseries IDs to target, separated by commas.
+#* @query start:string* Start date, inclusive, in ISO 8601 date format.
+#* @query end:string End date, inclusive, in ISO 8601 date format.
+#* @query limit:integer(100000) Maximum number of records to return.
+#* @query modifiedSince:string Only return daily measurements created or modified since this ISO 8601 date/time.
+#* @query stats:boolean(false) Include historical range statistics.
+#* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
+#* @serializer text/plain v2_identity_serializer()
+#* @async
+function(client_id, query) {
+  id <- v2_query_value(query, "id")
+  if (is.null(id)) {
+    return(v2_response(
+      v2_error_df("Missing required 'id' parameter."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+
+  start <- v2_query_value(query, "start")
+  if (is.null(start)) {
+    return(v2_response(
+      v2_error_df("Missing required 'start' parameter."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+  start <- try(as.Date(start), silent = TRUE)
+  if (inherits(start, "try-error") || is.na(start)) {
+    return(v2_response(
+      v2_error_df(
+        "Invalid 'start' parameter. Must be in ISO 8601 date format."
+      ),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+
+  end <- try(as.Date(v2_query_value(query, "end", Sys.Date())), silent = TRUE)
+  if (inherits(end, "try-error") || is.na(end)) {
+    return(v2_response(
+      v2_error_df("Invalid 'end' parameter. Must be in ISO 8601 date format."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+
+  modified_since <- v2_query_value(query, "modifiedSince")
+  if (!is.null(modified_since)) {
+    modified_since <- v2_parse_datetime(modified_since)
+    if (is.null(modified_since)) {
+      return(v2_response(
+        v2_error_df(
+          "Invalid 'modifiedSince' parameter. Must be in ISO 8601 format."
+        ),
+        status = 400L,
+        headers = list("X-Status" = "error")
+      ))
+    }
+  }
+
+  stats <- tolower(as.character(v2_query_value(query, "stats", "false")[[1L]]))
+  if (!stats %in% c("true", "false")) {
+    return(v2_response(
+      v2_error_df("Invalid 'stats' parameter. Use 'true' or 'false'."),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+  include_stats <- identical(stats, "true")
+
+  lim <- suppressWarnings(as.integer(v2_query_value(query, "limit", "100000")))
+  if (is.na(lim) || lim <= 0L) {
+    lim <- 100000L
+  }
+
+  ids <- v2_parse_integer_csv(id)
+  if (length(ids) == 0L) {
+    return(v2_response(
+      v2_error_df(
+        "Invalid 'id' parameter. Must contain at least one integer timeseries_id."
+      ),
+      status = 400L,
+      headers = list("X-Status" = "error")
+    ))
+  }
+
+  ctx <- v2_context(client_id)
+  if (!is.null(ctx$error)) {
+    return(ctx$error)
+  }
+  on.exit(DBI::dbDisconnect(ctx$con), add = TRUE)
+
+  stats_select_sql <- ""
+  if (include_stats) {
+    thirty_year_columns <- c(
+      "percent_historic_range_30yr",
+      "max_30yr",
+      "min_30yr",
+      "q90_30yr",
+      "q75_30yr",
+      "q50_30yr",
+      "q25_30yr",
+      "q10_30yr",
+      "mean_30yr",
+      "doy_count_30yr"
+    )
+    available_columns <- DBI::dbGetQuery(
+      ctx$con,
+      "SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'continuous'
+         AND table_name = 'measurements_calculated_daily'"
+    )$column_name
+    thirty_year_select_sql <- if (
+      all(thirty_year_columns %in% available_columns)
+    ) {
+      paste0(
+        ",\n      m.",
+        paste(thirty_year_columns, collapse = ",\n      m.")
+      )
+    } else {
+      paste0(
+        ",\n      NULL::numeric AS ",
+        paste(
+          thirty_year_columns[-length(thirty_year_columns)],
+          collapse = ",\n      NULL::numeric AS "
+        ),
+        ",\n      NULL::integer AS doy_count_30yr"
+      )
+    }
+    stats_select_sql <- paste0(
+      ",
+      m.percent_historic_range,
+      m.max,
+      m.min,
+      m.q90,
+      m.q75,
+      m.q50,
+      m.q25,
+      m.q10,
+      m.mean,
+      m.doy_count",
+      thirty_year_select_sql
+    )
+  }
+  modified_filter_sql <- ""
+  query_params <- list(
+    start,
+    end,
+    !v2_request_cache_allowed(ctx$credentials),
+    lim
+  )
+  limit_param <- "$4"
+  if (!is.null(modified_since)) {
+    modified_filter_sql <- "
+          AND (m.created >= $4 OR m.modified >= $4)"
+    query_params <- list(
+      start,
+      end,
+      !v2_request_cache_allowed(ctx$credentials),
+      modified_since,
+      lim
+    )
+    limit_param <- "$5"
+  }
+
+  sql <- paste0(
+    "WITH selected_timeseries AS MATERIALIZED (
+       SELECT timeseries_id, timezone_daily_calc
+       FROM continuous.timeseries
+       WHERE timeseries_id = ANY(ARRAY[",
+    paste(ids, collapse = ","),
+    "]::integer[])
+         AND ($3::boolean OR publicly_visible)
+     ),
+     limited_daily_rows AS MATERIALIZED (
+       SELECT m.*
+       FROM continuous.measurements_calculated_daily m
+       JOIN selected_timeseries ts USING (timeseries_id)
+       WHERE m.date BETWEEN $1::date AND $2::date",
+    modified_filter_sql,
+    "
+       ORDER BY m.date ASC, m.timeseries_id ASC
+       LIMIT ",
+    limit_param,
+    "
+     )
+     SELECT
+       m.timeseries_id,
+       m.date,
+       ts.timezone_daily_calc AS day_timezone,
+       m.value,
+       m.imputed",
+    stats_select_sql,
+    "
+     FROM limited_daily_rows m
+     JOIN selected_timeseries ts USING (timeseries_id)
+     ORDER BY m.date ASC, m.timeseries_id ASC"
+  )
+  out <- DBI::dbGetQuery(ctx$con, sql, params = query_params)
+
+  if (nrow(out) == 0L) {
+    return(v2_response(
+      v2_error_df(
+        paste(
+          "No daily measurements found for the specified timeseries and",
+          "date range."
+        ),
         status = "info"
       ),
       headers = list("X-Status" = "info")

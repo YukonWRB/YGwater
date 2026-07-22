@@ -195,6 +195,7 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
   async_routes <- c(
     "/timeseries/measurements",
+    "/timeseries/measurementsDaily",
     "/images/download",
     "/samples",
     "/samples/results",
@@ -289,6 +290,40 @@ test_that("API measurement SQL limits rows before metadata range joins", {
       fixed = TRUE
     )
     expect_false(grepl("FROM measurement_rows m", block, fixed = TRUE))
+  }
+})
+
+test_that("API daily measurement routes expose timezone and optional stats", {
+  for (route_file in c(
+    v2_route_file(),
+    system.file("plumber/v1.R", package = "YGwater")
+  )) {
+    lines <- readLines(route_file, warn = FALSE)
+    route_start <- grep(
+      "^#\\* @get\\s+/timeseries/measurementsDaily\\s*$",
+      lines
+    )[[1L]]
+    next_route <- grep("^#\\* @get\\s+", lines)
+    route_end <- next_route[next_route > route_start][[1L]] - 1L
+    block <- paste(lines[route_start:route_end], collapse = "\n")
+
+    expect_match(
+      block,
+      "continuous.measurements_calculated_daily",
+      fixed = TRUE
+    )
+    expect_match(
+      block,
+      "ts.timezone_daily_calc AS day_timezone",
+      fixed = TRUE
+    )
+    expect_match(block, "include_stats", fixed = TRUE)
+    expect_match(block, "m.percent_historic_range", fixed = TRUE)
+    expect_match(block, "m.doy_count", fixed = TRUE)
+    expect_match(block, "percent_historic_range_30yr", fixed = TRUE)
+    expect_match(block, "doy_count_30yr", fixed = TRUE)
+    expect_match(block, "m.created >= $4 OR m.modified >= $4", fixed = TRUE)
+    expect_match(block, "AND ($3::boolean OR publicly_visible)", fixed = TRUE)
   }
 })
 
@@ -918,6 +953,70 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   timeseries <- read.csv(text = get_ts$body)
   timeseries$end_datetime <- as.POSIXct(timeseries$end_datetime, tz = "UTC")
   timeseries <- timeseries[!is.na(timeseries$end_datetime), ]
+
+  daily_candidates <- timeseries$timeseries_id[
+    !is.na(timeseries$last_daily_calculation) &
+      nzchar(as.character(timeseries$last_daily_calculation))
+  ]
+  if (length(daily_candidates) > 0L) {
+    daily_url <- sprintf(
+      paste0(
+        "http://example.com/timeseries/measurementsDaily",
+        "?id=%s&start=1900-01-01&end=%s&limit=10"
+      ),
+      daily_candidates[[1L]],
+      Sys.Date()
+    )
+    daily <- get_v2(paste0(daily_url, "&stats=false"))
+    daily_stats <- get_v2(paste0(daily_url, "&stats=true&format=json"))
+
+    expect_equal(daily$status, 200)
+    expect_equal(daily_stats$status, 200)
+    daily_out <- read.csv(text = daily$body)
+    daily_stats_out <- parse_json_df(daily_stats)
+    if (!identical(names(daily_out), c("status", "message"))) {
+      expect_named(
+        daily_out,
+        c(
+          "timeseries_id",
+          "date",
+          "day_timezone",
+          "value",
+          "imputed"
+        )
+      )
+      expect_named(
+        daily_stats_out,
+        c(
+          "timeseries_id",
+          "date",
+          "day_timezone",
+          "value",
+          "imputed",
+          "percent_historic_range",
+          "max",
+          "min",
+          "q90",
+          "q75",
+          "q50",
+          "q25",
+          "q10",
+          "mean",
+          "doy_count",
+          "percent_historic_range_30yr",
+          "max_30yr",
+          "min_30yr",
+          "q90_30yr",
+          "q75_30yr",
+          "q50_30yr",
+          "q25_30yr",
+          "q10_30yr",
+          "mean_30yr",
+          "doy_count_30yr"
+        )
+      )
+    }
+  }
 
   skip_if(nrow(timeseries) == 0, "No timeseries with end_datetime available")
 
