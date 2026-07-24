@@ -163,6 +163,7 @@ test_that("tests for API V1", {
     "timezone_daily_calc",
     "last_daily_calculation",
     "last_synchronize",
+    "parameter_id",
     "matrix_state_id",
     "matrix_state_name",
     "matrix_state_name_fr",

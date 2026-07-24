@@ -459,6 +459,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV and JSON", {
     "timezone_daily_calc",
     "last_daily_calculation",
     "last_synchronize",
+    "parameter_id",
     "matrix_state_id",
     "matrix_state_name",
     "matrix_state_name_fr",

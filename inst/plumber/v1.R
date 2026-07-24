@@ -256,6 +256,7 @@ function(req, res, lang = "en", format = NULL) {
        ts.timezone_daily_calc,
        ts.last_daily_calculation,
        ts.last_synchronize,
+       ts.parameter_id,
        ts.matrix_state_id,
        ms.matrix_state_name,
        ms.matrix_state_name_fr,
