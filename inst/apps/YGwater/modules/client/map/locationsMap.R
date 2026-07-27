@@ -246,161 +246,161 @@ mapLocs <- function(id, language, outputs = NULL) {
     output$sidebar_controls <- renderUI({
       req(moduleData, language)
       tagList(
-            checkboxInput(
-              ns("cluster_points"),
-              label = tr("cluster_points_label", language$language),
-              value = TRUE
+        checkboxInput(
+          ns("cluster_points"),
+          label = tr("cluster_points_label", language$language),
+          value = TRUE
+        ),
+        selectizeInput(
+          ns("data_type"),
+          label = tooltip(
+            trigger = list(
+              tr("data_format", language$language),
+              bsicons::bs_icon("info-circle-fill")
             ),
-            selectizeInput(
-              ns("data_type"),
-              label = tooltip(
-                trigger = list(
-                  tr("data_format", language$language),
-                  bsicons::bs_icon("info-circle-fill")
-                ),
-                tr("tooltip_discrete_continuous", language$language),
-              ),
-              choices = stats::setNames(
-                c("all", "discrete", "continuous"),
-                c(
-                  tr("all_m", language$language),
-                  c(
-                    tr("discrete", language$language),
-                    tr("continuous", language$language)
-                  )
-                )
-              ),
-              selected = "all",
-              multiple = TRUE
-            ),
-            selectizeInput(
-              ns("media_type"),
-              label = tooltip(
-                trigger = list(
-                  tr("media", language$language),
-                  bsicons::bs_icon("info-circle-fill")
-                ),
-                tr("tooltip_sample_media", language$language),
-              ),
-              choices = stats::setNames(
-                c("all", moduleData$media_types$media_id),
-                c(
-                  tr("all_m", language$language),
-                  moduleData$media_types[[tr(
-                    "media_type_col",
-                    language$language
-                  )]]
-                )
-              ),
-              selected = "all",
-              multiple = TRUE
-            ),
-            selectizeInput(
-              ns("param_group"),
-              label = tr("param_group", language$language),
-              choices = stats::setNames(
-                c("all", moduleData$parameter_groups$group_id),
-                c(
-                  tr("all_m", language$language),
-                  moduleData$parameter_groups[[tr(
-                    "param_group_col",
-                    language$language
-                  )]]
-                )
-              ),
-              selected = "all",
-              multiple = TRUE
-            ),
-            selectizeInput(
-              ns("param"),
-              label = tr("parameter", language$language),
-              choices = parameter_choices(),
-              selected = "all",
-              multiple = TRUE
-            ),
-            selectizeInput(
-              ns("project"),
-              label = tr("project", language$language),
-              choices = stats::setNames(
-                c("all", moduleData$projects$project_id),
-                c(
-                  tr("all_m", language$language),
-                  moduleData$projects[[tr(
-                    "generic_name_col",
-                    language$language
-                  )]]
-                )
-              ),
-              selected = "all",
-              multiple = TRUE
-            ),
-            selectizeInput(
-              ns("network"),
-              label = tr("network", language$language),
-              choices = stats::setNames(
-                c("all", moduleData$networks$network_id),
-                c(
-                  tr("all_m", language$language),
-                  moduleData$networks[[tr(
-                    "generic_name_col",
-                    language$language
-                  )]]
-                )
-              ),
-              selected = "all",
-              multiple = TRUE
-            ),
-            textInput(
-              ns("location_name_search"),
-              label = tr("location_name_contains", language$language),
-              value = "",
-              placeholder = tr(
-                "location_name_contains_placeholder",
-                language$language
+            tr("tooltip_discrete_continuous", language$language),
+          ),
+          choices = stats::setNames(
+            c("all", "discrete", "continuous"),
+            c(
+              tr("all_m", language$language),
+              c(
+                tr("discrete", language$language),
+                tr("continuous", language$language)
               )
-            ),
-            div(
-              class = "compact-checkboxes",
-              style = "margin-top: 10px;",
-              checkboxInput(
-                ns("location_name_starts_with"),
-                label = tr("starts_with", language$language),
-                value = FALSE
-              ),
-              checkboxInput(
-                ns("location_name_ends_with"),
-                label = tr("ends_with", language$language),
-                value = FALSE
-              ),
-              checkboxInput(
-                ns("location_name_case_sensitive"),
-                label = tr("case_sensitive", language$language),
-                value = FALSE
-              )
-            ),
-            sliderInput(
-              ns("yrs"),
-              label = tr("year_filter", language$language),
-              min = lubridate::year(min(
-                moduleData$timeseries$start_datetime,
-                na.rm = TRUE
-              )),
-              max = lubridate::year(max(
-                moduleData$timeseries$end_datetime,
-                na.rm = TRUE
-              )),
-              value = lubridate::year(c(
-                min(moduleData$timeseries$start_datetime, na.rm = TRUE),
-                max(moduleData$timeseries$end_datetime, na.rm = TRUE)
-              )),
-              step = 1,
-              sep = ""
-            ),
-            actionButton(
-              ns("reset"),
-              tr("reset", language$language),
-              class = "btn btn-primary"
             )
+          ),
+          selected = "all",
+          multiple = TRUE
+        ),
+        selectizeInput(
+          ns("media_type"),
+          label = tooltip(
+            trigger = list(
+              tr("media", language$language),
+              bsicons::bs_icon("info-circle-fill")
+            ),
+            tr("tooltip_sample_media", language$language),
+          ),
+          choices = stats::setNames(
+            c("all", moduleData$media_types$media_id),
+            c(
+              tr("all_m", language$language),
+              moduleData$media_types[[tr(
+                "media_type_col",
+                language$language
+              )]]
+            )
+          ),
+          selected = "all",
+          multiple = TRUE
+        ),
+        selectizeInput(
+          ns("param_group"),
+          label = tr("param_group", language$language),
+          choices = stats::setNames(
+            c("all", moduleData$parameter_groups$group_id),
+            c(
+              tr("all_m", language$language),
+              moduleData$parameter_groups[[tr(
+                "param_group_col",
+                language$language
+              )]]
+            )
+          ),
+          selected = "all",
+          multiple = TRUE
+        ),
+        selectizeInput(
+          ns("param"),
+          label = tr("parameter", language$language),
+          choices = parameter_choices(),
+          selected = "all",
+          multiple = TRUE
+        ),
+        selectizeInput(
+          ns("project"),
+          label = tr("project", language$language),
+          choices = stats::setNames(
+            c("all", moduleData$projects$project_id),
+            c(
+              tr("all_m", language$language),
+              moduleData$projects[[tr(
+                "generic_name_col",
+                language$language
+              )]]
+            )
+          ),
+          selected = "all",
+          multiple = TRUE
+        ),
+        selectizeInput(
+          ns("network"),
+          label = tr("network", language$language),
+          choices = stats::setNames(
+            c("all", moduleData$networks$network_id),
+            c(
+              tr("all_m", language$language),
+              moduleData$networks[[tr(
+                "generic_name_col",
+                language$language
+              )]]
+            )
+          ),
+          selected = "all",
+          multiple = TRUE
+        ),
+        textInput(
+          ns("location_name_search"),
+          label = tr("location_name_contains", language$language),
+          value = "",
+          placeholder = tr(
+            "location_name_contains_placeholder",
+            language$language
+          )
+        ),
+        div(
+          class = "compact-checkboxes",
+          style = "margin-top: 10px;",
+          checkboxInput(
+            ns("location_name_starts_with"),
+            label = tr("starts_with", language$language),
+            value = FALSE
+          ),
+          checkboxInput(
+            ns("location_name_ends_with"),
+            label = tr("ends_with", language$language),
+            value = FALSE
+          ),
+          checkboxInput(
+            ns("location_name_case_sensitive"),
+            label = tr("case_sensitive", language$language),
+            value = FALSE
+          )
+        ),
+        sliderInput(
+          ns("yrs"),
+          label = tr("year_filter", language$language),
+          min = lubridate::year(min(
+            moduleData$timeseries$start_datetime,
+            na.rm = TRUE
+          )),
+          max = lubridate::year(max(
+            moduleData$timeseries$end_datetime,
+            na.rm = TRUE
+          )),
+          value = lubridate::year(c(
+            min(moduleData$timeseries$start_datetime, na.rm = TRUE),
+            max(moduleData$timeseries$end_datetime, na.rm = TRUE)
+          )),
+          step = 1,
+          sep = ""
+        ),
+        actionButton(
+          ns("reset"),
+          tr("reset", language$language),
+          class = "btn btn-primary"
+        )
       )
     }) |>
       bindEvent(moduleData, language$language)
@@ -1006,39 +1006,32 @@ mapLocs <- function(id, language, outputs = NULL) {
 
       search_term <- trimws(input$location_name_search %||% "")
       if (nzchar(search_term)) {
-        location_names <- loc.sub[[tr("generic_name_col", language$language)]]
-        valid_name <- !is.na(location_names)
+        location_values <- loc.sub[, .(
+          location_name = get(tr("generic_name_col", language$language)),
+          location_code = location
+        )]
 
-        names_for_match <- if (isTRUE(input$location_name_case_sensitive)) {
-          location_names
-        } else {
-          tolower(location_names)
+        if (!isTRUE(input$location_name_case_sensitive)) {
+          location_values <- location_values[, lapply(.SD, tolower)]
+          search_term <- tolower(search_term)
         }
 
-        search_for_match <- if (isTRUE(input$location_name_case_sensitive)) {
-          search_term
-        } else {
-          tolower(search_term)
-        }
-
-        match_idx <- rep(FALSE, nrow(loc.sub))
-        if (isTRUE(input$location_name_starts_with)) {
-          match_idx[valid_name] <- startsWith(
-            names_for_match[valid_name],
-            search_for_match
-          )
-        } else if (isTRUE(input$location_name_ends_with)) {
-          match_idx[valid_name] <- endsWith(
-            names_for_match[valid_name],
-            search_for_match
-          )
-        } else {
-          match_idx[valid_name] <- grepl(
-            search_for_match,
-            names_for_match[valid_name],
-            fixed = TRUE
-          )
-        }
+        matches <- vapply(
+          location_values,
+          function(values) {
+            matched <- if (isTRUE(input$location_name_starts_with)) {
+              startsWith(values, search_term)
+            } else if (isTRUE(input$location_name_ends_with)) {
+              endsWith(values, search_term)
+            } else {
+              grepl(search_term, values, fixed = TRUE)
+            }
+            matched[is.na(matched)] <- FALSE
+            matched
+          },
+          logical(nrow(loc.sub))
+        )
+        match_idx <- rowSums(matches) > 0
         loc.sub <- loc.sub[match_idx]
       }
 
