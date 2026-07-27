@@ -81,6 +81,7 @@ syncCont <- function(id, language) {
         JOIN continuous.timeseries ts ON md.timeseries_id = ts.timeseries_id"
       )
       # Make columns factors for better filtering in DT
+      res[, timeseries_id := as.integer(timeseries_id)]
       res[, location := as.factor(location)]
       res[, parameter := as.factor(parameter)]
       res[, media := as.factor(media)]
@@ -95,9 +96,6 @@ syncCont <- function(id, language) {
         ts_meta(),
         selection = 'multiple',
         options = list(
-          columnDefs = list(
-            list(targets = 1, visible = FALSE) #Hides the timeseries_id column. Column index numbers start at 0 here!!!
-          ),
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
             "function(settings, json) {",
