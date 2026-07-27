@@ -97,6 +97,34 @@ test_AquaConnect <- function(silent = TRUE) {
     silent = silent
   )
 }
+
+# Historical QC became reliable only after its audit triggers were installed.
+# Integration tests use a timestamp just after that boundary and skip cleanly
+# against older database schemas.
+historical_qc_test_as_of <- function(
+  con,
+  earliest = as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+) {
+  history_start <- tryCatch(
+    DBI::dbGetQuery(
+      con,
+      "SELECT history_started_at
+       FROM audit.history_boundaries
+       WHERE history_name = 'continuous_qc'"
+    )$history_started_at[[1]],
+    error = function(e) {
+      NULL
+    }
+  )
+  if (is.null(history_start) || is.na(history_start)) {
+    testthat::skip(
+      "The database does not have reliable continuous QC history."
+    )
+  }
+
+  max(earliest, as.POSIXct(history_start, tz = "UTC") + 1)
+}
+
 set.seed(123) # Set seed for reproducibility in tests
 
 # Ensure ragg is available for deterministic PNG outputs

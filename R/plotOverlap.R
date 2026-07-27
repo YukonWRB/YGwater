@@ -37,10 +37,11 @@
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param build_plot Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
-#' @param as_of Optional point-in-time timestamp at which measurement values and
-#'   stored daily summaries should be reconstructed. Character, Date, and
-#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
-#'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param as_of Optional point-in-time timestamp at which measurement values,
+#'   daily summaries, quality-control metadata, and unusable-grade exclusions
+#'   should be reconstructed. Character, Date, and POSIXct inputs are supported.
+#'   Date-like inputs are interpreted as the end of that day in `tzone`. When
+#'   `NULL` (default), current data are used.
 #' @param stats_period Historical range statistics period. Use "full" for
 #'   full-record statistics or "30yr" for the most recent 30-year statistics
 #'   when the connected database provides them. Default is "full".
@@ -1205,14 +1206,18 @@ plotOverlap <- function(
 
   ## Filter out unusable data from the traces
   if (!unusable) {
-    # if unusable is FALSE, the grades must be pulled so that we can filter them out
-    grades_dt <- dbGetQueryDT(
+    grades_dt <- fetch_continuous_qc_intervals(
       con,
-      glue::glue_sql(
-        "SELECT g.start_dt, g.end_dt FROM continuous.grades g LEFT JOIN public.grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = {tsid} AND g.end_dt >= {startDay} AND g.start_dt <= {endDay} AND gt.grade_type_code = 'N' ORDER BY start_dt;",
-        .con = con
-      )
+      timeseries_id = tsid,
+      start_date = min(realtime$datetime, na.rm = TRUE),
+      end_date = max(realtime$datetime, na.rm = TRUE),
+      qc_type = "grade",
+      as_of = as_of
     )
+    grades_dt <- grades_dt[
+      grades_dt$qc_type_code == "N",
+      c("start_dt", "end_dt")
+    ]
     if (nrow(grades_dt) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       realtime[

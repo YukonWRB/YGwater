@@ -159,7 +159,7 @@ test_that("plotMultiTimeseries can show data in the past", {
     "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM public.locations WHERE location_code = '09EA004') LIMIT 1;"
   )$timeseries_id[[1]]
 
-  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+  as_of <- historical_qc_test_as_of(con)
   start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
   end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
 

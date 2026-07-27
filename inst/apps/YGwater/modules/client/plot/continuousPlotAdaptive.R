@@ -3789,18 +3789,18 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 return(trace_data)
               }
 
-              unusable_dt <- dbGetQueryDT(
+              unusable_dt <- YGwater:::fetch_continuous_qc_intervals(
                 con,
-                "SELECT g.start_dt, g.end_dt
-                 FROM continuous.grades g
-                 LEFT JOIN public.grade_types gt
-                   ON g.grade_type_id = gt.grade_type_id
-                 WHERE g.timeseries_id = $1
-                   AND g.end_dt >= $2
-                   AND g.start_dt <= $3
-                   AND gt.grade_type_description = 'Unusable';",
-                params = list(ts_id, start_dt, end_dt)
+                timeseries_id = ts_id,
+                start_date = start_dt,
+                end_date = end_dt,
+                qc_type = "grade",
+                as_of = req$as_of
               )
+              unusable_dt <- unusable_dt[
+                unusable_dt$qc_type_code == "N",
+                c("start_dt", "end_dt")
+              ]
               if (!nrow(unusable_dt)) {
                 return(trace_data)
               }

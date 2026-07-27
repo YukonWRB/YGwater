@@ -51,10 +51,11 @@
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
 #' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
 #' @param snowbulletin If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.
-#' @param as_of Optional point-in-time timestamp at which measurement values and
-#'   stored daily summaries should be reconstructed. Character, Date, and
-#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
-#'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param as_of Optional point-in-time timestamp at which measurement values,
+#'   daily summaries, and unusable-grade exclusions should be reconstructed.
+#'   Character, Date, and POSIXct inputs are supported. Date-like inputs are
+#'   interpreted as the end of that day in `tzone`. When `NULL` (default),
+#'   current data are used.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @export

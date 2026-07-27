@@ -403,7 +403,7 @@ test_that("plotTimeseries can show data in the past", {
     params = list(wl, loc_id)
   )[1, 1]
 
-  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC") # Has to be after implementation of patch_38, otherwise the old AquaCache logic was deleting rows and replacing, resulting in recent created_on timestamps - this made it appear as if there was nothing in the past.
+  as_of <- historical_qc_test_as_of(con)
   start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
   end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
 

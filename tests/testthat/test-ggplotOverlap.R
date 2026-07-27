@@ -334,7 +334,7 @@ test_that("ggplotOverlap can show data in the past", {
     skip("Historical queries require USAGE on schema audit.")
   }
 
-  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+  as_of <- historical_qc_test_as_of(con)
 
   # Check if the connection can access function 'measurements_calculated_daily_at' which is used for historical queries. If not, skip the test.
   tsid <- DBI::dbGetQuery(

@@ -121,10 +121,11 @@ plotTimeseries(
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
-\item{as_of}{Optional point-in-time timestamp at which measurement values and
-stored daily summaries should be reconstructed. Character, Date, and
-POSIXct inputs are supported. Date-like inputs are interpreted as the end
-of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
+\item{as_of}{Optional point-in-time timestamp at which measurement values,
+daily summaries, quality-control metadata, and unusable-grade exclusions
+should be reconstructed. Character, Date, and POSIXct inputs are supported.
+Date-like inputs are interpreted as the end of that day in \code{tzone}. When
+\code{NULL} (default), current data are used.}
 
 \item{stats_period}{Historical range statistics period. Use "full" for
 full-record statistics or "30yr" for the most recent 30-year statistics

@@ -39,10 +39,11 @@
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
-#' @param as_of Optional point-in-time timestamp at which measurement values and
-#'   stored daily summaries should be reconstructed. Character, Date, and
-#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
-#'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param as_of Optional point-in-time timestamp at which measurement values,
+#'   daily summaries, quality-control metadata, and unusable-grade exclusions
+#'   should be reconstructed. Character, Date, and POSIXct inputs are supported.
+#'   Date-like inputs are interpreted as the end of that day in `tzone`. When
+#'   `NULL` (default), current data are used.
 #' @param stats_period Historical range statistics period. Use "full" for
 #'   full-record statistics or "30yr" for the most recent 30-year statistics
 #'   when the connected database provides them. Default is "full".
@@ -1408,19 +1409,18 @@ plotMultiTimeseries <- function(
 
       ## Filter out unusable data from the traces
       if (!unusable) {
-        # if unusable, the grades must be pulled so that we can filter them out
-        grades_dt <- dbGetQueryDT(
+        grades_dt <- fetch_continuous_qc_intervals(
           con,
-          paste0(
-            "SELECT g.start_dt, g.end_dt FROM continuous.grades g LEFT JOIN public.grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ",
-            tsid,
-            " AND g.end_dt >= '",
-            sub.start_date,
-            "' AND g.start_dt <= '",
-            sub.end_date,
-            "' AND gt.grade_type_code = 'N' ORDER BY start_dt;"
-          )
+          timeseries_id = tsid,
+          start_date = sub.start_date,
+          end_date = sub.end_date,
+          qc_type = "grade",
+          as_of = as_of
         )
+        grades_dt <- grades_dt[
+          grades_dt$qc_type_code == "N",
+          c("start_dt", "end_dt")
+        ]
         if (nrow(grades_dt) > 0) {
           # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
           trace_data[

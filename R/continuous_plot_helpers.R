@@ -841,6 +841,108 @@ format_as_of_title <- function(as_of, tzone, lang = "en") {
   }
 }
 
+#' Fetch continuous quality-control intervals
+#'
+#' @description
+#' Returns grade, approval, or qualifier intervals for one timeseries. When
+#' `as_of` is supplied, both the interval assignments and their type metadata
+#' are reconstructed at that timestamp by the database audit function.
+#'
+#' @param con A DBI database connection.
+#' @param timeseries_id Integer timeseries identifier.
+#' @param start_date,end_date Datetime bounds used to limit overlapping
+#'   intervals.
+#' @param qc_type One of `"grade"`, `"approval"`, or `"qualifier"`.
+#' @param as_of Optional point-in-time timestamp.
+#'
+#' @return A data.table with standardized QC type columns.
+#' @noRd
+#' @keywords internal
+fetch_continuous_qc_intervals <- function(
+  con,
+  timeseries_id,
+  start_date,
+  end_date,
+  qc_type = c("grade", "approval", "qualifier"),
+  as_of = NULL
+) {
+  qc_type <- match.arg(qc_type)
+
+  if (is.null(as_of)) {
+    qc_config <- switch(
+      qc_type,
+      grade = list(
+        interval_table = "continuous.grades",
+        type_table = "public.grade_types",
+        type_id = "grade_type_id",
+        type_code = "grade_type_code",
+        type_description = "grade_type_description",
+        type_description_fr = "grade_type_description_fr"
+      ),
+      approval = list(
+        interval_table = "continuous.approvals",
+        type_table = "public.approval_types",
+        type_id = "approval_type_id",
+        type_code = "approval_type_code",
+        type_description = "approval_type_description",
+        type_description_fr = "approval_type_description_fr"
+      ),
+      qualifier = list(
+        interval_table = "continuous.qualifiers",
+        type_table = "public.qualifier_types",
+        type_id = "qualifier_type_id",
+        type_code = "qualifier_type_code",
+        type_description = "qualifier_type_description",
+        type_description_fr = "qualifier_type_description_fr"
+      )
+    )
+
+    statement <- sprintf(
+      "SELECT
+         qc.start_dt,
+         qc.end_dt,
+         qt.%s AS qc_type_code,
+         qt.%s AS qc_type_description,
+         qt.%s AS qc_type_description_fr,
+         qt.color_code
+       FROM %s qc
+       LEFT JOIN %s qt
+         ON qt.%s = qc.%s
+       WHERE qc.timeseries_id = $1
+         AND qc.end_dt >= $2
+         AND qc.start_dt <= $3
+       ORDER BY qc.start_dt, qc.end_dt",
+      qc_config$type_code,
+      qc_config$type_description,
+      qc_config$type_description_fr,
+      qc_config$interval_table,
+      qc_config$type_table,
+      qc_config$type_id,
+      qc_config$type_id
+    )
+    params <- list(timeseries_id, start_date, end_date)
+  } else {
+    statement <- "SELECT
+         start_dt,
+         end_dt,
+         type_code AS qc_type_code,
+         type_description AS qc_type_description,
+         type_description_fr AS qc_type_description_fr,
+         color_code
+       FROM audit.continuous_qc_intervals_as_of(
+         $1,
+         ARRAY[$2]::INTEGER[],
+         $3,
+         $4,
+         ARRAY[$5]::TEXT[]
+       )
+       ORDER BY start_dt, end_dt"
+    params <- list(as_of, timeseries_id, start_date, end_date, qc_type)
+  }
+
+  dbGetQueryDT(con, statement, params = params)
+}
+
 #' @title Fetch hourly trace data
 #' @description Fetches hourly aggregated trace data for a given timeseries and date range, with options for using corrected values and specifying an as_of datetime.
 #' @param con A DBI database connection object.
