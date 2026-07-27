@@ -293,6 +293,55 @@ test_that("API measurement SQL limits rows before metadata range joins", {
   }
 })
 
+test_that("API measurement modifiedSince includes related range changes", {
+  for (route_file in c(
+    v2_route_file(),
+    system.file("plumber/v1.R", package = "YGwater")
+  )) {
+    lines <- readLines(route_file, warn = FALSE)
+    measurement_start <- grep(
+      "^#\\* @get\\s+/timeseries/measurements\\s*$",
+      lines
+    )[[1L]]
+    next_route <- grep("^#\\* @get\\s+", lines)
+    measurement_end <- next_route[next_route > measurement_start][[1L]] - 1L
+    block <- paste(lines[measurement_start:measurement_end], collapse = "\n")
+
+    expect_match(block, "modified_ranges AS MATERIALIZED", fixed = TRUE)
+    expect_match(
+      block,
+      "tt.root_timeseries_id AS timeseries_id",
+      fixed = TRUE
+    )
+    for (table in c(
+      "corrections",
+      "grades",
+      "approvals",
+      "qualifiers",
+      "owners",
+      "contributors"
+    )) {
+      expect_match(
+        block,
+        paste0("JOIN continuous.", table),
+        fixed = TRUE,
+        info = route_file
+      )
+    }
+    expect_match(block, "FROM modified_ranges changed", fixed = TRUE)
+    expect_match(
+      block,
+      "changed.start_dt <= mc.datetime",
+      fixed = TRUE
+    )
+    expect_match(
+      block,
+      "changed.start_dt <= m.datetime",
+      fixed = TRUE
+    )
+  }
+})
+
 test_that("API daily measurement routes expose timezone and optional stats", {
   for (route_file in c(
     v2_route_file(),
@@ -1113,8 +1162,14 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
       !identical(names(recent), c("status", "message")) ||
         !identical(recent$status[1], "info")
     ) {
-      recent_stamps <- measurement_stamp(recent)
-      expect_true(all(recent_stamps >= newest_stamp, na.rm = TRUE))
+      # Related range changes may legitimately return measurements whose own
+      # created/modified timestamps predate modifiedSince.
+      recent_keys <- paste(recent$timeseries_id, recent$datetime)
+      measurement_keys <- paste(
+        measurements$timeseries_id,
+        measurements$datetime
+      )
+      expect_true(all(recent_keys %in% measurement_keys))
       expect_lte(nrow(recent), nrow(measurements))
     }
   }

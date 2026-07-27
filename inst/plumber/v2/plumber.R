@@ -1229,7 +1229,7 @@ function(request, response, query) {
        ts.matrix_state_id,
        ms.matrix_state_name,
        ms.matrix_state_name_fr,
-       ts.sub_location_id,
+      ts.sub_location_id,
        sl.sub_location_name,
        sl.sub_location_name_fr,
        tc.expression_sql AS compound_expression_sql,
@@ -1286,7 +1286,7 @@ function(request, response, query) {
 #* @query start:string* Start date/time, inclusive, in ISO 8601 format.
 #* @query end:string End date/time, inclusive, in ISO 8601 format.
 #* @query limit:integer(100000) Maximum number of records to return; capped at 1000000.
-#* @query modifiedSince:string Only return measurements created or modified since this ISO 8601 date/time.
+#* @query modifiedSince:string Only return measurements changed since this ISO 8601 date/time, including changes to corrections, grades, approvals, qualifiers, owners, and contributors.
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()
 #* @async
@@ -1470,18 +1470,92 @@ function(client_id, query) {
 
   basic_modified_filter_sql <- ""
   compound_modified_filter_sql <- ""
+  modified_ranges_cte_sql <- ""
   query_params <- list(start, end, include_private, lim)
   limit_param <- "$4"
   if (!is.null(modified_since)) {
+    modified_ranges_cte_sql <- "
+         modified_ranges AS MATERIALIZED (
+           SELECT
+             tt.root_timeseries_id AS timeseries_id,
+             c.start_dt,
+             c.end_dt
+           FROM timeseries_tree tt
+           JOIN continuous.corrections c
+             ON c.timeseries_id = tt.source_timeseries_id
+           WHERE c.start_dt <= $2
+             AND c.end_dt >= $1
+             AND (c.created >= $4 OR c.modified >= $4)
+
+           UNION ALL
+
+           SELECT st.timeseries_id, g.start_dt, g.end_dt
+           FROM selected_timeseries st
+           JOIN continuous.grades g USING (timeseries_id)
+           WHERE g.start_dt <= $2
+             AND g.end_dt >= $1
+             AND (g.created >= $4 OR g.modified >= $4)
+
+           UNION ALL
+
+           SELECT st.timeseries_id, a.start_dt, a.end_dt
+           FROM selected_timeseries st
+           JOIN continuous.approvals a USING (timeseries_id)
+           WHERE a.start_dt <= $2
+             AND a.end_dt >= $1
+             AND (a.created >= $4 OR a.modified >= $4)
+
+           UNION ALL
+
+           SELECT st.timeseries_id, q.start_dt, q.end_dt
+           FROM selected_timeseries st
+           JOIN continuous.qualifiers q USING (timeseries_id)
+           WHERE q.start_dt <= $2
+             AND q.end_dt >= $1
+             AND (q.created >= $4 OR q.modified >= $4)
+
+           UNION ALL
+
+           SELECT st.timeseries_id, o.start_dt, o.end_dt
+           FROM selected_timeseries st
+           JOIN continuous.owners o USING (timeseries_id)
+           WHERE o.start_dt <= $2
+             AND o.end_dt >= $1
+             AND (o.created >= $4 OR o.modified >= $4)
+
+           UNION ALL
+
+           SELECT st.timeseries_id, c.start_dt, c.end_dt
+           FROM selected_timeseries st
+           JOIN continuous.contributors c USING (timeseries_id)
+           WHERE c.start_dt <= $2
+             AND c.end_dt >= $1
+             AND (c.created >= $4 OR c.modified >= $4)
+         ),
+    "
     basic_modified_filter_sql <- "
        AND (
          mc.created >= $4
          OR mc.modified >= $4
+         OR EXISTS (
+           SELECT 1
+           FROM modified_ranges changed
+           WHERE changed.timeseries_id = mc.timeseries_id
+             AND changed.start_dt <= mc.datetime
+             AND changed.end_dt >= mc.datetime
+         )
        )"
     compound_modified_filter_sql <- "
        AND (
          source_stamp.created >= $4
          OR source_stamp.modified >= $4
+         OR EXISTS (
+           SELECT 1
+           FROM modified_ranges changed
+           WHERE changed.timeseries_id = m.timeseries_id
+             AND changed.start_dt <= m.datetime
+             AND changed.end_dt >= m.datetime
+         )
        )"
     query_params <- list(start, end, include_private, modified_since, lim)
     limit_param <- "$5"
@@ -1537,7 +1611,9 @@ function(client_id, query) {
            SELECT root_timeseries_id, source_timeseries_id
            FROM timeseries_tree
            WHERE source_type = 'basic'
-         ),
+         ),",
+    modified_ranges_cte_sql,
+    "
          grade_ranges AS MATERIALIZED (
            SELECT
              g.timeseries_id,
