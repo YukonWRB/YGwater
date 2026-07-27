@@ -113,6 +113,7 @@ syncCont <- function(id, language) {
           )
         ),
         filter = 'top',
+        rownames = FALSE
       )
     })
 

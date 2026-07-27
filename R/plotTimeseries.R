@@ -36,10 +36,11 @@
 #' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
-#' @param as_of Optional point-in-time timestamp at which measurement values and
-#'   stored daily summaries should be reconstructed. Character, Date, and
-#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
-#'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param as_of Optional point-in-time timestamp at which measurement values,
+#'   daily summaries, quality-control metadata, and unusable-grade exclusions
+#'   should be reconstructed. Character, Date, and POSIXct inputs are supported.
+#'   Date-like inputs are interpreted as the end of that day in `tzone`. When
+#'   `NULL` (default), current data are used.
 #' @param stats_period Historical range statistics period. Use "full" for
 #'   full-record statistics or "30yr" for the most recent 30-year statistics
 #'   when the connected database provides them. Default is "full".
@@ -747,28 +748,37 @@ plotTimeseries <- function(
 
   ## Grades, approvals, qualifiers ############
   if (grades | !unusable) {
-    # if unusable, the grades must be pulled so that we can filter them out
-    grades_dt <- dbGetQueryDT(
+    # If unusable is FALSE, grades are also needed to filter the trace.
+    grades_dt <- fetch_continuous_qc_intervals(
       con,
-      paste0(
-        "SELECT g.start_dt, g.end_dt, gt.grade_type_description, gt.grade_type_description_fr, gt.color_code FROM continuous.grades g LEFT JOIN public.grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ",
-        tsid,
-        " AND g.end_dt >= '",
-        start_date,
-        "' AND g.start_dt <= '",
-        end_date,
-        "' ORDER BY start_dt;"
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      qc_type = "grade",
+      as_of = as_of
+    )
+    data.table::setnames(
+      grades_dt,
+      c(
+        "qc_type_code",
+        "qc_type_description",
+        "qc_type_description_fr"
+      ),
+      c(
+        "grade_type_code",
+        "grade_type_description",
+        "grade_type_description_fr"
       )
     )
 
-    # Many rows could be adjacent repeats of grade_type_description with different start_dt and end_dt, in which case these rows should be amalgamated
-    grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_description)]
+    # Amalgamate adjacent intervals of the same grade.
+    grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_code)]
 
-    # now collapse each run into one interval
     grades_dt <- grades_dt[,
       .(
         start_dt = data.table::first(.SD$start_dt),
         end_dt = data.table::last(.SD$end_dt),
+        grade_type_code = data.table::first(.SD$grade_type_code),
         grade_type_description = data.table::first(.SD$grade_type_description),
         grade_type_description_fr = data.table::first(
           .SD$grade_type_description_fr
@@ -781,26 +791,36 @@ plotTimeseries <- function(
     grades_dt[, "run" := NULL]
   }
   if (approvals) {
-    approvals_dt <- dbGetQueryDT(
+    approvals_dt <- fetch_continuous_qc_intervals(
       con,
-      paste0(
-        "SELECT a.start_dt, a.end_dt, at.approval_type_description, at.approval_type_description_fr, at.color_code FROM continuous.approvals a LEFT JOIN public.approval_types at ON a.approval_type_id = at.approval_type_id WHERE a.timeseries_id = ",
-        tsid,
-        " AND a.end_dt >= '",
-        start_date,
-        "' AND a.start_dt <= '",
-        end_date,
-        "' ORDER BY start_dt;"
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      qc_type = "approval",
+      as_of = as_of
+    )
+    data.table::setnames(
+      approvals_dt,
+      c(
+        "qc_type_code",
+        "qc_type_description",
+        "qc_type_description_fr"
+      ),
+      c(
+        "approval_type_code",
+        "approval_type_description",
+        "approval_type_description_fr"
       )
     )
     # amalgamate
     approvals_dt[,
-      "run" := data.table::rleid(approvals_dt$approval_type_description)
+      "run" := data.table::rleid(approvals_dt$approval_type_code)
     ]
     approvals_dt <- approvals_dt[,
       .(
         start_dt = data.table::first(.SD$start_dt),
         end_dt = data.table::last(.SD$end_dt),
+        approval_type_code = data.table::first(.SD$approval_type_code),
         approval_type_description = data.table::first(
           .SD$approval_type_description
         ),
@@ -814,26 +834,36 @@ plotTimeseries <- function(
     approvals_dt[, "run" := NULL]
   }
   if (qualifiers) {
-    qualifiers_dt <- dbGetQueryDT(
+    qualifiers_dt <- fetch_continuous_qc_intervals(
       con,
-      paste0(
-        "SELECT q.start_dt, q.end_dt, qt.qualifier_type_description, qt.qualifier_type_description_fr, qt.color_code FROM continuous.qualifiers q LEFT JOIN public.qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE q.timeseries_id = ",
-        tsid,
-        " AND q.end_dt >= '",
-        start_date,
-        "' AND q.start_dt <= '",
-        end_date,
-        "' ORDER BY start_dt;"
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      qc_type = "qualifier",
+      as_of = as_of
+    )
+    data.table::setnames(
+      qualifiers_dt,
+      c(
+        "qc_type_code",
+        "qc_type_description",
+        "qc_type_description_fr"
+      ),
+      c(
+        "qualifier_type_code",
+        "qualifier_type_description",
+        "qualifier_type_description_fr"
       )
     )
     # amalgamate
     qualifiers_dt[,
-      "run" := data.table::rleid(qualifiers_dt$qualifier_type_description)
+      "run" := data.table::rleid(qualifiers_dt$qualifier_type_code)
     ]
     qualifiers_dt <- qualifiers_dt[,
       .(
         start_dt = data.table::first(.SD$start_dt),
         end_dt = data.table::last(.SD$end_dt),
+        qualifier_type_code = data.table::first(.SD$qualifier_type_code),
         qualifier_type_description = data.table::first(
           .SD$qualifier_type_description
         ),
@@ -1005,8 +1035,8 @@ plotTimeseries <- function(
   }
 
   if (!unusable) {
-    # Trow out unusable data (replace with NAs)
-    unus <- grades_dt[grades_dt$grade_type_description == "Unusable"]
+    # Throw out data carrying the no-use grade that existed at `as_of`.
+    unus <- grades_dt[grades_dt$grade_type_code == "N"]
     if (nrow(unus) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       trace_data[
