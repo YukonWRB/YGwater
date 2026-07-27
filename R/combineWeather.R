@@ -53,7 +53,7 @@ combineWeather <- function(
     stop("The 'stations' parameter must be a list.")
   }
 
-  if (length(data) < 2) {
+  if (length(stations) < 2) {
     stop("The 'stations' parameter must be a list with two or more elements.")
   }
 
@@ -113,7 +113,7 @@ combineWeather <- function(
       # Transform to long format
       station <- station %>%
         tidyr::pivot_longer(
-          cols = variables,
+          cols = dplyr::any_of(variables),
           names_to = "variable",
           values_to = "value"
         )
@@ -214,7 +214,8 @@ combineWeather <- function(
       } else {
         interval <- calculate_period(stn1, datetime_col = datetime_col) %>%
           dplyr::count(.data$period, name = "count") %>%
-          dplyr::filter("count" == max("count")) %>%
+          dplyr::filter(.data$count == max(.data$count)) %>%
+          dplyr::slice(1) %>%
           dplyr::pull("period")
         interval <- as.numeric(lubridate::period(interval))
         all_dates <- seq.POSIXt(
@@ -257,8 +258,13 @@ combineWeather <- function(
             .data$station_stn2
           )
         ) %>%
-        dplyr::select(datetime_col, "value", "variable", "station") %>%
-        dplyr::arrange(datetime_col)
+        dplyr::select(
+          dplyr::all_of(datetime_col),
+          "value",
+          "variable",
+          "station"
+        ) %>%
+        dplyr::arrange(.data[[datetime_col]])
 
       message("Gaps filled")
 

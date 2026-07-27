@@ -63,9 +63,9 @@ plotMultiTimeseries(
 
 \item{z_approx}{Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value. Matched one to one to the locations and parameters or recycled if specified as length one.}
 
-\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.}
+\item{start_date}{The day or datetime on which to start the plot as character, Date, or POSIXct. Date-only values start at the beginning of that day in \code{tzone}. Default is one year ago.}
 
-\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.}
+\item{end_date}{The day or datetime on which to end the plot as character, Date, or POSIXct. Date-only values include the full selected day in \code{tzone}. Default is today.}
 
 \item{lead_lag}{The number of \strong{hours} to lead or lag the data. Default is NULL, which will not lead or lag any of the timeseries, otherwise set to a signed numeric value. Matched one to one to the locations and parameters. Not used for \code{type} 'subplots'.}
 
@@ -116,10 +116,11 @@ to FALSE to force standard scatter traces.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
-\item{as_of}{Optional point-in-time timestamp at which measurement values and
-stored daily summaries should be reconstructed. Character, Date, and
-POSIXct inputs are supported. Date-like inputs are interpreted as the end
-of that day in \code{tzone}. When \code{NULL} (default), current data are used.}
+\item{as_of}{Optional point-in-time timestamp at which measurement values,
+daily summaries, quality-control metadata, and unusable-grade exclusions
+should be reconstructed. Character, Date, and POSIXct inputs are supported.
+Date-like inputs are interpreted as the end of that day in \code{tzone}. When
+\code{NULL} (default), current data are used.}
 
 \item{stats_period}{Historical range statistics period. Use "full" for
 full-record statistics or "30yr" for the most recent 30-year statistics

@@ -1027,17 +1027,17 @@ addTimeseries <- function(id, language) {
           "ts.sensor_priority, ts.default_owner, ts.record_rate,",
           "ts.share_with, ts.source_fx, ts.source_fx_args, ts.note,",
           "ts.default_data_sharing_agreement_id",
-          "FROM timeseries ts",
+          "FROM continuous.timeseries ts",
           "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
         )
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id ORDER BY l.name ASC"
+        "SELECT l.location_id, l.name, lt.type, l.latitude, l.longitude FROM public.locations l INNER JOIN public.location_types lt ON l.location_type = lt.type_id ORDER BY l.name ASC"
       )
       moduleData$sub_locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT sub_location_id, sub_location_name, location_id FROM sub_locations ORDER BY sub_location_name ASC"
+        "SELECT sub_location_id, sub_location_name, location_id FROM public.sub_locations ORDER BY sub_location_name ASC"
       )
       moduleData$locations_z <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -1073,12 +1073,12 @@ addTimeseries <- function(id, language) {
         session$userData$AquaCache,
         paste(
           "SELECT media_id, media_type, default_matrix_state_id",
-          "FROM media_types ORDER BY media_type ASC"
+          "FROM public.media_types ORDER BY media_type ASC"
         )
       )
       moduleData$aggregation_types <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT aggregation_type_id, aggregation_type FROM aggregation_types ORDER BY aggregation_type ASC"
+        "SELECT aggregation_type_id, aggregation_type FROM continuous.aggregation_types ORDER BY aggregation_type ASC"
       )
       moduleData$correction_types <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -1093,7 +1093,7 @@ addTimeseries <- function(id, language) {
       )
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT organization_id, name FROM organizations ORDER BY name ASC"
+        "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -1116,17 +1116,17 @@ addTimeseries <- function(id, language) {
           ", ms.matrix_state_name AS matrix_state, m.media_type AS media,",
           "at.aggregation_type, lz.z_meters AS depth_height_m,",
           "ts.sensor_priority, o.name AS owner, ts.record_rate",
-          "FROM timeseries ts",
-          "INNER JOIN locations l ON ts.location_id = l.location_id",
-          "LEFT JOIN sub_locations sl ON ts.sub_location_id = sl.sub_location_id",
-          "LEFT JOIN locations_z lz ON ts.z_id = lz.z_id",
-          "INNER JOIN parameters p ON ts.parameter_id = p.parameter_id",
+          "FROM continuous.timeseries ts",
+          "INNER JOIN public.locations l ON ts.location_id = l.location_id",
+          "LEFT JOIN public.sub_locations sl ON ts.sub_location_id = sl.sub_location_id",
+          "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id",
+          "INNER JOIN public.parameters p ON ts.parameter_id = p.parameter_id",
           "LEFT JOIN public.matrix_states ms",
           "ON ts.matrix_state_id = ms.matrix_state_id",
-          "INNER JOIN media_types m ON ts.media_id = m.media_id",
-          "INNER JOIN aggregation_types at",
+          "INNER JOIN public.media_types m ON ts.media_id = m.media_id",
+          "INNER JOIN continuous.aggregation_types at",
           "ON ts.aggregation_type_id = at.aggregation_type_id",
-          "INNER JOIN organizations o ON ts.default_owner = o.organization_id"
+          "INNER JOIN public.organizations o ON ts.default_owner = o.organization_id"
         )
       )
       # Join on files.document_types.document_type_en = 'data sharing agreement' to get only data sharing agreements
@@ -1516,9 +1516,7 @@ addTimeseries <- function(id, language) {
             maxItems = 1,
             placeholder = "Optional",
             create = TRUE,
-            createFilter = htmlwidgets::JS(
-              "function(input) { return /^-?(?:\\d+|\\d*\\.\\d+)$/.test($.trim(input)); }"
-            ),
+            createFilter = "^-?(?:[0-9]+|[0-9]*[.][0-9]+)$",
             createOnBlur = TRUE,
             persist = FALSE,
             plugins = list("clear_button")
@@ -2686,7 +2684,7 @@ addTimeseries <- function(id, language) {
         # Update the moduleData reactiveValues
         moduleData$organizations <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT organization_id, name FROM organizations"
+          "SELECT organization_id, name FROM public.organizations"
         )
         # Update the selectizeInput to the new value
         new_id <- match_lookup_id_by_label(
@@ -2868,7 +2866,7 @@ addTimeseries <- function(id, language) {
                 if (!is.na(new_start)) {
                   DBI::dbExecute(
                     con,
-                    "UPDATE timeseries SET start_datetime = $1 WHERE timeseries_id = $2",
+                    "UPDATE continuous.timeseries SET start_datetime = $1 WHERE timeseries_id = $2",
                     params = list(new_start, new_timeseries_id)
                   )
                 }
@@ -2903,15 +2901,6 @@ addTimeseries <- function(id, language) {
                 if (is.na(mcd) && is.na(mc)) {
                   stop(
                     "Could not find any data for this timeseries. Try different parameters."
-                  )
-                }
-
-                # Now calculate stats
-                if (lubridate::period(rate) <= lubridate::period("1 day")) {
-                  AquaCache::calculate_stats(
-                    timeseries_id = new_timeseries_id,
-                    con = con,
-                    start_recalc = NULL
                   )
                 }
                 DBI::dbCommit(con)
@@ -3199,7 +3188,7 @@ addTimeseries <- function(id, language) {
         # Check if the timeseries already exists
         existing_timeseries <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT * FROM timeseries WHERE timeseries_id = $1;",
+          "SELECT * FROM continuous.timeseries WHERE timeseries_id = $1;",
           params = list(selected_timeseries$timeseries_id)
         )
         if (nrow(existing_timeseries) == 0) {
@@ -3253,7 +3242,7 @@ addTimeseries <- function(id, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET location_id = $1 WHERE timeseries_id = $2;",
+                "UPDATE continuous.timeseries SET location_id = $1 WHERE timeseries_id = $2;",
                 params = list(input_location_id, selected_timeseries_id)
               )
             }
@@ -3267,13 +3256,13 @@ addTimeseries <- function(id, language) {
               if (is.na(input_sub_location_id)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET sub_location_id = NULL WHERE timeseries_id = $1;",
+                  "UPDATE continuous.timeseries SET sub_location_id = NULL WHERE timeseries_id = $1;",
                   params = list(selected_timeseries_id)
                 )
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET sub_location_id = $1 WHERE timeseries_id = $2;",
+                  "UPDATE continuous.timeseries SET sub_location_id = $1 WHERE timeseries_id = $2;",
                   params = list(
                     input_sub_location_id,
                     selected_timeseries_id
@@ -3282,15 +3271,14 @@ addTimeseries <- function(id, language) {
               }
             }
 
-            # If a change is made to tz, AquaCache::calculate_stats will need to be rerun from the beginning of the timeseries
-            recalc_stats <- FALSE
+            refresh_daily_stats <- FALSE
             if (input$tz != selected_timeseries$timezone_daily_calc) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET timezone_daily_calc = $1 WHERE timeseries_id = $2;",
+                "UPDATE continuous.timeseries SET timezone_daily_calc = $1 WHERE timeseries_id = $2;",
                 params = list(input$tz, selected_timeseries$timeseries_id)
               )
-              recalc_stats <- TRUE
+              refresh_daily_stats <- TRUE
             }
 
             if (!is.na(input_z_value)) {
@@ -3315,7 +3303,7 @@ addTimeseries <- function(id, language) {
               ) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET z_id = $1 WHERE timeseries_id = $2",
+                  "UPDATE continuous.timeseries SET z_id = $1 WHERE timeseries_id = $2",
                   params = list(target_z_id, selected_timeseries$timeseries_id)
                 )
               }
@@ -3323,7 +3311,7 @@ addTimeseries <- function(id, language) {
               if (!is.na(selected_timeseries$z_id)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET z_id = NULL WHERE timeseries_id = $1",
+                  "UPDATE continuous.timeseries SET z_id = NULL WHERE timeseries_id = $1",
                   params = list(selected_timeseries_id)
                 )
               }
@@ -3346,7 +3334,7 @@ addTimeseries <- function(id, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 paste(
-                  "UPDATE timeseries",
+                  "UPDATE continuous.timeseries",
                   "SET parameter_id = $1, media_id = $2, matrix_state_id = $3",
                   "WHERE timeseries_id = $4"
                 ),
@@ -3367,7 +3355,7 @@ addTimeseries <- function(id, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET aggregation_type_id = $1 WHERE timeseries_id = $2",
+                "UPDATE continuous.timeseries SET aggregation_type_id = $1 WHERE timeseries_id = $2",
                 params = list(
                   input_aggregation_type_id,
                   selected_timeseries_id
@@ -3384,7 +3372,7 @@ addTimeseries <- function(id, language) {
               if (!is.na(input_record_rate)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET record_rate = $1 WHERE timeseries_id = $2",
+                  "UPDATE continuous.timeseries SET record_rate = $1 WHERE timeseries_id = $2",
                   params = list(
                     input_record_rate,
                     selected_timeseries_id
@@ -3393,7 +3381,7 @@ addTimeseries <- function(id, language) {
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET record_rate = NULL WHERE timeseries_id = $1",
+                  "UPDATE continuous.timeseries SET record_rate = NULL WHERE timeseries_id = $1",
                   params = list(selected_timeseries_id)
                 )
               }
@@ -3407,7 +3395,7 @@ addTimeseries <- function(id, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET sensor_priority = $1 WHERE timeseries_id = $2",
+                "UPDATE continuous.timeseries SET sensor_priority = $1 WHERE timeseries_id = $2",
                 params = list(
                   input_sensor_priority,
                   selected_timeseries_id
@@ -3424,7 +3412,7 @@ addTimeseries <- function(id, language) {
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET default_owner = $1 WHERE timeseries_id = $2",
+                "UPDATE continuous.timeseries SET default_owner = $1 WHERE timeseries_id = $2",
                 params = list(
                   input_default_owner,
                   selected_timeseries_id
@@ -3442,13 +3430,13 @@ addTimeseries <- function(id, language) {
               if (is.na(input_data_sharing_agreement_id)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET default_data_sharing_agreement_id = NULL WHERE timeseries_id = $1",
+                  "UPDATE continuous.timeseries SET default_data_sharing_agreement_id = NULL WHERE timeseries_id = $1",
                   params = list(selected_timeseries_id)
                 )
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET default_data_sharing_agreement_id = $1 WHERE timeseries_id = $2",
+                  "UPDATE continuous.timeseries SET default_data_sharing_agreement_id = $1 WHERE timeseries_id = $2",
                   params = list(
                     input_data_sharing_agreement_id,
                     selected_timeseries_id
@@ -3486,13 +3474,13 @@ addTimeseries <- function(id, language) {
               ) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET share_with = NULL WHERE timeseries_id = $1;",
+                  "UPDATE continuous.timeseries SET share_with = NULL WHERE timeseries_id = $1;",
                   params = list(selected_timeseries_id)
                 )
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET share_with = $1 WHERE timeseries_id = $2;",
+                  "UPDATE continuous.timeseries SET share_with = $1 WHERE timeseries_id = $2;",
                   params = list(
                     input_share_with,
                     selected_timeseries_id
@@ -3511,7 +3499,7 @@ addTimeseries <- function(id, language) {
               if (!is.na(input_source_fx)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET source_fx = $1 WHERE timeseries_id = $2",
+                  "UPDATE continuous.timeseries SET source_fx = $1 WHERE timeseries_id = $2",
                   params = list(
                     input_source_fx,
                     selected_timeseries_id
@@ -3520,7 +3508,7 @@ addTimeseries <- function(id, language) {
               } else {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET source_fx = NULL WHERE timeseries_id = $1",
+                  "UPDATE continuous.timeseries SET source_fx = NULL WHERE timeseries_id = $1",
                   params = list(
                     selected_timeseries_id
                   )
@@ -3532,7 +3520,7 @@ addTimeseries <- function(id, language) {
               if (is.na(input_source_fx_args)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET source_fx_args = NULL WHERE timeseries_id = $1",
+                  "UPDATE continuous.timeseries SET source_fx_args = NULL WHERE timeseries_id = $1",
                   params = list(
                     selected_timeseries_id
                   )
@@ -3577,7 +3565,7 @@ addTimeseries <- function(id, language) {
 
                   DBI::dbExecute(
                     session$userData$AquaCache,
-                    "UPDATE timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
+                    "UPDATE continuous.timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
                     params = list(
                       args,
                       selected_timeseries_id
@@ -3594,7 +3582,7 @@ addTimeseries <- function(id, language) {
 
               DBI::dbExecute(
                 session$userData$AquaCache,
-                "UPDATE timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
+                "UPDATE continuous.timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
                 params = list(
                   args,
                   selected_timeseries_id
@@ -3606,7 +3594,7 @@ addTimeseries <- function(id, language) {
               if (!is.na(input_note)) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE timeseries SET note = $1 WHERE timeseries_id = $2",
+                  "UPDATE continuous.timeseries SET note = $1 WHERE timeseries_id = $2",
                   params = list(
                     input_note,
                     selected_timeseries_id
@@ -3629,22 +3617,16 @@ addTimeseries <- function(id, language) {
               deployment_metadata_id = input$instrument_deployment
             )
 
-            # If recalc_stats is TRUE, we need to recalculate stats from the beginning of the timeseries
-            if (recalc_stats) {
+            if (refresh_daily_stats) {
               showNotification(
-                "Recalculating statistics from the beginning of the timeseries due to timezone change. Please be patient.",
+                "Refreshing daily calculations from the beginning of the timeseries due to timezone change. Please be patient.",
                 type = "message",
                 duration = 8
               )
-              earliest <- DBI::dbGetQuery(
+              DBI::dbGetQuery(
                 session$userData$AquaCache,
-                "SELECT MIN(datetime) FROM continuous.measurements_continuous WHERE timeseries_id = $1",
+                "SELECT continuous.refresh_calculated_daily($1::integer, NULL::date, NULL::date);",
                 params = list(selected_timeseries$timeseries_id)
-              )[1, 1]
-              AquaCache::calculate_stats(
-                timeseries_id = selected_timeseries$timeseries_id,
-                con = session$userData$AquaCache,
-                start_recalc = earliest
               )
             }
 

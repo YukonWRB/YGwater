@@ -42,7 +42,7 @@ DBI::dbListTables(con) # This line lists all tables in the database.
 DBI::dbListFields(con, "locations") # This line lists all fields in the 'locations' table.
 
 # If you're a bit familiar with the database structure, you'll remember that locations can have timeseries, and timeseries are unique on location, parameter, recording rate, and a few other things. Let's extract all records from the 'locations' table and take a peek:
-locations <- DBI::dbGetQuery(con, "SELECT * FROM locations") # dbGetQuery passes an SQL query to the database and returns the result as a data frame.
+locations <- DBI::dbGetQuery(con, "SELECT * FROM public.locations") # dbGetQuery passes an SQL query to the database and returns the result as a data frame.
 View(locations) # This line opens the 'locations' data frame in a new window.
 
 # A lot of the columns extracted are not very useful for us. The line below extracts only the column names:
@@ -56,7 +56,7 @@ locations <- locations[ , c("location_id", "location", "name", "latitude", "long
 # It **is** possible to subset by numeric index instead of column name, but it's not recommended because it makes your code less readable and can't adapt to changes in the data structure.
 # .... and....
 # We can use a better database query!
-locations <- DBI::dbGetQuery(con, "SELECT location_id, location, name, latitude, longitude FROM locations") # This line extracts only the columns we want from the database.
+locations <- DBI::dbGetQuery(con, "SELECT location_id, location, name, latitude, longitude FROM public.locations") # This line extracts only the columns we want from the database.
 head(locations) # This lets us take a look at the first few rows of the data frame. You can also use View(locations) to open the data frame in a new window.
 
 # Cool! Now do you see the column called 'location_id'? This is a unique identifier for the location, and we can use it to get all timeseries for this location from table 'timeseries', and later to get the actual timeseries data. Let's do that:
@@ -64,13 +64,13 @@ head(locations) # This lets us take a look at the first few rows of the data fra
 tagish <- locations[locations$name == "Tagish Meteorological", "location_id"] # This line extracts the row of the 'locations' data frame where the location is 'Tagish Meteorological'.
 
 # Now let's get the timeseries for that location. You can do this by running the following line of code:
-tagish_timeseries <- DBI::dbGetQuery(con, paste0("SELECT * FROM timeseries WHERE location_id = ", tagish))
+tagish_timeseries <- DBI::dbGetQuery(con, paste0("SELECT * FROM continuous.timeseries WHERE location_id = ", tagish))
 View(tagish_timeseries) # This line opens the 'timeseries' data frame in a new window. You should see a few rows!
 
 
 # Now let's pull the timeseries data for SWE at Tagish. The problem is, though, which timeseries is the one for SWE? The column 'parameter_id' could tell us that, but we don't know what the numbers mean! In databases, we use foreign keys to link id columns like that to their parent records; this prevents unnecessary re-writing of data and keeps only one authoritative record. We can use SQL to find foreign keys, but it's a bit of a pain... much easier to see that using a tool like DBeaver. I'll walk you though this one for now.
 # The referenced table is table 'parameters'. Let's see it here. Note that I'm not creating an object in the environment for this one (I'm not using the <- operator):
-View(DBI::dbGetQuery(con, "SELECT * FROM parameters")) # This line extracts all columns from the 'parameters' table.
+View(DBI::dbGetQuery(con, "SELECT * FROM public.parameters")) # This line extracts all columns from the 'parameters' table.
 
 # Well wouldn't you know it, there's a column called 'parameter_id'!!! Now we can find the right parameter_id for SWE by scrolling through the table, since it might not be named exactly SWE. Take a look and come back with the parameter_id for SWE.
 

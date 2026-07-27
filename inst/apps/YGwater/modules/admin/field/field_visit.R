@@ -74,17 +74,26 @@ visit <- function(id, language) {
       } else {
         NA_character_
       }
-      precip_type <- if (nchar(input$precip > 0) && !is.na(input$precip)) {
-        input$precip
+      precip <- input$precip
+      precip_type <- if (
+        !is.null(precip) &&
+          length(precip) &&
+          !is.na(precip[[1]]) &&
+          nzchar(as.character(precip[[1]]))
+      ) {
+        as.character(precip[[1]])
       } else {
         "None"
       }
+      precip_rate_input <- input$precip_rate
       precip_rate <- if (
-        !is.null(input$precip_rate) &&
-          !is.na(precip_rate) &&
+        !is.null(precip_rate_input) &&
+          length(precip_rate_input) &&
+          !is.na(precip_rate_input[[1]]) &&
+          nzchar(as.character(precip_rate_input[[1]])) &&
           !identical(precip_type, "None")
       ) {
-        input$precip_rate
+        as.character(precip_rate_input[[1]])
       } else {
         "None"
       }
@@ -144,27 +153,27 @@ visit <- function(id, language) {
     getModuleData <- function() {
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT l.location_id, l.location_code AS location, l.name, lt.type, l.latitude, l.longitude FROM locations l INNER JOIN location_types lt ON l.location_type = lt.type_id"
+        "SELECT l.location_id, l.location_code AS location, l.name, lt.type, l.latitude, l.longitude FROM public.locations l INNER JOIN public.location_types lt ON l.location_type = lt.type_id"
       )
       moduleData$sub_locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT sub_location_id, sub_location_name, location_id FROM sub_locations"
+        "SELECT sub_location_id, sub_location_name, location_id FROM public.sub_locations"
       )
       moduleData$parameters <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT parameter_id, param_name FROM parameters"
+        "SELECT parameter_id, param_name FROM public.parameters"
       )
       moduleData$media <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT media_id, media_type FROM media_types"
+        "SELECT media_id, media_type FROM public.media_types"
       )
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT organization_id, name FROM organizations"
+        "SELECT organization_id, name FROM public.organizations"
       )
       moduleData$instruments <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT i.instrument_id, i.serial_no, instrument_makes.make, instrument_models.model, instrument_types.type, i.owner FROM instruments AS i LEFT JOIN instrument_makes ON i.make = instrument_makes.make_id LEFT JOIN instrument_models ON i.model = instrument_models.model_id LEFT JOIN instrument_types ON i.type = instrument_types.type_id ORDER BY i.instrument_id"
+        "SELECT i.instrument_id, i.serial_no, instrument_makes.make, instrument_models.model, instrument_types.type, i.owner FROM instruments.instruments AS i LEFT JOIN instruments.instrument_makes ON i.make = instrument_makes.make_id LEFT JOIN instruments.instrument_models ON i.model = instrument_models.model_id LEFT JOIN instruments.instrument_types ON i.type = instrument_types.type_id ORDER BY i.instrument_id"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -175,8 +184,8 @@ visit <- function(id, language) {
         "
         SELECT v.field_visit_id, l.name AS location_name, sl.sub_location_name, v.start_datetime AS start_datetime_MST
         FROM field.field_visits v
-        INNER JOIN locations l ON v.location_id = l.location_id
-        LEFT JOIN sub_locations sl ON v.sub_location_id = sl.sub_location_id
+        INNER JOIN public.locations l ON v.location_id = l.location_id
+        LEFT JOIN public.sub_locations sl ON v.sub_location_id = sl.sub_location_id
         "
       )
     }

@@ -61,6 +61,10 @@ snowBulletin <- function(
     reason = "necessary to create a report using Rmarkdown."
   )
   rlang::check_installed(
+    "rmarkdown",
+    reason = "necessary to render the report."
+  )
+  rlang::check_installed(
     "flextable",
     reason = "necessary to create report tables."
   )
@@ -107,7 +111,7 @@ snowBulletin <- function(
       # TODO: this now calls several locations which are part of the 'sample_series' table.
       target_sample_series <- DBI::dbGetQuery(
         con,
-        "SELECT sample_series_id FROM sample_series WHERE source_fx = 'downloadSnowCourse'"
+        "SELECT sample_series_id FROM discrete.sample_series WHERE source_fx = 'downloadSnowCourse'"
       ) # Snow survey sites
       AquaCache::synchronize_discrete(
         con = con,

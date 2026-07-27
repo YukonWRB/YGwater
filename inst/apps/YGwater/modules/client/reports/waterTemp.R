@@ -1712,7 +1712,7 @@ waterTempMod <- function(id, language, inputs) {
                   ) m ON TRUE
                   JOIN continuous.timeseries
                     ON m.timeseries_id = continuous.timeseries.timeseries_id
-                  JOIN locations
+                  JOIN public.locations
                     ON timeseries.location_id = locations.location_id
                   WHERE m.datetime >= $1 AND m.datetime < $2
                   ORDER BY m.datetime;"

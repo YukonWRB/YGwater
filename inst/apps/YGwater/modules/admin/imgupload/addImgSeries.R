@@ -36,16 +36,16 @@ addImgSeries <- function(id, language) {
         session$userData$AquaCache,
         "SELECT i.img_series_id, l.name AS location, o.name AS owner, i.source_fx, i.active
                                                          FROM files.image_series i
-                                                         INNER JOIN locations l ON i.location_id = l.location_id
-                                                         INNER JOIN organizations o ON i.owner = o.organization_id;"
+                                                         INNER JOIN public.locations l ON i.location_id = l.location_id
+                                                         INNER JOIN public.organizations o ON i.owner = o.organization_id;"
       )
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT organization_id, name FROM organizations"
+        "SELECT organization_id, name FROM public.organizations"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT location_id, location_code AS location, name, latitude, longitude FROM locations"
+        "SELECT location_id, location_code AS location, name, latitude, longitude FROM public.locations"
       )
       moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -338,7 +338,7 @@ addImgSeries <- function(id, language) {
         )
         DBI::dbExecute(
           session$userData$AquaCache,
-          "INSERT INTO organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6);",
+          "INSERT INTO public.organizations (name, name_fr, contact_name, phone, email, note) VALUES ($1, $2, $3, $4, $5, $6);",
           params = list(
             df$name,
             df$name_fr,
@@ -352,7 +352,7 @@ addImgSeries <- function(id, language) {
         # Update the moduleData reactiveValues
         moduleData$organizations <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT organization_id, name FROM organizations"
+          "SELECT organization_id, name FROM public.organizations"
         )
         # Update the selectizeInput to the new value
         updateSelectizeInput(
@@ -539,7 +539,7 @@ addImgSeries <- function(id, language) {
 
               new_id <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO image_series (location_id, owner, description, share_with, source_fx, source_fx_args, active, last_img) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING img_series_id;",
+                "INSERT INTO files.image_series (location_id, owner, description, share_with, source_fx, source_fx_args, active, last_img) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING img_series_id;",
                 params = list(
                   df$location_id,
                   df$owner,
@@ -559,7 +559,7 @@ addImgSeries <- function(id, language) {
               earliest <- DBI::dbGetQuery(
                 con,
                 paste0(
-                  "SELECT MIN(datetime) FROM images WHERE img_series_id = ",
+                  "SELECT MIN(datetime) FROM files.images WHERE img_series_id = ",
                   new_id
                 )
               )[1, 1]
@@ -570,7 +570,7 @@ addImgSeries <- function(id, language) {
                 DBI::dbExecute(
                   con,
                   paste0(
-                    "UPDATE image_series SET first_img = '",
+                    "UPDATE files.image_series SET first_img = '",
                     earliest,
                     "' WHERE img_series_id = ",
                     new_id
@@ -693,7 +693,7 @@ addImgSeries <- function(id, language) {
         existing_timeseries <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0(
-            "SELECT * FROM image_series WHERE img_series_id = ",
+            "SELECT * FROM files.image_series WHERE img_series_id = ",
             selected_series$img_series_id
           )
         )
@@ -750,20 +750,40 @@ addImgSeries <- function(id, language) {
               DBI::dbExecute(
                 session$userData$AquaCache,
                 glue::glue_sql(
-                  "UPDATE image_series SET share_with = {share_with_sql} WHERE img_series_id = {selected_series$img_series_id};",
+                  "UPDATE files.image_series SET share_with = {share_with_sql} WHERE img_series_id = {selected_series$img_series_id};",
                   .con = session$userData$AquaCache
                 )
               )
             }
 
             # Changes to source_fx
-            if (input$source_fx != selected_series$source_fx) {
+            submitted_source_fx <- if (
+              !length(input$source_fx) ||
+                is.na(input$source_fx[[1]]) ||
+                !nzchar(input$source_fx[[1]])
+            ) {
+              NA_character_
+            } else {
+              input$source_fx[[1]]
+            }
+            if (
+              length(input$source_fx) > 1L ||
+                (!is.na(submitted_source_fx) &&
+                  !submitted_source_fx %in% moduleData$source_fx)
+            ) {
+              stop("Select a valid AquaCache image source function.")
+            }
+            existing_source_fx <- if (is.na(selected_series$source_fx)) {
+              NA_character_
+            } else {
+              as.character(selected_series$source_fx)
+            }
+            if (!identical(submitted_source_fx, existing_source_fx)) {
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE image_series SET source_fx = '",
-                  input$source_fx,
-                  "' WHERE img_series_id = ",
+                "UPDATE files.image_series SET source_fx = $1 WHERE img_series_id = $2",
+                params = list(
+                  submitted_source_fx,
                   selected_series$img_series_id
                 )
               )
@@ -774,7 +794,7 @@ addImgSeries <- function(id, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   paste0(
-                    "UPDATE timeseries SET source_fx_args = NULL WHERE img_series_id = ",
+                    "UPDATE continuous.timeseries SET source_fx_args = NULL WHERE img_series_id = ",
                     selected_series$img_series_id
                   )
                 )
@@ -820,12 +840,8 @@ addImgSeries <- function(id, language) {
 
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  paste0(
-                    "UPDATE image_series SET source_fx_args = '",
-                    args,
-                    "' WHERE img_series_id = ",
-                    selected_series$img_series_id
-                  )
+                  "UPDATE files.image_series SET source_fx_args = $1::jsonb WHERE img_series_id = $2",
+                  params = list(args, selected_series$img_series_id)
                 )
               }
             } else {
@@ -833,7 +849,7 @@ addImgSeries <- function(id, language) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
                   paste0(
-                    "UPDATE image_series SET source_fx_args = NULL WHERE img_series_id = ",
+                    "UPDATE files.image_series SET source_fx_args = NULL WHERE img_series_id = ",
                     selected_series$img_series_id
                   )
                 )
@@ -855,12 +871,8 @@ addImgSeries <- function(id, language) {
               args <- jsonlite::toJSON(args, auto_unbox = TRUE)
               DBI::dbExecute(
                 session$userData$AquaCache,
-                paste0(
-                  "UPDATE image_series SET source_fx_args = '",
-                  args,
-                  "' WHERE img_series_id = ",
-                  selected_series$img_series_id
-                )
+                "UPDATE files.image_series SET source_fx_args = $1::jsonb WHERE img_series_id = $2",
+                params = list(args, selected_series$img_series_id)
               )
             }
 

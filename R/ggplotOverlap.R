@@ -51,10 +51,11 @@
 #' @param con A connection to the target database. NULL uses AquaConnect from this package and automatically disconnects.
 #' @param continuous_data A data.frame with the data to be plotted. Must contain the following columns: datetime, value.
 #' @param snowbulletin If TRUE, data will be plotted to the snow bulletin standards. Lines will be smoothed and max/min lines are added.
-#' @param as_of Optional point-in-time timestamp at which measurement values and
-#'   stored daily summaries should be reconstructed. Character, Date, and
-#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
-#'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param as_of Optional point-in-time timestamp at which measurement values,
+#'   daily summaries, and unusable-grade exclusions should be reconstructed.
+#'   Character, Date, and POSIXct inputs are supported. Date-like inputs are
+#'   interpreted as the end of that day in `tzone`. When `NULL` (default),
+#'   current data are used.
 #' @return A .png file of the plot requested (if a save path has been selected), plus the plot displayed in RStudio. Assign the function to a variable to also get a plot in your global environment as a ggplot object which can be further modified.
 #' @param lang The language to use for the plot. Currently only "en" and "fr" are supported. Default is "en".
 #' @export
@@ -409,13 +410,13 @@ ggplotOverlap <- function(
 
     instantaneous <- DBI::dbGetQuery(
       con,
-      "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type = 'instantaneous';"
+      "SELECT aggregation_type_id FROM continuous.aggregation_types WHERE aggregation_type = 'instantaneous';"
     )[1, 1]
     if (is.null(record_rate)) {
       exist_check <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT timeseries_id, record_rate FROM timeseries WHERE location_id = ",
+          "SELECT timeseries_id, record_rate FROM continuous.timeseries WHERE location_id = ",
           location_id,
           " AND parameter_id = ",
           parameter_code,
@@ -426,7 +427,7 @@ ggplotOverlap <- function(
       exist_check <- dbGetQueryDT(
         con,
         paste0(
-          "SELECT timeseries_id FROM timeseries WHERE location_id = ",
+          "SELECT timeseries_id FROM continuous.timeseries WHERE location_id = ",
           location_id,
           " AND parameter_id = ",
           parameter_code,
@@ -484,7 +485,7 @@ ggplotOverlap <- function(
         datum <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT conversion_m FROM datum_conversions WHERE location_id = ",
+            "SELECT conversion_m FROM public.datum_conversions WHERE location_id = ",
             location_id,
             " AND current = TRUE"
           )
@@ -513,7 +514,7 @@ ggplotOverlap <- function(
         daily <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ",
+            "SELECT date, value, max, min, q75, q25 FROM continuous.measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date <= '",
             daily_end,
@@ -550,7 +551,7 @@ ggplotOverlap <- function(
         daily <- dbGetQueryDT(
           con,
           paste0(
-            "SELECT date, value, max, min, q75, q25 FROM measurements_calculated_daily WHERE timeseries_id = ",
+            "SELECT date, value, max, min, q75, q25 FROM continuous.measurements_calculated_daily WHERE timeseries_id = ",
             tsid,
             " AND date <= '",
             daily_end,
@@ -1964,7 +1965,7 @@ ggplotOverlap <- function(
           dbGetQueryDT(
             con,
             paste0(
-              "SELECT name_fr FROM locations where location_id = '",
+              "SELECT name_fr FROM public.locations where location_id = '",
               location_id,
               "'"
             )
@@ -1978,7 +1979,7 @@ ggplotOverlap <- function(
           dbGetQueryDT(
             con,
             paste0(
-              "SELECT name FROM locations where location_id = '",
+              "SELECT name FROM public.locations where location_id = '",
               location_id,
               "'"
             )

@@ -58,6 +58,8 @@ test_that("tests for API V1", {
   # Set some environment variables for the API to use. These are normally set when the API is launched using api() but are set here in the local environment.
   Sys.setenv(APIaquacacheUser = Sys.getenv("aquacacheTestUser", "runner"))
   Sys.setenv(APIaquacachePass = Sys.getenv("aquacacheTestPass", "runner"))
+  Sys.setenv(APIaquacachePublicUser = Sys.getenv("aquacacheTestUser", "runner"))
+  Sys.setenv(APIaquacachePublicPass = Sys.getenv("aquacacheTestPass", "runner"))
   Sys.setenv(APIaquacacheName = Sys.getenv("aquacacheTestName", "testdb"))
   Sys.setenv(APIaquacacheHost = Sys.getenv("aquacacheTestHost", "localhost"))
   Sys.setenv(APIaquacachePort = Sys.getenv("aquacacheTestPort", "5432"))
@@ -161,6 +163,7 @@ test_that("tests for API V1", {
     "timezone_daily_calc",
     "last_daily_calculation",
     "last_synchronize",
+    "parameter_id",
     "matrix_state_id",
     "matrix_state_name",
     "matrix_state_name_fr",
@@ -207,6 +210,76 @@ test_that("tests for API V1", {
   test_timeseries_id_2 <- out$timeseries_id[
     out$end_datetime >= test_timeseries_end
   ][1]
+
+  daily_candidates <- out$timeseries_id[
+    !is.na(out$last_daily_calculation) &
+      nzchar(as.character(out$last_daily_calculation))
+  ]
+  if (length(daily_candidates) > 0L) {
+    daily_query <- list(
+      id = daily_candidates[[1L]],
+      start = "1900-01-01",
+      end = as.character(Sys.Date()),
+      limit = 10
+    )
+    daily <- callthat::call_that_api_get(
+      api_session,
+      endpoint = "timeseries/measurementsDaily",
+      query = c(daily_query, list(stats = "false", format = "csv"))
+    )
+    daily_stats <- callthat::call_that_api_get(
+      api_session,
+      endpoint = "timeseries/measurementsDaily",
+      query = c(daily_query, list(stats = "true", format = "json"))
+    )
+
+    expect_equal(daily$status_code, 200)
+    expect_equal(daily_stats$status_code, 200)
+    daily_out <- read.csv(text = content_text(daily))
+    daily_stats_out <- parse_json_df(daily_stats)
+    if (!identical(names(daily_out), c("status", "message"))) {
+      expect_named(
+        daily_out,
+        c(
+          "timeseries_id",
+          "date",
+          "day_timezone",
+          "value",
+          "imputed"
+        )
+      )
+      expect_named(
+        daily_stats_out,
+        c(
+          "timeseries_id",
+          "date",
+          "day_timezone",
+          "value",
+          "imputed",
+          "percent_historic_range",
+          "max",
+          "min",
+          "q90",
+          "q75",
+          "q50",
+          "q25",
+          "q10",
+          "mean",
+          "doy_count",
+          "percent_historic_range_30yr",
+          "max_30yr",
+          "min_30yr",
+          "q90_30yr",
+          "q75_30yr",
+          "q50_30yr",
+          "q25_30yr",
+          "q10_30yr",
+          "mean_30yr",
+          "doy_count_30yr"
+        )
+      )
+    }
+  }
 
   # Tests for /locations endpoint
   expect_s3_class(

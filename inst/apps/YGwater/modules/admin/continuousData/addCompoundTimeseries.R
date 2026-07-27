@@ -55,6 +55,8 @@ addCompoundTimeseries <- function(id, language) {
       member_priority = integer(0),
       use_from = as.POSIXct(character(0), tz = "UTC"),
       use_to = as.POSIXct(character(0), tz = "UTC"),
+      alignment_tolerance_seconds = numeric(0),
+      reuse_member_values = logical(0),
       stringsAsFactors = FALSE
     ))
 
@@ -110,6 +112,64 @@ addCompoundTimeseries <- function(id, language) {
         return(NA_character_)
       }
       value
+    }
+
+    nullable_logical <- function(x) {
+      if (is.null(x) || !length(x) || is.na(x[[1]])) {
+        return(FALSE)
+      }
+      isTRUE(x[[1]])
+    }
+
+    tolerance_unit_seconds <- function(unit) {
+      unit <- nullable_text(unit)
+      if (is.na(unit)) {
+        return(60)
+      }
+      switch(
+        unit,
+        seconds = 1,
+        minutes = 60,
+        hours = 3600,
+        days = 86400,
+        60
+      )
+    }
+
+    member_tolerance_seconds <- function(value, unit) {
+      value <- nullable_numeric(value)
+      if (is.na(value)) {
+        return(NA_real_)
+      }
+      value * tolerance_unit_seconds(unit)
+    }
+
+    split_tolerance_seconds <- function(seconds) {
+      seconds <- nullable_numeric(seconds)
+      if (is.na(seconds)) {
+        return(list(value = NA_real_, unit = "minutes"))
+      }
+      units <- c(days = 86400, hours = 3600, minutes = 60, seconds = 1)
+      for (unit in names(units)) {
+        converted <- seconds / units[[unit]]
+        if (abs(converted - round(converted)) < .Machine$double.eps^0.5) {
+          return(list(value = converted, unit = unit))
+        }
+      }
+      list(value = seconds, unit = "seconds")
+    }
+
+    tolerance_label <- function(seconds) {
+      seconds <- nullable_numeric(seconds)
+      if (is.na(seconds)) {
+        return("")
+      }
+      split <- split_tolerance_seconds(seconds)
+      unit_label <- sub("s$", "", split$unit)
+      if (!isTRUE(all.equal(split$value, 1))) {
+        unit_label <- split$unit
+      }
+      paste(format(split$value, scientific = FALSE, trim = TRUE), unit_label)
     }
 
     format_z_value <- function(x) {
@@ -207,7 +267,8 @@ addCompoundTimeseries <- function(id, language) {
             "units_",
             moduleData$matrix_states$matrix_state_code[[i]]
           )
-          unit_col %in% names(param_row) &&
+          unit_col %in%
+            names(param_row) &&
             !is.na(param_row[[unit_col]][[1]]) &&
             nzchar(param_row[[unit_col]][[1]])
         },
@@ -267,7 +328,9 @@ addCompoundTimeseries <- function(id, language) {
         return("Please select a matrix state.")
       }
       if (!matrix_state_id %in% supported_matrix_state_ids(parameter_id)) {
-        return("The selected matrix state has no unit configured for this parameter.")
+        return(
+          "The selected matrix state has no unit configured for this parameter."
+        )
       }
 
       NULL
@@ -338,9 +401,9 @@ addCompoundTimeseries <- function(id, language) {
           "SELECT ts.timeseries_id, ts.location_id, ts.sub_location_id,",
           "ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id,",
           "ts.parameter_id, ts.matrix_state_id, ts.aggregation_type_id,",
-          "ts.sensor_priority, ts.default_owner, ts.record_rate,",
-          "ts.share_with, ts.note, ts.default_data_sharing_agreement_id,",
-          "ts.active, ts.sync_remote, ts.publicly_visible,",
+          "ts.sensor_priority,",
+          "ts.share_with, ts.note,",
+          "ts.publicly_visible,",
           "ts.timeseries_type",
           "FROM continuous.timeseries ts",
           "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
@@ -380,7 +443,9 @@ addCompoundTimeseries <- function(id, language) {
         con,
         paste(
           "SELECT timeseries_id, member_alias, member_timeseries_id,",
-          "member_priority, use_from, use_to",
+          "member_priority, use_from, use_to,",
+          "EXTRACT(EPOCH FROM alignment_tolerance)::double precision",
+          "AS alignment_tolerance_seconds, reuse_member_values",
           "FROM continuous.timeseries_compound_members",
           "ORDER BY timeseries_id, member_priority, member_alias"
         )
@@ -435,17 +500,9 @@ addCompoundTimeseries <- function(id, language) {
         con,
         "SELECT aggregation_type_id, aggregation_type FROM continuous.aggregation_types ORDER BY aggregation_type ASC"
       )
-      moduleData$organizations <- DBI::dbGetQuery(
-        con,
-        "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
-      )
       moduleData$users <- DBI::dbGetQuery(
         con,
         "SELECT * FROM public.get_shareable_principals_for('continuous.timeseries') ORDER BY role_name ASC;"
-      )
-      moduleData$agreements <- DBI::dbGetQuery(
-        con,
-        "SELECT f.document_id, f.name FROM files.documents AS f LEFT JOIN files.document_types AS dt ON f.type = dt.document_type_id WHERE dt.document_type_en = 'data sharing agreement' ORDER BY f.name ASC;"
       )
     }
 
@@ -465,6 +522,8 @@ addCompoundTimeseries <- function(id, language) {
           member_end_datetime = character(0),
           use_from = character(0),
           use_to = character(0),
+          alignment_tolerance = character(0),
+          reuse_member_values = logical(0),
           stringsAsFactors = FALSE
         ))
       }
@@ -483,6 +542,12 @@ addCompoundTimeseries <- function(id, language) {
         member_end_datetime = utc_label(md$end_datetime[idx]),
         use_from = utc_label(df$use_from),
         use_to = utc_label(df$use_to),
+        alignment_tolerance = vapply(
+          df$alignment_tolerance_seconds,
+          tolerance_label,
+          character(1)
+        ),
+        reuse_member_values = df$reuse_member_values,
         stringsAsFactors = FALSE
       )
       out
@@ -497,7 +562,6 @@ addCompoundTimeseries <- function(id, language) {
         moduleData$matrix_states,
         moduleData$media,
         moduleData$aggregation_types,
-        moduleData$organizations,
         moduleData$users,
         moduleData$timeseries_display,
         moduleData$compound_display
@@ -511,11 +575,7 @@ addCompoundTimeseries <- function(id, language) {
         ),
         tags$div(
           class = "alert alert-info",
-          paste(
-            "Derived timeseries are stored as compound timeseries.",
-            "They are resolved from member timeseries and cannot receive",
-            "uploaded measurements or instrument deployment links directly."
-          )
+          "Derived (calculated) or composite (stitched-together) timeseries are calculated on-the-fly from basic or other derived/composite timeseries. They are resolved from member timeseries and a priority order or equation and cannot receive uploaded measurements or instrument deployment links directly."
         ),
         radioButtons(
           ns("mode"),
@@ -587,9 +647,7 @@ addCompoundTimeseries <- function(id, language) {
             maxItems = 1,
             placeholder = "Optional",
             create = TRUE,
-            createFilter = htmlwidgets::JS(
-              "function(input) { return /^-?(?:\\d+|\\d*\\.\\d+)$/.test($.trim(input)); }"
-            ),
+            createFilter = "^-?(?:[0-9]+|[0-9]*[.][0-9]+)$",
             createOnBlur = TRUE,
             persist = FALSE,
             plugins = list("clear_button")
@@ -606,7 +664,11 @@ addCompoundTimeseries <- function(id, language) {
               moduleData$parameters$param_name
             ),
             multiple = TRUE,
-            options = list(maxItems = 1, placeholder = "Select a parameter"),
+            options = list(
+              maxItems = 1,
+              placeholder = "Select a parameter",
+              dropdownParent = "body"
+            ),
             width = "100%"
           ),
           selectizeInput(
@@ -617,7 +679,11 @@ addCompoundTimeseries <- function(id, language) {
               moduleData$media$media_type
             ),
             multiple = TRUE,
-            options = list(maxItems = 1, placeholder = "Select media type"),
+            options = list(
+              maxItems = 1,
+              placeholder = "Select media type",
+              dropdownParent = "body"
+            ),
             width = "100%"
           ),
           selectizeInput(
@@ -628,62 +694,40 @@ addCompoundTimeseries <- function(id, language) {
               moduleData$matrix_states$matrix_state_name
             ),
             multiple = TRUE,
-            options = list(maxItems = 1, placeholder = "Select matrix state"),
-            width = "100%"
-          )
-        ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          selectizeInput(
-            ns("aggregation_type"),
-            "Aggregation type",
-            choices = stats::setNames(
-              moduleData$aggregation_types$aggregation_type_id,
-              moduleData$aggregation_types$aggregation_type
+            options = list(
+              maxItems = 1,
+              placeholder = "Select matrix state",
+              dropdownParent = "body"
             ),
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = "Select aggregation"),
-            width = "100%"
-          ),
-          textInput(
-            ns("record_rate"),
-            "Rough record rate (5 minutes, 1 hour, 1 day, etc.)",
-            value = "",
-            width = "100%"
-          )
-        ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          selectizeInput(
-            ns("sensor_priority"),
-            "Sensor priority metadata",
-            choices = c("Primary" = 1, "Secondary" = 2, "Tertiary" = 3),
-            selected = 1,
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = "Select priority"),
-            width = "100%"
-          ),
-          selectizeInput(
-            ns("default_owner"),
-            "Default owner",
-            choices = stats::setNames(
-              moduleData$organizations$organization_id,
-              moduleData$organizations$name
-            ),
-            multiple = TRUE,
-            options = list(maxItems = 1, placeholder = "Select owner"),
             width = "100%"
           )
         ),
         selectizeInput(
-          ns("data_sharing_agreement"),
-          "Default data sharing agreement",
+          ns("aggregation_type"),
+          "Aggregation type",
           choices = stats::setNames(
-            moduleData$agreements$document_id,
-            moduleData$agreements$name
+            moduleData$aggregation_types$aggregation_type_id,
+            moduleData$aggregation_types$aggregation_type
           ),
-          options = list(placeholder = "Optional"),
-          multiple = FALSE,
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = "Select aggregation",
+            dropdownParent = "body"
+          ),
+          width = "100%"
+        ),
+        selectizeInput(
+          ns("sensor_priority"),
+          "Timeseries priority metadata",
+          choices = c("Primary" = 1, "Secondary" = 2, "Tertiary" = 3),
+          selected = 1,
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = "Select priority",
+            dropdownParent = "body"
+          ),
           width = "100%"
         ),
         selectizeInput(
@@ -694,11 +738,10 @@ addCompoundTimeseries <- function(id, language) {
           multiple = TRUE,
           width = "100%"
         ),
-        splitLayout(
-          cellWidths = c("33%", "33%", "34%"),
-          checkboxInput(ns("active"), "Active", value = TRUE),
-          checkboxInput(ns("publicly_visible"), "Publicly visible", value = TRUE),
-          checkboxInput(ns("sync_remote"), "Sync remote metadata", value = TRUE)
+        checkboxInput(
+          ns("publicly_visible"),
+          "Publicly visible",
+          value = TRUE
         ),
         accordion(
           id = ns("accordion2"),
@@ -711,7 +754,7 @@ addCompoundTimeseries <- function(id, language) {
               "Expression SQL (blank uses first available member by priority)",
               value = "",
               rows = 3,
-              placeholder = "cond / (1 + 0.0191 * (temp - 25))",
+              placeholder = "Leave empty if not using (e.g. using priority-based stitching) OR enter SQL expression using the 'Member alias' defined below for each timeseries, i.e. cond / (1 + 0.0191 * (temp - 25))",
               width = "100%"
             ),
             fluidRow(
@@ -795,6 +838,41 @@ addCompoundTimeseries <- function(id, language) {
                 )
               )
             ),
+            splitLayout(
+              cellWidths = c("34%", "33%", "33%"),
+              numericInput(
+                ns("member_alignment_tolerance"),
+                "Alignment tolerance",
+                value = NA,
+                min = 0,
+                step = 1,
+                width = "100%"
+              ),
+              selectizeInput(
+                ns("member_alignment_tolerance_unit"),
+                "Tolerance unit",
+                choices = c(
+                  "Seconds" = "seconds",
+                  "Minutes" = "minutes",
+                  "Hours" = "hours",
+                  "Days" = "days"
+                ),
+                selected = "minutes",
+                multiple = FALSE,
+                options = list(dropdownParent = "body"),
+                width = "100%"
+              ),
+              checkboxInput(
+                ns("member_reuse_values"),
+                "Reuse matched values",
+                value = FALSE,
+                width = "100%"
+              )
+            ),
+            tags$p(
+              class = "text-muted small",
+              "Alignment tolerance uses the nearest member measurement within the tolerance window. If 'Reuse matched values' is checked, the same member measurement can be matched to multiple derived timestamps. Consider this when combining different recording rates, such as hourly and 5-minute timeseries."
+            ),
             div(
               actionButton(ns("add_member"), "Add member"),
               actionButton(ns("update_member"), "Update selected member"),
@@ -843,9 +921,9 @@ addCompoundTimeseries <- function(id, language) {
       }
 
       df$timeseries_type <- as.factor(df$timeseries_type)
-      df$active <- as.factor(df$active)
       df$publicly_visible <- as.factor(df$publicly_visible)
       df$sensor_priority <- as.factor(df$sensor_priority)
+      df$active <- NULL
 
       DT::datatable(
         df,
@@ -853,7 +931,10 @@ addCompoundTimeseries <- function(id, language) {
         options = list(
           columnDefs = list(
             list(targets = 0, visible = FALSE),
-            list(targets = which(names(df) == "timeseries_type_code") - 1L, visible = FALSE)
+            list(
+              targets = which(names(df) == "timeseries_type_code") - 1L,
+              visible = FALSE
+            )
           ),
           scrollX = TRUE,
           initComplete = htmlwidgets::JS(
@@ -909,76 +990,96 @@ addCompoundTimeseries <- function(id, language) {
       )
     })
 
-    observeEvent(input$member_timezone, {
-      shift_air_datetime_input_timezone(
-        session,
-        input,
-        "member_use_from",
-        input$member_timezone
-      )
-      shift_air_datetime_input_timezone(
-        session,
-        input,
-        "member_use_to",
-        input$member_timezone
-      )
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$member_timezone,
+      {
+        shift_air_datetime_input_timezone(
+          session,
+          input,
+          "member_use_from",
+          input$member_timezone
+        )
+        shift_air_datetime_input_timezone(
+          session,
+          input,
+          "member_use_to",
+          input$member_timezone
+        )
+      },
+      ignoreInit = TRUE
+    )
 
-    observeEvent(list(input$location, input$sub_location), {
-      update_z_selectize()
-      loc <- nullable_integer(input$location)
-      if (is.na(loc)) {
+    observeEvent(
+      list(input$location, input$sub_location),
+      {
+        update_z_selectize()
+        loc <- nullable_integer(input$location)
+        if (is.na(loc)) {
+          updateSelectizeInput(
+            session,
+            "sub_location",
+            choices = stats::setNames(
+              moduleData$sub_locations$sub_location_id,
+              moduleData$sub_locations$sub_location_name
+            ),
+            selected = character(0)
+          )
+          return()
+        }
+
+        sub_rows <- moduleData$sub_locations[
+          moduleData$sub_locations$location_id == loc,
+          ,
+          drop = FALSE
+        ]
         updateSelectizeInput(
           session,
           "sub_location",
           choices = stats::setNames(
-            moduleData$sub_locations$sub_location_id,
-            moduleData$sub_locations$sub_location_name
+            sub_rows$sub_location_id,
+            sub_rows$sub_location_name
           ),
-          selected = character(0)
+          selected = if (
+            nullable_integer(input$sub_location) %in%
+              sub_rows$sub_location_id
+          ) {
+            input$sub_location
+          } else {
+            character(0)
+          }
         )
-        return()
-      }
+      },
+      ignoreInit = TRUE
+    )
 
-      sub_rows <- moduleData$sub_locations[
-        moduleData$sub_locations$location_id == loc,
-        ,
-        drop = FALSE
-      ]
-      updateSelectizeInput(
-        session,
-        "sub_location",
-        choices = stats::setNames(
-          sub_rows$sub_location_id,
-          sub_rows$sub_location_name
-        ),
-        selected = if (
-          nullable_integer(input$sub_location) %in%
-            sub_rows$sub_location_id
+    observeEvent(
+      input$parameter,
+      {
+        update_matrix_state_selectize(parameter_id = input$parameter)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$share_with,
+      {
+        if (
+          length(input$share_with) > 1 &&
+            "public_reader" %in% input$share_with
         ) {
-          input$sub_location
-        } else {
-          character(0)
+          updateSelectizeInput(
+            session,
+            "share_with",
+            selected = "public_reader"
+          )
+          showNotification(
+            "Use either public_reader or specific groups, not both.",
+            type = "warning"
+          )
         }
-      )
-    }, ignoreInit = TRUE)
-
-    observeEvent(input$parameter, {
-      update_matrix_state_selectize(parameter_id = input$parameter)
-    }, ignoreInit = TRUE)
-
-    observeEvent(input$share_with, {
-      if (
-        length(input$share_with) > 1 &&
-          "public_reader" %in% input$share_with
-      ) {
-        updateSelectizeInput(session, "share_with", selected = "public_reader")
-        showNotification(
-          "Use either public_reader or specific groups, not both.",
-          type = "warning"
-        )
-      }
-    }, ignoreInit = TRUE)
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$reload_module, {
       getModuleData()
@@ -997,10 +1098,21 @@ addCompoundTimeseries <- function(id, language) {
 
     clear_member_inputs <- function() {
       updateTextInput(session, "member_alias", value = "")
-      updateSelectizeInput(session, "member_timeseries_id", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "member_timeseries_id",
+        selected = character(0)
+      )
       updateNumericInput(session, "member_priority", value = 1)
       shinyWidgets::updateAirDateInput(session, "member_use_from", value = NULL)
       shinyWidgets::updateAirDateInput(session, "member_use_to", value = NULL)
+      updateNumericInput(session, "member_alignment_tolerance", value = NA)
+      updateSelectizeInput(
+        session,
+        "member_alignment_tolerance_unit",
+        selected = "minutes"
+      )
+      updateCheckboxInput(session, "member_reuse_values", value = FALSE)
       DT::dataTableProxy("members_table", session = session) |>
         DT::selectRows(NULL)
     }
@@ -1011,6 +1123,11 @@ addCompoundTimeseries <- function(id, language) {
       member_priority <- nullable_integer(input$member_priority)
       use_from <- scalar_utc_datetime(input$member_use_from)
       use_to <- scalar_utc_datetime(input$member_use_to)
+      alignment_tolerance_seconds <- member_tolerance_seconds(
+        input$member_alignment_tolerance,
+        input$member_alignment_tolerance_unit
+      )
+      reuse_member_values <- nullable_logical(input$member_reuse_values)
 
       data.frame(
         member_alias = member_alias,
@@ -1018,11 +1135,17 @@ addCompoundTimeseries <- function(id, language) {
         member_priority = member_priority,
         use_from = use_from,
         use_to = use_to,
+        alignment_tolerance_seconds = alignment_tolerance_seconds,
+        reuse_member_values = reuse_member_values,
         stringsAsFactors = FALSE
       )
     }
 
-    validate_member_input <- function(row, existing, replace_row = NA_integer_) {
+    validate_member_input <- function(
+      row,
+      existing,
+      replace_row = NA_integer_
+    ) {
       errors <- character()
 
       if (is.na(row$member_alias[[1]])) {
@@ -1048,7 +1171,10 @@ addCompoundTimeseries <- function(id, language) {
           !is.na(row$member_timeseries_id[[1]]) &&
           row$member_timeseries_id[[1]] == nullable_integer(selected_tsid())
       ) {
-        errors <- c(errors, "A derived timeseries cannot be a member of itself.")
+        errors <- c(
+          errors,
+          "A derived timeseries cannot be a member of itself."
+        )
       }
       if (is.na(row$member_priority[[1]]) || row$member_priority[[1]] <= 0) {
         errors <- c(errors, "Member priority must be a positive integer.")
@@ -1059,6 +1185,21 @@ addCompoundTimeseries <- function(id, language) {
           row$use_to[[1]] <= row$use_from[[1]]
       ) {
         errors <- c(errors, "Use-to must be later than use-from.")
+      }
+      if (
+        !is.na(row$alignment_tolerance_seconds[[1]]) &&
+          row$alignment_tolerance_seconds[[1]] < 0
+      ) {
+        errors <- c(errors, "Alignment tolerance cannot be negative.")
+      }
+      if (
+        isTRUE(row$reuse_member_values[[1]]) &&
+          is.na(row$alignment_tolerance_seconds[[1]])
+      ) {
+        errors <- c(
+          errors,
+          "Reuse matched values requires an alignment tolerance."
+        )
       }
 
       check_rows <- existing
@@ -1097,7 +1238,25 @@ addCompoundTimeseries <- function(id, language) {
         !is.na(rows$use_to) &
         rows$use_to <= rows$use_from
       if (any(bad_range)) {
-        errors <- c(errors, "One or more member use windows end before they start.")
+        errors <- c(
+          errors,
+          "One or more member use windows end before they start."
+        )
+      }
+      bad_tolerance <- !is.na(rows$alignment_tolerance_seconds) &
+        rows$alignment_tolerance_seconds < 0
+      if (any(bad_tolerance)) {
+        errors <- c(errors, "One or more alignment tolerances are negative.")
+      }
+      bad_reuse <- isTRUE(any(
+        rows$reuse_member_values &
+          is.na(rows$alignment_tolerance_seconds)
+      ))
+      if (bad_reuse) {
+        errors <- c(
+          errors,
+          "Reuse matched values requires an alignment tolerance."
+        )
       }
 
       parent_id <- nullable_integer(selected_tsid())
@@ -1106,7 +1265,10 @@ addCompoundTimeseries <- function(id, language) {
           !is.na(parent_id) &&
           parent_id %in% rows$member_timeseries_id
       ) {
-        errors <- c(errors, "A derived timeseries cannot be a member of itself.")
+        errors <- c(
+          errors,
+          "A derived timeseries cannot be a member of itself."
+        )
       }
 
       expression_sql <- nullable_text(expression_sql)
@@ -1118,6 +1280,22 @@ addCompoundTimeseries <- function(id, language) {
           errors,
           "Expression SQL must be a single expression without comments or semicolons."
         )
+      }
+      if (!is.na(expression_sql)) {
+        expression_error <- tryCatch(
+          {
+            YGwater:::validate_numeric_sql_expression(
+              expression_sql,
+              allowed_identifiers = rows$member_alias,
+              label = "Expression SQL"
+            )
+            NULL
+          },
+          error = function(e) e$message
+        )
+        if (!is.null(expression_error)) {
+          errors <- c(errors, expression_error)
+        }
       }
 
       unique(errors)
@@ -1132,7 +1310,9 @@ addCompoundTimeseries <- function(id, language) {
       }
 
       new_rows <- rbind(member_rows(), row)
-      new_rows <- new_rows[order(new_rows$member_priority, new_rows$member_alias), ]
+      new_rows <- new_rows[
+        order(new_rows$member_priority, new_rows$member_alias),
+      ]
       row.names(new_rows) <- NULL
       member_rows(new_rows)
       clear_member_inputs()
@@ -1206,6 +1386,22 @@ addCompoundTimeseries <- function(id, language) {
         value = if (is.na(row$use_to[[1]])) NULL else row$use_to[[1]],
         tz = air_datetime_widget_timezone(input$member_timezone)
       )
+      tolerance <- split_tolerance_seconds(row$alignment_tolerance_seconds[[1]])
+      updateNumericInput(
+        session,
+        "member_alignment_tolerance",
+        value = tolerance$value
+      )
+      updateSelectizeInput(
+        session,
+        "member_alignment_tolerance_unit",
+        selected = tolerance$unit
+      )
+      updateCheckboxInput(
+        session,
+        "member_reuse_values",
+        value = isTRUE(row$reuse_member_values[[1]])
+      )
     })
 
     reset_form <- function() {
@@ -1219,18 +1415,9 @@ addCompoundTimeseries <- function(id, language) {
       updateSelectizeInput(session, "media", selected = character(0))
       update_matrix_state_selectize(selected = NA_integer_)
       updateSelectizeInput(session, "aggregation_type", selected = character(0))
-      updateTextInput(session, "record_rate", value = "")
       updateSelectizeInput(session, "sensor_priority", selected = 1)
-      updateSelectizeInput(session, "default_owner", selected = character(0))
-      updateSelectizeInput(
-        session,
-        "data_sharing_agreement",
-        selected = character(0)
-      )
       updateSelectizeInput(session, "share_with", selected = "public_reader")
-      updateCheckboxInput(session, "active", value = TRUE)
       updateCheckboxInput(session, "publicly_visible", value = TRUE)
-      updateCheckboxInput(session, "sync_remote", value = TRUE)
       updateTextAreaInput(session, "expression_sql", value = "")
       updateTextAreaInput(session, "note", value = "")
       clear_member_inputs()
@@ -1252,7 +1439,10 @@ addCompoundTimeseries <- function(id, language) {
         drop = FALSE
       ]
       if (nrow(details) != 1) {
-        showNotification("Selected derived timeseries is unavailable.", type = "error")
+        showNotification(
+          "Selected derived timeseries is unavailable.",
+          type = "error"
+        )
         return()
       }
 
@@ -1268,7 +1458,9 @@ addCompoundTimeseries <- function(id, language) {
           "member_timeseries_id",
           "member_priority",
           "use_from",
-          "use_to"
+          "use_to",
+          "alignment_tolerance_seconds",
+          "reuse_member_values"
         ),
         drop = FALSE
       ]
@@ -1284,9 +1476,17 @@ addCompoundTimeseries <- function(id, language) {
           details$sub_location_id[[1]]
         }
       )
-      updateSelectizeInput(session, "tz", selected = details$timezone_daily_calc)
+      updateSelectizeInput(
+        session,
+        "tz",
+        selected = details$timezone_daily_calc
+      )
       update_z_selectize(selected = details$z)
-      updateSelectizeInput(session, "parameter", selected = details$parameter_id)
+      updateSelectizeInput(
+        session,
+        "parameter",
+        selected = details$parameter_id
+      )
       updateSelectizeInput(session, "media", selected = details$media_id)
       update_matrix_state_selectize(
         selected = details$matrix_state_id,
@@ -1297,7 +1497,6 @@ addCompoundTimeseries <- function(id, language) {
         "aggregation_type",
         selected = details$aggregation_type_id
       )
-      updateTextInput(session, "record_rate", value = safe_text(details$record_rate))
       updateSelectizeInput(
         session,
         "sensor_priority",
@@ -1305,35 +1504,13 @@ addCompoundTimeseries <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "default_owner",
-        selected = details$default_owner
-      )
-      updateSelectizeInput(
-        session,
-        "data_sharing_agreement",
-        selected = if (
-          is.na(details$default_data_sharing_agreement_id[[1]])
-        ) {
-          character(0)
-        } else {
-          details$default_data_sharing_agreement_id[[1]]
-        }
-      )
-      updateSelectizeInput(
-        session,
         "share_with",
         selected = array_to_text(details$share_with)
       )
-      updateCheckboxInput(session, "active", value = isTRUE(details$active[[1]]))
       updateCheckboxInput(
         session,
         "publicly_visible",
         value = isTRUE(details$publicly_visible[[1]])
-      )
-      updateCheckboxInput(
-        session,
-        "sync_remote",
-        value = isTRUE(details$sync_remote[[1]])
       )
       updateTextAreaInput(
         session,
@@ -1357,12 +1534,16 @@ addCompoundTimeseries <- function(id, language) {
         if (!isTruthy(input$parameter)) "Please select a parameter.",
         if (!isTruthy(input$media)) "Please select a media type.",
         if (!isTruthy(input$matrix_state)) "Please select a matrix state.",
-        if (!isTruthy(input$aggregation_type)) "Please select an aggregation type.",
-        if (!isTruthy(input$record_rate)) "Please specify a record rate.",
-        if (!isTruthy(input$default_owner)) "Please select a default owner.",
-        if (!isTruthy(input$sensor_priority)) "Please select sensor priority metadata."
+        if (!isTruthy(input$aggregation_type)) {
+          "Please select an aggregation type."
+        },
+        if (!isTruthy(input$sensor_priority)) {
+          "Please select sensor priority metadata."
+        }
       )
-      if (identical(mode, "modify") && is.na(nullable_integer(selected_tsid()))) {
+      if (
+        identical(mode, "modify") && is.na(nullable_integer(selected_tsid()))
+      ) {
         required_errors <- c(
           required_errors,
           "Please select a derived timeseries to modify."
@@ -1406,14 +1587,7 @@ addCompoundTimeseries <- function(id, language) {
         matrix_state_id = nullable_integer(input$matrix_state),
         sensor_priority = nullable_integer(input$sensor_priority),
         aggregation_type_id = nullable_integer(input$aggregation_type),
-        record_rate = nullable_text(input$record_rate),
-        default_owner = nullable_integer(input$default_owner),
-        default_data_sharing_agreement_id = nullable_integer(
-          input$data_sharing_agreement
-        ),
         share_with = share_with_to_array(input$share_with),
-        active = isTRUE(input$active),
-        sync_remote = isTRUE(input$sync_remote),
         publicly_visible = isTRUE(input$publicly_visible),
         expression_sql = nullable_text(input$expression_sql),
         note = nullable_text(input$note),
@@ -1425,11 +1599,14 @@ addCompoundTimeseries <- function(id, language) {
       con <- session$userData$AquaCache
       DBI::dbBegin(con)
       committed <- FALSE
-      on.exit({
-        if (!committed) {
-          try(DBI::dbRollback(con), silent = TRUE)
-        }
-      }, add = TRUE)
+      on.exit(
+        {
+          if (!committed) {
+            try(DBI::dbRollback(con), silent = TRUE)
+          }
+        },
+        add = TRUE
+      )
 
       z_id <- get_or_create_location_z_id(
         con = con,
@@ -1445,18 +1622,21 @@ addCompoundTimeseries <- function(id, language) {
             "INSERT INTO continuous.timeseries (",
             "location_id, sub_location_id, timezone_daily_calc, z_id,",
             "parameter_id, media_id, matrix_state_id, sensor_priority,",
-            "aggregation_type_id, record_rate, default_owner,",
-            "default_data_sharing_agreement_id, share_with, note, active,",
+            "aggregation_type_id, share_with, note, active,",
             "sync_remote, publicly_visible, timeseries_type, source_fx,",
             "source_fx_args",
             ") VALUES (",
-            "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,",
-            "$11, $12, $13, $14, $15, $16, $17, 'compound', NULL, NULL",
+            "$1, $2, $3, $4, $5, $6, $7, $8, $9,",
+            "$10, $11, TRUE, FALSE, $12, 'compound', NULL, NULL",
             ") RETURNING timeseries_id"
           ),
           params = list(
             req$location_id,
-            if (is.na(req$sub_location_id)) NA_integer_ else req$sub_location_id,
+            if (is.na(req$sub_location_id)) {
+              NA_integer_
+            } else {
+              req$sub_location_id
+            },
             req$timezone_daily_calc,
             if (is.na(z_id)) NA_integer_ else z_id,
             req$parameter_id,
@@ -1464,19 +1644,8 @@ addCompoundTimeseries <- function(id, language) {
             req$matrix_state_id,
             req$sensor_priority,
             req$aggregation_type_id,
-            req$record_rate,
-            req$default_owner,
-            if (
-              is.na(req$default_data_sharing_agreement_id)
-            ) {
-              NA_integer_
-            } else {
-              req$default_data_sharing_agreement_id
-            },
             req$share_with,
             if (is.na(req$note)) NA_character_ else req$note,
-            req$active,
-            req$sync_remote,
             req$publicly_visible
           )
         )[[1]])
@@ -1502,17 +1671,21 @@ addCompoundTimeseries <- function(id, language) {
             "timezone_daily_calc = $3, z_id = $4,",
             "parameter_id = $5, media_id = $6, matrix_state_id = $7,",
             "sensor_priority = $8, aggregation_type_id = $9,",
-            "record_rate = $10, default_owner = $11,",
-            "default_data_sharing_agreement_id = $12,",
-            "share_with = $13, note = $14, active = $15,",
-            "sync_remote = $16, publicly_visible = $17,",
+            "default_owner = NULL,",
+            "default_data_sharing_agreement_id = NULL,",
+            "share_with = $10, note = $11, active = TRUE,",
+            "sync_remote = FALSE, publicly_visible = $12,",
             "source_fx = NULL, source_fx_args = NULL,",
             "modified = CURRENT_TIMESTAMP, modified_by = CURRENT_USER",
-            "WHERE timeseries_id = $18"
+            "WHERE timeseries_id = $13"
           ),
           params = list(
             req$location_id,
-            if (is.na(req$sub_location_id)) NA_integer_ else req$sub_location_id,
+            if (is.na(req$sub_location_id)) {
+              NA_integer_
+            } else {
+              req$sub_location_id
+            },
             req$timezone_daily_calc,
             if (is.na(z_id)) NA_integer_ else z_id,
             req$parameter_id,
@@ -1520,19 +1693,8 @@ addCompoundTimeseries <- function(id, language) {
             req$matrix_state_id,
             req$sensor_priority,
             req$aggregation_type_id,
-            req$record_rate,
-            req$default_owner,
-            if (
-              is.na(req$default_data_sharing_agreement_id)
-            ) {
-              NA_integer_
-            } else {
-              req$default_data_sharing_agreement_id
-            },
             req$share_with,
             if (is.na(req$note)) NA_character_ else req$note,
-            req$active,
-            req$sync_remote,
             req$publicly_visible,
             req$timeseries_id
           )
@@ -1566,8 +1728,16 @@ addCompoundTimeseries <- function(id, language) {
           paste(
             "INSERT INTO continuous.timeseries_compound_members (",
             "timeseries_id, member_alias, member_timeseries_id,",
-            "member_priority, use_from, use_to",
-            ") VALUES ($1, $2, $3, $4, $5, $6)"
+            "member_priority, use_from, use_to,",
+            "alignment_tolerance, reuse_member_values",
+            ") VALUES (",
+            "$1, $2, $3, $4, $5, $6,",
+            "CASE",
+            "WHEN $7::double precision IS NULL THEN NULL",
+            "ELSE make_interval(secs => $7::double precision)",
+            "END,",
+            "$8",
+            ")"
           ),
           params = list(
             req$timeseries_id,
@@ -1583,7 +1753,13 @@ addCompoundTimeseries <- function(id, language) {
               empty_utc_datetime()
             } else {
               req$members$use_to[[i]]
-            }
+            },
+            if (is.na(req$members$alignment_tolerance_seconds[[i]])) {
+              NA_real_
+            } else {
+              req$members$alignment_tolerance_seconds[[i]]
+            },
+            isTRUE(req$members$reuse_member_values[[i]])
           )
         )
       }
@@ -1634,7 +1810,10 @@ addCompoundTimeseries <- function(id, language) {
 
     observeEvent(input$add_compound_timeseries, {
       if (!identical(input$mode, "add")) {
-        showNotification("Select add mode before adding a timeseries.", type = "error")
+        showNotification(
+          "Select add mode before adding a timeseries.",
+          type = "error"
+        )
         return()
       }
       handle_save("add")
@@ -1642,7 +1821,10 @@ addCompoundTimeseries <- function(id, language) {
 
     observeEvent(input$modify_compound_timeseries, {
       if (!identical(input$mode, "modify")) {
-        showNotification("Select modify mode before modifying a timeseries.", type = "error")
+        showNotification(
+          "Select modify mode before modifying a timeseries.",
+          type = "error"
+        )
         return()
       }
       handle_save("modify")

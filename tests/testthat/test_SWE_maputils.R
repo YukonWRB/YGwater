@@ -23,12 +23,12 @@ test_that("get_state_style_elements returns correct color mapping", {
     expect_length(cols, length(vals))
 })
 
-test_that("standardize_param_name returns valid param", {
+test_that("standardize_swe_param_name returns valid param", {
     expect_equal(
-        standardize_param_name("snow water equivalent"),
+        standardize_swe_param_name("snow water equivalent"),
         "snow water equivalent"
     )
-    expect_error(standardize_param_name("not_a_param"))
+    expect_error(standardize_swe_param_name("not_a_param"))
 })
 
 test_that("get_period_dates returns correct start/end", {

@@ -43,7 +43,7 @@ calculateFlowStats <- function(
 
     flow_paramId <- DBI::dbGetQuery(
       con,
-      "SELECT parameter_id FROM parameters WHERE param_name = 'water flow'"
+      "SELECT parameter_id FROM public.parameters WHERE param_name = 'water flow'"
     )$parameter_id
     flow_all <- DBI::dbGetQuery(
       con,
@@ -53,11 +53,11 @@ calculateFlowStats <- function(
             locations.location_code AS location, 
             measurements_calculated_daily.date, 
             measurements_calculated_daily.value 
-        FROM measurements_calculated_daily 
+        FROM continuous.measurements_calculated_daily
         INNER JOIN 
-          timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id 
+          continuous.timeseries ON measurements_calculated_daily.timeseries_id = timeseries.timeseries_id
         INNER JOIN 
-          locations ON timeseries.location_id = locations.location_id 
+          public.locations ON timeseries.location_id = locations.location_id
         WHERE (locations.location_code IN ('",
         paste0(stations, collapse = "', '"),
         "') OR locations.alias IN ('",

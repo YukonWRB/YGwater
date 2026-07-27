@@ -1009,7 +1009,7 @@ addContData <- function(id, language) {
       default_owner <- DBI::dbGetQuery(
         session$userData$AquaCache,
         sprintf(
-          "SELECT default_owner FROM timeseries WHERE timeseries_id = %s",
+          "SELECT default_owner FROM continuous.timeseries WHERE timeseries_id = %s",
           as.integer(timeseries())
         )
       )
@@ -1150,7 +1150,7 @@ addContData <- function(id, language) {
         # Update the moduleData reactiveValues
         moduleData$organizations <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT organization_id, name FROM organizations"
+          "SELECT organization_id, name FROM public.organizations"
         )
         # Update the selectizeInput to the new value
         updateSelectizeInput(
@@ -1228,7 +1228,7 @@ addContData <- function(id, language) {
         # Update the moduleData reactiveValues
         moduleData$organizations <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT organization_id, name FROM organizations"
+          "SELECT organization_id, name FROM public.organizations"
         )
         # Update the selectizeInput to the new value
         updateSelectizeInput(

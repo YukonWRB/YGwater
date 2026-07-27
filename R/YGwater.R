@@ -64,6 +64,10 @@ YGwater <- function(
   rlang::check_installed("htmlwidgets", reason = "to use YGwater app")
   rlang::check_installed("jsonlite", reason = "to use YGwater app")
   rlang::check_installed(
+    "rmarkdown",
+    reason = "to use report modules in YGwater app"
+  )
+  rlang::check_installed(
     "base64enc",
     reason = "to create base64-encoded plot images"
   )
@@ -165,21 +169,30 @@ YGwater <- function(
   }
 
   # Check that the connection can see a few tables: 'timeseries', 'locations', 'parameters', 'measurements_continuous_calculated', 'samples', 'results'
-  if (!DBI::dbExistsTable(con, "timeseries")) {
+  if (!DBI::dbExistsTable(
+    con,
+    DBI::Id(schema = "continuous", table = "timeseries")
+  )) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'timeseries'. This table is required for the app to function."
     )
   }
-  if (!DBI::dbExistsTable(con, "locations")) {
+  if (!DBI::dbExistsTable(
+    con,
+    DBI::Id(schema = "public", table = "locations")
+  )) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'locations'. This table is required for the app to function."
     )
   }
-  if (!DBI::dbExistsTable(con, "parameters")) {
+  if (!DBI::dbExistsTable(
+    con,
+    DBI::Id(schema = "public", table = "parameters")
+  )) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
@@ -204,14 +217,20 @@ YGwater <- function(
       "The user you're connecting with can't execute the database function 'continuous.measurements_continuous_corrected'. This function is required for the app to function."
     )
   }
-  if (!DBI::dbExistsTable(con, "samples")) {
+  if (!DBI::dbExistsTable(
+    con,
+    DBI::Id(schema = "discrete", table = "samples")
+  )) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
       "The user you're connecting with can't see the table 'samples'. This table is required for the app to function."
     )
   }
-  if (!DBI::dbExistsTable(con, "results")) {
+  if (!DBI::dbExistsTable(
+    con,
+    DBI::Id(schema = "discrete", table = "results")
+  )) {
     # Disconnect from the database
     DBI::dbDisconnect(con)
     stop(
@@ -238,7 +257,7 @@ YGwater <- function(
   # Check if the database 'testdb' exists and can be seen on the cluster. This is used to give the user the option to log in to the test DB so they can try things out without consequences.
   test_exists <- FALSE
   if (!public) {
-    dbs <- DBI::dbGetQuery(con, "SELECT datname FROM pg_database;")
+    dbs <- DBI::dbGetQuery(con, "SELECT datname FROM pg_catalog.pg_database;")
     if ("testdb" %in% dbs$datname) {
       # Check if the user 'tester' can log in with password 'tester'
       tryCatch(

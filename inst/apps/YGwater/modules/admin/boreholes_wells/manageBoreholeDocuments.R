@@ -384,11 +384,11 @@ manageBoreholeDocuments <- function(id, language) {
         "SELECT ns.nspname AS schema_name,
                 cls.relname AS table_name,
                 att.attname AS column_name
-         FROM pg_constraint con
-         JOIN pg_class cls ON cls.oid = con.conrelid
-         JOIN pg_namespace ns ON ns.oid = cls.relnamespace
+         FROM pg_catalog.pg_constraint con
+         JOIN pg_catalog.pg_class cls ON cls.oid = con.conrelid
+         JOIN pg_catalog.pg_namespace ns ON ns.oid = cls.relnamespace
          JOIN unnest(con.conkey) WITH ORDINALITY AS cols(attnum, ord) ON TRUE
-         JOIN pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = cols.attnum
+         JOIN pg_catalog.pg_attribute att ON att.attrelid = con.conrelid AND att.attnum = cols.attnum
          WHERE con.contype = 'f'
            AND con.confrelid = 'files.documents'::regclass;"
       )

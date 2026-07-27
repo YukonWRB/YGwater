@@ -1242,7 +1242,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
     if (!is.null(locations)) {
       if (inherits(locations, "character")) {
         query <- paste0(
-          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE LOWER(location_code) IN (LOWER('",
+          "SELECT location_id, location_code AS location, alias, name, name_fr FROM public.locations WHERE LOWER(location_code) IN (LOWER('",
           paste0(locations, collapse = "'), LOWER('"),
           "')) ",
           "OR LOWER(alias) IN (LOWER('",
@@ -1257,7 +1257,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         )
       } else {
         query <- paste0(
-          "SELECT location_id, location_code AS location, alias, name, name_fr FROM locations WHERE location_id IN (",
+          "SELECT location_id, location_code AS location, alias, name, name_fr FROM public.locations WHERE location_id IN (",
           paste0(locations, collapse = ", "),
           ");"
         )
@@ -1310,8 +1310,8 @@ ORDER BY ag.result_id, ag.guideline_id;"
         paste0(
           "SELECT DISTINCT l.location_id, l.location_code AS location,",
           " l.alias, l.name, l.name_fr",
-          " FROM locations AS l",
-          " INNER JOIN samples AS s ON l.location_id = s.location_id",
+          " FROM public.locations AS l",
+          " INNER JOIN discrete.samples AS s ON l.location_id = s.location_id",
           " WHERE s.sample_id IN (",
           paste0(sample_ids, collapse = ", "),
           ");"
@@ -1324,7 +1324,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
 
     if (!is.null(sub_locations)) {
       query <- paste0(
-        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM sub_locations WHERE ",
+        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM public.sub_locations WHERE ",
         "LOWER(sub_location) IN (LOWER('",
         paste0(sub_locations, collapse = "'), LOWER('"),
         "')) ",
@@ -1373,7 +1373,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         query <- paste0(
           "SELECT p.parameter_id, p.param_name, p.param_name_fr, ",
           unit_sql,
-          " FROM parameters p WHERE ",
+          " FROM public.parameters p WHERE ",
           "LOWER(p.param_name) IN (LOWER('",
           paste0(parameters, collapse = "'), LOWER('"),
           "')) ",
@@ -1386,7 +1386,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
         query <- paste0(
           "SELECT p.parameter_id, p.param_name, p.param_name_fr, ",
           unit_sql,
-          " FROM parameters p WHERE p.parameter_id IN (",
+          " FROM public.parameters p WHERE p.parameter_id IN (",
           paste0(parameters, collapse = ", "),
           ");"
         )
@@ -1427,8 +1427,8 @@ ORDER BY ag.result_id, ag.guideline_id;"
         paste0(
           "SELECT DISTINCT p.parameter_id, p.param_name, p.param_name_fr, ",
           unit_sql,
-          " FROM parameters AS p",
-          " INNER JOIN results AS r ON p.parameter_id = r.parameter_id",
+          " FROM public.parameters AS p",
+          " INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id",
           " WHERE r.sample_id IN (",
           paste0(sample_ids, collapse = ", "),
           ");"
@@ -1477,21 +1477,21 @@ ORDER BY ag.result_id, ag.guideline_id;"
         qt.qualifier_type_description,
         qt.qualifier_type_description_fr
     FROM 
-        samples as s
+        discrete.samples as s
     LEFT JOIN
-        media_types as mt ON s.media_id = mt.media_id
+        public.media_types as mt ON s.media_id = mt.media_id
     LEFT JOIN
-        collection_methods as cm ON s.collection_method = cm.collection_method_id
+        discrete.collection_methods as cm ON s.collection_method = cm.collection_method_id
     LEFT JOIN
-        sample_types as st ON s.sample_type = st.sample_type_id
+        discrete.sample_types as st ON s.sample_type = st.sample_type_id
     LEFT JOIN
-        grade_types as gt ON s.sample_grade = gt.grade_type_id
+        public.grade_types as gt ON s.sample_grade = gt.grade_type_id
     LEFT JOIN
-        approval_types as at ON s.sample_approval = at.approval_type_id
+        public.approval_types as at ON s.sample_approval = at.approval_type_id
     LEFT JOIN
-        qualifier_types as qt ON s.sample_qualifier = qt.qualifier_type_id
+        public.qualifier_types as qt ON s.sample_qualifier = qt.qualifier_type_id
     LEFT JOIN
-        sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
+        public.sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
     WHERE s.location_id IN (",
         paste0(locIds$location_id, collapse = ", "),
         ") 
@@ -1531,21 +1531,21 @@ SELECT
     qt.qualifier_type_description,
     qt.qualifier_type_description_fr
 FROM 
-    samples AS s
+    discrete.samples AS s
 LEFT JOIN
-    media_types AS mt ON s.media_id = mt.media_id
+    public.media_types AS mt ON s.media_id = mt.media_id
 LEFT JOIN
-    collection_methods AS cm ON s.collection_method = cm.collection_method_id
+    discrete.collection_methods AS cm ON s.collection_method = cm.collection_method_id
 LEFT JOIN
-    sample_types AS st ON s.sample_type = st.sample_type_id
+    discrete.sample_types AS st ON s.sample_type = st.sample_type_id
 LEFT JOIN
-    grade_types AS gt ON s.sample_grade = gt.grade_type_id
+    public.grade_types AS gt ON s.sample_grade = gt.grade_type_id
 LEFT JOIN
-    approval_types AS at ON s.sample_approval = at.approval_type_id
+    public.approval_types AS at ON s.sample_approval = at.approval_type_id
 LEFT JOIN
-    qualifier_types AS qt ON s.sample_qualifier = qt.qualifier_type_id
+    public.qualifier_types AS qt ON s.sample_qualifier = qt.qualifier_type_id
 LEFT JOIN
-    sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
+    public.sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
 WHERE
     (s.location_id, COALESCE(s.sub_location_id, -1)) IN (
         ",
@@ -1637,19 +1637,19 @@ AND s.datetime > '",
         rs.result_speciation,
         ms.matrix_state_name AS matrix_state
     FROM 
-        results AS r
+        discrete.results AS r
     LEFT JOIN
-        result_types AS rt ON r.result_type = rt.result_type_id
+        discrete.result_types AS rt ON r.result_type = rt.result_type_id
     LEFT JOIN
-        result_conditions AS rc ON r.result_condition = rc.result_condition_id
+        discrete.result_conditions AS rc ON r.result_condition = rc.result_condition_id
     LEFT JOIN 
-        sample_fractions AS sf ON r.sample_fraction_id = sf.sample_fraction_id
+        discrete.sample_fractions AS sf ON r.sample_fraction_id = sf.sample_fraction_id
     LEFT JOIN 
-        result_speciations AS rs ON r.result_speciation_id = rs.result_speciation_id
+        discrete.result_speciations AS rs ON r.result_speciation_id = rs.result_speciation_id
     LEFT JOIN
-        result_value_types AS rvt ON r.result_value_type = rvt.result_value_type_id
+        discrete.result_value_types AS rvt ON r.result_value_type = rvt.result_value_type_id
     LEFT JOIN
-        matrix_states AS ms ON r.matrix_state_id = ms.matrix_state_id
+        public.matrix_states AS ms ON r.matrix_state_id = ms.matrix_state_id
     WHERE 
         r.sample_id IN (",
       paste0(samples$sample_id, collapse = ", "),

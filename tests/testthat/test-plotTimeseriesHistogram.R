@@ -6,7 +6,7 @@ on.exit(DBI::dbDisconnect(test_con), add = TRUE)
 
 wlevel <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'water level';"
 )$parameter_id[[1]]
 
 # Find the first water level timeseries in the DB
@@ -255,7 +255,7 @@ test_that("plotTimeseriesHistogram can show data in the past", {
 
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1"
+    "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM public.locations WHERE location_code = '09EA004') LIMIT 1"
   )$timeseries_id
 
   if (

@@ -229,6 +229,23 @@ WQReport <- function(id, mdb_files, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns # Used to create UI elements in the server code
 
+    configured_mdb_files <- unique(as.character(mdb_files))
+    resolve_eqwin_source <- function(value) {
+      if (
+        length(value) != 1L ||
+          is.na(value) ||
+          !nzchar(value) ||
+          !value %in% configured_mdb_files
+      ) {
+        stop("Select a configured EQWin database.", call. = FALSE)
+      }
+      approved <- configured_mdb_files[match(value, configured_mdb_files)]
+      if (!file.exists(approved)) {
+        stop("The configured EQWin database is unavailable.", call. = FALSE)
+      }
+      normalizePath(approved, winslash = "/", mustWork = TRUE)
+    }
+
     output$banner <- renderUI({
       req(language$language)
       application_notifications_ui(
@@ -289,7 +306,15 @@ WQReport <- function(id, mdb_files, language) {
     observeEvent(
       input$EQWin_source,
       {
-        EQWin <- AccessConnect(input$EQWin_source, silent = TRUE)
+        source <- tryCatch(
+          resolve_eqwin_source(input$EQWin_source),
+          error = function(e) {
+            showNotification(e$message, type = "error", duration = 8)
+            NULL
+          }
+        )
+        req(source)
+        EQWin <- AccessConnect(source, silent = TRUE)
         EQ_locs <- DBI::dbGetQuery(
           EQWin,
           paste0("SELECT StnCode, StnDesc FROM eqstns;")
@@ -478,6 +503,11 @@ WQReport <- function(id, mdb_files, language) {
           !nzchar(input$EQWin_source[[1]])
       ) {
         issues <- c(issues, "Select a valid EQWin database.")
+      } else if (inherits(
+        try(resolve_eqwin_source(input$EQWin_source[[1]]), silent = TRUE),
+        "try-error"
+      )) {
+        issues <- c(issues, "Select an available configured EQWin database.")
       }
 
       if (is.null(moduleData$EQ_locs) || is.null(moduleData$EQ_params)) {
@@ -515,6 +545,11 @@ WQReport <- function(id, mdb_files, language) {
             issues,
             "Select at least one station, or switch to location groups."
           )
+        } else if (length(setdiff(
+          input$locations_EQ,
+          moduleData$EQ_locs$StnCode
+        ))) {
+          issues <- c(issues, "One or more selected stations are invalid.")
         }
       } else if (identical(input$locs_groups, "Location Groups")) {
         if (
@@ -524,6 +559,8 @@ WQReport <- function(id, mdb_files, language) {
             !nzchar(input$location_groups[[1]])
         ) {
           issues <- c(issues, "Select a location group.")
+        } else if (!input$location_groups[[1]] %in% moduleData$EQ_loc_grps$groupname) {
+          issues <- c(issues, "The selected location group is invalid.")
         }
       } else {
         issues <- c(
@@ -543,6 +580,11 @@ WQReport <- function(id, mdb_files, language) {
             issues,
             "Select at least one parameter, or switch to parameter groups."
           )
+        } else if (length(setdiff(
+          input$parameters_EQ,
+          moduleData$EQ_params$ParamCode
+        ))) {
+          issues <- c(issues, "One or more selected parameters are invalid.")
         }
       } else if (identical(input$params_groups, "Parameter Groups")) {
         if (
@@ -552,12 +594,21 @@ WQReport <- function(id, mdb_files, language) {
             !nzchar(input$parameter_groups[[1]])
         ) {
           issues <- c(issues, "Select a parameter group.")
+        } else if (!input$parameter_groups[[1]] %in% moduleData$EQ_param_grps$groupname) {
+          issues <- c(issues, "The selected parameter group is invalid.")
         }
       } else {
         issues <- c(
           issues,
           "Choose whether to filter by parameters or by parameter groups."
         )
+      }
+
+      if (
+        length(input$stds) &&
+          length(setdiff(input$stds, moduleData$EQ_stds$StdCode))
+      ) {
+        issues <- c(issues, "One or more selected standards are invalid.")
       }
 
       if (!is.null(input$SD_SD) && length(input$SD_SD) == 1 && !is.na(input$SD_SD)) {
@@ -688,7 +739,7 @@ WQReport <- function(id, mdb_files, language) {
       }
 
       report_task$invoke(req = list(
-        eqwin_source = input$EQWin_source,
+        eqwin_source = resolve_eqwin_source(input$EQWin_source),
         date = as.Date(input$date),
         date_approx = as.numeric(input$date_approx),
         stations = if (input$locs_groups == "Locations") {

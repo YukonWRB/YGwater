@@ -408,8 +408,14 @@ addImgs <- function(id, language) {
 
     # Function to check if latitude and longitude are valid
     is_valid_latlon <- function(lat, lon) {
-      valid_lat <- !is.na(lat) & !is.null(lat) & lat >= -90 & lat <= 90
-      valid_lon <- !is.na(lon) & !is.null(lat) & lon >= -180 & lon <= 180
+      if (is.null(lat) || is.null(lon) || !length(lat) || !length(lon)) {
+        return(FALSE)
+      }
+
+      lat <- suppressWarnings(as.numeric(lat))
+      lon <- suppressWarnings(as.numeric(lon))
+      valid_lat <- !is.na(lat) & lat >= -90 & lat <= 90
+      valid_lon <- !is.na(lon) & lon >= -180 & lon <= 180
       return(valid_lat & valid_lon)
     }
 

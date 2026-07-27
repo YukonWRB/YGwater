@@ -145,7 +145,7 @@ lookup_location_id <- function(con, location) {
   if (!is.na(location_num) && nzchar(location_txt)) {
     result <- DBI::dbGetQuery(
       con,
-      "SELECT location_id FROM locations WHERE location_id = $1 LIMIT 1;",
+      "SELECT location_id FROM public.locations WHERE location_id = $1 LIMIT 1;",
       params = list(location_num)
     )
     return(result[1, 1])
@@ -153,7 +153,7 @@ lookup_location_id <- function(con, location) {
 
   result <- DBI::dbGetQuery(
     con,
-    "SELECT location_id FROM locations WHERE location_code = $1 OR alias = $1 OR name = $1 OR name_fr = $1 LIMIT 1;",
+    "SELECT location_id FROM public.locations WHERE location_code = $1 OR alias = $1 OR name = $1 OR name_fr = $1 LIMIT 1;",
     params = list(location_txt)
   )
   result[1, 1]
@@ -214,8 +214,8 @@ ac_db_function_exists <- function(
   query <- paste(
     "SELECT EXISTS (",
     "  SELECT 1",
-    "  FROM pg_proc p",
-    "  JOIN pg_namespace n",
+    "  FROM pg_catalog.pg_proc p",
+    "  JOIN pg_catalog.pg_namespace n",
     "    ON n.oid = p.pronamespace",
     "  WHERE n.nspname = $1",
     "    AND p.proname = $2",
@@ -772,8 +772,8 @@ fetch_historic_range_timeseries_metadata <- function(con, timeseries_ids) {
     paste0(
       "SELECT ts.timeseries_id, at.aggregation_type, ",
       "EXTRACT(EPOCH FROM ts.record_rate) AS record_rate_seconds ",
-      "FROM timeseries ts ",
-      "LEFT JOIN aggregation_types at ",
+      "FROM continuous.timeseries ts ",
+      "LEFT JOIN continuous.aggregation_types at ",
       "ON ts.aggregation_type_id = at.aggregation_type_id ",
       "WHERE ts.timeseries_id IN (",
       paste(timeseries_ids, collapse = ", "),

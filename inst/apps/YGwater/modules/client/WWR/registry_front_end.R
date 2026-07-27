@@ -448,10 +448,11 @@ wellRegistry <- function(id, language) {
 
           purposes_lookup <- moduleData$purposes[, .(
             borehole_well_purpose_id,
-            purpose_name = get(
-              tr("borehole_well_purpose_col", language$language)
+            purpose_name = YGwater:::escape_html_text(
+              get(tr("borehole_well_purpose_col", language$language))
             )
           )]
+          popup_names[, popup_name := YGwater:::escape_html_text(popup_name)]
 
           # Combine all the data
           tmp <- data.table::copy(popup_names) # Use copy to avoid modifying the original data table

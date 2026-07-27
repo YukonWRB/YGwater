@@ -32,7 +32,7 @@
 #' @keywords internal
 #'
 snowbull_months <- function(month = NULL, short = FALSE) {
-    months = c(
+    months <- c(
         "January",
         "February",
         "March",
@@ -47,7 +47,7 @@ snowbull_months <- function(month = NULL, short = FALSE) {
         "December"
     )
     if (short) {
-        months = tolower(substr(months, 1, 3))
+        months <- tolower(substr(months, 1, 3))
     }
 
     if (!is.null(month)) {
@@ -215,7 +215,7 @@ get_static_style_elements <- function() {
         iconHeight = static_style_elements$communities$iconHeight
     )
 
-    static_style_elements$communities$labelOptions = leaflet::labelOptions(
+    static_style_elements$communities$labelOptions <- leaflet::labelOptions(
         noHide = TRUE,
         direction = "top",
         textOnly = TRUE,
@@ -278,7 +278,7 @@ get_dynamic_style_elements <- function(
     #     )
     # }
 
-    param_name <- standardize_param_name(param_name)
+    param_name <- standardize_swe_param_name(param_name)
 
     # standardize parameter name for upcoming switch case
     # param_name <- standardize_param_name(param_name)
@@ -426,7 +426,7 @@ get_dynamic_style_elements <- function(
         percentile_labels <- unlist(percentile_labels)
     }
 
-    style_choices = list(
+    style_choices <- list(
         relative_to_med = list(
             bins = relative_bins,
             colors = relative_colors,
@@ -858,7 +858,7 @@ standardize_epsg <- function(epsg) {
 #' @param con (Optional) AquaCache connection
 #' @return parameter name
 #' @noRd
-standardize_param_name <- function(param_name, con = NULL) {
+standardize_swe_param_name <- function(param_name, con = NULL) {
     if (is.null(param_name)) {
         stop("param_name must be provided and non-null")
     }
@@ -1441,7 +1441,7 @@ download_discrete_ts_locations <- function(con, param_name, epsg = 4326) {
         FROM discrete.samples s
         JOIN discrete.results r ON s.sample_id = r.sample_id
         JOIN public.locations l ON s.location_id = l.location_id
-        LEFT JOIN datum_conversions dc ON l.location_id = dc.location_id
+        LEFT JOIN public.datum_conversions dc ON l.location_id = dc.location_id
         WHERE r.parameter_id = 
             (SELECT parameter_id FROM public.parameters
              WHERE param_name = $1)",
@@ -1514,7 +1514,7 @@ download_continuous_ts <- function(
     resolution = "daily",
     epsg = 4326
 ) {
-    param_name <- standardize_param_name(
+    param_name <- standardize_swe_param_name(
         con = con,
         param_name = param_name
     )
@@ -1761,7 +1761,7 @@ download_discrete_ts <- function(
     param_name = NULL,
     epsg = 4326
 ) {
-    param_name <- standardize_param_name(
+    param_name <- standardize_swe_param_name(
         con = con,
         param_name = param_name
     )
@@ -4486,6 +4486,8 @@ generate_popup_content <- function(
     continuity = "discrete"
 ) {
     language <- lengthenLanguage(language)
+    name <- escape_html_text(name)
+    location <- escape_html_text(location)
 
     # Get acronym: first letter of each word in param_name, lowercased
     parameter_accronym <- tolower(paste(
@@ -4760,6 +4762,9 @@ get_display_data <- function(
         "anomalies" = "mm",
         "%"
     )
+
+    dataset_state$annotation_en <- escape_html_text(dataset_state$annotation_en)
+    dataset_state$annotation_fr <- escape_html_text(dataset_state$annotation_fr)
 
     dataset_state$annotation_fr <- paste0(
         dataset_state$annotation_fr,
@@ -5156,7 +5161,11 @@ make_leaflet_map <- function(
                 opacity = static_style_elements$surveys$opacity,
                 fillOpacity = static_style_elements$surveys$fillOpacity,
                 label = ~ lapply(
-                    paste0(name, "<br>", location),
+                    paste0(
+                        escape_html_text(name),
+                        "<br>",
+                        escape_html_text(location)
+                    ),
                     htmltools::HTML
                 ),
                 popup = ~ lapply(popup_content, htmltools::HTML),
@@ -5190,7 +5199,11 @@ make_leaflet_map <- function(
                     iconHeight = 2.7 * static_style_elements$pillows$radius
                 ),
                 label = ~ lapply(
-                    paste0(name, "<br>", location),
+                    paste0(
+                        escape_html_text(name),
+                        "<br>",
+                        escape_html_text(location)
+                    ),
                     htmltools::HTML
                 ),
                 popup = ~ lapply(popup_content, htmltools::HTML),

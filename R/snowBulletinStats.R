@@ -93,7 +93,7 @@ snowBulletinStats <- function(
     query <- "
       SELECT t.timeseries_id
       FROM continuous.timeseries t
-      INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+      INNER JOIN public.parameters p ON t.parameter_id = p.parameter_id
       WHERE t.record_rate = '1 day'
         AND p.param_name = 'precipitation, total'
     "
@@ -119,8 +119,8 @@ snowBulletinStats <- function(
           NULL::timestamptz,
           NULL::timestamptz
         ) m ON TRUE
-        INNER JOIN timeseries ON m.timeseries_id = timeseries.timeseries_id
-        INNER JOIN locations ON timeseries.location_id = locations.location_id"
+        INNER JOIN continuous.timeseries ON m.timeseries_id = timeseries.timeseries_id
+        INNER JOIN public.locations ON timeseries.location_id = locations.location_id"
       )
     )
     #AND datetime >= '", year_param-40, "-10-01'"))
@@ -445,7 +445,7 @@ snowBulletinStats <- function(
     query <- sprintf(
       "SELECT t.timeseries_id
           FROM continuous.timeseries t
-          INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+          INNER JOIN public.parameters p ON t.parameter_id = p.parameter_id
           WHERE p.param_name = '%s'
           AND t.aggregation_type_id = (
             SELECT aggregation_type_id FROM continuous.aggregation_types
@@ -476,8 +476,8 @@ snowBulletinStats <- function(
               NULL::timestamptz,
               NULL::timestamptz
             ) m ON TRUE
-            INNER JOIN timeseries ON m.timeseries_id = timeseries.timeseries_id
-            INNER JOIN locations ON timeseries.location_id = locations.location_id"
+            INNER JOIN continuous.timeseries ON m.timeseries_id = timeseries.timeseries_id
+            INNER JOIN public.locations ON timeseries.location_id = locations.location_id"
       )
     )
 
@@ -703,10 +703,10 @@ snowBulletinStats <- function(
           m.doy_count AS years,
           m.timeseries_id,
           ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
-        FROM measurements_calculated_daily m
-          INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
-          INNER JOIN locations l ON t.location_id = l.location_id
-          INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+        FROM continuous.measurements_calculated_daily m
+          INNER JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+          INNER JOIN public.locations l ON t.location_id = l.location_id
+          INNER JOIN public.parameters p ON t.parameter_id = p.parameter_id
         WHERE m.timeseries_id IN (20, 145, 51, 75, 122, 85, 649)
           AND m.date BETWEEN ('",
       year,
@@ -857,10 +857,10 @@ snowBulletinStats <- function(
           m.doy_count AS years,
           m.timeseries_id,
           ROW_NUMBER() OVER (PARTITION BY m.timeseries_id ORDER BY m.date DESC) AS rn
-        FROM measurements_calculated_daily m
-          INNER JOIN timeseries t ON m.timeseries_id = t.timeseries_id
-          INNER JOIN locations l ON t.location_id = l.location_id
-          INNER JOIN parameters p ON t.parameter_id = p.parameter_id
+        FROM continuous.measurements_calculated_daily m
+          INNER JOIN continuous.timeseries t ON m.timeseries_id = t.timeseries_id
+          INNER JOIN public.locations l ON t.location_id = l.location_id
+          INNER JOIN public.parameters p ON t.parameter_id = p.parameter_id
         WHERE m.timeseries_id IN (30, 31, 38, 48, 57, 81, 69, 71, 107, 132, 110, 14)
           AND m.date BETWEEN ('",
       year,

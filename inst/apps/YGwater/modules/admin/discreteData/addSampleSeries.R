@@ -617,7 +617,7 @@ addSampleSeries <- function(id, language) {
 
         moduleData$organizations <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT organization_id, name FROM organizations ORDER BY name ASC"
+          "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
         )
         update_org_selectize("default_owner")
         update_org_selectize("default_contributor")

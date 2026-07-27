@@ -7,7 +7,7 @@ test_that("tabular report is created without error on current data", {
   # Check the 'timeseries' table to make sure there's data for today.
   check <- DBI::dbGetQuery(
     con,
-    "SELECT COUNT(*) FROM timeseries WHERE DATE(end_datetime) = CURRENT_DATE"
+    "SELECT COUNT(*) FROM continuous.timeseries WHERE DATE(end_datetime) = CURRENT_DATE"
   )[1, 1]
   if (check == 0) {
     skip("No data available for today, skipping test.")
@@ -33,7 +33,7 @@ test_that("tabular report is created without error on current data", {
 
   # Check that the file has the expected sheet names; getSheetNames returns a vector of sheet names, so expect_named doesn't work here
   names <- openxlsx::getSheetNames(res)
-  expect_equal(names, c("comments", "levels", "flows", "snow"))
+  expect_equal(names, c("comments", "levels", "flows", "snow", "temperature"))
 
   # Check that levels has four header rows plus at least one data row
   levels <- openxlsx::read.xlsx(res, sheet = "levels")

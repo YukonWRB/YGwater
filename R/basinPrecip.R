@@ -11,7 +11,7 @@
 #'
 #' Additional spatial data is added to the maps when possible, Keeping in mind that large vector files can be lengthy for R to graphically represent. To ease this limitation, the watercourses file is left out when the drainage extent is greater than 30 000 km2; by that size, major water courses are expected to be represented by polygons in the waterbodies layer anyways.
 #'
-#' @param location The location above which you wish to calculate precipitation. Specify either a WSC or WSC-like station ID (e.g. `"09AB004"`) for which there is a database entry, or coordinates in signed decimal degrees in form latitude, longitude (`"60.1234 -139.1234"`; note the space, negative sign, and lack of comma). See details for more info if specifying coordinates.
+#' @param location The location above which you wish to calculate precipitation. Specify either a WSC or WSC-like station ID (e.g. `"09AB004"`) for which there is a database entry, or coordinates in signed decimal degrees in form latitude, longitude (`"60.1234 -139.1234"`; note the space, negative sign, and lack of comma). Multiple locations are also supported as a character vector/list of WSC IDs, or as a list/matrix/data.frame of coordinate pairs (latitude, longitude).
 #' @param start The start of the time period over which to accumulate precipitation. Use format `"yyyy-mm-dd hh:mm"` (character vector) in UTC time, or a POSIXct object (e.g. `Sys.time()-60*60*24` for one day in the past). In the case of a POSIXct object, the timezone is converted to UTC without modifying the time. See details if requesting earlier than 30 days prior to now.
 #' @param end The end of the time period over which to accumulate precipitation. Other details as per `start`
 #' @param map Should a map be output to the console? See details for more info.
@@ -22,15 +22,11 @@
 #' @param con A connection to the aquacache database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param hrdpa_loc The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.
 #' @param hrdps_loc The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.
+#' @param .raster_cache Internal parameter for caching rasters between multiple calls to basinPrecip. Do not set this parameter manually.
+#' @param .return_result_and_cache Internal parameter for returning both the result and the raster cache. Do not set this parameter manually.
 #'
-#' @return The accumulated precipitation in mm of water within the drainage specified or immediately surrounding the point specified in `location` printed to the console and (optionally) a map of precipitation printed to the console. A list is also generated containing statistics and the optional plot; to save this plot to disc use either grDevices::png() or grDevices::dev.print(), or use the graphical device export functionality.
+#' @return For a single location, returns a list containing precipitation statistics and optional map output. For multiple locations, returns a list of per-location outputs in the same order as the input. Output includes `raster_time_vector_UTC`, the vector of raster timestamps used.
 #' @export
-
-#TODO Update function to work directly with DB, with terra object, or with shapefiles, or with gpkg files.
-#TODO: problem with extents not matching. reproduce by first calling a map for somewhere in YT, then in Ontario. will get Error:[sds] extents do not match, which means that the DL and/or file selection process didn't work properly
-#IDEA: Allow multiple plots to be fetched, or a time-lapse of plots (better). Allow setting increments and number of plots.
-#IDEA: use leaflet to display maps
-#TODO: Get precip further in future using RDPS beyond HRDPS range.
 
 basinPrecip <- function(
   location,
@@ -43,7 +39,9 @@ basinPrecip <- function(
   silent = FALSE,
   con = NULL,
   hrdpa_loc = NULL,
-  hrdps_loc = NULL
+  hrdps_loc = NULL,
+  .raster_cache = NULL,
+  .return_result_and_cache = FALSE
 ) {
   # location <- "09EB001"
   # start = Sys.time() - 60*60*24
@@ -56,6 +54,122 @@ basinPrecip <- function(
   # con = NULL
   # hrdpa_loc = NULL
   # hrdps_loc = NULL
+
+  normalize_single_location <- function(loc) {
+    if (is.character(loc) && length(loc) == 1) {
+      return(loc)
+    }
+    if (is.numeric(loc) && length(loc) == 2) {
+      return(paste0(loc[1], " ", loc[2]))
+    }
+    if (
+      is.list(loc) &&
+        length(loc) == 2 &&
+        all(vapply(loc, is.numeric, logical(1)))
+    ) {
+      vals <- unlist(loc, use.names = FALSE)
+      return(paste0(vals[1], " ", vals[2]))
+    }
+    if (is.matrix(loc) && nrow(loc) == 1 && ncol(loc) >= 2) {
+      return(paste0(loc[1, 1], " ", loc[1, 2]))
+    }
+    if (is.data.frame(loc) && nrow(loc) == 1 && ncol(loc) >= 2) {
+      return(paste0(loc[[1]][1], " ", loc[[2]][1]))
+    }
+    stop(
+      "Each location must be a single WSC ID (character) or coordinate pair (latitude, longitude)."
+    )
+  }
+
+  maptype <- tolower(maptype)
+  if (!maptype %in% c("dynamic", "static")) {
+    stop("Parameter `maptype` should be either 'dynamic' or 'static'.")
+  }
+
+  is_single_coordinate_pair_list <- (is.list(location) &&
+    length(location) == 2 &&
+    all(vapply(location, is.numeric, logical(1))))
+
+  is_multi_location <- ((is.character(location) && length(location) > 1) ||
+    (is.list(location) && !is_single_coordinate_pair_list) ||
+    (is.matrix(location) && nrow(location) > 1) ||
+    (is.data.frame(location) && nrow(location) > 1))
+
+  if (is_multi_location) {
+    if (map) {
+      warning(
+        "When multiple locations are provided, map output is disabled and set to FALSE."
+      )
+      map <- FALSE
+    }
+
+    location_inputs <- if (is.character(location)) {
+      as.list(location)
+    } else if (is.list(location)) {
+      location
+    } else if (is.matrix(location) || is.data.frame(location)) {
+      lapply(seq_len(nrow(location)), function(i) {
+        as.numeric(location[i, seq_len(min(2, ncol(location))), drop = TRUE])
+      })
+    } else {
+      stop("Unsupported input format for `location`.")
+    }
+
+    normalized_locations <- vapply(
+      location_inputs,
+      normalize_single_location,
+      FUN.VALUE = character(1)
+    )
+
+    if (is.null(con)) {
+      con <- AquaConnect(silent = TRUE)
+      on.exit(DBI::dbDisconnect(con))
+    }
+
+    first_payload <- basinPrecip(
+      location = normalized_locations[1],
+      start = start,
+      end = end,
+      map = FALSE,
+      maptype = maptype,
+      title = title,
+      raster_col = raster_col,
+      silent = silent,
+      con = con,
+      hrdpa_loc = hrdpa_loc,
+      hrdps_loc = hrdps_loc,
+      .raster_cache = NULL,
+      .return_result_and_cache = TRUE
+    )
+
+    results <- vector("list", length(normalized_locations))
+    results[[1]] <- first_payload$result
+
+    if (length(normalized_locations) > 1) {
+      for (idx in 2:length(normalized_locations)) {
+        results[[idx]] <- basinPrecip(
+          location = normalized_locations[idx],
+          start = start,
+          end = end,
+          map = FALSE,
+          maptype = maptype,
+          title = title,
+          raster_col = raster_col,
+          silent = silent,
+          con = con,
+          hrdpa_loc = hrdpa_loc,
+          hrdps_loc = hrdps_loc,
+          .raster_cache = first_payload$raster_cache,
+          .return_result_and_cache = FALSE
+        )
+      }
+    }
+
+    names(results) <- normalized_locations
+    return(results)
+  }
+
+  location <- normalize_single_location(location)
 
   # Check that terra is 1.7.81 at minimum.
   if (maptype == "dynamic") {
@@ -80,12 +194,10 @@ basinPrecip <- function(
   # }
 
   #Basic checks on location
-  if (!inherits(location, "character")) {
-    stop("Parameter `location` should be specified as a character vector.")
-  }
-  maptype <- tolower(maptype)
-  if (!maptype %in% c("dynamic", "static")) {
-    stop("Parameter `maptype` should be either 'dynamic' or 'static'.")
+  if (!inherits(location, "character") || length(location) != 1) {
+    stop(
+      "Parameter `location` should be a single location after normalization."
+    )
   }
 
   #Basic checks on start and end
@@ -144,7 +256,7 @@ basinPrecip <- function(
   } else if (!is.na(location_id)) {
     location_metadata <- DBI::dbGetQuery(
       con,
-      "SELECT location_code, longitude, latitude FROM locations WHERE location_id = $1 LIMIT 1;",
+      "SELECT location_code, longitude, latitude FROM public.locations WHERE location_id = $1 LIMIT 1;",
       params = list(location_id)
     )
 
@@ -224,352 +336,477 @@ basinPrecip <- function(
     within <- as.data.frame(polygons[which(within)])$PREABBR
   }
 
-  #Determine the sequence of rasters from start to end. Load from database instead of downloading.
-  start <- as.POSIXct(start)
-  end <- as.POSIXct(end)
-  attr(start, "tzone") <- "UTC"
-  attr(end, "tzone") <- "UTC"
-  #Check that start < end
-  if (start > end) {
-    stop(
-      "The start time you specified is *after* the end time. R is not a time travel machine, please try again."
-    )
-  }
-
-  if (start > Sys.time() - 60 * 60 * 1.2) {
-    #if TRUE, the start is prior to any issued HRDPA and so is the end. Only a sequence for forecast will be generated.
-    hrdpa <- FALSE
-    actual_times_hrdpa <- NULL
-    if (end > (Sys.time() + 60 * 60 * 44)) {
-      end <- Sys.time() + 60 * 60 * 44
-      attr(end, "tzone") <- "UTC"
+  raster_time_vector_UTC <- NULL
+  format_time_vector_utc <- function(x) {
+    if (is.null(x) || length(x) == 0) {
+      return(character(0))
     }
-  } else {
-    #start is not in future, try to load hrdpa from database
-    hrdpa <- TRUE
+    x_posix <- as.POSIXct(x, tz = "UTC")
+    x_posix <- sort(unique(x_posix))
+    strftime(x_posix, format = "%Y-%m-%d %H:%M", tz = "UTC")
   }
 
-  if (hrdpa) {
-    start_hrdpa <- start + 60 * 60 * 4.8 #Assuming that rasters are issued at most 1.2 hours post valid time, this sets the start time so that the 6 hours before the requested start time is not included.
-    start_hrdpa <- lubridate::floor_date(start_hrdpa, "6 hours")
-    end_hrdpa <- lubridate::floor_date(end, "6 hours")
-    if (end_hrdpa < start_hrdpa) {
-      end_hrdpa <- start_hrdpa
-    }
-    sequence_hrdpa <- seq.POSIXt(start_hrdpa, end_hrdpa, by = "6 hour")
-
-    # Query rasters_reference to get valid times for HRDPA
-    ref_query_hrdpa <- paste0(
-      "SELECT reference_id, valid_from, valid_to FROM rasters_reference ",
-      "WHERE model = 'HRDPA' ",
-      "AND valid_from <= '",
-      format(end_hrdpa, "%Y-%m-%d %H:%M:%S"),
-      "'::timestamp ",
-      "AND valid_to >= '",
-      format(start_hrdpa, "%Y-%m-%d %H:%M:%S"),
-      "'::timestamp"
-    )
-
-    hrdpa_refs <- DBI::dbGetQuery(con, ref_query_hrdpa)
-
-    # Try to retrieve HRDPA rasters from database
-    tryCatch(
-      {
-        if (nrow(hrdpa_refs) > 0) {
-          # Build clause using reference IDs and their valid times
-          ref_ids <- paste0("'", hrdpa_refs$reference_id, "'", collapse = ", ")
-          clauses_hrdpa <- paste0(
-            "WHERE reference_id IN (",
-            ref_ids,
-            ")"
-          )
-
-          hrdpa_rasters_db <- getRaster(
-            clauses = clauses_hrdpa,
-            tbl_name = c("spatial", "rasters"),
-            col_name = "rast",
-            con = con
-          )
-          if (!is.null(hrdpa_rasters_db)) {
-            hrdpa_files <- list(hrdpa_rasters_db)
-            actual_times_hrdpa <- c(
-              min(hrdpa_refs$valid_from),
-              max(hrdpa_refs$valid_to)
-            )
-          } else {
-            hrdpa <- FALSE
-            actual_times_hrdpa <- NULL
-          }
-        } else {
-          hrdpa <- FALSE
-          actual_times_hrdpa <- NULL
-        }
-      },
-      error = function(e) {
-        if (!silent) {
-          message(
-            "HRDPA data not found in database. Proceeding with forecast data only."
-          )
-        }
-        hrdpa <<- FALSE
-        actual_times_hrdpa <<- NULL
-      }
-    )
-  } else {
-    hrdpa_files <- NULL
-    actual_times_hrdpa <- NULL
-  }
-
-  end_hrdps <- lubridate::floor_date(end, "1 hours")
-  start_hrdps <- lubridate::floor_date(start, "1 hours")
-  hrdps <- FALSE #overwritten if hrdps are usable
-  actual_times_hrdps <- NULL
-  # Query database for HRDPS rasters
-  if (!hrdpa) {
-    #only hrdps needed, times are in the future
-    hrdps <- TRUE
-    start_hrdps <- lubridate::floor_date(start, "1 hours")
-    end_hrdps <- lubridate::floor_date(end, "1 hours")
-
-    # Query rasters_reference to get valid times for HRDPS
-    ref_query_hrdps <- paste0(
-      "SELECT reference_id, valid_from, valid_to FROM rasters_reference ",
-      "WHERE model = 'HRDPS' ",
-      "AND valid_from <= '",
-      format(end_hrdps, "%Y-%m-%d %H:%M:%S"),
-      "'::timestamp ",
-      "AND valid_to >= '",
-      format(start_hrdps, "%Y-%m-%d %H:%M:%S"),
-      "'::timestamp"
-    )
-
-    hrdps_refs <- DBI::dbGetQuery(con, ref_query_hrdps)
-
-    if (nrow(hrdps_refs) == 0) {
-      warning(
-        "No HRDPS rasters found in database for the requested time range."
+  if (is.null(.raster_cache)) {
+    #Determine the sequence of rasters from start to end. Load from database instead of downloading.
+    start <- as.POSIXct(start)
+    end <- as.POSIXct(end)
+    attr(start, "tzone") <- "UTC"
+    attr(end, "tzone") <- "UTC"
+    #Check that start < end
+    if (start > end) {
+      stop(
+        "The start time you specified is *after* the end time. R is not a time travel machine, please try again."
       )
     }
 
-    tryCatch(
-      {
-        if (nrow(hrdps_refs) > 0) {
-          # Build clause using reference IDs and their valid times
-          ref_ids <- paste0("'", hrdps_refs$reference_id, "'", collapse = ", ")
-          clauses_hrdps <- paste0(
-            "WHERE reference_id IN (",
-            ref_ids,
-            ")"
-          )
+    if (start > Sys.time() - 60 * 60 * 1.2) {
+      #if TRUE, the start is prior to any issued HRDPA and so is the end. Only a sequence for forecast will be generated.
+      hrdpa <- FALSE
+      actual_times_hrdpa <- NULL
+      if (end > (Sys.time() + 60 * 60 * 44)) {
+        end <- Sys.time() + 60 * 60 * 44
+        attr(end, "tzone") <- "UTC"
+      }
+    } else {
+      #start is not in future, try to load hrdpa from database
+      hrdpa <- TRUE
+    }
 
-          forecast_precip <- getRaster(
-            clauses = clauses_hrdps,
-            tbl_name = c("spatial", "rasters"),
-            col_name = "rast",
-            con = con
-          )
-          if (!is.null(forecast_precip)) {
-            forecast_precip <- terra::project(
-              forecast_precip,
-              "+proj=longlat +EPSG:3347"
+    if (hrdpa) {
+      start_hrdpa <- start + 60 * 60 * 4.8 #Assuming that rasters are issued at most 1.2 hours post valid time, this sets the start time so that the 6 hours before the requested start time is not included.
+      start_hrdpa <- lubridate::floor_date(start_hrdpa, "6 hours")
+      end_hrdpa <- lubridate::floor_date(end, "6 hours")
+      if (end_hrdpa < start_hrdpa) {
+        end_hrdpa <- start_hrdpa
+      }
+      sequence_hrdpa <- seq.POSIXt(start_hrdpa, end_hrdpa, by = "6 hour")
+
+      # Query rasters_reference to get valid times for HRDPA
+      ref_query_hrdpa <- paste0(
+        "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "WHERE rr.model = 'HRDPA' ",
+        "AND rsi.parameter = 'accumulated precipitation (all types) at surface' ",
+        "AND rr.valid_from <= '",
+        format(end_hrdpa, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp ",
+        "AND rr.valid_to >= '",
+        format(start_hrdpa, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp"
+      )
+
+      hrdpa_refs <- DBI::dbGetQuery(con, ref_query_hrdpa)
+      raster_times_hrdpa <- NULL
+
+      # Try to retrieve HRDPA rasters from database
+      tryCatch(
+        {
+          if (nrow(hrdpa_refs) > 0) {
+            # Build clause using reference IDs and their valid times
+            ref_ids <- paste0(
+              "'",
+              hrdpa_refs$reference_id,
+              "'",
+              collapse = ", "
             )
-            names(forecast_precip) <- "precip"
-            actual_times_hrdps <- c(
-              min(hrdps_refs$valid_from),
-              max(hrdps_refs$valid_to)
+            # clauses_hrdpa <- paste0(
+            #   "WHERE reference_id IN (",
+            #   ref_ids,
+            #   ")"
+            # )
+
+            hrdpa_rasters_db <- getRasters(
+              raster_reference_ids = hrdpa_refs$reference_id,
+              tbl_name = c("spatial", "rasters"),
+              col_name = "rast",
+              con = con,
+              stack = FALSE
             )
+
+            # print(hrdpa_rasters_db)
+
+            if (!is.null(hrdpa_rasters_db)) {
+              hrdpa_files <- list(hrdpa_rasters_db)
+              actual_times_hrdpa <- c(
+                min(hrdpa_refs$valid_from),
+                max(hrdpa_refs$valid_to)
+              )
+              raster_times_hrdpa <- sort(unique(as.POSIXct(
+                hrdpa_refs$valid_to,
+                tz = "UTC"
+              )))
+            } else {
+              hrdpa <- FALSE
+              actual_times_hrdpa <- NULL
+              raster_times_hrdpa <- NULL
+            }
+          } else {
+            hrdpa <- FALSE
+            actual_times_hrdpa <- NULL
+            raster_times_hrdpa <- NULL
+          }
+        },
+        error = function(e) {
+          if (!silent) {
+            message(
+              "HRDPA data not found in database. Proceeding with forecast data only."
+            )
+          }
+          hrdpa <<- FALSE
+          actual_times_hrdpa <<- NULL
+          raster_times_hrdpa <<- NULL
+        }
+      )
+    } else {
+      hrdpa_files <- NULL
+      actual_times_hrdpa <- NULL
+      raster_times_hrdpa <- NULL
+    }
+
+    end_hrdps <- lubridate::floor_date(end, "1 hours")
+    start_hrdps <- lubridate::floor_date(start, "1 hours")
+    hrdps <- FALSE #overwritten if hrdps are usable
+    actual_times_hrdps <- NULL
+    raster_times_hrdps <- NULL
+    # Query database for HRDPS rasters
+    if (!hrdpa) {
+      #only hrdps needed, times are in the future
+      hrdps <- TRUE
+      start_hrdps <- lubridate::floor_date(start, "1 hours")
+      end_hrdps <- lubridate::floor_date(end, "1 hours")
+
+      # Query rasters_reference to get valid times for HRDPS
+      ref_query_hrdps <- paste0(
+        "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "WHERE rr.model = 'HRDPS' ",
+        "AND rsi.parameter = 'accumulated precip (all types) 1 hour' ",
+        "AND rr.valid_from <= '",
+        format(end_hrdps, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp ",
+        "AND rr.valid_to >= '",
+        format(start_hrdps, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp"
+      )
+
+      hrdps_refs <- DBI::dbGetQuery(con, ref_query_hrdps)
+
+      if (nrow(hrdps_refs) == 0) {
+        warning(
+          "No HRDPS rasters found in database for the requested time range."
+        )
+      }
+
+      tryCatch(
+        {
+          if (nrow(hrdps_refs) > 0) {
+            # Build clause using reference IDs and their valid times
+            ref_ids <- paste0(
+              "'",
+              hrdps_refs$reference_id,
+              "'",
+              collapse = ", "
+            )
+            clauses_hrdps <- paste0(
+              "WHERE reference_id IN (",
+              ref_ids,
+              ")"
+            )
+
+            forecast_precip <- getRasters(
+              raster_reference_ids = hrdps_refs$reference_id,
+              tbl_name = c("spatial", "rasters"),
+              col_name = "rast",
+              con = con,
+              stack = FALSE
+            )
+            if (!is.null(forecast_precip)) {
+              forecast_precip <- terra::project(
+                forecast_precip,
+                "+proj=longlat +EPSG:3347"
+              )
+
+              # Sum all HRDPS rasters over the requested period.
+              if (terra::nlyr(forecast_precip) > 1) {
+                forecast_precip <- sum(forecast_precip)
+              }
+              names(forecast_precip) <- "precip"
+
+              actual_times_hrdps <- c(
+                min(hrdps_refs$valid_from),
+                max(hrdps_refs$valid_to)
+              )
+              raster_times_hrdps <- sort(unique(as.POSIXct(
+                hrdps_refs$valid_to,
+                tz = "UTC"
+              )))
+            } else {
+              hrdps <- FALSE
+              raster_times_hrdps <- NULL
+            }
           } else {
             hrdps <- FALSE
+            raster_times_hrdps <- NULL
+            if (!silent) {
+              message(
+                "No HRDPS data found in database for requested time range."
+              )
+            }
           }
-        } else {
-          hrdps <- FALSE
+        },
+        error = function(e) {
           if (!silent) {
-            message("No HRDPS data found in database for requested time range.")
+            message("Error retrieving HRDPS data from database.")
+          }
+          hrdps <<- FALSE
+          raster_times_hrdps <<- NULL
+        }
+      )
+    } else if (hrdpa & end > (Sys.time() - 60 * 60 * 6)) {
+      #There might be a need for some hrdps to fill in to the requested end time.
+      hrdps <- TRUE
+      start_hrdps <- lubridate::floor_date(start, "1 hours")
+      end_hrdps <- lubridate::floor_date(end, "1 hours")
+
+      ref_query_hrdps <- paste0(
+        "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "WHERE rr.model = 'HRDPS' ",
+        "AND rsi.parameter = 'accumulated precip (all types) 1 hour' ",
+        "AND rr.valid_from <= '",
+        format(end_hrdps, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp ",
+        "AND rr.valid_to >= '",
+        format(start_hrdps, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp"
+      )
+      hrdps_refs <- DBI::dbGetQuery(con, ref_query_hrdps)
+
+      if (nrow(hrdps_refs) == 0) {
+        hrdps <- FALSE
+      }
+
+      clauses_hrdps <- paste0(
+        "WHERE valid_time >= '",
+        format(start_hrdps, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp AND valid_time <= '",
+        format(end_hrdps, "%Y-%m-%d %H:%M:%S"),
+        "'::timestamp AND model = 'HRDPS'"
+      )
+
+      if (hrdps) {
+        tryCatch(
+          {
+            forecast_precip <- getRasters(
+              raster_reference_ids = hrdps_refs$reference_id,
+              tbl_name = c("rasters", "precipitations"),
+              col_name = "rast",
+              con = con,
+              stack = FALSE
+            )
+            if (!is.null(forecast_precip)) {
+              forecast_precip <- terra::project(
+                forecast_precip,
+                "+proj=longlat +EPSG:3347"
+              )
+
+              # Sum all HRDPS rasters over the requested period.
+              if (terra::nlyr(forecast_precip) > 1) {
+                forecast_precip <- sum(forecast_precip)
+              }
+              names(forecast_precip) <- "precip"
+
+              actual_times_hrdps <- c(
+                min(hrdps_refs$valid_from),
+                max(hrdps_refs$valid_to)
+              )
+              raster_times_hrdps <- sort(unique(as.POSIXct(
+                hrdps_refs$valid_to,
+                tz = "UTC"
+              )))
+            } else {
+              hrdps <- FALSE
+              raster_times_hrdps <- NULL
+            }
+          },
+          error = function(e) {
+            hrdps <<- FALSE
+            raster_times_hrdps <<- NULL
+          }
+        )
+      }
+    }
+
+    ###now the rasters are present for the extent and time required, finally! Proceed to accumulating them into a single raster.
+    if (hrdpa & !hrdps) {
+      if (length(hrdpa_files) > 1) {
+        # hrdpa_files is now a list of raster objects from database
+        all_hrdpa <- hrdpa_files
+        xmin <- numeric(0)
+        xmax <- numeric(0)
+        ymin <- numeric(0)
+        ymax <- numeric(0)
+        for (i in 1:length(all_hrdpa)) {
+          all_hrdpa[[i]] <- terra::project(all_hrdpa[[i]], all_hrdpa[[1]])
+          xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
+          xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
+          ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])
+          ymax <- c(ymax, terra::ext(all_hrdpa[[i]])[4])
+        }
+        # Check if at least one of the extents are not uniform across all rasters, trim if TRUE
+        if (
+          (stats::var(xmin) != 0) |
+            (stats::var(xmax) != 0) |
+            (stats::var(ymin) != 0) |
+            (stats::var(ymax) != 0)
+        ) {
+          min_extent <- terra::rast()
+          min_extent <- terra::project(min_extent, all_hrdpa[[1]]) #Project must happend before setting the boundaries, otherwise the boundaries of the project from layer apply
+          terra::ext(min_extent) <- c(
+            max(xmin),
+            min(xmax),
+            max(ymin),
+            min(ymax)
+          )
+          min_extent <- terra::as.polygons(min_extent)
+          for (i in 1:length(all_hrdpa)) {
+            all_hrdpa[[i]] <- terra::mask(all_hrdpa[[i]], min_extent)
+            all_hrdpa[[i]] <- terra::trim(all_hrdpa[[i]])
           }
         }
-      },
-      error = function(e) {
-        if (!silent) {
-          message("Error retrieving HRDPS data from database.")
+        hrdpa_rasters <- terra::sds(all_hrdpa)
+        total <- hrdpa_rasters[1] #prepare to accumulate/add raster values
+        for (i in 2:length(hrdpa_rasters)) {
+          total <- total + hrdpa_rasters[i]
         }
-        hrdps <<- FALSE
-      }
-    )
-  } else if (hrdpa & end > (Sys.time() - 60 * 60 * 6)) {
-    #There might be a need for some hrdps to fill in to the requested end time.
-    hrdps <- TRUE
-    start_hrdps <- lubridate::floor_date(start, "1 hours")
-    end_hrdps <- lubridate::floor_date(end, "1 hours")
-
-    clauses_hrdps <- paste0(
-      "WHERE valid_time >= '",
-      format(start_hrdps, "%Y-%m-%d %H:%M:%S"),
-      "'::timestamp AND valid_time <= '",
-      format(end_hrdps, "%Y-%m-%d %H:%M:%S"),
-      "'::timestamp AND model = 'HRDPS'"
-    )
-
-    tryCatch(
-      {
-        forecast_precip <- getRaster(
-          clauses = clauses_hrdps,
-          tbl_name = c("rasters", "precipitations"),
-          col_name = "rast",
-          con = con
+      } else if (length(hrdpa_files) == 1) {
+        total <- hrdpa_files[[1]]
+      } else {
+        cli::cli_abort(
+          "No HRDPA rasters available for the requested time range."
         )
-        if (!is.null(forecast_precip)) {
-          forecast_precip <- terra::project(
-            forecast_precip,
-            "+proj=longlat +EPSG:3347"
+      }
+      names(total) <- rep("precip", terra::nlyr(total))
+
+      total <- terra::project(total, "+proj=longlat +EPSG:3347")
+      actual_times <- actual_times_hrdpa
+    }
+
+    if (!hrdpa & hrdps) {
+      total <- forecast_precip
+      actual_times <- actual_times_hrdps
+    }
+
+    if (hrdpa & hrdps) {
+      #start with hrdpa - files are now raster objects from database
+      if (length(hrdpa_files) > 1) {
+        all_hrdpa <- hrdpa_files
+        xmin <- numeric(0)
+        xmax <- numeric(0)
+        ymin <- numeric(0)
+        ymax <- numeric(0)
+        for (i in 1:length(all_hrdpa)) {
+          all_hrdpa[[i]] <- terra::project(all_hrdpa[[i]], all_hrdpa[[1]])
+          xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
+          xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
+          ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])
+          ymax <- c(ymax, terra::ext(all_hrdpa[[i]])[4])
+        }
+        # Check if at least one of the extents are not uniform across all rasters, trim if TRUE
+        if (
+          (stats::var(xmin) != 0) |
+            (stats::var(xmax) != 0) |
+            (stats::var(ymin) != 0) |
+            (stats::var(ymax) != 0)
+        ) {
+          min_extent <- terra::rast()
+          min_extent <- terra::project(min_extent, all_hrdpa[[1]])
+          terra::ext(min_extent) <- c(
+            max(xmin),
+            min(xmax),
+            max(ymin),
+            min(ymax)
           )
-          names(forecast_precip) <- "precip"
-          actual_times_hrdps <- c(start_hrdps, end_hrdps)
-        } else {
-          hrdps <- FALSE
+          min_extent <- terra::as.polygons(min_extent)
+          for (i in 1:length(all_hrdpa)) {
+            all_hrdpa[[i]] <- terra::mask(all_hrdpa[[i]], min_extent)
+            all_hrdpa[[i]] <- terra::trim(all_hrdpa[[i]])
+          }
         }
-      },
-      error = function(e) {
-        hrdps <<- FALSE
+        hrdpa_rasters <- terra::sds(all_hrdpa)
+        total_hrdpa <- hrdpa_rasters[1] #prepare to accumulate/add raster values
+        for (i in 2:length(hrdpa_rasters)) {
+          total_hrdpa <- total_hrdpa + hrdpa_rasters[i]
+        }
+      } else if (length(hrdpa_files) == 1) {
+        total_hrdpa <- hrdpa_files[[1]]
+      } else {
+        cli::cli_abort(
+          "No HRDPA rasters available for the requested time range."
+        )
       }
+      names(total_hrdpa) <- rep("precip", terra::nlyr(total_hrdpa))
+      total_hrdpa <- terra::project(total_hrdpa, "+proj=longlat +EPSG:3347")
+      actual_times <- c(min(actual_times_hrdpa), max(actual_times_hrdps))
+
+      #trim one by the other (and the reverse) to get extents the same
+      forecast_precip <- terra::resample(forecast_precip, total_hrdpa) #aligns the rasters
+      forecast_precip <- terra::extend(forecast_precip, total_hrdpa)
+      total_hrdpa <- terra::extend(total_hrdpa, forecast_precip)
+
+      total <- total_hrdpa + forecast_precip
+    }
+
+    #Add zeros for the actual_times so that they are not ambiguous at midnight
+    actual_times <- as.character(actual_times)
+    for (i in 1:2) {
+      if (nchar(actual_times[i]) < 13) {
+        actual_times[i] <- paste0(actual_times[i], " 00:00")
+      }
+      if (nchar(actual_times[i]) > 16) {
+        actual_times[i] <- substr(actual_times[i], 1, 16)
+      }
+    }
+    if (hrdpa) {
+      actual_times_hrdpa <- as.character(actual_times_hrdpa)
+      for (i in 1:2) {
+        if (nchar(actual_times_hrdpa[i]) < 13) {
+          actual_times_hrdpa[i] <- paste0(actual_times_hrdpa[i], " 00:00")
+        }
+        if (nchar(actual_times_hrdpa[i]) > 16) {
+          actual_times_hrdpa[i] <- substr(actual_times_hrdpa[i], 1, 16)
+        }
+      }
+    }
+    if (hrdps) {
+      actual_times_hrdps <- as.character(actual_times_hrdps)
+      for (i in 1:2) {
+        if (nchar(actual_times_hrdps[i]) < 13) {
+          actual_times_hrdps[i] <- paste0(actual_times_hrdps[i], " 00:00")
+        }
+        if (nchar(actual_times_hrdps[i]) > 16) {
+          actual_times_hrdps[i] <- substr(actual_times_hrdps[i], 1, 16)
+        }
+      }
+    }
+
+    raster_time_vector_UTC <- format_time_vector_utc(c(
+      raster_times_hrdpa,
+      raster_times_hrdps
+    ))
+  } else {
+    total <- .raster_cache$total
+    actual_times <- .raster_cache$actual_times
+    actual_times_hrdpa <- .raster_cache$actual_times_hrdpa
+    actual_times_hrdps <- .raster_cache$actual_times_hrdps
+    raster_time_vector_UTC <- format_time_vector_utc(
+      .raster_cache$raster_time_vector_UTC
     )
-  }
-
-  ###now the rasters are present for the extent and time required, finally! Proceed to accumulating them into a single raster.
-  if (hrdpa & !hrdps) {
-    if (length(hrdpa_files) > 1) {
-      # hrdpa_files is now a list of raster objects from database
-      all_hrdpa <- hrdpa_files
-      xmin <- numeric(0)
-      xmax <- numeric(0)
-      ymin <- numeric(0)
-      ymax <- numeric(0)
-      for (i in 1:length(all_hrdpa)) {
-        all_hrdpa[[i]] <- terra::project(all_hrdpa[[i]], all_hrdpa[[1]])
-        xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
-        xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
-        ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])
-        ymax <- c(ymax, terra::ext(all_hrdpa[[i]])[4])
-      }
-      # Check if at least one of the extents are not uniform across all rasters, trim if TRUE
-      if (
-        (stats::var(xmin) != 0) |
-          (stats::var(xmax) != 0) |
-          (stats::var(ymin) != 0) |
-          (stats::var(ymax) != 0)
-      ) {
-        min_extent <- terra::rast()
-        min_extent <- terra::project(min_extent, all_hrdpa[[1]]) #Project must happend before setting the boundaries, otherwise the boundaries of the project from layer apply
-        terra::ext(min_extent) <- c(max(xmin), min(xmax), max(ymin), min(ymax))
-        min_extent <- terra::as.polygons(min_extent)
-        for (i in 1:length(all_hrdpa)) {
-          all_hrdpa[[i]] <- terra::mask(all_hrdpa[[i]], min_extent)
-          all_hrdpa[[i]] <- terra::trim(all_hrdpa[[i]])
-        }
-      }
-      hrdpa_rasters <- terra::sds(all_hrdpa)
-      total <- hrdpa_rasters[1] #prepare to accumulate/add raster values
-      for (i in 2:length(hrdpa_rasters)) {
-        total <- total + hrdpa_rasters[i]
-      }
-    } else if (length(hrdpa_files) == 1) {
-      total <- hrdpa_files[[1]]
-    } else {
-      cli::cli_abort("No HRDPA rasters available for the requested time range.")
-    }
-    names(total) <- "precip"
-    total <- terra::project(total, "+proj=longlat +EPSG:3347")
-    actual_times <- actual_times_hrdpa
-  }
-
-  if (!hrdpa & hrdps) {
-    total <- forecast_precip
-    actual_times <- actual_times_hrdps
-  }
-
-  if (hrdpa & hrdps) {
-    #start with hrdpa - files are now raster objects from database
-    if (length(hrdpa_files) > 1) {
-      all_hrdpa <- hrdpa_files
-      xmin <- numeric(0)
-      xmax <- numeric(0)
-      ymin <- numeric(0)
-      ymax <- numeric(0)
-      for (i in 1:length(all_hrdpa)) {
-        all_hrdpa[[i]] <- terra::project(all_hrdpa[[i]], all_hrdpa[[1]])
-        xmin <- c(xmin, terra::ext(all_hrdpa[[i]])[1])
-        xmax <- c(xmax, terra::ext(all_hrdpa[[i]])[2])
-        ymin <- c(ymin, terra::ext(all_hrdpa[[i]])[3])
-        ymax <- c(ymax, terra::ext(all_hrdpa[[i]])[4])
-      }
-      # Check if at least one of the extents are not uniform across all rasters, trim if TRUE
-      if (
-        (stats::var(xmin) != 0) |
-          (stats::var(xmax) != 0) |
-          (stats::var(ymin) != 0) |
-          (stats::var(ymax) != 0)
-      ) {
-        min_extent <- terra::rast()
-        min_extent <- terra::project(min_extent, all_hrdpa[[1]])
-        terra::ext(min_extent) <- c(max(xmin), min(xmax), max(ymin), min(ymax))
-        min_extent <- terra::as.polygons(min_extent)
-        for (i in 1:length(all_hrdpa)) {
-          all_hrdpa[[i]] <- terra::mask(all_hrdpa[[i]], min_extent)
-          all_hrdpa[[i]] <- terra::trim(all_hrdpa[[i]])
-        }
-      }
-      hrdpa_rasters <- terra::sds(all_hrdpa)
-      total_hrdpa <- hrdpa_rasters[1] #prepare to accumulate/add raster values
-      for (i in 2:length(hrdpa_rasters)) {
-        total_hrdpa <- total_hrdpa + hrdpa_rasters[i]
-      }
-    } else if (length(hrdpa_files) == 1) {
-      total_hrdpa <- hrdpa_files[[1]]
-    } else {
-      cli::cli_abort("No HRDPA rasters available for the requested time range.")
-    }
-    names(total_hrdpa) <- "precip"
-    total_hrdpa <- terra::project(total_hrdpa, "+proj=longlat +EPSG:3347")
-    actual_times <- c(min(actual_times_hrdpa), max(actual_times_hrdps))
-
-    #trim one by the other (and the reverse) to get extents the same
-    forecast_precip <- terra::resample(forecast_precip, total_hrdpa) #aligns the rasters
-    forecast_precip <- terra::extend(forecast_precip, total_hrdpa)
-    total_hrdpa <- terra::extend(total_hrdpa, forecast_precip)
-
-    total <- total_hrdpa + forecast_precip
-  }
-
-  #Add zeros for the actual_times so that they are not ambiguous at midnight
-  actual_times <- as.character(actual_times)
-  for (i in 1:2) {
-    if (nchar(actual_times[i]) < 13) {
-      actual_times[i] <- paste0(actual_times[i], " 00:00")
-    }
-    if (nchar(actual_times[i]) > 16) {
-      actual_times[i] <- substr(actual_times[i], 1, 16)
-    }
-  }
-  if (hrdpa) {
-    actual_times_hrdpa <- as.character(actual_times_hrdpa)
-    for (i in 1:2) {
-      if (nchar(actual_times_hrdpa[i]) < 13) {
-        actual_times_hrdpa[i] <- paste0(actual_times_hrdpa[i], " 00:00")
-      }
-      if (nchar(actual_times_hrdpa[i]) > 16) {
-        actual_times_hrdpa[i] <- substr(actual_times_hrdpa[i], 1, 16)
-      }
-    }
-  }
-  if (hrdps) {
-    actual_times_hrdps <- as.character(actual_times_hrdps)
-    for (i in 1:2) {
-      if (nchar(actual_times_hrdps[i]) < 13) {
-        actual_times_hrdps[i] <- paste0(actual_times_hrdps[i], " 00:00")
-      }
-      if (nchar(actual_times_hrdps[i]) > 16) {
-        actual_times_hrdps[i] <- substr(actual_times_hrdps[i], 1, 16)
-      }
-    }
+    hrdpa <- isTRUE(.raster_cache$hrdpa)
+    hrdps <- isTRUE(.raster_cache$hrdps)
   }
 
   #crop to the watershed or to the point to get the precip within the basin or at the point, if no basin exists
@@ -582,9 +819,15 @@ basinPrecip <- function(
       cropped_precip <- terra::mask(total, terra::buffer(location, 5000)) # Rain within 5 km of the point
     }
   }
+
+  # ES: modified the following few lines to accomodate [x,y,t] dimensioned raster
+  # ES: this was needed as a result of migrading the HRDPS/A source from web to AquaCache
+  # ES: the AquaCache raster is loaded in a different format then the previous web source, and the [x,y,t] dimensioned raster is not compatible with the terra::sum() function
   cropped_precip <- terra::trim(cropped_precip)
-  mean_precip <- as.data.frame(cropped_precip)
-  mean_precip <- mean(mean_precip$precip)
+  cropped_precip <- sum(cropped_precip)
+
+  mean_precip <- mean(cropped_precip[], na.rm = TRUE)
+
   if (type != "longlat") {
     minmax_precip <- terra::minmax(cropped_precip)
     min <- minmax_precip[1]
@@ -851,6 +1094,7 @@ basinPrecip <- function(
       total_time_range_UTC = actual_times,
       reanalysis_time_range_UTC = actual_times_hrdpa,
       forecast_time_range_UTC = actual_times_hrdps,
+      raster_time_vector_UTC = raster_time_vector_UTC,
       point = requested_point,
       plot = if (map) plot else NULL
     )
@@ -937,6 +1181,7 @@ basinPrecip <- function(
       total_time_range_UTC = actual_times,
       reanalysis_time_range_UTC = actual_times_hrdpa,
       forecast_time_range_UTC = actual_times_hrdps,
+      raster_time_vector_UTC = raster_time_vector_UTC,
       watershed = basin$feature_name,
       plot = if (map) plot else NULL
     )
@@ -982,6 +1227,20 @@ basinPrecip <- function(
   }
   if (maptype == "dynamic") {
     list <- c(list, total_raster = total)
+  }
+  if (.return_result_and_cache) {
+    return(list(
+      result = list,
+      raster_cache = list(
+        total = total,
+        actual_times = actual_times,
+        actual_times_hrdpa = actual_times_hrdpa,
+        actual_times_hrdps = actual_times_hrdps,
+        raster_time_vector_UTC = raster_time_vector_UTC,
+        hrdpa = hrdpa,
+        hrdps = hrdps
+      )
+    ))
   }
   return(list)
 }
