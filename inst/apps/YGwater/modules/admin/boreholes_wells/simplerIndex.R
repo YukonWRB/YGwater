@@ -291,10 +291,7 @@ simplerIndexUI <- function(id) {
                 "Select",
                 icon("mouse-pointer"),
                 class = "btn-toggle"
-              ) |>
-                tooltip(
-                  "Enable the selection tool for OCR and content redaction."
-                ),
+              ),
               actionButton(
                 ns("redaction_mode"),
                 "Redaction Mode",
@@ -302,7 +299,7 @@ simplerIndexUI <- function(id) {
                 class = "btn-toggle"
               ) |>
                 tooltip(
-                  "Toggle redaction mode. When enabled, every selection will be automatically redacted."
+                  "Toggle redaction mode."
                 ),
               actionButton(
                 ns("delete_redaction"),
@@ -542,6 +539,17 @@ simplerIndexUI <- function(id) {
             ) |>
               tooltip(
                 "Add a new driller by typing the name in."
+              ),
+            selectizeInput(
+              ns("drill_method"),
+              "Drill method",
+              choices = NULL, # Populated in server
+              selected = NULL,
+              multiple = FALSE,
+              options = list(placeholder = "Select drill method")
+            ) |>
+              tooltip(
+                "Select the drilling method recorded for this borehole."
               ),
 
             # Location information section - remove surveyed_location_top_casing field
@@ -863,6 +871,98 @@ simplerIndexUI <- function(id) {
                   )
                 )
               ),
+              tags$h5("Seal construction"),
+              selectizeInput(
+                ns("seal_material"),
+                "Seal material",
+                choices = NULL,
+                selected = NULL,
+                multiple = FALSE,
+                options = list(placeholder = "Select seal material")
+              ),
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("seal_diameter"),
+                    "Seal outside diameter",
+                    value = NULL,
+                    min = 0,
+                    step = 1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("seal_diameter_unit"),
+                    "",
+                    choices = list("cm" = "cm", "inch" = "inch"),
+                    selected = "inch",
+                    inline = TRUE
+                  )
+                )
+              ),
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("seal_depth_from"),
+                    "Seal depth from",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("seal_depth_from_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
+                )
+              ),
+              fluidRow(
+                column(
+                  8,
+                  numericInput(
+                    ns("seal_depth_to"),
+                    "Seal depth to",
+                    value = NULL,
+                    min = 0,
+                    step = 0.1
+                  )
+                ),
+                column(
+                  4,
+                  radioButtons(
+                    ns("seal_depth_to_unit"),
+                    "",
+                    choices = list("m" = "m", "ft" = "ft"),
+                    selected = "m",
+                    inline = TRUE
+                  )
+                )
+              ),
+              tags$h5("Screen construction"),
+              selectizeInput(
+                ns("screen_material"),
+                "Screen material",
+                choices = NULL,
+                selected = NULL,
+                multiple = FALSE,
+                options = list(placeholder = "Select screen material")
+              ),
+              selectizeInput(
+                ns("screen_type"),
+                "Screen type",
+                choices = NULL,
+                selected = NULL,
+                multiple = FALSE,
+                options = list(placeholder = "Select screen type")
+              ),
               # Top of Screen
               fluidRow(
                 column(
@@ -991,17 +1091,17 @@ simplerIndexUI <- function(id) {
                   maxItems = 1
                 )
               ),
-              textInput(
-                ns("notes_well"),
-                "Well notes",
-                placeholder = "Screen type, filter pack, development, etc."
-              ),
               radioButtons(
                 ns("purpose_well_inferred"),
                 "Purpose inferred or explicit?",
                 choices = list("Inferred" = TRUE, "Explicit" = FALSE),
                 selected = TRUE,
                 inline = TRUE
+              ),
+              textInput(
+                ns("notes_well"),
+                "Well notes",
+                placeholder = "Screen type, filter pack, development, etc."
               )
             ), # End of is_well conditional panel
             hr(),
@@ -1060,6 +1160,7 @@ simplerIndexUI <- function(id) {
               'clear_location_association',
               'utm_zone',
               'drilled_by',
+              'drill_method',
               'purpose_of_borehole',
               'purpose_borehole_inferred',
               'is_well',
@@ -1069,6 +1170,12 @@ simplerIndexUI <- function(id) {
               'permafrost_bot',
               'date_drilled',
               'casing_od',
+              'seal_material',
+              'seal_diameter',
+              'seal_depth_from',
+              'seal_depth_to',
+              'screen_material',
+              'screen_type',
               'drill_depth',
               'surveyed_ground_elev',
               'top_of_screen',
@@ -1177,6 +1284,30 @@ simplerIndex <- function(id, language) {
         session$userData$AquaCache,
         "SELECT driller_id, name FROM boreholes.drillers"
       ),
+      drill_methods = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT drill_method_id, method_name
+         FROM boreholes.drill_methods
+         ORDER BY method_name"
+      ),
+      seal_materials = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT seal_material_id, material_name
+         FROM boreholes.seal_materials
+         ORDER BY material_name"
+      ),
+      screen_materials = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT screen_material_id, material_name
+         FROM boreholes.screen_materials
+         ORDER BY material_name"
+      ),
+      screen_types = DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT screen_type_id, type_name
+         FROM boreholes.screen_types
+         ORDER BY type_name"
+      ),
       purposes = DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes"
@@ -1246,6 +1377,10 @@ simplerIndex <- function(id, language) {
     observeEvent(moduleData, {
       req(
         moduleData$drillers,
+        moduleData$drill_methods,
+        moduleData$seal_materials,
+        moduleData$screen_materials,
+        moduleData$screen_types,
         moduleData$purposes,
         moduleData$share_with_boreholes,
         moduleData$share_with_wells
@@ -1256,6 +1391,42 @@ simplerIndex <- function(id, language) {
         choices = stats::setNames(
           moduleData$drillers$driller_id,
           moduleData$drillers$name
+        ),
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session,
+        "drill_method",
+        choices = stats::setNames(
+          moduleData$drill_methods$drill_method_id,
+          moduleData$drill_methods$method_name
+        ),
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session,
+        "seal_material",
+        choices = stats::setNames(
+          moduleData$seal_materials$seal_material_id,
+          moduleData$seal_materials$material_name
+        ),
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session,
+        "screen_material",
+        choices = stats::setNames(
+          moduleData$screen_materials$screen_material_id,
+          moduleData$screen_materials$material_name
+        ),
+        selected = NULL
+      )
+      updateSelectizeInput(
+        session,
+        "screen_type",
+        choices = stats::setNames(
+          moduleData$screen_types$screen_type_id,
+          moduleData$screen_types$type_name
         ),
         selected = NULL
       )
@@ -1411,6 +1582,11 @@ simplerIndex <- function(id, language) {
           session,
           "drilled_by",
           selected = target_metadata$drilled_by
+        )
+        updateSelectizeInput(
+          session,
+          "drill_method",
+          selected = target_metadata$drill_method
         )
         updateDateInput(
           session,
@@ -1645,6 +1821,10 @@ simplerIndex <- function(id, language) {
       updateSelectizeInput(session, "purpose_of_well", selected = character(0))
       updateRadioButtons(session, "purpose_well_inferred", selected = TRUE)
       updateSelectizeInput(session, "drilled_by", selected = character(0))
+      updateSelectizeInput(session, "drill_method", selected = character(0))
+      updateSelectizeInput(session, "seal_material", selected = character(0))
+      updateSelectizeInput(session, "screen_material", selected = character(0))
+      updateSelectizeInput(session, "screen_type", selected = character(0))
       updateSelectizeInput(
         session,
         "share_with_borehole",
@@ -1661,6 +1841,9 @@ simplerIndex <- function(id, language) {
       updateRadioButtons(session, "permafrost_top_unit", selected = "m")
       updateRadioButtons(session, "permafrost_bot_unit", selected = "m")
       updateRadioButtons(session, "casing_od_unit", selected = "inch")
+      updateRadioButtons(session, "seal_diameter_unit", selected = "inch")
+      updateRadioButtons(session, "seal_depth_from_unit", selected = "m")
+      updateRadioButtons(session, "seal_depth_to_unit", selected = "m")
       updateRadioButtons(session, "drill_depth_unit", selected = "m")
       updateRadioButtons(session, "top_of_screen_unit", selected = "m")
       updateRadioButtons(session, "bottom_of_screen_unit", selected = "m")
@@ -1687,6 +1870,9 @@ simplerIndex <- function(id, language) {
         "permafrost_top",
         "permafrost_bot",
         "casing_od",
+        "seal_diameter",
+        "seal_depth_from",
+        "seal_depth_to",
         "drill_depth",
         "surveyed_ground_elev",
         "top_of_screen",
@@ -1862,8 +2048,17 @@ simplerIndex <- function(id, language) {
       "date_drilled",
       "casing_od",
       "casing_od_unit",
+      "seal_material",
+      "seal_diameter",
+      "seal_diameter_unit",
+      "seal_depth_from",
+      "seal_depth_from_unit",
+      "seal_depth_to",
+      "seal_depth_to_unit",
       "drill_depth",
       "drill_depth_unit",
+      "screen_material",
+      "screen_type",
       "top_of_screen",
       "top_of_screen_unit",
       "bottom_of_screen",
@@ -1883,6 +2078,7 @@ simplerIndex <- function(id, language) {
       "permafrost_bot_unit",
       "is_well",
       "drilled_by",
+      "drill_method",
       "purpose_of_well",
       "purpose_well_inferred"
     )
@@ -1890,6 +2086,15 @@ simplerIndex <- function(id, language) {
     nested_well_specific_fields <- c(
       "drill_depth",
       "drill_depth_unit",
+      "seal_material",
+      "seal_diameter",
+      "seal_diameter_unit",
+      "seal_depth_from",
+      "seal_depth_from_unit",
+      "seal_depth_to",
+      "seal_depth_to_unit",
+      "screen_material",
+      "screen_type",
       "top_of_screen",
       "top_of_screen_unit",
       "bottom_of_screen",
@@ -2291,6 +2496,10 @@ simplerIndex <- function(id, language) {
       }
 
       sanitized$drilled_by <- parse_numeric(metadata$drilled_by)
+      sanitized$drill_method <- parse_numeric(metadata$drill_method)
+      sanitized$seal_material <- parse_numeric(metadata$seal_material)
+      sanitized$screen_material <- parse_numeric(metadata$screen_material)
+      sanitized$screen_type <- parse_numeric(metadata$screen_type)
       sanitized$purpose_of_borehole <- parse_numeric(
         metadata$purpose_of_borehole
       )
@@ -2334,6 +2543,9 @@ simplerIndex <- function(id, language) {
         "permafrost_top",
         "permafrost_bot",
         "casing_od",
+        "seal_diameter",
+        "seal_depth_from",
+        "seal_depth_to",
         "drill_depth",
         "top_of_screen",
         "bottom_of_screen",
@@ -2388,6 +2600,18 @@ simplerIndex <- function(id, language) {
         sanitized[["casing_od"]],
         metadata$casing_od_unit
       )
+      sanitized$seal_diameter <- convert_length_to_mm(
+        sanitized[["seal_diameter"]],
+        metadata$seal_diameter_unit
+      )
+      sanitized$seal_depth_from <- convert_length_to_m(
+        sanitized[["seal_depth_from"]],
+        metadata$seal_depth_from_unit
+      )
+      sanitized$seal_depth_to <- convert_length_to_m(
+        sanitized[["seal_depth_to"]],
+        metadata$seal_depth_to_unit
+      )
       sanitized$estimated_yield <- convert_flow_to_lps(
         sanitized[["estimated_yield"]],
         metadata$estimated_yield_unit
@@ -2441,6 +2665,32 @@ simplerIndex <- function(id, language) {
       ) {
         showNotification(
           "Depth to bedrock is required when bedrock was reached.",
+          type = "error",
+          duration = 5
+        )
+        return(FALSE)
+      }
+
+      if (
+        !is.null(metadata$top_of_screen) &&
+          !is.null(metadata$bottom_of_screen) &&
+          metadata$bottom_of_screen < metadata$top_of_screen
+      ) {
+        showNotification(
+          "Bottom of screen cannot be shallower than top of screen.",
+          type = "error",
+          duration = 5
+        )
+        return(FALSE)
+      }
+
+      if (
+        !is.null(metadata$seal_depth_from) &&
+          !is.null(metadata$seal_depth_to) &&
+          metadata$seal_depth_to < metadata$seal_depth_from
+      ) {
+        showNotification(
+          "Seal depth to cannot be shallower than seal depth from.",
           type = "error",
           duration = 5
         )
@@ -4509,6 +4759,9 @@ simplerIndex <- function(id, language) {
                 "permafrost_top",
                 "permafrost_bot",
                 "casing_od",
+                "seal_diameter",
+                "seal_depth_from",
+                "seal_depth_to",
                 "drill_depth",
                 "top_of_screen",
                 "bottom_of_screen",
@@ -4704,8 +4957,17 @@ simplerIndex <- function(id, language) {
         date_drilled = input$date_drilled,
         casing_od = input$casing_od,
         casing_od_unit = input$casing_od_unit,
+        seal_material = input$seal_material,
+        seal_diameter = input$seal_diameter,
+        seal_diameter_unit = input$seal_diameter_unit,
+        seal_depth_from = input$seal_depth_from,
+        seal_depth_from_unit = input$seal_depth_from_unit,
+        seal_depth_to = input$seal_depth_to,
+        seal_depth_to_unit = input$seal_depth_to_unit,
         drill_depth = input$drill_depth,
         drill_depth_unit = input$drill_depth_unit,
+        screen_material = input$screen_material,
+        screen_type = input$screen_type,
         top_of_screen = input$top_of_screen,
         top_of_screen_unit = input$top_of_screen_unit,
         bottom_of_screen = input$bottom_of_screen,
@@ -4722,6 +4984,7 @@ simplerIndex <- function(id, language) {
         purpose_of_well = input$purpose_of_well,
         purpose_well_inferred = input$purpose_well_inferred,
         drilled_by = input$drilled_by,
+        drill_method = input$drill_method,
         share_with_borehole = input$share_with_borehole,
         share_with_well = input$share_with_well
       )
@@ -4793,6 +5056,26 @@ simplerIndex <- function(id, language) {
           )
           updateSelectizeInput(
             session,
+            "drill_method",
+            selected = get_meta_value("drill_method", metadata = metadata)
+          )
+          updateSelectizeInput(
+            session,
+            "seal_material",
+            selected = get_meta_value("seal_material", metadata = metadata)
+          )
+          updateSelectizeInput(
+            session,
+            "screen_material",
+            selected = get_meta_value("screen_material", metadata = metadata)
+          )
+          updateSelectizeInput(
+            session,
+            "screen_type",
+            selected = get_meta_value("screen_type", metadata = metadata)
+          )
+          updateSelectizeInput(
+            session,
             "share_with_borehole",
             selected = get_meta_value_multiple(
               "share_with_borehole",
@@ -4845,6 +5128,33 @@ simplerIndex <- function(id, language) {
               "casing_od_unit",
               metadata = metadata,
               default = "inch"
+            )
+          )
+          updateRadioButtons(
+            session,
+            "seal_diameter_unit",
+            selected = get_meta_value(
+              "seal_diameter_unit",
+              metadata = metadata,
+              default = "inch"
+            )
+          )
+          updateRadioButtons(
+            session,
+            "seal_depth_from_unit",
+            selected = get_meta_value(
+              "seal_depth_from_unit",
+              metadata = metadata,
+              default = "m"
+            )
+          )
+          updateRadioButtons(
+            session,
+            "seal_depth_to_unit",
+            selected = get_meta_value(
+              "seal_depth_to_unit",
+              metadata = metadata,
+              default = "m"
             )
           )
           updateRadioButtons(
@@ -5012,6 +5322,21 @@ simplerIndex <- function(id, language) {
           )
           updateNumericInput(
             session,
+            "seal_diameter",
+            value = get_meta_numeric("seal_diameter", metadata = metadata)
+          )
+          updateNumericInput(
+            session,
+            "seal_depth_from",
+            value = get_meta_numeric("seal_depth_from", metadata = metadata)
+          )
+          updateNumericInput(
+            session,
+            "seal_depth_to",
+            value = get_meta_numeric("seal_depth_to", metadata = metadata)
+          )
+          updateNumericInput(
+            session,
             "drill_depth",
             value = get_meta_numeric("drill_depth", metadata = metadata)
           )
@@ -5171,6 +5496,12 @@ simplerIndex <- function(id, language) {
               well_depth = metadata[["drill_depth"]],
               top_of_screen = metadata[["top_of_screen"]],
               bottom_of_screen = metadata[["bottom_of_screen"]],
+              seal_material = metadata[["seal_material"]],
+              seal_diameter_mm = metadata[["seal_diameter"]],
+              seal_depth_from = metadata[["seal_depth_from"]],
+              seal_depth_to = metadata[["seal_depth_to"]],
+              screen_material = metadata[["screen_material"]],
+              screen_type = metadata[["screen_type"]],
               well_head_stick_up = metadata[["well_head_stick_up"]],
               static_water_level = metadata[["static_water_level"]],
               estimated_yield = metadata[["estimated_yield"]],
@@ -5178,7 +5509,7 @@ simplerIndex <- function(id, language) {
               notes_well = metadata[["notes_well"]],
               share_with_borehole = metadata[["share_with_borehole"]],
               drilled_by = metadata[["drilled_by"]],
-              drill_method = NULL,
+              drill_method = metadata[["drill_method"]],
               purpose_of_well = metadata[["purpose_of_well"]],
               purpose_well_inferred = metadata[["purpose_well_inferred"]],
               share_with_well = metadata[["share_with_well"]]
@@ -5321,6 +5652,12 @@ simplerIndex <- function(id, language) {
               well_depth = metadata[["drill_depth"]],
               top_of_screen = metadata[["top_of_screen"]],
               bottom_of_screen = metadata[["bottom_of_screen"]],
+              seal_material = metadata[["seal_material"]],
+              seal_diameter_mm = metadata[["seal_diameter"]],
+              seal_depth_from = metadata[["seal_depth_from"]],
+              seal_depth_to = metadata[["seal_depth_to"]],
+              screen_material = metadata[["screen_material"]],
+              screen_type = metadata[["screen_type"]],
               well_head_stick_up = metadata[["well_head_stick_up"]],
               static_water_level = metadata[["static_water_level"]],
               estimated_yield = metadata[["estimated_yield"]],
@@ -5328,7 +5665,7 @@ simplerIndex <- function(id, language) {
               notes_well = metadata[["notes_well"]],
               share_with_borehole = metadata[["share_with_borehole"]],
               drilled_by = metadata[["drilled_by"]],
-              drill_method = NULL,
+              drill_method = metadata[["drill_method"]],
               purpose_of_well = metadata[["purpose_of_well"]],
               purpose_well_inferred = metadata[["purpose_well_inferred"]],
               share_with_well = metadata[["share_with_well"]]

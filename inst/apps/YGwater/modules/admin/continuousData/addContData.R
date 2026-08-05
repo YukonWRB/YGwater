@@ -5414,7 +5414,7 @@ addContData <- function(id, language) {
         class = "well",
         style = "padding: 10px; margin-top: 10px;",
         tags$strong(
-          "Delete rows from this plotted timeseries. This prevents rows from being uploaded to the database, so use with caution and only when there is absolutely no foreseable use for the data such as pre/post deployment data. You can also apply a delete region *correction* to suppress data without deleting it, or grade it as unusable."
+          "Delete rows from this plotted timeseries. This prevents rows from being uploaded to the database: use with caution and only when there is absolutely no foreseable use for the data such as pre/post deployment data. You can also apply a delete region *correction* to suppress data without deleting it (after upload) or grade it as unusable."
         ),
         tags$div(
           class = "text-muted small",

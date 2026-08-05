@@ -26,18 +26,40 @@ addImgSeries <- function(id, language) {
     })
 
     moduleData <- reactiveValues()
+    source_args_existing <- reactiveVal(NA_character_)
+    source_args_existing_source <- reactiveVal(NA_character_)
+    source_args_secondary_existing <- reactiveVal(NA_character_)
+    source_args_secondary_existing_source <- reactiveVal(NA_character_)
 
     getModuleData <- function() {
       moduleData$image_series <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT img_series_id, source_fx, source_fx_args, description, location_id, active, share_with, owner FROM files.image_series;"
+        "SELECT img_series_id, description, location_id, active, share_with,
+                owner
+         FROM files.image_series;"
+      )
+      moduleData$image_series_source_assignments <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT image_series_source_adapter_id, img_series_id, source_fx,
+                source_fx_args, fetch_priority, active, note
+         FROM files.image_series_source_adapters
+         ORDER BY img_series_id, fetch_priority,
+                  image_series_source_adapter_id"
       )
       moduleData$image_series_display <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT i.img_series_id, l.name AS location, o.name AS owner, i.source_fx, i.active
-                                                         FROM files.image_series i
-                                                         INNER JOIN public.locations l ON i.location_id = l.location_id
-                                                         INNER JOIN public.organizations o ON i.owner = o.organization_id;"
+        "SELECT i.img_series_id, l.name AS location, o.name AS owner,
+                source.source_fx, i.active
+         FROM files.image_series i
+         INNER JOIN public.locations l ON i.location_id = l.location_id
+         INNER JOIN public.organizations o ON i.owner = o.organization_id
+         LEFT JOIN LATERAL (
+           SELECT isa.source_fx
+           FROM files.image_series_source_adapters isa
+           WHERE isa.img_series_id = i.img_series_id AND isa.active
+           ORDER BY isa.fetch_priority, isa.image_series_source_adapter_id
+           LIMIT 1
+         ) source ON TRUE;"
       )
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -51,12 +73,162 @@ addImgSeries <- function(id, language) {
         session$userData$AquaCache,
         "SELECT * FROM public.get_shareable_principals_for('files.images');"
       ) # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
+      moduleData$source_adapters <- AquaCache::getSourceAdapterCapabilities(
+        con = session$userData$AquaCache,
+        data_domain = "image"
+      )
+      moduleData$source_fx <- sort(unique(
+        as.character(moduleData$source_adapters$source_fx)
+      ))
     }
 
     getModuleData() # Initial data load
 
-    choices <- ls(getNamespace("AquaCache"))
-    moduleData$source_fx <- choices[grepl("^download", choices)]
+    current_source_capability <- reactive({
+      source_adapter_capability_row(moduleData$source_adapters, input$source_fx)
+    })
+
+    current_stored_source_args <- reactive({
+      source_fx <- input$source_fx
+      if (
+        length(source_fx) == 1L &&
+          !is.na(source_fx) &&
+          identical(source_fx, source_args_existing_source())
+      ) {
+        source_args_existing()
+      } else {
+        NA_character_
+      }
+    })
+
+    output$source_fx_args_ui <- renderUI({
+      capability <- current_source_capability()
+      if (is.null(capability)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "Select a source function to see its arguments."
+        ))
+      }
+      source_adapter_argument_ui(
+        ns,
+        capability,
+        current_stored_source_args()
+      )
+    })
+
+    collect_source_fx_args <- function() {
+      source_adapter_args_json(source_adapter_collect_args(
+        input,
+        current_source_capability(),
+        current_stored_source_args()
+      ))
+    }
+
+    secondary_source_capability <- reactive({
+      source_adapter_capability_row(
+        moduleData$source_adapters,
+        input$source_fx_secondary
+      )
+    })
+
+    secondary_stored_source_args <- reactive({
+      source_fx <- input$source_fx_secondary
+      if (
+        length(source_fx) == 1L &&
+          !is.na(source_fx) &&
+          identical(source_fx, source_args_secondary_existing_source())
+      ) {
+        source_args_secondary_existing()
+      } else {
+        NA_character_
+      }
+    })
+
+    output$source_fx_secondary_args_ui <- renderUI({
+      capability <- secondary_source_capability()
+      if (is.null(capability)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "Select a secondary source function to see its arguments."
+        ))
+      }
+      source_adapter_argument_ui(
+        ns,
+        capability,
+        secondary_stored_source_args(),
+        input_prefix = "secondary_"
+      )
+    })
+
+    collect_source_assignments <- function() {
+      rows <- list()
+      add_assignment <- function(source_fx, args, priority, active) {
+        if (
+          is.null(source_fx) ||
+            !length(source_fx) ||
+            is.na(source_fx[[1L]]) ||
+            !nzchar(source_fx[[1L]])
+        ) {
+          return()
+        }
+        rows[[length(rows) + 1L]] <<- data.frame(
+          source_fx = as.character(source_fx[[1L]]),
+          source_fx_args = args,
+          fetch_priority = as.integer(priority),
+          active = isTRUE(active),
+          note = NA_character_,
+          stringsAsFactors = FALSE
+        )
+      }
+      add_assignment(
+        input$source_fx,
+        collect_source_fx_args(),
+        input$source_fetch_priority,
+        input$source_assignment_active
+      )
+      add_assignment(
+        input$source_fx_secondary,
+        source_adapter_args_json(source_adapter_collect_args(
+          input,
+          secondary_source_capability(),
+          secondary_stored_source_args(),
+          input_prefix = "secondary_"
+        )),
+        input$source_secondary_fetch_priority,
+        input$source_secondary_assignment_active
+      )
+      if (!length(rows)) {
+        stop("Please configure at least one image source assignment.")
+      }
+      assignments <- do.call(rbind, rows)
+      active_priorities <- assignments$fetch_priority[assignments$active]
+      if (anyDuplicated(active_priorities)) {
+        stop(
+          "Active image source assignments must have unique fetch priorities."
+        )
+      }
+      assignments
+    }
+
+    insert_source_assignments <- function(con, img_series_id, assignments) {
+      for (i in seq_len(nrow(assignments))) {
+        DBI::dbExecute(
+          con,
+          "INSERT INTO files.image_series_source_adapters (
+             img_series_id, source_fx, source_fx_args, fetch_priority,
+             active, note
+           ) VALUES ($1, $2, $3::jsonb, $4, $5, $6)",
+          params = list(
+            img_series_id,
+            assignments$source_fx[[i]],
+            assignments$source_fx_args[[i]],
+            assignments$fetch_priority[[i]],
+            assignments$active[[i]],
+            assignments$note[[i]]
+          )
+        )
+      }
+    }
 
     output$ui <- renderUI({
       tagList(
@@ -109,14 +281,14 @@ addImgSeries <- function(id, language) {
           multiple = TRUE,
           width = "100%"
         ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          verticalLayout(
-            # htmlOutput to tell the user when they should use the source functions and what the arguments are
-            tags$div(
-              class = "alert alert-info",
-              "The source function is used to download images using the AquaCache R package. Leave blank if entering data manually or using other methods. For more information refer to the AquaCache package documentation."
-            ),
+        tags$div(
+          class = "alert alert-info",
+          "Configure a primary image source and, optionally, retain a secondary route. The active assignment with the highest fetch priority (lowest number) is used. Leave blank if entering data manually or using other methods. For more information refer to the AquaCache package documentation."
+        ),
+        fluidRow(
+          column(
+            width = 6,
+            tags$h5("Primary source assignment"),
             selectizeInput(
               ns("source_fx"),
               "Source function (see AquaCache package documentation for details)",
@@ -128,28 +300,59 @@ addImgSeries <- function(id, language) {
               ),
               width = "100%"
             ),
+            tags$p(
+              class = "text-muted small",
+              "Missing download function? Download functions must be ",
+              "registered in the database's ",
+              tags$code("public.source_adapter_capabilities"),
+              " table for the image domain to show up here. Developers: see AquaCache::registerSourceAdapterArguments()."
+            ),
             actionButton(
               ns("source_fx_doc"),
               "Open function documentation"
-            )
-          ),
-          verticalLayout(
-            # htmlOutput to tell the user how the source function arguments should be formatted
-            tags$div(
-              class = "alert alert-info",
-              "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
             ),
-            textInput(
-              ns("source_fx_args"),
-              "Source function arguments",
-              value = "",
-              placeholder = "arg1: value1, arg2: value2",
-              width = "100%"
+            checkboxInput(
+              ns("source_assignment_active"),
+              "Assignment active",
+              TRUE
             ),
+            numericInput(
+              ns("source_fetch_priority"),
+              "Fetch priority",
+              1,
+              min = 1,
+              step = 1
+            ),
+            uiOutput(ns("source_fx_args_ui")),
             actionButton(
               ns("args_example"),
               "Show example arguments"
             )
+          ),
+          column(
+            width = 6,
+            tags$h5("Secondary source assignment (optional)"),
+            selectizeInput(
+              ns("source_fx_secondary"),
+              "Secondary source function",
+              choices = moduleData$source_fx,
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = "Optional"),
+              width = "100%"
+            ),
+            checkboxInput(
+              ns("source_secondary_assignment_active"),
+              "Assignment active",
+              FALSE
+            ),
+            numericInput(
+              ns("source_secondary_fetch_priority"),
+              "Fetch priority",
+              2,
+              min = 1,
+              step = 1
+            ),
+            uiOutput(ns("source_fx_secondary_args_ui"))
           )
         ),
         textAreaInput(
@@ -239,6 +442,11 @@ addImgSeries <- function(id, language) {
         choices = moduleData$users$role_name
       )
       updateSelectizeInput(session, "source_fx", choices = moduleData$source_fx)
+      updateSelectizeInput(
+        session,
+        "source_fx_secondary",
+        choices = moduleData$source_fx
+      )
       showNotification("Module reloaded", type = "message")
     })
 
@@ -246,9 +454,12 @@ addImgSeries <- function(id, language) {
       sel <- input$series_table_rows_selected
       if (length(sel) > 0) {
         selected_series(moduleData$image_series_display[sel, ])
+        image_series_id <- selected_series()$img_series_id[[1L]]
         # Fetch details for the selected series
         details <- moduleData$image_series[
-          moduleData$image_series == selected_series(),
+          moduleData$image_series$img_series_id == image_series_id,
+          ,
+          drop = FALSE
         ]
 
         updateSelectizeInput(
@@ -263,11 +474,82 @@ addImgSeries <- function(id, language) {
           selected = details$share_with
         )
         updateTextAreaInput(session, "description", value = details$description)
-        updateSelectizeInput(session, "source_fx", selected = details$source_fx)
-        updateTextInput(
+        assignments <- moduleData$image_series_source_assignments[
+          moduleData$image_series_source_assignments$img_series_id ==
+            image_series_id,
+          ,
+          drop = FALSE
+        ]
+        if (nrow(assignments) > 2L) {
+          showNotification(
+            "This image series has more than two source assignments. The first two are shown; consolidate them before modifying this series here.",
+            type = "warning",
+            duration = 10
+          )
+        }
+        primary <- if (nrow(assignments)) {
+          assignments[1, , drop = FALSE]
+        } else {
+          NULL
+        }
+        secondary <- if (nrow(assignments) >= 2L) {
+          assignments[2, , drop = FALSE]
+        } else {
+          NULL
+        }
+        source_args_existing(
+          if (is.null(primary)) NA_character_ else primary$source_fx_args
+        )
+        source_args_existing_source(
+          if (is.null(primary)) {
+            NA_character_
+          } else {
+            as.character(primary$source_fx)
+          }
+        )
+        updateSelectizeInput(
           session,
-          "source_fx_args",
-          value = parse_source_args(details$source_fx_args)
+          "source_fx",
+          selected = if (is.null(primary)) character(0) else primary$source_fx
+        )
+        updateCheckboxInput(
+          session,
+          "source_assignment_active",
+          value = is.null(primary) || isTRUE(primary$active)
+        )
+        updateNumericInput(
+          session,
+          "source_fetch_priority",
+          value = if (is.null(primary)) 1 else primary$fetch_priority
+        )
+        source_args_secondary_existing(
+          if (is.null(secondary)) NA_character_ else secondary$source_fx_args
+        )
+        source_args_secondary_existing_source(
+          if (is.null(secondary)) {
+            NA_character_
+          } else {
+            as.character(secondary$source_fx)
+          }
+        )
+        updateSelectizeInput(
+          session,
+          "source_fx_secondary",
+          selected = if (is.null(secondary)) {
+            character(0)
+          } else {
+            secondary$source_fx
+          }
+        )
+        updateCheckboxInput(
+          session,
+          "source_secondary_assignment_active",
+          value = is.null(secondary) || isTRUE(secondary$active)
+        )
+        updateNumericInput(
+          session,
+          "source_secondary_fetch_priority",
+          value = if (is.null(secondary)) 2 else secondary$fetch_priority
         )
         updateCheckboxInput(
           session,
@@ -276,6 +558,10 @@ addImgSeries <- function(id, language) {
         )
       } else {
         selected_series(NULL)
+        source_args_existing(NA_character_)
+        source_args_existing_source(NA_character_)
+        source_args_secondary_existing(NA_character_)
+        source_args_secondary_existing_source(NA_character_)
       }
     })
 
@@ -408,8 +694,8 @@ addImgSeries <- function(id, language) {
         return()
       }
 
-      ex_args <- moduleData$image_series[
-        moduleData$image_series$source_fx == input$source_fx,
+      ex_args <- moduleData$image_series_source_assignments[
+        moduleData$image_series_source_assignments$source_fx == input$source_fx,
         "source_fx_args"
       ]
       ex_args <- ex_args[!is.na(ex_args)]
@@ -484,8 +770,7 @@ addImgSeries <- function(id, language) {
         share_with,
         owner,
         description,
-        source_fx,
-        source_fx_args,
+        source_assignments,
         start
       ) {
         promises::future_promise({
@@ -505,22 +790,6 @@ addImgSeries <- function(id, language) {
               # start a transaction
               DBI::dbBegin(con)
 
-              # Make the json object for source_fx_args
-              # Make the source_fx_args a json object
-              args <- source_fx_args
-              # split into "argument1: value1" etc.
-              args <- strsplit(args, ",\\s*")[[1]]
-
-              # split only on first colon
-              keys <- sub(":.*", "", args)
-              vals <- sub("^[^:]+:\\s*", "", args)
-
-              # build named list
-              args <- stats::setNames(as.list(vals), keys)
-
-              # convert to JSON
-              args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-
               df <- data.frame(
                 location_id = loc,
                 owner = owner,
@@ -530,8 +799,6 @@ addImgSeries <- function(id, language) {
                   paste(share_with, collapse = ", "),
                   "}"
                 ),
-                source_fx = source_fx,
-                source_fx_args = args,
                 active = TRUE,
                 last_img = start
               )
@@ -539,18 +806,36 @@ addImgSeries <- function(id, language) {
 
               new_id <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO files.image_series (location_id, owner, description, share_with, source_fx, source_fx_args, active, last_img) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING img_series_id;",
+                "INSERT INTO files.image_series (
+                   location_id, owner, description, share_with, active, last_img
+                 ) VALUES ($1, $2, $3, $4, $5, $6)
+                 RETURNING img_series_id;",
                 params = list(
                   df$location_id,
                   df$owner,
                   df$description,
                   DBI::SQL(df$share_with),
-                  df$source_fx,
-                  if (nzchar(df$source_fx_args)) df$source_fx_args else NA,
                   df$active,
                   df$last_img
                 )
               )[1, 1]
+              for (i in seq_len(nrow(source_assignments))) {
+                DBI::dbExecute(
+                  con,
+                  "INSERT INTO files.image_series_source_adapters (
+                     img_series_id, source_fx, source_fx_args,
+                     fetch_priority, active, note
+                   ) VALUES ($1, $2, $3::jsonb, $4, $5, $6)",
+                  params = list(
+                    new_id,
+                    source_assignments$source_fx[[i]],
+                    source_assignments$source_fx_args[[i]],
+                    source_assignments$fetch_priority[[i]],
+                    source_assignments$active[[i]],
+                    source_assignments$note[[i]]
+                  )
+                )
+              }
 
               # fetch images
               AquaCache::getNewImages(image_series_ids = new_id, con = con)
@@ -606,11 +891,7 @@ addImgSeries <- function(id, language) {
           input$share_with,
           "Please select at least one group to share with"
         ),
-        need(input$source_fx, "Please select a source function"),
-        need(
-          !isTruthy(input$source_fx_args) || grepl(":", input$source_fx_args),
-          "Source function arguments must be formatted as key-value pairs, e.g. 'arg1: value1, arg2: value2'"
-        )
+        need(input$source_fx, "Please select a source function")
       )
 
       if (input$mode != "add") {
@@ -618,6 +899,17 @@ addImgSeries <- function(id, language) {
           "Please select 'Add new' mode to add a timeseries.",
           type = "error"
         )
+        return()
+      }
+
+      source_assignments <- tryCatch(
+        collect_source_assignments(),
+        error = function(e) {
+          showNotification(e$message, type = "error")
+          NULL
+        }
+      )
+      if (is.null(source_assignments)) {
         return()
       }
 
@@ -633,8 +925,7 @@ addImgSeries <- function(id, language) {
         owner = input$owner,
         description = input$description,
         share_with = input$share_with,
-        source_fx = input$source_fx,
-        source_fx_args = input$source_fx_args,
+        source_assignments = source_assignments,
         start = as.character(input$start_date)
       )
     })
@@ -659,7 +950,15 @@ addImgSeries <- function(id, language) {
         updateSelectizeInput(session, "share_with", selected = "public_reader")
         updateTextAreaInput(session, "description", value = "")
         updateSelectizeInput(session, "source_fx", selected = character(0))
-        updateTextInput(session, "source_fx_args", value = "")
+        updateSelectizeInput(
+          session,
+          "source_fx_secondary",
+          selected = character(0)
+        )
+        source_args_existing(NA_character_)
+        source_args_existing_source(NA_character_)
+        source_args_secondary_existing(NA_character_)
+        source_args_secondary_existing_source(NA_character_)
         updateCheckboxInput(session, "active", value = FALSE)
       }
     })
@@ -686,6 +985,17 @@ addImgSeries <- function(id, language) {
           return()
         }
         id <- moduleData$image_series_display[selected_row, "img_series_id"]
+        existing_assignment_count <- sum(
+          moduleData$image_series_source_assignments$img_series_id == id
+        )
+        if (existing_assignment_count > 2L) {
+          showNotification(
+            "This editor supports two assignments and will not overwrite an image series that currently has more than two.",
+            type = "error",
+            duration = 10
+          )
+          return()
+        }
         selected_series <- moduleData$image_series[
           moduleData$image_series$img_series_id == id,
         ]
@@ -702,6 +1012,17 @@ addImgSeries <- function(id, language) {
             "Selected image_series does not exist in the database.",
             type = "error"
           )
+          return()
+        }
+
+        submitted_source_assignments <- tryCatch(
+          collect_source_assignments(),
+          error = function(e) {
+            showNotification(e$message, type = "error")
+            NULL
+          }
+        )
+        if (is.null(submitted_source_assignments)) {
           return()
         }
 
@@ -756,125 +1077,17 @@ addImgSeries <- function(id, language) {
               )
             }
 
-            # Changes to source_fx
-            submitted_source_fx <- if (
-              !length(input$source_fx) ||
-                is.na(input$source_fx[[1]]) ||
-                !nzchar(input$source_fx[[1]])
-            ) {
-              NA_character_
-            } else {
-              input$source_fx[[1]]
-            }
-            if (
-              length(input$source_fx) > 1L ||
-                (!is.na(submitted_source_fx) &&
-                  !submitted_source_fx %in% moduleData$source_fx)
-            ) {
-              stop("Select a valid AquaCache image source function.")
-            }
-            existing_source_fx <- if (is.na(selected_series$source_fx)) {
-              NA_character_
-            } else {
-              as.character(selected_series$source_fx)
-            }
-            if (!identical(submitted_source_fx, existing_source_fx)) {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE files.image_series SET source_fx = $1 WHERE img_series_id = $2",
-                params = list(
-                  submitted_source_fx,
-                  selected_series$img_series_id
-                )
-              )
-            }
-
-            if (!is.na(selected_series$source_fx_args)) {
-              if (!nzchar(input$source_fx_args)) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  paste0(
-                    "UPDATE continuous.timeseries SET source_fx_args = NULL WHERE img_series_id = ",
-                    selected_series$img_series_id
-                  )
-                )
-                return()
-              }
-
-              # source_fx_args are fetched from DB as json, so we need to handle them accordingly for comparison
-              # The following gives us a data.frame with column names as the keys and values as the values
-              parsed_json <- jsonlite::fromJSON(
-                selected_series$source_fx_args,
-                simplifyVector = TRUE,
-                flatten = TRUE
-              )
-
-              # Now work the input$source_fx_args into a data.frame with the same shape as parsed_json
-              # split into “arg:value” pairs, trim whitespace
-              arg_pairs <- strsplit(input$source_fx_args, ",")[[1]] # e.g. c("arg1: value1", "arg2: value2")
-              arg_pairs <- trimws(arg_pairs) # remove leading/trailing spaces
-              # split each on “:”, extract keys & values
-              kv <- strsplit(arg_pairs, ":")
-              keys <- sapply(kv, `[`, 1)
-              vals <- sapply(kv, `[`, 2)
-              # build a named list and then a one-row data.frame
-              input_df <- stats::setNames(as.list(vals), keys)
-              input_df <- as.data.frame(input_df, stringsAsFactors = FALSE)
-              # now `parsed_json` and `input_df` have the same shape
-
-              if (!identical(parsed_json, input_df)) {
-                # Make the source_fx_args a json object
-                args <- input$source_fx_args
-                # split into "argument1: value1" etc.
-                args <- strsplit(args, ",\\s*")[[1]]
-
-                # split only on first colon
-                keys <- sub(":.*", "", args)
-                vals <- sub("^[^:]+:\\s*", "", args)
-
-                # build named list
-                args <- stats::setNames(as.list(vals), keys)
-
-                # convert to JSON
-                args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE files.image_series SET source_fx_args = $1::jsonb WHERE img_series_id = $2",
-                  params = list(args, selected_series$img_series_id)
-                )
-              }
-            } else {
-              if (!nzchar(input$source_fx_args)) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  paste0(
-                    "UPDATE files.image_series SET source_fx_args = NULL WHERE img_series_id = ",
-                    selected_series$img_series_id
-                  )
-                )
-                return()
-              }
-              # Make the source_fx_args a json object
-              args <- input$source_fx_args
-              # split into "argument1: value1" etc.
-              args <- strsplit(args, ",\\s*")[[1]]
-
-              # split only on first colon
-              keys <- sub(":.*", "", args)
-              vals <- sub("^[^:]+:\\s*", "", args)
-
-              # build named list
-              args <- stats::setNames(as.list(vals), keys)
-
-              # convert to JSON
-              args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE files.image_series SET source_fx_args = $1::jsonb WHERE img_series_id = $2",
-                params = list(args, selected_series$img_series_id)
-              )
-            }
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "DELETE FROM files.image_series_source_adapters
+               WHERE img_series_id = $1",
+              params = list(selected_series$img_series_id)
+            )
+            insert_source_assignments(
+              session$userData$AquaCache,
+              selected_series$img_series_id,
+              submitted_source_assignments
+            )
 
             DBI::dbCommit(session$userData$AquaCache)
             showNotification(

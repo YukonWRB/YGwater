@@ -131,6 +131,8 @@ app_server <- function(input, output, session) {
     "manageInstrumentConnectionSignals",
     "manageTransmissionSetups",
     "manageTransmissionRoutes",
+    "manageTransmissionTimeseriesMappings",
+    "viewTransmissionImportRuns",
     "manageTransmissionComponents",
     "simplerIndex",
     "editBoreholesWells",
@@ -1288,6 +1290,8 @@ app_server <- function(input, output, session) {
           session$userData$admin_privs$manageInstrumentConnectionSignals,
           session$userData$admin_privs$manageTransmissionSetups,
           session$userData$admin_privs$manageTransmissionRoutes,
+          session$userData$admin_privs$manageTransmissionTimeseriesMappings,
+          session$userData$admin_privs$viewTransmissionImportRuns,
           session$userData$admin_privs$manageTransmissionComponents
         )
       ) {
@@ -1329,6 +1333,32 @@ app_server <- function(input, output, session) {
         }
         if (!isTRUE(session$userData$admin_privs$manageTransmissionRoutes)) {
           nav_hide(id = "navbar", target = "manageTransmissionRoutes")
+        }
+        if (
+          isTRUE(
+            session$userData$admin_privs$manageTransmissionTimeseriesMappings
+          )
+        ) {
+          nav_show(
+            id = "navbar",
+            target = "manageTransmissionTimeseriesMappings"
+          )
+        }
+        if (
+          !isTRUE(
+            session$userData$admin_privs$manageTransmissionTimeseriesMappings
+          )
+        ) {
+          nav_hide(
+            id = "navbar",
+            target = "manageTransmissionTimeseriesMappings"
+          )
+        }
+        if (isTRUE(session$userData$admin_privs$viewTransmissionImportRuns)) {
+          nav_show(id = "navbar", target = "viewTransmissionImportRuns")
+        }
+        if (!isTRUE(session$userData$admin_privs$viewTransmissionImportRuns)) {
+          nav_hide(id = "navbar", target = "viewTransmissionImportRuns")
         }
         if (isTRUE(session$userData$admin_privs$manageTransmissionComponents)) {
           nav_show(id = "navbar", target = "manageTransmissionComponents")
@@ -1727,6 +1757,8 @@ app_server <- function(input, output, session) {
     ui_loaded$manageInstrumentConnectionSignals <- FALSE
     ui_loaded$manageTransmissionSetups <- FALSE
     ui_loaded$manageTransmissionRoutes <- FALSE
+    ui_loaded$manageTransmissionTimeseriesMappings <- FALSE
+    ui_loaded$viewTransmissionImportRuns <- FALSE
     ui_loaded$manageTransmissionComponents <- FALSE
 
     ui_loaded$changePwd <- FALSE
@@ -1809,6 +1841,8 @@ app_server <- function(input, output, session) {
     "manageInstrumentConnectionSignals",
     "manageTransmissionSetups",
     "manageTransmissionRoutes",
+    "manageTransmissionTimeseriesMappings",
+    "viewTransmissionImportRuns",
     "manageTransmissionComponents",
     "adminHome",
     "changePwd",
@@ -1818,6 +1852,7 @@ app_server <- function(input, output, session) {
     "viewFeedback",
     "visit"
   )
+  module_privilege_requirements <- ygwater_module_privilege_requirements()
 
   # Language selection ########################################################
 
@@ -2615,736 +2650,23 @@ app_server <- function(input, output, session) {
           )
 
           # If application.feedback is present but only has INSERT privileges, remove it
+          feedback_privileges <- session$userData$table_privs$extra_privileges[
+            session$userData$table_privs$qual_name == "application.feedback"
+          ]
           if (
-            session$userData$table_privs$extra_privileges[
-              session$userData$table_privs$qual_name == "application.feedback"
-            ] ==
-              "INSERT"
+            length(feedback_privileges) == 1 &&
+              identical(feedback_privileges, "INSERT")
           ) {
             session$userData$table_privs <- session$userData$table_privs[
               !session$userData$table_privs$qual_name == "application.feedback",
             ]
           }
 
-          lookup_table_privs <- c(
-            network_project_types = has_priv(
-              tbl = session$userData$table_privs,
-              "public.network_project_types",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            location_types = has_priv(
-              tbl = session$userData$table_privs,
-              "public.location_types",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            media_types = has_priv(
-              tbl = session$userData$table_privs,
-              "public.media_types",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            matrix_states = has_priv(
-              tbl = session$userData$table_privs,
-              "public.matrix_states",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            parameter_groups = has_priv(
-              tbl = session$userData$table_privs,
-              "public.parameter_groups",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            parameter_sub_groups = has_priv(
-              tbl = session$userData$table_privs,
-              "public.parameter_sub_groups",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            parameters = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.parameters",
-                "public.parameter_relationships",
-                "public.parameter_groups",
-                "public.parameter_sub_groups"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT", "INSERT", "DELETE"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            communication_protocol_families = has_priv(
-              tbl = session$userData$table_privs,
-              "instruments.communication_protocol_families",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            communication_protocols = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "instruments.communication_protocols",
-                "instruments.communication_protocol_families"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT")
-              )
-            ),
-            transmission_method_families = has_priv(
-              tbl = session$userData$table_privs,
-              "instruments.transmission_method_families",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            transmission_methods = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "instruments.transmission_methods",
-                "instruments.transmission_method_families"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT")
-              )
-            ),
-            transmission_component_roles = has_priv(
-              tbl = session$userData$table_privs,
-              "instruments.transmission_component_roles",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            )
-          )
-
-          session$userData$admin_privs <- list(
-            addLocation = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.locations",
-                "public.locations_networks",
-                "public.locations_projects",
-                "public.networks",
-                "public.projects"
-              ),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT"),
-                c("INSERT")
-              )
-            ),
-            addSubLocation = has_priv(
-              tbl = session$userData$table_privs,
-              c("public.sub_locations", "public.locations"),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("SELECT")
-              )
-            ),
-            calibrate = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "instruments.calibrations",
-                "instruments.calibrate_ph",
-                "instruments.calibrate_temperature",
-                "instruments.calibrate_orp",
-                "instruments.calibrate_specific_conductance",
-                "instruments.calibrate_turbidity",
-                "instruments.calibrate_dissolved_oxygen",
-                "instruments.calibrate_depth",
-                "instruments.instruments",
-                "instruments.instrument_makes",
-                "instruments.instrument_models",
-                "instruments.instrument_types",
-                "instruments.observers",
-                "public.organizations"
-              ),
-              list(
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT"),
-                c("INSERT"),
-                c("INSERT"),
-                c("INSERT"),
-                c("INSERT")
-              )
-            ),
-            manageInstruments = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "instruments.instruments",
-                "instruments.observers",
-                "instruments.instrument_makes",
-                "instruments.instrument_models",
-                "instruments.instrument_types",
-                "public.organizations",
-                "instruments.suppliers"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT")
-              )
-            ),
-            manageSensors = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "instruments.sensors",
-                "instruments.sensor_types",
-                "instruments.sensor_makes",
-                "instruments.sensor_models",
-                "public.organizations",
-                "instruments.suppliers"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            instrumentMaintenance = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "instruments.instruments",
-                "instruments.instrument_maintenance",
-                "instruments.instrument_maintenance_due",
-                "instruments.instrument_sensor_events",
-                "instruments.instrument_sensor_event_slots",
-                "instruments.sensors",
-                "instruments.sensor_types",
-                "instruments.sensor_makes",
-                "instruments.sensor_models",
-                "instruments.observers",
-                "instruments.instrument_makes",
-                "instruments.instrument_models",
-                "instruments.instrument_types",
-                "public.organizations",
-                "instruments.suppliers"
-              ),
-              list(
-                c("SELECT"),
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT", "INSERT", "UPDATE", "DELETE"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT", "INSERT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            deploy_recover = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.locations_metadata_instruments",
-                "public.locations",
-                "public.sub_locations",
-                "public.locations_z",
-                "instruments.instruments",
-                "instruments.instrument_makes",
-                "instruments.instrument_models",
-                "instruments.instrument_types"
-              ),
-              list(
-                c(
-                  "SELECT",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            addContData = has_priv(
-              tbl = session$userData$table_privs,
-              "continuous.measurements_continuous",
-              list(c(
-                "INSERT",
-                "UPDATE"
-              ))
-            ),
-            imputeMissing = has_priv(
-              tbl = session$userData$table_privs,
-              "continuous.measurements_continuous"
-            ),
-            continuousDataReview = any(
-              has_priv(
-                tbl = session$userData$table_privs,
-                "continuous.grades"
-              ),
-              has_priv(
-                tbl = session$userData$table_privs,
-                "continuous.approvals"
-              ),
-              has_priv(
-                tbl = session$userData$table_privs,
-                "continuous.qualifiers"
-              ),
-              has_priv(
-                tbl = session$userData$table_privs,
-                "continuous.corrections"
-              )
-            ),
-            addTimeseries = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "continuous.timeseries",
-                "public.locations_z",
-                "public.organizations"
-              ),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT"
-                ),
-                c("INSERT")
-              )
-            ),
-            addCompoundTimeseries = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "continuous.timeseries",
-                "continuous.timeseries_compounds",
-                "continuous.timeseries_compound_members",
-                "public.locations_z"
-              ),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "INSERT",
-                  "UPDATE",
-                  "DELETE"
-                ),
-                c(
-                  "INSERT",
-                  "DELETE"
-                ),
-                c(
-                  "INSERT"
-                )
-              )
-            ),
-            syncCont = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "continuous.measurements_continuous",
-                "continuous.measurements_calculated_daily",
-                "continuous.timeseries"
-              ),
-              list(
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("UPDATE")
-              )
-            ),
-            addDiscData = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "files.documents",
-                "discrete.samples",
-                "discrete.results"
-              ),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT"),
-                c("INSERT")
-              )
-            ),
-            editSamples = has_priv(
-              tbl = session$userData$table_privs,
-              "discrete.samples",
-              list(c(
-                "INSERT",
-                "UPDATE"
-              ))
-            ),
-            addSampleSeries = has_priv(
-              tbl = session$userData$table_privs,
-              c("discrete.sample_series", "public.organizations"),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT")
-              )
-            ),
-            syncDisc = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "discrete.sample_series",
-                "discrete.samples",
-                "discrete.results"
-              ),
-              list(
-                c("UPDATE"),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                )
-              )
-            ),
-            addGuidelines = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "criteria.guidelines",
-                "criteria.guideline_value_rules",
-                "criteria.guideline_rule_inputs",
-                "criteria.guideline_rule_coefficients",
-                "criteria.guideline_narrative_values",
-                "criteria.guidelines_fractions",
-                "criteria.guidelines_media_types",
-                "criteria.guideline_locations",
-                "criteria.guideline_publishers",
-                "criteria.guideline_series",
-                "criteria.guideline_jurisdictions",
-                "criteria.guideline_protection_goals",
-                "criteria.guideline_exposure_durations",
-                "criteria.guideline_averaging_periods"
-              ),
-              c(
-                rep(list(c("DELETE", "INSERT", "UPDATE")), 8),
-                rep(list(c("INSERT", "UPDATE")), 6)
-              )
-            ),
-            addDocs = has_priv(
-              tbl = session$userData$table_privs,
-              "files.documents",
-              list(c("INSERT"))
-            ),
-            addImgs = has_priv(
-              tbl = session$userData$table_privs,
-              "files.images",
-              list(c("INSERT"))
-            ),
-            addImgSeries = has_priv(
-              tbl = session$userData$table_privs,
-              c("files.image_series", "public.organizations"),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c("INSERT")
-              )
-            ),
-            boreholes_wells = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "boreholes.boreholes",
-                "boreholes.wells",
-                "boreholes.drillers",
-                "boreholes.borehole_well_purposes"
-              )
-              # Insert, update, delete by default
-            ),
-            manageOrganizations = has_priv(
-              tbl = session$userData$table_privs,
-              "public.organizations",
-              list(c("SELECT", "INSERT", "UPDATE"))
-            ),
-            manageNetworks = has_priv(
-              tbl = session$userData$table_privs,
-              c("public.networks", "public.network_project_types"),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT")
-              )
-            ),
-            manageProjects = has_priv(
-              tbl = session$userData$table_privs,
-              c("public.projects", "public.network_project_types"),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT")
-              )
-            ),
-            lookup_tables = lookup_table_privs,
-            manageNetworkProjectTypes = lookup_table_privs[[
-              "network_project_types"
-            ]],
-            manageLocationTypes = lookup_table_privs[["location_types"]],
-            manageMediaTypes = lookup_table_privs[["media_types"]],
-            manageMatrixStates = lookup_table_privs[["matrix_states"]],
-            manageParameterGroups = lookup_table_privs[["parameter_groups"]],
-            manageParameterSubGroups = lookup_table_privs[[
-              "parameter_sub_groups"
-            ]],
-            manageParameters = lookup_table_privs[["parameters"]],
-            manageCommunicationProtocolFamilies = lookup_table_privs[[
-              "communication_protocol_families"
-            ]],
-            manageCommunicationProtocols = lookup_table_privs[[
-              "communication_protocols"
-            ]],
-            manageTransmissionMethodFamilies = lookup_table_privs[[
-              "transmission_method_families"
-            ]],
-            manageTransmissionMethods = lookup_table_privs[[
-              "transmission_methods"
-            ]],
-            manageTransmissionComponentRoles = lookup_table_privs[[
-              "transmission_component_roles"
-            ]],
-            manageInstrumentConnections = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.locations_metadata_instrument_connections",
-                "public.locations_metadata_instruments",
-                "public.locations",
-                "instruments.instruments",
-                "instruments.instrument_makes",
-                "instruments.instrument_models",
-                "instruments.instrument_types",
-                "instruments.communication_protocols"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            manageInstrumentConnectionSignals = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.locations_metadata_instrument_connection_signals",
-                "public.locations_metadata_instrument_connections",
-                "public.locations_metadata_instruments",
-                "instruments.instruments",
-                "instruments.communication_protocols",
-                "public.parameters",
-                "continuous.timeseries",
-                "public.locations",
-                "public.media_types",
-                "public.matrix_states",
-                "public.units"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            manageTransmissionSetups = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.locations_metadata_transmission_setups",
-                "public.locations_metadata_instruments",
-                "instruments.instruments",
-                "instruments.transmission_methods"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            manageTransmissionRoutes = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.locations_metadata_transmission_routes",
-                "public.locations_metadata_transmission_setups",
-                "public.locations_metadata_instruments",
-                "instruments.instruments",
-                "instruments.transmission_methods"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            manageTransmissionComponents = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "public.locations_metadata_transmission_components",
-                "public.locations_metadata_transmission_setups",
-                "public.locations_metadata_instruments",
-                "public.locations",
-                "instruments.instruments",
-                "instruments.instrument_makes",
-                "instruments.instrument_models",
-                "instruments.instrument_types",
-                "instruments.transmission_methods",
-                "instruments.transmission_component_roles"
-              ),
-              list(
-                c("SELECT", "INSERT", "UPDATE"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT"),
-                c("SELECT")
-              )
-            ),
-            visit = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "field.field_visits",
-                "field.field_visit_instruments"
-              ),
-              list(
-                c(
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT"
-                )
-              )
-            ),
-            manageNewsContent = has_priv(
-              tbl = session$userData$table_privs,
-              c(
-                "application.images",
-                "application.text",
-                "application.page_content"
-              ),
-              list(
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                ),
-                c(
-                  "DELETE",
-                  "INSERT",
-                  "UPDATE"
-                )
-              )
-            ),
-            manageNotifications = has_priv(
-              tbl = session$userData$table_privs,
-              "application.notifications",
-              list(c(
-                "INSERT",
-                "SELECT",
-                "UPDATE"
-              ))
-            ),
-            viewFeedback = has_priv(
-              tbl = session$userData$table_privs,
-              "application.feedback",
-              list(c("SELECT"))
-            )
+          # Recalculate visibility from the shared catalogue used by manageUsers.
+          # This keeps the diagnostic table and navigation access in sync.
+          session$userData$admin_privs <- ygwater_admin_privileges(
+            session$userData$table_privs,
+            module_privilege_requirements
           )
 
           # IF the user has more than SELECT privileges on any tables, show the 'admin' button
@@ -3359,7 +2681,21 @@ app_server <- function(input, output, session) {
               logical(1)
             ))
           }
-          if (has_admin_privs) {
+          if (session$userData$config$dbName == "testdb") {
+            # Role changes affect the shared PostgreSQL cluster, so testers must
+            # not manage roles while connected through the test database.
+            session$userData$can_create_role <- FALSE
+          } else {
+            session$userData$can_create_role <- DBI::dbGetQuery(
+              session$userData$AquaCache,
+              "SELECT rolcreaterole
+FROM pg_catalog.pg_roles
+WHERE rolname = current_user;"
+            )[[1, 1]]
+          }
+
+          # CREATEROLE alone is sufficient to expose the manage-users page.
+          if (has_admin_privs || isTRUE(session$userData$can_create_role)) {
             if (!isTRUE(session$userData$admin_button_inserted)) {
               # Create the new element for the 'admin' mode
               # Other tabs are created if/when the user clicks on the 'admin' actionButton
@@ -3375,12 +2711,6 @@ app_server <- function(input, output, session) {
               )
               session$userData$admin_button_inserted <- TRUE
             }
-
-            # Check if the user has CREATE ROLE privileges, used to determine if the 'manage users' tab should be shown in admin mode
-            session$userData$can_create_role <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              'SELECT rolcreaterole FROM pg_catalog.pg_roles WHERE rolname = current_user;'
-            )[1, 1]
           } # else the button just won't be created/shown
 
           # Set the login status to TRUE
@@ -4373,6 +3703,32 @@ app_server <- function(input, output, session) {
         )
       }
     }
+    if (input$navbar == "manageTransmissionTimeseriesMappings") {
+      if (!ui_loaded$manageTransmissionTimeseriesMappings) {
+        output$manageTransmissionTimeseriesMappings_ui <- renderUI(
+          manageTransmissionTimeseriesMappingsUI(
+            "manageTransmissionTimeseriesMappings"
+          )
+        )
+        ui_loaded$manageTransmissionTimeseriesMappings <- TRUE
+        manageTransmissionTimeseriesMappings(
+          "manageTransmissionTimeseriesMappings",
+          language = languageSelection
+        )
+      }
+    }
+    if (input$navbar == "viewTransmissionImportRuns") {
+      if (!ui_loaded$viewTransmissionImportRuns) {
+        output$viewTransmissionImportRuns_ui <- renderUI(
+          viewTransmissionImportRunsUI("viewTransmissionImportRuns")
+        )
+        ui_loaded$viewTransmissionImportRuns <- TRUE
+        viewTransmissionImportRuns(
+          "viewTransmissionImportRuns",
+          language = languageSelection
+        )
+      }
+    }
     if (input$navbar == "manageTransmissionComponents") {
       if (!ui_loaded$manageTransmissionComponents) {
         output$manageTransmissionComponents_ui <- renderUI(
@@ -4433,7 +3789,12 @@ app_server <- function(input, output, session) {
       if (!ui_loaded$manageUsers) {
         output$manageUsers_ui <- renderUI(manageUsersUI("manageUsers"))
         ui_loaded$manageUsers <- TRUE
-        manageUsers("manageUsers", language = languageSelection)
+        manageUsers(
+          "manageUsers",
+          language = languageSelection,
+          modules = notification_module_choices,
+          module_requirements = module_privilege_requirements
+        )
       }
     }
     if (input$navbar == "visit") {

@@ -471,6 +471,12 @@ wellRegistry <- function(id, language) {
               static_water_level_m = i.static_water_level_m,
               estimated_yield_lps = i.estimated_yield_lps,
               casing_diameter_mm = i.casing_diameter_mm,
+              seal_material = i.seal_material,
+              seal_diameter_mm = i.seal_diameter_mm,
+              seal_depth_from_m = i.seal_depth_from_m,
+              seal_depth_to_m = i.seal_depth_to_m,
+              screen_material = i.screen_material,
+              screen_type = i.screen_type,
               screen_top_depth_m = i.screen_top_depth_m,
               screen_bottom_depth_m = i.screen_bottom_depth_m,
               latitude = i.latitude,
@@ -549,6 +555,48 @@ wellRegistry <- function(id, language) {
                 is.na(casing_diameter_mm),
                 unknown_label,
                 as.character(round(casing_diameter_mm, 1))
+              ),
+              "</div>",
+              "<div><strong>Seal material:</strong> ",
+              data.table::fifelse(
+                is.na(seal_material) | !nzchar(seal_material),
+                unknown_label,
+                YGwater:::escape_html_text(seal_material)
+              ),
+              "</div>",
+              "<div><strong>Seal diameter (mm):</strong> ",
+              data.table::fifelse(
+                is.na(seal_diameter_mm),
+                unknown_label,
+                as.character(round(seal_diameter_mm, 1))
+              ),
+              "</div>",
+              "<div><strong>Seal depth from (m):</strong> ",
+              data.table::fifelse(
+                is.na(seal_depth_from_m),
+                unknown_label,
+                as.character(round(seal_depth_from_m, 4))
+              ),
+              "</div>",
+              "<div><strong>Seal depth to (m):</strong> ",
+              data.table::fifelse(
+                is.na(seal_depth_to_m),
+                unknown_label,
+                as.character(round(seal_depth_to_m, 4))
+              ),
+              "</div>",
+              "<div><strong>Screen material:</strong> ",
+              data.table::fifelse(
+                is.na(screen_material) | !nzchar(screen_material),
+                unknown_label,
+                YGwater:::escape_html_text(screen_material)
+              ),
+              "</div>",
+              "<div><strong>Screen type:</strong> ",
+              data.table::fifelse(
+                is.na(screen_type) | !nzchar(screen_type),
+                unknown_label,
+                YGwater:::escape_html_text(screen_type)
               ),
               "</div>",
               "<div><strong>Screen top (m):</strong> ",

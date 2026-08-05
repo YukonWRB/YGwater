@@ -697,7 +697,38 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
         # Merge boreholes and wells tables on borehole_id, discarding boreholes with no wells
         wells = dbGetQueryDT(
           con,
-          "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.bedrock_reached, b.depth_to_bedrock_m, b.borehole_id FROM boreholes.boreholes AS b JOIN boreholes.wells AS w ON b.borehole_id = w.borehole_id"
+          "SELECT
+             w.casing_material,
+             w.casing_diameter_mm,
+             w.casing_depth_to_m,
+             w.seal_diameter_mm,
+             w.seal_depth_from_m,
+             w.seal_depth_to_m,
+             seal_material.material_name AS seal_material,
+             w.screen_top_depth_m,
+             w.screen_bottom_depth_m,
+             screen_material.material_name AS screen_material,
+             screen_type.type_name AS screen_type,
+             w.static_water_level_m,
+             w.estimated_yield_lps,
+             w.well_purpose_id,
+             w.notes,
+             b.latitude,
+             b.longitude,
+             b.completion_date,
+             b.borehole_name,
+             b.depth_m,
+             b.bedrock_reached,
+             b.depth_to_bedrock_m,
+             b.borehole_id
+           FROM boreholes.boreholes AS b
+           JOIN boreholes.wells AS w ON b.borehole_id = w.borehole_id
+           LEFT JOIN boreholes.seal_materials AS seal_material
+             ON w.seal_material_id = seal_material.seal_material_id
+           LEFT JOIN boreholes.screen_materials AS screen_material
+             ON w.screen_material_id = screen_material.screen_material_id
+           LEFT JOIN boreholes.screen_types AS screen_type
+             ON w.screen_type_id = screen_type.screen_type_id"
         )
       )
       res$wells[, completion_year := lubridate::year(completion_date)]

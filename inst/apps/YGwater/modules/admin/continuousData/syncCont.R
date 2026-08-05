@@ -75,10 +75,20 @@ syncCont <- function(id, language) {
           md.media_type AS media,
           md.aggregation_type AS aggregation,
           md.recording_rate AS nominal_record_rate,
-          ts.source_fx,
+          source.source_fx,
           md.note
         FROM continuous.timeseries_metadata_en md
-        JOIN continuous.timeseries ts ON md.timeseries_id = ts.timeseries_id"
+        JOIN continuous.timeseries ts ON md.timeseries_id = ts.timeseries_id
+        LEFT JOIN LATERAL (
+          SELECT tsa.source_fx
+          FROM continuous.timeseries_source_adapters tsa
+          WHERE tsa.timeseries_id = ts.timeseries_id
+            AND tsa.active
+            AND tsa.synchronize_priority IS NOT NULL
+          ORDER BY tsa.synchronize_priority,
+                   tsa.timeseries_source_adapter_id
+          LIMIT 1
+        ) source ON TRUE"
       )
       # Make columns factors for better filtering in DT
       res[, timeseries_id := as.integer(timeseries_id)]

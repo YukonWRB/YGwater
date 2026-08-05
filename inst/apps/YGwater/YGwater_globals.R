@@ -204,6 +204,10 @@ YGwater_globals <- function(
 
     # continuous data sub-modules
     source(system.file(
+      "apps/YGwater/modules/admin/sourceAdapterArguments.R",
+      package = "YGwater"
+    ))
+    source(system.file(
       "apps/YGwater/modules/admin/continuousData/addContData.R",
       package = "YGwater"
     ))
@@ -213,6 +217,10 @@ YGwater_globals <- function(
     ))
     source(system.file(
       "apps/YGwater/modules/admin/continuousData/continuousDataReview.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/continuousData/transmissionTimeseriesHelpers.R",
       package = "YGwater"
     ))
     source(system.file(
@@ -303,6 +311,10 @@ YGwater_globals <- function(
     ))
     source(system.file(
       "apps/YGwater/modules/admin/applicationTasks/viewFeedback.R",
+      package = "YGwater"
+    ))
+    source(system.file(
+      "apps/YGwater/modules/admin/users/modulePrivilegeRequirements.R",
       package = "YGwater"
     ))
     source(system.file(
