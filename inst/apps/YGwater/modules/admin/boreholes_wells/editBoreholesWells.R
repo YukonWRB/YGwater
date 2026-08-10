@@ -100,14 +100,14 @@ editBoreholesWellsUI <- function(id) {
           "Selected row includes a well record",
           value = FALSE
         ),
-        actionButton(
-          ns("add_well"),
-          "Add another well to this borehole",
-          icon = icon("plus")
-        ),
         conditionalPanel(
           condition = "input.is_well == true",
           ns = ns,
+          actionButton(
+            ns("add_well"),
+            "Add another well to this borehole",
+            icon = icon("plus")
+          ),
           textInput(ns("well_name"), "Well name"),
           selectizeInput(
             ns("well_approval_type_id"),
@@ -214,7 +214,7 @@ editBoreholesWells <- function(id, language) {
       if (!is.numeric(x)) {
         return(x)
       }
-      out <- signif(x, digits = digits)
+      out <- round(x, digits = digits)
       out[is.na(x)] <- NA_real_
       out
     }

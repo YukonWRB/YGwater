@@ -1,5 +1,3 @@
-
-
 module_privilege_requirement <- function(
   tables = character(0),
   privileges = list(c("DELETE", "INSERT", "UPDATE")),
@@ -255,12 +253,22 @@ ygwater_module_privilege_requirements <- function() {
       "boreholes.drillers",
       "boreholes.borehole_well_purposes"
     )),
-    simplerIndex = req(c(
-      "boreholes.boreholes",
-      "boreholes.wells",
-      "boreholes.drillers",
-      "boreholes.borehole_well_purposes"
-    )),
+    simplerIndex = req(
+      c(
+        "boreholes.boreholes",
+        "boreholes.wells",
+        "boreholes.drillers",
+        "boreholes.borehole_well_purposes",
+        "public.approval_types"
+      ),
+      list(
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT")
+      )
+    ),
     editBoreholesWells = req(c(
       "boreholes.boreholes",
       "boreholes.wells",
