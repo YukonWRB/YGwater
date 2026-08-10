@@ -1452,9 +1452,10 @@ addTimeseries <- function(id, language) {
         input$source_active,
         requires_transmission_mapping = !is.null(
           current_adapter_capability()
-        ) && isTRUE(
-          current_adapter_capability()$requires_transmission_mapping[[1L]]
-        ),
+        ) &&
+          isTRUE(
+            current_adapter_capability()$requires_transmission_mapping[[1L]]
+          ),
         transmission_route_id = input$transmission_route
       )
       rows[[2L]] <- if (isTRUE(input$source_secondary_enabled)) {
@@ -1468,9 +1469,10 @@ addTimeseries <- function(id, language) {
           input$source_secondary_active,
           requires_transmission_mapping = !is.null(
             secondary_adapter_capability()
-          ) && isTRUE(
-            secondary_adapter_capability()$requires_transmission_mapping[[1L]]
-          ),
+          ) &&
+            isTRUE(
+              secondary_adapter_capability()$requires_transmission_mapping[[1L]]
+            ),
           transmission_route_id = input$secondary_transmission_route
         )
       } else {
@@ -1692,10 +1694,11 @@ addTimeseries <- function(id, language) {
             as.integer(mapping$transmission_route_id),
             existing_route_ids
           )
-          !is.na(row_index) && same_transmission_mapping_row(
-            mapping,
-            existing_rows[row_index, , drop = FALSE]
-          )
+          !is.na(row_index) &&
+            same_transmission_mapping_row(
+              mapping,
+              existing_rows[row_index, , drop = FALSE]
+            )
         },
         logical(1)
       ))
@@ -2744,23 +2747,18 @@ addTimeseries <- function(id, language) {
           choices$setups$label
         )
       )
-      logger_choices <- stats::setNames(
-        choices$loggers$metadata_id,
-        choices$loggers$label
+      logger_choices <- c(
+        "No deployed logger recorded" = "",
+        stats::setNames(
+          choices$loggers$metadata_id,
+          choices$loggers$label
+        )
       )
       method_choices <- stats::setNames(
         choices$methods$transmission_method_id,
         choices$methods$method_name
       )
-      setup_start <- if (nrow(choices$loggers) > 0L) {
-        format(
-          choices$loggers$start_datetime[[1]],
-          "%Y-%m-%d %H:%M:%S",
-          tz = "UTC"
-        )
-      } else {
-        format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC")
-      }
+      setup_start <- format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
       showModal(modalDialog(
         title = "Create transmission route",
@@ -2791,15 +2789,19 @@ addTimeseries <- function(id, language) {
             cellWidths = c("50%", "50%"),
             selectizeInput(
               ns("new_route_logger"),
-              "Deployed logger",
+              "Deployed logger (optional)",
               choices = logger_choices,
+              selected = "",
               multiple = TRUE,
               options = list(
                 maxItems = 1,
-                placeholder = "Select a logger"
+                placeholder = "Optional: select a logger"
               ),
               width = "100%"
-            ),
+            ) |>
+              tooltip(
+                "Optional logger deployment that originates this transmission. The route remains attached to the selected location when no logger is recorded."
+              ),
             selectizeInput(
               ns("new_route_method"),
               "Transmission method",
@@ -2828,7 +2830,10 @@ addTimeseries <- function(id, language) {
               "Platform identifier",
               value = "",
               placeholder = "DCP address, IMEI, terminal ID, etc."
-            )
+            ) |>
+              tooltip(
+                "Transmission platform identifier. For GOES DCS, enter the eight-character DCP address."
+              )
           ),
           textInput(
             ns("new_route_setup_start"),
@@ -2841,18 +2846,21 @@ addTimeseries <- function(id, language) {
             "Advanced setup configuration (JSON object)",
             value = "{}",
             rows = 2
-          )
+          ) |>
+            tooltip(
+              "Provider-wide JSON settings shared by every route in this transmission setup. Usually left as {} for GOES."
+            )
         ),
         tags$hr(),
         splitLayout(
           cellWidths = c("50%", "50%"),
-            textInput(
-              ns("new_route_name"),
-              "Route name",
-              value = paste(
-                if (secondary) "Secondary" else "Primary",
-                "transmission route"
-              )
+          textInput(
+            ns("new_route_name"),
+            "Route name",
+            value = paste(
+              if (secondary) "Secondary" else "Primary",
+              "transmission route"
+            )
           ),
           textInput(
             ns("new_route_endpoint"),
@@ -2870,7 +2878,7 @@ addTimeseries <- function(id, language) {
           ),
           textInput(
             ns("new_route_schedule_reference"),
-            "Schedule reference time (UTC)",
+            "Schedule reference time (UTC, if known)",
             value = "",
             placeholder = "HH:MM:SS (optional)"
           )
@@ -2885,13 +2893,13 @@ addTimeseries <- function(id, language) {
           ),
           numericInput(
             ns("new_route_window"),
-            "Transmit window, seconds",
+            "Transmit window, seconds (if known)",
             value = NA,
             min = 0
           ),
           numericInput(
             ns("new_route_payload_size"),
-            "Payload size, bytes",
+            "Payload size, bytes (if known)",
             value = NA,
             min = 1
           )
@@ -2901,7 +2909,10 @@ addTimeseries <- function(id, language) {
           "Advanced route configuration (JSON object)",
           value = "{}",
           rows = 3
-        ),
+        ) |>
+          tooltip(
+            "Route-specific parser and retrieval settings. SHEF normally uses {}; max_days defaults to 14."
+          ),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(
@@ -2924,10 +2935,12 @@ addTimeseries <- function(id, language) {
     observeEvent(input$save_transmission_route, {
       route_id <- tryCatch(
         {
-          capability <- if (identical(
-            route_creation_target(),
-            "secondary"
-          )) {
+          capability <- if (
+            identical(
+              route_creation_target(),
+              "secondary"
+            )
+          ) {
             secondary_adapter_capability()
           } else {
             current_adapter_capability()
@@ -4460,9 +4473,11 @@ addTimeseries <- function(id, language) {
         )
         return()
       }
-      selected_secondary_source_fx <- if (isTRUE(
-        input$source_secondary_enabled
-      )) {
+      selected_secondary_source_fx <- if (
+        isTRUE(
+          input$source_secondary_enabled
+        )
+      ) {
         nullable_text(input$source_fx_secondary)
       } else {
         NA_character_
@@ -4890,9 +4905,11 @@ addTimeseries <- function(id, language) {
           )
           return()
         }
-        selected_secondary_source_fx <- if (isTRUE(
-          input$source_secondary_enabled
-        )) {
+        selected_secondary_source_fx <- if (
+          isTRUE(
+            input$source_secondary_enabled
+          )
+        ) {
           nullable_text(input$source_fx_secondary)
         } else {
           NA_character_

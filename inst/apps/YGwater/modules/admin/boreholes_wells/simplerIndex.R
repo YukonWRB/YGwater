@@ -222,6 +222,7 @@ simplerIndexUI <- function(id) {
             accept = ".pdf",
             multiple = TRUE
           ),
+          uiOutput(ns("document_names_ui")),
           numericInput(
             ns("num_boreholes"),
             "Number of boreholes",
@@ -256,7 +257,7 @@ simplerIndexUI <- function(id) {
                 title = "Remove selected page",
                 class = "nav-btn"
               ),
-              # Duplicate a pdf page, useful for nested wells that share a log.
+              # Duplicate a PDF page when multiple wells share a log.
               actionButton(
                 ns("duplicate_pdf"),
                 icon("copy"),
@@ -478,7 +479,7 @@ simplerIndexUI <- function(id) {
                   )
               )
             ),
-            # Copy metadata from another borehole if more than 1 borehole (useful for nested wells)
+            # Copy metadata from another borehole if more than 1 borehole
             conditionalPanel(
               condition = "input.num_boreholes > 1",
               ns = ns,
@@ -505,7 +506,7 @@ simplerIndexUI <- function(id) {
             # Well identification
             textInput(
               ns("name"),
-              "Borehole/well name *",
+              "Borehole name *",
               placeholder = "Enter name"
             ),
             textInput(
@@ -827,283 +828,329 @@ simplerIndexUI <- function(id) {
             ),
             hr(),
 
-            dateInput(ns("date_drilled"), "Date drilled *", value = NULL),
+            dateInput(ns("date_drilled"), "Date drilled", value = NULL),
 
             ## IS WELL conditional panel ##################
             hr(),
-            checkboxInput(ns("is_well"), "Well constructed", value = FALSE),
+            checkboxInput(
+              ns("is_well"),
+              "One or more wells constructed",
+              value = FALSE
+            ),
 
-            # Show well construction fields only if 'is_well' is checked
             conditionalPanel(
               condition = "input.is_well == true",
               ns = ns,
-              selectizeInput(
-                ns("share_with_well"),
-                "Share well with groups",
-                choices = "public_reader", # Rest populated in server
-                selected = "public_reader",
-                multiple = TRUE,
-                width = "100%"
-              ) |>
-                tooltip(
-                  "Select user groups to share this well with. 'public_reader' = shared with everyone. Can be different from borehole sharing."
-                ),
-              # Casing Outside Diameter
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("casing_od"),
-                    "Casing outside diameter",
-                    value = NULL,
-                    min = 0,
-                    step = 1
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("casing_od_unit"),
-                    "",
-                    choices = list("cm" = "cm", "inch" = "inch"),
-                    selected = "inch",
-                    inline = TRUE
-                  )
-                )
-              ),
-              tags$h5("Seal construction"),
-              selectizeInput(
-                ns("seal_material"),
-                "Seal material",
-                choices = NULL,
-                selected = NULL,
-                multiple = FALSE,
-                options = list(placeholder = "Select seal material")
-              ),
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("seal_diameter"),
-                    "Seal outside diameter",
-                    value = NULL,
-                    min = 0,
-                    step = 1
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("seal_diameter_unit"),
-                    "",
-                    choices = list("cm" = "cm", "inch" = "inch"),
-                    selected = "inch",
-                    inline = TRUE
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("seal_depth_from"),
-                    "Seal depth from",
-                    value = NULL,
-                    min = 0,
-                    step = 0.1
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("seal_depth_from_unit"),
-                    "",
-                    choices = list("m" = "m", "ft" = "ft"),
-                    selected = "m",
-                    inline = TRUE
-                  )
-                )
-              ),
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("seal_depth_to"),
-                    "Seal depth to",
-                    value = NULL,
-                    min = 0,
-                    step = 0.1
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("seal_depth_to_unit"),
-                    "",
-                    choices = list("m" = "m", "ft" = "ft"),
-                    selected = "m",
-                    inline = TRUE
-                  )
-                )
-              ),
-              tags$h5("Screen construction"),
-              selectizeInput(
-                ns("screen_material"),
-                "Screen material",
-                choices = NULL,
-                selected = NULL,
-                multiple = FALSE,
-                options = list(placeholder = "Select screen material")
-              ),
-              selectizeInput(
-                ns("screen_type"),
-                "Screen type",
-                choices = NULL,
-                selected = NULL,
-                multiple = FALSE,
-                options = list(placeholder = "Select screen type")
-              ),
-              # Top of Screen
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("top_of_screen"),
-                    "Top of screen",
-                    value = NULL,
-                    min = 0,
-                    step = 0.1
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("top_of_screen_unit"),
-                    "",
-                    choices = list("m" = "m", "ft" = "ft"),
-                    selected = "m",
-                    inline = TRUE
-                  )
-                )
-              ),
-              # Bottom of Screen
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("bottom_of_screen"),
-                    "Bottom of screen",
-                    value = NULL,
-                    min = 0,
-                    step = 0.1
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("bottom_of_screen_unit"),
-                    "",
-                    choices = list("m" = "m", "ft" = "ft"),
-                    selected = "m",
-                    inline = TRUE
-                  )
-                )
-              ),
-              # Well Head Stick Up
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("well_head_stick_up"),
-                    "Well stick up",
-                    value = NULL,
-                    step = 0.01
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("well_head_stick_up_unit"),
-                    "",
-                    choices = list("m" = "m", "ft" = "ft"),
-                    selected = "m",
-                    inline = TRUE
-                  )
-                )
-              ),
-              # Static Water Level
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("static_water_level"),
-                    "Static water level BTOC",
-                    value = NULL,
-                    step = 0.01
-                  ) |>
-                    tooltip(
-                      "Convert elevations BGS to BTOC!"
-                    )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("static_water_level_unit"),
-                    "",
-                    choices = list("m" = "m", "ft" = "ft"),
-                    selected = "m",
-                    inline = TRUE
-                  )
-                )
-              ),
-              # Estimated Yield
-              fluidRow(
-                column(
-                  8,
-                  numericInput(
-                    ns("estimated_yield"),
-                    "Estimated yield",
-                    value = NULL,
-                    min = 0,
-                    step = 0.1
-                  )
-                ),
-                column(
-                  4,
-                  radioButtons(
-                    ns("estimated_yield_unit"),
-                    "",
-                    choices = list("L/s" = "L/s", "G/min" = "G/min"),
-                    selected = "G/min",
-                    inline = TRUE
-                  )
-                )
-              ),
+              uiOutput(ns("wells_ui"))
+            ),
 
-              selectizeInput(
-                ns("purpose_of_well"),
-                "Purpose of well",
-                choices = NULL, # Populated in server
-                selected = NULL,
-                multiple = TRUE,
-                options = list(
-                  placeholder = "Enter if different from borehole purpose",
-                  maxItems = 1
+            # Legacy inputs remain hidden while existing OCR/input-selection
+            # wiring is transitioned to the indexed well controls below.
+            div(
+              style = "display: none;",
+              conditionalPanel(
+                condition = "input.is_well == true",
+                ns = ns,
+                textInput(
+                  ns("well_name"),
+                  "Well name *",
+                  placeholder = "Defaults from the borehole name"
+                ),
+                fluidRow(
+                  column(
+                    6,
+                    actionButton(
+                      ns("add_well_to_borehole"),
+                      "Add another well",
+                      icon = icon("plus"),
+                      width = "100%"
+                    )
+                  ),
+                  column(
+                    6,
+                    actionButton(
+                      ns("remove_additional_well"),
+                      "Remove this well",
+                      icon = icon("minus"),
+                      width = "100%"
+                    )
+                  )
+                ),
+                tags$small(
+                  class = "text-muted",
+                  "Additional wells share the selected borehole's location and borehole metadata."
+                ),
+                br(),
+                br(),
+                selectizeInput(
+                  ns("share_with_well"),
+                  "Share well with groups",
+                  choices = "public_reader", # Rest populated in server
+                  selected = "public_reader",
+                  multiple = TRUE,
+                  width = "100%"
+                ) |>
+                  tooltip(
+                    "Select user groups to share this well with. 'public_reader' = shared with everyone. Can be different from borehole sharing."
+                  ),
+                # Casing Outside Diameter
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("casing_od"),
+                      "Casing outside diameter",
+                      value = NULL,
+                      min = 0,
+                      step = 1
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("casing_od_unit"),
+                      "",
+                      choices = list("cm" = "cm", "inch" = "inch"),
+                      selected = "inch",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                tags$h5("Seal construction"),
+                selectizeInput(
+                  ns("seal_material"),
+                  "Seal material",
+                  choices = NULL,
+                  selected = NULL,
+                  multiple = FALSE,
+                  options = list(placeholder = "Select seal material")
+                ),
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("seal_diameter"),
+                      "Seal outside diameter",
+                      value = NULL,
+                      min = 0,
+                      step = 1
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("seal_diameter_unit"),
+                      "",
+                      choices = list("cm" = "cm", "inch" = "inch"),
+                      selected = "inch",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("seal_depth_from"),
+                      "Seal depth from",
+                      value = NULL,
+                      min = 0,
+                      step = 0.1
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("seal_depth_from_unit"),
+                      "",
+                      choices = list("m" = "m", "ft" = "ft"),
+                      selected = "m",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("seal_depth_to"),
+                      "Seal depth to",
+                      value = NULL,
+                      min = 0,
+                      step = 0.1
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("seal_depth_to_unit"),
+                      "",
+                      choices = list("m" = "m", "ft" = "ft"),
+                      selected = "m",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                tags$h5("Screen construction"),
+                selectizeInput(
+                  ns("screen_material"),
+                  "Screen material",
+                  choices = NULL,
+                  selected = NULL,
+                  multiple = FALSE,
+                  options = list(placeholder = "Select screen material")
+                ),
+                selectizeInput(
+                  ns("screen_type"),
+                  "Screen type",
+                  choices = NULL,
+                  selected = NULL,
+                  multiple = FALSE,
+                  options = list(placeholder = "Select screen type")
+                ),
+                # Top of Screen
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("top_of_screen"),
+                      "Top of screen",
+                      value = NULL,
+                      min = 0,
+                      step = 0.1
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("top_of_screen_unit"),
+                      "",
+                      choices = list("m" = "m", "ft" = "ft"),
+                      selected = "m",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                # Bottom of Screen
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("bottom_of_screen"),
+                      "Bottom of screen",
+                      value = NULL,
+                      min = 0,
+                      step = 0.1
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("bottom_of_screen_unit"),
+                      "",
+                      choices = list("m" = "m", "ft" = "ft"),
+                      selected = "m",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                tags$h5("Other well information"),
+                # Well Head Stick Up
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("well_head_stick_up"),
+                      "Well stick up",
+                      value = NULL,
+                      step = 0.01
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("well_head_stick_up_unit"),
+                      "",
+                      choices = list("m" = "m", "ft" = "ft"),
+                      selected = "m",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                # Static Water Level
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("static_water_level"),
+                      "Static water level BTOC",
+                      value = NULL,
+                      step = 0.01
+                    ) |>
+                      tooltip(
+                        "Convert elevations BGS to BTOC!"
+                      )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("static_water_level_unit"),
+                      "",
+                      choices = list("m" = "m", "ft" = "ft"),
+                      selected = "m",
+                      inline = TRUE
+                    )
+                  )
+                ),
+                # Estimated Yield
+                fluidRow(
+                  column(
+                    8,
+                    numericInput(
+                      ns("estimated_yield"),
+                      "Estimated yield",
+                      value = NULL,
+                      min = 0,
+                      step = 0.1
+                    )
+                  ),
+                  column(
+                    4,
+                    radioButtons(
+                      ns("estimated_yield_unit"),
+                      "",
+                      choices = list("L/s" = "L/s", "G/min" = "G/min"),
+                      selected = "G/min",
+                      inline = TRUE
+                    )
+                  )
+                ),
+
+                selectizeInput(
+                  ns("purpose_of_well"),
+                  "Purpose of well",
+                  choices = NULL, # Populated in server
+                  selected = NULL,
+                  multiple = TRUE,
+                  options = list(
+                    placeholder = "Enter if different from borehole purpose",
+                    maxItems = 1
+                  )
+                ),
+                radioButtons(
+                  ns("purpose_well_inferred"),
+                  "Purpose inferred or explicit?",
+                  choices = list("Inferred" = TRUE, "Explicit" = FALSE),
+                  selected = TRUE,
+                  inline = TRUE
+                ),
+                textInput(
+                  ns("notes_well"),
+                  "Well notes",
+                  placeholder = "Screen type, filter pack, development, etc."
                 )
-              ),
-              radioButtons(
-                ns("purpose_well_inferred"),
-                "Purpose inferred or explicit?",
-                choices = list("Inferred" = TRUE, "Explicit" = FALSE),
-                selected = TRUE,
-                inline = TRUE
-              ),
-              textInput(
-                ns("notes_well"),
-                "Well notes",
-                placeholder = "Screen type, filter pack, development, etc."
-              )
-            ), # End of is_well conditional panel
+              ) # End of hidden legacy is_well conditional panel
+            ),
             hr(),
 
             # Add upload buttons at the bottom of the scrollable content
@@ -1136,7 +1183,7 @@ simplerIndexUI <- function(id) {
 
       # script to resize sidebars and reattach handlers after Shiny redraws UI
       tags$script(HTML(sprintf(
-        "$(function(){ initSidebarResize({leftId:'%s', rightId:'%s', leftHandle:'%s', rightHandle:'%s', ids:[%s]}); });",
+        "$(function(){ initSidebarResize({leftId:'%s', rightId:'%s', leftHandle:'%s', rightHandle:'%s', ids:[%s], dynamicPrefixes:['%s']}); });",
         ns('sidebar'),
         ns('right-sidebar'),
         ns('resize-handle'),
@@ -1146,6 +1193,7 @@ simplerIndexUI <- function(id) {
             "'%s'",
             ns(c(
               'name',
+              'well_name',
               'notes_borehole',
               'share_with_borehole',
               'easting',
@@ -1188,7 +1236,8 @@ simplerIndexUI <- function(id) {
             ))
           ),
           collapse = ','
-        )
+        ),
+        ns("well_")
       )))
     )
   )
@@ -1236,6 +1285,9 @@ simplerIndex <- function(id, language) {
     )
     borehole_choices <- reactiveVal(character())
     image_cache <- reactiveVal(list())
+    well_ui_version <- reactiveVal(0L)
+    document_ui_version <- reactiveVal(0L)
+    invalid_document_names <- reactiveVal(list())
 
     get_cached_image <- function(img_path) {
       cache <- image_cache()
@@ -1264,7 +1316,7 @@ simplerIndex <- function(id, language) {
         return(NULL)
       }
       selection <- as.character(selection)[1]
-      if (!nzchar(selection) || !selection %in% names(rv$borehole_data)) {
+      if (!nzchar(selection) || !selection %in% borehole_choices()) {
         return(NULL)
       }
       selection
@@ -1792,10 +1844,15 @@ simplerIndex <- function(id, language) {
       rv$table_version <- rv$table_version + 1
     }
 
+    bump_document_ui_version <- function() {
+      document_ui_version(isolate(document_ui_version()) + 1L)
+    }
+
     clear_borehole_form <- function() {
       loading_metadata(TRUE)
 
       updateTextInput(session, "name", value = "")
+      updateTextInput(session, "well_name", value = "")
       update_location_choices(
         nearby_locations(),
         selected_id = NULL
@@ -1979,6 +2036,7 @@ simplerIndex <- function(id, language) {
 
       sort_files_df()
       bump_table_version()
+      bump_document_ui_version()
     }
 
     sort_files_df <- function() {
@@ -2025,6 +2083,7 @@ simplerIndex <- function(id, language) {
 
     well_fields <- c(
       "name",
+      "well_name",
       "location_id",
       "notes_well",
       "notes_borehole",
@@ -2083,9 +2142,11 @@ simplerIndex <- function(id, language) {
       "purpose_well_inferred"
     )
 
-    nested_well_specific_fields <- c(
-      "drill_depth",
-      "drill_depth_unit",
+    well_specific_fields <- c(
+      "well_name",
+      "share_with_well",
+      "casing_od",
+      "casing_od_unit",
       "seal_material",
       "seal_diameter",
       "seal_diameter_unit",
@@ -2105,6 +2166,8 @@ simplerIndex <- function(id, language) {
       "static_water_level_unit",
       "estimated_yield",
       "estimated_yield_unit",
+      "purpose_of_well",
+      "purpose_well_inferred",
       "notes_well"
     )
 
@@ -2115,16 +2178,52 @@ simplerIndex <- function(id, language) {
         "borehole_id",
         "location_id",
         "associated_location",
-        nested_well_specific_fields
+        "is_well",
+        well_specific_fields
       )
     )
+
+    next_well_input_key <- reactiveVal(0L)
+
+    new_well_input_key <- function() {
+      key <- next_well_input_key() + 1L
+      next_well_input_key(key)
+      key
+    }
+
+    empty_well_metadata <- function() {
+      metadata <- stats::setNames(
+        as.list(rep(NA, length(well_specific_fields))),
+        well_specific_fields
+      )
+      metadata$share_with_well <- "public_reader"
+      metadata$casing_od_unit <- "inch"
+      metadata$seal_diameter_unit <- "inch"
+      metadata$seal_depth_from_unit <- "m"
+      metadata$seal_depth_to_unit <- "m"
+      metadata$top_of_screen_unit <- "m"
+      metadata$bottom_of_screen_unit <- "m"
+      metadata$well_head_stick_up_unit <- "m"
+      metadata$static_water_level_unit <- "m"
+      metadata$estimated_yield_unit <- "G/min"
+      metadata$purpose_well_inferred <- TRUE
+      metadata$auto_name <- TRUE
+      metadata$input_key <- new_well_input_key()
+      metadata
+    }
 
     empty_well_entry <- function() {
       metadata <- stats::setNames(
         as.list(rep(NA, length(well_fields))),
         well_fields
       )
-      list(files = character(), metadata = metadata)
+      list(
+        files = character(),
+        metadata = metadata,
+        wells = list(),
+        document_name = NULL,
+        document_name_custom = FALSE
+      )
     }
 
     null_if_empty <- function(x) {
@@ -2136,6 +2235,365 @@ simplerIndex <- function(id, language) {
       }
       x
     }
+
+    document_name_input_id <- function(entry_id) {
+      paste0("document_name_", entry_id)
+    }
+
+    default_document_name <- function(borehole_name, entry_id) {
+      borehole_name <- null_if_empty(borehole_name)
+      if (is.null(borehole_name)) {
+        borehole_name <- paste("Borehole", entry_id)
+      } else {
+        borehole_name <- trimws(as.character(borehole_name[[1]]))
+      }
+      paste0("Document for borehole/well ", borehole_name)
+    }
+
+    default_well_name <- function(borehole_name, well_index, well_count) {
+      borehole_name <- null_if_empty(borehole_name)
+      if (is.null(borehole_name)) {
+        return(NA_character_)
+      }
+      borehole_name <- trimws(as.character(borehole_name[[1]]))
+      if (well_count == 1L) borehole_name else paste(borehole_name, well_index)
+    }
+
+    is_default_style_well_name <- function(well_name, borehole_name) {
+      well_name <- null_if_empty(well_name)
+      borehole_name <- null_if_empty(borehole_name)
+      if (is.null(well_name) || is.null(borehole_name)) {
+        return(FALSE)
+      }
+      well_name <- trimws(as.character(well_name[[1]]))
+      borehole_name <- trimws(as.character(borehole_name[[1]]))
+      if (identical(well_name, borehole_name)) {
+        return(TRUE)
+      }
+      prefix <- paste0(borehole_name, " ")
+      startsWith(well_name, prefix) &&
+        grepl("^[0-9]+$", substring(well_name, nchar(prefix) + 1L))
+    }
+
+    refresh_auto_well_names <- function(wells, borehole_name) {
+      for (well_index in seq_along(wells)) {
+        if (isTRUE(wells[[well_index]]$auto_name)) {
+          wells[[well_index]]$well_name <- default_well_name(
+            borehole_name,
+            well_index,
+            length(wells)
+          )
+        }
+      }
+      wells
+    }
+
+    queue_auto_well_name_updates <- function(wells) {
+      updates <- lapply(
+        wells[vapply(wells, function(well) isTRUE(well$auto_name), logical(1))],
+        function(well) list(key = well$input_key, name = well$well_name)
+      )
+      if (!length(updates)) {
+        return(invisible(NULL))
+      }
+      session$onFlushed(
+        function() {
+          later::later(
+            function() {
+              for (update in updates) {
+                updateTextInput(
+                  session,
+                  well_input_id(update$key, "well_name"),
+                  value = update$name
+                )
+              }
+            },
+            delay = 0.1
+          )
+        },
+        once = TRUE
+      )
+      invisible(NULL)
+    }
+
+    well_input_id <- function(well_key, field) {
+      sprintf("well_%d_%s", well_key, field)
+    }
+
+    well_display_value <- function(well, field, default = NULL) {
+      value <- null_if_empty(well[[field]])
+      if (is.null(value)) default else value
+    }
+
+    well_numeric_with_unit_ui <- function(
+      well_index,
+      well,
+      field,
+      label,
+      units,
+      default_unit,
+      min = NA_real_,
+      step = 0.1,
+      tooltip_text = NULL
+    ) {
+      numeric_control <- numericInput(
+        ns(well_input_id(well_index, field)),
+        label,
+        value = well_display_value(well, field, NA_real_),
+        min = min,
+        step = step
+      )
+      if (!is.null(tooltip_text)) {
+        numeric_control <- tooltip(numeric_control, tooltip_text)
+      }
+      fluidRow(
+        column(8, numeric_control),
+        column(
+          4,
+          radioButtons(
+            ns(well_input_id(well_index, paste0(field, "_unit"))),
+            "",
+            choices = units,
+            selected = well_display_value(
+              well,
+              paste0(field, "_unit"),
+              default_unit
+            ),
+            inline = TRUE
+          )
+        )
+      )
+    }
+
+    well_panel_ui <- function(well_index, well, well_count) {
+      well_key <- well$input_key
+      remove_button <- if (well_count > 1L) {
+        tags$button(
+          type = "button",
+          class = "btn btn-outline-danger btn-sm",
+          icon("trash"),
+          "Remove this well",
+          onclick = sprintf(
+            "Shiny.setInputValue('%s', %d, {priority: 'event'});",
+            ns("remove_nested_well"),
+            well_index
+          )
+        )
+      }
+
+      bslib::accordion_panel(
+        title = paste("Well", well_index),
+        value = paste0("well_", well_key),
+        textInput(
+          ns(well_input_id(well_key, "well_name")),
+          "Well name *",
+          value = well_display_value(well, "well_name", "")
+        ),
+        selectizeInput(
+          ns(well_input_id(well_key, "share_with_well")),
+          "Share well with groups",
+          choices = moduleData$share_with_wells$role_name,
+          selected = well_display_value(
+            well,
+            "share_with_well",
+            "public_reader"
+          ),
+          multiple = TRUE,
+          width = "100%"
+        ) |>
+          tooltip(
+            "Select user groups to share this well with. 'public_reader' = shared with everyone."
+          ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "casing_od",
+          "Casing outside diameter",
+          list("cm" = "cm", "inch" = "inch"),
+          "inch",
+          min = 0,
+          step = 1
+        ),
+        tags$h5("Seal construction"),
+        selectizeInput(
+          ns(well_input_id(well_key, "seal_material")),
+          "Seal material",
+          choices = stats::setNames(
+            moduleData$seal_materials$seal_material_id,
+            moduleData$seal_materials$material_name
+          ),
+          selected = well_display_value(well, "seal_material"),
+          multiple = FALSE,
+          options = list(placeholder = "Select seal material")
+        ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "seal_diameter",
+          "Seal outside diameter",
+          list("cm" = "cm", "inch" = "inch"),
+          "inch",
+          min = 0,
+          step = 1
+        ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "seal_depth_from",
+          "Seal depth from",
+          list("m" = "m", "ft" = "ft"),
+          "m",
+          min = 0
+        ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "seal_depth_to",
+          "Seal depth to",
+          list("m" = "m", "ft" = "ft"),
+          "m",
+          min = 0
+        ),
+        tags$h5("Screen construction"),
+        selectizeInput(
+          ns(well_input_id(well_key, "screen_material")),
+          "Screen material",
+          choices = stats::setNames(
+            moduleData$screen_materials$screen_material_id,
+            moduleData$screen_materials$material_name
+          ),
+          selected = well_display_value(well, "screen_material"),
+          multiple = FALSE,
+          options = list(placeholder = "Select screen material")
+        ),
+        selectizeInput(
+          ns(well_input_id(well_key, "screen_type")),
+          "Screen type",
+          choices = stats::setNames(
+            moduleData$screen_types$screen_type_id,
+            moduleData$screen_types$type_name
+          ),
+          selected = well_display_value(well, "screen_type"),
+          multiple = FALSE,
+          options = list(placeholder = "Select screen type")
+        ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "top_of_screen",
+          "Top of screen",
+          list("m" = "m", "ft" = "ft"),
+          "m",
+          min = 0
+        ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "bottom_of_screen",
+          "Bottom of screen",
+          list("m" = "m", "ft" = "ft"),
+          "m",
+          min = 0
+        ),
+        tags$h5("Other well information"),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "well_head_stick_up",
+          "Well stick up",
+          list("m" = "m", "ft" = "ft"),
+          "m",
+          step = 0.01
+        ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "static_water_level",
+          "Static water level BTOC",
+          list("m" = "m", "ft" = "ft"),
+          "m",
+          step = 0.01,
+          tooltip_text = "Convert elevations BGS to BTOC!"
+        ),
+        well_numeric_with_unit_ui(
+          well_key,
+          well,
+          "estimated_yield",
+          "Estimated yield",
+          list("L/s" = "L/s", "G/min" = "G/min"),
+          "G/min",
+          min = 0
+        ),
+        selectizeInput(
+          ns(well_input_id(well_key, "purpose_of_well")),
+          "Purpose of well",
+          choices = stats::setNames(
+            moduleData$purposes$borehole_well_purpose_id,
+            moduleData$purposes$purpose_name
+          ),
+          selected = well_display_value(well, "purpose_of_well"),
+          multiple = FALSE,
+          options = list(
+            placeholder = "Enter if different from borehole purpose"
+          )
+        ),
+        radioButtons(
+          ns(well_input_id(well_key, "purpose_well_inferred")),
+          "Purpose inferred or explicit?",
+          choices = list("Inferred" = TRUE, "Explicit" = FALSE),
+          selected = well_display_value(
+            well,
+            "purpose_well_inferred",
+            TRUE
+          ),
+          inline = TRUE
+        ),
+        textInput(
+          ns(well_input_id(well_key, "notes_well")),
+          "Well notes",
+          value = well_display_value(well, "notes_well", ""),
+          placeholder = "Filter pack, development, etc."
+        ),
+        remove_button
+      )
+    }
+
+    output$wells_ui <- renderUI({
+      well_ui_version()
+      entry_id <- current_borehole_id()
+      if (is.null(entry_id)) {
+        return(NULL)
+      }
+      wells <- isolate(rv$borehole_data[[entry_id]]$wells)
+      if (!length(wells)) {
+        return(NULL)
+      }
+      panels <- lapply(
+        seq_along(wells),
+        function(index) well_panel_ui(index, wells[[index]], length(wells))
+      )
+      accordion <- do.call(
+        bslib::accordion,
+        c(
+          panels,
+          list(
+            id = ns("well_accordion"),
+            open = paste0("well_", wells[[length(wells)]]$input_key),
+            multiple = TRUE
+          )
+        )
+      )
+      tagList(
+        accordion,
+        actionButton(
+          ns("add_nested_well"),
+          "Add another well",
+          icon = icon("plus"),
+          class = "btn btn-outline-primary",
+          style = "margin-top: 12px; width: 100%;"
+        )
+      )
+    })
 
     format_bedrock_reached_input <- function(x) {
       x <- null_if_empty(x)
@@ -2469,6 +2927,10 @@ simplerIndex <- function(id, language) {
         metadata$name,
         empty_to_null = TRUE
       )
+      sanitized$well_name <- parse_character_scalar(
+        metadata$well_name,
+        empty_to_null = TRUE
+      )
       sanitized$location_id <- parse_numeric(metadata$location_id)
       sanitized$notes_borehole <- parse_character_scalar(
         metadata$notes_borehole,
@@ -2640,17 +3102,35 @@ simplerIndex <- function(id, language) {
       sanitized
     }
 
-    validate_metadata_for_upload <- function(metadata) {
-      if (is.null(metadata$name)) {
+    sanitize_wells_for_insert <- function(wells, borehole_metadata) {
+      lapply(wells, function(well) {
+        combined <- borehole_metadata
+        for (field in well_specific_fields) {
+          combined[[field]] <- well[[field]]
+        }
+        combined$is_well <- TRUE
+        sanitize_metadata_for_insert(combined)
+      })
+    }
+
+    validate_metadata_for_upload <- function(
+      metadata,
+      check_borehole_name = TRUE,
+      require_borehole_fields = TRUE
+    ) {
+      if (isTRUE(require_borehole_fields) && is.null(metadata$name)) {
         showNotification(
-          "Please provide a borehole or well name before uploading.",
+          "Please provide a borehole name before uploading.",
           type = "error",
           duration = 5
         )
         return(FALSE)
       }
 
-      if (is.null(metadata$latitude) || is.null(metadata$longitude)) {
+      if (
+        isTRUE(require_borehole_fields) &&
+          (is.null(metadata$latitude) || is.null(metadata$longitude))
+      ) {
         showNotification(
           "Latitude and longitude are required before uploading a borehole.",
           type = "error",
@@ -2660,7 +3140,8 @@ simplerIndex <- function(id, language) {
       }
 
       if (
-        isTRUE(metadata$bedrock_reached) &&
+        isTRUE(require_borehole_fields) &&
+          isTRUE(metadata$bedrock_reached) &&
           is.null(metadata$depth_to_bedrock)
       ) {
         showNotification(
@@ -2671,53 +3152,114 @@ simplerIndex <- function(id, language) {
         return(FALSE)
       }
 
-      if (
-        !is.null(metadata$top_of_screen) &&
-          !is.null(metadata$bottom_of_screen) &&
-          metadata$bottom_of_screen < metadata$top_of_screen
-      ) {
-        showNotification(
-          "Bottom of screen cannot be shallower than top of screen.",
-          type = "error",
-          duration = 5
-        )
-        return(FALSE)
-      }
-
-      if (
-        !is.null(metadata$seal_depth_from) &&
-          !is.null(metadata$seal_depth_to) &&
-          metadata$seal_depth_to < metadata$seal_depth_from
-      ) {
-        showNotification(
-          "Seal depth to cannot be shallower than seal depth from.",
-          type = "error",
-          duration = 5
-        )
-        return(FALSE)
-      }
-
       # Check to ensure that the well name does not already exist in the database
-      existing_names <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT borehole_name FROM boreholes.boreholes WHERE borehole_name = $1;",
-        params = list(metadata$name)
-      )$borehole_name
+      if (isTRUE(check_borehole_name)) {
+        existing_names <- DBI::dbGetQuery(
+          session$userData$AquaCache,
+          "SELECT borehole_name
+           FROM boreholes.boreholes
+           WHERE borehole_name = $1;",
+          params = list(metadata$name)
+        )$borehole_name
 
-      if (length(existing_names) > 0) {
-        showNotification(
-          sprintf(
-            "A borehole or well with the name '%s' already exists in the database. Please choose a different name.",
-            metadata$name
-          ),
-          type = "error",
-          duration = 10
-        )
-        return(FALSE)
+        if (length(existing_names) > 0) {
+          showNotification(
+            sprintf(
+              "A borehole or well with the name '%s' already exists in the database. Please choose a different name.",
+              metadata$name
+            ),
+            type = "error",
+            duration = 10
+          )
+          return(FALSE)
+        }
       }
 
       # If we got to here, return TRUE
       return(TRUE)
+    }
+
+    validate_wells_for_upload <- function(well_metadata, is_well) {
+      if (!isTRUE(is_well)) {
+        return(TRUE)
+      }
+      if (!length(well_metadata)) {
+        showNotification(
+          paste0(
+            "Add at least one well or clear 'One or more wells constructed' ",
+            "before uploading."
+          ),
+          type = "error",
+          duration = 7
+        )
+        return(FALSE)
+      }
+      missing_name <- vapply(
+        well_metadata,
+        function(metadata) is.null(metadata$well_name),
+        logical(1)
+      )
+      if (any(missing_name)) {
+        showNotification(
+          paste(
+            "Please provide a name for well",
+            which(missing_name)[[1]],
+            "before uploading."
+          ),
+          type = "error",
+          duration = 7
+        )
+        return(FALSE)
+      }
+      well_names <- vapply(
+        well_metadata,
+        function(metadata) trimws(tolower(metadata$well_name)),
+        character(1)
+      )
+      if (anyDuplicated(well_names)) {
+        showNotification(
+          "Well names must be unique within a borehole.",
+          type = "error",
+          duration = 7
+        )
+        return(FALSE)
+      }
+      for (well_index in seq_along(well_metadata)) {
+        metadata <- well_metadata[[well_index]]
+        if (
+          !is.null(metadata$top_of_screen) &&
+            !is.null(metadata$bottom_of_screen) &&
+            metadata$bottom_of_screen < metadata$top_of_screen
+        ) {
+          showNotification(
+            paste(
+              "Well",
+              well_index,
+              "has a bottom of screen shallower than its top of screen."
+            ),
+            type = "error",
+            duration = 7
+          )
+          return(FALSE)
+        }
+        if (
+          !is.null(metadata$seal_depth_from) &&
+            !is.null(metadata$seal_depth_to) &&
+            metadata$seal_depth_to < metadata$seal_depth_from
+        ) {
+          showNotification(
+            paste(
+              "Well",
+              well_index,
+              "has a seal depth-to shallower than its depth-from."
+            ),
+            type = "error",
+            duration = 7
+          )
+          return(FALSE)
+        }
+      }
+      TRUE
     }
 
     # Bits to associate the borehole/well with a location
@@ -2929,6 +3471,188 @@ simplerIndex <- function(id, language) {
       all(!is.na(assigned) & nzchar(assigned))
     }
 
+    document_entry_ids <- function(entry_ids = names(rv$borehole_data)) {
+      entry_ids[vapply(
+        entry_ids,
+        function(entry_id) {
+          length(rv$borehole_data[[entry_id]]$files) > 0L
+        },
+        logical(1)
+      )]
+    }
+
+    output$document_names_ui <- renderUI({
+      document_ui_version()
+      invalid <- invalid_document_names()
+      entries <- isolate(rv$borehole_data)
+      entry_ids <- names(entries)
+      entry_ids <- entry_ids[vapply(
+        entry_ids,
+        function(entry_id) length(entries[[entry_id]]$files) > 0L,
+        logical(1)
+      )]
+      if (!length(entry_ids)) {
+        return(NULL)
+      }
+
+      tagList(
+        hr(),
+        tags$h5("Document names"),
+        tags$p(
+          class = "text-muted",
+          "Rename a document here when its default name is already in use."
+        ),
+        lapply(entry_ids, function(entry_id) {
+          input_id <- document_name_input_id(entry_id)
+          message <- invalid[[entry_id]]
+          value <- entries[[entry_id]]$document_name
+          if (is.null(value)) {
+            value <- default_document_name(
+              entries[[entry_id]]$metadata$name,
+              entry_id
+            )
+          }
+          tagList(
+            if (!is.null(message)) {
+              tags$style(shiny::HTML(sprintf(
+                "#%s { border-color: #dc3545; box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25); }",
+                ns(input_id)
+              )))
+            },
+            textInput(
+              ns(input_id),
+              paste("Borehole", entry_id, "document name"),
+              value = value
+            ),
+            if (!is.null(message)) {
+              tags$div(class = "text-danger", message)
+            }
+          )
+        })
+      )
+    })
+
+    observe({
+      document_ui_version()
+      entries <- isolate(rv$borehole_data)
+      entry_ids <- names(entries)
+      entry_ids <- entry_ids[vapply(
+        entry_ids,
+        function(entry_id) length(entries[[entry_id]]$files) > 0L,
+        logical(1)
+      )]
+
+      for (entry_id in entry_ids) {
+        value <- input[[document_name_input_id(entry_id)]]
+        if (is.null(value)) {
+          next
+        }
+        stored <- isolate(rv$borehole_data[[entry_id]]$document_name)
+        if (!identical(value, stored)) {
+          isolate({
+            rv$borehole_data[[entry_id]]$document_name <- value
+            rv$borehole_data[[entry_id]]$document_name_custom <- !identical(
+              trimws(value),
+              default_document_name(
+                rv$borehole_data[[entry_id]]$metadata$name,
+                entry_id
+              )
+            )
+          })
+        }
+      }
+    })
+
+    save_document_names <- function(entry_ids) {
+      for (entry_id in document_entry_ids(entry_ids)) {
+        value <- input[[document_name_input_id(entry_id)]]
+        if (!is.null(value)) {
+          rv$borehole_data[[entry_id]]$document_name <- trimws(value)
+        }
+      }
+    }
+
+    validate_document_names_for_upload <- function(entry_ids) {
+      save_document_names(entry_ids)
+      document_ids <- document_entry_ids(entry_ids)
+      if (!length(document_ids)) {
+        invalid_document_names(list())
+        return(TRUE)
+      }
+
+      document_names <- vapply(
+        document_ids,
+        function(entry_id) {
+          name <- rv$borehole_data[[entry_id]]$document_name
+          if (is.null(name) || length(name) != 1L || is.na(name)) {
+            ""
+          } else {
+            trimws(name)
+          }
+        },
+        character(1)
+      )
+      invalid <- list()
+
+      for (entry_id in document_ids[!nzchar(document_names)]) {
+        invalid[[entry_id]] <- "Enter a document name."
+      }
+
+      duplicate_names <- unique(document_names[
+        nzchar(document_names) &
+          (duplicated(document_names) | duplicated(document_names, fromLast = TRUE))
+      ])
+      if (length(duplicate_names)) {
+        for (entry_id in document_ids[document_names %in% duplicate_names]) {
+          invalid[[entry_id]] <- paste(
+            "This name is used by another document in this upload."
+          )
+        }
+      }
+
+      names_to_check <- unique(document_names[nzchar(document_names)])
+      if (length(names_to_check)) {
+        placeholders <- paste0("$", seq_along(names_to_check))
+        existing <- tryCatch(
+          DBI::dbGetQuery(
+            session$userData$AquaCache,
+            sprintf(
+              "SELECT name FROM files.documents WHERE name IN (%s)",
+              paste(placeholders, collapse = ", ")
+            ),
+            params = as.list(names_to_check)
+          )$name,
+          error = function(e) {
+            showNotification(
+              paste("Could not validate document names:", e$message),
+              type = "error",
+              duration = 10
+            )
+            NULL
+          }
+        )
+        if (is.null(existing)) {
+          return(FALSE)
+        }
+        for (entry_id in document_ids[document_names %in% existing]) {
+          invalid[[entry_id]] <- paste(
+            "A document with this name already exists in the database."
+          )
+        }
+      }
+
+      invalid_document_names(invalid)
+      if (length(invalid)) {
+        showNotification(
+          "Change the highlighted document name(s) before uploading.",
+          type = "error",
+          duration = 8
+        )
+        return(FALSE)
+      }
+      TRUE
+    }
+
     # Add observer for brush_select button
     observeEvent(input$brush_select, {
       # Toggle brush_enabled value
@@ -3135,11 +3859,31 @@ simplerIndex <- function(id, language) {
             if (is.null(entry$metadata)) {
               entry$metadata <- empty_well_entry()$metadata
             }
+            if (is.null(entry$wells)) {
+              entry$wells <- list()
+            }
             entry$metadata$borehole_id <- id
+            if (is.null(entry$document_name_custom)) {
+              entry$document_name_custom <- FALSE
+            }
+            if (
+              is.null(null_if_empty(entry$document_name)) ||
+                (!isTRUE(entry$document_name_custom) &&
+                  !nzchar(trimws(entry$document_name)))
+            ) {
+              entry$document_name <- default_document_name(
+                entry$metadata$name,
+                id
+              )
+            }
             entry
           } else {
             entry <- empty_well_entry()
             entry$metadata$borehole_id <- id
+            entry$document_name <- default_document_name(
+              entry$metadata$name,
+              id
+            )
             entry
           }
         })
@@ -3158,10 +3902,252 @@ simplerIndex <- function(id, language) {
         update_borehole_details_selector(isolate(
           input$borehole_details_selector
         ))
+        bump_document_ui_version()
       },
       ignoreNULL = FALSE,
       ignoreInit = FALSE
     )
+
+    save_current_wells <- function(entry_id = current_borehole_id()) {
+      if (is.null(entry_id) || !entry_id %in% names(rv$borehole_data)) {
+        return(invisible(NULL))
+      }
+      wells <- isolate(rv$borehole_data[[entry_id]]$wells)
+      if (!length(wells)) {
+        return(invisible(NULL))
+      }
+
+      for (well_index in seq_along(wells)) {
+        well_key <- wells[[well_index]]$input_key
+        for (field in well_specific_fields) {
+          value <- input[[well_input_id(well_key, field)]]
+          if (!is.null(value)) {
+            name_changed <-
+              identical(field, "well_name") &&
+              !identical(
+                if (is.null(null_if_empty(value))) {
+                  ""
+                } else {
+                  as.character(value[[1]])
+                },
+                if (is.null(null_if_empty(wells[[well_index]][[field]]))) {
+                  ""
+                } else {
+                  as.character(wells[[well_index]][[field]][[1]])
+                }
+              )
+            if (
+              name_changed &&
+                isTRUE(wells[[well_index]]$auto_name) &&
+                is_default_style_well_name(value, input$name)
+            ) {
+              next
+            }
+            if (name_changed) {
+              wells[[well_index]]$auto_name <- FALSE
+            }
+            wells[[well_index]][[field]] <- value
+          }
+        }
+        groups <- wells[[well_index]]$share_with_well
+        if (!length(groups)) {
+          groups <- "public_reader"
+        } else if (length(groups) > 1L && "public_reader" %in% groups) {
+          groups <- "public_reader"
+          updateSelectizeInput(
+            session,
+            well_input_id(well_key, "share_with_well"),
+            selected = groups
+          )
+        }
+        wells[[well_index]]$share_with_well <- groups
+      }
+      isolate(rv$borehole_data[[entry_id]]$wells <- wells)
+      invisible(wells)
+    }
+
+    observe({
+      entry_id <- current_borehole_id()
+      if (loading_metadata() || is.null(entry_id)) {
+        return()
+      }
+      wells <- isolate(rv$borehole_data[[entry_id]]$wells)
+      if (!length(wells)) {
+        return()
+      }
+      for (well_index in seq_along(wells)) {
+        well_key <- wells[[well_index]]$input_key
+        for (field in well_specific_fields) {
+          input[[well_input_id(well_key, field)]]
+        }
+      }
+      save_current_wells(entry_id)
+    })
+
+    observeEvent(
+      input$is_well,
+      {
+        if (loading_metadata()) {
+          return()
+        }
+        entry_id <- current_borehole_id()
+        if (is.null(entry_id) || !entry_id %in% names(rv$borehole_data)) {
+          return()
+        }
+        rv$borehole_data[[entry_id]]$metadata$is_well <- isTRUE(input$is_well)
+        if (
+          isTRUE(input$is_well) && !length(rv$borehole_data[[entry_id]]$wells)
+        ) {
+          well <- empty_well_metadata()
+          well$well_name <- default_well_name(input$name, 1L, 1L)
+          well$share_with_well <- if (length(input$share_with_borehole)) {
+            input$share_with_borehole
+          } else {
+            "public_reader"
+          }
+          well$purpose_of_well <- input$purpose_of_borehole
+          well$purpose_well_inferred <- input$purpose_borehole_inferred
+          rv$borehole_data[[entry_id]]$wells <- list(well)
+        }
+        well_ui_version(well_ui_version() + 1L)
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      input$name,
+      {
+        if (loading_metadata() || !isTRUE(input$is_well)) {
+          return()
+        }
+        entry_id <- current_borehole_id()
+        if (is.null(entry_id) || !entry_id %in% names(rv$borehole_data)) {
+          return()
+        }
+        wells <- save_current_wells(entry_id)
+        if (!length(wells)) {
+          return()
+        }
+        wells <- refresh_auto_well_names(wells, input$name)
+        for (well_index in seq_along(wells)) {
+          if (isTRUE(wells[[well_index]]$auto_name)) {
+            updateTextInput(
+              session,
+              well_input_id(wells[[well_index]]$input_key, "well_name"),
+              value = wells[[well_index]]$well_name
+            )
+          }
+        }
+        rv$borehole_data[[entry_id]]$wells <- wells
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(input$add_nested_well, {
+      entry_id <- current_borehole_id()
+      if (is.null(entry_id) || !entry_id %in% names(rv$borehole_data)) {
+        showNotification(
+          "Select a borehole before adding a well.",
+          type = "warning",
+          duration = 5
+        )
+        return()
+      }
+      wells <- save_current_wells(entry_id)
+      if (is.null(wells)) {
+        wells <- rv$borehole_data[[entry_id]]$wells
+      }
+      borehole_name <- null_if_empty(input$name)
+      if (is.null(borehole_name)) {
+        showNotification(
+          "Enter the borehole name before adding another well.",
+          type = "warning",
+          duration = 5
+        )
+        return()
+      }
+      borehole_name <- trimws(as.character(borehole_name[[1]]))
+
+      if (length(wells) == 1L) {
+        first_name <- null_if_empty(wells[[1]]$well_name)
+        if (
+          isTRUE(wells[[1]]$auto_name) ||
+            is.null(first_name) ||
+            identical(trimws(as.character(first_name[[1]])), borehole_name)
+        ) {
+          wells[[1]]$well_name <- paste(borehole_name, 1L)
+        }
+      }
+
+      well_number <- length(wells) + 1L
+      new_well <- empty_well_metadata()
+      new_well$well_name <- default_well_name(
+        borehole_name,
+        well_number,
+        well_number
+      )
+      new_well$share_with_well <- if (length(input$share_with_borehole)) {
+        input$share_with_borehole
+      } else {
+        "public_reader"
+      }
+      new_well$purpose_of_well <- input$purpose_of_borehole
+      new_well$purpose_well_inferred <- input$purpose_borehole_inferred
+      wells[[well_number]] <- new_well
+      wells <- refresh_auto_well_names(wells, borehole_name)
+      rv$borehole_data[[entry_id]]$wells <- wells
+      rv$borehole_data[[entry_id]]$metadata$is_well <- TRUE
+      well_ui_version(well_ui_version() + 1L)
+      queue_auto_well_name_updates(wells)
+      showNotification(
+        paste("Added well", well_number, "to Borehole", entry_id),
+        type = "message",
+        duration = 4
+      )
+    })
+
+    observeEvent(input$remove_nested_well, {
+      entry_id <- current_borehole_id()
+      if (is.null(entry_id) || !entry_id %in% names(rv$borehole_data)) {
+        return()
+      }
+      wells <- save_current_wells(entry_id)
+      well_index <- suppressWarnings(as.integer(input$remove_nested_well))
+      if (
+        length(wells) <= 1L ||
+          is.na(well_index) ||
+          well_index < 1L ||
+          well_index > length(wells)
+      ) {
+        return()
+      }
+
+      wells <- wells[-well_index]
+      if (length(wells) == 1L) {
+        borehole_name <- null_if_empty(input$name)
+        current_name <- null_if_empty(wells[[1]]$well_name)
+        if (
+          isTRUE(wells[[1]]$auto_name) &&
+            !is.null(borehole_name) &&
+            !is.null(current_name) &&
+            identical(
+              trimws(as.character(current_name[[1]])),
+              paste(trimws(as.character(borehole_name[[1]])), 1L)
+            )
+        ) {
+          wells[[1]]$well_name <- trimws(as.character(borehole_name[[1]]))
+        }
+      }
+      wells <- refresh_auto_well_names(wells, input$name)
+      rv$borehole_data[[entry_id]]$wells <- wells
+      well_ui_version(well_ui_version() + 1L)
+      queue_auto_well_name_updates(wells)
+      showNotification(
+        "Well removed.",
+        type = "message",
+        duration = 4
+      )
+    })
 
     # Observe change to share_with_borehole and update share_with_well to match if it doesn't already. Give user a notification that they can change it back if needed
     observeEvent(
@@ -3935,6 +4921,7 @@ simplerIndex <- function(id, language) {
           }
           sort_files_df()
           bump_table_version()
+          bump_document_ui_version()
         }
       },
       ignoreInit = TRUE
@@ -4038,6 +5025,7 @@ simplerIndex <- function(id, language) {
 
         sort_files_df()
         bump_table_version()
+        bump_document_ui_version()
 
         showNotification(
           "Document page duplicated. You can now assign the copy to another borehole.",
@@ -4141,6 +5129,7 @@ simplerIndex <- function(id, language) {
                 } else {
                   NA_character_
                 }
+                bump_document_ui_version()
               },
               ignoreNULL = TRUE,
               ignoreInit = TRUE
@@ -4729,6 +5718,7 @@ simplerIndex <- function(id, language) {
 
           # Extract field name from clicked input name
           field_name <- sub("_clicked$", "", most_recent)
+          base_field_name <- sub("^well_[0-9]+_", "", field_name)
 
           # Function to blur the input field after updating
           blur_field <- function(field_id) {
@@ -4739,7 +5729,15 @@ simplerIndex <- function(id, language) {
           }
 
           # Update different field types appropriately
-          if (field_name %in% c("name", "notes_borehole", "notes_well")) {
+          if (
+            base_field_name %in%
+              c(
+                "name",
+                "well_name",
+                "notes_borehole",
+                "notes_well"
+              )
+          ) {
             updateTextInput(session, field_name, value = selected_text)
             shinyjs::runjs(sprintf(
               "var el=$('#%s'); if(el.length){el.addClass('flash-update'); setTimeout(function(){el.removeClass('flash-update');},1400);}",
@@ -4749,7 +5747,7 @@ simplerIndex <- function(id, language) {
             # Blur the field
             blur_field(field_name)
           } else if (
-            field_name %in%
+            base_field_name %in%
               c(
                 "easting",
                 "northing",
@@ -4787,7 +5785,12 @@ simplerIndex <- function(id, language) {
                         ns(field_name)
                       ))
                       showNotification(
-                        paste("Updated", field_name, "with value", num_value),
+                        paste(
+                          "Updated",
+                          base_field_name,
+                          "with value",
+                          num_value
+                        ),
                         type = "message",
                         duration = 2
                       )
@@ -4811,7 +5814,7 @@ simplerIndex <- function(id, language) {
                 )
               }
             )
-          } else if (field_name == "date_drilled") {
+          } else if (base_field_name == "date_drilled") {
             # Try to extract and parse date
             tryCatch(
               {
@@ -4889,7 +5892,7 @@ simplerIndex <- function(id, language) {
 
           # For selectize inputs which need special handling (if any exist)
           if (
-            field_name %in%
+            base_field_name %in%
               c(
                 "drilled_by",
                 "utm_zone",
@@ -4927,13 +5930,13 @@ simplerIndex <- function(id, language) {
       if (is.null(well_id) || !well_id %in% names(rv$borehole_data)) {
         return()
       }
-      # Update metadata with current input values for the correct well
+      # Update borehole-level metadata. Well-specific values are stored in the
+      # entry's nested `wells` list by save_current_wells().
       rv$borehole_data[[well_id]]$metadata <- list(
         borehole_id = well_id,
         name = input$name,
         location_id = input$associated_location,
         notes_borehole = input$notes_borehole,
-        notes_well = input$notes_well,
         coordinate_system = input$coordinate_system,
         easting = input$easting,
         northing = input$northing,
@@ -4955,29 +5958,8 @@ simplerIndex <- function(id, language) {
         permafrost_bot = input$permafrost_bot,
         permafrost_bot_unit = input$permafrost_bot_unit,
         date_drilled = input$date_drilled,
-        casing_od = input$casing_od,
-        casing_od_unit = input$casing_od_unit,
-        seal_material = input$seal_material,
-        seal_diameter = input$seal_diameter,
-        seal_diameter_unit = input$seal_diameter_unit,
-        seal_depth_from = input$seal_depth_from,
-        seal_depth_from_unit = input$seal_depth_from_unit,
-        seal_depth_to = input$seal_depth_to,
-        seal_depth_to_unit = input$seal_depth_to_unit,
         drill_depth = input$drill_depth,
         drill_depth_unit = input$drill_depth_unit,
-        screen_material = input$screen_material,
-        screen_type = input$screen_type,
-        top_of_screen = input$top_of_screen,
-        top_of_screen_unit = input$top_of_screen_unit,
-        bottom_of_screen = input$bottom_of_screen,
-        bottom_of_screen_unit = input$bottom_of_screen_unit,
-        well_head_stick_up = input$well_head_stick_up,
-        well_head_stick_up_unit = input$well_head_stick_up_unit,
-        static_water_level = input$static_water_level,
-        static_water_level_unit = input$static_water_level_unit,
-        estimated_yield = input$estimated_yield,
-        estimated_yield_unit = input$estimated_yield_unit,
         surveyed_ground_elev = input$surveyed_ground_elev,
         surveyed_ground_elev_unit = input$surveyed_ground_elev_unit,
         is_well = input$is_well,
@@ -4985,9 +5967,23 @@ simplerIndex <- function(id, language) {
         purpose_well_inferred = input$purpose_well_inferred,
         drilled_by = input$drilled_by,
         drill_method = input$drill_method,
-        share_with_borehole = input$share_with_borehole,
-        share_with_well = input$share_with_well
+        share_with_borehole = input$share_with_borehole
       )
+
+      if (!isTRUE(rv$borehole_data[[well_id]]$document_name_custom)) {
+        document_name <- default_document_name(input$name, well_id)
+        if (!identical(
+          rv$borehole_data[[well_id]]$document_name,
+          document_name
+        )) {
+          rv$borehole_data[[well_id]]$document_name <- document_name
+          if (length(rv$borehole_data[[well_id]]$files) > 0L) {
+            input_id <- document_name_input_id(well_id)
+            freezeReactiveValue(input, input_id)
+            updateTextInput(session, input_id, value = document_name)
+          }
+        }
+      }
     })
 
     # Metadata loader. Update input fields when a new borehole is selected
@@ -4999,12 +5995,42 @@ simplerIndex <- function(id, language) {
         if (!is.null(well_id) && well_id %in% names(rv$borehole_data)) {
           loading_metadata(TRUE)
           metadata <- rv$borehole_data[[well_id]]$metadata
+          if (is.null(rv$borehole_data[[well_id]]$wells)) {
+            rv$borehole_data[[well_id]]$wells <- list()
+          }
+          if (
+            isTRUE(metadata$is_well) &&
+              !length(rv$borehole_data[[well_id]]$wells)
+          ) {
+            migrated_well <- empty_well_metadata()
+            for (field in well_specific_fields) {
+              if (!is.null(metadata[[field]])) {
+                migrated_well[[field]] <- metadata[[field]]
+              }
+            }
+            if (is.null(null_if_empty(migrated_well$well_name))) {
+              migrated_well$well_name <- default_well_name(
+                metadata$name,
+                1L,
+                1L
+              )
+              migrated_well$auto_name <- TRUE
+            } else {
+              migrated_well$auto_name <- FALSE
+            }
+            rv$borehole_data[[well_id]]$wells <- list(migrated_well)
+          }
 
           # Update text inputs - make sure notes is included
           updateTextInput(
             session,
             "name",
             value = get_meta_value("name", metadata = metadata)
+          )
+          updateTextInput(
+            session,
+            "well_name",
+            value = get_meta_value("well_name", metadata = metadata)
           )
           update_location_choices(
             nearby_locations(),
@@ -5397,6 +6423,7 @@ simplerIndex <- function(id, language) {
             value = get_meta_date("date_drilled", metadata = metadata)
           )
 
+          well_ui_version(well_ui_version() + 1L)
           # Re-enable metadata saving after all updates are complete
           loading_metadata(FALSE)
         } else {
@@ -5407,20 +6434,99 @@ simplerIndex <- function(id, language) {
       ignoreNULL = FALSE
     )
 
+    entry_pdf_path <- function(entry_id) {
+      if (
+        is.null(rv$files_df) ||
+          !any(rv$files_df$borehole_id == entry_id, na.rm = TRUE)
+      ) {
+        return(NULL)
+      }
+      create_pdf_with_redactions(entry_id, return_path = TRUE)
+    }
+
+    entry_document_name <- function(entry_id, path) {
+      if (is.null(path)) {
+        return(NULL)
+      }
+      trimws(rv$borehole_data[[entry_id]]$document_name)
+    }
+
+    well_vector <- function(wells, field, missing_value) {
+      vapply(
+        wells,
+        function(well) {
+          value <- null_if_empty(well[[field]])
+          if (is.null(value)) missing_value else value[[1]]
+        },
+        missing_value
+      )
+    }
+
+    insert_vectorized_borehole <- function(
+      metadata,
+      wells,
+      path,
+      document_name = NULL
+    ) {
+      AquaCache::insertACBorehole(
+        con = session$userData$AquaCache,
+        path = path,
+        document_name = document_name,
+        borehole_name = metadata[["name"]],
+        well_name = well_vector(wells, "well_name", NA_character_),
+        location_id = metadata[["location_id"]],
+        latitude = metadata[["latitude"]],
+        longitude = metadata[["longitude"]],
+        location_source = metadata[["location_source"]],
+        surveyed_ground_elev = metadata[["surveyed_ground_elev"]],
+        ground_elev_m = metadata[["surveyed_ground_elev"]],
+        purpose_of_borehole = metadata[["purpose_of_borehole"]],
+        purpose_borehole_inferred = metadata[["purpose_borehole_inferred"]],
+        bedrock_reached = metadata[["bedrock_reached"]],
+        depth_to_bedrock = metadata[["depth_to_bedrock"]],
+        permafrost_present = metadata[["permafrost_present"]],
+        permafrost_top = metadata[["permafrost_top"]],
+        permafrost_bot = metadata[["permafrost_bot"]],
+        date_drilled = metadata[["date_drilled"]],
+        casing_od = well_vector(wells, "casing_od", NA_real_),
+        is_well = isTRUE(metadata[["is_well"]]),
+        well_depth = metadata[["drill_depth"]],
+        top_of_screen = well_vector(wells, "top_of_screen", NA_real_),
+        bottom_of_screen = well_vector(wells, "bottom_of_screen", NA_real_),
+        seal_material = well_vector(wells, "seal_material", NA_real_),
+        seal_diameter_mm = well_vector(wells, "seal_diameter", NA_real_),
+        seal_depth_from = well_vector(wells, "seal_depth_from", NA_real_),
+        seal_depth_to = well_vector(wells, "seal_depth_to", NA_real_),
+        screen_material = well_vector(wells, "screen_material", NA_real_),
+        screen_type = well_vector(wells, "screen_type", NA_real_),
+        well_head_stick_up = well_vector(
+          wells,
+          "well_head_stick_up",
+          NA_real_
+        ),
+        static_water_level = well_vector(
+          wells,
+          "static_water_level",
+          NA_real_
+        ),
+        estimated_yield = well_vector(wells, "estimated_yield", NA_real_),
+        notes_borehole = metadata[["notes_borehole"]],
+        notes_well = well_vector(wells, "notes_well", NA_character_),
+        share_with_borehole = metadata[["share_with_borehole"]],
+        drilled_by = metadata[["drilled_by"]],
+        drill_method = metadata[["drill_method"]],
+        purpose_of_well = well_vector(wells, "purpose_of_well", NA_real_),
+        purpose_well_inferred = well_vector(
+          wells,
+          "purpose_well_inferred",
+          FALSE
+        ),
+        share_with_well = lapply(wells, `[[`, "share_with_well")
+      )
+    }
+
     # Upload handlers
     observeEvent(input$upload_selected, {
-      req(rv$files_df)
-      req(rv$display_index)
-
-      if (nrow(rv$files_df) == 0) {
-        showNotification(
-          "No PDF pages available to upload.",
-          type = "error",
-          duration = 5
-        )
-        return()
-      }
-
       if (!all_pages_assigned()) {
         showNotification(
           "Please assign every document page to a borehole before uploading.",
@@ -5430,10 +6536,9 @@ simplerIndex <- function(id, language) {
         return()
       }
 
-      # Get the current well ID
-      current_borehole_id <- current_borehole_id()
+      selected_entry_id <- current_borehole_id()
 
-      if (is.null(current_borehole_id)) {
+      if (is.null(selected_entry_id)) {
         showNotification(
           "Assign a borehole to upload before proceeding",
           type = "error",
@@ -5442,8 +6547,13 @@ simplerIndex <- function(id, language) {
         return()
       }
 
-      if (current_borehole_id %in% names(rv$borehole_data)) {
-        metadata <- rv$borehole_data[[current_borehole_id]]$metadata
+      if (!validate_document_names_for_upload(selected_entry_id)) {
+        return()
+      }
+
+      if (selected_entry_id %in% names(rv$borehole_data)) {
+        save_current_wells(selected_entry_id)
+        metadata <- rv$borehole_data[[selected_entry_id]]$metadata
         if (is.null(metadata)) {
           metadata <- empty_well_entry()$metadata
         }
@@ -5452,10 +6562,25 @@ simplerIndex <- function(id, language) {
         if (!validate_metadata_for_upload(metadata)) {
           return()
         }
+        wells <- if (isTRUE(metadata$is_well)) {
+          sanitize_wells_for_insert(
+            rv$borehole_data[[selected_entry_id]]$wells,
+            rv$borehole_data[[selected_entry_id]]$metadata
+          )
+        } else {
+          list()
+        }
+        if (!validate_wells_for_upload(wells, metadata$is_well)) {
+          return()
+        }
 
         # Show processing notification
         showNotification(
-          "Uploading selected borehole...",
+          paste(
+            "Uploading borehole with",
+            length(wells),
+            "well(s)..."
+          ),
           type = "message",
           duration = 3
         )
@@ -5465,68 +6590,36 @@ simplerIndex <- function(id, language) {
             AquaCache::dbTransBegin(session$userData$AquaCache)
 
             # Create PDF with redactions for this borehole
-            pdf_file_path <- create_pdf_with_redactions(
-              current_borehole_id,
-              return_path = TRUE
+            pdf_file_path <- entry_pdf_path(selected_entry_id)
+            document_name <- entry_document_name(
+              selected_entry_id,
+              pdf_file_path
             )
 
-            # Call AquaCache function with the metadata
-            result <- AquaCache::insertACBorehole(
-              con = session$userData$AquaCache,
-              path = pdf_file_path,
-              well_name = metadata[["name"]],
-              location_id = metadata[["location_id"]],
-              latitude = metadata[["latitude"]],
-              longitude = metadata[["longitude"]],
-              location_source = metadata[["location_source"]],
-              surveyed_ground_elev = metadata[["surveyed_ground_elev"]],
-              ground_elev_m = metadata[["surveyed_ground_elev"]],
-              purpose_of_borehole = metadata[["purpose_of_borehole"]],
-              purpose_borehole_inferred = metadata[[
-                "purpose_borehole_inferred"
-              ]],
-              bedrock_reached = metadata[["bedrock_reached"]],
-              depth_to_bedrock = metadata[["depth_to_bedrock"]],
-              permafrost_present = metadata[["permafrost_present"]],
-              permafrost_top = metadata[["permafrost_top"]],
-              permafrost_bot = metadata[["permafrost_bot"]],
-              date_drilled = metadata[["date_drilled"]],
-              casing_od = metadata[["casing_od"]],
-              is_well = metadata[["is_well"]],
-              well_depth = metadata[["drill_depth"]],
-              top_of_screen = metadata[["top_of_screen"]],
-              bottom_of_screen = metadata[["bottom_of_screen"]],
-              seal_material = metadata[["seal_material"]],
-              seal_diameter_mm = metadata[["seal_diameter"]],
-              seal_depth_from = metadata[["seal_depth_from"]],
-              seal_depth_to = metadata[["seal_depth_to"]],
-              screen_material = metadata[["screen_material"]],
-              screen_type = metadata[["screen_type"]],
-              well_head_stick_up = metadata[["well_head_stick_up"]],
-              static_water_level = metadata[["static_water_level"]],
-              estimated_yield = metadata[["estimated_yield"]],
-              notes_borehole = metadata[["notes_borehole"]],
-              notes_well = metadata[["notes_well"]],
-              share_with_borehole = metadata[["share_with_borehole"]],
-              drilled_by = metadata[["drilled_by"]],
-              drill_method = metadata[["drill_method"]],
-              purpose_of_well = metadata[["purpose_of_well"]],
-              purpose_well_inferred = metadata[["purpose_well_inferred"]],
-              share_with_well = metadata[["share_with_well"]]
+            insert_vectorized_borehole(
+              metadata,
+              wells,
+              pdf_file_path,
+              document_name
             )
 
             DBI::dbExecute(session$userData$AquaCache, "COMMIT")
 
             showNotification(
-              paste("Successfully uploaded borehole", current_borehole_id),
+              paste(
+                "Successfully uploaded borehole",
+                selected_entry_id,
+                "with",
+                length(wells),
+                "well(s)"
+              ),
               type = "message",
               duration = 5
             )
 
-            remove_borehole_pages(current_borehole_id)
-
-            # Remove uploaded borehole from local data to prevent re-upload
-            rv$borehole_data[[current_borehole_id]] <- NULL
+            remove_borehole_pages(selected_entry_id)
+            rv$borehole_data[[selected_entry_id]] <- NULL
+            bump_document_ui_version()
             update_borehole_details_selector()
             if (length(rv$borehole_data) == 0) {
               clear_borehole_form()
@@ -5561,7 +6654,6 @@ simplerIndex <- function(id, language) {
 
     observeEvent(input$upload_all, {
       req(rv$borehole_data)
-      req(rv$files_df)
 
       if (!all_pages_assigned()) {
         showNotification(
@@ -5572,9 +6664,7 @@ simplerIndex <- function(id, language) {
         return()
       }
 
-      assigned_ids <- rv$files_df$borehole_id
-      assigned_ids <- assigned_ids[!is.na(assigned_ids) & nzchar(assigned_ids)]
-      unique_borehole_ids <- unique(assigned_ids)
+      unique_borehole_ids <- names(rv$borehole_data)
       total_boreholes <- length(unique_borehole_ids)
 
       if (total_boreholes == 0) {
@@ -5583,6 +6673,10 @@ simplerIndex <- function(id, language) {
           type = "warning",
           duration = 7
         )
+        return()
+      }
+
+      if (!validate_document_names_for_upload(unique_borehole_ids)) {
         return()
       }
 
@@ -5598,11 +6692,14 @@ simplerIndex <- function(id, language) {
       error_count <- 0
 
       # Loop through each unique borehole ID
-      for (well_id in unique_borehole_ids) {
-        if (!(well_id %in% names(rv$borehole_data))) {
+      for (borehole_id in unique_borehole_ids) {
+        if (!(borehole_id %in% names(rv$borehole_data))) {
           next
         }
-        metadata <- rv$borehole_data[[well_id]]$metadata
+        if (identical(borehole_id, current_borehole_id())) {
+          save_current_wells(borehole_id)
+        }
+        metadata <- rv$borehole_data[[borehole_id]]$metadata
         if (is.null(metadata)) {
           metadata <- empty_well_entry()$metadata
         }
@@ -5612,63 +6709,34 @@ simplerIndex <- function(id, language) {
           error_count <- error_count + 1
           next()
         }
+        wells <- if (isTRUE(metadata$is_well)) {
+          sanitize_wells_for_insert(
+            rv$borehole_data[[borehole_id]]$wells,
+            rv$borehole_data[[borehole_id]]$metadata
+          )
+        } else {
+          list()
+        }
+        if (!validate_wells_for_upload(wells, metadata$is_well)) {
+          error_count <- error_count + 1
+          next()
+        }
 
         tryCatch(
           {
             AquaCache::dbTransBegin(session$userData$AquaCache)
             # Create PDF with redactions for this borehole
-            pdf_file_path <- create_pdf_with_redactions(
-              well_id,
-              return_path = TRUE
+            pdf_file_path <- entry_pdf_path(borehole_id)
+            document_name <- entry_document_name(
+              borehole_id,
+              pdf_file_path
             )
 
-            # Call AquaCache function with the metadata
-            result <- AquaCache::insertACBorehole(
-              con = session$userData$AquaCache,
-              path = pdf_file_path,
-              well_name = metadata[["name"]],
-              location_id = metadata[["location_id"]],
-              latitude = metadata[["latitude"]],
-              longitude = metadata[["longitude"]],
-              location_source = metadata[["location_source"]],
-              ground_elev_m = metadata[[
-                "surveyed_ground_elev"
-              ]],
-              surveyed_ground_elev = metadata[[
-                "surveyed_ground_elev"
-              ]],
-              purpose_of_borehole = metadata[["purpose_of_borehole"]],
-              purpose_borehole_inferred = metadata[[
-                "purpose_borehole_inferred"
-              ]],
-              bedrock_reached = metadata[["bedrock_reached"]],
-              depth_to_bedrock = metadata[["depth_to_bedrock"]],
-              permafrost_present = metadata[["permafrost_present"]],
-              permafrost_top = metadata[["permafrost_top"]],
-              permafrost_bot = metadata[["permafrost_bot"]],
-              date_drilled = metadata[["date_drilled"]],
-              casing_od = metadata[["casing_od"]],
-              is_well = metadata[["is_well"]],
-              well_depth = metadata[["drill_depth"]],
-              top_of_screen = metadata[["top_of_screen"]],
-              bottom_of_screen = metadata[["bottom_of_screen"]],
-              seal_material = metadata[["seal_material"]],
-              seal_diameter_mm = metadata[["seal_diameter"]],
-              seal_depth_from = metadata[["seal_depth_from"]],
-              seal_depth_to = metadata[["seal_depth_to"]],
-              screen_material = metadata[["screen_material"]],
-              screen_type = metadata[["screen_type"]],
-              well_head_stick_up = metadata[["well_head_stick_up"]],
-              static_water_level = metadata[["static_water_level"]],
-              estimated_yield = metadata[["estimated_yield"]],
-              notes_borehole = metadata[["notes_borehole"]],
-              notes_well = metadata[["notes_well"]],
-              share_with_borehole = metadata[["share_with_borehole"]],
-              drilled_by = metadata[["drilled_by"]],
-              drill_method = metadata[["drill_method"]],
-              purpose_of_well = metadata[["purpose_of_well"]],
-              purpose_well_inferred = metadata[["purpose_well_inferred"]],
-              share_with_well = metadata[["share_with_well"]]
+            insert_vectorized_borehole(
+              metadata,
+              wells,
+              pdf_file_path,
+              document_name
             )
 
             DBI::dbExecute(session$userData$AquaCache, "COMMIT")
@@ -5687,9 +6755,8 @@ simplerIndex <- function(id, language) {
               type = "message",
               duration = 7
             )
-            remove_borehole_pages(well_id)
-            # Remove uploaded borehole from local data to prevent re-upload
-            rv$borehole_data[[well_id]] <- NULL
+            remove_borehole_pages(borehole_id)
+            rv$borehole_data[[borehole_id]] <- NULL
           },
           error = function(e) {
             DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
@@ -5697,7 +6764,7 @@ simplerIndex <- function(id, language) {
             showNotification(
               paste0(
                 "Error uploading borehole ",
-                well_id,
+                borehole_id,
                 ": ",
                 e$message,
                 "\n"
@@ -5730,6 +6797,7 @@ simplerIndex <- function(id, language) {
         )
       }
       # Update selector choices
+      bump_document_ui_version()
       update_borehole_details_selector()
       if (length(rv$borehole_data) == 0) {
         clear_borehole_form()

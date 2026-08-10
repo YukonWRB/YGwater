@@ -51,15 +51,13 @@ timeseries_transmission_choices <- function(con, location_id, source_fx) {
        OR tm.method_code = ANY(sac.transmission_method_codes)
      JOIN public.locations_metadata_transmission_setups s
        ON s.transmission_method_id = tm.transmission_method_id
-     JOIN public.locations_metadata_instruments lmi
-       ON lmi.metadata_id = s.logger_metadata_id
      JOIN public.locations_metadata_transmission_routes r
        ON r.transmission_setup_id = s.transmission_setup_id
      WHERE sac.source_fx = $1
        AND sac.data_domain = 'continuous'
        AND sac.enabled
        AND sac.requires_transmission_mapping
-       AND lmi.location_id = $2
+       AND s.location_id = $2
        AND s.start_datetime <= CURRENT_TIMESTAMP
        AND (s.end_datetime IS NULL OR s.end_datetime > CURRENT_TIMESTAMP)
      ORDER BY r.route_name, r.transmission_route_id",
@@ -90,13 +88,11 @@ timeseries_transmission_choices <- function(con, location_id, source_fx) {
        OR tm.method_code = ANY(sac.transmission_method_codes)
      JOIN public.locations_metadata_transmission_setups s
        ON s.transmission_method_id = tm.transmission_method_id
-     JOIN public.locations_metadata_instruments lmi
-       ON lmi.metadata_id = s.logger_metadata_id
      WHERE sac.source_fx = $1
        AND sac.data_domain = 'continuous'
        AND sac.enabled
        AND sac.requires_transmission_mapping
-       AND lmi.location_id = $2
+       AND s.location_id = $2
        AND s.start_datetime <= CURRENT_TIMESTAMP
        AND (s.end_datetime IS NULL OR s.end_datetime > CURRENT_TIMESTAMP)
      ORDER BY s.start_datetime DESC, s.transmission_setup_id DESC",
@@ -168,7 +164,7 @@ timeseries_transmission_mapping <- function(con, timeseries_id) {
        m.missing_values::text AS missing_values,
        m.mapping_config::text AS mapping_config,
        m.enabled,
-       lmi.location_id AS route_location_id,
+       s.location_id AS route_location_id,
        CONCAT(r.route_name, ' (#', r.transmission_route_id, ')')
          AS route_label
      FROM continuous.transmission_timeseries_mappings m
@@ -176,8 +172,6 @@ timeseries_transmission_mapping <- function(con, timeseries_id) {
        ON r.transmission_route_id = m.transmission_route_id
      JOIN public.locations_metadata_transmission_setups s
        ON s.transmission_setup_id = r.transmission_setup_id
-     JOIN public.locations_metadata_instruments lmi
-       ON lmi.metadata_id = s.logger_metadata_id
      WHERE m.timeseries_id = $1
      ORDER BY m.enabled DESC, m.transmission_mapping_id",
     params = list(timeseries_id)
@@ -453,13 +447,10 @@ timeseries_save_transmission_route <- function(
   }, add = TRUE)
 
   if (is.na(setup_id)) {
-    logger_metadata_id <- suppressWarnings(as.integer(logger_metadata_id))
+    logger_metadata_id <- nullable_integer(logger_metadata_id)
     transmission_method_id <- suppressWarnings(
       as.integer(transmission_method_id)
     )
-    if (is.na(logger_metadata_id)) {
-      stop("Select the deployed logger for the new transmission setup.")
-    }
     if (is.na(transmission_method_id)) {
       stop("Select a transmission method.")
     }
@@ -470,6 +461,7 @@ timeseries_save_transmission_route <- function(
     setup_result <- DBI::dbGetQuery(
       con,
       "INSERT INTO public.locations_metadata_transmission_setups (
+         location_id,
          logger_metadata_id,
          transmission_method_id,
          provider_name,
@@ -477,26 +469,18 @@ timeseries_save_transmission_route <- function(
          transmission_config,
          start_datetime
        )
-       SELECT $1, $2, $3, $4, $5::jsonb, $6
-       FROM public.locations_metadata_instruments lmi
-       WHERE lmi.metadata_id = $1
-         AND lmi.location_id = $7
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7)
        RETURNING transmission_setup_id",
       params = list(
+        location_id,
         logger_metadata_id,
         transmission_method_id,
         nullable_text(provider_name),
         nullable_text(platform_identifier),
         transmission_config,
-        setup_start_datetime,
-        location_id
+        setup_start_datetime
       )
     )
-    if (nrow(setup_result) != 1L) {
-      stop(
-        "The selected logger deployment does not belong to the timeseries location."
-      )
-    }
     setup_id <- setup_result$transmission_setup_id[[1]]
   }
 

@@ -204,13 +204,15 @@ reference_transmission_setup_choices_query <- function() {
     "SELECT s.transmission_setup_id AS value,",
     "CONCAT(",
     "  '#', s.transmission_setup_id::text,",
-    "  ' | ', COALESCE(i.serial_no, '[logger]'),",
+    "  ' | ', COALESCE(l.location_code, l.name, '[location]'),",
+    "  ' | ', COALESCE(i.serial_no, '[no logger]'),",
     "  ' | ', COALESCE(tm.method_name, '?'),",
     "  CASE WHEN s.provider_name IS NOT NULL THEN CONCAT(' | ', s.provider_name) ELSE '' END,",
     "  CASE WHEN s.platform_identifier IS NOT NULL THEN CONCAT(' | ', s.platform_identifier) ELSE '' END,",
     "  ' | ', to_char(s.start_datetime AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), ' UTC'",
     ") AS label",
     "FROM public.locations_metadata_transmission_setups AS s",
+    "LEFT JOIN public.locations AS l ON s.location_id = l.location_id",
     "LEFT JOIN public.locations_metadata_instruments AS lmi",
     "  ON s.logger_metadata_id = lmi.metadata_id",
     "LEFT JOIN instruments.instruments AS i ON lmi.instrument_id = i.instrument_id",
@@ -234,9 +236,7 @@ reference_transmission_route_choices_query <- function() {
     "FROM public.locations_metadata_transmission_routes AS r",
     "JOIN public.locations_metadata_transmission_setups AS s",
     "  ON r.transmission_setup_id = s.transmission_setup_id",
-    "LEFT JOIN public.locations_metadata_instruments AS lmi",
-    "  ON s.logger_metadata_id = lmi.metadata_id",
-    "LEFT JOIN public.locations AS l ON lmi.location_id = l.location_id",
+    "LEFT JOIN public.locations AS l ON s.location_id = l.location_id",
     "LEFT JOIN instruments.transmission_methods AS tm",
     "  ON s.transmission_method_id = tm.transmission_method_id",
     "ORDER BY l.location_code, r.route_name, r.transmission_route_id"
@@ -839,7 +839,8 @@ reference_table_configs <- function() {
       key = "transmission_setups",
       title = "Transmission Setups",
       description = paste(
-        "Manage time-bounded telemetry setups for deployed loggers.",
+        "Manage time-bounded telemetry setups for locations.",
+        "A deployed logger can be recorded when known.",
         "Enter timestamps as UTC ISO values."
       ),
       schema = "public",
@@ -850,12 +851,23 @@ reference_table_configs <- function() {
       audit_columns = audit_cols,
       columns = list(
         reference_select_field(
+          "location_id",
+          "Location",
+          choices_query = paste(
+            "SELECT location_id AS value,",
+            "CONCAT(COALESCE(location_code, '[no code]'), ' | ', name) AS label",
+            "FROM public.locations",
+            "ORDER BY location_code, name"
+          ),
+          required = TRUE
+        ),
+        reference_select_field(
           "logger_metadata_id",
-          "Logger deployment",
+          "Logger deployment (optional)",
           choices_query = reference_deployment_choices_query(
             require_logger = TRUE
           ),
-          required = TRUE
+          required = FALSE
         ),
         reference_select_field(
           "transmission_method_id",

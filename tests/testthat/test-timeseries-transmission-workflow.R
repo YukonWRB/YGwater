@@ -204,7 +204,7 @@ test_that("route creation can reuse an existing transmission setup", {
   expect_false(rolled_back)
 })
 
-test_that("route creation can create its transmission setup", {
+test_that("route creation can create a setup without a deployed logger", {
   env <- timeseries_transmission_test_environment()
   statements <- character()
   parameters <- list()
@@ -232,7 +232,7 @@ test_that("route creation can create its transmission setup", {
     con = structure(list(), class = "mock_con"),
     location_id = 3,
     setup_id = NA,
-    logger_metadata_id = 12,
+    logger_metadata_id = NA,
     transmission_method_id = 5,
     provider_name = "NESDIS",
     platform_identifier = "CE123456",
@@ -253,8 +253,10 @@ test_that("route creation can create its transmission setup", {
   expect_length(statements, 2L)
   expect_match(statements[[1]], "transmission_setups", fixed = TRUE)
   expect_match(statements[[2]], "transmission_routes", fixed = TRUE)
-  expect_equal(parameters[[1]][1:4], list(12L, 5L, "NESDIS", "CE123456"))
-  expect_equal(parameters[[1]][[7]], 3L)
+  expect_equal(
+    parameters[[1]][1:5],
+    list(3L, NA_integer_, 5L, "NESDIS", "CE123456")
+  )
   expect_equal(parameters[[2]][[1]], 33L)
 })
 
@@ -377,6 +379,11 @@ test_that("addTimeseries uses registry-driven transmission UI and persistence", 
   expect_match(
     module_text,
     "Create transmission route",
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "Deployed logger (optional)",
     fixed = TRUE
   )
   expect_match(

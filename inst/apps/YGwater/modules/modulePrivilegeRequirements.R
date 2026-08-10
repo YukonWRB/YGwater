@@ -1,3 +1,5 @@
+
+
 module_privilege_requirement <- function(
   tables = character(0),
   privileges = list(c("DELETE", "INSERT", "UPDATE")),

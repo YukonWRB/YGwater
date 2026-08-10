@@ -29,12 +29,13 @@ wellRegistryUI <- function(id) {
       "
     function pieClusterIcon(cluster) {
       var children = cluster.getAllChildMarkers();
-      var counts = {}; // key: 'type|hex'
+      var counts = {}; // key: 'purpose|hex|fill style'
       children.forEach(function(m){
         var cls = (m.options.icon && m.options.icon.options.className) || '';
         var type = (cls.match(/loc-type-([^\\s]+)/) || [,'unknown'])[1];
         var col  = (cls.match(/loc-col-([0-9A-Fa-f]+)/) || [,'777777'])[1];
-        var key = type + '|' + col;
+        var fillStyle = (cls.match(/loc-fill-([^\\s]+)/) || [,'filled'])[1];
+        var key = type + '|' + col + '|' + fillStyle;
         counts[key] = (counts[key] || 0) + 1;
       });
   
@@ -47,13 +48,23 @@ wellRegistryUI <- function(id) {
   
       if (keys.length === 1) {
         // FULL ring: one category only
-        var hex = '#'+keys[0].split('|')[1];
-        ring = '<circle cx=\"'+cx+'\" cy=\"'+cy+'\" r=\"'+r+'\" fill=\"'+hex+'\" stroke=\"'+stroke+'\" stroke-width=\"1\" />';
+        var parts = keys[0].split('|');
+        var hex = '#'+parts[1];
+        var hollow = parts[2] === 'hollow';
+        var ringFill = hollow ? 'white' : hex;
+        var ringStroke = hollow ? hex : stroke;
+        var ringStrokeWidth = hollow ? 5 : 1;
+        ring = '<circle cx=\"'+cx+'\" cy=\"'+cy+'\" r=\"'+r+'\" fill=\"'+ringFill+'\" stroke=\"'+ringStroke+'\" stroke-width=\"'+ringStrokeWidth+'\" />';
       } else {
         // Pie slices
         var start = 0;
         keys.forEach(function(k){
-          var hex = '#'+k.split('|')[1];
+          var parts = k.split('|');
+          var hex = '#'+parts[1];
+          var hollow = parts[2] === 'hollow';
+          var sliceFill = hollow ? 'white' : hex;
+          var sliceStroke = hollow ? hex : stroke;
+          var sliceStrokeWidth = hollow ? 5 : 1;
           var val = counts[k];
           var theta = 2*Math.PI*val/total;
           // guard tiny float issues
@@ -64,7 +75,7 @@ wellRegistryUI <- function(id) {
           var y2 = cy + r*Math.sin(start+theta);
           var large = (theta > Math.PI) ? 1 : 0;
           var d = 'M '+cx+' '+cy+' L '+x1+' '+y1+' A '+r+' '+r+' 0 '+large+' 1 '+x2+' '+y2+' Z';
-          ring += '<path d=\"'+d+'\" fill=\"'+hex+'\" stroke=\"'+stroke+'\" stroke-width=\"1\" />';
+          ring += '<path d=\"'+d+'\" fill=\"'+sliceFill+'\" stroke=\"'+sliceStroke+'\" stroke-width=\"'+sliceStrokeWidth+'\" />';
           start += theta;
         });
       }
@@ -107,8 +118,6 @@ wellRegistry <- function(id, language) {
 
     ns <- session$ns
 
-    outputs <- reactiveValues() # This allows the module to pass values back to the main server
-
     if (session$userData$user_logged_in) {
       cached <- wwr_module_data(
         con = session$userData$AquaCache,
@@ -120,11 +129,24 @@ wellRegistry <- function(id, language) {
 
     moduleData <- reactiveValues(
       wells = cached$wells,
-      casing_materials = cached$casing_materials,
       boreholes_docs = cached$boreholes_docs,
       documents = cached$documents,
       purposes = cached$purposes
     )
+
+    completion_year_range <- function() {
+      years <- moduleData$wells$completion_year
+      years <- years[!is.na(years) & is.finite(years)]
+      if (!length(years)) {
+        current_year <- lubridate::year(Sys.Date())
+        return(c(current_year - 1L, current_year))
+      }
+      year_range <- range(years)
+      if (year_range[1] == year_range[2]) {
+        year_range <- year_range + c(-1L, 1L)
+      }
+      year_range
+    }
 
     # Adjust filter selections based on if 'all' is selected (remove selections other than 'all')
     observeFilterInput <- function(inputId) {
@@ -151,6 +173,50 @@ wellRegistry <- function(id, language) {
     }
     observeFilterInput("purpose")
 
+    purpose_label_for_scope <- function(
+      registry_scope = input$borehole_well_scope %||% "with_wells"
+    ) {
+      switch(
+        registry_scope,
+        without_wells = tr("borehole_purpose", language$language),
+        all = tr("well_or_borehole_purpose", language$language),
+        tr("well_purpose", language$language)
+      )
+    }
+
+    purpose_choices_for_scope <- function(
+      registry_scope = input$borehole_well_scope %||% "with_wells"
+    ) {
+      purpose_ids <- switch(
+        registry_scope,
+        without_wells = moduleData$wells[
+          has_well == FALSE,
+          unique(borehole_purpose_id)
+        ],
+        all = unique(c(
+          moduleData$wells[has_well == TRUE, well_purpose_id],
+          moduleData$wells[has_well == FALSE, borehole_purpose_id]
+        )),
+        moduleData$wells[has_well == TRUE, unique(well_purpose_id)]
+      )
+      purpose_ids <- purpose_ids[!is.na(purpose_ids)]
+      purpose_column <- tr(
+        "borehole_well_purpose_col",
+        language$language
+      )
+      purposes_sorted <- moduleData$purposes[
+        borehole_well_purpose_id %in% purpose_ids
+      ][order(get(purpose_column))]
+
+      stats::setNames(
+        c("all", purposes_sorted$borehole_well_purpose_id),
+        c(
+          tr("all_m", language$language),
+          purposes_sorted[[purpose_column]]
+        )
+      )
+    }
+
     # Create UI elements #####
 
     output$banner <- renderUI({
@@ -164,11 +230,8 @@ wellRegistry <- function(id, language) {
 
     output$sidebar_controls <- renderUI({
       req(moduleData, language)
-      purposes_sorted <- moduleData$purposes[order(get(
-        tr("borehole_well_purpose_col", language$language)
-      ))]
 
-      # If there are no wells, return a message instead of the filters
+      # If there are no boreholes, return a message instead of the filters
       if (nrow(moduleData$wells) == 0) {
         return(
           div(
@@ -177,6 +240,7 @@ wellRegistry <- function(id, language) {
           )
         )
       }
+      year_range <- completion_year_range()
       tagList(
         checkboxInput(
           ns("cluster_points"),
@@ -185,17 +249,8 @@ wellRegistry <- function(id, language) {
         ),
         selectizeInput(
           ns("purpose"),
-          label = tr("well_purpose", language$language),
-          choices = stats::setNames(
-            c("all", purposes_sorted$borehole_well_purpose_id),
-            c(
-              tr("all_m", language$language),
-              purposes_sorted[[tr(
-                "borehole_well_purpose_col",
-                language$language
-              )]]
-            )
-          ),
+          label = purpose_label_for_scope(),
+          choices = purpose_choices_for_scope(),
           multiple = TRUE,
           selected = "all"
         ),
@@ -230,18 +285,9 @@ wellRegistry <- function(id, language) {
         sliderInput(
           ns("yrs"),
           label = tr("well_completion_yr", language$language),
-          min = lubridate::year(min(
-            moduleData$wells$completion_date,
-            na.rm = TRUE
-          )),
-          max = lubridate::year(max(
-            moduleData$wells$completion_date,
-            na.rm = TRUE
-          )),
-          value = lubridate::year(c(
-            min(moduleData$wells$completion_date, na.rm = TRUE),
-            max(moduleData$wells$completion_date, na.rm = TRUE)
-          )),
+          min = year_range[1],
+          max = year_range[2],
+          value = year_range,
           step = 1,
           sep = ""
         ),
@@ -272,6 +318,19 @@ wellRegistry <- function(id, language) {
             value = TRUE
           )
         ),
+        selectizeInput(
+          ns("borehole_well_scope"),
+          label = tr("borehole_well_scope", language$language),
+          choices = stats::setNames(
+            c("with_wells", "without_wells", "all"),
+            c(
+              tr("show_boreholes_with_wells", language$language),
+              tr("show_boreholes_without_wells", language$language),
+              tr("show_all_boreholes", language$language)
+            )
+          ),
+          selected = "with_wells"
+        ),
         # # Checkbox for wells with missing depth to bedrock
         # checkboxInput(
         #   ns("include_missing_depth_to_bedrock"),
@@ -290,9 +349,30 @@ wellRegistry <- function(id, language) {
     }) |>
       bindEvent(moduleData, language$language)
 
+    observeEvent(
+      list(input$borehole_well_scope, language$language),
+      {
+        purpose_choices <- purpose_choices_for_scope()
+        selected_purposes <- as.character(input$purpose %||% "all")
+        available_purposes <- as.character(unname(purpose_choices))
+        if (!all(selected_purposes %in% available_purposes)) {
+          selected_purposes <- "all"
+        }
+        updateSelectizeInput(
+          session,
+          "purpose",
+          label = purpose_label_for_scope(),
+          choices = purpose_choices,
+          selected = selected_purposes
+        )
+      },
+      ignoreInit = FALSE
+    )
+
     # Reset all filters when reset button pressed ##################################
     observeEvent(input$reset, {
       req(moduleData)
+      year_range <- completion_year_range()
       updateSelectizeInput(
         session,
         "purpose",
@@ -301,10 +381,7 @@ wellRegistry <- function(id, language) {
       updateSliderInput(
         session,
         "yrs",
-        value = lubridate::year(c(
-          min(moduleData$wells$completion_date, na.rm = TRUE),
-          max(moduleData$wells$completion_date, na.rm = TRUE)
-        ))
+        value = year_range
       )
       updateCheckboxInput(
         session,
@@ -341,6 +418,11 @@ wellRegistry <- function(id, language) {
         "well_name_case_sensitive",
         value = FALSE
       )
+      updateSelectizeInput(
+        session,
+        "borehole_well_scope",
+        selected = "with_wells"
+      )
       # updateCheckboxInput(
       #   session,
       #   "include_missing_depth_to_bedrock",
@@ -348,193 +430,190 @@ wellRegistry <- function(id, language) {
       # )
     }) # End of observeEvent for reset filters button
 
-    # Update map popup based on language ###########################################
+    # Build one popup per registry row. Borehole-level fields and documents are
+    # repeated for associated wells, while borehole-only rows remain distinct.
     popupData <- reactive({
-      get_cached(
-        key = if (language$abbrev == "fr") {
-          "wwr_popup_data_fr"
-        } else {
-          "wwr_popup_data_en"
-        },
-        env = if (session$userData$user_logged_in) {
-          session$userData$app_cache
-        } else {
-          .GlobalEnv
-        },
-        fetch_fun = function() {
-          # Create popup text for each well. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
-          # Get well names
-          popup_names <- moduleData$wells[, .(
-            borehole_id,
-            popup_name = data.table::fifelse(
-              is.na(borehole_name),
-              tr("borehole_unnamed", language$language),
-              borehole_name
-            )
-          )]
-          unknown_label <- tr("unknown", language$language)
-          bedrock_not_reached_label <- if (identical(language$abbrev, "fr")) {
-            "Non atteint"
-          } else {
-            "Not reached"
-          }
-          docs_by_borehole <- data.table::copy(moduleData$boreholes_docs)[
-            moduleData$documents,
-            on = .(document_id),
-            `:=`(
-              document_name = i.name,
-              document_format = i.format,
-              download_id = paste0("download_document_", i.document_id)
-            )
-          ]
+      unknown_label <- tr("unknown", language$language)
+      bedrock_not_reached_label <- if (identical(language$abbrev, "fr")) {
+        "Non atteint"
+      } else {
+        "Not reached"
+      }
+      well_label <- if (identical(language$abbrev, "fr")) "Puits" else "Well"
+      borehole_label <- if (identical(language$abbrev, "fr")) {
+        "Trou de forage"
+      } else {
+        "Borehole"
+      }
 
-          # Create download links for documents
-          doc_links <- docs_by_borehole[,
-            .(
-              document_count = .N,
-              document_links = paste0(
-                "<li>",
-                vapply(
-                  seq_len(.N),
-                  function(idx) {
-                    doc_label <- document_name[idx]
-                    if (is.na(doc_label) || !nzchar(doc_label)) {
-                      doc_label <- paste(
-                        tr("document_download", language$language),
-                        document_id[idx]
-                      )
-                    }
-                    if (
-                      !is.na(document_format[idx]) &&
-                        nzchar(document_format[idx])
-                    ) {
-                      doc_label <- paste0(
-                        doc_label,
-                        " (",
-                        document_format[idx],
-                        ")"
-                      )
-                    }
-                    as.character(
-                      shiny::downloadLink(
-                        ns(download_id[idx]),
-                        label = htmltools::htmlEscape(doc_label)
-                      )
-                    )
-                  },
-                  character(1)
+      docs_by_borehole <- data.table::copy(moduleData$boreholes_docs)
+      docs_by_borehole[
+        moduleData$documents,
+        on = .(document_id),
+        `:=`(
+          document_name = i.name,
+          document_format = i.format
+        )
+      ]
+      registry_documents <- merge(
+        moduleData$wells[, .(registry_id, borehole_id)],
+        docs_by_borehole,
+        by = "borehole_id",
+        all = FALSE,
+        sort = FALSE,
+        allow.cartesian = TRUE
+      )
+      registry_documents[,
+        download_id := paste0(
+          "download_document_",
+          registry_id,
+          "_",
+          document_id
+        )
+      ]
+      doc_links <- registry_documents[,
+        .(
+          document_count = .N,
+          document_links = paste0(
+            "<li>",
+            vapply(
+              seq_len(.N),
+              function(idx) {
+                doc_label <- document_name[idx]
+                if (is.na(doc_label) || !nzchar(doc_label)) {
+                  doc_label <- paste(
+                    tr("document_download", language$language),
+                    document_id[idx]
+                  )
+                }
+                if (
+                  !is.na(document_format[idx]) &&
+                    nzchar(document_format[idx])
+                ) {
+                  doc_label <- paste0(
+                    doc_label,
+                    " (",
+                    document_format[idx],
+                    ")"
+                  )
+                }
+                as.character(shiny::downloadLink(
+                  ns(download_id[idx]),
+                  label = htmltools::htmlEscape(doc_label)
+                ))
+              },
+              character(1)
+            ),
+            "</li>",
+            collapse = ""
+          )
+        ),
+        by = registry_id
+      ]
+
+      purposes_lookup <- moduleData$purposes[, .(
+        borehole_well_purpose_id,
+        purpose_name = YGwater:::escape_html_text(
+          get(tr("borehole_well_purpose_col", language$language))
+        )
+      )]
+
+      tmp <- data.table::copy(moduleData$wells)
+      tmp[
+        purposes_lookup,
+        on = .(well_purpose_id = borehole_well_purpose_id),
+        purpose_name := i.purpose_name
+      ]
+      tmp[
+        doc_links,
+        on = .(registry_id),
+        `:=`(
+          document_count = i.document_count,
+          document_links = i.document_links
+        )
+      ]
+      tmp[is.na(document_count), document_count := 0L]
+      tmp[,
+        `:=`(
+          well_display_name = data.table::fcase(
+            !is.na(well_name) & nzchar(trimws(well_name)),
+            YGwater:::escape_html_text(well_name),
+            !is.na(borehole_name) & nzchar(trimws(borehole_name)),
+            YGwater:::escape_html_text(borehole_name),
+            default = unknown_label
+          ),
+          borehole_display_name = data.table::fcase(
+            !is.na(borehole_name) & nzchar(trimws(borehole_name)),
+            YGwater:::escape_html_text(borehole_name),
+            default = tr("borehole_unnamed", language$language)
+          ),
+          drill_date = data.table::fifelse(
+            is.na(completion_date),
+            unknown_label,
+            as.character(completion_date)
+          ),
+          depth_to_bedrock_display = data.table::fcase(
+            !is.na(depth_to_bedrock_m),
+            as.character(round(depth_to_bedrock_m, 4)),
+            !is.na(bedrock_reached) & !bedrock_reached,
+            bedrock_not_reached_label,
+            default = unknown_label
+          )
+        )
+      ]
+
+      tmp[,
+        popup_html := paste0(
+          data.table::fifelse(
+            has_well,
+            paste0(
+              "<strong>",
+              well_label,
+              ": ",
+              well_display_name,
+              "</strong><br/>",
+              data.table::fifelse(
+                well_display_name != borehole_display_name,
+                paste0(
+                  "<div><strong>",
+                  borehole_label,
+                  ":</strong> ",
+                  borehole_display_name,
+                  "</div>"
                 ),
-                "</li>",
-                collapse = ""
+                ""
               )
             ),
-            by = borehole_id
-          ]
-          # drill date for each well
-          drill_date <- moduleData$wells[, .(
-            borehole_id,
-            completion_date = data.table::fifelse(
-              is.na(completion_date),
-              unknown_label,
-              as.character(completion_date)
-            )
-          )]
-          docs_count <- moduleData$boreholes_docs[,
-            .(
-              document_count = .N
-            ),
-            by = borehole_id
-          ]
-
-          purposes_lookup <- moduleData$purposes[, .(
-            borehole_well_purpose_id,
-            purpose_name = YGwater:::escape_html_text(
-              get(tr("borehole_well_purpose_col", language$language))
-            )
-          )]
-          popup_names[, popup_name := YGwater:::escape_html_text(popup_name)]
-
-          # Combine all the data
-          tmp <- data.table::copy(popup_names) # Use copy to avoid modifying the original data table
-          tmp[
-            drill_date,
-            on = .(borehole_id),
-            drill_date := completion_date
-          ] # Join drill_date
-          tmp[
-            moduleData$wells,
-            on = .(borehole_id),
-            `:=`(
-              depth_m = i.depth_m,
-              bedrock_reached = i.bedrock_reached,
-              depth_to_bedrock_m = i.depth_to_bedrock_m,
-              static_water_level_m = i.static_water_level_m,
-              estimated_yield_lps = i.estimated_yield_lps,
-              casing_diameter_mm = i.casing_diameter_mm,
-              seal_material = i.seal_material,
-              seal_diameter_mm = i.seal_diameter_mm,
-              seal_depth_from_m = i.seal_depth_from_m,
-              seal_depth_to_m = i.seal_depth_to_m,
-              screen_material = i.screen_material,
-              screen_type = i.screen_type,
-              screen_top_depth_m = i.screen_top_depth_m,
-              screen_bottom_depth_m = i.screen_bottom_depth_m,
-              latitude = i.latitude,
-              longitude = i.longitude,
-              well_purpose_id = i.well_purpose_id
-            )
-          ] # Join other well info
-          tmp[
-            purposes_lookup,
-            on = .(well_purpose_id = borehole_well_purpose_id),
-            purpose_name := i.purpose_name
-          ] # Join purpose name
-          tmp[
-            docs_count,
-            on = .(borehole_id),
-            document_count := i.document_count
-          ] # Join document count
-
-          tmp[
-            doc_links,
-            on = .(borehole_id),
-            document_links := i.document_links
-          ]
-          tmp[is.na(document_count), document_count := 0]
-          tmp[,
-            depth_to_bedrock_display := data.table::fcase(
-              !is.na(depth_to_bedrock_m),
-              as.character(round(depth_to_bedrock_m, 4)),
-              !is.na(bedrock_reached) & !bedrock_reached,
-              bedrock_not_reached_label,
-              default = unknown_label
-            )
-          ]
-
-          tmp[,
-            popup_html := paste0(
+            paste0(
               "<strong>",
-              popup_name,
-              "</strong><br/>",
-              "<div><strong>Year drilled:</strong> ",
-              drill_date,
-              "</div>",
+              borehole_label,
+              ": ",
+              borehole_display_name,
+              "</strong><br/>"
+            )
+          ),
+          "<div><strong>Year drilled:</strong> ",
+          drill_date,
+          "</div>",
+          "<div><strong>Depth (m):</strong> ",
+          data.table::fifelse(
+            is.na(depth_m),
+            unknown_label,
+            as.character(round(depth_m, 4))
+          ),
+          "</div>",
+          "<div><strong>Depth to bedrock (m):</strong> ",
+          depth_to_bedrock_display,
+          "</div>",
+          data.table::fifelse(
+            has_well,
+            paste0(
               "<div><strong>Well purpose:</strong> ",
               data.table::fifelse(
                 is.na(purpose_name) | !nzchar(purpose_name),
                 unknown_label,
                 purpose_name
               ),
-              "</div>",
-              "<div><strong>Depth (m):</strong> ",
-              data.table::fifelse(
-                is.na(depth_m),
-                unknown_label,
-                as.character(round(depth_m, 4))
-              ),
-              "</div>",
-              "<div><strong>Depth to bedrock (m):</strong> ",
-              depth_to_bedrock_display,
               "</div>",
               "<div><strong>Static water level (m):</strong> ",
               data.table::fifelse(
@@ -555,6 +634,13 @@ wellRegistry <- function(id, language) {
                 is.na(casing_diameter_mm),
                 unknown_label,
                 as.character(round(casing_diameter_mm, 1))
+              ),
+              "</div>",
+              "<div><strong>Stick-up height (m):</strong> ",
+              data.table::fifelse(
+                is.na(stick_up_height_m),
+                unknown_label,
+                as.character(round(stick_up_height_m, 4))
               ),
               "</div>",
               "<div><strong>Seal material:</strong> ",
@@ -622,29 +708,29 @@ wellRegistry <- function(id, language) {
                   4
                 ))
               ),
-              "</div>",
-              "<div><strong>Latitude:</strong> ",
-              round(latitude, 4),
-              "</div>",
-              "<div><strong>Longitude:</strong> ",
-              round(longitude, 4),
-              "</div>",
-              "<div><strong>",
-              tr("documents", language$language),
-              ":</strong> ",
-              document_count,
-              "</div>",
-              data.table::fifelse(
-                document_count > 0,
-                paste0("<ul>", document_links, "</ul>"),
-                ""
-              )
-            )
-          ]
-          tmp
-        },
-        ttl = 60 * 60 * 24
-      ) # Cache for 24 hours
+              "</div>"
+            ),
+            ""
+          ),
+          "<div><strong>Latitude:</strong> ",
+          round(latitude, 4),
+          "</div>",
+          "<div><strong>Longitude:</strong> ",
+          round(longitude, 4),
+          "</div>",
+          "<div><strong>",
+          tr("documents", language$language),
+          ":</strong> ",
+          document_count,
+          "</div>",
+          data.table::fifelse(
+            document_count > 0,
+            paste0("<ul>", document_links, "</ul>"),
+            ""
+          )
+        )
+      ]
+      tmp[, .(registry_id, popup_html)]
     })
 
     # Create the basic map ###########################################################
@@ -695,9 +781,15 @@ wellRegistry <- function(id, language) {
       fill = "#2C7FB8",
       size = 20,
       stroke = "#0c4e7aff",
-      stroke_width = 1
+      stroke_width = 1,
+      hollow = FALSE
     ) {
       shape <- match.arg(shape)
+      if (isTRUE(hollow)) {
+        stroke <- fill
+        fill <- "white"
+        stroke_width <- max(stroke_width, 4)
+      }
       s <- size
       svg <- switch(
         shape,
@@ -754,35 +846,54 @@ wellRegistry <- function(id, language) {
     }
 
     # Helpers to build legend HTML (default leaflet legend doesn't support shapes)
-    build_symbol_legend <- function(type_map, title, stroke = "#244C5A") {
-      rows <- mapply(
-        function(shape, fill, label, icon_url) {
-          icon <- if (!is.null(icon_url) && nzchar(icon_url)) {
-            icon_url
-          } else {
-            svg_data_uri(
-              shape = shape,
-              fill = fill,
-              size = 14,
-              stroke = stroke,
-              stroke_width = 1
+    build_symbol_legend <- function(legend_map, title, group_titles = NULL) {
+      render_rows <- function(rows_data) {
+        if (!nrow(rows_data)) {
+          return("")
+        }
+        rows_data <- rows_data[order(type_label)]
+        paste0(
+          mapply(
+            function(label, icon_url) {
+              sprintf(
+                "<div style='display:flex;align-items:center;margin:2px 0;'>
+                 <img src='%s' style='width:14px;height:14px;margin-right:6px;'/>
+                 <span>%s</span>
+               </div>",
+                icon_url,
+                htmltools::htmlEscape(label)
+              )
+            },
+            rows_data$type_label,
+            rows_data$icon_url,
+            USE.NAMES = FALSE
+          ),
+          collapse = ""
+        )
+      }
+
+      legend_body <- if (is.null(group_titles)) {
+        render_rows(legend_map)
+      } else {
+        sections <- vapply(
+          names(group_titles),
+          function(group_key) {
+            group_value <- identical(group_key, "TRUE")
+            group_rows <- legend_map[has_well == group_value]
+            if (!nrow(group_rows)) {
+              return("")
+            }
+            paste0(
+              "<div style='font-weight:600;margin:6px 0 3px;'>",
+              htmltools::htmlEscape(group_titles[[group_key]]),
+              "</div>",
+              render_rows(group_rows)
             )
-          }
-          sprintf(
-            "<div style='display:flex;align-items:center;margin:2px 0;'>
-           <img src='%s' style='width:14px;height:14px;margin-right:6px;'/>
-           <span>%s</span>
-         </div>",
-            icon,
-            htmltools::htmlEscape(label)
-          )
-        },
-        type_map$shape,
-        type_map$color_hex,
-        type_map$type_label,
-        type_map$icon_url,
-        USE.NAMES = FALSE
-      )
+          },
+          character(1)
+        )
+        paste0(sections, collapse = "")
+      }
 
       htmltools::HTML(sprintf(
         "<div style='background: rgba(255,255,255,0.9);
@@ -793,7 +904,7 @@ wellRegistry <- function(id, language) {
        %s
      </div>",
         htmltools::htmlEscape(title),
-        paste(rows, collapse = "")
+        legend_body
       ))
     }
 
@@ -803,24 +914,51 @@ wellRegistry <- function(id, language) {
       popup_data <- popupData()
 
       wells_sub <- data.table::copy(moduleData$wells)
+      purpose_column <- tr(
+        "borehole_well_purpose_col",
+        language$language
+      )
       wells_sub[
         moduleData$purposes,
         on = .(well_purpose_id = borehole_well_purpose_id),
-        purpose_name := get(paste0(
-          "i.",
-          tr("borehole_well_purpose_col", language$language)
-        ))
+        well_purpose_name := get(paste0("i.", purpose_column))
       ]
+      wells_sub[
+        moduleData$purposes,
+        on = .(borehole_purpose_id = borehole_well_purpose_id),
+        borehole_purpose_name := get(paste0("i.", purpose_column))
+      ]
+      wells_sub[,
+        `:=`(
+          display_purpose_id = data.table::fifelse(
+            has_well,
+            well_purpose_id,
+            borehole_purpose_id
+          ),
+          type_label = data.table::fifelse(
+            has_well,
+            well_purpose_name,
+            borehole_purpose_name
+          )
+        )
+      ]
+
+      registry_scope <- input$borehole_well_scope %||% "with_wells"
+      if (identical(registry_scope, "with_wells")) {
+        wells_sub <- wells_sub[has_well == TRUE]
+      } else if (identical(registry_scope, "without_wells")) {
+        wells_sub <- wells_sub[has_well == FALSE]
+      }
 
       if (!is.null(input$purpose)) {
         selected_purposes <- suppressWarnings(as.numeric(input$purpose))
         if (length(input$purpose) > 1) {
           wells_sub <- wells_sub[
-            well_purpose_id %in% selected_purposes
+            display_purpose_id %in% selected_purposes
           ]
         } else if (input$purpose != "all") {
           wells_sub <- wells_sub[
-            well_purpose_id == selected_purposes
+            display_purpose_id == selected_purposes
           ]
         }
       }
@@ -851,40 +989,36 @@ wellRegistry <- function(id, language) {
       # Filter based on well name search
       search_term <- trimws(input$well_name_search %||% "")
       if (nzchar(search_term)) {
-        well_names <- wells_sub$borehole_name
-        valid_name <- !is.na(well_names)
-
-        names_for_match <- if (isTRUE(input$well_name_case_sensitive)) {
-          well_names
-        } else {
-          tolower(well_names)
-        }
-
         search_for_match <- if (isTRUE(input$well_name_case_sensitive)) {
           search_term
         } else {
           tolower(search_term)
         }
 
-        match_idx <- rep(FALSE, nrow(wells_sub))
-        if (isTRUE(input$well_name_starts_with)) {
-          match_idx[valid_name] <- startsWith(
-            names_for_match[valid_name],
-            search_for_match
-          )
-        } else if (isTRUE(input$well_name_ends_with)) {
-          match_idx[valid_name] <- endsWith(
-            names_for_match[valid_name],
-            search_for_match
-          )
-        } else {
-          match_idx[valid_name] <- grepl(
-            search_for_match,
-            names_for_match[valid_name],
-            fixed = TRUE
-          )
+        matches_name <- function(values) {
+          valid <- !is.na(values) & nzchar(trimws(values))
+          values <- if (isTRUE(input$well_name_case_sensitive)) {
+            values
+          } else {
+            tolower(values)
+          }
+          matched <- rep(FALSE, length(values))
+          if (isTRUE(input$well_name_starts_with)) {
+            matched[valid] <- startsWith(values[valid], search_for_match)
+          } else if (isTRUE(input$well_name_ends_with)) {
+            matched[valid] <- endsWith(values[valid], search_for_match)
+          } else {
+            matched[valid] <- grepl(
+              search_for_match,
+              values[valid],
+              fixed = TRUE
+            )
+          }
+          matched
         }
-        wells_sub <- wells_sub[match_idx]
+        wells_sub <- wells_sub[
+          matches_name(well_name) | matches_name(borehole_name)
+        ]
       }
 
       # if (isFALSE(input$include_missing_depth_to_bedrock)) {
@@ -895,16 +1029,22 @@ wellRegistry <- function(id, language) {
 
       wells_sub <- wells_sub[
         popup_data,
-        on = .(borehole_id),
-        popup_html := popup_html
+        on = .(registry_id),
+        popup_html := i.popup_html
       ]
-      wells_sub[, type_label := purpose_name]
+      wells_sub[,
+        marker_label := data.table::fcase(
+          !is.na(well_name) & nzchar(trimws(well_name)),
+          well_name,
+          !is.na(borehole_name) & nzchar(trimws(borehole_name)),
+          borehole_name,
+          default = tr("unknown", language$language)
+        )
+      ]
       wells_sub[
         is.na(type_label) | trimws(type_label) == "",
         type_label := tr("unknown", language$language)
       ]
-
-      loc_types <- sort(unique(wells_sub$type_label))
 
       shape_choices <- c("circle", "square", "diamond")
 
@@ -938,18 +1078,57 @@ wellRegistry <- function(id, language) {
         "#C83E8A"
       )
 
-      # Create a mapping of location types to colors and shapes
-      type_map <- data.table::data.table(
-        type_label = loc_types,
-        color_hex = color_hex_choices[
-          ((seq_along(loc_types) - 1) %% length(color_hex_choices)) + 1
-        ],
-        shape = shape_choices[
-          ((seq_along(loc_types) - 1) %% length(shape_choices)) + 1
-        ]
+      # Assign each purpose a stable color and shape. Borehole-only records use
+      # the same purpose symbol as wells, but render it hollow.
+      purpose_map <- data.table::copy(moduleData$purposes)[
+        order(borehole_well_purpose_id),
+        .(display_purpose_id = borehole_well_purpose_id)
+      ]
+      purpose_map[,
+        `:=`(
+          color_hex = color_hex_choices[
+            ((seq_len(.N) - 1) %% length(color_hex_choices)) + 1
+          ],
+          shape = shape_choices[
+            ((seq_len(.N) - 1) %% length(shape_choices)) + 1
+          ]
+        )
+      ]
+      purpose_map <- data.table::rbindlist(
+        list(
+          purpose_map,
+          data.table::data.table(
+            display_purpose_id = NA_integer_,
+            color_hex = "#5E5E5E",
+            shape = "circle"
+          )
+        ),
+        use.names = TRUE
       )
 
-      type_map[,
+      wells_sub[
+        purpose_map,
+        on = .(display_purpose_id),
+        `:=`(
+          color_hex = i.color_hex,
+          shape = i.shape
+        )
+      ]
+      wells_sub[,
+        `:=`(
+          symbol_fill = data.table::fifelse(
+            has_well,
+            "filled",
+            "hollow"
+          ),
+          purpose_key = data.table::fifelse(
+            is.na(display_purpose_id),
+            "unknown",
+            as.character(display_purpose_id)
+          )
+        )
+      ]
+      wells_sub[,
         icon_url := vapply(
           seq_len(.N),
           function(idx) {
@@ -958,22 +1137,39 @@ wellRegistry <- function(id, language) {
               fill = color_hex[idx],
               size = 20,
               stroke = "#244C5A",
-              stroke_width = 1
+              stroke_width = 1,
+              hollow = !has_well[idx]
             )
           },
           character(1)
         )
       ]
 
-      wells_sub[
-        type_map,
-        on = .(type_label),
-        `:=`(
-          color_hex = i.color_hex,
-          shape = i.shape,
-          icon_url = i.icon_url
+      legend_map <- unique(wells_sub[, .(
+        has_well,
+        display_purpose_id,
+        type_label,
+        color_hex,
+        shape,
+        icon_url
+      )])
+      legend_title <- switch(
+        registry_scope,
+        without_wells = tr("borehole_purpose", language$language),
+        all = tr("well_or_borehole_purpose", language$language),
+        tr("well_purpose", language$language)
+      )
+      legend_group_titles <- if (identical(registry_scope, "all")) {
+        stats::setNames(
+          c(
+            tr("well_purpose", language$language),
+            tr("borehole_purpose", language$language)
+          ),
+          c("TRUE", "FALSE")
         )
-      ]
+      } else {
+        NULL
+      }
 
       map_proxy <- leaflet::leafletProxy("map", session = session) %>%
         leaflet::clearMarkers() %>%
@@ -981,15 +1177,6 @@ wellRegistry <- function(id, language) {
         leaflet::removeControl("well_purpose_legend")
 
       if (nrow(wells_sub) > 0) {
-        # Build per-row SVG data URIs (matches nrow(wells_sub))
-        icon_urls <- mapply(
-          svg_data_uri,
-          shape = wells_sub$shape,
-          fill = wells_sub$color_hex,
-          MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
-          USE.NAMES = FALSE
-        )
-
         # Create icons with custom class names, used for pie chart cluster icons
         slug <- function(x) gsub("[^A-Za-z0-9_-]", "_", x)
         icons <- leaflet::icons(
@@ -998,9 +1185,11 @@ wellRegistry <- function(id, language) {
           iconHeight = 15,
           className = paste0(
             "loc-type-",
-            slug(wells_sub$type_label),
+            slug(wells_sub$purpose_key),
             " loc-col-",
-            gsub("#", "", wells_sub$color_hex)
+            gsub("#", "", wells_sub$color_hex),
+            " loc-fill-",
+            wells_sub$symbol_fill
           )
         )
 
@@ -1009,6 +1198,8 @@ wellRegistry <- function(id, language) {
             data = wells_sub,
             lng = ~longitude,
             lat = ~latitude,
+            layerId = ~registry_id,
+            label = ~htmltools::htmlEscape(marker_label),
             popup = ~popup_html,
             icon = icons,
             clusterOptions = if (isTRUE(input$cluster_points)) {
@@ -1026,9 +1217,9 @@ wellRegistry <- function(id, language) {
           ) %>%
           leaflet::addControl(
             build_symbol_legend(
-              type_map,
-              title = tr("well_purpose", language$language),
-              stroke = "#244C5A" # same stroke as for markers
+              legend_map,
+              title = legend_title,
+              group_titles = legend_group_titles
             ),
             position = "bottomright",
             layerId = "well_purpose_legend",
@@ -1043,41 +1234,63 @@ wellRegistry <- function(id, language) {
       list(moduleData$documents, moduleData$boreholes_docs),
       {
         req(moduleData$documents, moduleData$boreholes_docs)
-        doc_ids <- unique(moduleData$boreholes_docs$document_id)
-        if (length(doc_ids) == 0) {
+        registry_documents <- merge(
+          moduleData$wells[, .(registry_id, borehole_id)],
+          moduleData$boreholes_docs[, .(borehole_id, document_id)],
+          by = "borehole_id",
+          all = FALSE,
+          sort = FALSE,
+          allow.cartesian = TRUE
+        )
+        registry_documents <- unique(
+          registry_documents[, .(registry_id, document_id)]
+        )
+        if (!nrow(registry_documents)) {
           return()
         }
-        for (doc_id in doc_ids) {
+        for (row_index in seq_len(nrow(registry_documents))) {
           local({
-            doc_id_local <- doc_id
-            output[[paste0("download_document_", doc_id_local)]] <-
+            registry_id_local <- registry_documents$registry_id[[row_index]]
+            doc_id_local <- registry_documents$document_id[[row_index]]
+            output[[paste0(
+              "download_document_",
+              registry_id_local,
+              "_",
+              doc_id_local
+            )]] <-
               downloadHandler(
                 filename = function() {
                   doc <- DBI::dbGetQuery(
                     session$userData$AquaCache,
-                    paste0(
-                      "SELECT name, format FROM files.documents ",
-                      "WHERE document_id = ",
-                      doc_id_local,
-                      ";"
-                    )
+                    "SELECT name, format
+                       FROM files.documents
+                      WHERE document_id = $1;",
+                    params = list(doc_id_local)
                   )
                   if (nrow(doc) != 1) {
                     return("document")
                   }
-                  name <- gsub("[^A-Za-z0-9_-]", "_", doc$name)
-                  format <- doc$format
+                  name <- gsub(
+                    "[^A-Za-z0-9_-]",
+                    "_",
+                    doc$name[[1]]
+                  )
+                  if (is.na(name) || !nzchar(name)) {
+                    name <- paste0("document_", doc_id_local)
+                  }
+                  format <- sub("^\\.", "", doc$format[[1]])
+                  if (is.na(format) || !nzchar(format)) {
+                    return(name)
+                  }
                   paste0(name, ".", format)
                 },
                 content = function(file) {
                   doc <- DBI::dbGetQuery(
                     session$userData$AquaCache,
-                    paste0(
-                      "SELECT document FROM files.documents ",
-                      "WHERE document_id = ",
-                      doc_id_local,
-                      ";"
-                    )
+                    "SELECT document
+                       FROM files.documents
+                      WHERE document_id = $1;",
+                    params = list(doc_id_local)
                   )
                   if (nrow(doc) != 1) {
                     return(NULL)
