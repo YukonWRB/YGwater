@@ -111,7 +111,16 @@ snowBulletin <- function(
       # TODO: this now calls several locations which are part of the 'sample_series' table.
       target_sample_series <- DBI::dbGetQuery(
         con,
-        "SELECT sample_series_id FROM discrete.sample_series WHERE source_fx = 'downloadSnowCourse'"
+        "SELECT ss.sample_series_id
+         FROM discrete.sample_series ss
+         WHERE EXISTS (
+           SELECT 1
+           FROM discrete.sample_series_source_adapters ssa
+           WHERE ssa.sample_series_id = ss.sample_series_id
+             AND ssa.source_fx = 'downloadSnowCourse'
+             AND ssa.active
+             AND ssa.synchronize_priority IS NOT NULL
+         )"
       ) # Snow survey sites
       AquaCache::synchronize_discrete(
         con = con,

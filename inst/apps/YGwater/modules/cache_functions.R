@@ -680,27 +680,87 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
 # water well registry module #########
 wwr_module_data <- function(con, env = .GlobalEnv) {
   get_cached(
-    key = "wwr_module_data",
+    key = "wwr_module_data_v2",
     env = env,
     fetch_fun = function() {
       res <- list(
         # Only get borehole purposes that are used in the wells table
         purposes = dbGetQueryDT(
           con,
-          "SELECT p.borehole_well_purpose_id, p.purpose_name, p.purpose_name_fr, p.description FROM boreholes.borehole_well_purposes AS p WHERE p.borehole_well_purpose_id IN (SELECT DISTINCT well_purpose_id FROM boreholes.wells);"
+          "SELECT
+             p.borehole_well_purpose_id,
+             p.purpose_name,
+             p.purpose_name_fr,
+             p.description
+           FROM boreholes.borehole_well_purposes AS p
+           WHERE p.borehole_well_purpose_id IN (
+             SELECT well_purpose_id
+             FROM boreholes.wells
+             WHERE well_purpose_id IS NOT NULL
+             UNION
+             SELECT borehole_purpose_id
+             FROM boreholes.boreholes
+             WHERE borehole_purpose_id IS NOT NULL
+           );"
         ),
         boreholes_docs = dbGetQueryDT(con, "SELECT * FROM boreholes.boreholes_documents"),
         documents = dbGetQueryDT(
           con,
           "SELECT document_id, name, format FROM files.documents"
         ),
-        # Merge boreholes and wells tables on borehole_id, discarding boreholes with no wells
+        # Keep every borehole, with one row per associated well where present
         wells = dbGetQueryDT(
           con,
-          "SELECT w.casing_material, w.casing_diameter_mm, w.casing_depth_to_m, w.screen_top_depth_m, w.screen_bottom_depth_m, w.static_water_level_m, w.estimated_yield_lps, w.well_purpose_id, w.notes, b.latitude, b.longitude, b.completion_date, b.borehole_name, b.depth_m, b.bedrock_reached, b.depth_to_bedrock_m, b.borehole_id FROM boreholes.boreholes AS b JOIN boreholes.wells AS w ON b.borehole_id = w.borehole_id"
+          "SELECT
+             w.well_id,
+             w.well_name,
+             w.casing_material,
+             w.casing_diameter_mm,
+             w.casing_depth_to_m,
+             w.stick_up_height_m,
+             w.seal_diameter_mm,
+             w.seal_depth_from_m,
+             w.seal_depth_to_m,
+             seal_material.material_name AS seal_material,
+             w.screen_top_depth_m,
+             w.screen_bottom_depth_m,
+             screen_material.material_name AS screen_material,
+             screen_type.type_name AS screen_type,
+             w.static_water_level_m,
+             w.estimated_yield_lps,
+             w.well_purpose_id,
+             w.notes AS well_notes,
+             b.latitude,
+             b.longitude,
+             b.completion_date,
+             b.borehole_name,
+             b.notes AS borehole_notes,
+             b.depth_m,
+             b.bedrock_reached,
+             b.depth_to_bedrock_m,
+             b.borehole_purpose_id,
+             b.borehole_id
+           FROM boreholes.boreholes AS b
+           LEFT JOIN boreholes.wells AS w ON b.borehole_id = w.borehole_id
+           LEFT JOIN boreholes.seal_materials AS seal_material
+             ON w.seal_material_id = seal_material.seal_material_id
+           LEFT JOIN boreholes.screen_materials AS screen_material
+             ON w.screen_material_id = screen_material.screen_material_id
+           LEFT JOIN boreholes.screen_types AS screen_type
+             ON w.screen_type_id = screen_type.screen_type_id"
         )
       )
       res$wells[, completion_year := lubridate::year(completion_date)]
+      res$wells[,
+        `:=`(
+          has_well = !is.na(well_id),
+          registry_id = data.table::fifelse(
+            is.na(well_id),
+            paste0("borehole_", borehole_id),
+            paste0("well_", well_id)
+          )
+        )
+      ]
       return(res)
     },
     ttl = 60 * 60 * 24

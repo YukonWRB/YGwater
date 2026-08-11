@@ -30,6 +30,10 @@ addSampleSeries <- function(id, language) {
 
     moduleData <- reactiveValues()
     selected_series <- reactiveVal(NULL)
+    source_args_existing <- reactiveVal(NA_character_)
+    source_args_existing_source <- reactiveVal(NA_character_)
+    source_args_secondary_existing <- reactiveVal(NA_character_)
+    source_args_secondary_existing_source <- reactiveVal(NA_character_)
     moduleData$org_modal_target <- NULL
     pending_owner_selection <- reactiveVal(character(0))
     pending_owner_new <- reactiveVal(NULL)
@@ -89,11 +93,45 @@ addSampleSeries <- function(id, language) {
     getModuleData <- function() {
       moduleData$sample_series <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT sample_series_id, location_id, sub_location_id, synch_from, synch_to, default_owner, default_contributor, active, source_fx, source_fx_args, note FROM discrete.sample_series ORDER BY sample_series_id"
+        "SELECT sample_series_id, location_id, sub_location_id, synch_from, synch_to, default_owner, default_contributor, active, note FROM discrete.sample_series ORDER BY sample_series_id"
+      )
+      moduleData$sample_series_source_assignments <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT sample_series_source_adapter_id, sample_series_id,
+                source_fx, source_fx_args, fetch_priority,
+                synchronize_priority, active, note
+         FROM discrete.sample_series_source_adapters
+         ORDER BY sample_series_id,
+                  COALESCE(fetch_priority, 32767),
+                  COALESCE(synchronize_priority, 32767),
+                  sample_series_source_adapter_id"
       )
       moduleData$sample_series_display <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT ss.sample_series_id, loc.name AS location, sl.sub_location_name AS sub_location, ss.synch_from, ss.synch_to, ss.active, ss.source_fx, owner.name AS default_owner, contrib.name AS default_contributor, ss.last_new_data, ss.last_synchronize, ss.note FROM discrete.sample_series ss JOIN public.locations loc ON ss.location_id = loc.location_id LEFT JOIN public.sub_locations sl ON ss.sub_location_id = sl.sub_location_id LEFT JOIN public.organizations owner ON ss.default_owner = owner.organization_id LEFT JOIN public.organizations contrib ON ss.default_contributor = contrib.organization_id ORDER BY loc.name ASC, sl.sub_location_name ASC"
+        "SELECT ss.sample_series_id, loc.name AS location,
+                sl.sub_location_name AS sub_location, ss.synch_from,
+                ss.synch_to, ss.active, source.source_fx,
+                owner.name AS default_owner,
+                contrib.name AS default_contributor, ss.last_new_data,
+                ss.last_synchronize, ss.note
+         FROM discrete.sample_series ss
+         JOIN public.locations loc ON ss.location_id = loc.location_id
+         LEFT JOIN public.sub_locations sl
+           ON ss.sub_location_id = sl.sub_location_id
+         LEFT JOIN public.organizations owner
+           ON ss.default_owner = owner.organization_id
+         LEFT JOIN public.organizations contrib
+           ON ss.default_contributor = contrib.organization_id
+         LEFT JOIN LATERAL (
+           SELECT ssa.source_fx
+           FROM discrete.sample_series_source_adapters ssa
+           WHERE ssa.sample_series_id = ss.sample_series_id
+           ORDER BY COALESCE(ssa.fetch_priority, 32767),
+                    COALESCE(ssa.synchronize_priority, 32767),
+                    ssa.sample_series_source_adapter_id
+           LIMIT 1
+         ) source ON TRUE
+         ORDER BY loc.name ASC, sl.sub_location_name ASC"
       )
       moduleData$locations <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -107,12 +145,200 @@ addSampleSeries <- function(id, language) {
         session$userData$AquaCache,
         "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
       )
+      moduleData$source_adapters <- AquaCache::getSourceAdapterCapabilities(
+        con = session$userData$AquaCache,
+        data_domain = "discrete"
+      )
+      moduleData$source_fx <- sort(unique(
+        as.character(moduleData$source_adapters$source_fx)
+      ))
     }
 
     getModuleData()
 
-    choices <- ls(getNamespace("AquaCache"))
-    moduleData$source_fx <- choices[grepl("^download", choices)]
+    current_source_capability <- reactive({
+      source_adapter_capability_row(moduleData$source_adapters, input$source_fx)
+    })
+
+    current_stored_source_args <- reactive({
+      source_fx <- input$source_fx
+      if (
+        length(source_fx) == 1L &&
+          !is.na(source_fx) &&
+          identical(source_fx, source_args_existing_source())
+      ) {
+        source_args_existing()
+      } else {
+        NA_character_
+      }
+    })
+
+    output$source_fx_args_ui <- renderUI({
+      capability <- current_source_capability()
+      if (is.null(capability)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "Select a source function to see its arguments."
+        ))
+      }
+      source_adapter_argument_ui(
+        ns,
+        capability,
+        current_stored_source_args()
+      )
+    })
+
+    collect_source_fx_args <- function() {
+      source_adapter_args_json(source_adapter_collect_args(
+        input,
+        current_source_capability(),
+        current_stored_source_args()
+      ))
+    }
+
+    current_secondary_source_capability <- reactive({
+      source_adapter_capability_row(
+        moduleData$source_adapters,
+        input$source_fx_secondary
+      )
+    })
+
+    current_stored_secondary_source_args <- reactive({
+      source_fx <- input$source_fx_secondary
+      if (
+        length(source_fx) == 1L &&
+          !is.na(source_fx) &&
+          identical(source_fx, source_args_secondary_existing_source())
+      ) {
+        source_args_secondary_existing()
+      } else {
+        NA_character_
+      }
+    })
+
+    output$source_fx_secondary_args_ui <- renderUI({
+      capability <- current_secondary_source_capability()
+      if (is.null(capability)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "Select a secondary source function to see its arguments."
+        ))
+      }
+      source_adapter_argument_ui(
+        ns,
+        capability,
+        current_stored_secondary_source_args(),
+        input_prefix = "secondary_"
+      )
+    })
+
+    collect_secondary_source_fx_args <- function() {
+      source_adapter_args_json(source_adapter_collect_args(
+        input,
+        current_secondary_source_capability(),
+        current_stored_secondary_source_args(),
+        input_prefix = "secondary_"
+      ))
+    }
+
+    collect_source_assignments <- function() {
+      rows <- list()
+      add_assignment <- function(
+        source_fx,
+        args,
+        active,
+        use_fetch,
+        fetch_priority,
+        use_synchronize,
+        synchronize_priority
+      ) {
+        if (
+          is.null(source_fx) ||
+            !length(source_fx) ||
+            is.na(source_fx[[1L]]) ||
+            !nzchar(source_fx[[1L]])
+        ) {
+          return()
+        }
+        if (!isTRUE(use_fetch) && !isTRUE(use_synchronize)) {
+          stop(
+            "Each source assignment must be used for fetching, synchronizing, or both."
+          )
+        }
+        rows[[length(rows) + 1L]] <<- data.frame(
+          source_fx = as.character(source_fx[[1L]]),
+          source_fx_args = args,
+          fetch_priority = if (isTRUE(use_fetch)) {
+            as.integer(fetch_priority)
+          } else {
+            NA_integer_
+          },
+          synchronize_priority = if (isTRUE(use_synchronize)) {
+            as.integer(synchronize_priority)
+          } else {
+            NA_integer_
+          },
+          active = isTRUE(active),
+          note = NA_character_,
+          stringsAsFactors = FALSE
+        )
+      }
+      add_assignment(
+        input$source_fx,
+        collect_source_fx_args(),
+        input$source_assignment_active,
+        input$source_use_fetch,
+        input$source_fetch_priority,
+        input$source_use_synchronize,
+        input$source_synchronize_priority
+      )
+      add_assignment(
+        input$source_fx_secondary,
+        collect_secondary_source_fx_args(),
+        input$source_secondary_active,
+        input$source_secondary_use_fetch,
+        input$source_secondary_fetch_priority,
+        input$source_secondary_use_synchronize,
+        input$source_secondary_synchronize_priority
+      )
+      if (!length(rows)) {
+        stop("Please configure at least one source assignment.")
+      }
+      assignments <- do.call(rbind, rows)
+      active <- assignments[assignments$active, , drop = FALSE]
+      for (priority in c("fetch_priority", "synchronize_priority")) {
+        values <- active[[priority]][!is.na(active[[priority]])]
+        if (anyDuplicated(values)) {
+          stop(
+            "Active source assignments must have unique ",
+            gsub("_", " ", priority),
+            " values."
+          )
+        }
+      }
+      assignments
+    }
+
+    insert_source_assignments <- function(sample_series_id, assignments) {
+      for (i in seq_len(nrow(assignments))) {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "INSERT INTO discrete.sample_series_source_adapters (
+             sample_series_id, source_fx, source_fx_args, fetch_priority,
+             synchronize_priority, active, note
+           ) VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7)",
+          params = list(
+            sample_series_id,
+            assignments$source_fx[[i]],
+            assignments$source_fx_args[[i]],
+            assignments$fetch_priority[[i]],
+            assignments$synchronize_priority[[i]],
+            assignments$active[[i]],
+            assignments$note[[i]]
+          )
+        )
+      }
+    }
 
     output$ui <- renderUI({
       req(moduleData$locations, moduleData$organizations)
@@ -275,12 +501,17 @@ addSampleSeries <- function(id, language) {
           "Active",
           value = TRUE
         ),
-        splitLayout(
-          cellWidths = c("50%", "50%"),
-          verticalLayout(
+        tags$div(
+          class = "alert alert-info",
+          "Configure one or two source assignments. Active assignments are selected independently for routine fetching and full synchronization by their priority; lower numbers run first."
+        ),
+        fluidRow(
+          column(
+            width = 6,
+            tags$h5("Primary source assignment"),
             tags$div(
-              class = "alert alert-info",
-              "The source function is required and should correspond to a download-transform function provided by the AquaCache package."
+              class = "alert alert-secondary",
+              "Usually the routine incremental import route."
             ),
             selectizeInput(
               ns("source_fx"),
@@ -293,27 +524,125 @@ addSampleSeries <- function(id, language) {
               ),
               width = "100%"
             ),
+            tags$p(
+              class = "text-muted small",
+              "Missing download function? Download functions must be ",
+              "registered in the database's ",
+              tags$code("public.source_adapter_capabilities"),
+              " table for the discrete domain to show up here. Developers: see AquaCache::registerSourceAdapterArguments()."
+            ),
             actionButton(
               ns("source_fx_doc"),
               "Open function documentation"
-            )
-          ),
-          verticalLayout(
-            tags$div(
-              class = "alert alert-info",
-              "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
             ),
-            textInput(
-              ns("source_fx_args"),
-              "Source function arguments",
-              value = "",
-              placeholder = "arg1: value1, arg2: value2",
-              width = "100%"
+            checkboxInput(
+              ns("source_assignment_active"),
+              "Assignment active",
+              TRUE
             ),
+            fluidRow(
+              column(
+                6,
+                checkboxInput(ns("source_use_fetch"), "Use for fetching", TRUE)
+              ),
+              column(
+                6,
+                numericInput(
+                  ns("source_fetch_priority"),
+                  "Fetch priority",
+                  1,
+                  min = 1,
+                  step = 1
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                6,
+                checkboxInput(
+                  ns("source_use_synchronize"),
+                  "Use for synchronization",
+                  TRUE
+                )
+              ),
+              column(
+                6,
+                numericInput(
+                  ns("source_synchronize_priority"),
+                  "Synchronization priority",
+                  1,
+                  min = 1,
+                  step = 1
+                )
+              )
+            ),
+            uiOutput(ns("source_fx_args_ui")),
             actionButton(
               ns("args_example"),
               "Show example arguments"
             )
+          ),
+          column(
+            width = 6,
+            tags$h5("Secondary source assignment (optional)"),
+            tags$div(
+              class = "alert alert-secondary",
+              "Useful for retaining an alternate provider or a synchronization-specific route."
+            ),
+            selectizeInput(
+              ns("source_fx_secondary"),
+              "Secondary source function",
+              choices = moduleData$source_fx,
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = "Optional"),
+              width = "100%"
+            ),
+            checkboxInput(
+              ns("source_secondary_active"),
+              "Assignment active",
+              FALSE
+            ),
+            fluidRow(
+              column(
+                6,
+                checkboxInput(
+                  ns("source_secondary_use_fetch"),
+                  "Use for fetching",
+                  FALSE
+                )
+              ),
+              column(
+                6,
+                numericInput(
+                  ns("source_secondary_fetch_priority"),
+                  "Fetch priority",
+                  2,
+                  min = 1,
+                  step = 1
+                )
+              )
+            ),
+            fluidRow(
+              column(
+                6,
+                checkboxInput(
+                  ns("source_secondary_use_synchronize"),
+                  "Use for synchronization",
+                  FALSE
+                )
+              ),
+              column(
+                6,
+                numericInput(
+                  ns("source_secondary_synchronize_priority"),
+                  "Synchronization priority",
+                  2,
+                  min = 1,
+                  step = 1
+                )
+              )
+            ),
+            uiOutput(ns("source_fx_secondary_args_ui"))
           )
         ),
         textAreaInput(
@@ -386,11 +715,14 @@ addSampleSeries <- function(id, language) {
 
     observeEvent(input$reload_module, {
       getModuleData()
-      choices <- ls(getNamespace("AquaCache"))
-      moduleData$source_fx <- choices[grepl("^download", choices)]
       updateSelectizeInput(
         session,
         "source_fx",
+        choices = moduleData$source_fx
+      )
+      updateSelectizeInput(
+        session,
+        "source_fx_secondary",
         choices = moduleData$source_fx
       )
       showNotification("Module reloaded", type = "message")
@@ -653,6 +985,10 @@ addSampleSeries <- function(id, language) {
         sel <- input$ss_table_rows_selected
         if (length(sel) == 0) {
           selected_series(NULL)
+          source_args_existing(NA_character_)
+          source_args_existing_source(NA_character_)
+          source_args_secondary_existing(NA_character_)
+          source_args_secondary_existing_source(NA_character_)
           return()
         }
         ssid <- moduleData$sample_series_display[sel, "sample_series_id"]
@@ -715,19 +1051,127 @@ addSampleSeries <- function(id, language) {
           }
         )
         updateCheckboxInput(session, "active", value = isTRUE(details$active))
+        assignments <- moduleData$sample_series_source_assignments[
+          moduleData$sample_series_source_assignments$sample_series_id == ssid,
+          ,
+          drop = FALSE
+        ]
+        if (nrow(assignments) > 2L) {
+          showNotification(
+            "This sample series has more than two source assignments. The first two are shown; remove or consolidate the additional assignments before modifying it here.",
+            type = "warning",
+            duration = 10
+          )
+        }
+        primary <- if (nrow(assignments)) {
+          assignments[1, , drop = FALSE]
+        } else {
+          assignments[0, , drop = FALSE]
+        }
+        secondary <- if (nrow(assignments) >= 2L) {
+          assignments[2, , drop = FALSE]
+        } else {
+          assignments[0, , drop = FALSE]
+        }
+
+        if (nrow(primary)) {
+          source_args_existing(primary$source_fx_args)
+          source_args_existing_source(as.character(primary$source_fx))
+        } else {
+          source_args_existing(NA_character_)
+          source_args_existing_source(NA_character_)
+        }
         updateSelectizeInput(
           session,
           "source_fx",
-          selected = if (is.na(details$source_fx)) {
+          selected = if (!nrow(primary)) {
             character(0)
           } else {
-            details$source_fx
+            primary$source_fx
           }
         )
-        updateTextInput(
+        updateCheckboxInput(
           session,
-          "source_fx_args",
-          value = parse_source_args(details$source_fx_args)
+          "source_assignment_active",
+          value = !nrow(primary) || isTRUE(primary$active)
+        )
+        updateCheckboxInput(
+          session,
+          "source_use_fetch",
+          value = nrow(primary) && !is.na(primary$fetch_priority)
+        )
+        updateNumericInput(
+          session,
+          "source_fetch_priority",
+          value = if (nrow(primary) && !is.na(primary$fetch_priority)) {
+            primary$fetch_priority
+          } else {
+            1
+          }
+        )
+        updateCheckboxInput(
+          session,
+          "source_use_synchronize",
+          value = nrow(primary) && !is.na(primary$synchronize_priority)
+        )
+        updateNumericInput(
+          session,
+          "source_synchronize_priority",
+          value = if (nrow(primary) && !is.na(primary$synchronize_priority)) {
+            primary$synchronize_priority
+          } else {
+            1
+          }
+        )
+
+        if (nrow(secondary)) {
+          source_args_secondary_existing(secondary$source_fx_args)
+          source_args_secondary_existing_source(as.character(
+            secondary$source_fx
+          ))
+        } else {
+          source_args_secondary_existing(NA_character_)
+          source_args_secondary_existing_source(NA_character_)
+        }
+        updateSelectizeInput(
+          session,
+          "source_fx_secondary",
+          selected = if (nrow(secondary)) secondary$source_fx else character(0)
+        )
+        updateCheckboxInput(
+          session,
+          "source_secondary_active",
+          value = !nrow(secondary) || isTRUE(secondary$active)
+        )
+        updateCheckboxInput(
+          session,
+          "source_secondary_use_fetch",
+          value = nrow(secondary) && !is.na(secondary$fetch_priority)
+        )
+        updateNumericInput(
+          session,
+          "source_secondary_fetch_priority",
+          value = if (nrow(secondary) && !is.na(secondary$fetch_priority)) {
+            secondary$fetch_priority
+          } else {
+            2
+          }
+        )
+        updateCheckboxInput(
+          session,
+          "source_secondary_use_synchronize",
+          value = nrow(secondary) && !is.na(secondary$synchronize_priority)
+        )
+        updateNumericInput(
+          session,
+          "source_secondary_synchronize_priority",
+          value = if (
+            nrow(secondary) && !is.na(secondary$synchronize_priority)
+          ) {
+            secondary$synchronize_priority
+          } else {
+            1
+          }
         )
         updateTextAreaInput(
           session,
@@ -746,8 +1190,9 @@ addSampleSeries <- function(id, language) {
         ))
         return()
       }
-      ex_args <- moduleData$sample_series[
-        moduleData$sample_series$source_fx == input$source_fx,
+      ex_args <- moduleData$sample_series_source_assignments[
+        moduleData$sample_series_source_assignments$source_fx ==
+          input$source_fx,
         "source_fx_args"
       ]
       ex_args <- ex_args[!is.na(ex_args)][1:10]
@@ -849,41 +1294,6 @@ addSampleSeries <- function(id, language) {
         return()
       }
 
-      # if input$source_fx_args is not blank, validate that it is in the correct format.
-      # Should have no =, no "" or '', and have : separating key and value
-      if (nzchar(input$source_fx_args)) {
-        if (grepl("=", input$source_fx_args)) {
-          showNotification(
-            "Source function arguments should use ':' to separate keys and values, not '='.",
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
-        if (grepl("\"|'", input$source_fx_args)) {
-          showNotification(
-            "Source function arguments should not contain quotes (\") or (').",
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
-        if (!all(grepl(":", unlist(strsplit(input$source_fx_args, ",\\s*"))))) {
-          showNotification(
-            "Source function arguments should use ':' to separate keys and values.",
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
-      } else {
-        showNotification(
-          "Source functions and arguments are necessary when adding a sample series.",
-          type = "error",
-          duration = 8
-        )
-      }
-
       synch_from_input <- input$synch_from
       synch_from <- scalar_utc_datetime(synch_from_input)
       if (
@@ -906,7 +1316,16 @@ addSampleSeries <- function(id, language) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }
-      args <- format_source_args(input$source_fx_args)
+      source_assignments <- tryCatch(
+        collect_source_assignments(),
+        error = function(e) {
+          showNotification(e$message, type = "error")
+          NULL
+        }
+      )
+      if (is.null(source_assignments)) {
+        return()
+      }
 
       contributor <- if (is.null(input$default_contributor)) {
         NA
@@ -924,7 +1343,11 @@ addSampleSeries <- function(id, language) {
         {
           new <- DBI::dbGetQuery(
             session$userData$AquaCache,
-            "INSERT INTO discrete.sample_series (location_id, sub_location_id, synch_from, synch_to, default_owner, default_contributor, active, source_fx, source_fx_args, note) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING sample_series_id;",
+            "INSERT INTO discrete.sample_series (
+               location_id, sub_location_id, synch_from, synch_to,
+               default_owner, default_contributor, active, note
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             RETURNING sample_series_id;",
             params = list(
               input$location,
               sub_loc,
@@ -933,10 +1356,12 @@ addSampleSeries <- function(id, language) {
               input$default_owner,
               contributor,
               isTRUE(input$active),
-              input$source_fx,
-              args,
               input$note
             )
+          )
+          insert_source_assignments(
+            new$sample_series_id[[1L]],
+            source_assignments
           )
           # Try to get new discrete data
           AquaCache::getNewDiscrete(
@@ -977,7 +1402,15 @@ addSampleSeries <- function(id, language) {
         )
         updateCheckboxInput(session, "active", value = TRUE)
         updateSelectizeInput(session, "source_fx", selected = character(0))
-        updateTextInput(session, "source_fx_args", value = "")
+        updateSelectizeInput(
+          session,
+          "source_fx_secondary",
+          selected = character(0)
+        )
+        source_args_existing(NA_character_)
+        source_args_existing_source(NA_character_)
+        source_args_secondary_existing(NA_character_)
+        source_args_secondary_existing_source(NA_character_)
         updateTextAreaInput(session, "note", value = "")
       }
     })
@@ -1021,7 +1454,28 @@ addSampleSeries <- function(id, language) {
         showNotification("Invalid 'synchronize to' value.", type = "error")
         return()
       }
-      args <- format_source_args(input$source_fx_args)
+      source_assignments <- tryCatch(
+        collect_source_assignments(),
+        error = function(e) {
+          showNotification(e$message, type = "error")
+          NULL
+        }
+      )
+      if (is.null(source_assignments)) {
+        return()
+      }
+      existing_assignment_count <- sum(
+        moduleData$sample_series_source_assignments$sample_series_id ==
+          selected_series()
+      )
+      if (existing_assignment_count > 2L) {
+        showNotification(
+          "This editor supports two assignments and will not overwrite a series that currently has more than two.",
+          type = "error",
+          duration = 10
+        )
+        return()
+      }
 
       sub_loc <- if (is.null(input$sub_location)) {
         NA
@@ -1049,7 +1503,11 @@ addSampleSeries <- function(id, language) {
         {
           DBI::dbExecute(
             session$userData$AquaCache,
-            "UPDATE discrete.sample_series SET location_id = $1, sub_location_id = $2, synch_from = $3, synch_to = $4, default_owner = $5, default_contributor = $6, active = $7, source_fx = $8, source_fx_args = $9, note = $10 WHERE sample_series_id = $11;",
+            "UPDATE discrete.sample_series
+             SET location_id = $1, sub_location_id = $2, synch_from = $3,
+                 synch_to = $4, default_owner = $5,
+                 default_contributor = $6, active = $7, note = $8
+             WHERE sample_series_id = $9;",
             params = list(
               input$location,
               sub_loc,
@@ -1058,12 +1516,17 @@ addSampleSeries <- function(id, language) {
               input$default_owner,
               contributor,
               isTRUE(input$active),
-              input$source_fx,
-              args,
               input$note,
               selected_series()
             )
           )
+          DBI::dbExecute(
+            session$userData$AquaCache,
+            "DELETE FROM discrete.sample_series_source_adapters
+             WHERE sample_series_id = $1",
+            params = list(selected_series())
+          )
+          insert_source_assignments(selected_series(), source_assignments)
 
           # Re-synch the sample series
           AquaCache::synchronize_discrete(

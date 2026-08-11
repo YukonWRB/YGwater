@@ -18,5 +18,9 @@
   <p></p>
   <h2>Privileges</h2>
   <p>Review inherited privileges before changing direct grants. Role and table privilege changes affect database access outside the Shiny application as well.</p>
+  <p>The schema list includes application schemas because a table grant alone is not enough: a role also needs <code>USAGE</code> on the table's schema.</p>
+  <h2>Checking module access</h2>
+  <p>Select <b>Check module visibility and usability</b>, then choose a user or group. <b>Visible</b> shows whether the application's navigation check passes. <b>Full functionality</b> also checks every registered table privilege and schema <code>USAGE</code>. Any missing grants are listed in the final column.</p>
+  <p>The table updates after role membership or privilege changes made on this page. Use <b>Refresh privileges</b> after changing grants elsewhere.</p>
 </body>
 </html>

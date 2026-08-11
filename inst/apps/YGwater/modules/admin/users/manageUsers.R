@@ -14,6 +14,7 @@ manageUsersUI <- function(id) {
             "users_to_groups",
             "group_privileges",
             "user_privileges",
+            "module_access",
             "delete_roles"
           ),
           c(
@@ -22,6 +23,7 @@ manageUsersUI <- function(id) {
             "Assign users to groups",
             "Modify group privileges",
             "Modify user privileges",
+            "Check module visibility and usability",
             "Delete users/groups"
           )
         )
@@ -151,6 +153,25 @@ manageUsersUI <- function(id) {
         DT::DTOutput(ns("user_privileges_table"))
       ),
       conditionalPanel(
+        condition = "input.group_user == 'module_access'",
+        ns = ns,
+        h4("Check module visibility and usability"),
+        selectInput(
+          ns("module_access_role"),
+          "User or group",
+          choices = NULL
+        ),
+        actionButton(
+          ns("refresh_module_access"),
+          "Refresh privileges",
+          icon = icon("rotate")
+        ),
+        helpText(
+          "Visible matches the application's module-access check. Full functionality also requires every listed table privilege and USAGE on the relevant schemas."
+        ),
+        DT::DTOutput(ns("module_access_table"))
+      ),
+      conditionalPanel(
         condition = "input.group_user == 'delete_roles'",
         ns = ns,
         h4("Delete users/groups"),
@@ -183,7 +204,12 @@ manageUsersUI <- function(id) {
   )
 }
 
-manageUsers <- function(id, language) {
+manageUsers <- function(
+  id,
+  language,
+  modules,
+  module_requirements = ygwater_module_privilege_requirements()
+) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
 
@@ -333,8 +359,7 @@ SELECT schema_name
 FROM information_schema.schemata 
 WHERE schema_name NOT LIKE 'pg_%' 
   AND schema_name <> 'information_schema'
-  AND schema_name <> 'application'
-  AND schema_name <> 'information';"
+ORDER BY schema_name;"
     )
 
     # Reload user and group lists
@@ -344,14 +369,21 @@ WHERE schema_name NOT LIKE 'pg_%'
     existing_roles <- reactiveVal(character(0))
     can_reassign_owned_to_users <- reactiveVal(FALSE)
     role_delete_preview <- reactiveVal(data.frame())
+    module_access_refresh <- reactiveVal(0L)
+
+    refresh_module_access <- function() {
+      module_access_refresh(isolate(module_access_refresh()) + 1L)
+    }
 
     update_delete_reassign_choices <- function() {
       delete_role <- isolate(input$delete_role)
-      choices <- if (isTRUE(can_reassign_owned_to_users())) {
-        existing_roles()
-      } else {
-        existing_groups()
-      }
+      choices <- isolate({
+        if (isTRUE(can_reassign_owned_to_users())) {
+          existing_roles()
+        } else {
+          existing_groups()
+        }
+      })
       choices <- setdiff(choices, delete_role)
       selected <- isolate(input$delete_reassign_owned_to)
       if (is.null(selected) || !(selected %in% choices)) {
@@ -375,6 +407,7 @@ WHERE schema_name NOT LIKE 'pg_%'
     load_roles <- function() {
       current_delete_role <- isolate(input$delete_role)
       current_replacement_role <- isolate(input$delete_replacement_role)
+      current_access_role <- isolate(input$module_access_role)
 
       roles <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -404,6 +437,24 @@ ORDER BY rolname"
       updateSelectInput(session, "existing_group", choices = groups)
       updateSelectInput(session, "privilege_user", choices = users)
       updateSelectInput(session, "privilege_group", choices = groups)
+
+      access_choices <- c(
+        stats::setNames(users, paste0(users, " (user)")),
+        stats::setNames(groups, paste0(groups, " (group)"))
+      )
+      updateSelectInput(
+        session,
+        "module_access_role",
+        choices = access_choices,
+        selected = if (
+          !is.null(current_access_role) &&
+            current_access_role %in% unname(access_choices)
+        ) {
+          current_access_role
+        } else {
+          character(0)
+        }
+      )
 
       delete_choices <- setdiff(c(users, groups), "public_reader")
       updateSelectInput(
@@ -443,6 +494,45 @@ ORDER BY rolname"
       update_delete_reassign_choices()
     }
     load_roles()
+
+    observeEvent(
+      input$refresh_module_access,
+      {
+        load_roles()
+        refresh_module_access()
+        set_status("Refreshed roles and effective privileges from the database.")
+      },
+      ignoreInit = TRUE
+    )
+
+    output$module_access_table <- DT::renderDT({
+      req(input$group_user == "module_access")
+      req(input$module_access_role)
+      module_access_refresh()
+
+      access <- tryCatch(
+        module_access_status_query(
+          con = session$userData$AquaCache,
+          role = input$module_access_role,
+          module_ids = modules,
+          requirements = module_requirements
+        ),
+        error = function(e) {
+          validate(need(FALSE, e$message))
+        }
+      )
+
+      DT::datatable(
+        access,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 25,
+          scrollX = TRUE,
+          autoWidth = TRUE
+        )
+      )
+    })
 
     get_tables <- function(schema_names) {
       schema_names <- input_or_empty(schema_names)
@@ -811,50 +901,25 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
     })
 
     observeEvent(input$schema_permissions, {
-      req(input$schema_permissions)
-      tables <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        sprintf(
-          "SELECT table_schema, table_name 
-         FROM information_schema.tables 
-         WHERE table_schema IN (%s)
-         AND table_type = 'BASE TABLE'
-        ORDER BY table_schema, table_name;",
-          paste(
-            DBI::dbQuoteString(
-              session$userData$AquaCache,
-              input$schema_permissions
-            ),
-            collapse = ", "
-          )
-        )
-      )
-      table_choices <- paste0(tables$table_schema, ".", tables$table_name)
+      tables <- get_tables(input_or_empty(input$schema_permissions))
+      table_choices <- tables$table_id
       available_table_choices(table_choices)
-      updateSelectizeInput(
-        session,
-        "table_permission_select",
-        choices = c("All tables", table_choices),
-        selected = NULL
-      )
-      updateSelectizeInput(
-        session,
-        "table_permission_insert",
-        choices = c("All tables", table_choices),
-        selected = NULL
-      )
-      updateSelectizeInput(
-        session,
-        "table_permission_delete",
-        choices = c("All tables", table_choices),
-        selected = NULL
-      )
-      updateSelectizeInput(
-        session,
-        "table_permission_update",
-        choices = c("All tables", table_choices),
-        selected = NULL
-      )
+      choices <- if (length(table_choices) > 0) {
+        c("All tables", table_choices)
+      } else {
+        character(0)
+      }
+
+      for (privilege in table_privileges) {
+        input_id <- paste0("table_permission_", tolower(privilege))
+        selected <- intersect(input_or_empty(isolate(input[[input_id]])), choices)
+        updateSelectizeInput(
+          session,
+          input_id,
+          choices = choices,
+          selected = selected
+        )
+      }
     })
 
     observeEvent(input$create_group, {
@@ -1016,6 +1081,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
           DBI::dbExecute(session$userData$AquaCache, "COMMIT;")
 
           load_roles()
+          refresh_module_access()
           set_status(sprintf(
             "Created group '%s'",
             input$group_name
@@ -1040,6 +1106,10 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
           set_status(password_requirements)
           return(NULL)
         }
+
+        shinyjs::disable("create_user")
+        on.exit(shinyjs::enable("create_user"), add = TRUE)
+
         tryCatch(
           {
             sql <- sprintf(
@@ -1055,6 +1125,9 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
             )
             DBI::dbExecute(session$userData$AquaCache, sql)
             load_roles()
+            refresh_module_access()
+            updateTextInput(session, "user_name", value = "")
+            updateTextInput(session, "user_password", value = "")
             set_status(sprintf(
               "Created user '%s'. Remember to add them to relevant user groups!",
               input$user_name
@@ -1089,6 +1162,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
 
             DBI::dbExecute(session$userData$AquaCache, sql)
 
+            refresh_module_access()
             set_status(sprintf(
               "Added '%s' to '%s'",
               user,
@@ -1200,6 +1274,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
               role = role,
               inherited_roles = character(0)
             )
+            refresh_module_access()
             set_status(sprintf("Updated privileges for group '%s'.", role))
           },
           error = function(e) {
@@ -1309,6 +1384,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
               role = role,
               inherited_roles = member_groups(role)
             )
+            refresh_module_access()
             set_status(sprintf(
               "Updated direct privileges for user '%s'.",
               role
@@ -1427,6 +1503,7 @@ ORDER BY table_schema, table_name",
             )
             DBI::dbExecute(session$userData$AquaCache, "COMMIT;")
             role_delete_preview(dat)
+            refresh_module_access()
             set_status(sprintf(
               "Cleaned share_with references for role '%s'.",
               role
@@ -1491,6 +1568,7 @@ FROM public.drop_role_if_unused($1, NULLIF($2, ''), $3)",
             } else {
               updateSelectInput(session, "delete_role", selected = role)
             }
+            refresh_module_access()
             set_status(result$message[[1]])
           },
           error = function(e) {

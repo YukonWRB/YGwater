@@ -1623,11 +1623,10 @@ addCompoundTimeseries <- function(id, language) {
             "location_id, sub_location_id, timezone_daily_calc, z_id,",
             "parameter_id, media_id, matrix_state_id, sensor_priority,",
             "aggregation_type_id, share_with, note, active,",
-            "sync_remote, publicly_visible, timeseries_type, source_fx,",
-            "source_fx_args",
+            "sync_remote, publicly_visible, timeseries_type",
             ") VALUES (",
             "$1, $2, $3, $4, $5, $6, $7, $8, $9,",
-            "$10, $11, TRUE, FALSE, $12, 'compound', NULL, NULL",
+            "$10, $11, TRUE, FALSE, $12, 'compound'",
             ") RETURNING timeseries_id"
           ),
           params = list(
@@ -1675,7 +1674,6 @@ addCompoundTimeseries <- function(id, language) {
             "default_data_sharing_agreement_id = NULL,",
             "share_with = $10, note = $11, active = TRUE,",
             "sync_remote = FALSE, publicly_visible = $12,",
-            "source_fx = NULL, source_fx_args = NULL,",
             "modified = CURRENT_TIMESTAMP, modified_by = CURRENT_USER",
             "WHERE timeseries_id = $13"
           ),

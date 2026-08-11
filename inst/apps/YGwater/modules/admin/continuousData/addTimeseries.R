@@ -63,6 +63,15 @@ addTimeseries <- function(id, language) {
     instrument_association_cleared <- reactiveVal(FALSE)
     pending_default_owner_selection <- reactiveVal(character(0))
     pending_default_owner_new <- reactiveVal(NULL)
+    pending_transmission_mapping <- reactiveVal(NULL)
+    preferred_transmission_route_id <- reactiveVal(NULL)
+    preferred_secondary_transmission_route_id <- reactiveVal(NULL)
+    route_creation_target <- reactiveVal("primary")
+    transmission_choices_version <- reactiveVal(0L)
+    source_args_existing <- reactiveVal(NA_character_)
+    source_args_existing_source <- reactiveVal(NA_character_)
+    source_args_secondary_existing <- reactiveVal(NA_character_)
+    source_args_secondary_existing_source <- reactiveVal(NA_character_)
 
     safe_text <- function(x) {
       ifelse(is.na(x), "", as.character(x))
@@ -103,6 +112,21 @@ addTimeseries <- function(id, language) {
       }
 
       as.integer(value)
+    }
+
+    source_args_transmission_route_id <- function(source_fx_args) {
+      source_fx_args <- nullable_text(source_fx_args)
+      if (is.na(source_fx_args) || !jsonlite::validate(source_fx_args)) {
+        return(NA_integer_)
+      }
+      args <- tryCatch(
+        jsonlite::fromJSON(source_fx_args, simplifyVector = FALSE),
+        error = function(e) NULL
+      )
+      if (is.null(args) || is.null(args$transmission_route_id)) {
+        return(NA_integer_)
+      }
+      nullable_integer(args$transmission_route_id)
     }
 
     normalize_integer_vector <- function(x) {
@@ -1018,6 +1042,13 @@ addTimeseries <- function(id, language) {
     }
 
     getModuleData <- function() {
+      moduleData$source_adapters <- AquaCache::getSourceAdapterCapabilities(
+        con = session$userData$AquaCache,
+        data_domain = "continuous"
+      )
+      moduleData$source_fx <- sort(unique(
+        as.character(moduleData$source_adapters$source_fx)
+      ))
       moduleData$timeseries <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste(
@@ -1025,10 +1056,29 @@ addTimeseries <- function(id, language) {
           "ts.timezone_daily_calc, lz.z_meters AS z, ts.z_id, ts.media_id,",
           "ts.parameter_id, ts.matrix_state_id, ts.aggregation_type_id,",
           "ts.sensor_priority, ts.default_owner, ts.record_rate,",
-          "ts.share_with, ts.source_fx, ts.source_fx_args, ts.note,",
+          "ts.share_with, source.source_fx, source.source_fx_args, ts.note,",
           "ts.default_data_sharing_agreement_id",
           "FROM continuous.timeseries ts",
+          "LEFT JOIN LATERAL (",
+          "  SELECT source_fx, source_fx_args",
+          "  FROM continuous.timeseries_source_adapters tsa",
+          "  WHERE tsa.timeseries_id = ts.timeseries_id",
+          "  ORDER BY COALESCE(fetch_priority, 32767),",
+          "    COALESCE(synchronize_priority, 32767),",
+          "    timeseries_source_adapter_id",
+          "  LIMIT 1",
+          ") source ON TRUE",
           "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+        )
+      )
+      moduleData$timeseries_source_assignments <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        paste(
+          "SELECT *",
+          "FROM continuous.timeseries_source_adapters",
+          "ORDER BY timeseries_id, COALESCE(fetch_priority, 32767),",
+          "COALESCE(synchronize_priority, 32767),",
+          "timeseries_source_adapter_id"
         )
       )
       moduleData$locations <- DBI::dbGetQuery(
@@ -1227,8 +1277,432 @@ addTimeseries <- function(id, language) {
 
     getModuleData() # Initial data load
 
-    choices <- ls(getNamespace("AquaCache"))
-    moduleData$source_fx <- choices[grepl("^download", choices)]
+    current_adapter_capability <- reactive({
+      source_fx <- nullable_text(input$source_fx)
+      if (
+        is.na(source_fx) ||
+          is.null(moduleData$source_adapters) ||
+          nrow(moduleData$source_adapters) == 0L
+      ) {
+        return(NULL)
+      }
+
+      timeseries_source_adapter_capability(
+        moduleData$source_adapters,
+        source_fx
+      )
+    })
+
+    current_stored_source_args <- reactive({
+      source_fx <- nullable_text(input$source_fx)
+      if (
+        !is.na(source_fx) &&
+          identical(source_fx, source_args_existing_source())
+      ) {
+        source_args_existing()
+      } else {
+        NA_character_
+      }
+    })
+
+    output$source_fx_args_ui <- renderUI({
+      capability <- current_adapter_capability()
+      if (is.null(capability)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "Select a source function to see its arguments."
+        ))
+      }
+      source_adapter_argument_ui(
+        ns,
+        capability,
+        current_stored_source_args()
+      )
+    })
+
+    collect_source_fx_args <- function() {
+      source_adapter_args_json(source_adapter_collect_args(
+        input,
+        current_adapter_capability(),
+        current_stored_source_args()
+      ))
+    }
+
+    secondary_adapter_capability <- reactive({
+      if (!isTRUE(input$source_secondary_enabled)) {
+        return(NULL)
+      }
+      source_fx <- nullable_text(input$source_fx_secondary)
+      if (
+        is.na(source_fx) ||
+          is.null(moduleData$source_adapters) ||
+          nrow(moduleData$source_adapters) == 0L
+      ) {
+        return(NULL)
+      }
+      timeseries_source_adapter_capability(
+        moduleData$source_adapters,
+        source_fx
+      )
+    })
+
+    secondary_stored_source_args <- reactive({
+      source_fx <- nullable_text(input$source_fx_secondary)
+      if (
+        !is.na(source_fx) &&
+          identical(source_fx, source_args_secondary_existing_source())
+      ) {
+        source_args_secondary_existing()
+      } else {
+        NA_character_
+      }
+    })
+
+    output$source_fx_secondary_args_ui <- renderUI({
+      capability <- secondary_adapter_capability()
+      if (is.null(capability)) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          "Select a secondary source function to see its arguments."
+        ))
+      }
+      source_adapter_argument_ui(
+        ns,
+        capability,
+        secondary_stored_source_args(),
+        input_prefix = "secondary_"
+      )
+    })
+
+    collect_secondary_source_fx_args <- function() {
+      source_adapter_args_json(source_adapter_collect_args(
+        input,
+        secondary_adapter_capability(),
+        secondary_stored_source_args(),
+        input_prefix = "secondary_"
+      ))
+    }
+
+    collect_source_assignments <- function() {
+      if (isTRUE(input$source_secondary_enabled)) {
+        if (is.na(nullable_text(input$source_fx))) {
+          stop(
+            "Select a primary source before configuring a secondary source."
+          )
+        }
+        if (is.na(nullable_text(input$source_fx_secondary))) {
+          stop(
+            "Select a secondary source function or turn off the secondary ",
+            "source adapter."
+          )
+        }
+      }
+      rows <- list()
+      add_assignment <- function(
+        source_fx,
+        args,
+        fetch_enabled,
+        fetch_priority,
+        synchronize_enabled,
+        synchronize_priority,
+        active,
+        requires_transmission_mapping = FALSE,
+        transmission_route_id = NULL
+      ) {
+        source_fx <- nullable_text(source_fx)
+        if (is.na(source_fx)) {
+          return(NULL)
+        }
+        if (!isTRUE(fetch_enabled) && !isTRUE(synchronize_enabled)) {
+          stop(
+            "Each configured source must be enabled for fetching, ",
+            "synchronization, or both."
+          )
+        }
+        if (isTRUE(requires_transmission_mapping)) {
+          args <- timeseries_source_args_with_transmission_route(
+            args,
+            transmission_route_id
+          )
+        }
+        data.frame(
+          source_fx = source_fx,
+          source_fx_args = args,
+          fetch_priority = if (isTRUE(fetch_enabled)) {
+            as.integer(fetch_priority)
+          } else {
+            NA_integer_
+          },
+          synchronize_priority = if (isTRUE(synchronize_enabled)) {
+            as.integer(synchronize_priority)
+          } else {
+            NA_integer_
+          },
+          active = isTRUE(active),
+          stringsAsFactors = FALSE
+        )
+      }
+      rows[[1L]] <- add_assignment(
+        input$source_fx,
+        collect_source_fx_args(),
+        input$source_fetch_enabled,
+        input$source_fetch_priority,
+        input$source_sync_enabled,
+        input$source_sync_priority,
+        input$source_active,
+        requires_transmission_mapping = !is.null(
+          current_adapter_capability()
+        ) &&
+          isTRUE(
+            current_adapter_capability()$requires_transmission_mapping[[1L]]
+          ),
+        transmission_route_id = input$transmission_route
+      )
+      rows[[2L]] <- if (isTRUE(input$source_secondary_enabled)) {
+        add_assignment(
+          input$source_fx_secondary,
+          collect_secondary_source_fx_args(),
+          input$source_secondary_fetch_enabled,
+          input$source_secondary_fetch_priority,
+          input$source_secondary_sync_enabled,
+          input$source_secondary_sync_priority,
+          input$source_secondary_active,
+          requires_transmission_mapping = !is.null(
+            secondary_adapter_capability()
+          ) &&
+            isTRUE(
+              secondary_adapter_capability()$requires_transmission_mapping[[1L]]
+            ),
+          transmission_route_id = input$secondary_transmission_route
+        )
+      } else {
+        NULL
+      }
+      rows <- Filter(Negate(is.null), rows)
+      if (!length(rows)) {
+        return(data.frame())
+      }
+      assignments <- do.call(rbind, rows)
+      active_assignments <- assignments[assignments$active, , drop = FALSE]
+      for (column in c("fetch_priority", "synchronize_priority")) {
+        priority <- active_assignments[[column]]
+        priority <- priority[!is.na(priority)]
+        if (anyDuplicated(priority)) {
+          stop("Active source assignments cannot repeat ", column, ".")
+        }
+      }
+      assignments
+    }
+
+    transmission_adapter <- reactive({
+      capability <- current_adapter_capability()
+      if (
+        is.null(capability) ||
+          !isTRUE(capability$requires_transmission_mapping[[1L]])
+      ) {
+        return(NULL)
+      }
+      capability
+    })
+
+    secondary_transmission_adapter <- reactive({
+      capability <- secondary_adapter_capability()
+      if (
+        is.null(capability) ||
+          !isTRUE(capability$requires_transmission_mapping[[1L]])
+      ) {
+        return(NULL)
+      }
+      capability
+    })
+
+    uses_transmission_mapping <- reactive({
+      !is.null(transmission_adapter())
+    })
+
+    secondary_uses_transmission_mapping <- reactive({
+      !is.null(secondary_transmission_adapter())
+    })
+
+    adapter_ui_default <- function(
+      name,
+      default = "",
+      capability = transmission_adapter()
+    ) {
+      if (is.null(capability)) {
+        return(default)
+      }
+      ui_config <- capability$ui_config[[1]]
+      value <- ui_config[[name]]
+      if (is.null(value) || !length(value) || is.na(value[[1]])) {
+        return(default)
+      }
+      as.character(value[[1]])
+    }
+
+    transmission_choices_for <- function(capability) {
+      transmission_choices_version()
+      if (is.null(capability)) {
+        return(list(
+          routes = data.frame(),
+          setups = data.frame(),
+          loggers = data.frame(),
+          methods = data.frame()
+        ))
+      }
+
+      location_id <- nullable_integer(input$location)
+      source_fx <- if (is.null(capability)) {
+        NA_character_
+      } else {
+        as.character(capability$source_fx[[1L]])
+      }
+      if (is.na(location_id) || is.na(source_fx)) {
+        return(list(
+          routes = data.frame(),
+          setups = data.frame(),
+          loggers = data.frame(),
+          methods = data.frame()
+        ))
+      }
+
+      timeseries_transmission_choices(
+        con = session$userData$AquaCache,
+        location_id = location_id,
+        source_fx = source_fx
+      )
+    }
+
+    transmission_choices <- reactive({
+      transmission_choices_for(transmission_adapter())
+    })
+
+    secondary_transmission_choices <- reactive({
+      transmission_choices_for(secondary_transmission_adapter())
+    })
+
+    transmission_mapping_input <- function(input_prefix = "") {
+      timeseries_normalize_transmission_mapping(
+        route_id = input[[paste0(input_prefix, "transmission_route")]],
+        source_field = input[[paste0(
+          input_prefix,
+          "transmission_source_field"
+        )]],
+        value_multiplier = input[[paste0(
+          input_prefix,
+          "transmission_value_multiplier"
+        )]],
+        value_offset = input[[paste0(
+          input_prefix,
+          "transmission_value_offset"
+        )]],
+        missing_values = input[[paste0(
+          input_prefix,
+          "transmission_missing_values"
+        )]],
+        mapping_config = input[[paste0(
+          input_prefix,
+          "transmission_mapping_config"
+        )]]
+      )
+    }
+
+    current_transmission_mappings_input <- function() {
+      mappings <- list()
+      if (uses_transmission_mapping()) {
+        mappings[[length(mappings) + 1L]] <- transmission_mapping_input()
+      }
+      if (secondary_uses_transmission_mapping()) {
+        mappings[[length(mappings) + 1L]] <- transmission_mapping_input(
+          "secondary_"
+        )
+      }
+      if (length(mappings) > 1L) {
+        route_ids <- vapply(
+          mappings,
+          function(x) as.integer(x$transmission_route_id),
+          integer(1)
+        )
+        if (anyDuplicated(route_ids)) {
+          stop(
+            "Primary and secondary transmission sources must use different ",
+            "routes."
+          )
+        }
+      }
+      mappings
+    }
+
+    same_transmission_mapping_row <- function(mapping, existing) {
+      existing_missing <- tryCatch(
+        as.character(jsonlite::fromJSON(existing$missing_values[[1]])),
+        error = function(e) character()
+      )
+      input_missing <- tryCatch(
+        as.character(jsonlite::fromJSON(mapping$missing_values)),
+        error = function(e) character()
+      )
+      existing_config <- tryCatch(
+        jsonlite::fromJSON(
+          existing$mapping_config[[1]],
+          simplifyVector = FALSE
+        ),
+        error = function(e) NULL
+      )
+      input_config <- tryCatch(
+        jsonlite::fromJSON(mapping$mapping_config, simplifyVector = FALSE),
+        error = function(e) NULL
+      )
+
+      same_nullable_integer(
+        mapping$transmission_route_id,
+        existing$transmission_route_id[[1]]
+      ) &&
+        identical(
+          mapping$source_field,
+          trimws(existing$source_field[[1]])
+        ) &&
+        same_nullable_numeric(
+          mapping$value_multiplier,
+          existing$value_multiplier[[1]]
+        ) &&
+        same_nullable_numeric(
+          mapping$value_offset,
+          existing$value_offset[[1]]
+        ) &&
+        identical(existing_missing, input_missing) &&
+        identical(existing_config, input_config) &&
+        isTRUE(existing$enabled[[1]])
+    }
+
+    same_transmission_mappings <- function(mappings, existing_rows) {
+      if (is.null(existing_rows)) {
+        existing_rows <- data.frame()
+      }
+      if (length(mappings) != nrow(existing_rows)) {
+        return(FALSE)
+      }
+      if (!length(mappings)) {
+        return(TRUE)
+      }
+
+      existing_route_ids <- as.integer(existing_rows$transmission_route_id)
+      all(vapply(
+        mappings,
+        function(mapping) {
+          row_index <- match(
+            as.integer(mapping$transmission_route_id),
+            existing_route_ids
+          )
+          !is.na(row_index) &&
+            same_transmission_mapping_row(
+              mapping,
+              existing_rows[row_index, , drop = FALSE]
+            )
+        },
+        logical(1)
+      ))
+    }
 
     correction_type_row <- function(correction_type) {
       if (
@@ -1417,6 +1891,7 @@ addTimeseries <- function(id, language) {
         moduleData$timeseries,
         moduleData$locations_z,
         moduleData$correction_types,
+        moduleData$source_adapters,
         orgs,
         moduleData$agreements
       )
@@ -1722,7 +2197,7 @@ addTimeseries <- function(id, language) {
                 ),
                 selectizeInput(
                   ns("source_fx"),
-                  "Source function (see AquaCache package documentation for details)",
+                  "Primary source function",
                   choices = moduleData$source_fx,
                   multiple = TRUE,
                   options = list(
@@ -1731,29 +2206,139 @@ addTimeseries <- function(id, language) {
                   ),
                   width = "100%"
                 ),
+                checkboxInput(
+                  ns("source_active"),
+                  "Assignment active",
+                  value = TRUE
+                ),
+                fluidRow(
+                  column(
+                    6,
+                    checkboxInput(
+                      ns("source_fetch_enabled"),
+                      "Use for fetching",
+                      value = TRUE
+                    ),
+                    numericInput(
+                      ns("source_fetch_priority"),
+                      "Fetch priority",
+                      value = 1,
+                      min = 1,
+                      step = 1
+                    )
+                  ),
+                  column(
+                    6,
+                    checkboxInput(
+                      ns("source_sync_enabled"),
+                      "Use for synchronization",
+                      value = TRUE
+                    ),
+                    numericInput(
+                      ns("source_sync_priority"),
+                      "Synchronization priority",
+                      value = 1,
+                      min = 1,
+                      step = 1
+                    )
+                  )
+                ),
+                tags$p(
+                  class = "text-muted small",
+                  "Missing download function? Download functions must be ",
+                  "registered in the database's ",
+                  tags$code("public.source_adapter_capabilities"),
+                  " table to show up here. Developers: see AquaCache::registerSourceAdapterArguments()."
+                ),
                 actionButton(
                   ns("source_fx_doc"),
                   "Open function documentation"
                 )
               ),
               verticalLayout(
-                # htmlOutput to tell the user how the source function arguments should be formatted
                 tags$div(
                   class = "alert alert-info",
-                  "Arguments must be formatted as key-value pairs for conversion to JSON, e.g. 'arg1: value1, arg2: value2'. Leave blank if not using a source_fx, otherwise refer to the function documentation in AquaCache."
+                  "Enter the catalogued source arguments below. AquaCache supplies the read-only managed arguments automatically. Transmission route and field settings, if applicable, remain separate."
                 ),
-                textInput(
-                  ns("source_fx_args"),
-                  "Source function arguments",
-                  value = "",
-                  placeholder = "arg1: value1, arg2: value2",
-                  width = "100%"
-                ),
+                uiOutput(ns("source_fx_args_ui")),
                 actionButton(
                   ns("args_example"),
                   "Show example arguments"
                 )
               )
+            ),
+            uiOutput(ns("transmission_mapping_ui")),
+            tags$hr(),
+            checkboxInput(
+              ns("source_secondary_enabled"),
+              "Configure a secondary source adapter",
+              value = FALSE
+            ),
+            conditionalPanel(
+              condition = "input.source_secondary_enabled",
+              ns = ns,
+              tags$h5("Secondary source adapter"),
+              splitLayout(
+                cellWidths = c("50%", "50%"),
+                verticalLayout(
+                  selectizeInput(
+                    ns("source_fx_secondary"),
+                    "Secondary source function",
+                    choices = moduleData$source_fx,
+                    multiple = TRUE,
+                    options = list(
+                      maxItems = 1,
+                      placeholder = "Select secondary source"
+                    ),
+                    width = "100%"
+                  ),
+                  checkboxInput(
+                    ns("source_secondary_active"),
+                    "Assignment active",
+                    value = TRUE
+                  ),
+                  fluidRow(
+                    column(
+                      6,
+                      checkboxInput(
+                        ns("source_secondary_fetch_enabled"),
+                        "Use for fetching",
+                        value = FALSE
+                      ),
+                      numericInput(
+                        ns("source_secondary_fetch_priority"),
+                        "Fetch priority",
+                        value = 2,
+                        min = 1,
+                        step = 1
+                      )
+                    ),
+                    column(
+                      6,
+                      checkboxInput(
+                        ns("source_secondary_sync_enabled"),
+                        "Use for synchronization",
+                        value = TRUE
+                      ),
+                      numericInput(
+                        ns("source_secondary_sync_priority"),
+                        "Synchronization priority",
+                        value = 1,
+                        min = 1,
+                        step = 1
+                      )
+                    )
+                  )
+                ),
+                verticalLayout(
+                  tags$div(
+                    class = "alert alert-info",
+                    "Secondary arguments are stored independently from the primary adapter."
+                  ),
+                  uiOutput(ns("source_fx_secondary_args_ui"))
+                )
+              ),
+              uiOutput(ns("secondary_transmission_mapping_ui"))
             )
           ),
           accordion_panel(
@@ -1860,6 +2445,586 @@ addTimeseries <- function(id, language) {
         )
       )
     }) # End of output$ui
+
+    transmission_mapping_ui <- function(
+      role = c("primary", "secondary")
+    ) {
+      role <- match.arg(role)
+      secondary <- identical(role, "secondary")
+      uses_mapping <- if (secondary) {
+        secondary_uses_transmission_mapping()
+      } else {
+        uses_transmission_mapping()
+      }
+      if (!uses_mapping) {
+        return(NULL)
+      }
+
+      input_prefix <- if (secondary) "secondary_" else ""
+      capability <- if (secondary) {
+        secondary_transmission_adapter()
+      } else {
+        transmission_adapter()
+      }
+
+      location_id <- nullable_integer(input$location)
+      mapping_rows <- pending_transmission_mapping()
+      selected_route <- if (secondary) {
+        preferred_secondary_transmission_route_id()
+      } else {
+        preferred_transmission_route_id()
+      }
+      if (is.null(selected_route)) {
+        stored_route <- source_args_transmission_route_id(
+          if (secondary) {
+            secondary_stored_source_args()
+          } else {
+            current_stored_source_args()
+          }
+        )
+        if (!is.na(stored_route)) {
+          selected_route <- stored_route
+        }
+      }
+      mapping <- NULL
+      if (!is.null(mapping_rows) && nrow(mapping_rows) > 0L) {
+        row_index <- if (!is.null(selected_route)) {
+          match(
+            as.integer(selected_route),
+            as.integer(mapping_rows$transmission_route_id)
+          )
+        } else if (
+          secondary &&
+            uses_transmission_mapping() &&
+            !is.null(preferred_transmission_route_id())
+        ) {
+          candidates <- which(
+            as.integer(mapping_rows$transmission_route_id) !=
+              as.integer(preferred_transmission_route_id())
+          )
+          if (length(candidates)) candidates[[1L]] else NA_integer_
+        } else {
+          1L
+        }
+        if (!is.na(row_index)) {
+          mapping <- mapping_rows[row_index, , drop = FALSE]
+        }
+      }
+
+      if (is.null(selected_route) && !is.null(mapping)) {
+        if (
+          is.na(location_id) ||
+            identical(
+              as.integer(mapping$route_location_id[[1]]),
+              location_id
+            )
+        ) {
+          selected_route <- mapping$transmission_route_id[[1]]
+        }
+      }
+
+      choices <- if (secondary) {
+        secondary_transmission_choices()
+      } else {
+        transmission_choices()
+      }
+      route_values <- choices$routes$transmission_route_id
+      route_labels <- choices$routes$label
+      if (
+        !is.null(selected_route) &&
+          length(selected_route) == 1L &&
+          !is.na(selected_route) &&
+          !selected_route %in% route_values
+      ) {
+        route_values <- c(route_values, selected_route)
+        route_labels <- c(
+          route_labels,
+          if (!is.null(mapping)) {
+            paste0(
+              mapping$route_label[[1]],
+              " (not currently effective)"
+            )
+          } else {
+            paste0(
+              "Current route #",
+              selected_route,
+              " (not currently effective)"
+            )
+          }
+        )
+      }
+
+      missing_values <- ""
+      mapping_config <- "{}"
+      source_field <- ""
+      value_multiplier <- 1
+      value_offset <- 0
+      if (!is.null(mapping)) {
+        source_field <- safe_text(mapping$source_field[[1]])
+        value_multiplier <- as.numeric(mapping$value_multiplier[[1]])
+        value_offset <- as.numeric(mapping$value_offset[[1]])
+        mapping_config <- safe_text(mapping$mapping_config[[1]])
+        parsed_missing <- tryCatch(
+          jsonlite::fromJSON(mapping$missing_values[[1]]),
+          error = function(e) character()
+        )
+        missing_values <- paste(parsed_missing, collapse = ", ")
+      }
+
+      tagList(
+        tags$hr(),
+        tags$h5(paste(
+          if (secondary) "Secondary" else "Primary",
+          "transmission route and field mapping"
+        )),
+        tags$div(
+          class = "alert alert-info",
+          paste(
+            "One transmission route can feed many timeseries. This form",
+            "adds only the field mapping for the current timeseries; route",
+            "and provider settings remain shared."
+          )
+        ),
+        if (is.na(location_id)) {
+          tags$div(
+            class = "alert alert-warning",
+            "Select a location before choosing or creating a transmission route."
+          )
+        },
+        if (
+          !is.na(location_id) &&
+            nrow(choices$routes) == 0L
+        ) {
+          tags$div(
+            class = "alert alert-warning",
+            paste(
+              "No currently effective compatible route exists at this",
+              "location. Create one below."
+            )
+          )
+        },
+        if (
+          !is.null(mapping) &&
+            !is.na(location_id) &&
+            !identical(
+              as.integer(mapping$route_location_id[[1]]),
+              location_id
+            )
+        ) {
+          tags$div(
+            class = "alert alert-warning",
+            paste(
+              "The existing mapping belongs to another location.",
+              "Select a compatible route before saving."
+            )
+          )
+        },
+        selectizeInput(
+          ns(paste0(input_prefix, "transmission_route")),
+          "Transmission route",
+          choices = stats::setNames(route_values, route_labels),
+          selected = selected_route,
+          multiple = TRUE,
+          options = list(
+            maxItems = 1,
+            placeholder = "Select a compatible route",
+            plugins = list("clear_button")
+          ),
+          width = "100%"
+        ),
+        actionButton(
+          ns(paste0(input_prefix, "new_transmission_route")),
+          "Create transmission route",
+          icon = icon("plus"),
+          disabled = is.na(location_id)
+        ),
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          textInput(
+            ns(paste0(input_prefix, "transmission_source_field")),
+            adapter_ui_default(
+              "source_field_label",
+              "Provider field",
+              capability = capability
+            ),
+            value = source_field,
+            placeholder = "Exact payload field name",
+            width = "100%"
+          ),
+          textInput(
+            ns(paste0(input_prefix, "transmission_missing_values")),
+            "Missing-value codes",
+            value = missing_values,
+            placeholder = "-9999, MISSING",
+            width = "100%"
+          )
+        ),
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          numericInput(
+            ns(paste0(input_prefix, "transmission_value_multiplier")),
+            "Value multiplier",
+            value = value_multiplier,
+            step = "any",
+            width = "100%"
+          ),
+          numericInput(
+            ns(paste0(input_prefix, "transmission_value_offset")),
+            "Value offset",
+            value = value_offset,
+            step = "any",
+            width = "100%"
+          )
+        ),
+        textAreaInput(
+          ns(paste0(input_prefix, "transmission_mapping_config")),
+          "Advanced mapping configuration (JSON object)",
+          value = mapping_config,
+          rows = 3,
+          width = "100%"
+        )
+      )
+    }
+
+    output$transmission_mapping_ui <- renderUI({
+      transmission_mapping_ui("primary")
+    })
+
+    output$secondary_transmission_mapping_ui <- renderUI({
+      transmission_mapping_ui("secondary")
+    })
+
+    observeEvent(
+      list(input$location, input$source_fx),
+      {
+        preferred_transmission_route_id(NULL)
+        if (identical(input$mode, "add")) {
+          pending_transmission_mapping(NULL)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    observeEvent(
+      list(
+        input$location,
+        input$source_secondary_enabled,
+        input$source_fx_secondary
+      ),
+      {
+        preferred_secondary_transmission_route_id(NULL)
+        if (identical(input$mode, "add")) {
+          pending_transmission_mapping(NULL)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
+    show_transmission_route_modal <- function(
+      role = c("primary", "secondary")
+    ) {
+      role <- match.arg(role)
+      secondary <- identical(role, "secondary")
+      capability <- if (secondary) {
+        secondary_transmission_adapter()
+      } else {
+        transmission_adapter()
+      }
+      req(!is.null(capability))
+      route_creation_target(role)
+      choices <- if (secondary) {
+        secondary_transmission_choices()
+      } else {
+        transmission_choices()
+      }
+      location_id <- nullable_integer(input$location)
+      req(!is.na(location_id))
+
+      setup_choices <- c(
+        "Create a new transmission setup" = "__new__",
+        stats::setNames(
+          choices$setups$transmission_setup_id,
+          choices$setups$label
+        )
+      )
+      logger_choices <- c(
+        "No deployed logger recorded" = "",
+        stats::setNames(
+          choices$loggers$metadata_id,
+          choices$loggers$label
+        )
+      )
+      method_choices <- stats::setNames(
+        choices$methods$transmission_method_id,
+        choices$methods$method_name
+      )
+      setup_start <- format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC")
+
+      showModal(modalDialog(
+        title = "Create transmission route",
+        size = "l",
+        easyClose = FALSE,
+        selectizeInput(
+          ns("new_route_setup"),
+          "Transmission setup",
+          choices = setup_choices,
+          selected = if (nrow(choices$setups) > 0L) {
+            choices$setups$transmission_setup_id[[1]]
+          } else {
+            "__new__"
+          },
+          width = "100%"
+        ),
+        conditionalPanel(
+          condition = "input.new_route_setup == '__new__'",
+          ns = ns,
+          tags$div(
+            class = "alert alert-info",
+            paste(
+              "A setup describes the deployed logger, provider, and platform.",
+              "The route below describes one delivery schedule or endpoint."
+            )
+          ),
+          splitLayout(
+            cellWidths = c("50%", "50%"),
+            selectizeInput(
+              ns("new_route_logger"),
+              "Deployed logger (optional)",
+              choices = logger_choices,
+              selected = "",
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = "Optional: select a logger"
+              ),
+              width = "100%"
+            ) |>
+              tooltip(
+                "Optional logger deployment that originates this transmission. The route remains attached to the selected location when no logger is recorded."
+              ),
+            selectizeInput(
+              ns("new_route_method"),
+              "Transmission method",
+              choices = method_choices,
+              multiple = TRUE,
+              options = list(
+                maxItems = 1,
+                placeholder = "Select a method"
+              ),
+              width = "100%"
+            )
+          ),
+          splitLayout(
+            cellWidths = c("50%", "50%"),
+            textInput(
+              ns("new_route_provider"),
+              "Provider",
+              value = adapter_ui_default(
+                "provider_name",
+                "",
+                capability = capability
+              )
+            ),
+            textInput(
+              ns("new_route_platform"),
+              "Platform identifier",
+              value = "",
+              placeholder = "DCP address, IMEI, terminal ID, etc."
+            ) |>
+              tooltip(
+                "Transmission platform identifier. For GOES DCS, enter the eight-character DCP address."
+              )
+          ),
+          textInput(
+            ns("new_route_setup_start"),
+            "Setup start datetime (UTC)",
+            value = setup_start,
+            placeholder = "YYYY-MM-DD HH:MM:SS"
+          ),
+          textAreaInput(
+            ns("new_route_transmission_config"),
+            "Advanced setup configuration (JSON object)",
+            value = "{}",
+            rows = 2
+          ) |>
+            tooltip(
+              "Provider-wide JSON settings shared by every route in this transmission setup. Usually left as {} for GOES."
+            )
+        ),
+        tags$hr(),
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          textInput(
+            ns("new_route_name"),
+            "Route name",
+            value = paste(
+              if (secondary) "Secondary" else "Primary",
+              "transmission route"
+            )
+          ),
+          textInput(
+            ns("new_route_endpoint"),
+            "Endpoint or route identifier",
+            value = ""
+          )
+        ),
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          textInput(
+            ns("new_route_message_format"),
+            "Message format",
+            value = "",
+            placeholder = "JSON, CSV, SHEF, custom, etc."
+          ),
+          textInput(
+            ns("new_route_schedule_reference"),
+            "Schedule reference time (UTC, if known)",
+            value = "",
+            placeholder = "HH:MM:SS (optional)"
+          )
+        ),
+        splitLayout(
+          cellWidths = c("34%", "33%", "33%"),
+          numericInput(
+            ns("new_route_interval"),
+            "Transmit interval, seconds",
+            value = NA,
+            min = 1
+          ),
+          numericInput(
+            ns("new_route_window"),
+            "Transmit window, seconds (if known)",
+            value = NA,
+            min = 0
+          ),
+          numericInput(
+            ns("new_route_payload_size"),
+            "Payload size, bytes (if known)",
+            value = NA,
+            min = 1
+          )
+        ),
+        textAreaInput(
+          ns("new_route_config"),
+          "Advanced route configuration (JSON object)",
+          value = "{}",
+          rows = 3
+        ) |>
+          tooltip(
+            "Route-specific parser and retrieval settings. SHEF normally uses {}; max_days defaults to 14."
+          ),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(
+            ns("save_transmission_route"),
+            "Create route",
+            class = "btn-primary"
+          )
+        )
+      ))
+    }
+
+    observeEvent(input$new_transmission_route, {
+      show_transmission_route_modal("primary")
+    })
+
+    observeEvent(input$secondary_new_transmission_route, {
+      show_transmission_route_modal("secondary")
+    })
+
+    observeEvent(input$save_transmission_route, {
+      route_id <- tryCatch(
+        {
+          capability <- if (
+            identical(
+              route_creation_target(),
+              "secondary"
+            )
+          ) {
+            secondary_adapter_capability()
+          } else {
+            current_adapter_capability()
+          }
+          if (
+            identical(input$new_route_setup, "__new__") &&
+              !is.null(capability) &&
+              identical(
+                capability$parallel_group_strategy[[1]],
+                "transmission_platform"
+              ) &&
+              is.na(nullable_text(input$new_route_platform))
+          ) {
+            stop("Enter the provider platform identifier for this setup.")
+          }
+
+          timeseries_save_transmission_route(
+            con = session$userData$AquaCache,
+            location_id = nullable_integer(input$location),
+            setup_id = if (identical(input$new_route_setup, "__new__")) {
+              NA_integer_
+            } else {
+              nullable_integer(input$new_route_setup)
+            },
+            logger_metadata_id = nullable_integer(input$new_route_logger),
+            transmission_method_id = nullable_integer(input$new_route_method),
+            provider_name = safe_text(input$new_route_provider),
+            platform_identifier = safe_text(input$new_route_platform),
+            setup_start_datetime = safe_text(input$new_route_setup_start),
+            transmission_config = safe_text(
+              input$new_route_transmission_config
+            ),
+            route_name = safe_text(input$new_route_name),
+            endpoint_identifier = safe_text(input$new_route_endpoint),
+            message_format = safe_text(input$new_route_message_format),
+            schedule_reference_time_utc = safe_text(
+              input$new_route_schedule_reference
+            ),
+            transmit_interval_seconds = input$new_route_interval,
+            transmit_window_seconds = input$new_route_window,
+            payload_size_bytes = input$new_route_payload_size,
+            route_config = safe_text(input$new_route_config)
+          )
+        },
+        error = function(e) {
+          showNotification(
+            conditionMessage(e),
+            type = "error",
+            duration = 10
+          )
+          NA_integer_
+        }
+      )
+      if (is.na(route_id)) {
+        return()
+      }
+
+      target <- route_creation_target()
+      if (identical(target, "secondary")) {
+        preferred_secondary_transmission_route_id(route_id)
+      } else {
+        preferred_transmission_route_id(route_id)
+      }
+      transmission_choices_version(transmission_choices_version() + 1L)
+      removeModal()
+      session$onFlushed(
+        function() {
+          updateSelectizeInput(
+            session,
+            if (identical(target, "secondary")) {
+              "secondary_transmission_route"
+            } else {
+              "transmission_route"
+            },
+            selected = route_id
+          )
+        },
+        once = TRUE
+      )
+      showNotification(
+        paste("Transmission route", route_id, "created."),
+        type = "message"
+      )
+    })
 
     output$default_corrections_warning <- renderUI({
       tryCatch(
@@ -2394,6 +3559,14 @@ addTimeseries <- function(id, language) {
           moduleData$timeseries$timeseries_id == tsid,
         ]
         if (nrow(details) > 0) {
+          mapping_rows <- timeseries_transmission_mapping(
+            session$userData$AquaCache,
+            tsid
+          )
+          pending_transmission_mapping(mapping_rows)
+          preferred_transmission_route_id(NULL)
+          preferred_secondary_transmission_route_id(NULL)
+
           # Update inputs with the selected timeseries details
           updateSelectizeInput(
             session,
@@ -2487,19 +3660,217 @@ addTimeseries <- function(id, language) {
             "share_with",
             selected = array_to_text(details$share_with)
           )
+          assignments <- moduleData$timeseries_source_assignments[
+            moduleData$timeseries_source_assignments$timeseries_id == tsid,
+            ,
+            drop = FALSE
+          ]
+          if (nrow(assignments) > 2L) {
+            showNotification(
+              "This timeseries has more than two source assignments. The first two are shown; remove or consolidate the additional assignments before modifying it here.",
+              type = "warning",
+              duration = 10
+            )
+          }
+          primary_assignment <- if (nrow(assignments) >= 1L) {
+            assignments[1L, , drop = FALSE]
+          } else {
+            NULL
+          }
+          secondary_assignment <- if (nrow(assignments) >= 2L) {
+            assignments[2L, , drop = FALSE]
+          } else {
+            NULL
+          }
+          assignment_requires_mapping <- function(assignment) {
+            if (is.null(assignment)) {
+              return(FALSE)
+            }
+            capability <- timeseries_source_adapter_capability(
+              moduleData$source_adapters,
+              assignment$source_fx[[1L]]
+            )
+            !is.null(capability) &&
+              isTRUE(capability$requires_transmission_mapping[[1L]])
+          }
+          primary_route_id <- if (is.null(primary_assignment)) {
+            NA_integer_
+          } else {
+            source_args_transmission_route_id(
+              primary_assignment$source_fx_args[[1L]]
+            )
+          }
+          secondary_route_id <- if (is.null(secondary_assignment)) {
+            NA_integer_
+          } else {
+            source_args_transmission_route_id(
+              secondary_assignment$source_fx_args[[1L]]
+            )
+          }
+          available_route_ids <- if (nrow(mapping_rows)) {
+            as.integer(mapping_rows$transmission_route_id)
+          } else {
+            integer()
+          }
+          if (
+            is.na(primary_route_id) &&
+              assignment_requires_mapping(primary_assignment) &&
+              length(available_route_ids)
+          ) {
+            primary_route_id <- available_route_ids[[1L]]
+          }
+          if (
+            is.na(secondary_route_id) &&
+              assignment_requires_mapping(secondary_assignment)
+          ) {
+            secondary_candidates <- setdiff(
+              available_route_ids,
+              primary_route_id
+            )
+            if (length(secondary_candidates)) {
+              secondary_route_id <- secondary_candidates[[1L]]
+            }
+          }
+          preferred_transmission_route_id(
+            if (is.na(primary_route_id)) NULL else primary_route_id
+          )
+          preferred_secondary_transmission_route_id(
+            if (is.na(secondary_route_id)) NULL else secondary_route_id
+          )
+          updateCheckboxInput(
+            session,
+            "source_secondary_enabled",
+            value = !is.null(secondary_assignment)
+          )
+          source_args_existing(
+            if (is.null(primary_assignment)) {
+              NA_character_
+            } else {
+              primary_assignment$source_fx_args
+            }
+          )
+          source_args_existing_source(
+            if (is.null(primary_assignment)) {
+              NA_character_
+            } else {
+              as.character(primary_assignment$source_fx)
+            }
+          )
           updateSelectizeInput(
             session,
             "source_fx",
-            selected = details$source_fx
+            selected = if (is.null(primary_assignment)) {
+              character(0)
+            } else {
+              primary_assignment$source_fx
+            }
           )
-          updateTextInput(
+          updateCheckboxInput(
             session,
-            "source_fx_args",
-            value = ifelse(
-              is.na(details$source_fx_args),
-              "",
-              parse_source_args(details$source_fx_args)
-            )
+            "source_active",
+            value = is.null(primary_assignment) ||
+              isTRUE(primary_assignment$active)
+          )
+          updateCheckboxInput(
+            session,
+            "source_fetch_enabled",
+            value = !is.null(primary_assignment) &&
+              !is.na(primary_assignment$fetch_priority)
+          )
+          updateNumericInput(
+            session,
+            "source_fetch_priority",
+            value = if (
+              is.null(primary_assignment) ||
+                is.na(primary_assignment$fetch_priority)
+            ) {
+              1
+            } else {
+              primary_assignment$fetch_priority
+            }
+          )
+          updateCheckboxInput(
+            session,
+            "source_sync_enabled",
+            value = !is.null(primary_assignment) &&
+              !is.na(primary_assignment$synchronize_priority)
+          )
+          updateNumericInput(
+            session,
+            "source_sync_priority",
+            value = if (
+              is.null(primary_assignment) ||
+                is.na(primary_assignment$synchronize_priority)
+            ) {
+              1
+            } else {
+              primary_assignment$synchronize_priority
+            }
+          )
+          source_args_secondary_existing(
+            if (is.null(secondary_assignment)) {
+              NA_character_
+            } else {
+              secondary_assignment$source_fx_args
+            }
+          )
+          source_args_secondary_existing_source(
+            if (is.null(secondary_assignment)) {
+              NA_character_
+            } else {
+              as.character(secondary_assignment$source_fx)
+            }
+          )
+          updateSelectizeInput(
+            session,
+            "source_fx_secondary",
+            selected = if (is.null(secondary_assignment)) {
+              character(0)
+            } else {
+              secondary_assignment$source_fx
+            }
+          )
+          updateCheckboxInput(
+            session,
+            "source_secondary_active",
+            value = is.null(secondary_assignment) ||
+              isTRUE(secondary_assignment$active)
+          )
+          updateCheckboxInput(
+            session,
+            "source_secondary_fetch_enabled",
+            value = !is.null(secondary_assignment) &&
+              !is.na(secondary_assignment$fetch_priority)
+          )
+          updateNumericInput(
+            session,
+            "source_secondary_fetch_priority",
+            value = if (
+              is.null(secondary_assignment) ||
+                is.na(secondary_assignment$fetch_priority)
+            ) {
+              2
+            } else {
+              secondary_assignment$fetch_priority
+            }
+          )
+          updateCheckboxInput(
+            session,
+            "source_secondary_sync_enabled",
+            value = !is.null(secondary_assignment) &&
+              !is.na(secondary_assignment$synchronize_priority)
+          )
+          updateNumericInput(
+            session,
+            "source_secondary_sync_priority",
+            value = if (
+              is.null(secondary_assignment) ||
+                is.na(secondary_assignment$synchronize_priority)
+            ) {
+              1
+            } else {
+              secondary_assignment$synchronize_priority
+            }
           )
           updateTextAreaInput(
             session,
@@ -2514,6 +3885,18 @@ addTimeseries <- function(id, language) {
         }
       } else {
         selected_tsid(NULL)
+        pending_transmission_mapping(NULL)
+        preferred_transmission_route_id(NULL)
+        preferred_secondary_transmission_route_id(NULL)
+        updateCheckboxInput(
+          session,
+          "source_secondary_enabled",
+          value = FALSE
+        )
+        source_args_existing(NA_character_)
+        source_args_existing_source(NA_character_)
+        source_args_secondary_existing(NA_character_)
+        source_args_secondary_existing_source(NA_character_)
       }
     })
 
@@ -2722,14 +4105,17 @@ addTimeseries <- function(id, language) {
         rate,
         owner,
         note,
-        source_fx,
-        source_fx_args,
+        source_assignments,
+        allow_empty_initial_fetch,
+        transmission_mappings,
         instrument_deployment,
         data,
         share_with,
         default_corrections
       ) {
         promises::future_promise(seed = TRUE, expr = {
+          con <- NULL
+          transaction_active <- FALSE
           tryCatch(
             {
               # Make a connection
@@ -2745,6 +4131,7 @@ addTimeseries <- function(id, language) {
 
               # start a transaction
               DBI::dbBegin(con)
+              transaction_active <- TRUE
 
               if (is.null(sub_loc)) {
                 sub_loc <- NA
@@ -2754,23 +4141,19 @@ addTimeseries <- function(id, language) {
                 sub_loc <- NA
               }
 
-              if (!is.null(source_fx_args)) {
-                if (nzchar(source_fx_args)) {
-                  args <- format_source_args(source_fx_args)
-                } else {
-                  args <- NA
-                }
-              } else {
-                # if the source_fx_args is NULL, we set it to NA
-                args <- NA
-              }
-
-              if (!is.null(source_fx)) {
-                if (nzchar(source_fx)) {
-                  source_fx <- source_fx
-                } else {
-                  source_fx <- NA
-                }
+              active_fetch <- source_assignments[
+                source_assignments$active &
+                  !is.na(source_assignments$fetch_priority),
+                ,
+                drop = FALSE
+              ]
+              if (nrow(active_fetch) > 0L) {
+                active_fetch <- active_fetch[
+                  order(active_fetch$fetch_priority),
+                  ,
+                  drop = FALSE
+                ]
+                source_fx <- active_fetch$source_fx[[1L]]
                 if (source_fx == "downloadNWIS") {
                   # NWIS data is only available from 2007 onwards, and errors if a date in the 1900s or earlier is specified.
                   end_datetime <- "2000-01-01"
@@ -2793,7 +4176,7 @@ addTimeseries <- function(id, language) {
               # Make a new entry to the timeseries table
               new_timeseries_id <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, source_fx, source_fx_args, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING timeseries_id;",
+                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING timeseries_id;",
                 params = list(
                   as.numeric(loc),
                   ifelse(is.na(sub_loc), NA, sub_loc),
@@ -2807,12 +4190,36 @@ addTimeseries <- function(id, language) {
                   rate,
                   as.numeric(owner),
                   share_with_to_array(share_with),
-                  ifelse(is.na(source_fx), NA, source_fx),
-                  ifelse(is.na(args), NA, args),
                   if (nzchar(note)) note else NA,
                   ifelse(is.na(end_datetime), NA, end_datetime)
                 )
               )[1, 1]
+
+              if (nrow(source_assignments) > 0L) {
+                for (row_idx in seq_len(nrow(source_assignments))) {
+                  DBI::dbExecute(
+                    con,
+                    "INSERT INTO continuous.timeseries_source_adapters (
+                       timeseries_id, source_fx, source_fx_args,
+                       fetch_priority, synchronize_priority, active
+                     ) VALUES ($1, $2, $3::jsonb, $4, $5, $6)",
+                    params = list(
+                      new_timeseries_id,
+                      source_assignments$source_fx[[row_idx]],
+                      source_assignments$source_fx_args[[row_idx]],
+                      source_assignments$fetch_priority[[row_idx]],
+                      source_assignments$synchronize_priority[[row_idx]],
+                      source_assignments$active[[row_idx]]
+                    )
+                  )
+                }
+              }
+
+              timeseries_sync_transmission_mapping(
+                con = con,
+                timeseries_id = new_timeseries_id,
+                mapping = transmission_mappings
+              )
 
               update_timeseries_instrument_association(
                 con = con,
@@ -2851,7 +4258,12 @@ addTimeseries <- function(id, language) {
                 }
               }
 
-              # Fetch historical data if source_fx is provided
+              # Commit configuration before external network work. A temporary
+              # provider failure must not erase a valid timeseries and mapping.
+              DBI::dbCommit(con)
+              transaction_active <- FALSE
+
+              # Fetch historical data if source_fx is provided.
               if (!is.na(source_fx)) {
                 AquaCache::getNewContinuous(
                   con = con,
@@ -2899,27 +4311,98 @@ addTimeseries <- function(id, language) {
                 )[1, 1]
 
                 if (is.na(mcd) && is.na(mc)) {
-                  stop(
-                    "Could not find any data for this timeseries. Try different parameters."
-                  )
+                  return(list(
+                    status = "saved_no_data",
+                    timeseries_id = as.integer(new_timeseries_id),
+                    message = if (isTRUE(allow_empty_initial_fetch)) {
+                      paste(
+                        "Timeseries configuration was saved. The source had",
+                        "no measurements available in the current retrieval",
+                        "window."
+                      )
+                    } else {
+                      paste(
+                        "Timeseries configuration was saved, but the source",
+                        "returned no measurements. Verify its arguments."
+                      )
+                    }
+                  ))
                 }
-                DBI::dbCommit(con)
-                return("success")
+                return(list(
+                  status = "saved_data",
+                  timeseries_id = as.integer(new_timeseries_id),
+                  message = "Timeseries and initial measurements were saved."
+                ))
               } else {
-                DBI::dbCommit(con)
-                return("successNoData")
+                return(list(
+                  status = "saved_no_source",
+                  timeseries_id = as.integer(new_timeseries_id),
+                  message = "Timeseries was saved without an automatic source."
+                ))
               }
             },
             error = function(e) {
-              DBI::dbRollback(con)
-              return(paste("Error adding timeseries:", e$message))
+              if (
+                isTRUE(transaction_active) &&
+                  !is.null(con) &&
+                  DBI::dbIsValid(con)
+              ) {
+                try(DBI::dbRollback(con), silent = TRUE)
+              }
+              if (!isTRUE(transaction_active) && !is.null(con)) {
+                return(list(
+                  status = "saved_fetch_failed",
+                  timeseries_id = if (exists("new_timeseries_id")) {
+                    as.integer(new_timeseries_id)
+                  } else {
+                    NA_integer_
+                  },
+                  message = paste(
+                    "Timeseries configuration was saved, but the initial",
+                    "fetch failed:",
+                    conditionMessage(e)
+                  )
+                ))
+              } else {
+                return(list(
+                  status = "error",
+                  timeseries_id = NA_integer_,
+                  message = paste(
+                    "Error adding timeseries:",
+                    conditionMessage(e)
+                  )
+                ))
+              }
             },
             warning = function(w) {
-              DBI::dbRollback(con)
-              return(paste(
-                "Failure due to warning when adding timeseries:",
-                w$message
-              ))
+              if (
+                isTRUE(transaction_active) &&
+                  !is.null(con) &&
+                  DBI::dbIsValid(con)
+              ) {
+                try(DBI::dbRollback(con), silent = TRUE)
+                return(list(
+                  status = "error",
+                  timeseries_id = NA_integer_,
+                  message = paste(
+                    "Failure due to warning when adding timeseries:",
+                    conditionMessage(w)
+                  )
+                ))
+              }
+              list(
+                status = "saved_fetch_failed",
+                timeseries_id = if (exists("new_timeseries_id")) {
+                  as.integer(new_timeseries_id)
+                } else {
+                  NA_integer_
+                },
+                message = paste(
+                  "Timeseries configuration was saved, but the initial",
+                  "fetch raised a warning:",
+                  conditionMessage(w)
+                )
+              )
             }
           )
         })
@@ -2974,33 +4457,71 @@ addTimeseries <- function(id, language) {
         return()
       }
 
-      # if input$source_fx_args is not blank, validate that it is in the correct format.
-      # Should have no =, no "" or '', and have : separating key and value
-      if (nzchar(input$source_fx_args)) {
-        if (grepl("=", input$source_fx_args)) {
-          showNotification(
-            "Source function arguments should use ':' to separate keys and values, not '='.",
-            type = "error",
-            duration = 8
-          )
-          return()
+      selected_source_fx <- nullable_text(input$source_fx)
+      if (
+        !is.na(selected_source_fx) &&
+          is.null(current_adapter_capability())
+      ) {
+        showNotification(
+          paste0(
+            "Source function '",
+            selected_source_fx,
+            "' is not enabled in the source-adapter registry."
+          ),
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+      selected_secondary_source_fx <- if (
+        isTRUE(
+          input$source_secondary_enabled
+        )
+      ) {
+        nullable_text(input$source_fx_secondary)
+      } else {
+        NA_character_
+      }
+      if (
+        !is.na(selected_secondary_source_fx) &&
+          is.null(secondary_adapter_capability())
+      ) {
+        showNotification(
+          paste0(
+            "Secondary source function '",
+            selected_secondary_source_fx,
+            "' is not enabled in the source-adapter registry."
+          ),
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      source_assignments <- tryCatch(
+        collect_source_assignments(),
+        error = function(e) {
+          showNotification(e$message, type = "error", duration = 8)
+          NULL
         }
-        if (grepl("\"|'", input$source_fx_args)) {
+      )
+      if (is.null(source_assignments)) {
+        return()
+      }
+
+      transmission_mappings <- tryCatch(
+        current_transmission_mappings_input(),
+        error = function(e) {
           showNotification(
-            "Source function arguments should not contain quotes (\") or (').",
+            conditionMessage(e),
             type = "error",
-            duration = 8
+            duration = 10
           )
-          return()
+          structure(list(), class = "transmission_mapping_error")
         }
-        if (!all(grepl(":", unlist(strsplit(input$source_fx_args, ",\\s*"))))) {
-          showNotification(
-            "Source function arguments should use ':' to separate keys and values.",
-            type = "error",
-            duration = 8
-          )
-          return()
-        }
+      )
+      if (inherits(transmission_mappings, "transmission_mapping_error")) {
+        return()
       }
 
       default_corrections <- tryCatch(
@@ -3019,6 +4540,34 @@ addTimeseries <- function(id, language) {
       }
 
       # Call the extendedTask to add a new timeseries
+      fetch_source <- if (nrow(source_assignments)) {
+        fetch_rows <- source_assignments[
+          source_assignments$active &
+            !is.na(source_assignments$fetch_priority),
+          ,
+          drop = FALSE
+        ]
+        if (nrow(fetch_rows)) {
+          fetch_rows <- fetch_rows[
+            order(fetch_rows$fetch_priority),
+            ,
+            drop = FALSE
+          ]
+          fetch_rows$source_fx[[1L]]
+        } else {
+          NA_character_
+        }
+      } else {
+        NA_character_
+      }
+      capability <- if (is.na(fetch_source)) {
+        NULL
+      } else {
+        timeseries_source_adapter_capability(
+          moduleData$source_adapters,
+          fetch_source
+        )
+      }
       addNewTimeseries$invoke(
         config = session$userData$config,
         loc = input$location,
@@ -3033,8 +4582,10 @@ addTimeseries <- function(id, language) {
         rate = input$record_rate,
         owner = input$default_owner,
         note = input$note,
-        source_fx = input$source_fx,
-        source_fx_args = input$source_fx_args,
+        source_assignments = source_assignments,
+        allow_empty_initial_fetch = !is.null(capability) &&
+          isTRUE(capability$allow_empty_initial_fetch[[1]]),
+        transmission_mappings = transmission_mappings,
         instrument_deployment = input$instrument_deployment,
         data = reactiveValuesToList(moduleData),
         share_with = input$share_with,
@@ -3044,71 +4595,198 @@ addTimeseries <- function(id, language) {
 
     # Observe the result of the ExtendedTask
     observeEvent(addNewTimeseries$result(), {
-      if (is.null(addNewTimeseries$result())) {
+      result <- addNewTimeseries$result()
+      if (is.null(result)) {
         return() # No result yet, do nothing
-      } else if (
-        !addNewTimeseries$result() %in% c("successNoData", "success")
+      }
+      if (
+        !is.list(result) ||
+          is.null(result$status) ||
+          !nzchar(result$status)
       ) {
-        # If the result is not "success", show an error notification
-        showNotification(addNewTimeseries$result(), type = "error")
-        return()
-      } else if (addNewTimeseries$result() == "successNoData") {
         showNotification(
-          "Timeseries added successfully with no data fetched. REMEMBER TO ADD DATA NOW.",
+          "The timeseries task returned an invalid result.",
+          type = "error"
+        )
+        return()
+      }
+      if (identical(result$status, "error")) {
+        showNotification(result$message, type = "error", duration = 10)
+        return()
+      }
+
+      if (identical(result$status, "saved_data")) {
+        showNotification(
+          paste0(result$message, " Timeseries ID: ", result$timeseries_id, "."),
+          type = "message",
+          duration = 10
+        )
+      } else if (identical(result$status, "saved_no_source")) {
+        showNotification(
+          paste0(result$message, " Timeseries ID: ", result$timeseries_id, "."),
           type = "warning",
           duration = 10
         )
-      } else if (addNewTimeseries$result() == "success") {
-        # If the result is "success", show a success notification
+      } else {
         showNotification(
-          "Timeseries added successfully! Historical data was fetched and daily means calculated if you provided a source_fx.",
-          type = "message",
-          duration = 8
+          paste0(
+            result$message,
+            " Timeseries ID: ",
+            result$timeseries_id,
+            ". The configuration remains available for retry."
+          ),
+          type = "warning",
+          duration = 15
         )
-
-        getModuleData()
-
-        # Reset all fields
-        updateSelectizeInput(session, "location", selected = character(0))
-        updateSelectizeInput(session, "sub_location", selected = character(0))
-        updateSelectizeInput(session, "tz", selected = -7)
-        updateSelectizeInput(session, "z", selected = character(0))
-        updateSelectizeInput(session, "parameter", selected = character(0))
-        updateSelectizeInput(session, "media", selected = character(0))
-        update_matrix_state_selectize(selected = NA_integer_)
-        updateSelectizeInput(
-          session,
-          "aggregation_type",
-          selected = character(0)
-        )
-        updateTextInput(session, "record_rate", value = "")
-        updateSelectizeInput(session, "sensor_priority", selected = 1)
-        updateSelectizeInput(session, "default_owner", selected = character(0))
-        updateSelectizeInput(
-          session,
-          "data_sharing_agreement",
-          selected = character(0)
-        )
-        updateSelectizeInput(session, "share_with", selected = "public_reader")
-        updateSelectizeInput(session, "source_fx", selected = character(0))
-        updateTextInput(session, "source_fx_args", value = "")
-        updateCheckboxInput(session, "add_trim_correction", value = FALSE)
-        updateNumericInput(session, "trim_value_min", value = NA)
-        updateNumericInput(session, "trim_value_max", value = NA)
-        updateCheckboxInput(
-          session,
-          "add_offset_linear_correction",
-          value = FALSE
-        )
-        updateNumericInput(session, "offset_linear_value", value = NA)
-        updateSelectizeInput(
-          session,
-          "instrument_deployment",
-          selected = character(0)
-        )
-        updateTextAreaInput(session, "note", value = "")
       }
+
+      getModuleData()
+      pending_transmission_mapping(NULL)
+      preferred_transmission_route_id(NULL)
+      preferred_secondary_transmission_route_id(NULL)
+
+      # Reset all fields
+      updateSelectizeInput(session, "location", selected = character(0))
+      updateSelectizeInput(session, "sub_location", selected = character(0))
+      updateSelectizeInput(session, "tz", selected = -7)
+      updateSelectizeInput(session, "z", selected = character(0))
+      updateSelectizeInput(session, "parameter", selected = character(0))
+      updateSelectizeInput(session, "media", selected = character(0))
+      update_matrix_state_selectize(selected = NA_integer_)
+      updateSelectizeInput(
+        session,
+        "aggregation_type",
+        selected = character(0)
+      )
+      updateTextInput(session, "record_rate", value = "")
+      updateSelectizeInput(session, "sensor_priority", selected = 1)
+      updateSelectizeInput(session, "default_owner", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "data_sharing_agreement",
+        selected = character(0)
+      )
+      updateSelectizeInput(session, "share_with", selected = "public_reader")
+      updateSelectizeInput(session, "source_fx", selected = character(0))
+      source_args_existing(NA_character_)
+      source_args_existing_source(NA_character_)
+      updateSelectizeInput(
+        session,
+        "source_fx_secondary",
+        selected = character(0)
+      )
+      updateCheckboxInput(
+        session,
+        "source_secondary_enabled",
+        value = FALSE
+      )
+      source_args_secondary_existing(NA_character_)
+      source_args_secondary_existing_source(NA_character_)
+      updateCheckboxInput(session, "source_active", value = TRUE)
+      updateCheckboxInput(session, "source_fetch_enabled", value = TRUE)
+      updateNumericInput(session, "source_fetch_priority", value = 1)
+      updateCheckboxInput(session, "source_sync_enabled", value = TRUE)
+      updateNumericInput(session, "source_sync_priority", value = 1)
+      updateCheckboxInput(session, "source_secondary_active", value = TRUE)
+      updateCheckboxInput(
+        session,
+        "source_secondary_fetch_enabled",
+        value = FALSE
+      )
+      updateNumericInput(
+        session,
+        "source_secondary_fetch_priority",
+        value = 2
+      )
+      updateCheckboxInput(
+        session,
+        "source_secondary_sync_enabled",
+        value = TRUE
+      )
+      updateNumericInput(
+        session,
+        "source_secondary_sync_priority",
+        value = 1
+      )
+      updateCheckboxInput(session, "add_trim_correction", value = FALSE)
+      updateNumericInput(session, "trim_value_min", value = NA)
+      updateNumericInput(session, "trim_value_max", value = NA)
+      updateCheckboxInput(
+        session,
+        "add_offset_linear_correction",
+        value = FALSE
+      )
+      updateNumericInput(session, "offset_linear_value", value = NA)
+      updateSelectizeInput(
+        session,
+        "instrument_deployment",
+        selected = character(0)
+      )
+      updateTextAreaInput(session, "note", value = "")
     })
+
+    fetch_modified_timeseries <- function(timeseries_id) {
+      config <- session$userData$config
+      fetch_promise <- promises::future_promise(seed = TRUE, expr = {
+        con <- AquaCache::AquaConnect(
+          name = config$dbName,
+          host = config$dbHost,
+          port = config$dbPort,
+          username = config$dbUser,
+          password = config$dbPass,
+          silent = TRUE
+        )
+        on.exit(DBI::dbDisconnect(con))
+        AquaCache::getNewContinuous(
+          con = con,
+          timeseries_id = timeseries_id
+        )
+      })
+
+      promises::then(
+        fetch_promise,
+        onFulfilled = function(result) {
+          added <- if (
+            is.data.frame(result) &&
+              "rows_added" %in% names(result)
+          ) {
+            sum(result$rows_added, na.rm = TRUE)
+          } else {
+            NA_integer_
+          }
+          showNotification(
+            if (is.na(added)) {
+              paste(
+                "Timeseries updated and the source fetch completed.",
+                "Review synchronization history for details."
+              )
+            } else {
+              paste(
+                "Timeseries updated and source fetch completed:",
+                added,
+                "new measurement(s)."
+              )
+            },
+            type = "message",
+            duration = 10
+          )
+          invisible(result)
+        },
+        onRejected = function(error) {
+          showNotification(
+            paste(
+              "Timeseries configuration was saved, but the source fetch",
+              "failed:",
+              conditionMessage(error)
+            ),
+            type = "warning",
+            duration = 15
+          )
+          invisible(NULL)
+        }
+      )
+      invisible(fetch_promise)
+    }
 
     # Modify existing timeseries ###############
     observeEvent(
@@ -3171,6 +4849,23 @@ addTimeseries <- function(id, language) {
           return()
         }
 
+        selected_source_fx <- nullable_text(input$source_fx)
+        if (
+          !is.na(selected_source_fx) &&
+            is.null(current_adapter_capability())
+        ) {
+          showNotification(
+            paste0(
+              "Source function '",
+              selected_source_fx,
+              "' is not enabled in the source-adapter registry."
+            ),
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+
         # If we are modifying an existing timeseries, we need to check if it exists
         selected_row <- input$ts_table_rows_selected
         if (is.null(selected_row) || length(selected_row) != 1) {
@@ -3182,6 +4877,17 @@ addTimeseries <- function(id, language) {
           return()
         }
         tsid <- moduleData$timeseries_display[selected_row, "timeseries_id"]
+        existing_assignment_count <- sum(
+          moduleData$timeseries_source_assignments$timeseries_id == tsid
+        )
+        if (existing_assignment_count > 2L) {
+          showNotification(
+            "This editor supports two assignments and will not overwrite a timeseries that currently has more than two.",
+            type = "error",
+            duration = 10
+          )
+          return()
+        }
         selected_timeseries <- moduleData$timeseries[
           moduleData$timeseries$timeseries_id == tsid,
         ]
@@ -3199,6 +4905,100 @@ addTimeseries <- function(id, language) {
           )
           return()
         }
+        selected_secondary_source_fx <- if (
+          isTRUE(
+            input$source_secondary_enabled
+          )
+        ) {
+          nullable_text(input$source_fx_secondary)
+        } else {
+          NA_character_
+        }
+        if (
+          !is.na(selected_secondary_source_fx) &&
+            is.null(secondary_adapter_capability())
+        ) {
+          showNotification(
+            paste0(
+              "Secondary source function '",
+              selected_secondary_source_fx,
+              "' is not enabled in the source-adapter registry."
+            ),
+            type = "error",
+            duration = 8
+          )
+          return()
+        }
+
+        input_source_assignments <- tryCatch(
+          collect_source_assignments(),
+          error = function(e) {
+            showNotification(e$message, type = "error", duration = 8)
+            NULL
+          }
+        )
+        if (is.null(input_source_assignments)) {
+          return()
+        }
+
+        transmission_mappings <- tryCatch(
+          current_transmission_mappings_input(),
+          error = function(e) {
+            showNotification(
+              conditionMessage(e),
+              type = "error",
+              duration = 10
+            )
+            structure(list(), class = "transmission_mapping_error")
+          }
+        )
+        if (inherits(transmission_mappings, "transmission_mapping_error")) {
+          return()
+        }
+        existing_mapping_rows <- timeseries_transmission_mapping(
+          session$userData$AquaCache,
+          selected_timeseries$timeseries_id
+        )
+        existing_source_assignments <-
+          moduleData$timeseries_source_assignments[
+            moduleData$timeseries_source_assignments$timeseries_id ==
+              selected_timeseries$timeseries_id,
+            c(
+              "source_fx",
+              "source_fx_args",
+              "fetch_priority",
+              "synchronize_priority",
+              "active"
+            ),
+            drop = FALSE
+          ]
+        assignment_signature <- function(x) {
+          if (!nrow(x)) {
+            return("[]")
+          }
+          x <- x[
+            order(
+              ifelse(is.na(x$fetch_priority), 32767, x$fetch_priority),
+              ifelse(
+                is.na(x$synchronize_priority),
+                32767,
+                x$synchronize_priority
+              ),
+              x$source_fx
+            ),
+            ,
+            drop = FALSE
+          ]
+          as.character(jsonlite::toJSON(x, dataframe = "rows", na = "null"))
+        }
+        fetch_after_update <- (!identical(
+          assignment_signature(input_source_assignments),
+          assignment_signature(existing_source_assignments)
+        ) ||
+          !same_transmission_mappings(
+            transmission_mappings,
+            existing_mapping_rows
+          ))
 
         # If it exists, update the timeseries
         DBI::dbBegin(session$userData$AquaCache)
@@ -3222,8 +5022,22 @@ addTimeseries <- function(id, language) {
               input$data_sharing_agreement
             )
             input_record_rate <- nullable_text(input$record_rate)
-            input_source_fx <- nullable_text(input$source_fx)
-            input_source_fx_args <- nullable_text(input$source_fx_args)
+            active_fetch <- input_source_assignments[
+              input_source_assignments$active &
+                !is.na(input_source_assignments$fetch_priority),
+              ,
+              drop = FALSE
+            ]
+            input_source_fx <- if (nrow(active_fetch)) {
+              active_fetch <- active_fetch[
+                order(active_fetch$fetch_priority),
+                ,
+                drop = FALSE
+              ]
+              active_fetch$source_fx[[1L]]
+            } else {
+              NA_character_
+            }
             input_note <- nullable_text(input$note)
             input_z_value <- current_z_value()
             input_share_with_values <- if (
@@ -3489,106 +5303,37 @@ addTimeseries <- function(id, language) {
               }
             }
 
-            # Changes to source_fx and source_fx_args
-            if (
-              !same_nullable_text(
-                input_source_fx,
-                selected_timeseries$source_fx
-              )
-            ) {
-              if (!is.na(input_source_fx)) {
+            DBI::dbExecute(
+              session$userData$AquaCache,
+              "DELETE FROM continuous.timeseries_source_adapters
+               WHERE timeseries_id = $1",
+              params = list(selected_timeseries_id)
+            )
+            if (nrow(input_source_assignments) > 0L) {
+              for (row_idx in seq_len(nrow(input_source_assignments))) {
                 DBI::dbExecute(
                   session$userData$AquaCache,
-                  "UPDATE continuous.timeseries SET source_fx = $1 WHERE timeseries_id = $2",
+                  "INSERT INTO continuous.timeseries_source_adapters (
+                     timeseries_id, source_fx, source_fx_args,
+                     fetch_priority, synchronize_priority, active
+                   ) VALUES ($1, $2, $3::jsonb, $4, $5, $6)",
                   params = list(
-                    input_source_fx,
-                    selected_timeseries_id
-                  )
-                )
-              } else {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE continuous.timeseries SET source_fx = NULL WHERE timeseries_id = $1",
-                  params = list(
-                    selected_timeseries_id
+                    selected_timeseries_id,
+                    input_source_assignments$source_fx[[row_idx]],
+                    input_source_assignments$source_fx_args[[row_idx]],
+                    input_source_assignments$fetch_priority[[row_idx]],
+                    input_source_assignments$synchronize_priority[[row_idx]],
+                    input_source_assignments$active[[row_idx]]
                   )
                 )
               }
             }
 
-            if (!is.na(selected_timeseries$source_fx_args)) {
-              if (is.na(input_source_fx_args)) {
-                DBI::dbExecute(
-                  session$userData$AquaCache,
-                  "UPDATE continuous.timeseries SET source_fx_args = NULL WHERE timeseries_id = $1",
-                  params = list(
-                    selected_timeseries_id
-                  )
-                )
-              } else {
-                # source_fx_args are fetched from DB as json, so we need to handle them accordingly for comparison
-                # The following gives us a data.frame with column names as the keys and values as the values
-                parsed_json <- jsonlite::fromJSON(
-                  selected_timeseries$source_fx_args,
-                  simplifyVector = TRUE,
-                  flatten = TRUE
-                )
-
-                # Now work the input$source_fx_args into a data.frame with the same shape as parsed_json
-                # split into “arg:value” pairs, trim whitespace
-                arg_pairs <- strsplit(input_source_fx_args, ",")[[1]] # e.g. c("arg1: value1", "arg2: value2")
-                arg_pairs <- trimws(arg_pairs) # remove leading/trailing spaces
-                # split each on “:”, extract keys & values
-                kv <- strsplit(arg_pairs, ":")
-                keys <- sapply(kv, `[`, 1)
-                vals <- sapply(kv, `[`, 2)
-                # build a named list and then a one-row data.frame
-                input_df <- stats::setNames(as.list(vals), keys)
-                input_df <- as.data.frame(input_df, stringsAsFactors = FALSE)
-                # now `parsed_json` and `input_df` have the same shape
-
-                if (!identical(parsed_json, input_df)) {
-                  # Make the source_fx_args a json object
-                  args <- input_source_fx_args
-                  # split into "argument1: value1" etc.
-                  args <- strsplit(args, ",\\s*")[[1]]
-
-                  # split only on first colon
-                  keys <- sub(":.*", "", args)
-                  vals <- sub("^[^:]+:\\s*", "", args)
-
-                  # build named list
-                  args <- stats::setNames(as.list(vals), keys)
-
-                  # convert to JSON
-                  args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-
-                  DBI::dbExecute(
-                    session$userData$AquaCache,
-                    "UPDATE continuous.timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
-                    params = list(
-                      args,
-                      selected_timeseries_id
-                    )
-                  )
-                }
-              }
-            } else if (!is.na(input_source_fx_args)) {
-              args <- strsplit(input_source_fx_args, ",\\s*")[[1]]
-              keys <- sub(":.*", "", args)
-              vals <- sub("^[^:]+:\\s*", "", args)
-              args <- stats::setNames(as.list(vals), keys)
-              args <- jsonlite::toJSON(args, auto_unbox = TRUE)
-
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                "UPDATE continuous.timeseries SET source_fx_args = $1 WHERE timeseries_id = $2",
-                params = list(
-                  args,
-                  selected_timeseries_id
-                )
-              )
-            }
+            timeseries_sync_transmission_mapping(
+              con = session$userData$AquaCache,
+              timeseries_id = selected_timeseries_id,
+              mapping = transmission_mappings
+            )
 
             if (!same_nullable_text(input_note, selected_timeseries$note)) {
               if (!is.na(input_note)) {
@@ -3631,10 +5376,22 @@ addTimeseries <- function(id, language) {
             }
 
             DBI::dbCommit(session$userData$AquaCache)
-            showNotification(
-              "Timeseries updated successfully!",
-              type = "message"
-            )
+            if (fetch_after_update && !is.na(input_source_fx)) {
+              showNotification(
+                paste(
+                  "Timeseries configuration updated successfully.",
+                  "Fetching from the source in the background."
+                ),
+                type = "message",
+                duration = 8
+              )
+              fetch_modified_timeseries(selected_timeseries_id)
+            } else {
+              showNotification(
+                "Timeseries updated successfully!",
+                type = "message"
+              )
+            }
             getModuleData()
           },
           error = function(e) {

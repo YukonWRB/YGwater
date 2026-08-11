@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Transmission timeseries mappings help</title>
+  <style>
+    body{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.5;margin:2rem auto;max-width:900px;padding:0 1rem;color:#222}
+    h1,h2{color:#244c5a}
+    code{background:#f3f5f6;padding:.1rem .25rem;border-radius:.2rem}
+  </style>
+</head>
+<body>
+  <h1>Transmission timeseries mappings</h1>
+  <p>Use this page to map fields in a provider payload to basic AquaCache continuous timeseries. One transmission route can populate many timeseries, and routes sharing a platform identifier can reuse the same downloaded payload.</p>
+  <h2>Required relationships</h2>
+  <p>The selected timeseries must belong to the same location as the logger deployment behind the transmission route. The database enforces this rule and also rejects compound timeseries.</p>
+  <h2>Field names and transformations</h2>
+  <p><strong>Source field</strong> must match the parser output exactly, including prefixes and underscores used by multi-location payloads. Apply a multiplier and offset only when the transmitted values need a deterministic numeric conversion. Enter source missing-value sentinels as a JSON array, for example <code>["99999","-9999"]</code>.</p>
+  <p><strong>Mapping config</strong> is a JSON object reserved for provider-specific extraction, unit, quality-code, or future transformation settings. Disable a mapping when it should be retained for history but no longer imported.</p>
+  <h2>NESDIS source workflow</h2>
+  <p>For direct GOES/NESDIS retrieval, set the target basic timeseries <code>source_fx</code> to <code>downloadNESDIS</code>. The importer obtains the route, platform identifier, parser format, and field mapping from database metadata; these values do not need to be repeated in each timeseries' <code>source_fx_args</code>.</p>
+</body>
+</html>

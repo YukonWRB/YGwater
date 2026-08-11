@@ -67,7 +67,22 @@ syncDisc <- function(id, language) {
     ss_meta <- reactive({
       dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT ss.sample_series_id, loc.name AS location, sl.sub_location_name AS sub_location, ss.source_fx FROM discrete.sample_series ss JOIN public.locations loc ON ss.location_id = loc.location_id LEFT JOIN public.sub_locations sl ON ss.sub_location_id = sl.sub_location_id"
+        "SELECT ss.sample_series_id, loc.name AS location,
+                sl.sub_location_name AS sub_location, source.source_fx
+         FROM discrete.sample_series ss
+         JOIN public.locations loc ON ss.location_id = loc.location_id
+         LEFT JOIN public.sub_locations sl
+           ON ss.sub_location_id = sl.sub_location_id
+         LEFT JOIN LATERAL (
+           SELECT ssa.source_fx
+           FROM discrete.sample_series_source_adapters ssa
+           WHERE ssa.sample_series_id = ss.sample_series_id
+             AND ssa.active
+             AND ssa.synchronize_priority IS NOT NULL
+           ORDER BY ssa.synchronize_priority,
+                    ssa.sample_series_source_adapter_id
+           LIMIT 1
+         ) source ON TRUE"
       )
     })
 
