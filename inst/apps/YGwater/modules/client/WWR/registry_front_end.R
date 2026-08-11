@@ -423,11 +423,6 @@ wellRegistry <- function(id, language) {
         "borehole_well_scope",
         selected = "with_wells"
       )
-      # updateCheckboxInput(
-      #   session,
-      #   "include_missing_depth_to_bedrock",
-      #   value = TRUE
-      # )
     }) # End of observeEvent for reset filters button
 
     # Build one popup per registry row. Borehole-level fields and documents are
@@ -536,15 +531,15 @@ wellRegistry <- function(id, language) {
       tmp[,
         `:=`(
           well_display_name = data.table::fcase(
-            !is.na(well_name) & nzchar(trimws(well_name)),
-            YGwater:::escape_html_text(well_name),
-            !is.na(borehole_name) & nzchar(trimws(borehole_name)),
-            YGwater:::escape_html_text(borehole_name),
+            !is.na(well_name) & nzchar(trimws(well_name))         ,
+            YGwater:::escape_html_text(well_name)                 ,
+            !is.na(borehole_name) & nzchar(trimws(borehole_name)) ,
+            YGwater:::escape_html_text(borehole_name)             ,
             default = unknown_label
           ),
           borehole_display_name = data.table::fcase(
-            !is.na(borehole_name) & nzchar(trimws(borehole_name)),
-            YGwater:::escape_html_text(borehole_name),
+            !is.na(borehole_name) & nzchar(trimws(borehole_name)) ,
+            YGwater:::escape_html_text(borehole_name)             ,
             default = tr("borehole_unnamed", language$language)
           ),
           drill_date = data.table::fifelse(
@@ -553,10 +548,10 @@ wellRegistry <- function(id, language) {
             as.character(completion_date)
           ),
           depth_to_bedrock_display = data.table::fcase(
-            !is.na(depth_to_bedrock_m),
-            as.character(round(depth_to_bedrock_m, 4)),
-            !is.na(bedrock_reached) & !bedrock_reached,
-            bedrock_not_reached_label,
+            !is.na(depth_to_bedrock_m)                 ,
+            as.character(round(depth_to_bedrock_m, 4)) ,
+            !is.na(bedrock_reached) & !bedrock_reached ,
+            bedrock_not_reached_label                  ,
             default = unknown_label
           )
         )
@@ -1034,10 +1029,10 @@ wellRegistry <- function(id, language) {
       ]
       wells_sub[,
         marker_label := data.table::fcase(
-          !is.na(well_name) & nzchar(trimws(well_name)),
-          well_name,
-          !is.na(borehole_name) & nzchar(trimws(borehole_name)),
-          borehole_name,
+          !is.na(well_name) & nzchar(trimws(well_name))         ,
+          well_name                                             ,
+          !is.na(borehole_name) & nzchar(trimws(borehole_name)) ,
+          borehole_name                                         ,
           default = tr("unknown", language$language)
         )
       ]
@@ -1199,7 +1194,7 @@ wellRegistry <- function(id, language) {
             lng = ~longitude,
             lat = ~latitude,
             layerId = ~registry_id,
-            label = ~htmltools::htmlEscape(marker_label),
+            label = ~ htmltools::htmlEscape(marker_label),
             popup = ~popup_html,
             icon = icons,
             clusterOptions = if (isTRUE(input$cluster_points)) {

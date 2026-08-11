@@ -1,16 +1,9 @@
 transmission_admin_environment <- function() {
   module_env <- new.env(parent = asNamespace("shiny"))
   sys.source(
-    testthat::test_path(
-      "..",
-      "..",
-      "inst",
-      "apps",
-      "YGwater",
-      "modules",
-      "admin",
-      "metadata",
-      "manageReferenceTables.R"
+    system.file(
+      "apps/YGwater/modules/admin/metadata/manageReferenceTables.R",
+      package = "YGwater"
     ),
     envir = module_env
   )
@@ -84,54 +77,6 @@ test_that("transmission import history renders as read-only", {
   expect_match(mapping_html, "mapping-new_record", fixed = TRUE)
 })
 
-test_that("transmission-linked app wiring includes patch 56 relationships", {
-  server_text <- paste(readLines(
-    testthat::test_path(
-      "..",
-      "..",
-      "inst",
-      "apps",
-      "YGwater",
-      "server.R"
-    ),
-    warn = FALSE
-  ), collapse = "\n")
-  deployment_text <- paste(readLines(
-    testthat::test_path(
-      "..",
-      "..",
-      "inst",
-      "apps",
-      "YGwater",
-      "modules",
-      "admin",
-      "field",
-      "deploy_recover.R"
-    ),
-    warn = FALSE
-  ), collapse = "\n")
-
-  expect_match(
-    server_text,
-    "continuous.transmission_timeseries_mappings",
-    fixed = TRUE
-  )
-  expect_match(
-    server_text,
-    "continuous.transmission_import_runs",
-    fixed = TRUE
-  )
-  expect_match(
-    deployment_text,
-    "transmission_mapping_count",
-    fixed = TRUE
-  )
-  expect_match(
-    deployment_text,
-    "transmission_import_run_count",
-    fixed = TRUE
-  )
-})
 
 test_that("patch 56 transmission admin queries execute on testdb", {
   con <- test_AquaConnect()

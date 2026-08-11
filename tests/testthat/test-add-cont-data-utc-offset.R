@@ -1,17 +1,11 @@
 add_cont_data_module_text <- function() {
   paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "admin",
-        "continuousData",
-        "addContData.R"
+      system.file(
+        "apps/YGwater/modules/admin/continuousData/addContData.R",
+        package = "YGwater"
       ),
+
       warn = FALSE
     ),
     collapse = "\n"

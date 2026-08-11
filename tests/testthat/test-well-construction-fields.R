@@ -1,16 +1,9 @@
 test_that("simplerIndex carries seal and screen construction fields to AquaCache", {
   module <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "admin",
-        "boreholes_wells",
-        "simplerIndex.R"
+      system.file(
+        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -53,16 +46,9 @@ test_that("simplerIndex carries seal and screen construction fields to AquaCache
 test_that("simplerIndex stores arbitrary wells beneath one borehole", {
   module <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "admin",
-        "boreholes_wells",
-        "simplerIndex.R"
+      system.file(
+        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -123,16 +109,9 @@ test_that("simplerIndex stores arbitrary wells beneath one borehole", {
 test_that("simplerIndex supports named and document-free borehole uploads", {
   module <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "admin",
-        "boreholes_wells",
-        "simplerIndex.R"
+      system.file(
+        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -143,21 +122,20 @@ test_that("simplerIndex supports named and document-free borehole uploads", {
   expect_match(module, "validate_document_names_for_upload", fixed = TRUE)
   expect_match(module, "SELECT name FROM files.documents", fixed = TRUE)
   expect_match(module, "document_name = document_name", fixed = TRUE)
-  expect_match(module, "unique_borehole_ids <- names(rv$borehole_data)", fixed = TRUE)
+  expect_match(
+    module,
+    "unique_borehole_ids <- names(rv$borehole_data)",
+    fixed = TRUE
+  )
   expect_false(grepl("No PDF pages available to upload.", module, fixed = TRUE))
 })
 
 test_that("WWR cache and popup expose well construction details", {
   cache_module <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "cache_functions.R"
+      system.file(
+        "apps/YGwater/modules/cache_functions.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -165,16 +143,9 @@ test_that("WWR cache and popup expose well construction details", {
   )
   registry_module <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "client",
-        "WWR",
-        "registry_front_end.R"
+      system.file(
+        "apps/YGwater/modules/client/WWR/registry_front_end.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -182,7 +153,11 @@ test_that("WWR cache and popup expose well construction details", {
   )
 
   expect_match(cache_module, "LEFT JOIN boreholes.seal_materials", fixed = TRUE)
-  expect_match(cache_module, "LEFT JOIN boreholes.screen_materials", fixed = TRUE)
+  expect_match(
+    cache_module,
+    "LEFT JOIN boreholes.screen_materials",
+    fixed = TRUE
+  )
   expect_match(cache_module, "LEFT JOIN boreholes.screen_types", fixed = TRUE)
   expect_match(registry_module, "Seal material:", fixed = TRUE)
   expect_match(registry_module, "Screen material:", fixed = TRUE)
@@ -192,14 +167,9 @@ test_that("WWR cache and popup expose well construction details", {
 test_that("WWR preserves distinct well and borehole registry rows", {
   cache_module <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "cache_functions.R"
+      system.file(
+        "apps/YGwater/modules/cache_functions.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -207,16 +177,9 @@ test_that("WWR preserves distinct well and borehole registry rows", {
   )
   registry_module <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "client",
-        "WWR",
-        "registry_front_end.R"
+      system.file(
+        "apps/YGwater/modules/client/WWR/registry_front_end.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -241,7 +204,11 @@ test_that("WWR preserves distinct well and borehole registry rows", {
     "wells_sub <- wells_sub[has_well == FALSE]",
     fixed = TRUE
   )
-  expect_match(registry_module, "tmp[, .(registry_id, popup_html)]", fixed = TRUE)
+  expect_match(
+    registry_module,
+    "tmp[, .(registry_id, popup_html)]",
+    fixed = TRUE
+  )
   expect_match(registry_module, "on = .(registry_id)", fixed = TRUE)
   expect_match(registry_module, "matches_name(well_name)", fixed = TRUE)
   expect_match(registry_module, "layerId = ~registry_id", fixed = TRUE)
@@ -251,9 +218,17 @@ test_that("WWR preserves distinct well and borehole registry rows", {
     fixed = TRUE
   )
   expect_match(registry_module, "hollow = !has_well[idx]", fixed = TRUE)
-  expect_match(registry_module, "stroke_width <- max(stroke_width, 4)", fixed = TRUE)
+  expect_match(
+    registry_module,
+    "stroke_width <- max(stroke_width, 4)",
+    fixed = TRUE
+  )
   expect_match(registry_module, '" loc-fill-"', fixed = TRUE)
-  expect_match(registry_module, "group_titles = legend_group_titles", fixed = TRUE)
+  expect_match(
+    registry_module,
+    "group_titles = legend_group_titles",
+    fixed = TRUE
+  )
   expect_match(
     registry_module,
     '"download_document_",\n          registry_id,',
@@ -289,16 +264,9 @@ test_that("WWR borehole scope labels are bilingual", {
 test_that("simplerIndex construction selects default to empty", {
   simpler_index <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "admin",
-        "boreholes_wells",
-        "simplerIndex.R"
+      system.file(
+        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),

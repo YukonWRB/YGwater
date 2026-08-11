@@ -1,16 +1,16 @@
 test_that("source-function selectors use the database registry by data domain", {
   module_paths <- c(
-    continuous = testthat::test_path(
-      "..", "..", "inst", "apps", "YGwater", "modules", "admin",
-      "continuousData", "addTimeseries.R"
+    continuous = system.file(
+      "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+      package = "YGwater"
     ),
-    discrete = testthat::test_path(
-      "..", "..", "inst", "apps", "YGwater", "modules", "admin",
-      "discreteData", "addSampleSeries.R"
+    discrete = system.file(
+      "apps/YGwater/modules/admin/discreteData/addSampleSeries.R",
+      package = "YGwater"
     ),
-    image = testthat::test_path(
-      "..", "..", "inst", "apps", "YGwater", "modules", "admin",
-      "imgupload", "addImgSeries.R"
+    image = system.file(
+      "apps/YGwater/modules/admin/imgupload/addImgSeries.R",
+      package = "YGwater"
     )
   )
 

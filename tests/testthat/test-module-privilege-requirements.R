@@ -1,16 +1,9 @@
 module_privilege_environment <- function() {
   module_env <- new.env(parent = baseenv())
   sys.source(
-    testthat::test_path(
-      "..",
-      "..",
-      "inst",
-      "apps",
-      "YGwater",
-      "modules",
-      "admin",
-      "users",
-      "modulePrivilegeRequirements.R"
+    system.file(
+      "apps/YGwater/modules/modulePrivilegeRequirements.R",
+      package = "YGwater"
     ),
     envir = module_env
   )
@@ -21,7 +14,7 @@ test_that("the privilege catalogue covers server admin privilege keys", {
   module_env <- module_privilege_environment()
   requirements <- module_env$ygwater_module_privilege_requirements()
   server <- readLines(
-    testthat::test_path("..", "..", "inst", "apps", "YGwater", "server.R"),
+    system.file("apps/YGwater/server.R", package = "YGwater"),
     warn = FALSE
   )
   matches <- regmatches(
@@ -85,15 +78,18 @@ test_that("any-table visibility still reports all missing functionality", {
   requirements <- module_env$ygwater_module_privilege_requirements()
   tables <- requirements$continuousDataReview$tables
   privileges <- requirements$continuousDataReview$privileges
-  table_status <- do.call(rbind, lapply(seq_along(tables), function(i) {
-    data.frame(
-      table = tables[[i]],
-      privilege = privileges[[i]],
-      object_exists = TRUE,
-      granted = i == 1,
-      stringsAsFactors = FALSE
-    )
-  }))
+  table_status <- do.call(
+    rbind,
+    lapply(seq_along(tables), function(i) {
+      data.frame(
+        table = tables[[i]],
+        privilege = privileges[[i]],
+        object_exists = TRUE,
+        granted = i == 1,
+        stringsAsFactors = FALSE
+      )
+    })
+  )
   schema_status <- data.frame(
     schema_name = "continuous",
     object_exists = TRUE,
@@ -171,12 +167,16 @@ test_that("viewFeedback requires all feedback table privileges", {
     extra_privileges = "SELECT, INSERT, UPDATE, DELETE"
   )
 
-  expect_false(module_env$ygwater_admin_privileges(
-    partial_privileges,
-    requirements
-  )$viewFeedback)
-  expect_true(module_env$ygwater_admin_privileges(
-    full_privileges,
-    requirements
-  )$viewFeedback)
+  expect_false(
+    module_env$ygwater_admin_privileges(
+      partial_privileges,
+      requirements
+    )$viewFeedback
+  )
+  expect_true(
+    module_env$ygwater_admin_privileges(
+      full_privileges,
+      requirements
+    )$viewFeedback
+  )
 })

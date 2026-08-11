@@ -1,6 +1,6 @@
-source_adapter_helper_path <- testthat::test_path(
-  "..", "..", "inst", "apps", "YGwater", "modules", "admin",
-  "sourceAdapterArguments.R"
+source_adapter_helper_path <- system.file(
+  "apps/YGwater/modules/admin/sourceAdapterArguments.R",
+  package = "YGwater"
 )
 
 test_that("source adapter capability lookup selects the requested row", {
@@ -131,17 +131,17 @@ test_that("source adapter editor collects typed values and preserves unknown key
 
 test_that("timeseries modules use the catalogued argument editor", {
   module_paths <- c(
-    testthat::test_path(
-      "..", "..", "inst", "apps", "YGwater", "modules", "admin",
-      "continuousData", "addTimeseries.R"
+    system.file(
+      "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+      package = "YGwater"
     ),
-    testthat::test_path(
-      "..", "..", "inst", "apps", "YGwater", "modules", "admin",
-      "discreteData", "addSampleSeries.R"
+    system.file(
+      "apps/YGwater/modules/admin/discreteData/addSampleSeries.R",
+      package = "YGwater"
     ),
-    testthat::test_path(
-      "..", "..", "inst", "apps", "YGwater", "modules", "admin",
-      "imgupload", "addImgSeries.R"
+    system.file(
+      "apps/YGwater/modules/admin/imgupload/addImgSeries.R",
+      package = "YGwater"
     )
   )
 

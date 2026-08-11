@@ -1,16 +1,9 @@
 timeseries_transmission_test_environment <- function() {
   env <- new.env(parent = globalenv())
   sys.source(
-    testthat::test_path(
-      "..",
-      "..",
-      "inst",
-      "apps",
-      "YGwater",
-      "modules",
-      "admin",
-      "continuousData",
-      "transmissionTimeseriesHelpers.R"
+    system.file(
+      "apps/YGwater/modules/admin/continuousData/transmissionTimeseriesHelpers.R",
+      package = "YGwater"
     ),
     envir = env
   )
@@ -263,16 +256,9 @@ test_that("route creation can create a setup without a deployed logger", {
 test_that("addTimeseries uses registry-driven transmission UI and persistence", {
   module_text <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "modules",
-        "admin",
-        "continuousData",
-        "addTimeseries.R"
+      system.file(
+        "apps/YGwater/modules/admin/continuousData/addTimeseries.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
@@ -280,13 +266,9 @@ test_that("addTimeseries uses registry-driven transmission UI and persistence", 
   )
   globals_text <- paste(
     readLines(
-      testthat::test_path(
-        "..",
-        "..",
-        "inst",
-        "apps",
-        "YGwater",
-        "YGwater_globals.R"
+      system.file(
+        "apps/YGwater/YGwater_globals.R",
+        package = "YGwater"
       ),
       warn = FALSE
     ),
