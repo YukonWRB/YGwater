@@ -2403,19 +2403,6 @@ addContData <- function(id, language) {
       out
     }
 
-    shift_display_datetime_strings <- function(x, from_tz, to_tz) {
-      out <- as.character(x)
-      utc_values <- table_datetimes_to_utc(x, from_tz)
-      valid_idx <- !is.na(utc_values)
-      if (any(valid_idx)) {
-        out[valid_idx] <- format_utc_datetimes_for_display(
-          utc_values[valid_idx],
-          to_tz
-        )
-      }
-      out
-    }
-
     uploaded_data_bounds <- function(tz_name = input$UTC_offset, df = data$df) {
       if (nrow(df) == 0 || !("datetime" %in% names(df))) {
         return(NULL)
@@ -2502,25 +2489,15 @@ addContData <- function(id, language) {
       )
     }
 
-    previous_data_timezone <- reactiveVal(format_utc_offset(0L))
-
     observeEvent(input$UTC_offset, {
       master_tz <- selected_offset_tz(
         input$UTC_offset,
         default = format_utc_offset(0L)
       )
-      previous_tz <- previous_data_timezone()
 
-      if (!identical(previous_tz, master_tz) && nrow(data$df) > 0) {
-        data$df$datetime <- shift_display_datetime_strings(
-          data$df$datetime,
-          previous_tz,
-          master_tz
-        )
-        refresh_data_table()
-      }
-
-      previous_data_timezone(master_tz)
+      # Datetimes in the staged tables are wall-clock values supplied by the
+      # user. Keep those values unchanged when the offset changes; the selected
+      # offset is applied to every upload job by table_datetimes_to_utc().
       for (input_id in c(
         "preview_utc_offset",
         "approval_utc_offset",
