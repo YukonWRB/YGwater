@@ -222,7 +222,6 @@ simplerIndexUI <- function(id) {
             accept = ".pdf",
             multiple = TRUE
           ),
-          uiOutput(ns("document_names_ui")),
           numericInput(
             ns("num_boreholes"),
             "Number of boreholes",
@@ -278,7 +277,8 @@ simplerIndexUI <- function(id) {
             " to delete it."
           ),
           br(),
-          DT::DTOutput(ns("pdf_table"))
+          DT::DTOutput(ns("pdf_table")),
+          uiOutput(ns("document_names_ui")),
         ),
         div(
           class = "main-panel",
@@ -1458,29 +1458,38 @@ simplerIndex <- function(id, language) {
       updateSelectizeInput(
         session,
         "seal_material",
-        choices = stats::setNames(
-          moduleData$seal_materials$seal_material_id,
-          moduleData$seal_materials$material_name
+        choices = c(
+          "Select seal material" = "",
+          stats::setNames(
+            moduleData$seal_materials$seal_material_id,
+            moduleData$seal_materials$material_name
+          )
         ),
-        selected = NULL
+        selected = character(0)
       )
       updateSelectizeInput(
         session,
         "screen_material",
-        choices = stats::setNames(
-          moduleData$screen_materials$screen_material_id,
-          moduleData$screen_materials$material_name
+        choices = c(
+          "Select screen material" = "",
+          stats::setNames(
+            moduleData$screen_materials$screen_material_id,
+            moduleData$screen_materials$material_name
+          )
         ),
-        selected = NULL
+        selected = character(0)
       )
       updateSelectizeInput(
         session,
         "screen_type",
-        choices = stats::setNames(
-          moduleData$screen_types$screen_type_id,
-          moduleData$screen_types$type_name
+        choices = c(
+          "Select screen type" = "",
+          stats::setNames(
+            moduleData$screen_types$screen_type_id,
+            moduleData$screen_types$type_name
+          )
         ),
-        selected = NULL
+        selected = character(0)
       )
       updateSelectizeInput(
         session,
@@ -2418,11 +2427,14 @@ simplerIndex <- function(id, language) {
         selectizeInput(
           ns(well_input_id(well_key, "seal_material")),
           "Seal material",
-          choices = stats::setNames(
-            moduleData$seal_materials$seal_material_id,
-            moduleData$seal_materials$material_name
+          choices = c(
+            "Select seal material" = "",
+            stats::setNames(
+              moduleData$seal_materials$seal_material_id,
+              moduleData$seal_materials$material_name
+            )
           ),
-          selected = well_display_value(well, "seal_material"),
+          selected = well_display_value(well, "seal_material", ""),
           multiple = FALSE,
           options = list(placeholder = "Select seal material")
         ),
@@ -2458,22 +2470,28 @@ simplerIndex <- function(id, language) {
         selectizeInput(
           ns(well_input_id(well_key, "screen_material")),
           "Screen material",
-          choices = stats::setNames(
-            moduleData$screen_materials$screen_material_id,
-            moduleData$screen_materials$material_name
+          choices = c(
+            "Select screen material" = "",
+            stats::setNames(
+              moduleData$screen_materials$screen_material_id,
+              moduleData$screen_materials$material_name
+            )
           ),
-          selected = well_display_value(well, "screen_material"),
+          selected = well_display_value(well, "screen_material", ""),
           multiple = FALSE,
           options = list(placeholder = "Select screen material")
         ),
         selectizeInput(
           ns(well_input_id(well_key, "screen_type")),
           "Screen type",
-          choices = stats::setNames(
-            moduleData$screen_types$screen_type_id,
-            moduleData$screen_types$type_name
+          choices = c(
+            "Select screen type" = "",
+            stats::setNames(
+              moduleData$screen_types$screen_type_id,
+              moduleData$screen_types$type_name
+            )
           ),
-          selected = well_display_value(well, "screen_type"),
+          selected = well_display_value(well, "screen_type", ""),
           multiple = FALSE,
           options = list(placeholder = "Select screen type")
         ),
@@ -3500,7 +3518,7 @@ simplerIndex <- function(id, language) {
         tags$h5("Document names"),
         tags$p(
           class = "text-muted",
-          "Rename a document here when its default name is already in use."
+          "Rename a document here when its default name is already in use. Document names are auto-generated from the borehole name(s) unless you've already edited them."
         ),
         lapply(entry_ids, function(entry_id) {
           input_id <- document_name_input_id(entry_id)
@@ -3600,7 +3618,8 @@ simplerIndex <- function(id, language) {
 
       duplicate_names <- unique(document_names[
         nzchar(document_names) &
-          (duplicated(document_names) | duplicated(document_names, fromLast = TRUE))
+          (duplicated(document_names) |
+            duplicated(document_names, fromLast = TRUE))
       ])
       if (length(duplicate_names)) {
         for (entry_id in document_ids[document_names %in% duplicate_names]) {
@@ -4348,6 +4367,10 @@ simplerIndex <- function(id, language) {
         }
       }
 
+      print(new_driller_name)
+      print(new_driller_address)
+      print(new_driller_phone)
+      print(new_driller_email)
       new_driller_id <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "INSERT INTO boreholes.drillers (name,address,phone,email)
@@ -4357,10 +4380,10 @@ simplerIndex <- function(id, language) {
           if (nzchar(trimws(new_driller_address))) {
             new_driller_address
           } else {
-            NULL
+            NA
           },
-          if (nzchar(trimws(new_driller_phone))) new_driller_phone else NULL,
-          if (nzchar(trimws(new_driller_email))) new_driller_email else NULL
+          if (nzchar(trimws(new_driller_phone))) new_driller_phone else NA,
+          if (nzchar(trimws(new_driller_email))) new_driller_email else NA
         )
       )[1, 1]
 
@@ -5972,10 +5995,12 @@ simplerIndex <- function(id, language) {
 
       if (!isTRUE(rv$borehole_data[[well_id]]$document_name_custom)) {
         document_name <- default_document_name(input$name, well_id)
-        if (!identical(
-          rv$borehole_data[[well_id]]$document_name,
-          document_name
-        )) {
+        if (
+          !identical(
+            rv$borehole_data[[well_id]]$document_name,
+            document_name
+          )
+        ) {
           rv$borehole_data[[well_id]]$document_name <- document_name
           if (length(rv$borehole_data[[well_id]]$files) > 0L) {
             input_id <- document_name_input_id(well_id)

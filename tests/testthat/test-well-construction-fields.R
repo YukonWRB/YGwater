@@ -285,3 +285,42 @@ test_that("WWR borehole scope labels are bilingual", {
     "Well or borehole purpose"
   )
 })
+
+test_that("simplerIndex construction selects default to empty", {
+  simpler_index <- paste(
+    readLines(
+      testthat::test_path(
+        "..",
+        "..",
+        "inst",
+        "apps",
+        "YGwater",
+        "modules",
+        "admin",
+        "boreholes_wells",
+        "simplerIndex.R"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(simpler_index, '"Select seal material" = ""', fixed = TRUE)
+  expect_match(simpler_index, '"Select screen material" = ""', fixed = TRUE)
+  expect_match(simpler_index, '"Select screen type" = ""', fixed = TRUE)
+  expect_match(
+    simpler_index,
+    'well_display_value(well, "seal_material", "")',
+    fixed = TRUE
+  )
+  expect_match(
+    simpler_index,
+    'well_display_value(well, "screen_material", "")',
+    fixed = TRUE
+  )
+  expect_match(
+    simpler_index,
+    'well_display_value(well, "screen_type", "")',
+    fixed = TRUE
+  )
+})
