@@ -12,7 +12,7 @@
 #' @param precip_locations List of flow/level locations for which to report precipitation. "default" is a pre-determined list of locations, "all" is all locations for which there is a drainage polygon (which may be more or less than the number of stations reporting level or flow information). NULL will not create the table. WARNING: this portion of the script is slow. Setting this parameter to "all" could take about an hour to get all information together.
 #' @param report_datetime Date-time for which to generate the report. Defaults to the current time.
 #' @param past The number of days in the past for which you want data. Will be rounded to yield table columns covering at least one week, at most 4 weeks. 24, 28, and 72 hour change columns are always rendered.
-#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report. 'choose' will bring up a file dialog to select the folder if the session is interactive. Default is 'choose'.
+#' @param save_path The path where you wish to save the Excel workbook. A folder will be created for each day's report.
 #' @param archive_path The path to yesterday's file, if you wish to include yesterday's comments in this report. Full path, including extension .xlsx. Function expects a workbook exactly as produced by this function, plus of course the observer comments. Default is 'choose', set to NULL to not use a previous report.
 #' @param log_level Logging threshold for file logging. One of "DEBUG", "INFO", "WARN", or "ERROR". Default is "INFO".
 
@@ -20,8 +20,6 @@
 #'
 #' @return The path to which the report was saved, and Excel workbook containing the report with one tab per timeseries type.
 #' @export
-
-# TODO: Adapt to use new DB
 
 tabularReport <- function(
   level_locations = "all",
@@ -41,7 +39,7 @@ tabularReport <- function(
   # snow_locations = "all"
   # bridge_locations = "all"
   # precip_locations = "default"
-  # report_datetime = as.POSIXct("2024-06-01 12:00", tz = "UTC")
+  # report_datetime = as.POSIXct("2026-08-11 12:00", tz = "UTC")
   # past = 7
   # save_path = NULL
   # archive_path = NULL
@@ -563,7 +561,7 @@ tabularReport <- function(
     log_info("[precip] Precipitation locations are NULL.")
   }
 
-  #Set the days for which to generate tables
+  # Set the days for which to generate tables
   if (past < 8) {
     past <- 7
   } else if (past >= 8 && past < 15) {
@@ -575,7 +573,7 @@ tabularReport <- function(
   }
   log_debug(paste0("Normalized past window to ", past, " days."))
 
-  #Load yesterday's workbook -----------------
+  # Load yesterday's workbook -----------------
   yesterday <- list(
     yesterday_general = NULL,
     yesterday_locs = NULL,
@@ -768,7 +766,11 @@ tabularReport <- function(
       log_debug(paste0("[precip] [", i, "] Station index=", idx, "."))
       name_query <- DBI::dbGetQuery(
         con,
-        paste0("SELECT name FROM public.locations WHERE location_code = '", i, "'")
+        paste0(
+          "SELECT name FROM public.locations WHERE location_code = '",
+          i,
+          "'"
+        )
       )
       log_debug(paste0(
         "[precip] [",
