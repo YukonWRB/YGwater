@@ -130,6 +130,34 @@ test_that("simplerIndex supports named and document-free borehole uploads", {
   expect_false(grepl("No PDF pages available to upload.", module, fixed = TRUE))
 })
 
+test_that("simplerIndex stages PDFs before background processing", {
+  module <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(module, 'pattern = "simplerIndex_upload_"', fixed = TRUE)
+  expect_match(module, "copy_success <- file.copy(", fixed = TRUE)
+  expect_match(
+    module,
+    "process_pdf_uploads$invoke(uploaded_files, upload_job_dir)",
+    fixed = TRUE
+  )
+  expect_match(
+    module,
+    "promises::future_promise(seed = NULL, expr = {",
+    fixed = TRUE
+  )
+  expect_match(module, "file.path(\n                upload_job_dir,", fixed = TRUE)
+  expect_false(grepl("file.rename(from_path, orig_path)", module, fixed = TRUE))
+})
+
 test_that("WWR cache and popup expose well construction details", {
   cache_module <- paste(
     readLines(
