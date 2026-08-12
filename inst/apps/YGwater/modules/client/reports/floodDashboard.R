@@ -4774,13 +4774,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             dat
         })
 
-        available_primary_stations <- shiny::reactive({
-            dat <- community_locations()
+        primary_stations_for_parameter <- function(
+            selected_parameter,
+            dat = community_locations()
+        ) {
             if (is.null(dat) || nrow(dat) == 0) {
                 return(data.frame())
             }
 
-            selected_parameter <- input$parameter
             if (is.null(selected_parameter) || !nzchar(selected_parameter)) {
                 selected_parameter <- "water level"
             }
@@ -4813,11 +4814,27 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ,
                 drop = FALSE
             ]
+        }
+
+        available_primary_stations <- shiny::reactive({
+            primary_stations_for_parameter(input$parameter)
         })
 
-        shiny::observe({
-            dat <- available_primary_stations()
+        build_station_choices <- function(dat) {
+            stats::setNames(
+                dat$location_code,
+                ifelse(
+                    !is.na(dat$name) & nzchar(dat$name),
+                    paste0(dat$name, " (", dat$location_code, ")"),
+                    dat$location_code
+                )
+            )
+        }
 
+        update_station_selector <- function(
+            selected = shiny::isolate(input$station),
+            dat = available_primary_stations()
+        ) {
             if (is.null(dat) || nrow(dat) == 0) {
                 shiny::updateSelectizeInput(
                     session,
@@ -4826,35 +4843,26 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     selected = "",
                     server = TRUE
                 )
-                return()
+                return(invisible(NULL))
             }
 
-            station_choices <- stats::setNames(
-                dat$location_code,
-                ifelse(
-                    !is.na(dat$name) & nzchar(dat$name),
-                    paste0(dat$name, " (", dat$location_code, ")"),
-                    dat$location_code
-                )
-            )
+            selected <- as.character(selected %||% "")
+            if (length(selected) != 1 || !(selected %in% dat$location_code)) {
+                selected <- dat$location_code[[1]]
+            }
 
             shiny::updateSelectizeInput(
                 session,
                 inputId = "station",
-                choices = station_choices,
-                selected = shiny::isolate({
-                    if (
-                        !is.null(input$station) &&
-                            nzchar(input$station) &&
-                            input$station %in% dat$location_code
-                    ) {
-                        input$station
-                    } else {
-                        dat$location_code[[1]]
-                    }
-                }),
+                choices = build_station_choices(dat),
+                selected = selected,
                 server = TRUE
             )
+            invisible(NULL)
+        }
+
+        shiny::observe({
+            update_station_selector()
         })
 
         # Update secondary_parameter choices from community stations.
@@ -6181,10 +6189,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     selected = selected_parameter
                 )
 
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "station",
-                    selected = selected_station
+                update_station_selector(
+                    selected = selected_station,
+                    dat = community_locations()
                 )
             },
             ignoreInit = TRUE
@@ -6808,11 +6815,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             }
             selected_code <- dat$location_code[[row_idx]]
             if (!is.null(selected_code) && nzchar(selected_code)) {
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "station",
-                    selected = selected_code
-                )
+                update_station_selector(selected = selected_code)
             }
         })
 
