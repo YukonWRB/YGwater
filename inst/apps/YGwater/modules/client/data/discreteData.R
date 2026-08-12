@@ -143,25 +143,34 @@ discData <- function(id, language, inputs) {
       return(data)
     }
 
-    # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
+    filteredData <- createFilteredData()
     moduleInputs <- reactiveValues(
-      location_id = if (!is.null(inputs$location_id)) {
-        as.numeric(inputs$location_id)
-      } else {
-        NULL
-      }
+      location_id = NULL,
+      location_request_id = isolate(inputs$location_request_id)
     )
 
-    # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
-    if (!is.null(moduleInputs$location_id)) {
-      filteredData <- createFilteredData()
-      # If the location_id is not in the filteredData$locs, return early
-      if (!moduleInputs$location_id %in% filteredData$locs$location_id) {
+    resetFilteredData <- function() {
+      refreshed <- createFilteredData()
+      for (name in isolate(names(refreshed))) {
+        filteredData[[name]] <- isolate(refreshed[[name]])
+      }
+    }
+
+    applyLocationInput <- function(location_id) {
+      resetFilteredData()
+
+      location_id <- suppressWarnings(as.numeric(location_id))
+      if (length(location_id) != 1 || is.na(location_id)) {
         moduleInputs$location_id <- NULL
-        return()
+        return(invisible(FALSE))
+      }
+      if (!location_id %in% filteredData$locs$location_id) {
+        moduleInputs$location_id <- NULL
+        return(invisible(FALSE))
       }
 
-      loc_id <- moduleInputs$location_id
+      moduleInputs$location_id <- location_id
+      loc_id <- location_id
       filteredData$samples <- filteredData$samples[
         filteredData$samples$location_id %in% loc_id,
       ]
@@ -254,9 +263,27 @@ discData <- function(id, language, inputs) {
           )
         }
       }
-    } else {
-      filteredData <- createFilteredData()
+      invisible(TRUE)
     }
+
+    if (identical(isolate(inputs$location_target), "discData")) {
+      applyLocationInput(isolate(inputs$location_id))
+    }
+
+    observeEvent(
+      inputs$location_request_id,
+      {
+        req(identical(inputs$location_target, "discData"))
+        request_id <- inputs$location_request_id
+        if (identical(request_id, isolate(moduleInputs$location_request_id))) {
+          return()
+        }
+        moduleInputs$location_request_id <- request_id
+        applyLocationInput(inputs$location_id)
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     # Create UI elements and necessary helpers ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.

@@ -5,6 +5,19 @@
 #' @import shiny
 #' @noRd
 
+observe_module_tab_change <- function(outputs, session, nav_select_fun) {
+  observeEvent(
+    outputs$change_tab,
+    {
+      target <- outputs$change_tab
+      req(!is.null(target), nzchar(target))
+      nav_select_fun(session = session, "navbar", selected = target)
+      outputs$change_tab <- NULL
+    },
+    ignoreNULL = TRUE
+  )
+}
+
 app_server <- function(input, output, session) {
   # Initial setup #############################################################
 
@@ -1679,7 +1692,10 @@ app_server <- function(input, output, session) {
     input$window_dimensions
   })
 
-  # Initialize reactive flags to track whether each UI has been loaded
+  # Track which modules have been loaded for the current database identity.
+  # Ordinary tab changes never reset these flags. Login resets them once so
+  # modules reload data with the authenticated connection; logout starts an
+  # entirely new Shiny session so all old observers are destroyed.
   reset_ui_loaded <- function() {
     # visualize-side modules
     ui_loaded$viz <- FALSE
@@ -1772,7 +1788,7 @@ app_server <- function(input, output, session) {
   }
 
   ui_loaded <- reactiveValues()
-  reset_ui_loaded() # Initialize the ui_loaded reactive values
+  reset_ui_loaded()
 
   notification_module_choices <- c(
     "all",
@@ -2414,8 +2430,6 @@ app_server <- function(input, output, session) {
 
     # Clear the app_cache environment
     session$userData$app_cache <- new.env(parent = emptyenv())
-    # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
-    reset_ui_loaded()
     # Send the user back to the 'home' tab if they were elsewhere
     updateTabsetPanel(session, "navbar", selected = "home")
 
@@ -2424,6 +2438,17 @@ app_server <- function(input, output, session) {
 
     # logout button is disabled on click to prevent multiple rapid clicks; re-enable after logout performed (it's hidden at this point but needs to be enabled for later use)
     shinyjs::runjs("$('#logoutBtn').prop('disabled', false);")
+
+    # End this authenticated session after the logout response has reached the
+    # browser. A fresh public session is the only reliable way to destroy every
+    # observer and discard module state that may contain data from the previous
+    # authenticated user.
+    session$onFlushed(
+      function() {
+        session$reload()
+      },
+      once = TRUE
+    )
   }
 
   observe({
@@ -2723,7 +2748,10 @@ WHERE rolname = current_user;"
           # Initialize a fresh cache environment for the session
           session$userData$app_cache <- new.env(parent = emptyenv())
 
-          # Reset all ui_loaded flags to FALSE so that they all reload data when the user clicks on them
+          # Public modules may already be loaded. Recreate them against the
+          # authenticated connection so row-level security and private data are
+          # reflected immediately. This reset occurs only once per session;
+          # logout reloads the complete Shiny session.
           reset_ui_loaded()
 
           # Send the user back to the 'home' tab if they were elsewhere
@@ -2806,6 +2834,7 @@ WHERE rolname = current_user;"
   # Store information to pass between modules
   moduleOutputs <- reactiveValues()
   moduleOutputs$mapLocs <- reactiveValues()
+  observe_module_tab_change(moduleOutputs$mapLocs, session, nav_select)
 
   # Initialize reactive values to store last tabs for each mode
   last_viz_tab <- reactiveVal("home") # Default tab for viz mode
@@ -2966,14 +2995,8 @@ WHERE rolname = current_user;"
         output$home_ui <- renderUI(homeUI("home"))
         ui_loaded$home <- TRUE
         moduleOutputs$home <- home("home", language = languageSelection) # Call the server
+        observe_module_tab_change(moduleOutputs$home, session, nav_select)
       }
-      observe({
-        if (!is.null(moduleOutputs$home$change_tab)) {
-          target <- moduleOutputs$home$change_tab
-          nav_select(session = session, "navbar", selected = target)
-          moduleOutputs$home$change_tab <- NULL
-        }
-      })
     }
 
     ### Plots nav_menu ##########################
@@ -3019,19 +3042,6 @@ WHERE rolname = current_user;"
           outputs = moduleOutputs$mapLocs
         )
       }
-      observe({
-        if (!is.null(moduleOutputs$mapLocs$change_tab)) {
-          target <- moduleOutputs$mapLocs$change_tab
-          if (target == "discData") {
-            ui_loaded$discData <- FALSE
-          }
-          if (target == "contData") {
-            ui_loaded$contData <- FALSE
-          }
-          nav_select(session = session, "navbar", selected = target) # Change tabs
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
-      })
     }
     if (input$navbar == "parameterValuesMap") {
       if (!ui_loaded$paramValuesMap) {
@@ -3171,11 +3181,6 @@ WHERE rolname = current_user;"
           language = languageSelection,
           inputs = moduleOutputs$mapLocs
         ) # Call the server
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$location_target <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
       }
     }
     if (input$navbar == "contData") {
@@ -3187,11 +3192,6 @@ WHERE rolname = current_user;"
           language = languageSelection,
           inputs = moduleOutputs$mapLocs
         ) # Call the server
-        if (!is.null(moduleOutputs$mapLocs)) {
-          moduleOutputs$mapLocs$location_id <- NULL
-          moduleOutputs$mapLocs$location_target <- NULL
-          moduleOutputs$mapLocs$change_tab <- NULL
-        }
       }
     }
 
@@ -3342,18 +3342,8 @@ WHERE rolname = current_user;"
           "addContData",
           language = languageSelection
         ) # Call the server
+        observe_module_tab_change(moduleOutputs$addContData, session, nav_select)
       }
-      # Observe the change_tab output from the addContData module
-      observe({
-        if (!is.null(moduleOutputs$addContData$change_tab)) {
-          nav_select(
-            session = session,
-            "navbar",
-            selected = moduleOutputs$addContData$change_tab
-          )
-          moduleOutputs$addContData$change_tab <- NULL
-        }
-      })
     }
     if (input$navbar == "imputeMissing") {
       if (!ui_loaded$imputeMissing) {
@@ -3382,18 +3372,8 @@ WHERE rolname = current_user;"
           "addDiscData",
           language = languageSelection
         ) # Call the server
+        observe_module_tab_change(moduleOutputs$addDiscData, session, nav_select)
       }
-      # Observe the change_tab output from the addDiscData module
-      observe({
-        if (!is.null(moduleOutputs$addDiscData$change_tab)) {
-          nav_select(
-            session = session,
-            "navbar",
-            selected = moduleOutputs$addDiscData$change_tab
-          )
-          moduleOutputs$addDiscData$change_tab <- NULL
-        }
-      })
     }
     if (input$navbar == "editSamples") {
       if (!ui_loaded$editSamples) {
