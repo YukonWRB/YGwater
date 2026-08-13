@@ -2,10 +2,13 @@
 .Rhistory
 .RData
 .Ruserdata
+/Meta/
+/doc/
+^.codex$
 Rprof.out
+**/.data/
 .secret
 .venv
 .conda
-**/.data/
 dev/raven/
 dev/mapping/
