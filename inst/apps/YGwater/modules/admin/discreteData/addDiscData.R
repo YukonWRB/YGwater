@@ -372,7 +372,7 @@ addDiscData_common_rows <- function(
     collection_method = defaults$collection_method,
     sample_type = defaults$sample_type,
     owner = defaults$owner,
-    source_sample_id = as.character(source_sample_id),
+    source_sample_id = sample_key,
     source_parameter_code = as.character(source_parameter_code),
     source_parameter_name = as.character(source_parameter_name),
     source_unit = as.character(source_unit),
@@ -816,6 +816,28 @@ addDiscDataUI <- function(id) {
               minutesStep = 15,
               timeFormat = "HH:mm"
             )
+          ),
+          radioButtons(
+            ns("sample_group_mode"),
+            "Sample group",
+            choices = c("None" = "none", "Existing" = "existing", "Create new" = "new"),
+            selected = "none",
+            inline = TRUE
+          ),
+          conditionalPanel(
+            condition = "input.sample_group_mode == 'existing'",
+            ns = ns,
+            selectizeInput(ns("sample_group_id"), "Existing sample group", choices = NULL)
+          ),
+          conditionalPanel(
+            condition = "input.sample_group_mode == 'new'",
+            ns = ns,
+            fluidRow(
+              column(4, selectizeInput(ns("sample_group_type"), "Group type", choices = NULL)),
+              column(4, textInput(ns("sample_group_code"), "Group code")),
+              column(4, textInput(ns("sample_group_name"), "Group name"))
+            ),
+            textAreaInput(ns("sample_group_note"), "Group notes", width = "100%")
           )
         ),
         accordion_panel(
@@ -881,6 +903,11 @@ addDiscData <- function(id, language) {
     outputs <- reactiveValues()
     data <- reactiveValues(df = addDiscData_empty_table())
     current_manual_sample <- reactiveVal(1L)
+    manual_upload_id <- paste0(
+      format(Sys.time(), "%Y%m%dT%H%M%OS6", tz = "UTC"),
+      "-",
+      Sys.getpid()
+    )
     import_profiles <- reactiveVal(data.frame())
 
     con <- session$userData$AquaCache
@@ -891,6 +918,20 @@ addDiscData <- function(id, language) {
     check_samples <- DBI::dbGetQuery(
       con,
       "SELECT has_table_privilege(current_user, 'discrete.samples', 'INSERT') AS can_insert"
+    )
+    check_groups <- DBI::dbGetQuery(
+      con,
+      "SELECT
+         has_table_privilege(
+           current_user,
+           'discrete.sample_groups',
+           'INSERT'
+         ) AS can_create_group,
+         has_table_privilege(
+           current_user,
+           'discrete.sample_group_members',
+           'INSERT'
+         ) AS can_assign_group"
     )
     if (!check_results$can_insert || !check_samples$can_insert) {
       showModal(modalDialog(
@@ -926,7 +967,23 @@ addDiscData <- function(id, language) {
     )
     sample_types <- DBI::dbGetQuery(
       con,
-      "SELECT sample_type_id, sample_type FROM discrete.sample_types ORDER BY sample_type"
+      "SELECT sample_type_id, sample_type, requires_location, requires_sample_group
+       FROM discrete.sample_types
+       ORDER BY sample_type"
+    )
+    sample_group_types <- DBI::dbGetQuery(
+      con,
+      "SELECT group_type, group_type_name
+       FROM discrete.sample_group_types
+       WHERE active
+       ORDER BY sort_order, group_type_name"
+    )
+    sample_groups <- DBI::dbGetQuery(
+      con,
+      "SELECT sample_group_id, group_type, group_code, group_name
+       FROM discrete.sample_groups
+       WHERE active
+       ORDER BY start_datetime DESC NULLS LAST, sample_group_id DESC"
     )
 
     pending_location_selection <- reactiveVal(character(0))
@@ -983,6 +1040,28 @@ addDiscData <- function(id, language) {
       "sample_type",
       choices = stats::setNames(sample_types$sample_type_id, sample_types$sample_type),
       selected = 34L
+    )
+    updateSelectizeInput(
+      session,
+      "sample_group_type",
+      choices = stats::setNames(
+        sample_group_types$group_type,
+        sample_group_types$group_type_name
+      )
+    )
+    sample_group_labels <- sprintf(
+      "%s: %s",
+      sample_groups$group_type,
+      ifelse(
+        nzchar(ifelse(is.na(sample_groups$group_code), "", sample_groups$group_code)),
+        sample_groups$group_code,
+        sample_groups$group_name
+      )
+    )
+    updateSelectizeInput(
+      session,
+      "sample_group_id",
+      choices = stats::setNames(sample_groups$sample_group_id, sample_group_labels)
     )
 
     observeEvent(
@@ -1152,7 +1231,7 @@ addDiscData <- function(id, language) {
       parsed_result <- addDiscData_parse_result(input$manual_result)
       row <- addDiscData_empty_table()
       row[1, ] <- NA
-      row$sample_key <- paste0("manual-", current_manual_sample())
+      row$sample_key <- paste0(manual_upload_id, "-", current_manual_sample())
       row$source_location_name <- ""
       row$location_id <- addDiscData_int(addDiscData_first(normalize_selectize_values(input$location)))
       row$sub_location_id <- addDiscData_int(addDiscData_first(normalize_selectize_values(input$sublocation)))
@@ -1178,7 +1257,7 @@ addDiscData <- function(id, language) {
       row$analysis_datetime <- as.POSIXct(NA)
       row$note <- ""
       row$mapping_status <- "manual"
-      row$source_code <- ""
+      row$source_code <- "YGwater-manual"
       row$source_row_number <- NA_integer_
       data$df <- rbind(data$df, row)
     })
@@ -1293,14 +1372,6 @@ addDiscData <- function(id, language) {
       }
     })
 
-    sample_documents_table_exists <- function() {
-      res <- DBI::dbGetQuery(
-        con,
-        "SELECT to_regclass('discrete.sample_documents') IS NOT NULL AS exists;"
-      )
-      isTRUE(res$exists[[1]])
-    }
-
     default_document_type <- function() {
       type <- DBI::dbGetQuery(
         con,
@@ -1354,7 +1425,7 @@ addDiscData <- function(id, language) {
     link_sample_documents <- function(sample_id, document_ids) {
       document_ids <- unique(as.integer(document_ids))
       document_ids <- document_ids[!is.na(document_ids)]
-      if (!length(document_ids) || !sample_documents_table_exists()) {
+      if (!length(document_ids)) {
         return(invisible(NULL))
       }
 
@@ -1375,12 +1446,11 @@ addDiscData <- function(id, language) {
       invisible(NULL)
     }
 
-    validate_upload_rows <- function(df) {
+    validate_upload_rows <- function(df, group_mode) {
       if (!nrow(df)) {
         stop("Empty data table.", call. = FALSE)
       }
       required <- list(
-        location_id = "location",
         datetime = "sample datetime",
         media_id = "media",
         collection_method = "collection method",
@@ -1402,6 +1472,50 @@ addDiscData <- function(id, language) {
           )
         }
       }
+      type_index <- match(df$sample_type, sample_types$sample_type_id)
+      if (anyNA(type_index)) {
+        stop(
+          "Unknown sample type in row(s): ",
+          paste(which(is.na(type_index)), collapse = ", "),
+          call. = FALSE
+        )
+      }
+      missing_location <- is.na(df$location_id)
+      requires_location <- sample_types$requires_location[type_index]
+      if (any(missing_location & requires_location)) {
+        stop(
+          "The selected sample type requires a location in row(s): ",
+          paste(which(missing_location & requires_location), collapse = ", "),
+          call. = FALSE
+        )
+      }
+      if (any(missing_location & !is.na(df$sub_location_id))) {
+        stop(
+          "A sub-location cannot be supplied without a location in row(s): ",
+          paste(which(missing_location & !is.na(df$sub_location_id)), collapse = ", "),
+          call. = FALSE
+        )
+      }
+      requires_group <- missing_location |
+        sample_types$requires_sample_group[type_index]
+      if (any(requires_group) && identical(group_mode, "none")) {
+        stop(
+          "One or more samples require a sample group. Select an existing group or create a new one.",
+          call. = FALSE
+        )
+      }
+      if (
+        any(missing_location) &&
+          any(
+            !addDiscData_present(df$source_code[missing_location]) |
+              !addDiscData_present(df$source_sample_id[missing_location])
+          )
+      ) {
+        stop(
+          "Locationless samples require both an import source and source sample ID.",
+          call. = FALSE
+        )
+      }
       no_result <- is.na(df$result) & is.na(df$result_condition)
       if (any(no_result)) {
         stop(
@@ -1418,7 +1532,47 @@ addDiscData <- function(id, language) {
       active <- FALSE
       tryCatch(
         {
-          validate_upload_rows(df)
+          group_mode <- addDiscData_first(input$sample_group_mode, "none")
+          validate_upload_rows(df, group_mode)
+
+          if (
+            !identical(group_mode, "none") &&
+              !isTRUE(check_groups$can_assign_group[[1]])
+          ) {
+            stop(
+              "You do not have permission to assign samples to groups.",
+              call. = FALSE
+            )
+          }
+          if (
+            identical(group_mode, "new") &&
+              !isTRUE(check_groups$can_create_group[[1]])
+          ) {
+            stop(
+              "You do not have permission to create sample groups.",
+              call. = FALSE
+            )
+          }
+
+          if (identical(group_mode, "existing")) {
+            group_id <- addDiscData_int(input$sample_group_id)
+            if (is.na(group_id) || !(group_id %in% sample_groups$sample_group_id)) {
+              stop("Select an existing sample group.", call. = FALSE)
+            }
+          } else {
+            group_id <- NA_integer_
+          }
+          if (identical(group_mode, "new")) {
+            group_type <- addDiscData_first(input$sample_group_type)
+            group_code <- trimws(addDiscData_first(input$sample_group_code, ""))
+            group_name <- trimws(addDiscData_first(input$sample_group_name, ""))
+            if (!addDiscData_present(group_type)) {
+              stop("Select a sample group type.", call. = FALSE)
+            }
+            if (!nzchar(group_code) && !nzchar(group_name)) {
+              stop("Enter a group code or group name.", call. = FALSE)
+            }
+          }
 
           DBI::dbExecute(con, "BEGIN")
           active <- TRUE
@@ -1438,12 +1592,6 @@ addDiscData <- function(id, language) {
               )
             }
           }
-          doc_array <- if (length(doc_ids) > 0) {
-            paste0("{", paste(doc_ids, collapse = ","), "}")
-          } else {
-            NA_character_
-          }
-
           inserted_samples <- 0L
           inserted_results <- 0L
           sample_lookup <- list()
@@ -1456,8 +1604,42 @@ addDiscData <- function(id, language) {
             "collection_method",
             "sample_type",
             "owner",
-            "source_sample_id"
+            "source_sample_id",
+            "source_code"
           )])
+
+          if (identical(group_mode, "new")) {
+            group_owners <- unique(as.integer(samples$owner))
+            group_owners <- group_owners[!is.na(group_owners)]
+            if (length(group_owners) != 1L) {
+              stop(
+                "All samples must have the same owner when creating a group.",
+                call. = FALSE
+              )
+            }
+            group_id <- DBI::dbGetQuery(
+              con,
+              "INSERT INTO discrete.sample_groups (
+                 group_type, group_code, group_name, start_datetime,
+                 end_datetime, owner, note, share_with
+               ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[])
+               RETURNING sample_group_id",
+              params = list(
+                group_type,
+                if (nzchar(group_code)) group_code else NA_character_,
+                if (nzchar(group_name)) group_name else NA_character_,
+                min(as.POSIXct(samples$datetime, tz = "UTC"), na.rm = TRUE),
+                max(as.POSIXct(samples$datetime, tz = "UTC"), na.rm = TRUE),
+                group_owners[[1]],
+                if (isTruthy(input$sample_group_note)) {
+                  input$sample_group_note
+                } else {
+                  NA_character_
+                },
+                "{public_reader}"
+              )
+            )$sample_group_id[[1]]
+          }
 
           for (i in seq_len(nrow(samples))) {
             sid <- DBI::dbGetQuery(
@@ -1469,13 +1651,13 @@ addDiscData <- function(id, language) {
                  datetime,
                  collection_method,
                  sample_type,
-                 owner,
-                 documents,
-                 import_source,
-                 note
-               ) VALUES (
-                 $1, $2, $3, $4, $5, $6, $7, $8::integer[], $9, $10
-               )
+                  owner,
+                  import_source,
+                  import_source_id,
+                  note
+                ) VALUES (
+                  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+                )
                RETURNING sample_id",
               params = list(
                 as.integer(samples$location_id[[i]]),
@@ -1485,12 +1667,21 @@ addDiscData <- function(id, language) {
                 as.integer(samples$collection_method[[i]]),
                 as.integer(samples$sample_type[[i]]),
                 as.integer(samples$owner[[i]]),
-                doc_array,
-                if (!is.null(input$file)) input$file$name else "manual",
+                samples$source_code[[i]],
+                samples$source_sample_id[[i]],
                 paste("Imported source sample:", samples$source_sample_id[[i]])
               )
             )$sample_id[[1]]
             link_sample_documents(sid, doc_ids)
+            if (!is.na(group_id)) {
+              DBI::dbExecute(
+                con,
+                "INSERT INTO discrete.sample_group_members (
+                   sample_group_id, sample_id, sequence_in_group
+                 ) VALUES ($1, $2, $3)",
+                params = list(as.integer(group_id), as.integer(sid), as.integer(i))
+              )
+            }
             sample_lookup[[samples$sample_key[[i]]]] <- sid
             inserted_samples <- inserted_samples + 1L
           }

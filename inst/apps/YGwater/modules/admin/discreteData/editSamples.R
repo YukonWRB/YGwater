@@ -117,11 +117,6 @@ editSamples <- function(id, language) {
         label = "Sampling organization",
         column = "sampling_org"
       ),
-      documents = list(
-        label = "Documents",
-        column = "documents",
-        cast = "::integer[]"
-      ),
       share_with = list(
         label = "Share with",
         column = "share_with",
@@ -202,66 +197,18 @@ editSamples <- function(id, language) {
       unique(values)
     }
 
-    format_integer_array <- function(values) {
-      values <- normalize_document_ids(values)
-      if (!length(values)) {
-        return(NA)
-      }
-      paste0("{", paste(values, collapse = ","), "}")
-    }
-
-    parse_integer_array <- function(value) {
-      normalize_document_ids(value)
-    }
-
-    sample_documents_table_exists <- function(con) {
-      res <- DBI::dbGetQuery(
-        con,
-        "SELECT to_regclass('discrete.sample_documents') IS NOT NULL AS exists;"
-      )
-      isTRUE(res$exists[[1]])
-    }
-
     current_sample_document_ids <- function(sample_id) {
-      details <- moduleData$samples[
-        moduleData$samples$sample_id == sample_id,
-        ,
-        drop = FALSE
+      if (is.null(moduleData$sample_documents) || !nrow(moduleData$sample_documents)) {
+        return(integer())
+      }
+      linked_ids <- moduleData$sample_documents$document_id[
+        moduleData$sample_documents$sample_id == sample_id
       ]
-      legacy_ids <- if (nrow(details)) {
-        parse_integer_array(details$documents)
-      } else {
-        integer()
-      }
-
-      if (
-        isTRUE(moduleData$has_sample_documents) &&
-          !is.null(moduleData$sample_documents) &&
-          nrow(moduleData$sample_documents)
-      ) {
-        linked_ids <- moduleData$sample_documents$document_id[
-          moduleData$sample_documents$sample_id == sample_id
-        ]
-        return(unique(c(legacy_ids, as.integer(linked_ids))))
-      }
-
-      legacy_ids
+      unique(as.integer(linked_ids))
     }
 
     sync_sample_document_links <- function(con, sample_id, document_ids) {
       document_ids <- normalize_document_ids(document_ids)
-      DBI::dbExecute(
-        con,
-        "UPDATE discrete.samples
-         SET documents = $1::integer[]
-         WHERE sample_id = $2;",
-        params = list(format_integer_array(document_ids), as.integer(sample_id))
-      )
-
-      if (!sample_documents_table_exists(con)) {
-        return(invisible(NULL))
-      }
-
       DBI::dbExecute(
         con,
         "DELETE FROM discrete.sample_documents WHERE sample_id = $1;",
@@ -282,6 +229,36 @@ editSamples <- function(id, language) {
         )
       }
 
+      invisible(NULL)
+    }
+
+    current_sample_group_ids <- function(sample_id) {
+      if (is.null(moduleData$sample_group_members) || !nrow(moduleData$sample_group_members)) {
+        return(integer())
+      }
+      group_ids <- moduleData$sample_group_members$sample_group_id[
+        moduleData$sample_group_members$sample_id == sample_id
+      ]
+      unique(as.integer(group_ids))
+    }
+
+    sync_sample_group_links <- function(con, sample_id, sample_group_ids) {
+      sample_group_ids <- unique(suppressWarnings(as.integer(sample_group_ids)))
+      sample_group_ids <- sample_group_ids[!is.na(sample_group_ids)]
+      DBI::dbExecute(
+        con,
+        "DELETE FROM discrete.sample_group_members WHERE sample_id = $1",
+        params = list(as.integer(sample_id))
+      )
+      for (i in seq_along(sample_group_ids)) {
+        DBI::dbExecute(
+          con,
+          "INSERT INTO discrete.sample_group_members (
+             sample_group_id, sample_id, sequence_in_group
+           ) VALUES ($1, $2, $3)",
+          params = list(sample_group_ids[[i]], as.integer(sample_id), as.integer(i))
+        )
+      }
       invisible(NULL)
     }
 
@@ -331,46 +308,6 @@ editSamples <- function(id, language) {
                 location = paste(
                   fk_tables$schema_name[i],
                   fk_tables$table_name[i],
-                  sep = "."
-                ),
-                count = as.integer(n),
-                stringsAsFactors = FALSE
-              )
-            )
-          }
-        }
-      }
-
-      arr_cols <- DBI::dbGetQuery(
-        con,
-        "SELECT table_schema, table_name, column_name
-         FROM information_schema.columns
-         WHERE udt_name = '_int4'
-           AND column_name = 'documents';"
-      )
-      if (nrow(arr_cols)) {
-        for (i in seq_len(nrow(arr_cols))) {
-          q <- paste0(
-            "SELECT count(*)::integer AS n FROM ",
-            DBI::dbQuoteIdentifier(con, arr_cols$table_schema[i]),
-            ".",
-            DBI::dbQuoteIdentifier(con, arr_cols$table_name[i]),
-            " WHERE $1 = ANY(",
-            DBI::dbQuoteIdentifier(con, arr_cols$column_name[i]),
-            ");"
-          )
-          n <- DBI::dbGetQuery(
-            con,
-            q,
-            params = list(as.integer(document_id))
-          )$n[[1]]
-          if (n > 0L) {
-            out <- rbind(
-              out,
-              data.frame(
-                location = paste(
-                  arr_cols$table_schema[i],
-                  arr_cols$table_name[i],
                   sep = "."
                 ),
                 count = as.integer(n),
@@ -547,6 +484,8 @@ editSamples <- function(id, language) {
       }
 
       document_ids <- normalize_document_ids(input$documents)
+      sample_group_ids <- suppressWarnings(as.integer(input$sample_groups))
+      sample_group_ids <- unique(sample_group_ids[!is.na(sample_group_ids)])
 
       list(
         location_id = location_id,
@@ -603,7 +542,7 @@ editSamples <- function(id, language) {
         comissioning_org = comissioning_org,
         sampling_org = sampling_org,
         document_ids = document_ids,
-        documents = format_integer_array(document_ids),
+        sample_group_ids = sample_group_ids,
         share_with = share_with_to_array(input$share_with),
         import_source = if (isTruthy(input$import_source)) {
           input$import_source
@@ -1355,6 +1294,7 @@ editSamples <- function(id, language) {
       updateSelectizeInput(session, "comissioning_org", selected = character(0))
       updateSelectizeInput(session, "sampling_org", selected = character(0))
       updateSelectizeInput(session, "documents", selected = character(0))
+      updateSelectizeInput(session, "sample_groups", selected = character(0))
       updateSelectizeInput(session, "share_with", selected = "public_reader")
       updateTextInput(session, "import_source", value = "")
       updateTextInput(session, "import_source_id", value = "")
@@ -1525,6 +1465,11 @@ editSamples <- function(id, language) {
       )
       updateSelectizeInput(
         session,
+        "sample_groups",
+        selected = as.character(current_sample_group_ids(sample_id))
+      )
+      updateSelectizeInput(
+        session,
         "share_with",
         selected = array_to_text(details$share_with)
       )
@@ -1562,7 +1507,7 @@ editSamples <- function(id, language) {
       )
       moduleData$samples_display <- DBI::dbGetQuery(
         con,
-        "SELECT s.sample_id, l.name AS location, COALESCE(sl.sub_location_name, '') AS sub_location, m.media_type, st.sample_type, cm.collection_method, s.datetime, s.target_datetime, o.name AS owner, c.name AS contributor, s.sample_volume_ml, s.purge_volume_l, s.share_with FROM discrete.samples s JOIN public.locations l ON s.location_id = l.location_id LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id JOIN public.media_types m ON s.media_id = m.media_id JOIN discrete.sample_types st ON s.sample_type = st.sample_type_id JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id LEFT JOIN public.organizations o ON s.owner = o.organization_id LEFT JOIN public.organizations c ON s.contributor = c.organization_id ORDER BY s.datetime DESC"
+        "SELECT s.sample_id, COALESCE(l.name, '[No location]') AS location, COALESCE(sl.sub_location_name, '') AS sub_location, m.media_type, st.sample_type, cm.collection_method, s.datetime, s.target_datetime, o.name AS owner, c.name AS contributor, s.sample_volume_ml, s.purge_volume_l, s.share_with, COALESCE((SELECT string_agg(COALESCE(sg.group_code, sg.group_name), ', ' ORDER BY sg.sample_group_id) FROM discrete.sample_group_members sgm JOIN discrete.sample_groups sg ON sg.sample_group_id = sgm.sample_group_id WHERE sgm.sample_id = s.sample_id), '') AS sample_groups FROM discrete.samples s LEFT JOIN public.locations l ON s.location_id = l.location_id LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id JOIN public.media_types m ON s.media_id = m.media_id JOIN discrete.sample_types st ON s.sample_type = st.sample_type_id JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id LEFT JOIN public.organizations o ON s.owner = o.organization_id LEFT JOIN public.organizations c ON s.contributor = c.organization_id ORDER BY s.datetime DESC"
       )
       moduleData$locations <- DBI::dbGetQuery(
         con,
@@ -1582,7 +1527,7 @@ editSamples <- function(id, language) {
       )
       moduleData$sample_types <- DBI::dbGetQuery(
         con,
-        "SELECT sample_type_id, sample_type FROM discrete.sample_types ORDER BY sample_type ASC"
+        "SELECT sample_type_id, sample_type, requires_location, requires_sample_group FROM discrete.sample_types ORDER BY sample_type ASC"
       )
       moduleData$grades <- DBI::dbGetQuery(
         con,
@@ -1610,23 +1555,25 @@ editSamples <- function(id, language) {
          FROM files.document_types
          ORDER BY document_type_en ASC"
       )
-      moduleData$has_sample_documents <- sample_documents_table_exists(con)
-      moduleData$sample_documents <- if (
-        isTRUE(moduleData$has_sample_documents)
-      ) {
-        DBI::dbGetQuery(
-          con,
-          "SELECT sample_id, document_id
-           FROM discrete.sample_documents
-           ORDER BY sample_id, document_id"
-        )
-      } else {
-        data.frame(
-          sample_id = integer(),
-          document_id = integer(),
-          stringsAsFactors = FALSE
-        )
-      }
+      moduleData$sample_documents <- DBI::dbGetQuery(
+        con,
+        "SELECT sample_id, document_id
+         FROM discrete.sample_documents
+         ORDER BY sample_id, document_id"
+      )
+      moduleData$sample_groups <- DBI::dbGetQuery(
+        con,
+        "SELECT sample_group_id, group_type, group_code, group_name
+         FROM discrete.sample_groups
+         WHERE active
+         ORDER BY start_datetime DESC NULLS LAST, sample_group_id DESC"
+      )
+      moduleData$sample_group_members <- DBI::dbGetQuery(
+        con,
+        "SELECT sample_group_id, sample_id
+         FROM discrete.sample_group_members
+         ORDER BY sample_group_id, sample_id"
+      )
       moduleData$share_groups <- DBI::dbGetQuery(
         con,
         "SELECT * FROM public.get_shareable_principals_for('discrete.samples') ORDER BY role_name ASC;"
@@ -2021,6 +1968,32 @@ editSamples <- function(id, language) {
                       maxItems = 1,
                       placeholder = "Select sample type"
                     ),
+                    width = "100%"
+                  )
+                )
+              )
+            ),
+            fluidRow(
+              single_only_ui(
+                column(
+                  12,
+                  selectizeInput(
+                    ns("sample_groups"),
+                    "Sample groups",
+                    choices = named_choices(
+                      moduleData$sample_groups$sample_group_id,
+                      paste0(
+                        moduleData$sample_groups$group_type,
+                        ": ",
+                        ifelse(
+                          is.na(moduleData$sample_groups$group_code),
+                          moduleData$sample_groups$group_name,
+                          moduleData$sample_groups$group_code
+                        )
+                      )
+                    ),
+                    multiple = TRUE,
+                    options = list(placeholder = "Optional for regular samples"),
                     width = "100%"
                   )
                 )
@@ -2711,11 +2684,15 @@ editSamples <- function(id, language) {
               params = params
             )
           } else {
-            DBI::dbExecute(
+            updated <- DBI::dbExecute(
               session$userData$AquaCache,
               sql,
               params = params
             )
+            if (updated != 1L) {
+              stop("The selected result was not updated.", call. = FALSE)
+            }
+            updated
           }
           load_sample_results(form$sample_id)
           if (identical(mode, "add") && nrow(res)) {
@@ -2915,15 +2892,6 @@ editSamples <- function(id, language) {
           return()
         }
 
-        documents_updated <- "documents" %in% selected_fields
-        previous_documents <- if (documents_updated) {
-          stats::setNames(
-            lapply(sample_ids, current_sample_document_ids),
-            as.character(sample_ids)
-          )
-        } else {
-          list()
-        }
         params <- list()
         set_clauses <- character()
         validation_errors <- character()
@@ -2969,50 +2937,31 @@ editSamples <- function(id, language) {
           length(params) + 1
         )
 
-        errors <- character()
-        cleanup_messages <- character()
-        for (id in sample_ids) {
-          res <- try(
-            {
-              DBI::dbExecute(
-                session$userData$AquaCache,
-                update_sql,
-                params = c(params, list(id))
-              )
-              if (documents_updated) {
-                sync_sample_document_links(
-                  session$userData$AquaCache,
-                  id,
-                  form$document_ids
-                )
-                cleanup_messages <- c(
-                  cleanup_messages,
-                  cleanup_removed_documents(
-                    session$userData$AquaCache,
-                    setdiff(
-                      previous_documents[[as.character(id)]],
-                      form$document_ids
-                    )
-                  )
+        con <- session$userData$AquaCache
+        update_error <- tryCatch(
+          {
+            DBI::dbWithTransaction(con, {
+              for (id in sample_ids) {
+                tryCatch(
+                  DBI::dbExecute(
+                    con,
+                    update_sql,
+                    params = c(params, list(id))
+                  ),
+                  error = function(e) {
+                    stop(sprintf("Sample %s: %s", id, e$message), call. = FALSE)
+                  }
                 )
               }
-            },
-            silent = TRUE
-          )
-          if (inherits(res, "try-error")) {
-            err_condition <- attr(res, "condition")
-            message <- if (!is.null(err_condition)) {
-              conditionMessage(err_condition)
-            } else {
-              as.character(res)
-            }
-            errors <- c(errors, sprintf("Sample %s: %s", id, message))
-          }
-        }
+            })
+            NULL
+          },
+          error = conditionMessage
+        )
 
-        if (length(errors)) {
+        if (!is.null(update_error)) {
           showNotification(
-            paste(c("Failed to update some samples:", errors), collapse = " "),
+            paste("No samples were updated:", update_error),
             type = "error"
           )
           return()
@@ -3032,12 +2981,43 @@ editSamples <- function(id, language) {
           sprintf("Updated %d samples successfully.", length(sample_ids)),
           type = "message"
         )
-        show_document_cleanup_messages(cleanup_messages)
       } else {
         sample_id <- sample_ids[[1]]
         previous_documents <- current_sample_document_ids(sample_id)
-        if (is.na(form$location_id)) {
-          showNotification("Location is required.", type = "error")
+        selected_type <- moduleData$sample_types[
+          moduleData$sample_types$sample_type_id == form$sample_type,
+          ,
+          drop = FALSE
+        ]
+        if (!nrow(selected_type)) {
+          showNotification("Select a valid sample type.", type = "error")
+          return()
+        }
+        if (isTRUE(selected_type$requires_location[[1]]) && is.na(form$location_id)) {
+          showNotification(
+            "Location is required for the selected sample type.",
+            type = "error"
+          )
+          return()
+        }
+        if (is.na(form$location_id) && !is.na(form$sub_location_id)) {
+          showNotification(
+            "A sub-location cannot be set without a location.",
+            type = "error"
+          )
+          return()
+        }
+        requires_group <- is.na(form$location_id) ||
+          isTRUE(selected_type$requires_sample_group[[1]])
+        if (requires_group && !length(form$sample_group_ids)) {
+          showNotification(
+            "The selected sample type requires at least one sample group.",
+            type = "error"
+          )
+          return()
+        }
+        if (any(!form$sample_group_ids %in% moduleData$sample_groups$sample_group_id)) {
+          showNotification("Select valid sample groups.", type = "error")
           return()
         }
         if (is.na(form$media_id)) {
@@ -3088,13 +3068,12 @@ editSamples <- function(id, language) {
           contributor = $19,
           comissioning_org = $20,
           sampling_org = $21,
-          documents = $22::integer[],
-          share_with = $23::text[],
-          import_source = $24,
-          no_update = $25,
-          note = $26,
-          import_source_id = $27
-        WHERE sample_id = $28;
+          share_with = $22::text[],
+          import_source = $23,
+          no_update = $24,
+          note = $25,
+          import_source_id = $26
+        WHERE sample_id = $27;
       "
 
         params <- list(
@@ -3119,7 +3098,6 @@ editSamples <- function(id, language) {
           form$contributor,
           form$comissioning_org,
           form$sampling_org,
-          form$documents,
           form$share_with,
           form$import_source,
           form$no_update,
@@ -3130,16 +3108,15 @@ editSamples <- function(id, language) {
 
         tryCatch(
           {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              update_sql,
-              params = params
-            )
-            sync_sample_document_links(
-              session$userData$AquaCache,
-              sample_id,
-              form$document_ids
-            )
+            con <- session$userData$AquaCache
+            DBI::dbWithTransaction(con, {
+              updated <- DBI::dbExecute(con, update_sql, params = params)
+              if (updated != 1L) {
+                stop("The selected sample was not updated.", call. = FALSE)
+              }
+              sync_sample_document_links(con, sample_id, form$document_ids)
+              sync_sample_group_links(con, sample_id, form$sample_group_ids)
+            })
             cleanup_messages <- cleanup_removed_documents(
               session$userData$AquaCache,
               setdiff(previous_documents, form$document_ids)

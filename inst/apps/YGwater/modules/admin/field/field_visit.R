@@ -65,10 +65,16 @@ visit <- function(id, language) {
     }
 
     collect_visit_inputs <- function() {
+      scalar_integer <- function(value) {
+        if (is.null(value) || !length(value) || is.na(value[[1]])) {
+          return(NA_integer_)
+        }
+        suppressWarnings(as.integer(value[[1]]))
+      }
       start_utc <- scalar_utc_datetime(input$visit_datetime_start)
       end_utc <- scalar_utc_datetime(input$visit_datetime_end)
-      location_id <- as.integer(input$location)
-      sub_location_id <- as.integer(input$sub_location)
+      location_id <- scalar_integer(input$location)
+      sub_location_id <- scalar_integer(input$sub_location)
       purpose <- if (isTruthy(input$visit_purpose)) {
         input$visit_purpose
       } else {
@@ -113,7 +119,11 @@ visit <- function(id, language) {
         precip_24 = input$precip_24,
         precip_48 = as.numeric(input$precip_48),
         air_temp = as.numeric(input$air_temp),
-        wind = input$weather_wind,
+        wind = if (isTruthy(input$weather_wind)) {
+          as.character(input$weather_wind[[1]])
+        } else {
+          NA_character_
+        },
         note = note,
         share_with = share_with_to_array(input$share_with)
       )
@@ -823,6 +833,19 @@ visit <- function(id, language) {
           )
           return()
         }
+        if (
+          !is.na(form$sub_location_id) &&
+            !any(
+              moduleData$sub_locations$sub_location_id == form$sub_location_id &
+                moduleData$sub_locations$location_id == form$location_id
+            )
+        ) {
+          showNotification(
+            "The selected sub-location does not belong to this location.",
+            type = "error"
+          )
+          return()
+        }
 
         params <- list(
           form$start_utc,
@@ -856,7 +879,7 @@ visit <- function(id, language) {
             note,
             share_with
           ) VALUES (
-            $1, $2, $3, $4, $5, $6 $7, $8, $9, $10, $11, $12, $13::text[]
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::text[]
           )
           RETURNING field_visit_id;
         "
@@ -864,14 +887,18 @@ visit <- function(id, language) {
         tryCatch(
           {
             DBI::dbWithTransaction(
-              con,
+              session$userData$AquaCache,
               {
-                res <- DBI::dbGetQuery(con, insert_sql, params = params)
+                res <- DBI::dbGetQuery(
+                  session$userData$AquaCache,
+                  insert_sql,
+                  params = params
+                )
                 visit_id <- res$field_visit_id[1]
                 if (length(visitData$instruments) > 0) {
                   for (instrument_id in visitData$instruments) {
                     DBI::dbExecute(
-                      con,
+                      session$userData$AquaCache,
                       "INSERT INTO field.field_visit_instruments (field_visit_id, instrument_id) VALUES ($1, $2)",
                       params = list(visit_id, instrument_id)
                     )
@@ -940,6 +967,19 @@ visit <- function(id, language) {
           )
           return()
         }
+        if (
+          !is.na(form$sub_location_id) &&
+            !any(
+              moduleData$sub_locations$sub_location_id == form$sub_location_id &
+                moduleData$sub_locations$location_id == form$location_id
+            )
+        ) {
+          showNotification(
+            "The selected sub-location does not belong to this location.",
+            type = "error"
+          )
+          return()
+        }
 
         update_sql <- "
           UPDATE field.field_visits
@@ -950,14 +990,14 @@ visit <- function(id, language) {
             sub_location_id = $4,
             purpose = $5,
             precip_current_type = $6,
-            precip_current_rate = $7
-            precip_24h_mm = $7,
-            precip_48h_mm = $8,
-            air_temp_c = $9,
-            wind = $10,
-            note = $11,
-            share_with = $12::text[]
-          WHERE field_visit_id = $13;
+            precip_current_rate = $7,
+            precip_24h_mm = $8,
+            precip_48h_mm = $9,
+            air_temp_c = $10,
+            wind = $11,
+            note = $12,
+            share_with = $13::text[]
+          WHERE field_visit_id = $14;
         "
 
         params <- list(
@@ -966,7 +1006,8 @@ visit <- function(id, language) {
           form$location_id,
           form$sub_location_id,
           form$purpose,
-          form$current_precip,
+          form$precip_current_type,
+          form$precip_current_rate,
           form$precip_24,
           form$precip_48,
           form$air_temp,
@@ -979,18 +1020,28 @@ visit <- function(id, language) {
         tryCatch(
           {
             DBI::dbWithTransaction(
-              con,
+              session$userData$AquaCache,
               {
-                DBI::dbExecute(con, update_sql, params = params)
+                updated <- DBI::dbExecute(
+                  session$userData$AquaCache,
+                  update_sql,
+                  params = params
+                )
+                if (updated != 1L) {
+                  stop(
+                    "The selected field visit was not updated.",
+                    call. = FALSE
+                  )
+                }
                 DBI::dbExecute(
-                  con,
+                  session$userData$AquaCache,
                   "DELETE FROM field.field_visit_instruments WHERE field_visit_id = $1",
                   params = list(visit_id)
                 )
                 if (length(visitData$instruments) > 0) {
                   for (instrument_id in visitData$instruments) {
                     DBI::dbExecute(
-                      con,
+                      session$userData$AquaCache,
                       "INSERT INTO field.field_visit_instruments (field_visit_id, instrument_id) VALUES ($1, $2)",
                       params = list(visit_id, instrument_id)
                     )
