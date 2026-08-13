@@ -177,7 +177,7 @@ ygwater_module_privilege_requirements <- function() {
         "continuous.timeseries",
         "public.locations_z",
         "public.organizations",
-        "continuous.transmission_source_adapters",
+        "continuous.timeseries_source_adapters",
         "continuous.transmission_timeseries_mappings",
         "public.source_adapter_capabilities"
       ),
