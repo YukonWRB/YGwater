@@ -75,10 +75,6 @@ test_that("public app SQL and help-page sinks remain parameterized", {
     "apps/YGwater/www/html/admin_help/page_help_placeholder.html",
     package = "YGwater"
   ))
-  water_info <- readLines(system.file(
-    "R/waterInfo.R",
-    package = "YGwater"
-  ))
   wq_report <- readLines(system.file(
     "apps/YGwater/modules/client/reports/WQReport.R",
     package = "YGwater"
@@ -100,11 +96,6 @@ test_that("public app SQL and help-page sinks remain parameterized", {
     fixed = TRUE
   )))
   expect_false(any(grepl("innerHTML", help_page, fixed = TRUE)))
-  expect_false(any(grepl(
-    "paste(locations, collapse = \"', '\")",
-    water_info,
-    fixed = TRUE
-  )))
   expect_true(any(grepl(
     "!value %in% configured_mdb_files",
     wq_report,

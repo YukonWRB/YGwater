@@ -500,7 +500,9 @@ ORDER BY rolname"
       {
         load_roles()
         refresh_module_access()
-        set_status("Refreshed roles and effective privileges from the database.")
+        set_status(
+          "Refreshed roles and effective privileges from the database."
+        )
       },
       ignoreInit = TRUE
     )
@@ -912,7 +914,10 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
 
       for (privilege in table_privileges) {
         input_id <- paste0("table_permission_", tolower(privilege))
-        selected <- intersect(input_or_empty(isolate(input[[input_id]])), choices)
+        selected <- intersect(
+          input_or_empty(isolate(input[[input_id]])),
+          choices
+        )
         updateSelectizeInput(
           session,
           input_id,
@@ -998,6 +1003,13 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
           role_ident <- quote_identifier_sql(input$group_name)
           sql <- sprintf(
             "CREATE ROLE %s NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;",
+            role_ident
+          )
+          DBI::dbExecute(session$userData$AquaCache, sql)
+
+          # Make the group inherit privileges from 'public_reader', so that it can see what the public can see at minimum
+          sql <- sprintf(
+            'GRANT public_reader to %s WITH INHERIT TRUE;',
             role_ident
           )
           DBI::dbExecute(session$userData$AquaCache, sql)
@@ -1124,6 +1136,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
               )
             )
             DBI::dbExecute(session$userData$AquaCache, sql)
+
             load_roles()
             refresh_module_access()
             updateTextInput(session, "user_name", value = "")

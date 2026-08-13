@@ -33,6 +33,15 @@ timeseries_transmission_choices <- function(con, location_id, source_fx) {
     con,
     "SELECT
        r.transmission_route_id,
+       r.transmission_setup_id,
+       r.route_name,
+       r.endpoint_identifier,
+       r.message_format,
+       r.schedule_reference_time_utc,
+       r.transmit_interval_seconds,
+       r.transmit_window_seconds,
+       r.payload_size_bytes,
+       r.route_config::text AS route_config,
        CONCAT(
          r.route_name,
          ' | ',
@@ -145,6 +154,140 @@ timeseries_transmission_choices <- function(con, location_id, source_fx) {
   )
 
   list(routes = routes, setups = setups, loggers = loggers, methods = methods)
+}
+
+timeseries_route_config_fields <- function(capability, message_format = NULL) {
+  if (is.null(capability) || nrow(capability) != 1L) {
+    return(list())
+  }
+  ui_config <- capability$ui_config[[1L]]
+  fields <- ui_config$route_config_fields
+  if (is.null(fields) || !is.list(fields)) {
+    return(list())
+  }
+
+  filter_by_format <- !is.null(message_format) && length(message_format) &&
+    !is.na(message_format[[1L]]) && nzchar(trimws(message_format[[1L]]))
+  normalized_format <- if (filter_by_format) {
+    toupper(trimws(as.character(message_format[[1L]])))
+  } else {
+    ""
+  }
+  Filter(
+    function(field) {
+      if (!is.list(field) || is.null(field$name) || is.null(field$path)) {
+        return(FALSE)
+      }
+      formats <- as.character(unlist(
+        field$message_formats,
+        use.names = FALSE
+      ))
+      !filter_by_format || !length(formats) ||
+        normalized_format %in% toupper(trimws(formats))
+    },
+    fields
+  )
+}
+
+timeseries_route_config_field_value <- function(route_config, path) {
+  route_config <- trimws(as.character(route_config))
+  if (
+    length(route_config) != 1L ||
+      is.na(route_config) ||
+      !nzchar(route_config) ||
+      !jsonlite::validate(route_config)
+  ) {
+    return(NULL)
+  }
+  value <- jsonlite::fromJSON(route_config, simplifyVector = FALSE)
+  for (key in as.character(unlist(path, use.names = FALSE))) {
+    if (!is.list(value) || is.null(value[[key]])) {
+      return(NULL)
+    }
+    value <- value[[key]]
+  }
+  value
+}
+
+timeseries_route_config_with_ui_fields <- function(
+  route_config,
+  fields,
+  values
+) {
+  route_config <- trimws(as.character(route_config))
+  if (!length(route_config) || is.na(route_config) || !nzchar(route_config)) {
+    route_config <- "{}"
+  }
+  if (!jsonlite::validate(route_config)) {
+    stop("Advanced route configuration must be valid JSON.")
+  }
+  config <- jsonlite::fromJSON(route_config, simplifyVector = FALSE)
+  if (!is.list(config) || (length(config) && is.null(names(config)))) {
+    stop("Advanced route configuration must be a JSON object.")
+  }
+
+  set_path <- function(object, path, value) {
+    key <- path[[1L]]
+    if (length(path) == 1L) {
+      object[[key]] <- value
+      return(object)
+    }
+    child <- object[[key]]
+    if (is.null(child) || !is.list(child)) {
+      child <- list()
+    }
+    child <- set_path(child, path[-1L], value)
+    if (!length(child)) {
+      object[[key]] <- NULL
+    } else {
+      object[[key]] <- child
+    }
+    object
+  }
+
+  for (field in fields) {
+    name <- as.character(field$name[[1L]])
+    path <- as.character(unlist(field$path, use.names = FALSE))
+    if (!length(path) || any(!nzchar(path))) {
+      stop("Route configuration field '", name, "' has an invalid JSON path.")
+    }
+    value <- values[[name]]
+    value_type <- as.character(field$value_type[[1L]])
+    missing <- is.null(value) || !length(value) || is.na(value[[1L]]) ||
+      (is.character(value[[1L]]) && !nzchar(trimws(value[[1L]])))
+    if (missing) {
+      config <- set_path(config, path, NULL)
+      next
+    }
+
+    value <- switch(
+      value_type,
+      integer = suppressWarnings(as.integer(value[[1L]])),
+      numeric = suppressWarnings(as.numeric(value[[1L]])),
+      logical = as.logical(value[[1L]]),
+      character = trimws(as.character(value[[1L]])),
+      stop("Unsupported route configuration value type '", value_type, "'.")
+    )
+    if (length(value) != 1L || is.na(value)) {
+      stop("Enter a valid value for ", field$label[[1L]], ".")
+    }
+    minimum <- suppressWarnings(as.numeric(field$minimum))
+    maximum <- suppressWarnings(as.numeric(field$maximum))
+    if (length(minimum) && !is.na(minimum) && value < minimum) {
+      stop(field$label[[1L]], " must be at least ", minimum, ".")
+    }
+    if (length(maximum) && !is.na(maximum) && value > maximum) {
+      stop(field$label[[1L]], " must be no more than ", maximum, ".")
+    }
+    config <- set_path(config, path, value)
+  }
+
+  as.character(jsonlite::toJSON(
+    config,
+    auto_unbox = TRUE,
+    null = "null",
+    na = "null"
+  ))
 }
 
 timeseries_transmission_mapping <- function(con, timeseries_id) {
@@ -396,7 +539,8 @@ timeseries_save_transmission_route <- function(
   transmit_interval_seconds,
   transmit_window_seconds,
   payload_size_bytes,
-  route_config
+  route_config,
+  route_id = NULL
 ) {
   nullable_integer <- function(x) {
     value <- suppressWarnings(as.integer(x))
@@ -412,6 +556,7 @@ timeseries_save_transmission_route <- function(
   }
   location_id <- nullable_integer(location_id)
   setup_id <- nullable_integer(setup_id)
+  route_id <- nullable_integer(route_id)
   if (is.na(location_id)) {
     stop("Select a location before creating a transmission route.")
   }
@@ -445,6 +590,44 @@ timeseries_save_transmission_route <- function(
   on.exit({
     if (active) DBI::dbRollback(con)
   }, add = TRUE)
+
+  if (!is.na(route_id)) {
+    route_id <- DBI::dbGetQuery(
+      con,
+      "UPDATE public.locations_metadata_transmission_routes r
+       SET route_name = $3,
+           endpoint_identifier = $4,
+           message_format = $5,
+           schedule_reference_time_utc = $6,
+           transmit_interval_seconds = $7,
+           transmit_window_seconds = $8,
+           payload_size_bytes = $9,
+           route_config = $10::jsonb
+       FROM public.locations_metadata_transmission_setups s
+       WHERE r.transmission_route_id = $1
+         AND r.transmission_setup_id = s.transmission_setup_id
+         AND s.location_id = $2
+       RETURNING r.transmission_route_id",
+      params = list(
+        route_id,
+        location_id,
+        route_name,
+        nullable_text(endpoint_identifier),
+        nullable_text(message_format),
+        nullable_text(schedule_reference_time_utc),
+        nullable_integer(transmit_interval_seconds),
+        nullable_integer(transmit_window_seconds),
+        nullable_integer(payload_size_bytes),
+        route_config
+      )
+    )$transmission_route_id
+    if (length(route_id) != 1L) {
+      stop("The selected transmission route no longer exists at this location.")
+    }
+    DBI::dbCommit(con)
+    active <- FALSE
+    return(as.integer(route_id[[1L]]))
+  }
 
   if (is.na(setup_id)) {
     logger_metadata_id <- nullable_integer(logger_metadata_id)

@@ -489,6 +489,39 @@ instrumentMaintenance <- function(id, language) {
       stats::setNames(as.character(dt$sensor_id), labels)
     }
 
+    update_instrument_selector <- function(selected = isolate(input$instrument_id)) {
+      updateSelectizeInput(
+        session,
+        "instrument_id",
+        choices = build_instrument_choices(maintenance_data$instruments),
+        selected = normalize_select_value(selected),
+        server = TRUE
+      )
+    }
+
+    update_observer_selector <- function(selected = isolate(input$observer)) {
+      updateSelectizeInput(
+        session,
+        "observer",
+        choices = build_observer_choices(maintenance_data$observers),
+        selected = normalize_select_value(selected),
+        server = TRUE
+      )
+    }
+
+    update_sensor_selector <- function(selected = isolate(input$sensor_id)) {
+      updateSelectizeInput(
+        session,
+        "sensor_id",
+        choices = c(
+          "No sensor / remove sensor" = "",
+          build_sensor_choices(maintenance_data$sensors)
+        ),
+        selected = normalize_select_value(selected),
+        server = TRUE
+      )
+    }
+
     sensor_label <- function(sensor_id) {
       sid <- suppressWarnings(as.integer(sensor_id))
       sensors <- maintenance_data$sensors
@@ -918,30 +951,9 @@ instrumentMaintenance <- function(id, language) {
          ORDER BY s.date_retired NULLS FIRST, st.sensor_type, s.sensor_serial, s.sensor_id"
       ))
 
-      updateSelectizeInput(
-        session,
-        "instrument_id",
-        choices = build_instrument_choices(maintenance_data$instruments),
-        selected = normalize_select_value(instrument_selected),
-        server = TRUE
-      )
-      updateSelectizeInput(
-        session,
-        "observer",
-        choices = build_observer_choices(maintenance_data$observers),
-        selected = normalize_select_value(observer_selected),
-        server = TRUE
-      )
-      updateSelectizeInput(
-        session,
-        "sensor_id",
-        choices = c(
-          "No sensor / remove sensor" = "",
-          build_sensor_choices(maintenance_data$sensors)
-        ),
-        selected = normalize_select_value(sensor_selected),
-        server = TRUE
-      )
+      update_instrument_selector(instrument_selected)
+      update_observer_selector(observer_selected)
+      update_sensor_selector(sensor_selected)
     }
 
     refresh_instrument_details <- function(
@@ -1476,11 +1488,7 @@ instrumentMaintenance <- function(id, language) {
           return()
         }
         instrument_id <- df$instrument_id[[selected[[1]]]]
-        updateSelectizeInput(
-          session,
-          "instrument_id",
-          selected = as.character(instrument_id)
-        )
+        update_instrument_selector(as.character(instrument_id))
         removeModal()
         clear_maintenance_form()
         clear_due_form()
@@ -1522,11 +1530,7 @@ instrumentMaintenance <- function(id, language) {
           "maintenance_note",
           value = safe_text(record$note[[1]])
         )
-        updateSelectizeInput(
-          session,
-          "observer",
-          selected = as.character(record$observer[[1]])
-        )
+        update_observer_selector(as.character(record$observer[[1]]))
         shinyWidgets::updateAirDateInput(
           session,
           "obs_datetime",
@@ -1572,11 +1576,7 @@ instrumentMaintenance <- function(id, language) {
           "maintenance_due_note",
           value = safe_text(record$maintenance_due_note[[1]])
         )
-        updateSelectizeInput(
-          session,
-          "observer",
-          selected = as.character(record$observer[[1]])
-        )
+        update_observer_selector(as.character(record$observer[[1]]))
         shinyWidgets::updateAirDateInput(
           session,
           "obs_datetime",
@@ -1615,11 +1615,7 @@ instrumentMaintenance <- function(id, language) {
           "slot_number",
           value = record$slot_number[[1]]
         )
-        updateSelectizeInput(
-          session,
-          "sensor_id",
-          selected = normalize_select_value(record$sensor_id[[1]])
-        )
+        update_sensor_selector(record$sensor_id[[1]])
         updateTextAreaInput(
           session,
           "slot_note",

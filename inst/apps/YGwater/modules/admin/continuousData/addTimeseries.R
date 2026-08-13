@@ -35,7 +35,13 @@ addTimeseriesUI <- function(id) {
       ))
     ),
     tags$head(tags$style(HTML(
-      ".shiny-split-layout > div {overflow: visible;}"
+      "
+      .shiny-split-layout > div {
+        overflow: visible;
+        white-space: normal;
+        overflow-wrap: anywhere;
+      }
+      "
     ))),
     page_fluid(
       uiOutput(ns("banner")),
@@ -67,6 +73,8 @@ addTimeseries <- function(id, language) {
     preferred_transmission_route_id <- reactiveVal(NULL)
     preferred_secondary_transmission_route_id <- reactiveVal(NULL)
     route_creation_target <- reactiveVal("primary")
+    route_edit_id <- reactiveVal(NULL)
+    route_modal_config <- reactiveVal("{}")
     transmission_choices_version <- reactiveVal(0L)
     source_args_existing <- reactiveVal(NA_character_)
     source_args_existing_source <- reactiveVal(NA_character_)
@@ -1540,6 +1548,113 @@ addTimeseries <- function(id, language) {
       as.character(value[[1]])
     }
 
+    route_modal_capability <- function() {
+      if (identical(route_creation_target(), "secondary")) {
+        secondary_transmission_adapter()
+      } else {
+        transmission_adapter()
+      }
+    }
+
+    output$new_route_config_fields <- renderUI({
+      capability <- route_modal_capability()
+      fields <- timeseries_route_config_fields(
+        capability,
+        input$new_route_message_format
+      )
+      if (!length(fields)) {
+        return(NULL)
+      }
+
+      controls <- lapply(fields, function(field) {
+        name <- as.character(field$name[[1L]])
+        label <- as.character(field$label[[1L]])
+        control <- as.character(field$control[[1L]])
+        value <- timeseries_route_config_field_value(
+          route_modal_config(),
+          field$path
+        )
+        if (is.null(value)) {
+          value <- field$default
+        }
+        input_id <- ns(paste0("new_route_config_", name))
+
+        input_control <- switch(
+          control,
+          numeric = do.call(
+            numericInput,
+            Filter(
+              Negate(is.null),
+              list(
+                inputId = input_id,
+                label = label,
+                value = if (is.null(value)) NA else as.numeric(value[[1L]]),
+                min = if (is.null(field$minimum)) {
+                  NULL
+                } else {
+                  as.numeric(field$minimum[[1L]])
+                },
+                max = if (is.null(field$maximum)) {
+                  NULL
+                } else {
+                  as.numeric(field$maximum[[1L]])
+                },
+                step = if (is.null(field$step)) {
+                  "any"
+                } else {
+                  as.numeric(field$step[[1L]])
+                },
+                width = "100%"
+              )
+            )
+          ),
+          checkbox = checkboxInput(
+            input_id,
+            label,
+            value = if (is.null(value)) FALSE else isTRUE(value[[1L]])
+          ),
+          select = selectizeInput(
+            input_id,
+            label,
+            choices = as.character(unlist(field$choices, use.names = FALSE)),
+            selected = if (is.null(value)) character() else value[[1L]],
+            width = "100%"
+          ),
+          textInput(
+            input_id,
+            label,
+            value = if (is.null(value)) "" else as.character(value[[1L]]),
+            placeholder = if (is.null(field$placeholder)) {
+              ""
+            } else {
+              as.character(field$placeholder[[1L]])
+            },
+            width = "100%"
+          )
+        )
+
+        tags$div(
+          class = "mb-3",
+          input_control,
+          tags$p(
+            class = "text-muted small mb-0",
+            as.character(field$help[[1L]])
+          )
+        )
+      })
+
+      tagList(
+        tags$div(
+          class = "alert alert-info",
+          paste(
+            "Observation timing settings belong to the transmission route,",
+            "so they apply to every timeseries mapped to this route."
+          )
+        ),
+        controls
+      )
+    })
+
     transmission_choices_for <- function(capability) {
       transmission_choices_version()
       if (is.null(capability)) {
@@ -2241,14 +2356,14 @@ addTimeseries <- function(id, language) {
                       min = 1,
                       step = 1
                     )
+                  ),
+                  tags$p(
+                    class = "text-muted small",
+                    "Missing download function? Download functions must be ",
+                    "registered in the database's ",
+                    tags$code("public.source_adapter_capabilities"),
+                    " table to show up here. Developers: see AquaCache::registerSourceAdapterArguments()."
                   )
-                ),
-                tags$p(
-                  class = "text-muted small",
-                  "Missing download function? Download functions must be ",
-                  "registered in the database's ",
-                  tags$code("public.source_adapter_capabilities"),
-                  " table to show up here. Developers: see AquaCache::registerSourceAdapterArguments()."
                 ),
                 actionButton(
                   ns("source_fx_doc"),
@@ -2632,11 +2747,25 @@ addTimeseries <- function(id, language) {
           ),
           width = "100%"
         ),
-        actionButton(
-          ns(paste0(input_prefix, "new_transmission_route")),
-          "Create transmission route",
-          icon = icon("plus"),
-          disabled = is.na(location_id)
+        tags$div(
+          class = "d-flex gap-2 flex-wrap",
+          actionButton(
+            ns(paste0(input_prefix, "new_transmission_route")),
+            "Create transmission route",
+            icon = icon("plus"),
+            disabled = is.na(location_id)
+          ),
+          actionButton(
+            ns(paste0(input_prefix, "edit_transmission_route")),
+            "Edit selected route",
+            icon = icon("pencil")
+          ) |>
+            tooltip(
+              paste(
+                "Transmission routes are shared. Editing one changes parser",
+                "and timing settings for every mapped timeseries."
+              )
+            )
         ),
         splitLayout(
           cellWidths = c("50%", "50%"),
@@ -2721,7 +2850,8 @@ addTimeseries <- function(id, language) {
     )
 
     show_transmission_route_modal <- function(
-      role = c("primary", "secondary")
+      role = c("primary", "secondary"),
+      route_id = NULL
     ) {
       role <- match.arg(role)
       secondary <- identical(role, "secondary")
@@ -2739,6 +2869,28 @@ addTimeseries <- function(id, language) {
       }
       location_id <- nullable_integer(input$location)
       req(!is.na(location_id))
+      route_id <- nullable_integer(route_id)
+      editing <- !is.na(route_id)
+      route <- NULL
+      if (editing) {
+        route_index <- match(
+          route_id,
+          as.integer(choices$routes$transmission_route_id)
+        )
+        if (is.na(route_index)) {
+          showNotification(
+            "The selected route is not currently available at this location.",
+            type = "error",
+            duration = 8
+          )
+          return(invisible(NULL))
+        }
+        route <- choices$routes[route_index, , drop = FALSE]
+      }
+      route_edit_id(if (editing) route_id else NULL)
+      route_modal_config(
+        if (editing) safe_text(route$route_config[[1L]]) else "{}"
+      )
 
       setup_choices <- c(
         "Create a new transmission setup" = "__new__",
@@ -2761,111 +2913,148 @@ addTimeseries <- function(id, language) {
       setup_start <- format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC")
 
       showModal(modalDialog(
-        title = "Create transmission route",
-        size = "l",
+        title = if (editing) {
+          "Edit transmission route"
+        } else {
+          "Create transmission route"
+        },
+        size = "xl",
         easyClose = FALSE,
-        selectizeInput(
-          ns("new_route_setup"),
-          "Transmission setup",
-          choices = setup_choices,
-          selected = if (nrow(choices$setups) > 0L) {
-            choices$setups$transmission_setup_id[[1]]
-          } else {
-            "__new__"
-          },
-          width = "100%"
-        ),
-        conditionalPanel(
-          condition = "input.new_route_setup == '__new__'",
-          ns = ns,
+        if (editing) {
           tags$div(
-            class = "alert alert-info",
+            class = "alert alert-warning",
             paste(
-              "A setup describes the deployed logger, provider, and platform.",
-              "The route below describes one delivery schedule or endpoint."
+              "This route is shared. Saving changes updates parsing and timing",
+              "for every timeseries that uses it; it does not affect only the",
+              "timeseries currently being modified."
             )
-          ),
-          splitLayout(
-            cellWidths = c("50%", "50%"),
+          )
+        } else {
+          tagList(
             selectizeInput(
-              ns("new_route_logger"),
-              "Deployed logger (optional)",
-              choices = logger_choices,
-              selected = "",
-              multiple = TRUE,
-              options = list(
-                maxItems = 1,
-                placeholder = "Optional: select a logger"
-              ),
+              ns("new_route_setup"),
+              "Transmission setup",
+              choices = setup_choices,
+              selected = if (nrow(choices$setups) > 0L) {
+                choices$setups$transmission_setup_id[[1]]
+              } else {
+                "__new__"
+              },
               width = "100%"
-            ) |>
-              tooltip(
-                "Optional logger deployment that originates this transmission. The route remains attached to the selected location when no logger is recorded."
-              ),
-            selectizeInput(
-              ns("new_route_method"),
-              "Transmission method",
-              choices = method_choices,
-              multiple = TRUE,
-              options = list(
-                maxItems = 1,
-                placeholder = "Select a method"
-              ),
-              width = "100%"
-            )
-          ),
-          splitLayout(
-            cellWidths = c("50%", "50%"),
-            textInput(
-              ns("new_route_provider"),
-              "Provider",
-              value = adapter_ui_default(
-                "provider_name",
-                "",
-                capability = capability
-              )
             ),
-            textInput(
-              ns("new_route_platform"),
-              "Platform identifier",
-              value = "",
-              placeholder = "DCP address, IMEI, terminal ID, etc."
-            ) |>
-              tooltip(
-                "Transmission platform identifier. For GOES DCS, enter the eight-character DCP address."
-              )
-          ),
-          textInput(
-            ns("new_route_setup_start"),
-            "Setup start datetime (UTC)",
-            value = setup_start,
-            placeholder = "YYYY-MM-DD HH:MM:SS"
-          ),
-          textAreaInput(
-            ns("new_route_transmission_config"),
-            "Advanced setup configuration (JSON object)",
-            value = "{}",
-            rows = 2
-          ) |>
-            tooltip(
-              "Provider-wide JSON settings shared by every route in this transmission setup. Usually left as {} for GOES."
+            conditionalPanel(
+              condition = "input.new_route_setup == '__new__'",
+              ns = ns,
+              tags$div(
+                class = "alert alert-info",
+                paste(
+                  "A setup identifies the location, provider, platform, and",
+                  "optional logger. A route describes one message format and",
+                  "delivery schedule from that setup."
+                )
+              ),
+              splitLayout(
+                cellWidths = c("50%", "50%"),
+                selectizeInput(
+                  ns("new_route_logger"),
+                  "Deployed logger (optional)",
+                  choices = logger_choices,
+                  selected = "",
+                  multiple = TRUE,
+                  options = list(
+                    maxItems = 1,
+                    placeholder = "Optional: select a logger"
+                  ),
+                  width = "100%"
+                ) |>
+                  tooltip(
+                    "Optional logger deployment that originates this transmission. The route remains attached to the selected location when no logger is recorded."
+                  ),
+                selectizeInput(
+                  ns("new_route_method"),
+                  "Transmission method",
+                  choices = method_choices,
+                  multiple = TRUE,
+                  options = list(
+                    maxItems = 1,
+                    placeholder = "Select a method"
+                  ),
+                  width = "100%"
+                )
+              ),
+              splitLayout(
+                cellWidths = c("50%", "50%"),
+                textInput(
+                  ns("new_route_provider"),
+                  "Provider",
+                  value = adapter_ui_default(
+                    "provider_name",
+                    "",
+                    capability = capability
+                  )
+                ),
+                textInput(
+                  ns("new_route_platform"),
+                  "Platform identifier",
+                  value = "",
+                  placeholder = "DCP address, IMEI, terminal ID, etc."
+                ) |>
+                  tooltip(
+                    "Transmission platform identifier. For GOES DCS, enter the eight-character DCP address."
+                  )
+              ),
+              textInput(
+                ns("new_route_setup_start"),
+                "Setup start datetime (UTC)",
+                value = setup_start,
+                placeholder = "YYYY-MM-DD HH:MM:SS"
+              ),
+              textAreaInput(
+                ns("new_route_transmission_config"),
+                "Advanced setup configuration (JSON object)",
+                value = "{}",
+                rows = 2
+              ) |>
+                tooltip(
+                  "Provider-wide JSON settings shared by every route in this transmission setup. Usually left as {} for GOES."
+                )
             )
-        ),
+          )
+        },
         tags$hr(),
+        tags$div(
+          class = "alert alert-info",
+          paste(
+            "Choose the message format used in the received payload, not the",
+            "file extension. For downloadNESDIS, common values are SHEF, BLM,",
+            "and comma-delimited. Delivery schedule fields describe when the",
+            "provider sends messages; they do not necessarily identify when",
+            "the measurements were observed. Format-specific observation-time",
+            "settings appear below when they are needed."
+          )
+        ),
         splitLayout(
           cellWidths = c("50%", "50%"),
           textInput(
             ns("new_route_name"),
             "Route name",
-            value = paste(
-              if (secondary) "Secondary" else "Primary",
-              "transmission route"
-            )
+            value = if (editing) {
+              safe_text(route$route_name[[1L]])
+            } else {
+              paste(
+                if (secondary) "Secondary" else "Primary",
+                "transmission route"
+              )
+            }
           ),
           textInput(
             ns("new_route_endpoint"),
             "Endpoint or route identifier",
-            value = ""
+            value = if (editing) {
+              safe_text(route$endpoint_identifier[[1L]])
+            } else {
+              ""
+            }
           )
         ),
         splitLayout(
@@ -2873,51 +3062,94 @@ addTimeseries <- function(id, language) {
           textInput(
             ns("new_route_message_format"),
             "Message format",
-            value = "",
-            placeholder = "JSON, CSV, SHEF, custom, etc."
-          ),
+            value = if (editing) {
+              safe_text(route$message_format[[1L]])
+            } else {
+              ""
+            },
+            placeholder = "For example: SHEF, BLM, or comma-delimited"
+          ) |>
+            tooltip(
+              paste(
+                "This selects the payload parser. Use the provider's message",
+                "format or inspect a raw message; do not infer it from the",
+                "download function name."
+              )
+            ),
           textInput(
             ns("new_route_schedule_reference"),
             "Schedule reference time (UTC, if known)",
-            value = "",
+            value = if (editing) {
+              safe_text(route$schedule_reference_time_utc[[1L]])
+            } else {
+              ""
+            },
             placeholder = "HH:MM:SS (optional)"
-          )
+          ) |>
+            tooltip(
+              paste(
+                "Scheduled UTC delivery time for this route. This describes",
+                "the transmission schedule and is not automatically used as",
+                "the observation timestamp."
+              )
+            )
         ),
         splitLayout(
           cellWidths = c("34%", "33%", "33%"),
           numericInput(
             ns("new_route_interval"),
             "Transmit interval, seconds",
-            value = NA,
+            value = if (editing) {
+              route$transmit_interval_seconds[[1L]]
+            } else {
+              NA
+            },
             min = 1
-          ),
+          ) |>
+            tooltip(
+              paste(
+                "Expected time between transmissions. For an hourly GOES",
+                "message enter 3600. This may differ from the interval between",
+                "measurements contained in each message."
+              )
+            ),
           numericInput(
             ns("new_route_window"),
             "Transmit window, seconds (if known)",
-            value = NA,
+            value = if (editing) {
+              route$transmit_window_seconds[[1L]]
+            } else {
+              NA
+            },
             min = 0
           ),
           numericInput(
             ns("new_route_payload_size"),
             "Payload size, bytes (if known)",
-            value = NA,
+            value = if (editing) route$payload_size_bytes[[1L]] else NA,
             min = 1
           )
         ),
+        uiOutput(ns("new_route_config_fields")),
         textAreaInput(
           ns("new_route_config"),
           "Advanced route configuration (JSON object)",
-          value = "{}",
+          value = route_modal_config(),
           rows = 3
         ) |>
           tooltip(
-            "Route-specific parser and retrieval settings. SHEF normally uses {}; max_days defaults to 14."
+            paste(
+              "Additional route-specific parser and retrieval settings.",
+              "Use the labelled fields above for catalogued settings; this",
+              "JSON box is for settings not yet represented by the form.",
+              "SHEF normally uses {}; max_days defaults to 14."
+            )
           ),
         footer = tagList(
           modalButton("Cancel"),
           actionButton(
             ns("save_transmission_route"),
-            "Create route",
+            if (editing) "Save route" else "Create route",
             class = "btn-primary"
           )
         )
@@ -2932,21 +3164,37 @@ addTimeseries <- function(id, language) {
       show_transmission_route_modal("secondary")
     })
 
+    observeEvent(input$edit_transmission_route, {
+      route_id <- nullable_integer(input$transmission_route)
+      if (is.na(route_id)) {
+        showNotification(
+          "Select a primary transmission route to edit.",
+          type = "warning"
+        )
+        return()
+      }
+      show_transmission_route_modal("primary", route_id)
+    })
+
+    observeEvent(input$secondary_edit_transmission_route, {
+      route_id <- nullable_integer(input$secondary_transmission_route)
+      if (is.na(route_id)) {
+        showNotification(
+          "Select a secondary transmission route to edit.",
+          type = "warning"
+        )
+        return()
+      }
+      show_transmission_route_modal("secondary", route_id)
+    })
+
     observeEvent(input$save_transmission_route, {
       route_id <- tryCatch(
         {
-          capability <- if (
-            identical(
-              route_creation_target(),
-              "secondary"
-            )
-          ) {
-            secondary_adapter_capability()
-          } else {
-            current_adapter_capability()
-          }
+          capability <- route_modal_capability()
           if (
-            identical(input$new_route_setup, "__new__") &&
+            is.null(route_edit_id()) &&
+              identical(input$new_route_setup, "__new__") &&
               !is.null(capability) &&
               identical(
                 capability$parallel_group_strategy[[1]],
@@ -2957,10 +3205,42 @@ addTimeseries <- function(id, language) {
             stop("Enter the provider platform identifier for this setup.")
           }
 
+          visible_fields <- timeseries_route_config_fields(
+            capability,
+            input$new_route_message_format
+          )
+          all_fields <- timeseries_route_config_fields(capability)
+          visible_names <- vapply(
+            visible_fields,
+            function(field) as.character(field$name[[1L]]),
+            character(1)
+          )
+          field_values <- stats::setNames(
+            lapply(all_fields, function(field) {
+              name <- as.character(field$name[[1L]])
+              if (!name %in% visible_names) {
+                return(NULL)
+              }
+              input[[paste0("new_route_config_", name)]]
+            }),
+            vapply(
+              all_fields,
+              function(field) as.character(field$name[[1L]]),
+              character(1)
+            )
+          )
+          route_config <- timeseries_route_config_with_ui_fields(
+            safe_text(input$new_route_config),
+            all_fields,
+            field_values
+          )
+
           timeseries_save_transmission_route(
             con = session$userData$AquaCache,
             location_id = nullable_integer(input$location),
-            setup_id = if (identical(input$new_route_setup, "__new__")) {
+            setup_id = if (!is.null(route_edit_id())) {
+              NA_integer_
+            } else if (identical(input$new_route_setup, "__new__")) {
               NA_integer_
             } else {
               nullable_integer(input$new_route_setup)
@@ -2982,7 +3262,8 @@ addTimeseries <- function(id, language) {
             transmit_interval_seconds = input$new_route_interval,
             transmit_window_seconds = input$new_route_window,
             payload_size_bytes = input$new_route_payload_size,
-            route_config = safe_text(input$new_route_config)
+            route_config = route_config,
+            route_id = route_edit_id()
           )
         },
         error = function(e) {
@@ -3021,9 +3302,15 @@ addTimeseries <- function(id, language) {
         once = TRUE
       )
       showNotification(
-        paste("Transmission route", route_id, "created."),
+        paste(
+          "Transmission route",
+          route_id,
+          if (is.null(route_edit_id())) "created." else "updated."
+        ),
         type = "message"
       )
+      route_edit_id(NULL)
+      route_modal_config("{}")
     })
 
     output$default_corrections_warning <- renderUI({

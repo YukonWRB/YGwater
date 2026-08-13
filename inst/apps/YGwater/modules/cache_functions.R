@@ -1,5 +1,14 @@
 # These cache functions fetch and store data in a global cache environment, allowing for efficient data retrieval across user sessions in a Shiny app or other R environments. The cache is automatically refreshed based on the specified TTL (time-to-live) value, ensuring that users always have access to up-to-date information without unnecessary database queries.
 
+continuous_timeseries_has_measurements_sql <-
+  # Technicall possible to have start_datetime and end_datetime not populated as they are populated via triggers, but the other option - checking the measurement table directly - excludes composite/derived timeseries which do not have data in the measurement table.
+  "EXISTS (
+       SELECT 1
+         FROM continuous.timeseries
+        WHERE start_datetime IS NOT NULL
+        AND end_datetime IS NOT NULL
+     )"
+
 # continuous plot and data modules ######
 cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
   get_cached(
@@ -8,11 +17,26 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
     fetch_fun = function() {
       locs <- dbGetQueryDT(
         con,
-        "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr FROM public.locations AS loc INNER JOIN continuous.timeseries ON loc.location_id = timeseries.location_id ORDER BY loc.name ASC"
+        paste(
+          "SELECT DISTINCT loc.location_id, loc.name, loc.name_fr",
+          "FROM public.locations AS loc",
+          "INNER JOIN continuous.timeseries ts ON loc.location_id = ts.location_id",
+          "WHERE",
+          continuous_timeseries_has_measurements_sql,
+          "ORDER BY loc.name ASC"
+        )
       )
       sub_locs <- dbGetQueryDT(
         con,
-        "SELECT sub_location_id, sub_location_name, sub_location_name_fr FROM public.sub_locations WHERE location_id IN (SELECT DISTINCT location_id FROM continuous.timeseries) ORDER BY sub_location_name ASC;"
+        paste(
+          "SELECT sub_location_id, sub_location_name, sub_location_name_fr",
+          "FROM public.sub_locations",
+          "WHERE location_id IN (",
+          "SELECT DISTINCT ts.location_id FROM continuous.timeseries ts",
+          "WHERE",
+          continuous_timeseries_has_measurements_sql,
+          ") ORDER BY sub_location_name ASC;"
+        )
       )
       params <- dbGetQueryDT(
         con,
@@ -20,48 +44,88 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
           "SELECT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr,",
           ac_parameter_unit_select_sql(con, "p", "unit"),
           "FROM public.parameters p",
-          "WHERE p.parameter_id IN (SELECT DISTINCT parameter_id FROM continuous.timeseries)",
+          "WHERE p.parameter_id IN (",
+          "SELECT DISTINCT ts.parameter_id FROM continuous.timeseries ts",
+          "WHERE",
+          continuous_timeseries_has_measurements_sql,
+          ")",
           "ORDER BY p.param_name ASC;"
         )
       )
       media <- dbGetQueryDT(
         con,
-        "SELECT m.media_id, m.media_type, m.media_type_fr FROM public.media_types as m WHERE EXISTS (SELECT 1 FROM continuous.timeseries AS t WHERE m.media_id = t.media_id);"
+        paste(
+          "SELECT m.media_id, m.media_type, m.media_type_fr",
+          "FROM public.media_types m",
+          "WHERE EXISTS (",
+          "SELECT 1 FROM continuous.timeseries ts",
+          "WHERE m.media_id = ts.media_id AND",
+          continuous_timeseries_has_measurements_sql,
+          ");"
+        )
       )
       aggregation_types <- dbGetQueryDT(
         con,
-        "SELECT aggregation_type_id, aggregation_type, aggregation_type_fr FROM continuous.aggregation_types WHERE aggregation_type_id IN (SELECT DISTINCT aggregation_type_id FROM continuous.timeseries);"
+        paste(
+          "SELECT aggregation_type_id, aggregation_type, aggregation_type_fr",
+          "FROM continuous.aggregation_types",
+          "WHERE aggregation_type_id IN (",
+          "SELECT DISTINCT ts.aggregation_type_id FROM continuous.timeseries ts",
+          "WHERE",
+          continuous_timeseries_has_measurements_sql,
+          ");"
+        )
       )
       parameter_relationships <- dbGetQueryDT(
         con,
-        "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM continuous.timeseries AS t WHERE p.parameter_id = t.parameter_id) ;"
+        paste(
+          "SELECT p.relationship_id, p.parameter_id, p.group_id, p.sub_group_id",
+          "FROM public.parameter_relationships p",
+          "WHERE EXISTS (",
+          "SELECT 1 FROM continuous.timeseries ts",
+          "WHERE p.parameter_id = ts.parameter_id AND",
+          continuous_timeseries_has_measurements_sql,
+          ");"
+        )
       )
       range <- dbGetQueryDT(
         con,
-        "SELECT MIN(start_datetime) AS min_datetime, MAX(end_datetime) AS max_datetime FROM continuous.timeseries;"
+        paste(
+          "SELECT MIN(ts.start_datetime) AS min_datetime,",
+          "MAX(ts.end_datetime) AS max_datetime",
+          "FROM continuous.timeseries ts",
+          "WHERE",
+          continuous_timeseries_has_measurements_sql,
+          ";"
+        )
       )
       timeseries <- dbGetQueryDT(
         con,
-        "SELECT
-           ts.timeseries_id,
-           ts.location_id,
-           ts.sub_location_id,
-           loc.location_code AS loc_code,
-           ts.media_id,
-           ts.parameter_id,
-           ts.aggregation_type_id,
-           EXTRACT(EPOCH FROM ts.record_rate) AS record_rate,
-           lz.z_meters AS z,
-           ts.start_datetime,
-           ts.end_datetime,
-           ts.timeseries_type AS timeseries_type_code,
-           tt.timeseries_type_name AS timeseries_type_name,
-           tt.timeseries_type_name_fr AS timeseries_type_name_fr
-         FROM continuous.timeseries ts
-         LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
-         LEFT JOIN public.locations loc ON ts.location_id = loc.location_id
-         LEFT JOIN continuous.timeseries_types tt
-           ON ts.timeseries_type = tt.timeseries_type;"
+        paste(
+          "SELECT
+             ts.timeseries_id,
+             ts.location_id,
+             ts.sub_location_id,
+             loc.location_code AS loc_code,
+             ts.media_id,
+             ts.parameter_id,
+             ts.aggregation_type_id,
+             EXTRACT(EPOCH FROM ts.record_rate) AS record_rate,
+             lz.z_meters AS z,
+             ts.start_datetime,
+             ts.end_datetime,
+             ts.timeseries_type AS timeseries_type_code,
+             tt.timeseries_type_name AS timeseries_type_name,
+             tt.timeseries_type_name_fr AS timeseries_type_name_fr
+           FROM continuous.timeseries ts
+           LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id
+           LEFT JOIN public.locations loc ON ts.location_id = loc.location_id
+           LEFT JOIN continuous.timeseries_types tt
+             ON ts.timeseries_type = tt.timeseries_type
+           WHERE",
+          continuous_timeseries_has_measurements_sql,
+          ";"
+        )
       )
 
       rates <- data.frame(
@@ -534,7 +598,9 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
             "LEFT JOIN public.matrix_states AS ms",
             "ON ts.matrix_state_id = ms.matrix_state_id",
             "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
-            "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id"
+            "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id",
+            "WHERE",
+            continuous_timeseries_has_measurements_sql
           )
         ),
         parameters = dbGetQueryDT(
@@ -545,7 +611,10 @@ map_params_module_data <- function(con, env = .GlobalEnv) {
             ", pr.group_id, pr.sub_group_id",
             "FROM public.parameters AS p",
             "RIGHT JOIN continuous.timeseries AS ts ON p.parameter_id = ts.parameter_id",
-            "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id;"
+            "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id",
+            "WHERE",
+            continuous_timeseries_has_measurements_sql,
+            ";"
           )
         )
       )
@@ -588,6 +657,8 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
             "ON ts.matrix_state_id = ms.matrix_state_id",
             "LEFT JOIN public.media_types AS m ON ts.media_id = m.media_id",
             "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id",
+            "WHERE",
+            continuous_timeseries_has_measurements_sql,
             "UNION ALL",
             "SELECT MIN(r.result_id) AS timeseries_id, s.location_id,",
             "p.param_name, p.param_name_fr,",
@@ -631,10 +702,15 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
         ),
         media_types = dbGetQueryDT(
           con,
-          "SELECT mt.media_id, mt.media_type, mt.media_type_fr FROM public.media_types mt WHERE mt.media_id IN (
-              SELECT DISTINCT media_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT media_id FROM discrete.samples)"
+          paste(
+            "SELECT mt.media_id, mt.media_type, mt.media_type_fr",
+            "FROM public.media_types mt WHERE mt.media_id IN (",
+            "SELECT DISTINCT ts.media_id FROM continuous.timeseries ts",
+            "WHERE",
+            continuous_timeseries_has_measurements_sql,
+            "UNION",
+            "SELECT DISTINCT media_id FROM discrete.samples)"
+          )
         ),
         parameters = dbGetQueryDT(
           con,
@@ -645,30 +721,40 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
             "FROM public.parameters AS p",
             "LEFT JOIN public.parameter_relationships AS pr ON p.parameter_id = pr.parameter_id",
             "WHERE p.parameter_id IN (",
-            "SELECT DISTINCT parameter_id FROM continuous.timeseries",
+            "SELECT DISTINCT ts.parameter_id FROM continuous.timeseries ts",
+            "WHERE",
+            continuous_timeseries_has_measurements_sql,
             "UNION",
             "SELECT DISTINCT parameter_id FROM discrete.results)"
           )
         ),
         parameter_groups = dbGetQueryDT(
           con,
-          "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr
-             FROM public.parameter_groups AS pg
-             LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id
-            WHERE pr.parameter_id IN (
-              SELECT DISTINCT parameter_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)"
+          paste(
+            "SELECT DISTINCT pg.group_id, pg.group_name, pg.group_name_fr",
+            "FROM public.parameter_groups AS pg",
+            "LEFT JOIN public.parameter_relationships AS pr ON pg.group_id = pr.group_id",
+            "WHERE pr.parameter_id IN (",
+            "SELECT DISTINCT ts.parameter_id FROM continuous.timeseries ts",
+            "WHERE",
+            continuous_timeseries_has_measurements_sql,
+            "UNION",
+            "SELECT DISTINCT parameter_id FROM discrete.results)"
+          )
         ),
         parameter_sub_groups = dbGetQueryDT(
           con,
-          "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr
-             FROM public.parameter_sub_groups AS psg
-             LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id
-            WHERE pr.parameter_id IN (
-              SELECT DISTINCT parameter_id FROM continuous.timeseries
-              UNION
-              SELECT DISTINCT parameter_id FROM discrete.results)"
+          paste(
+            "SELECT psg.sub_group_id, psg.sub_group_name, psg.sub_group_name_fr",
+            "FROM public.parameter_sub_groups AS psg",
+            "LEFT JOIN public.parameter_relationships AS pr ON psg.sub_group_id = pr.sub_group_id",
+            "WHERE pr.parameter_id IN (",
+            "SELECT DISTINCT ts.parameter_id FROM continuous.timeseries ts",
+            "WHERE",
+            continuous_timeseries_has_measurements_sql,
+            "UNION",
+            "SELECT DISTINCT parameter_id FROM discrete.results)"
+          )
         )
       )
     },
@@ -703,7 +789,10 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
              WHERE borehole_purpose_id IS NOT NULL
            );"
         ),
-        boreholes_docs = dbGetQueryDT(con, "SELECT * FROM boreholes.boreholes_documents"),
+        boreholes_docs = dbGetQueryDT(
+          con,
+          "SELECT * FROM boreholes.boreholes_documents"
+        ),
         documents = dbGetQueryDT(
           con,
           "SELECT document_id, name, format FROM files.documents"

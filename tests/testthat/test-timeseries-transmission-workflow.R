@@ -83,6 +83,65 @@ test_that("source adapter lookup works with data.table registries", {
   )
 })
 
+test_that("catalogued route fields are filtered and merged into route JSON", {
+  env <- timeseries_transmission_test_environment()
+  capability <- data.frame(source_fx = "downloadNESDIS")
+  capability$ui_config <- I(list(list(route_config_fields = list(
+    list(
+      name = "timestamp_floor_seconds",
+      path = list("parser_config", "timestamp_floor_seconds"),
+      label = "Observation-time alignment interval, seconds (optional)",
+      help = "Use only when the payload has no observation timestamp.",
+      value_type = "integer",
+      control = "numeric",
+      minimum = 1,
+      message_formats = list("BLM")
+    )
+  ))))
+
+  expect_length(
+    env$timeseries_route_config_fields(capability, "BLM"),
+    1L
+  )
+  expect_length(
+    env$timeseries_route_config_fields(capability, "SHEF"),
+    0L
+  )
+
+  fields <- env$timeseries_route_config_fields(capability)
+  config <- env$timeseries_route_config_with_ui_fields(
+    '{"max_days":14,"parser_config":{"fields":["ta","rh"]}}',
+    fields,
+    list(timestamp_floor_seconds = 3600)
+  )
+  parsed <- jsonlite::fromJSON(config)
+  expect_equal(parsed$max_days, 14L)
+  expect_equal(parsed$parser_config$fields, c("ta", "rh"))
+  expect_equal(parsed$parser_config$timestamp_floor_seconds, 3600L)
+  expect_equal(
+    env$timeseries_route_config_field_value(
+      config,
+      c("parser_config", "timestamp_floor_seconds")
+    ),
+    3600L
+  )
+
+  cleared <- env$timeseries_route_config_with_ui_fields(
+    config,
+    fields,
+    list(timestamp_floor_seconds = NA)
+  )
+  expect_null(jsonlite::fromJSON(cleared)$parser_config$timestamp_floor_seconds)
+  expect_error(
+    env$timeseries_route_config_with_ui_fields(
+      "{}",
+      fields,
+      list(timestamp_floor_seconds = 0)
+    ),
+    "must be at least 1"
+  )
+})
+
 test_that("transmission routes are stored with their source assignments", {
   env <- timeseries_transmission_test_environment()
 
@@ -253,6 +312,59 @@ test_that("route creation can create a setup without a deployed logger", {
   expect_equal(parameters[[2]][[1]], 33L)
 })
 
+test_that("route editing updates only a route at the selected location", {
+  env <- timeseries_transmission_test_environment()
+  statement <- NULL
+  parameters <- NULL
+  committed <- FALSE
+
+  local_mocked_bindings(
+    dbBegin = function(con, ...) invisible(TRUE),
+    dbCommit = function(con, ...) {
+      committed <<- TRUE
+      invisible(TRUE)
+    },
+    dbRollback = function(con, ...) invisible(TRUE),
+    dbGetQuery = function(con, sql, params = NULL, ...) {
+      statement <<- sql
+      parameters <<- params
+      data.frame(transmission_route_id = 44L)
+    },
+    .package = "DBI"
+  )
+
+  route_id <- env$timeseries_save_transmission_route(
+    con = structure(list(), class = "mock_con"),
+    location_id = 3,
+    setup_id = NA,
+    logger_metadata_id = NA,
+    transmission_method_id = NA,
+    provider_name = "",
+    platform_identifier = "",
+    setup_start_datetime = "",
+    transmission_config = "{}",
+    route_name = "Hourly BLM",
+    endpoint_identifier = "",
+    message_format = "BLM",
+    schedule_reference_time_utc = "00:09:30",
+    transmit_interval_seconds = 3600,
+    transmit_window_seconds = NA,
+    payload_size_bytes = NA,
+    route_config = '{"parser_config":{"timestamp_floor_seconds":3600}}',
+    route_id = 44
+  )
+
+  expect_equal(route_id, 44L)
+  expect_true(committed)
+  expect_match(statement, "UPDATE public.locations_metadata_transmission_routes", fixed = TRUE)
+  expect_match(statement, "s.location_id = $2", fixed = TRUE)
+  expect_equal(parameters[1:3], list(44L, 3L, "Hourly BLM"))
+  expect_equal(
+    jsonlite::fromJSON(parameters[[10]])$parser_config$timestamp_floor_seconds,
+    3600L
+  )
+})
+
 test_that("addTimeseries uses registry-driven transmission UI and persistence", {
   module_text <- paste(
     readLines(
@@ -361,6 +473,21 @@ test_that("addTimeseries uses registry-driven transmission UI and persistence", 
   expect_match(
     module_text,
     "Create transmission route",
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "Edit selected route",
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    'uiOutput(ns("new_route_config_fields"))',
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "Observation timing settings belong to the transmission route",
     fixed = TRUE
   )
   expect_match(

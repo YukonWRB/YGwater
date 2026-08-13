@@ -1,7 +1,11 @@
 source_adapter_capability_row <- function(adapters, source_fx) {
   if (
-    is.null(adapters) || !nrow(adapters) || is.null(source_fx) ||
-      !length(source_fx) || is.na(source_fx[[1]]) || !nzchar(source_fx[[1]])
+    is.null(adapters) ||
+      !nrow(adapters) ||
+      is.null(source_fx) ||
+      !length(source_fx) ||
+      is.na(source_fx[[1]]) ||
+      !nzchar(source_fx[[1]])
   ) {
     return(NULL)
   }
@@ -27,8 +31,7 @@ source_adapter_argument_schema <- function(capability) {
 
 source_adapter_decode_args <- function(value) {
   if (
-    is.null(value) || !length(value) || all(is.na(value)) ||
-      !nzchar(value[[1]])
+    is.null(value) || !length(value) || all(is.na(value)) || !nzchar(value[[1]])
   ) {
     return(list())
   }
@@ -55,7 +58,8 @@ source_adapter_logical_value <- function(value) {
     return(length(value) > 0L && !is.na(value[[1]]) && value[[1]] != 0)
   }
   length(value) > 0L &&
-    tolower(trimws(as.character(value[[1]]))) %in% c("true", "t", "1", "yes", "y")
+    tolower(trimws(as.character(value[[1]]))) %in%
+      c("true", "t", "1", "yes", "y")
 }
 
 source_adapter_argument_control <- function(
@@ -97,7 +101,11 @@ source_adapter_argument_control <- function(
     numeric = shiny::numericInput(
       input_id,
       label,
-      value = if (is.null(value) || !length(value)) NA else as.numeric(value[[1]]),
+      value = if (is.null(value) || !length(value)) {
+        NA
+      } else {
+        as.numeric(value[[1]])
+      },
       min = if (is.null(argument$minimum)) NA else argument$minimum,
       max = if (is.null(argument$maximum)) NA else argument$maximum,
       step = if (is.null(argument$step)) NA else argument$step,
@@ -125,7 +133,11 @@ source_adapter_argument_control <- function(
       input_id,
       label,
       choices = choices,
-      selected = if (is.null(value)) character() else as.character(unlist(value)),
+      selected = if (is.null(value)) {
+        character()
+      } else {
+        as.character(unlist(value))
+      },
       multiple = TRUE,
       width = "100%"
     ),
@@ -293,7 +305,8 @@ source_adapter_collect_args <- function(
   for (argument in user_arguments) {
     name <- argument$name
     value <- input[[source_adapter_argument_input_id(name, input_prefix)]]
-    missing <- is.null(value) || !length(value) ||
+    missing <- is.null(value) ||
+      !length(value) ||
       (is.character(value) && !any(nzchar(trimws(value)))) ||
       (is.numeric(value) && all(is.na(value)))
     if (missing) {
@@ -328,8 +341,14 @@ source_adapter_collect_args <- function(
       stop("Source argument '", argument$label, "' has an invalid value.")
     }
     choices <- if (is.null(argument$choices)) NULL else unlist(argument$choices)
-    if (!is.null(choices) && any(!as.character(value) %in% as.character(choices))) {
-      stop("Source argument '", argument$label, "' is outside its allowed choices.")
+    if (
+      !is.null(choices) && any(!as.character(value) %in% as.character(choices))
+    ) {
+      stop(
+        "Source argument '",
+        argument$label,
+        "' is outside its allowed choices."
+      )
     }
     if (!is.null(argument$minimum) && any(value < argument$minimum)) {
       stop("Source argument '", argument$label, "' is below its minimum.")

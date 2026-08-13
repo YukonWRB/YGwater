@@ -1283,6 +1283,17 @@ simplerIndex <- function(id, language) {
       assign_observers = list(),
       redaction_history = list() # New: Track redaction order for undo functionality
     )
+    upload_temp_dirs <- new.env(parent = emptyenv())
+    upload_temp_dirs$paths <- character()
+    session$onSessionEnded(function() {
+      if (length(upload_temp_dirs$paths) > 0) {
+        unlink(
+          upload_temp_dirs$paths,
+          recursive = TRUE,
+          force = TRUE
+        )
+      }
+    })
     borehole_choices <- reactiveVal(character())
     image_cache <- reactiveVal(list())
     well_ui_version <- reactiveVal(0L)
@@ -4623,12 +4634,18 @@ simplerIndex <- function(id, language) {
       removeModal()
     })
 
-    process_pdf_uploads <- ExtendedTask$new(function(uploaded_files) {
-      promises::future_promise({
+    process_pdf_uploads <- ExtendedTask$new(function(
+      uploaded_files,
+      upload_job_dir
+    ) {
+      promises::future_promise(seed = NULL, expr = {
         tryCatch(
           {
             if (is.null(uploaded_files) || nrow(uploaded_files) == 0) {
-              return(list(error = "No PDF files were provided."))
+              return(list(
+                error = "No PDF files were provided.",
+                upload_job_dir = upload_job_dir
+              ))
             }
 
             uploaded_files <- as.data.frame(
@@ -4636,20 +4653,8 @@ simplerIndex <- function(id, language) {
               stringsAsFactors = FALSE
             )
 
-            for (i in seq_len(nrow(uploaded_files))) {
-              orig_name <- uploaded_files$name[i]
-              from_path <- normalizePath(
-                uploaded_files$datapath[i],
-                winslash = "/",
-                mustWork = FALSE
-              )
-              orig_path <- file.path(dirname(from_path), orig_name)
-              rename_success <- file.rename(from_path, orig_path)
-              if (!rename_success) {
-                file.copy(from_path, orig_path, overwrite = TRUE)
-                unlink(from_path)
-              }
-              uploaded_files$datapath[i] <- orig_path
+            if (!dir.exists(upload_job_dir)) {
+              stop("The staged PDF upload directory is no longer available.")
             }
 
             all_split_files <- NULL
@@ -4657,13 +4662,34 @@ simplerIndex <- function(id, language) {
 
             for (i in seq_len(nrow(uploaded_files))) {
               pdf_path <- uploaded_files$datapath[i][1]
-              orig_name <- uploaded_files$name[i]
+              orig_name <- as.character(uploaded_files$name[i])
+              if (is.na(orig_name) || !nzchar(orig_name)) {
+                orig_name <- sprintf("uploaded_%03d.pdf", i)
+              }
+
+              pdf_info <- file.info(pdf_path)
+              if (
+                !file.exists(pdf_path) ||
+                  is.na(pdf_info$size) ||
+                  pdf_info$size <= 0
+              ) {
+                stop(
+                  sprintf(
+                    "The staged copy of '%s' is missing or empty.",
+                    orig_name
+                  )
+                )
+              }
 
               n_pages <- pdftools::pdf_info(pdf_path)$pages
-              base <- tools::file_path_sans_ext(basename(pdf_path))
+              base <- tools::file_path_sans_ext(basename(orig_name))
+              safe_base <- gsub("[^[:alnum:]_.-]+", "_", base)
+              if (!nzchar(safe_base)) {
+                safe_base <- "document"
+              }
               png_tpl <- file.path(
-                tempdir(),
-                sprintf("%s_page_%%d.%%s", base)
+                upload_job_dir,
+                sprintf("%03d_%s_page_%%d.%%s", i, safe_base)
               )
 
               png_files <- pdftools::pdf_convert(
@@ -4698,11 +4724,15 @@ simplerIndex <- function(id, language) {
 
             list(
               split_df = all_split_files,
-              file_counts = file_counts
+              file_counts = file_counts,
+              upload_job_dir = upload_job_dir
             )
           },
           error = function(e) {
-            list(error = e$message)
+            list(
+              error = e$message,
+              upload_job_dir = upload_job_dir
+            )
           }
         )
       })
@@ -4710,14 +4740,93 @@ simplerIndex <- function(id, language) {
 
     # Split PDFs into single-page files on upload
     observeEvent(input$pdf_file, {
-      uploaded_files <- input$pdf_file
-      req(uploaded_files)
+      uploaded_files <- as.data.frame(
+        input$pdf_file,
+        stringsAsFactors = FALSE
+      )
+      req(nrow(uploaded_files) > 0)
+
+      upload_job_dir <- tempfile(
+        pattern = "simplerIndex_upload_",
+        tmpdir = tempdir()
+      )
+      if (!dir.create(upload_job_dir)) {
+        showNotification(
+          "Could not create a temporary directory for this PDF upload.",
+          type = "error",
+          duration = 7
+        )
+        return()
+      }
+
+      staged_paths <- file.path(
+        upload_job_dir,
+        sprintf("input_%03d.pdf", seq_len(nrow(uploaded_files)))
+      )
+      source_sizes <- file.info(uploaded_files$datapath)$size
+      copy_success <- file.copy(
+        uploaded_files$datapath,
+        staged_paths,
+        overwrite = FALSE
+      )
+      staged_sizes <- file.info(staged_paths)$size
+      valid_copies <- copy_success &
+        !is.na(source_sizes) &
+        source_sizes > 0 &
+        !is.na(staged_sizes) &
+        staged_sizes == source_sizes
+      valid_copies[is.na(valid_copies)] <- FALSE
+
+      if (!all(valid_copies)) {
+        failed_names <- uploaded_files$name[!valid_copies]
+        unlink(upload_job_dir, recursive = TRUE, force = TRUE)
+        showNotification(
+          paste0(
+            "Could not stage the uploaded PDF(s): ",
+            paste(failed_names, collapse = ", "),
+            ". Please select the file(s) again."
+          ),
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      uploaded_files$datapath <- normalizePath(
+        staged_paths,
+        winslash = "/",
+        mustWork = TRUE
+      )
+      upload_job_dir <- normalizePath(
+        upload_job_dir,
+        winslash = "/",
+        mustWork = TRUE
+      )
+      upload_temp_dirs$paths <- unique(c(
+        upload_temp_dirs$paths,
+        upload_job_dir
+      ))
+
       showNotification(
         "Processing PDFs in the background. This can take a few minutes.",
         type = "message",
         duration = 5
       )
-      process_pdf_uploads$invoke(uploaded_files)
+      tryCatch(
+        process_pdf_uploads$invoke(uploaded_files, upload_job_dir),
+        error = function(e) {
+          unlink(upload_job_dir, recursive = TRUE, force = TRUE)
+          upload_temp_dirs$paths <- setdiff(
+            upload_temp_dirs$paths,
+            upload_job_dir
+          )
+          showNotification(
+            paste("Could not start PDF processing:", e$message),
+            type = "error",
+            duration = 8
+          )
+        }
+      )
     })
 
     observeEvent(process_pdf_uploads$result(), {
@@ -4726,12 +4835,35 @@ simplerIndex <- function(id, language) {
         return()
       }
       if (!is.null(result$error)) {
+        message("simplerIndex PDF processing failed: ", result$error)
+        if (!is.null(result$upload_job_dir)) {
+          unlink(
+            result$upload_job_dir,
+            recursive = TRUE,
+            force = TRUE
+          )
+          upload_temp_dirs$paths <- setdiff(
+            upload_temp_dirs$paths,
+            result$upload_job_dir
+          )
+        }
         showNotification(result$error, type = "error", duration = 6)
         return()
       }
 
       all_split_files <- result$split_df
       if (is.null(all_split_files) || nrow(all_split_files) == 0) {
+        if (!is.null(result$upload_job_dir)) {
+          unlink(
+            result$upload_job_dir,
+            recursive = TRUE,
+            force = TRUE
+          )
+          upload_temp_dirs$paths <- setdiff(
+            upload_temp_dirs$paths,
+            result$upload_job_dir
+          )
+        }
         showNotification(
           "No pages were generated from the uploaded PDFs.",
           type = "warning",

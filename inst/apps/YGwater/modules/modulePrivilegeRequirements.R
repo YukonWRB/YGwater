@@ -176,9 +176,19 @@ ygwater_module_privilege_requirements <- function() {
       c(
         "continuous.timeseries",
         "public.locations_z",
-        "public.organizations"
+        "public.organizations",
+        "continuous.timeseries_source_adapters",
+        "continuous.transmission_timeseries_mappings",
+        "public.source_adapter_capabilities"
       ),
-      list(c("INSERT", "UPDATE"), c("DELETE", "INSERT"), "INSERT")
+      list(
+        c("INSERT", "UPDATE"),
+        c("DELETE", "INSERT", "UPDATE"),
+        "INSERT",
+        c("INSERT", "UPDATE"),
+        c("INSERT", "UPDATE"),
+        "SELECT"
+      )
     ),
     addCompoundTimeseries = req(
       c(
@@ -208,8 +218,18 @@ ygwater_module_privilege_requirements <- function() {
     ),
     editSamples = req("discrete.samples", list(c("INSERT", "UPDATE"))),
     addSampleSeries = req(
-      c("discrete.sample_series", "public.organizations"),
-      list(c("INSERT", "UPDATE"), "INSERT")
+      c(
+        "discrete.sample_series",
+        "public.organizations",
+        "public.source_adapter_capabilities",
+        "discrete.sample_series_source_adapters"
+      ),
+      list(
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT"),
+        "SELECT",
+        c("SELECT", "INSERT", "UPDATE")
+      )
     ),
     syncDisc = req(
       c(
@@ -244,8 +264,18 @@ ygwater_module_privilege_requirements <- function() {
     ),
     addImgs = req("files.images", list(c("INSERT", "UPDATE"))),
     addImgSeries = req(
-      c("files.image_series", "public.organizations"),
-      list(c("INSERT", "UPDATE"), c("INSERT", "UPDATE"))
+      c(
+        "files.image_series",
+        "public.organizations",
+        "public.source_adapter_capabilities",
+        "files.image_series_source_adapters"
+      ),
+      list(
+        c("SELECT", "INSERT", "UPDATE"),
+        c("SELECT", "INSERT", "UPDATE"),
+        "SELECT",
+        c("SELECT", "INSERT", "UPDATE")
+      )
     ),
     boreholes_wells = req(c(
       "boreholes.boreholes",

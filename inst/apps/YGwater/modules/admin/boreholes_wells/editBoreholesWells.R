@@ -8,6 +8,7 @@ editBoreholesWellsUI <- function(id) {
       column(
         12,
         h4("Existing borehole/well records"),
+        actionButton(ns("reload"), "Reload", icon = icon("refresh")),
         DT::DTOutput(ns("records_table"))
       )
     ),
@@ -15,7 +16,6 @@ editBoreholesWellsUI <- function(id) {
     fluidRow(
       column(
         4,
-        actionButton(ns("reload"), "Reload", icon = icon("refresh")),
         selectizeInput(
           ns("record_id"),
           "Select borehole/well",
@@ -331,6 +331,37 @@ editBoreholesWells <- function(id, language) {
     active_borehole_id <- reactiveVal(NULL)
     active_well_id <- reactiveVal(NULL)
 
+    record_choice_labels <- function() {
+      sprintf(
+        "%s (borehole %s; %s)",
+        moduleData$records$borehole_name,
+        moduleData$records$borehole_id,
+        ifelse(
+          is.na(moduleData$records$well_id),
+          "no well",
+          paste0(
+            "well ",
+            moduleData$records$well_id,
+            ": ",
+            moduleData$records$well_name
+          )
+        )
+      )
+    }
+
+    update_record_selector <- function(selected = isolate(input$record_id)) {
+      updateSelectizeInput(
+        session,
+        "record_id",
+        choices = stats::setNames(
+          moduleData$records$record_key,
+          record_choice_labels()
+        ),
+        selected = selected,
+        server = TRUE
+      )
+    }
+
     default_approval_id <- function() {
       req(moduleData$approvals)
       id <- moduleData$approvals$approval_type_id[
@@ -346,28 +377,7 @@ editBoreholesWells <- function(id, language) {
 
     observe({
       req(moduleData$records)
-      labels <- sprintf(
-        "%s (borehole %s; %s)",
-        moduleData$records$borehole_name,
-        moduleData$records$borehole_id,
-        ifelse(
-          is.na(moduleData$records$well_id),
-          "no well",
-          paste0(
-            "well ",
-            moduleData$records$well_id,
-            ": ",
-            moduleData$records$well_name
-          )
-        )
-      )
-      updateSelectizeInput(
-        session,
-        "record_id",
-        choices = stats::setNames(moduleData$records$record_key, labels),
-        selected = isolate(input$record_id),
-        server = TRUE
-      )
+      update_record_selector()
 
       updateSelectizeInput(
         session,
@@ -939,6 +949,19 @@ editBoreholesWells <- function(id, language) {
         rownames = FALSE,
         selection = "single",
         filter = "top",
+        callback = DT::JS(sprintf(
+          "table.on('click', 'tbody tr', function() {
+            var rowData = table.row(this).data();
+            if (rowData && rowData.length > 0) {
+              Shiny.setInputValue(
+                '%s',
+                rowData[0],
+                {priority: 'event'}
+              );
+            }
+          });",
+          ns("records_table_record_key")
+        )),
         options = list(
           pageLength = 8,
           scrollX = TRUE,
@@ -947,15 +970,17 @@ editBoreholesWells <- function(id, language) {
       )
     })
 
-    observeEvent(input$records_table_rows_selected, {
+    observeEvent(input$records_table_record_key, {
       req(moduleData$records)
-      idx <- input$records_table_rows_selected
-      if (length(idx) == 1) {
-        updateSelectizeInput(
-          session,
-          "record_id",
-          selected = moduleData$records$record_key[idx]
-        )
+      record_key <- input$records_table_record_key
+      if (
+        length(record_key) == 1L &&
+          record_key %in% moduleData$records$record_key
+      ) {
+        # Server-backed selectize inputs only keep a subset of choices in the
+        # browser. Re-register choices so a table-selected value can be set
+        # even when that record has not previously been loaded by selectize.
+        update_record_selector(selected = record_key)
       }
     })
   })
