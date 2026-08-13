@@ -1009,7 +1009,7 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
 
           # Make the group inherit privileges from 'public_reader', so that it can see what the public can see at minimum
           sql <- sprintf(
-            'GRANT public_reader to "%s" WITH INHERIT TRUE;',
+            'GRANT public_reader to %s WITH INHERIT TRUE;',
             role_ident
           )
           DBI::dbExecute(session$userData$AquaCache, sql)
