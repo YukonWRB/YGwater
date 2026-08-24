@@ -1720,8 +1720,10 @@ discData <- function(id, language, inputs) {
     # Create the samples table and render it ###################################
     # The results table will be shown only if the user clicks on the 'view results' button in the modal
     table_data <- reactiveVal()
+    selected_qaqc_data <- reactiveVal(disc_plot_empty_qaqc_data())
     observeEvent(input$filter, {
       req(filteredData, language$language)
+      selected_qaqc_data(disc_plot_empty_qaqc_data())
       samples <- dbGetQueryDT(
         session$userData$AquaCache,
         paste0(
@@ -1769,6 +1771,75 @@ discData <- function(id, language, inputs) {
       samples[, (na_cols) := NULL]
 
       table_data(samples)
+    })
+
+    qaqc_table <- function(name) {
+      DT::renderDT({
+        data <- selected_qaqc_data()[[name]]
+        req(nrow(data) > 0L)
+        DT::datatable(
+          data,
+          rownames = FALSE,
+          selection = "none",
+          filter = "top",
+          options = list(pageLength = 10, scrollX = TRUE)
+        )
+      })
+    }
+
+    output$modal_qaqc_samples <- qaqc_table("samples")
+    output$modal_qaqc_results <- qaqc_table("results")
+    output$modal_qaqc_group_links <- qaqc_table("group_links")
+    output$modal_qaqc_documents <- qaqc_table("documents")
+
+    output$modal_qaqc_ui <- renderUI({
+      data <- selected_qaqc_data()
+      if (nrow(data$samples) == 0L) {
+        return(NULL)
+      }
+
+      tabs <- list(
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("samples", language$language),
+            nrow(data$samples)
+          ),
+          DT::DTOutput(ns("modal_qaqc_samples"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("results", language$language),
+            nrow(data$results)
+          ),
+          DT::DTOutput(ns("modal_qaqc_results"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("disc_qaqc_group_links", language$language),
+            nrow(data$group_links)
+          ),
+          DT::DTOutput(ns("modal_qaqc_group_links"))
+        )
+      )
+      if (nrow(data$documents) > 0L) {
+        tabs[[length(tabs) + 1L]] <- tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("documents", language$language),
+            nrow(data$documents)
+          ),
+          DT::DTOutput(ns("modal_qaqc_documents"))
+        )
+      }
+
+      tagList(
+        tags$hr(),
+        h4(tr("disc_qaqc_sample_data", language$language)),
+        do.call(tabsetPanel, tabs)
+      )
     })
 
     #
@@ -1862,6 +1933,26 @@ discData <- function(id, language, inputs) {
       # Get the timeseries_ids of the selected rows
       selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
       selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
+      selected_qaqc_data(
+        tryCatch(
+          disc_plot_related_qaqc_data(
+            session$userData$AquaCache,
+            selected_sampleids,
+            language$abbrev
+          ),
+          error = function(e) {
+            showNotification(
+              paste(
+                tr("disc_qaqc_retrieval_error", language$language),
+                e$message
+              ),
+              type = "warning",
+              duration = 15
+            )
+            disc_plot_empty_qaqc_data()
+          }
+        )
+      )
 
       # Query will be for discrete or continuous data, depending on input$type
       # Show a modal with a subset (first 3 rows per sample_id) of the data. Below this, show a date range picker (with min/max preset based on the selected data), the number of rows that would be returned, and download and close buttons. The download button will give the user the entire dataset within the date range selected
@@ -2002,6 +2093,7 @@ discData <- function(id, language, inputs) {
         DT::DTOutput(ns("modal_subset")),
         h4(tr("loc_meta_msg", language$language)),
         DT::DTOutput(ns("modal_location_metadata")),
+        uiOutput(ns("modal_qaqc_ui")),
         textOutput(ns("num_rows")),
         selectizeInput(
           ns("modal_format"),
@@ -2044,14 +2136,24 @@ discData <- function(id, language, inputs) {
           ");"
         )
       )[[1]]
+      qaqc_rows <- nrow(selected_qaqc_data()$results)
+      total_rows <- rows + qaqc_rows
 
       # ouput message about number of rows
       output$num_rows <- renderText({
-        paste0(tr("dl_num_results", language$language), " ", rows)
+        text <- paste0(tr("dl_num_results", language$language), " ", rows)
+        if (qaqc_rows > 0L) {
+          text <- paste(
+            text,
+            tr("disc_qaqc_linked_results", language$language),
+            qaqc_rows
+          )
+        }
+        text
       })
 
       # Update selectizeInput based on number of rows
-      if (rows > 1000000) {
+      if (total_rows > 1000000) {
         updateSelectizeInput(
           session,
           "modal_format",
@@ -2104,7 +2206,9 @@ discData <- function(id, language, inputs) {
         # Get the data together
         selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
 
-        selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
+        selected_loc_ids <- unique(
+          table_data()[input$tbl_rows_selected, location_id]
+        )
 
         data <- list()
         data$location_metadata <- dbGetQueryDT(
@@ -2121,7 +2225,7 @@ discData <- function(id, language, inputs) {
             ");"
           )
         ) # Get the location metadata
-        data$samples <- table_data()
+        data$samples <- table_data()[input$tbl_rows_selected]
         data$results <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
@@ -2148,19 +2252,29 @@ discData <- function(id, language, inputs) {
           )
         )
 
-        if ("grade" %in% names(data$samples)) {
+        qaqc_data <- selected_qaqc_data()
+        if (nrow(qaqc_data$samples) > 0L) {
+          data$qaqc_group_links <- qaqc_data$group_links
+          data$qaqc_samples <- qaqc_data$samples
+          data$qaqc_results <- qaqc_data$results
+          if (nrow(qaqc_data$documents) > 0L) {
+            data$qaqc_documents <- qaqc_data$documents
+          }
+        }
+
+        if ("sample_grade" %in% names(data$samples)) {
           data$grades <- dbGetQueryDT(
             session$userData$AquaCache,
             "SELECT * FROM public.grade_types;"
           )
         }
-        if ("approval" %in% names(data$samples)) {
+        if ("sample_approval" %in% names(data$samples)) {
           data$approvals <- dbGetQueryDT(
             session$userData$AquaCache,
             "SELECT * FROM public.approval_types;"
           )
         }
-        if ("qualifier" %in% names(data$samples)) {
+        if ("sample_qualifier" %in% names(data$samples)) {
           data$qualifiers <- dbGetQueryDT(
             session$userData$AquaCache,
             "SELECT * FROM public.qualifier_types;"
