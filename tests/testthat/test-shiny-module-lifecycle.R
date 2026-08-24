@@ -1,15 +1,4 @@
 ygwater_app_test_path <- function(...) {
-  checkout_path <- testthat::test_path(
-    "..",
-    "..",
-    "inst",
-    "apps",
-    "YGwater",
-    ...
-  )
-  if (file.exists(checkout_path)) {
-    return(checkout_path)
-  }
   system.file("apps", "YGwater", ..., package = "YGwater")
 }
 

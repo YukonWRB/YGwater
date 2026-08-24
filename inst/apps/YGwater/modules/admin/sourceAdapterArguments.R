@@ -383,3 +383,118 @@ source_adapter_args_equal <- function(left, right) {
   }
   identical(normalize(left), normalize(right))
 }
+
+# Run a source adapter over an explicit, read-only test window. The caller is
+# responsible for supplying a read-only database connection because adapters
+# may use it to resolve metadata such as transmission routes and mappings.
+source_adapter_test <- function(
+  source_fx,
+  source_fx_args,
+  start_datetime,
+  end_datetime,
+  con,
+  source_function = NULL
+) {
+  source_fx <- trimws(as.character(source_fx))
+  if (length(source_fx) != 1L || is.na(source_fx) || !nzchar(source_fx)) {
+    stop("Select a source function to test.")
+  }
+
+  parse_datetime <- function(value, label) {
+    if (inherits(value, "POSIXt")) {
+      value <- as.POSIXct(value, tz = "UTC")
+    } else {
+      value <- suppressWarnings(as.POSIXct(
+        trimws(as.character(value)),
+        tz = "UTC"
+      ))
+    }
+    if (length(value) != 1L || is.na(value)) {
+      stop(label, " must be a valid UTC datetime.")
+    }
+    value
+  }
+
+  start_datetime <- parse_datetime(start_datetime, "Start datetime")
+  end_datetime <- parse_datetime(end_datetime, "End datetime")
+  if (start_datetime >= end_datetime) {
+    stop("Start datetime must precede end datetime.")
+  }
+
+  if (is.null(source_function)) {
+    source_function <- get(
+      source_fx,
+      envir = asNamespace("AquaCache"),
+      inherits = FALSE
+    )
+  }
+  if (!is.function(source_function)) {
+    stop("The selected source adapter is not callable.")
+  }
+
+  args <- source_adapter_decode_args(source_fx_args)
+  function_args <- names(formals(source_function))
+  accepts_dots <- "..." %in% function_args
+  add_runtime_arg <- function(name, value) {
+    if (accepts_dots || name %in% function_args) {
+      args[[name]] <<- value
+    }
+  }
+  add_runtime_arg("start_datetime", start_datetime)
+  add_runtime_arg("end_datetime", end_datetime)
+  add_runtime_arg("con", con)
+
+  # Transmission import functions can record import runs and measurements.
+  # A test must always override that behaviour, including for legacy stored
+  # arguments that may contain a write flag.
+  if (accepts_dots || "write" %in% function_args) {
+    args$write <- FALSE
+  }
+
+  do.call(source_function, args)
+}
+
+# Produce a bounded, human-readable preview suitable for a Shiny modal. Large
+# provider responses are summarized and truncated so they do not overwhelm the
+# browser or the future-process serialization boundary.
+source_adapter_test_result_text <- function(result, max_rows = 100L) {
+  max_rows <- suppressWarnings(as.integer(max_rows))
+  if (length(max_rows) != 1L || is.na(max_rows) || max_rows < 1L) {
+    stop("max_rows must be a positive integer.")
+  }
+
+  table_text <- function(value) {
+    value <- as.data.frame(value)
+    heading <- paste0(nrow(value), " row(s) x ", ncol(value), " column(s)")
+    preview <- utils::head(value, max_rows)
+    output <- c(
+      heading,
+      capture.output(print(preview, row.names = FALSE))
+    )
+    if (nrow(value) > max_rows) {
+      output <- c(
+        output,
+        paste0("... ", nrow(value) - max_rows, " additional row(s) omitted")
+      )
+    }
+    output
+  }
+
+  if (inherits(result, "data.frame")) {
+    return(paste(table_text(result), collapse = "\n"))
+  }
+  if (is.list(result) && !is.null(names(result))) {
+    sections <- lapply(names(result), function(name) {
+      value <- result[[name]]
+      body <- if (inherits(value, "data.frame")) {
+        table_text(value)
+      } else {
+        capture.output(str(value, max.level = 3L, give.attr = FALSE))
+      }
+      c(paste0("[", name, "]"), body)
+    })
+    return(paste(unlist(sections, use.names = FALSE), collapse = "\n"))
+  }
+
+  paste(capture.output(str(result, max.level = 3L)), collapse = "\n")
+}
