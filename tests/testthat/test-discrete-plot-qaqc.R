@@ -59,6 +59,16 @@ test_that("plot QA/QC tabularization preserves its input", {
   expect_identical(output$share_with, "reader, reviewer")
 })
 
+test_that("plot QA/QC uses contributing IDs for averaged rows", {
+  env <- discrete_plot_module_environment()
+  plot_result <- list(
+    data = data.frame(sample_id = NA_integer_),
+    source_sample_ids = c(7L, NA_integer_, 5L, 7L)
+  )
+
+  expect_identical(env$disc_plot_source_sample_ids(plot_result), c(5L, 7L))
+})
+
 test_that("plot downloads include applicable QA/QC tables", {
   env <- discrete_plot_module_environment()
   qaqc <- env$disc_plot_empty_qaqc_data()

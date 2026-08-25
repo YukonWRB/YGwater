@@ -45,7 +45,8 @@
 #' @param dbPath The path to the EQWin database, if called for in parameter `dbSource`.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #'
-#' @return An interactive HTML plot of the data from EQWin.
+#' @return An interactive HTML plot. When `data = TRUE`, a list containing the
+#'   plot, plotted data, and the contributing AquaCache sample IDs is returned.
 #' @export
 #'
 
@@ -622,6 +623,10 @@ plotDiscrete <- function(
 
       if ("sample_id" %in% names(out)) {
         out$sample_id <- NA
+      }
+      if (".qaqc_sample_ids" %in% names(out)) {
+        ids <- suppressWarnings(as.integer(unlist(rows$.qaqc_sample_ids)))
+        out$.qaqc_sample_ids <- list(sort(unique(ids[!is.na(ids)])))
       }
       if ("result_id" %in% names(out)) {
         out$result_id <- NA
@@ -1865,6 +1870,7 @@ AND s.datetime > '",
     }
 
     if (duplicate_action == "average") {
+      data$.qaqc_sample_ids <- lapply(data$sample_id, function(id) id)
       data <- average_discrete_duplicates(data)
     }
   }
@@ -2441,6 +2447,20 @@ AND s.datetime > '",
 
   data <- data[order(data$location_name), ]
 
+  source_sample_ids <- integer()
+  if (dbSource == "AC") {
+    source_sample_ids <- if (".qaqc_sample_ids" %in% names(data)) {
+      unlist(data$.qaqc_sample_ids, use.names = FALSE)
+    } else {
+      data$sample_id
+    }
+    source_sample_ids <- suppressWarnings(as.integer(source_sample_ids))
+    source_sample_ids <- sort(unique(
+      source_sample_ids[!is.na(source_sample_ids)]
+    ))
+    data$.qaqc_sample_ids <- NULL
+  }
+
   plot <- create_facet_plot(
     data,
     facet_by,
@@ -2450,7 +2470,11 @@ AND s.datetime > '",
 
   # Return the plot and data if requested ##########################
   if (return_data) {
-    return(list(plot = plot, data = data))
+    return(list(
+      plot = plot,
+      data = data,
+      source_sample_ids = source_sample_ids
+    ))
   } else {
     return(plot)
   }

@@ -24,6 +24,15 @@ disc_plot_empty_qaqc_data <- function() {
   )
 }
 
+disc_plot_source_sample_ids <- function(plot_result) {
+  sample_ids <- plot_result$source_sample_ids
+  if (is.null(sample_ids) && "sample_id" %in% names(plot_result$data)) {
+    sample_ids <- plot_result$data$sample_id
+  }
+  sample_ids <- suppressWarnings(as.integer(sample_ids))
+  sort(unique(sample_ids[!is.na(sample_ids)]))
+}
+
 disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
   sample_ids <- suppressWarnings(as.integer(plotted_sample_ids))
   sample_ids <- sort(unique(sample_ids[!is.na(sample_ids)]))
@@ -3164,14 +3173,17 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       })
       plotData(plot_output_discrete$result()$data)
       qaQcData(disc_plot_empty_qaqc_data())
+      plotted_sample_ids <- disc_plot_source_sample_ids(
+        plot_output_discrete$result()
+      )
       if (
         identical(input$data_source, "AC") &&
-          "sample_id" %in% names(plotData())
+          length(plotted_sample_ids)
       ) {
         qaqc_data <- tryCatch(
           disc_plot_related_qaqc_data(
             session$userData$AquaCache,
-            plotData()$sample_id,
+            plotted_sample_ids,
             language$abbrev
           ),
           error = function(e) {

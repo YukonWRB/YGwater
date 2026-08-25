@@ -1,5 +1,19 @@
 # UI and server code for managing discrete samples
 
+edit_samples_group_link_changes <- function(existing_ids, selected_ids) {
+  normalize_ids <- function(ids) {
+    ids <- unique(suppressWarnings(as.integer(ids)))
+    ids[!is.na(ids)]
+  }
+
+  existing_ids <- normalize_ids(existing_ids)
+  selected_ids <- normalize_ids(selected_ids)
+  list(
+    remove = setdiff(existing_ids, selected_ids),
+    add = setdiff(selected_ids, existing_ids)
+  )
+}
+
 editSamplesUI <- function(id) {
   ns <- NS(id)
 
@@ -243,20 +257,34 @@ editSamples <- function(id, language) {
     }
 
     sync_sample_group_links <- function(con, sample_id, sample_group_ids) {
-      sample_group_ids <- unique(suppressWarnings(as.integer(sample_group_ids)))
-      sample_group_ids <- sample_group_ids[!is.na(sample_group_ids)]
-      DBI::dbExecute(
+      existing_ids <- DBI::dbGetQuery(
         con,
-        "DELETE FROM discrete.sample_group_members WHERE sample_id = $1",
+        "SELECT sample_group_id
+         FROM discrete.sample_group_members
+         WHERE sample_id = $1",
         params = list(as.integer(sample_id))
-      )
-      for (i in seq_along(sample_group_ids)) {
+      )$sample_group_id
+      changes <- edit_samples_group_link_changes(existing_ids, sample_group_ids)
+
+      for (sample_group_id in changes$remove) {
+        DBI::dbExecute(
+          con,
+          "DELETE FROM discrete.sample_group_members
+           WHERE sample_group_id = $1 AND sample_id = $2",
+          params = list(sample_group_id, as.integer(sample_id))
+        )
+      }
+      for (sample_group_id in changes$add) {
         DBI::dbExecute(
           con,
           "INSERT INTO discrete.sample_group_members (
              sample_group_id, sample_id, sequence_in_group
-           ) VALUES ($1, $2, $3)",
-          params = list(sample_group_ids[[i]], as.integer(sample_id), as.integer(i))
+           )
+           SELECT $1, $2, COALESCE(MAX(sequence_in_group), 0) + 1
+           FROM discrete.sample_group_members
+           WHERE sample_group_id = $1
+           ON CONFLICT (sample_group_id, sample_id) DO NOTHING",
+          params = list(sample_group_id, as.integer(sample_id))
         )
       }
       invisible(NULL)
