@@ -4681,23 +4681,15 @@ simplerIndex <- function(id, language) {
                 )
               }
 
-              n_pages <- pdftools::pdf_info(pdf_path)$pages
               base <- tools::file_path_sans_ext(basename(orig_name))
               safe_base <- gsub("[^[:alnum:]_.-]+", "_", base)
               if (!nzchar(safe_base)) {
                 safe_base <- "document"
               }
-              png_tpl <- file.path(
-                upload_job_dir,
-                sprintf("%03d_%s_page_%%d.%%s", i, safe_base)
-              )
-
-              png_files <- pdftools::pdf_convert(
+              png_files <- render_pdf_pages(
                 pdf_path,
-                dpi = 300,
-                pages = seq_len(n_pages),
-                format = "png",
-                filenames = png_tpl
+                output_dir = upload_job_dir,
+                filename_prefix = sprintf("%03d_%s", i, safe_base)
               )
 
               file_counts[[orig_name]] <- length(png_files)
@@ -7036,37 +7028,10 @@ simplerIndex <- function(id, language) {
           {
             # Read the original image
             img <- magick::image_read(img_path)
-            info <- magick::image_info(img)
-
             # Check if there are redactions for this image
             rectangles <- rv$rectangles[[img_path]]
-
-            if (!is.null(rectangles) && length(rectangles) > 0) {
-              # Create a drawing canvas
-              drawing <- magick::image_draw(img)
-
-              # Draw redaction rectangles
-              for (rect_data in rectangles) {
-                # Convert coordinates (plot coordinates are already correct for image)
-                rect(
-                  rect_data$xmin,
-                  info$height - rect_data$ymax, # Flip Y coordinate
-                  rect_data$xmax,
-                  info$height - rect_data$ymin, # Flip Y coordinate
-                  col = "black",
-                  border = "black"
-                )
-              }
-
-              # Finish drawing
-              dev.off()
-
-              # Write the modified image
-              magick::image_write(drawing, path = file, format = "PNG")
-            } else {
-              # No redactions, just copy the original
-              magick::image_write(img, path = file, format = "PNG")
-            }
+            img <- apply_image_redactions(img, rectangles)
+            magick::image_write(img, path = file, format = "PNG")
 
             showNotification(
               "Redacted image saved successfully",

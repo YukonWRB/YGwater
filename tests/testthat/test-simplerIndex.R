@@ -154,8 +154,93 @@ test_that("simplerIndex stages PDFs before background processing", {
     "promises::future_promise(seed = NULL, expr = {",
     fixed = TRUE
   )
-  expect_match(module, "file.path(\n                upload_job_dir,", fixed = TRUE)
+  expect_match(module, "output_dir = upload_job_dir", fixed = TRUE)
   expect_false(grepl("file.rename(from_path, orig_path)", module, fixed = TRUE))
+})
+
+test_that("simplerIndex caps PDF raster size and avoids graphics-device redactions", {
+  skip_if_not_installed("magick")
+  skip_if_not_installed("pdftools")
+
+  helper_environment <- new.env(parent = globalenv())
+  sys.source(
+    system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+      package = "YGwater"
+    ),
+    envir = helper_environment
+  )
+
+  pdf_path <- tempfile(fileext = ".pdf")
+  output_dir <- tempfile("simplerIndex_render_test_")
+  dir.create(output_dir)
+  on.exit(unlink(c(pdf_path, output_dir), recursive = TRUE), add = TRUE)
+
+  grDevices::pdf(pdf_path, width = 42, height = 56, paper = "special")
+  graphics::plot.new()
+  graphics::text(0.5, 0.5, "oversized PDF page")
+  grDevices::dev.off()
+
+  rendered <- helper_environment$render_pdf_pages(
+    pdf_path,
+    output_dir = output_dir,
+    filename_prefix = "test",
+    max_pixels = 1e6
+  )
+  info <- magick::image_info(magick::image_read(rendered))
+
+  expect_length(rendered, 1)
+  expect_true(file.exists(rendered))
+  expect_lte(info$width * info$height, 1e6)
+
+  image <- magick::image_blank(20, 20, color = "white")
+  redacted <- helper_environment$apply_image_redactions(
+    image,
+    list(list(xmin = 2, ymin = 3, xmax = 7, ymax = 8))
+  )
+  redacted_pixel <- magick::image_data(
+    magick::image_crop(redacted, "1x1+3+13"),
+    channels = "rgb"
+  )
+  untouched_pixel <- magick::image_data(
+    magick::image_crop(redacted, "1x1+0+0"),
+    channels = "rgb"
+  )
+
+  expect_true(all(redacted_pixel == as.raw(0)))
+  expect_true(all(untouched_pixel == as.raw(255)))
+  expect_error(
+    helper_environment$apply_image_redactions(
+      image,
+      list(list(xmin = NA, ymin = 3, xmax = 7, ymax = 8))
+    ),
+    "invalid coordinates"
+  )
+
+  module <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+  helpers <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(module, "render_pdf_pages(", fixed = TRUE)
+  expect_match(module, "apply_image_redactions(img, rectangles)", fixed = TRUE)
+  expect_false(grepl("image_draw(", paste(module, helpers), fixed = TRUE))
 })
 
 test_that("WWR cache and popup expose well construction details", {

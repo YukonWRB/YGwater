@@ -321,6 +321,119 @@ split_pdf_to_pages <- function(pdf_path, output_dir = tempdir()) {
 }
 
 
+# Render PDF pages without allowing unusually large PDF page boxes to create
+# multi-hundred-megabyte raster images. PDF dimensions are in points (1/72 in),
+# so the calculated DPI keeps each page at or below max_pixels while preserving
+# max_dpi for ordinary letter-sized pages.
+render_pdf_pages <- function(
+  pdf_path,
+  output_dir,
+  filename_prefix,
+  max_dpi = 300,
+  max_pixels = 12e6
+) {
+  page_sizes <- pdftools::pdf_pagesize(pdf_path)
+  if (nrow(page_sizes) == 0) {
+    stop("The PDF does not contain any pages.")
+  }
+  if (
+    !is.numeric(max_dpi) || length(max_dpi) != 1 ||
+      !is.finite(max_dpi) || max_dpi <= 0 ||
+      !is.numeric(max_pixels) || length(max_pixels) != 1 ||
+      !is.finite(max_pixels) || max_pixels <= 0
+  ) {
+    stop("PDF raster limits must be positive finite numbers.")
+  }
+
+  invalid_sizes <-
+    !is.finite(page_sizes$width) |
+    !is.finite(page_sizes$height) |
+    page_sizes$width <= 0 |
+    page_sizes$height <= 0
+  if (any(invalid_sizes)) {
+    stop("The PDF contains an invalid page size.")
+  }
+
+  page_dpi <- floor(pmin(
+    max_dpi,
+    72 * sqrt(max_pixels / (page_sizes$width * page_sizes$height))
+  ))
+  page_dpi <- pmax(1, page_dpi)
+  png_files <- character(nrow(page_sizes))
+  filename_template <- file.path(
+    output_dir,
+    sprintf("%s_page_%%d.%%s", filename_prefix)
+  )
+
+  for (page_number in seq_len(nrow(page_sizes))) {
+    converted <- pdftools::pdf_convert(
+      pdf_path,
+      dpi = page_dpi[page_number],
+      pages = page_number,
+      format = "png",
+      filenames = filename_template,
+      verbose = FALSE
+    )
+    if (length(converted) != 1 || !file.exists(converted)) {
+      stop(sprintf("PDF page %d could not be rendered.", page_number))
+    }
+    png_files[page_number] <- normalizePath(converted, mustWork = TRUE)
+  }
+
+  png_files
+}
+
+
+# Apply opaque redaction rectangles without opening an R graphics device.
+# This avoids ImageMagick MVG clip-path generation and its runtime dependency
+# on the R graphics API used to build the magick package.
+apply_image_redactions <- function(image, rectangles) {
+  if (is.null(rectangles) || length(rectangles) == 0) {
+    return(image)
+  }
+
+  info <- magick::image_info(image)
+  image_width <- info$width[1]
+  image_height <- info$height[1]
+
+  for (rectangle in rectangles) {
+    coordinates <- as.numeric(c(
+      rectangle$xmin,
+      rectangle$ymin,
+      rectangle$xmax,
+      rectangle$ymax
+    ))
+    if (length(coordinates) != 4 || any(!is.finite(coordinates))) {
+      stop("A redaction rectangle has invalid coordinates.")
+    }
+
+    x_min <- max(0, floor(min(coordinates[c(1, 3)])))
+    x_max <- min(image_width, ceiling(max(coordinates[c(1, 3)])))
+    y_min <- max(0, floor(image_height - max(coordinates[c(2, 4)])))
+    y_max <- min(image_height, ceiling(image_height - min(coordinates[c(2, 4)])))
+    rectangle_width <- x_max - x_min
+    rectangle_height <- y_max - y_min
+    if (rectangle_width <= 0 || rectangle_height <= 0) {
+      stop("A redaction rectangle falls outside the image bounds.")
+    }
+
+    redaction <- magick::image_blank(
+      width = rectangle_width,
+      height = rectangle_height,
+      color = "black"
+    )
+    image <- magick::image_composite(
+      image,
+      redaction,
+      offset = sprintf("+%d+%d", x_min, y_min),
+      operator = "over"
+    )
+  }
+
+  image
+}
+
+
 # Generalized function to create PDF with redactions
 create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
   if (is.null(rv$files_df)) {
@@ -363,32 +476,12 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
   if (length(img_paths) == 1) {
     # Single page
     img <- magick::image_read(img_paths[1])
-    info <- magick::image_info(img)
-    img_width <- info$width
-    img_height <- info$height
 
     # Get rectangles for this specific file path
     file_path <- img_paths[1]
     rectangles <- rv$rectangles[[file_path]]
 
-    # Apply rectangles if there are any for this file
-    if (!is.null(rectangles) && length(rectangles) > 0) {
-      img <- magick::image_draw(img)
-      for (rect in rectangles) {
-        y_min_img <- img_height - rect$ymax
-        y_max_img <- img_height - rect$ymin
-        rect(
-          rect$xmin,
-          y_min_img,
-          rect$xmax,
-          y_max_img,
-          border = "black",
-          col = "black",
-          lwd = 2
-        )
-      }
-      grDevices::dev.off()
-    }
+    img <- apply_image_redactions(img, rectangles)
     magick::image_write(img, path = temp_file_path, format = "pdf")
   } else {
     # Multi-page PDF logic with file-specific redactions
@@ -396,32 +489,10 @@ create_pdf_with_redactions <- function(borehole_id, return_path = FALSE) {
     for (i in seq_along(img_paths)) {
       file_path <- img_paths[i]
       img <- magick::image_read(file_path)
-      info <- magick::image_info(img)
-      img_width <- info$width
-      img_height <- info$height
 
       # Get rectangles for this specific file path
-
       rectangles <- rv$rectangles[[file_path]]
-
-      # Apply rectangles if there are any for this file
-      if (!is.null(rectangles) && length(rectangles) > 0) {
-        img <- magick::image_draw(img)
-        for (rect in rectangles) {
-          y_min_img <- img_height - rect$ymax
-          y_max_img <- img_height - rect$ymin
-          rect(
-            rect$xmin,
-            y_min_img,
-            rect$xmax,
-            y_max_img,
-            border = "black",
-            col = "black",
-            lwd = 2
-          )
-        }
-        grDevices::dev.off()
-      }
+      img <- apply_image_redactions(img, rectangles)
       img_list[[i]] <- img
     }
     # Combine all images into a single PDF
