@@ -728,21 +728,21 @@ mapLocs <- function(id, language, outputs = NULL) {
           zoomDelta = 0.5,
           zoomPxPerZoomLevel = 120
         )
-      ) %>%
-        leaflet::addTiles() %>%
+      ) |>
+        leaflet::addTiles() |>
         leaflet::addProviderTiles(
           "Esri.WorldTopoMap",
           group = "Topographic"
-        ) %>%
-        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") %>%
+        ) |>
+        leaflet::addProviderTiles("Esri.WorldImagery", group = "Satellite") |>
         leaflet::addLayersControl(
           baseGroups = c("Topographic", "Satellite")
-        ) %>%
+        ) |>
         leaflet::addScaleBar(
           position = "bottomleft",
           options = leaflet::scaleBarOptions(imperial = FALSE)
-        ) %>%
-        leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5) %>% # Center on Yukon
+        ) |>
+        leaflet::setView(lng = -135.05, lat = 64.00, zoom = 5) |> # Center on Yukon
         htmlwidgets::onRender(
           "function(el, x) {
           L.control.zoom({position:'bottomright'}).addTo(this);
@@ -1104,9 +1104,9 @@ mapLocs <- function(id, language, outputs = NULL) {
         )
       ]
 
-      map_proxy <- leaflet::leafletProxy("map", session = session) %>%
-        leaflet::clearMarkers() %>%
-        leaflet::clearMarkerClusters() %>%
+      map_proxy <- leaflet::leafletProxy("map", session = session) |>
+        leaflet::clearMarkers() |>
+        leaflet::clearMarkerClusters() |>
         leaflet::removeControl("location_type_legend")
 
       if (nrow(loc.sub) > 0) {
@@ -1133,7 +1133,7 @@ mapLocs <- function(id, language, outputs = NULL) {
           )
         )
 
-        map_proxy <- map_proxy %>%
+        map_proxy <- map_proxy |>
           leaflet::addMarkers(
             data = loc.sub,
             lng = ~longitude,
@@ -1149,7 +1149,7 @@ mapLocs <- function(id, language, outputs = NULL) {
             } else {
               NULL
             }
-          ) %>%
+          ) |>
           leaflet::addControl(
             build_symbol_legend(
               type_map,
