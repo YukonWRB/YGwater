@@ -1773,6 +1773,9 @@ addContData <- function(id, language) {
         ) |>
           as.data.frame()
 
+        # Drop columns with names == NA
+        out <- out[, !is.na(names(out))]
+
         return(out)
       } else if (ext == "csv") {
         # .csv files more complex due to ungraceful handling of non-equal
@@ -1796,6 +1799,7 @@ addContData <- function(id, language) {
           unname()
         # Apply header rows to data
         names(out) <- out_names
+        out <- out[, !is.na(names(out))]
 
         return(out)
       }
@@ -2057,7 +2061,9 @@ addContData <- function(id, language) {
         )
       )
 
-      uploaded_names <- names(upload_raw())
+      # Get col names, dropping any 'NA' names which might result from populated columns without heading names
+      uploaded_names <- names(upload_raw())[!is.na(names(upload_raw()))]
+
       choices_optional <- stats::setNames(uploaded_names, uploaded_names)
 
       targets <- selected_upload_timeseries_meta()
