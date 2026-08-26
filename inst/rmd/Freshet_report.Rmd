@@ -1,7 +1,6 @@
 ---
 title: "`r params$report_name`"
 subtitle: "`r paste0(format(Sys.Date(), '%B %e'), ', ', lubridate::year(Sys.Date()), ' at ', stringr::str_remove(tolower(format(Sys.time(), '%I %p', tz='America/Whitehorse')), '^0+'))`"
-date: 
 output: 
   word_document:
       reference_docx: style_template.docx
@@ -990,7 +989,7 @@ for(i in stations) {
   } else {#End of if loop
     cat("  \n\\newpage\n\n") 
     cat("## ", tidyhydat::hy_stations(i)$STATION_NAME, " Station ", i)
-    cat("  \n Station ", i, " could not be found in the WSC tidyhydat database.\n")
+    cat("  \n Station ", i, " could not be found in the WSC HYDAT database.\n")
     cat("  \n\\newpage\n\n")
     
   }
