@@ -155,6 +155,9 @@ test_that("simplerIndex stages PDFs before background processing", {
     fixed = TRUE
   )
   expect_match(module, "output_dir = upload_job_dir", fixed = TRUE)
+  expect_match(module, 'uiOutput(ns("pdf_processing_status"))', fixed = TRUE)
+  expect_match(module, "pdf_processing(TRUE)", fixed = TRUE)
+  expect_match(module, "pdf_processing(FALSE)", fixed = TRUE)
   expect_false(grepl("file.rename(from_path, orig_path)", module, fixed = TRUE))
 })
 
@@ -191,6 +194,7 @@ test_that("simplerIndex caps PDF raster size and avoids graphics-device redactio
 
   expect_length(rendered, 1)
   expect_true(file.exists(rendered))
+  expect_identical(tolower(tools::file_ext(rendered)), "jpg")
   expect_lte(info$width * info$height, 1e6)
 
   image <- magick::image_blank(20, 20, color = "white")
@@ -240,6 +244,7 @@ test_that("simplerIndex caps PDF raster size and avoids graphics-device redactio
 
   expect_match(module, "render_pdf_pages(", fixed = TRUE)
   expect_match(module, "apply_image_redactions(img, rectangles)", fixed = TRUE)
+  expect_match(helpers, "quality = 95", fixed = TRUE)
   expect_false(grepl("image_draw(", paste(module, helpers), fixed = TRUE))
 })
 

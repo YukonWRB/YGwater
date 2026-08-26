@@ -359,28 +359,37 @@ render_pdf_pages <- function(
     72 * sqrt(max_pixels / (page_sizes$width * page_sizes$height))
   ))
   page_dpi <- pmax(1, page_dpi)
-  png_files <- character(nrow(page_sizes))
+  rendered_files <- character(nrow(page_sizes))
   filename_template <- file.path(
     output_dir,
     sprintf("%s_page_%%d.%%s", filename_prefix)
   )
 
   for (page_number in seq_len(nrow(page_sizes))) {
-    converted <- pdftools::pdf_convert(
+    # High-quality JPEG encoding is substantially faster than PNG for scanned
+    # pages, with comparable OCR results at this quality setting.
+    output_path <- sprintf(filename_template, page_number, "jpg")
+    bitmap <- pdftools::pdf_render_page(
       pdf_path,
-      dpi = page_dpi[page_number],
-      pages = page_number,
-      format = "png",
-      filenames = filename_template,
-      verbose = FALSE
+      page = page_number,
+      dpi = page_dpi[page_number]
     )
+    image <- magick::image_read(bitmap)
+    magick::image_write(
+      image,
+      path = output_path,
+      format = "jpeg",
+      quality = 95
+    )
+    converted <- output_path
+
     if (length(converted) != 1 || !file.exists(converted)) {
       stop(sprintf("PDF page %d could not be rendered.", page_number))
     }
-    png_files[page_number] <- normalizePath(converted, mustWork = TRUE)
+    rendered_files[page_number] <- normalizePath(converted, mustWork = TRUE)
   }
 
-  png_files
+  rendered_files
 }
 
 
