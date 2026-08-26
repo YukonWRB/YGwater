@@ -4814,13 +4814,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ,
                 drop = FALSE
             ]
-        }
-
-        available_primary_stations <- shiny::reactive({
-            primary_stations_for_parameter(input$parameter)
         })
 
-<<<<<<< HEAD
         # Keep the primary station choices synchronized with the selected
         # parameter without repeatedly re-sending an identical Selectize update.
         # Repeated updateSelectizeInput() calls can cause visible flashing and can
@@ -4830,25 +4825,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         shiny::observe({
             dat <- available_primary_stations()
             current_station <- shiny::isolate(input$station %||% "")
-=======
-        build_station_choices <- function(dat) {
-            stats::setNames(
-                dat$location_code,
-                ifelse(
-                    !is.na(dat$name) & nzchar(dat$name),
-                    paste0(dat$name, " (", dat$location_code, ")"),
-                    dat$location_code
-                )
-            )
-        }
->>>>>>> 111c896afc414358db5ba87945991e38de69d0f5
 
-        update_station_selector <- function(
-            selected = shiny::isolate(input$station),
-            dat = available_primary_stations()
-        ) {
             if (is.null(dat) || nrow(dat) == 0) {
-<<<<<<< HEAD
                 signature <- "__NO_STATIONS__"
 
                 if (
@@ -4867,16 +4845,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     last_station_choice_signature(signature)
                 }
                 return()
-=======
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "station",
-                    choices = c("No stations available" = ""),
-                    selected = "",
-                    server = TRUE
-                )
-                return(invisible(NULL))
->>>>>>> 111c896afc414358db5ba87945991e38de69d0f5
             }
 
             selected <- as.character(selected %||% "")
@@ -4884,7 +4852,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 selected <- dat$location_code[[1]]
             }
 
-<<<<<<< HEAD
             selected_station <- if (
                 nzchar(current_station) &&
                     current_station %in% dat$location_code
@@ -4928,20 +4895,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     selected = selected_station
                 )
             }
-=======
-            shiny::updateSelectizeInput(
-                session,
-                inputId = "station",
-                choices = build_station_choices(dat),
-                selected = selected,
-                server = TRUE
-            )
-            invisible(NULL)
-        }
-
-        shiny::observe({
-            update_station_selector()
->>>>>>> 111c896afc414358db5ba87945991e38de69d0f5
         })
 
         # Update secondary_parameter choices from community stations.
@@ -6271,7 +6224,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 current_parameter <- shiny::isolate(input$parameter %||% "")
                 current_station <- shiny::isolate(input$station %||% "")
 
-<<<<<<< HEAD
                 if (!identical(current_parameter, selected_parameter)) {
                     pending_map_station(selected_station)
                     shiny::updateSelectizeInput(
@@ -6313,11 +6265,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     session,
                     inputId = "station",
                     selected = selected_station
-=======
-                update_station_selector(
-                    selected = selected_station,
-                    dat = community_locations()
->>>>>>> 111c896afc414358db5ba87945991e38de69d0f5
                 )
             }
 
@@ -6930,7 +6877,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             result_table
         })
 
-<<<<<<< HEAD
         # -----------------------------------------------------------------------
         # Synchronize summary-table selection and station Selectize.
         #
@@ -6939,23 +6885,6 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
         # table -> station -> table -> station -> ..., which presents as a rapidly
         # flashing Selectize input in the browser.
         # -----------------------------------------------------------------------
-=======
-        # Table row selection -> update station selectize
-        shiny::observe({
-            row_idx <- input$summary_table_rows_selected
-            dat <- filtered_summary_data()
-            if (is.null(dat) || nrow(dat) == 0 || is.null(row_idx)) {
-                return()
-            }
-            if (row_idx < 1L || row_idx > nrow(dat)) {
-                return()
-            }
-            selected_code <- dat$location_code[[row_idx]]
-            if (!is.null(selected_code) && nzchar(selected_code)) {
-                update_station_selector(selected = selected_code)
-            }
-        })
->>>>>>> 111c896afc414358db5ba87945991e38de69d0f5
 
         # Table row selection -> station Selectize
         shiny::observeEvent(
