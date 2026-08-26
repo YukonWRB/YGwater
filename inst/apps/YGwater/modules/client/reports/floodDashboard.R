@@ -4815,17 +4815,34 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             ]
         })
 
+        # Keep the primary station choices synchronized with the selected
+        # parameter without repeatedly re-sending an identical Selectize update.
+        # Repeated updateSelectizeInput() calls can cause visible flashing and can
+        # amplify feedback loops with the summary table and map selections.
+        last_station_choice_signature <- shiny::reactiveVal(NULL)
+
         shiny::observe({
             dat <- available_primary_stations()
+            current_station <- shiny::isolate(input$station %||% "")
 
             if (is.null(dat) || nrow(dat) == 0) {
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "station",
-                    choices = c("No stations available" = ""),
-                    selected = "",
-                    server = TRUE
-                )
+                signature <- "__NO_STATIONS__"
+
+                if (
+                    !identical(
+                        shiny::isolate(last_station_choice_signature()),
+                        signature
+                    )
+                ) {
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "station",
+                        choices = c("No stations available" = ""),
+                        selected = "",
+                        server = TRUE
+                    )
+                    last_station_choice_signature(signature)
+                }
                 return()
             }
 
@@ -4838,23 +4855,49 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 )
             )
 
-            shiny::updateSelectizeInput(
-                session,
-                inputId = "station",
-                choices = station_choices,
-                selected = shiny::isolate({
-                    if (
-                        !is.null(input$station) &&
-                            nzchar(input$station) &&
-                            input$station %in% dat$location_code
-                    ) {
-                        input$station
-                    } else {
-                        dat$location_code[[1]]
-                    }
-                }),
-                server = TRUE
+            selected_station <- if (
+                nzchar(current_station) &&
+                    current_station %in% dat$location_code
+            ) {
+                current_station
+            } else {
+                dat$location_code[[1]]
+            }
+
+            # Include both values and labels in the signature so the Selectize
+            # widget is refreshed if station names change, but not otherwise.
+            signature <- paste(
+                paste(
+                    names(station_choices),
+                    unname(station_choices),
+                    sep = "="
+                ),
+                collapse = "|"
             )
+
+            if (
+                !identical(
+                    shiny::isolate(last_station_choice_signature()),
+                    signature
+                )
+            ) {
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "station",
+                    choices = station_choices,
+                    selected = selected_station,
+                    server = TRUE
+                )
+                last_station_choice_signature(signature)
+            } else if (!identical(current_station, selected_station)) {
+                # Choices are unchanged, but the current selection is no longer
+                # valid (for example after a filter change).
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "station",
+                    selected = selected_station
+                )
+            }
         })
 
         # Update secondary_parameter choices from community stations.
@@ -5660,7 +5703,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
 
             map <- leaflet::leaflet() %>%
-                leaflet::addProviderTiles("CartoDB.Positron")
+                leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap)
 
             map_primary_selection_input <- session$ns("map_primary_selection")
 
@@ -6155,6 +6198,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             suspendWhenHidden = FALSE
         )
 
+        # When a map click changes both parameter and station, the parameter
+        # update can rebuild the station choices asynchronously. Store the station
+        # temporarily and apply it only after the new parameter-specific choices
+        # are available. This avoids parameter/station update races and flashing.
+        pending_map_station <- shiny::reactiveVal(NULL)
+
         shiny::observeEvent(
             input$map_primary_selection,
             {
@@ -6175,20 +6224,55 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     return()
                 }
 
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "parameter",
-                    selected = selected_parameter
-                )
+                current_parameter <- shiny::isolate(input$parameter %||% "")
+                current_station <- shiny::isolate(input$station %||% "")
 
+                if (!identical(current_parameter, selected_parameter)) {
+                    pending_map_station(selected_station)
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "parameter",
+                        selected = selected_parameter
+                    )
+                } else if (!identical(current_station, selected_station)) {
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "station",
+                        selected = selected_station
+                    )
+                }
+            },
+            ignoreInit = TRUE
+        )
+
+        # Complete a deferred map station selection once the station is present
+        # in the choices generated for the newly selected parameter.
+        shiny::observe({
+            selected_station <- pending_map_station()
+            if (is.null(selected_station) || !nzchar(selected_station)) {
+                return()
+            }
+
+            dat <- available_primary_stations()
+            if (
+                is.null(dat) ||
+                    nrow(dat) == 0 ||
+                    !selected_station %in% dat$location_code
+            ) {
+                return()
+            }
+
+            current_station <- shiny::isolate(input$station %||% "")
+            if (!identical(current_station, selected_station)) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "station",
                     selected = selected_station
                 )
-            },
-            ignoreInit = TRUE
-        )
+            }
+
+            pending_map_station(NULL)
+        })
 
         summary_mode_choices_for_parameter <- function(parameter) {
             selected_parameter <- as.character(parameter %||% "")
@@ -6796,48 +6880,96 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             result_table
         })
 
-        # Table row selection -> update station selectize
-        shiny::observe({
-            row_idx <- input$summary_table_rows_selected
-            dat <- filtered_summary_data()
-            if (is.null(dat) || nrow(dat) == 0 || is.null(row_idx)) {
-                return()
-            }
-            if (row_idx < 1L || row_idx > nrow(dat)) {
-                return()
-            }
-            selected_code <- dat$location_code[[row_idx]]
-            if (!is.null(selected_code) && nzchar(selected_code)) {
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "station",
-                    selected = selected_code
-                )
-            }
-        })
+        # -----------------------------------------------------------------------
+        # Synchronize summary-table selection and station Selectize.
+        #
+        # These two controls update one another, so every programmatic update is
+        # guarded by an equality check. Without these guards the cycle can be:
+        # table -> station -> table -> station -> ..., which presents as a rapidly
+        # flashing Selectize input in the browser.
+        # -----------------------------------------------------------------------
 
-        # Station selectize -> highlight matching table row
-        shiny::observe({
-            code <- input$station
-            dat <- filtered_summary_data()
-            if (
-                is.null(dat) || nrow(dat) == 0 || is.null(code) || !nzchar(code)
-            ) {
-                DT::selectRows(
-                    DT::dataTableProxy("summary_table", session = session),
-                    NULL
+        # Table row selection -> station Selectize
+        shiny::observeEvent(
+            input$summary_table_rows_selected,
+            {
+                row_idx <- input$summary_table_rows_selected
+                dat <- filtered_summary_data()
+
+                if (
+                    is.null(dat) ||
+                        nrow(dat) == 0 ||
+                        is.null(row_idx) ||
+                        length(row_idx) != 1L ||
+                        row_idx < 1L ||
+                        row_idx > nrow(dat)
+                ) {
+                    return()
+                }
+
+                selected_code <- as.character(
+                    dat$location_code[[row_idx]] %||% ""
                 )
-                return()
-            }
-            row_idx <- which(dat$location_code == code)
-            if (length(row_idx) == 0) {
-                row_idx <- NULL
-            }
-            DT::selectRows(
-                DT::dataTableProxy("summary_table", session = session),
-                row_idx
-            )
-        })
+                current_code <- shiny::isolate(input$station %||% "")
+
+                if (
+                    nzchar(selected_code) &&
+                        !identical(current_code, selected_code)
+                ) {
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "station",
+                        selected = selected_code
+                    )
+                }
+            },
+            ignoreInit = TRUE
+        )
+
+        # Station Selectize -> highlight matching table row
+        shiny::observeEvent(
+            input$station,
+            {
+                code <- as.character(input$station %||% "")
+                dat <- filtered_summary_data()
+                proxy <- DT::dataTableProxy("summary_table", session = session)
+
+                if (is.null(dat) || nrow(dat) == 0 || !nzchar(code)) {
+                    current_row <- shiny::isolate(
+                        input$summary_table_rows_selected
+                    )
+                    if (!is.null(current_row) && length(current_row) > 0L) {
+                        DT::selectRows(proxy, NULL)
+                    }
+                    return()
+                }
+
+                row_idx <- which(dat$location_code == code)
+                if (length(row_idx) == 0L) {
+                    row_idx <- integer(0)
+                } else {
+                    # The table is configured for single selection.
+                    row_idx <- row_idx[[1]]
+                }
+
+                current_row <- shiny::isolate(input$summary_table_rows_selected)
+                current_row <- if (is.null(current_row)) {
+                    integer(0)
+                } else {
+                    as.integer(current_row)
+                }
+
+                target_row <- as.integer(row_idx)
+
+                if (!identical(current_row, target_row)) {
+                    DT::selectRows(
+                        proxy,
+                        if (length(target_row) == 0L) NULL else target_row
+                    )
+                }
+            },
+            ignoreInit = TRUE
+        )
 
         # -----------------------------------------------------------------------
         # Plot server

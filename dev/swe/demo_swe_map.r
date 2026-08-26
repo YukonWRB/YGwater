@@ -8,10 +8,39 @@ con <- YGwater::AquaConnect(
     password = Sys.getenv("aquacacheAdminPass"),
 )
 
-location <- "08AA010"
+
+timeseries_id <- 663 # Example: Marsh Lake Near Whitehorse (water level)
+start_date <- Sys.Date() - 30
+end_date <- Sys.Date()
+
+# Download daily aggregated discharge (water flow) for the selected station
+daily_discharge <- DBI::dbGetQuery(
+    con,
+    "
+    SELECT
+        mcd.date,
+        mcd.value
+    FROM continuous.measurements_calculated_daily mcd
+    INNER JOIN timeseries ts
+        ON mcd.timeseries_id = ts.timeseries_id
+    INNER JOIN locations l
+        ON ts.location_id = l.location_id
+    WHERE ts.timeseries_id = $1
+        AND mcd.value IS NOT NULL
+        AND mcd.date >= $2
+        AND mcd.date <= $3
+    ORDER BY mcd.date ASC
+    ",
+    params = list(
+        as.integer(timeseries_id),
+        as.Date(start_date),
+        as.Date(end_date)
+    )
+)
+
 
 two_day_rain <- basinPrecip(
-    location = location,
+    timeseries_id = timeseries_id,
     start = Sys.time(),
     end = Sys.time() + 60 * 60 * 24 * 2,
     silent = TRUE,
