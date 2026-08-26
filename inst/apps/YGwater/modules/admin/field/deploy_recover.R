@@ -384,6 +384,8 @@ deploy_recover <- function(id, language) {
         "signal_row_count",
         "logger_connection_count",
         "transmission_setup_count",
+        "transmission_mapping_count",
+        "transmission_import_run_count",
         "transmission_component_count",
         "telemetry_component_setup_count"
       )
@@ -508,6 +510,30 @@ deploy_recover <- function(id, language) {
             plural_suffix(record$transmission_component_count[[1]]),
             ": ",
             record$transmission_component_count[[1]]
+          )
+        }
+        if (
+          !is.na(record$transmission_mapping_count[[1]]) &&
+            record$transmission_mapping_count[[1]] > 0
+        ) {
+          telemetry_piece <- paste0(
+            telemetry_piece,
+            ", timeseries mapping",
+            plural_suffix(record$transmission_mapping_count[[1]]),
+            ": ",
+            record$transmission_mapping_count[[1]]
+          )
+        }
+        if (
+          !is.na(record$transmission_import_run_count[[1]]) &&
+            record$transmission_import_run_count[[1]] > 0
+        ) {
+          telemetry_piece <- paste0(
+            telemetry_piece,
+            ", import run",
+            plural_suffix(record$transmission_import_run_count[[1]]),
+            ": ",
+            record$transmission_import_run_count[[1]]
           )
         }
         pieces <- c(pieces, telemetry_piece)
@@ -1272,6 +1298,10 @@ deploy_recover <- function(id, language) {
           COALESCE(conn.logger_connection_count, 0) AS logger_connection_count,
           COALESCE(tx.transmission_setup_count, 0) AS transmission_setup_count,
           COALESCE(tx.transmission_route_count, 0) AS transmission_route_count,
+          COALESCE(tx_receive.transmission_mapping_count, 0)
+            AS transmission_mapping_count,
+          COALESCE(tx_receive.transmission_import_run_count, 0)
+            AS transmission_import_run_count,
           COALESCE(tx.transmission_component_count, 0)
             AS transmission_component_count,
           COALESCE(comp.telemetry_component_setup_count, 0)
@@ -1348,6 +1378,27 @@ deploy_recover <- function(id, language) {
           WHERE
             ts.logger_metadata_id = lmi.metadata_id
         ) AS tx ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT
+            (
+              SELECT COUNT(*)
+              FROM continuous.transmission_timeseries_mappings AS ttm
+              INNER JOIN public.locations_metadata_transmission_routes AS ttr
+                ON ttr.transmission_route_id = ttm.transmission_route_id
+              INNER JOIN public.locations_metadata_transmission_setups AS tts
+                ON tts.transmission_setup_id = ttr.transmission_setup_id
+              WHERE tts.logger_metadata_id = lmi.metadata_id
+            ) AS transmission_mapping_count,
+            (
+              SELECT COUNT(*)
+              FROM continuous.transmission_import_runs AS tir
+              INNER JOIN public.locations_metadata_transmission_routes AS tirr
+                ON tirr.transmission_route_id = tir.transmission_route_id
+              INNER JOIN public.locations_metadata_transmission_setups AS tirs
+                ON tirs.transmission_setup_id = tirr.transmission_setup_id
+              WHERE tirs.logger_metadata_id = lmi.metadata_id
+            ) AS transmission_import_run_count
+        ) AS tx_receive ON TRUE
         LEFT JOIN LATERAL (
           SELECT
             COUNT(DISTINCT tc.transmission_setup_id)
@@ -1833,7 +1884,7 @@ deploy_recover <- function(id, language) {
     replace_deployment_timeseries <- function(metadata_id, timeseries_ids) {
       metadata_id <- as_nullable_integer(metadata_id)
       if (is.na(metadata_id)) {
-        stop("A deployment metadata_id is required to update timeseries links.")
+        stop("A deployment metadata_id is required to update continuous.timeseries links.")
       }
 
       timeseries_ids <- normalize_integer_vector(timeseries_ids)

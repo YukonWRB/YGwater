@@ -167,7 +167,6 @@ plot_resolution_hourly,,Hourly,Horaire
 plot_resolution_daily,,Daily,Journalière
 plot_timezone_offset,,Plot time zone (UTC offset),Fuseau horaire du graphique (décalage UTC)
 plot_timezone_offset_placeholder,,Select UTC offset,Choisir le décalage UTC
-plot_type_ts,,Timeseries,Série temporelle
 plot_type_ts_many,,Timeseries (one per plot),Série temporelle (une par graphique)
 plot_type_ts_all,,Timeseries (all on one plot),Séries temporelles (tous sur un graphique)
 plot_type_overlap,,Overlapping years,Années superposées
@@ -200,6 +199,34 @@ timeseries_metadata_heading,,Timeseries metadata,Métadonnées de la série chro
 ownership_history_heading,,Ownership history,Historique de propriété
 metadata_select_prompt,,Select a timeseries to view metadata.,Sélectionnez une série chronologique pour voir les métadonnées.
 attribute,,Attribute,Attribut
+timeseries_label,,Timeseries,Série chronologique
+timeseries_id_label,,Timeseries ID,ID de la série chronologique
+timeseries_type_label,,Timeseries type,Type de série chronologique
+timeseries_type_description,,Timeseries type description,Description du type de série chronologique
+expression_sql,,Expression SQL,Expression SQL
+constituent_count,,Constituent count,Nombre de constituants
+show_compound_timeseries_details,,Show composite/derived timeseries details,Afficher les détails de la série chronologique composite/dérivée
+show_compound_timeseries_details_for,,Show composite/derived timeseries details for,Afficher les détails de la série chronologique composite/dérivée pour
+compound_details_modal_title_for,,Composite/derived timeseries details for,Détails de la série chronologique composite/dérivée pour
+compound_metadata_heading,,Composite/derived timeseries metadata,Métadonnées de la série chronologique composite/dérivée
+constituents,,Constituents,Constituants
+yes,,Yes,Oui
+no,,No,Non
+active,,Active,Actif
+publicly_visible,,Publicly visible,Visible publiquement
+depth,,Depth,Profondeur
+path,,Path,Chemin
+alias,,Alias,Alias
+priority,,Priority,Priorité
+use_from_utc,,Use from (UTC),Utiliser à partir de (UTC)
+use_to_utc,,Use to (UTC),Utiliser jusqu'à (UTC)
+alignment_tolerance,,Alignment tolerance,Tolérance d’alignement
+reuse_values,,Reuse values,Réutiliser les valeurs
+member_timeseries_id,,Member timeseries ID,ID de la série chronologique membre
+alias_name,,Alias name,Nom d’alias
+sensor_priority,,Sensor priority,Priorité du capteur
+start_datetime_utc,,Start datetime (UTC),Date/heure de début (UTC)
+end_datetime_utc,,End datetime (UTC),Date/heure de fin (UTC)
 location_code_label,,Location code,Code du site
 latitude,,Latitude,Latitude
 longitude,,Longitude,Longitude
@@ -327,14 +354,20 @@ well_name_contains_placeholder,,e.g. YOWN,ex. YOWN
 starts_with,,Starts with,Commence par
 ends_with,,Ends with,Se termine par
 case_sensitive,,Case sensitive,Respect de la casse
-location_name_contains,,Location name contains,Le nom du point contient
-location_name_contains_placeholder,,e.g. Yukon,ex. Yukon
+location_name_contains,,Location name/code contains,Le nom/code du point contient
+location_name_contains_placeholder,,e.g. Yukon or 09EA001,ex. Yukon ou 09EA001
 well_completion_yr,,Well completion year,Année d'achèvement
 include_unknown_well_completion,,Include wells with unknown completion year,Inclure les puits ou l'année d'achèvement est inconnue
 include_missing_well_depth,,Include wells with missing depth,Inclure les puits où la profondeur est manquante
 include_missing_well_depth_to_water,,Include wells with missing depth to water,Inclure les puits où la profondeur jusqu'à l'eau est manquante
 include_missing_well_depth_to_bedrock,,Include wells with missing depth to bedrock,Inclure les puits où la profondeur jusqu'au substratum rocheux est manquante
-borehole_unnamed,,Unnamed well,Puits sans nom
+borehole_well_scope,,Boreholes to show,Trous de forage à afficher
+show_boreholes_with_wells,,Show boreholes with wells,Afficher les forage avec puits
+show_boreholes_without_wells,,Show boreholes with no wells,Afficher les forage sans puits
+show_all_boreholes,,Show all,Tout afficher
+borehole_purpose,,Borehole purpose,Usage du forage
+well_or_borehole_purpose,,Well or borehole purpose,Usage du puits ou du forage
+borehole_unnamed,,Unnamed borehole,Trou de forage sans nom
 borehole_well_purpose_col,,purpose_name,purpose_name_fr
 licence_title,,Using data from this application,Utilisation des données de l'application
 licence1,,"The data, reports, and plots generated from this application are licenced under the Government of Yukon's ","Les données, rapports et graphiques générés à l'aide de cette application sont régis par la "
@@ -533,6 +566,11 @@ result_value_type(s),Result value type selector,Result value type(s),Type(s) de 
 result_type(s),Result type selector,Result type(s),Type(s) de résultat
 disc_sample_result_filters,Discrete plot sample/result filter heading,Sample/result filters,Filtres des échantillons/résultats
 disc_show_blank_samples,Discrete plot blank sample toggle,Show blank samples,Afficher les blancs
+disc_qaqc_show_data,Discrete QA/QC related samples action,Show QA/QC sample data,Afficher les données des échantillons d'AQ/CQ
+disc_qaqc_sample_data,Discrete QA/QC related samples heading,QA/QC sample data,Données des échantillons d'AQ/CQ
+disc_qaqc_group_links,Discrete QA/QC sample group links label,Group links,Liens de groupe
+disc_qaqc_retrieval_error,Discrete QA/QC related samples retrieval error,Could not retrieve linked QA/QC samples:,Impossible de récupérer les échantillons d'AQ/CQ liés :
+disc_qaqc_linked_results,Discrete QA/QC linked result count label,Linked QA/QC results:,Résultats d'AQ/CQ liés :
 disc_duplicate_samples,Discrete plot duplicate sample control,Duplicate/replicate samples,Échantillons en double/réplicats
 disc_duplicates_show,Discrete plot duplicate show option,Show individually,Afficher individuellement
 disc_duplicates_average,Discrete plot duplicate average option,Average matching samples,Calculer la moyenne des échantillons correspondants

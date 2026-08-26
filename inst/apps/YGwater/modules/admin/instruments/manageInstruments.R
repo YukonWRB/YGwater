@@ -368,41 +368,7 @@ manageInstruments <- function(id, language) {
       )
     }
 
-    refresh_lookups <- function(selected = current_lookup_selection()) {
-      instrument_data$observers <- DBI::dbGetQuery(
-        con,
-        paste(
-          "SELECT observer_id,",
-          "CONCAT(observer_first, ' ', observer_last, ' (', organization, ')') AS observer_label",
-          "FROM instruments.observers",
-          "ORDER BY observer_first, observer_last, organization"
-        )
-      )
-      instrument_data$makes <- DBI::dbGetQuery(
-        con,
-        "SELECT make_id, make FROM instruments.instrument_makes ORDER BY make"
-      )
-      instrument_data$models <- DBI::dbGetQuery(
-        con,
-        "SELECT model_id, model FROM instruments.instrument_models ORDER BY model"
-      )
-      instrument_data$types <- DBI::dbGetQuery(
-        con,
-        "SELECT type_id, type FROM instruments.instrument_types ORDER BY type"
-      )
-      instrument_data$owners <- DBI::dbGetQuery(
-        con,
-        "SELECT organization_id, name FROM public.organizations ORDER BY name"
-      )
-      instrument_data$suppliers <- DBI::dbGetQuery(
-        con,
-        paste(
-          "SELECT supplier_id, supplier_name",
-          "FROM instruments.suppliers",
-          "ORDER BY supplier_name"
-        )
-      )
-
+    update_lookup_selectors <- function(selected = current_lookup_selection()) {
       updateSelectizeInput(
         session,
         "observer",
@@ -459,6 +425,60 @@ manageInstruments <- function(id, language) {
       )
     }
 
+    refresh_lookups <- function(selected = current_lookup_selection()) {
+      instrument_data$observers <- DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT observer_id,",
+          "CONCAT(observer_first, ' ', observer_last, ' (', organization, ')') AS observer_label",
+          "FROM instruments.observers",
+          "ORDER BY observer_first, observer_last, organization"
+        )
+      )
+      instrument_data$makes <- DBI::dbGetQuery(
+        con,
+        "SELECT make_id, make FROM instruments.instrument_makes ORDER BY make"
+      )
+      instrument_data$models <- DBI::dbGetQuery(
+        con,
+        "SELECT model_id, model FROM instruments.instrument_models ORDER BY model"
+      )
+      instrument_data$types <- DBI::dbGetQuery(
+        con,
+        "SELECT type_id, type FROM instruments.instrument_types ORDER BY type"
+      )
+      instrument_data$owners <- DBI::dbGetQuery(
+        con,
+        "SELECT organization_id, name FROM public.organizations ORDER BY name"
+      )
+      instrument_data$suppliers <- DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT supplier_id, supplier_name",
+          "FROM instruments.suppliers",
+          "ORDER BY supplier_name"
+        )
+      )
+
+      update_lookup_selectors(selected)
+    }
+
+    update_record_selector <- function(selected = isolate(input$record_id)) {
+      selected <- normalize_select_value(selected)
+      valid_choices <- as.character(instrument_data$records$instrument_id)
+      if (!length(selected) || !(selected %in% valid_choices)) {
+        selected <- character(0)
+      }
+
+      updateSelectizeInput(
+        session,
+        "record_id",
+        choices = build_record_choices(instrument_data$records),
+        selected = selected,
+        server = TRUE
+      )
+    }
+
     refresh_records <- function(selected = isolate(input$record_id)) {
       instrument_data$records <- DBI::dbGetQuery(
         con,
@@ -487,19 +507,7 @@ manageInstruments <- function(id, language) {
         )
       )
 
-      selected <- normalize_select_value(selected)
-      valid_choices <- as.character(instrument_data$records$instrument_id)
-      if (!length(selected) || !(selected %in% valid_choices)) {
-        selected <- character(0)
-      }
-
-      updateSelectizeInput(
-        session,
-        "record_id",
-        choices = build_record_choices(instrument_data$records),
-        selected = selected,
-        server = TRUE
-      )
+      update_record_selector(selected)
     }
 
     refresh_all <- function(
@@ -589,36 +597,14 @@ manageInstruments <- function(id, language) {
         return(invisible(NULL))
       }
 
-      updateSelectizeInput(
-        session,
-        "observer",
-        selected = normalize_select_value(record$observer)
-      )
-      updateSelectizeInput(
-        session,
-        "make",
-        selected = normalize_select_value(record$make)
-      )
-      updateSelectizeInput(
-        session,
-        "model",
-        selected = normalize_select_value(record$model)
-      )
-      updateSelectizeInput(
-        session,
-        "type",
-        selected = normalize_select_value(record$type)
-      )
-      updateSelectizeInput(
-        session,
-        "owner",
-        selected = normalize_select_value(record$owner)
-      )
-      updateSelectizeInput(
-        session,
-        "supplier_id",
-        selected = normalize_select_value(record$supplier_id)
-      )
+      update_lookup_selectors(list(
+        observer = record$observer,
+        make = record$make,
+        model = record$model,
+        type = record$type,
+        owner = record$owner,
+        supplier_id = record$supplier_id
+      ))
       shinyWidgets::updateAirDateInput(
         session,
         "obs_datetime",
@@ -852,12 +838,8 @@ manageInstruments <- function(id, language) {
       {
         req(length(input$records_table_rows_selected) == 1)
         selected_row <- input$records_table_rows_selected[[1]]
-        updateSelectizeInput(
-          session,
-          "record_id",
-          selected = as.character(instrument_data$records$instrument_id[[
-            selected_row
-          ]])
+        update_record_selector(
+          as.character(instrument_data$records$instrument_id[[selected_row]])
         )
       },
       ignoreInit = TRUE

@@ -1629,6 +1629,13 @@ continuousDataReview <- function(id, language) {
       if (isTRUE(row$equation[[1]]) && is.na(equation)) {
         stop("Equation is required for this correction type.")
       }
+      if (!is.na(equation)) {
+        YGwater:::validate_numeric_sql_expression(
+          equation,
+          allowed_placeholders = c(1L, 2L),
+          label = "Correction equation"
+        )
+      }
 
       list(
         type_id = as.integer(input$correction_type),

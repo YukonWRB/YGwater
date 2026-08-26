@@ -485,12 +485,12 @@ app_ui <- function(request) {
               uiOutput("imputeMissing_ui")
             ),
             nav_panel(
-              title = "Review / edit timeseries",
+              title = "Review / edit timeseries data",
               value = "continuousDataReview",
               uiOutput("continuousDataReview_ui")
             ),
             nav_panel(
-              title = "Add / edit timeseries",
+              title = "Add / edit basic timeseries",
               value = "addTimeseries",
               uiOutput("addTimeseries_ui")
             ),
@@ -749,6 +749,16 @@ app_ui <- function(request) {
               title = "Transmission routes",
               value = "manageTransmissionRoutes",
               uiOutput("manageTransmissionRoutes_ui")
+            ),
+            nav_panel(
+              title = "Timeseries mappings",
+              value = "manageTransmissionTimeseriesMappings",
+              uiOutput("manageTransmissionTimeseriesMappings_ui")
+            ),
+            nav_panel(
+              title = "Import history",
+              value = "viewTransmissionImportRuns",
+              uiOutput("viewTransmissionImportRuns_ui")
             ),
             nav_panel(
               title = "Transmission components",

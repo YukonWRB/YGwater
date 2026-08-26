@@ -135,7 +135,8 @@ plotDiscrete(
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 }
 \value{
-An interactive HTML plot of the data from EQWin.
+An interactive HTML plot. When \code{data = TRUE}, a list containing the
+plot, plotted data, and the contributing AquaCache sample IDs is returned.
 }
 \description{
 Plots data directly from EQWin or from the aquacache for one or more location (station) and one or more parameter. Depending on the setting for argument 'facet_on', the function can either make a facet plot where each station is a facet (with parameters as distinct traces) or where each parameter is a facet (with locations as distinct traces). Values above or below the detection limit are shown as the detection limit but symbolized differently (open circles).

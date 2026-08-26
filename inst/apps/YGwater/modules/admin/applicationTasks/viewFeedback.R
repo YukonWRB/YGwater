@@ -22,13 +22,18 @@ viewFeedback <- function(id, language) {
 
     check <- DBI::dbGetQuery(
       session$userData$AquaCache,
-      "SELECT has_table_privilege(current_user, 'application.feedback', 'SELECT') AS can_select"
+      "SELECT
+         has_table_privilege(current_user, 'application.feedback', 'SELECT')
+         AND has_table_privilege(current_user, 'application.feedback', 'INSERT')
+         AND has_table_privilege(current_user, 'application.feedback', 'UPDATE')
+         AND has_table_privilege(current_user, 'application.feedback', 'DELETE')
+           AS has_required_privileges"
     )
 
-    if (!check$can_select) {
+    if (!check$has_required_privileges) {
       showModal(modalDialog(
         title = 'Insufficient Privileges',
-        'You do not have the necessary privileges to view feedback.',
+        'You need SELECT, INSERT, UPDATE, and DELETE privileges on application.feedback to view this module.',
         easyClose = TRUE,
         footer = modalButton('Close')
       ))

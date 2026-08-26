@@ -140,6 +140,9 @@ api_run_with_httpuv_retry <- function(expr, env = parent.frame()) {
 #' @param publicDbPass The password for anonymous public API requests. Default
 #'   is taken from the environment variable 'aquacachePublicPass', falling back
 #'   to 'aquacache'.
+#' @param logRequests Whether to log API requests to
+#'   `application.api_requests`. Logging failures are ignored so API responses
+#'   are not blocked by logging table, schema, or privilege problems.
 #' @param workers The number of worker processes to use for the API server. Default is parallel::detectCores(-2). This parameter is only applicable when using plumber2, as plumber v1 does not support multiple workers.
 #' @param run Whether to run the API immediately. Default is TRUE. Set to FALSE for testing purposes.
 #' @return Runs the API server.
@@ -167,6 +170,7 @@ api <- function(
   dbPass = Sys.getenv("aquacachePass"),
   publicDbUser = Sys.getenv("aquacachePublicUser", "public_reader"),
   publicDbPass = Sys.getenv("aquacachePublicPass", "aquacache"),
+  logRequests = TRUE,
   workers = parallel::detectCores(-2),
   run = TRUE
 ) {
@@ -200,10 +204,12 @@ api <- function(
   Sys.setenv(APIaquacachePass = dbPass)
   Sys.setenv(APIaquacachePublicUser = publicDbUser)
   Sys.setenv(APIaquacachePublicPass = publicDbPass)
+  Sys.setenv(APIaquacacheLogRequests = if (isTRUE(logRequests)) "TRUE" else "FALSE")
 
   # Launch the plumber2 API using the appropriate engine and implementation
   if (identical(api_target$engine, "plumber2")) {
     pr <- plumber2::api(api_target$path)
+    pr <- api_configure_v2_logging(pr, api_target$version)
     if (server_supplied && !is.null(server) && nzchar(server)) {
       pr <- plumber2::api_doc_add(
         pr,
@@ -227,6 +233,7 @@ api <- function(
   # Code below won't run if plumber2 is used because of the return above
   # For plumber v1, we need to modify the API spec to add security schemes and server information
   pr <- plumber::plumb(api_target$path)
+  pr <- api_configure_v1_logging(pr, api_target$version)
 
   spec <- pr$getApiSpec()
   spec$components$securitySchemes$BasicAuth <- list(

@@ -22,15 +22,11 @@
 #' @param con A connection to the aquacache database. NULL uses [AquaConnect()] and automatically disconnects.
 #' @param hrdpa_loc The directory (folder) where past precipitation rasters are to be downloaded. Suggested use is to specify a repository where all such rasters are saved to speed processing time and reduce data usage. If using the default NULL, rasters will not persist beyond your current R session.
 #' @param hrdps_loc The directory (folder) where forecast precipitation rasters are to be downloaded. A folder will be created for the specific parameter (in this case, precipitation) or selected if already existing.
+#' @param .raster_cache Internal parameter for caching rasters between multiple calls to basinPrecip. Do not set this parameter manually.
+#' @param .return_result_and_cache Internal parameter for returning both the result and the raster cache. Do not set this parameter manually.
 #'
 #' @return For a single location, returns a list containing precipitation statistics and optional map output. For multiple locations, returns a list of per-location outputs in the same order as the input. Output includes `raster_time_vector_UTC`, the vector of raster timestamps used.
 #' @export
-
-#TODO Update function to work directly with DB, with terra object, or with shapefiles, or with gpkg files.
-#TODO: problem with extents not matching. reproduce by first calling a map for somewhere in YT, then in Ontario. will get Error:[sds] extents do not match, which means that the DL and/or file selection process didn't work properly
-#IDEA: Allow multiple plots to be fetched, or a time-lapse of plots (better). Allow setting increments and number of plots.
-#IDEA: use leaflet to display maps
-#TODO: Get precip further in future using RDPS beyond HRDPS range.
 
 basinPrecip <- function(
   location,
@@ -260,7 +256,7 @@ basinPrecip <- function(
   } else if (!is.na(location_id)) {
     location_metadata <- DBI::dbGetQuery(
       con,
-      "SELECT location_code, longitude, latitude FROM locations WHERE location_id = $1 LIMIT 1;",
+      "SELECT location_code, longitude, latitude FROM public.locations WHERE location_id = $1 LIMIT 1;",
       params = list(location_id)
     )
 
@@ -388,8 +384,8 @@ basinPrecip <- function(
       # Query rasters_reference to get valid times for HRDPA
       ref_query_hrdpa <- paste0(
         "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
-        "FROM rasters_reference rr ",
-        "JOIN raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
         "WHERE rr.model = 'HRDPA' ",
         "AND rsi.parameter = 'accumulated precipitation (all types) at surface' ",
         "AND rr.valid_from <= '",
@@ -483,8 +479,8 @@ basinPrecip <- function(
       # Query rasters_reference to get valid times for HRDPS
       ref_query_hrdps <- paste0(
         "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
-        "FROM rasters_reference rr ",
-        "JOIN raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
         "WHERE rr.model = 'HRDPS' ",
         "AND rsi.parameter = 'accumulated precip (all types) 1 hour' ",
         "AND rr.valid_from <= '",
@@ -576,8 +572,8 @@ basinPrecip <- function(
 
       ref_query_hrdps <- paste0(
         "SELECT rr.reference_id, rr.valid_from, rr.valid_to ",
-        "FROM rasters_reference rr ",
-        "JOIN raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
+        "FROM spatial.rasters_reference rr ",
+        "JOIN spatial.raster_series_index rsi ON rr.raster_series_id = rsi.raster_series_id ",
         "WHERE rr.model = 'HRDPS' ",
         "AND rsi.parameter = 'accumulated precip (all types) 1 hour' ",
         "AND rr.valid_from <= '",

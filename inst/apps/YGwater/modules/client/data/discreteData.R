@@ -143,25 +143,34 @@ discData <- function(id, language, inputs) {
       return(data)
     }
 
-    # Assign the input value to a reactive right away as it's reset to NULL as soon as this module is loaded
+    filteredData <- createFilteredData()
     moduleInputs <- reactiveValues(
-      location_id = if (!is.null(inputs$location_id)) {
-        as.numeric(inputs$location_id)
-      } else {
-        NULL
-      }
+      location_id = NULL,
+      location_request_id = isolate(inputs$location_request_id)
     )
 
-    # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
-    if (!is.null(moduleInputs$location_id)) {
-      filteredData <- createFilteredData()
-      # If the location_id is not in the filteredData$locs, return early
-      if (!moduleInputs$location_id %in% filteredData$locs$location_id) {
+    resetFilteredData <- function() {
+      refreshed <- createFilteredData()
+      for (name in isolate(names(refreshed))) {
+        filteredData[[name]] <- isolate(refreshed[[name]])
+      }
+    }
+
+    applyLocationInput <- function(location_id) {
+      resetFilteredData()
+
+      location_id <- suppressWarnings(as.numeric(location_id))
+      if (length(location_id) != 1 || is.na(location_id)) {
         moduleInputs$location_id <- NULL
-        return()
+        return(invisible(FALSE))
+      }
+      if (!location_id %in% filteredData$locs$location_id) {
+        moduleInputs$location_id <- NULL
+        return(invisible(FALSE))
       }
 
-      loc_id <- moduleInputs$location_id
+      moduleInputs$location_id <- location_id
+      loc_id <- location_id
       filteredData$samples <- filteredData$samples[
         filteredData$samples$location_id %in% loc_id,
       ]
@@ -197,7 +206,7 @@ discData <- function(id, language, inputs) {
         paste0(
           "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
           parameter_unit_sql("unit"),
-          " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+          " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
           paste(filteredData$samples$sample_id, collapse = ", "),
           ");"
         )
@@ -206,7 +215,7 @@ discData <- function(id, language, inputs) {
         filteredData$parameter_relationships <- DBI::dbGetQuery(
           session$userData$AquaCache,
           paste0(
-            "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+            "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             "));"
           )
@@ -215,7 +224,7 @@ discData <- function(id, language, inputs) {
           filteredData$param_groups <- DBI::dbGetQuery(
             session$userData$AquaCache,
             paste0(
-              "SELECT * FROM parameter_groups WHERE group_id IN (",
+              "SELECT * FROM public.parameter_groups WHERE group_id IN (",
               paste(
                 filteredData$parameter_relationships$group_id,
                 collapse = ", "
@@ -239,7 +248,7 @@ discData <- function(id, language, inputs) {
           filteredData$param_sub_groups <- DBI::dbGetQuery(
             session$userData$AquaCache,
             paste0(
-              "SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+              "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
               paste(sub_groups, collapse = ", "),
               ");"
             )
@@ -254,9 +263,27 @@ discData <- function(id, language, inputs) {
           )
         }
       }
-    } else {
-      filteredData <- createFilteredData()
+      invisible(TRUE)
     }
+
+    if (identical(isolate(inputs$location_target), "discData")) {
+      applyLocationInput(isolate(inputs$location_id))
+    }
+
+    observeEvent(
+      inputs$location_request_id,
+      {
+        req(identical(inputs$location_target, "discData"))
+        request_id <- inputs$location_request_id
+        if (identical(request_id, isolate(moduleInputs$location_request_id))) {
+          return()
+        }
+        moduleInputs$location_request_id <- request_id
+        applyLocationInput(inputs$location_id)
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     # Create UI elements and necessary helpers ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
@@ -846,7 +873,7 @@ discData <- function(id, language, inputs) {
           paste0(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
             parameter_unit_sql("unit"),
-            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -855,7 +882,7 @@ discData <- function(id, language, inputs) {
           filteredData$parameter_relationships <- DBI::dbGetQuery(
             session$userData$AquaCache,
             paste0(
-              "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
               paste(filteredData$samples$sample_id, collapse = ", "),
               "));"
             )
@@ -864,7 +891,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_groups WHERE group_id IN (",
+                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
                 paste(
                   filteredData$parameter_relationships$group_id,
                   collapse = ", "
@@ -888,7 +915,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_sub_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
                 paste(sub_groups, collapse = ", "),
                 ");"
               )
@@ -1067,7 +1094,7 @@ discData <- function(id, language, inputs) {
           paste0(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
             parameter_unit_sql("unit"),
-            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1076,7 +1103,7 @@ discData <- function(id, language, inputs) {
           filteredData$parameter_relationships <- DBI::dbGetQuery(
             session$userData$AquaCache,
             paste0(
-              "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
               paste(filteredData$samples$sample_id, collapse = ", "),
               "));"
             )
@@ -1085,7 +1112,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_groups WHERE group_id IN (",
+                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
                 paste(
                   filteredData$parameter_relationships$group_id,
                   collapse = ", "
@@ -1109,7 +1136,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_sub_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
                 paste(sub_groups, collapse = ", "),
                 ");"
               )
@@ -1259,7 +1286,7 @@ discData <- function(id, language, inputs) {
           paste0(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
             parameter_unit_sql("unit"),
-            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1268,7 +1295,7 @@ discData <- function(id, language, inputs) {
           filteredData$parameter_relationships <- DBI::dbGetQuery(
             session$userData$AquaCache,
             paste0(
-              "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
               paste(filteredData$samples$sample_id, collapse = ", "),
               "));"
             )
@@ -1277,7 +1304,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_groups WHERE group_id IN (",
+                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
                 paste(
                   filteredData$parameter_relationships$group_id,
                   collapse = ", "
@@ -1301,7 +1328,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_sub_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
                 paste(sub_groups, collapse = ", "),
                 ");"
               )
@@ -1426,7 +1453,7 @@ discData <- function(id, language, inputs) {
           paste0(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
             parameter_unit_sql("unit"),
-            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1435,7 +1462,7 @@ discData <- function(id, language, inputs) {
           filteredData$parameter_relationships <- DBI::dbGetQuery(
             session$userData$AquaCache,
             paste0(
-              "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
               paste(filteredData$samples$sample_id, collapse = ", "),
               "));"
             )
@@ -1444,7 +1471,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_groups WHERE group_id IN (",
+                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
                 paste(
                   filteredData$parameter_relationships$group_id,
                   collapse = ", "
@@ -1468,7 +1495,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_sub_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
                 paste(sub_groups, collapse = ", "),
                 ");"
               )
@@ -1577,7 +1604,7 @@ discData <- function(id, language, inputs) {
           paste0(
             "SELECT DISTINCT p.parameter_id, p.param_name, COALESCE(p.param_name_fr, p.param_name) AS param_name_fr, ",
             parameter_unit_sql("unit"),
-            " FROM parameters p INNER JOIN results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
+            " FROM public.parameters p INNER JOIN discrete.results AS r ON p.parameter_id = r.parameter_id WHERE r.sample_id IN (",
             paste(filteredData$samples$sample_id, collapse = ", "),
             ");"
           )
@@ -1586,7 +1613,7 @@ discData <- function(id, language, inputs) {
           filteredData$parameter_relationships <- DBI::dbGetQuery(
             session$userData$AquaCache,
             paste0(
-              "SELECT p.* FROM parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
+              "SELECT p.* FROM public.parameter_relationships AS p WHERE EXISTS (SELECT 1 FROM discrete.results AS r WHERE p.parameter_id = r.parameter_id AND r.sample_id IN (",
               paste(filteredData$samples$sample_id, collapse = ", "),
               "));"
             )
@@ -1595,7 +1622,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_groups WHERE group_id IN (",
+                "SELECT * FROM public.parameter_groups WHERE group_id IN (",
                 paste(
                   filteredData$parameter_relationships$group_id,
                   collapse = ", "
@@ -1619,7 +1646,7 @@ discData <- function(id, language, inputs) {
             filteredData$param_sub_groups <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT * FROM parameter_sub_groups WHERE sub_group_id IN (",
+                "SELECT * FROM public.parameter_sub_groups WHERE sub_group_id IN (",
                 paste(sub_groups, collapse = ", "),
                 ");"
               )
@@ -1693,21 +1720,23 @@ discData <- function(id, language, inputs) {
     # Create the samples table and render it ###################################
     # The results table will be shown only if the user clicks on the 'view results' button in the modal
     table_data <- reactiveVal()
+    selected_qaqc_data <- reactiveVal(disc_plot_empty_qaqc_data())
     observeEvent(input$filter, {
       req(filteredData, language$language)
+      selected_qaqc_data(disc_plot_empty_qaqc_data())
       samples <- dbGetQueryDT(
         session$userData$AquaCache,
         paste0(
           "SELECT DISTINCT ON (s.sample_id)
-          s.sample_id, l.location_id, l.name, sl.sub_location_name, s.z AS depth, s.datetime AS sample_datetime_utc, s.target_datetime AS target_datetime_utc, m.media_type, st.sample_type, cm.collection_method, s.sample_volume_ml, s.purge_volume_l, s.purge_time_min, s.flow_rate_l_min, s.wave_hgt_m, s.sample_grade, s.sample_approval, s.sample_qualifier, s.note FROM samples s 
-           JOIN results r ON s.sample_id = r.sample_id
-           JOIN locations l ON s.location_id = l.location_id
-           LEFT JOIN sub_locations sl ON s.sub_location_id = sl.sub_location_id
-           JOIN media_types m ON s.media_id = m.media_id
-           JOIN sample_types st ON s.sample_type = st.sample_type_id
-           JOIN parameters p ON r.parameter_id = p.parameter_id
-           JOIN collection_methods cm ON s.collection_method = cm.collection_method_id
-           LEFT JOIN organizations orgs ON s.owner = orgs.organization_id
+          s.sample_id, l.location_id, l.name, sl.sub_location_name, s.z AS depth, s.datetime AS sample_datetime_utc, s.target_datetime AS target_datetime_utc, m.media_type, st.sample_type, cm.collection_method, s.sample_volume_ml, s.purge_volume_l, s.purge_time_min, s.flow_rate_l_min, s.wave_hgt_m, s.sample_grade, s.sample_approval, s.sample_qualifier, s.note FROM discrete.samples s
+           JOIN discrete.results r ON s.sample_id = r.sample_id
+           JOIN public.locations l ON s.location_id = l.location_id
+           LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id
+           JOIN public.media_types m ON s.media_id = m.media_id
+           JOIN discrete.sample_types st ON s.sample_type = st.sample_type_id
+           JOIN public.parameters p ON r.parameter_id = p.parameter_id
+           JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id
+           LEFT JOIN public.organizations orgs ON s.owner = orgs.organization_id
            WHERE s.location_id IN (",
           paste(filteredData$locs$location_id, collapse = ", "),
           if (nrow(filteredData$sub_locs) > 0) {
@@ -1742,6 +1771,75 @@ discData <- function(id, language, inputs) {
       samples[, (na_cols) := NULL]
 
       table_data(samples)
+    })
+
+    qaqc_table <- function(name) {
+      DT::renderDT({
+        data <- selected_qaqc_data()[[name]]
+        req(nrow(data) > 0L)
+        DT::datatable(
+          data,
+          rownames = FALSE,
+          selection = "none",
+          filter = "top",
+          options = list(pageLength = 10, scrollX = TRUE)
+        )
+      })
+    }
+
+    output$modal_qaqc_samples <- qaqc_table("samples")
+    output$modal_qaqc_results <- qaqc_table("results")
+    output$modal_qaqc_group_links <- qaqc_table("group_links")
+    output$modal_qaqc_documents <- qaqc_table("documents")
+
+    output$modal_qaqc_ui <- renderUI({
+      data <- selected_qaqc_data()
+      if (nrow(data$samples) == 0L) {
+        return(NULL)
+      }
+
+      tabs <- list(
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("samples", language$language),
+            nrow(data$samples)
+          ),
+          DT::DTOutput(ns("modal_qaqc_samples"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("results", language$language),
+            nrow(data$results)
+          ),
+          DT::DTOutput(ns("modal_qaqc_results"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("disc_qaqc_group_links", language$language),
+            nrow(data$group_links)
+          ),
+          DT::DTOutput(ns("modal_qaqc_group_links"))
+        )
+      )
+      if (nrow(data$documents) > 0L) {
+        tabs[[length(tabs) + 1L]] <- tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("documents", language$language),
+            nrow(data$documents)
+          ),
+          DT::DTOutput(ns("modal_qaqc_documents"))
+        )
+      }
+
+      tagList(
+        tags$hr(),
+        h4(tr("disc_qaqc_sample_data", language$language)),
+        do.call(tabsetPanel, tabs)
+      )
     })
 
     #
@@ -1835,6 +1933,26 @@ discData <- function(id, language, inputs) {
       # Get the timeseries_ids of the selected rows
       selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
       selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
+      selected_qaqc_data(
+        tryCatch(
+          disc_plot_related_qaqc_data(
+            session$userData$AquaCache,
+            selected_sampleids,
+            language$abbrev
+          ),
+          error = function(e) {
+            showNotification(
+              paste(
+                tr("disc_qaqc_retrieval_error", language$language),
+                e$message
+              ),
+              type = "warning",
+              duration = 15
+            )
+            disc_plot_empty_qaqc_data()
+          }
+        )
+      )
 
       # Query will be for discrete or continuous data, depending on input$type
       # Show a modal with a subset (first 3 rows per sample_id) of the data. Below this, show a date range picker (with min/max preset based on the selected data), the number of rows that would be returned, and download and close buttons. The download button will give the user the entire dataset within the date range selected
@@ -1852,16 +1970,16 @@ discData <- function(id, language, inputs) {
           media_alias = "s"
         ),
         ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY r.sample_id ORDER BY result_id) AS rn 
-        FROM results r
-        JOIN samples s ON r.sample_id = s.sample_id
-        JOIN parameters p ON r.parameter_id = p.parameter_id
-        JOIN result_types rt ON r.result_type = rt.result_type_id
-        LEFT JOIN sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
-        LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id
-        LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
-        LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
-        LEFT JOIN laboratories l ON r.laboratory = l.lab_id
+        FROM discrete.results r
+        JOIN discrete.samples s ON r.sample_id = s.sample_id
+        JOIN public.parameters p ON r.parameter_id = p.parameter_id
+        JOIN discrete.result_types rt ON r.result_type = rt.result_type_id
+        LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
+        LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
+        LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
+        LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
+        LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
+        LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
         WHERE r.sample_id IN (",
         sample_ids_str,
         ")) sub WHERE rn <= 3;"
@@ -1975,6 +2093,7 @@ discData <- function(id, language, inputs) {
         DT::DTOutput(ns("modal_subset")),
         h4(tr("loc_meta_msg", language$language)),
         DT::DTOutput(ns("modal_location_metadata")),
+        uiOutput(ns("modal_qaqc_ui")),
         textOutput(ns("num_rows")),
         selectizeInput(
           ns("modal_format"),
@@ -2010,21 +2129,31 @@ discData <- function(id, language, inputs) {
       rows <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste0(
-          "SELECT COUNT(*) FROM results WHERE sample_id IN (",
+          "SELECT COUNT(*) FROM discrete.results WHERE sample_id IN (",
           paste(selected_sampleids, collapse = ", "),
           ") AND parameter_id IN (",
           paste(filteredData$params$parameter_id, collapse = ", "),
           ");"
         )
       )[[1]]
+      qaqc_rows <- nrow(selected_qaqc_data()$results)
+      total_rows <- rows + qaqc_rows
 
       # ouput message about number of rows
       output$num_rows <- renderText({
-        paste0(tr("dl_num_results", language$language), " ", rows)
+        text <- paste0(tr("dl_num_results", language$language), " ", rows)
+        if (qaqc_rows > 0L) {
+          text <- paste(
+            text,
+            tr("disc_qaqc_linked_results", language$language),
+            qaqc_rows
+          )
+        }
+        text
       })
 
       # Update selectizeInput based on number of rows
-      if (rows > 1000000) {
+      if (total_rows > 1000000) {
         updateSelectizeInput(
           session,
           "modal_format",
@@ -2077,7 +2206,9 @@ discData <- function(id, language, inputs) {
         # Get the data together
         selected_sampleids <- table_data()[input$tbl_rows_selected, sample_id]
 
-        selected_loc_ids <- table_data()[input$tbl_rows_selected, location_id]
+        selected_loc_ids <- unique(
+          table_data()[input$tbl_rows_selected, location_id]
+        )
 
         data <- list()
         data$location_metadata <- dbGetQueryDT(
@@ -2094,7 +2225,7 @@ discData <- function(id, language, inputs) {
             ");"
           )
         ) # Get the location metadata
-        data$samples <- table_data()
+        data$samples <- table_data()[input$tbl_rows_selected]
         data$results <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
@@ -2105,38 +2236,48 @@ discData <- function(id, language, inputs) {
               media_alias = "s"
             ),
             ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
-        FROM results r
-        JOIN samples s ON r.sample_id = s.sample_id
-        JOIN parameters p ON r.parameter_id = p.parameter_id
-        JOIN result_types rt ON r.result_type = rt.result_type_id
-        LEFT JOIN sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
-        LEFT JOIN result_conditions rc ON r.result_condition = rc.result_condition_id
-        LEFT JOIN result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
-        LEFT JOIN result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
-        LEFT JOIN protocols_methods pm ON r.protocol_method = pm.protocol_id
-        LEFT JOIN laboratories l ON r.laboratory = l.lab_id
+        FROM discrete.results r
+        JOIN discrete.samples s ON r.sample_id = s.sample_id
+        JOIN public.parameters p ON r.parameter_id = p.parameter_id
+        JOIN discrete.result_types rt ON r.result_type = rt.result_type_id
+        LEFT JOIN discrete.sample_fractions sf ON r.sample_fraction_id = sf.sample_fraction_id
+        LEFT JOIN discrete.result_conditions rc ON r.result_condition = rc.result_condition_id
+        LEFT JOIN discrete.result_value_types rvt ON r.result_value_type = rvt.result_value_type_id
+        LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
+        LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
+        LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
         WHERE r.sample_id IN (",
             paste(selected_sampleids, collapse = ","),
             ");"
           )
         )
 
-        if ("grade" %in% names(data$samples)) {
+        qaqc_data <- selected_qaqc_data()
+        if (nrow(qaqc_data$samples) > 0L) {
+          data$qaqc_group_links <- qaqc_data$group_links
+          data$qaqc_samples <- qaqc_data$samples
+          data$qaqc_results <- qaqc_data$results
+          if (nrow(qaqc_data$documents) > 0L) {
+            data$qaqc_documents <- qaqc_data$documents
+          }
+        }
+
+        if ("sample_grade" %in% names(data$samples)) {
           data$grades <- dbGetQueryDT(
             session$userData$AquaCache,
-            "SELECT * FROM grade_types;"
+            "SELECT * FROM public.grade_types;"
           )
         }
-        if ("approval" %in% names(data$samples)) {
+        if ("sample_approval" %in% names(data$samples)) {
           data$approvals <- dbGetQueryDT(
             session$userData$AquaCache,
-            "SELECT * FROM approval_types;"
+            "SELECT * FROM public.approval_types;"
           )
         }
-        if ("qualifier" %in% names(data$samples)) {
+        if ("sample_qualifier" %in% names(data$samples)) {
           data$qualifiers <- dbGetQueryDT(
             session$userData$AquaCache,
-            "SELECT * FROM qualifier_types;"
+            "SELECT * FROM public.qualifier_types;"
           )
         }
 

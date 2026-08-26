@@ -46,15 +46,15 @@ SWE_basin <- function(
 
     snow_id <- DBI::dbGetQuery(
       con,
-      "SELECT media_id FROM media_types WHERE media_type = 'snow'"
+      "SELECT media_id FROM public.media_types WHERE media_type = 'snow'"
     )[1, 1]
 
     samples <- DBI::dbGetQuery(
       con,
       paste0(
         "SELECT s.sample_id, l.location_code AS location, s.target_datetime 
-                               FROM samples s 
-                               INNER JOIN locations l ON l.location_id = s.location_id 
+                               FROM discrete.samples s
+                               INNER JOIN public.locations l ON l.location_id = s.location_id
                                WHERE media_id = ",
         snow_id,
         " AND collection_method = 1
@@ -68,8 +68,8 @@ SWE_basin <- function(
       con,
       paste0(
         "SELECT r.sample_id, r.result AS value
-                                   FROM results AS r 
-                                   JOIN parameters AS p ON p.parameter_id = r.parameter_id 
+                                   FROM discrete.results AS r
+                                   JOIN public.parameters AS p ON p.parameter_id = r.parameter_id
                                    WHERE r.sample_id IN ('",
         paste(samples$sample_id, collapse = "', '"),
         "') 
@@ -90,7 +90,7 @@ SWE_basin <- function(
     Meas <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT location, swe, target_date FROM means WHERE target_date >= '",
+        "SELECT location, swe, target_date FROM public.means WHERE target_date >= '",
         year - lookback,
         "-01-01'"
       )

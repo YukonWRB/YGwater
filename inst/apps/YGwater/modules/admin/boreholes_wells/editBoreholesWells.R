@@ -8,6 +8,7 @@ editBoreholesWellsUI <- function(id) {
       column(
         12,
         h4("Existing borehole/well records"),
+        actionButton(ns("reload"), "Reload", icon = icon("refresh")),
         DT::DTOutput(ns("records_table"))
       )
     ),
@@ -15,7 +16,6 @@ editBoreholesWellsUI <- function(id) {
     fluidRow(
       column(
         4,
-        actionButton(ns("reload"), "Reload", icon = icon("refresh")),
         selectizeInput(
           ns("record_id"),
           "Select borehole/well",
@@ -23,7 +23,13 @@ editBoreholesWellsUI <- function(id) {
           multiple = FALSE,
           options = list(placeholder = "Choose a record")
         ),
-        textInput(ns("borehole_name"), "Borehole/well name"),
+        textInput(ns("borehole_name"), "Borehole name"),
+        selectizeInput(
+          ns("borehole_approval_type_id"),
+          "Borehole approval level",
+          choices = NULL,
+          multiple = FALSE
+        ),
         dateInput(ns("completion_date"), "Completion date", value = NULL),
         numericInput(ns("latitude"), "Latitude", value = NA_real_),
         numericInput(ns("longitude"), "Longitude", value = NA_real_),
@@ -91,12 +97,24 @@ editBoreholesWellsUI <- function(id) {
         tags$hr(),
         checkboxInput(
           ns("is_well"),
-          "Has associated well record",
+          "Selected row includes a well record",
           value = FALSE
         ),
         conditionalPanel(
           condition = "input.is_well == true",
           ns = ns,
+          actionButton(
+            ns("add_well"),
+            "Add another well to this borehole",
+            icon = icon("plus")
+          ),
+          textInput(ns("well_name"), "Well name"),
+          selectizeInput(
+            ns("well_approval_type_id"),
+            "Well approval level",
+            choices = NULL,
+            multiple = FALSE
+          ),
           selectizeInput(
             ns("well_purpose_id"),
             "Well purpose",
@@ -196,7 +214,7 @@ editBoreholesWells <- function(id, language) {
       if (!is.numeric(x)) {
         return(x)
       }
-      out <- signif(x, digits = digits)
+      out <- round(x, digits = digits)
       out[is.na(x)] <- NA_real_
       out
     }
@@ -230,6 +248,8 @@ editBoreholesWells <- function(id, language) {
         session$userData$AquaCache,
         "SELECT b.borehole_id,
                 b.borehole_name,
+                b.approval_type_id AS borehole_approval_type_id,
+                ba.approval_type_description AS borehole_approval,
                 b.latitude,
                 b.longitude,
                 b.completion_date,
@@ -243,7 +263,11 @@ editBoreholesWells <- function(id, language) {
                 pf.ice_description AS permafrost_ice_description,
                 b.notes AS borehole_notes,
                 b.share_with AS borehole_share_with,
-                w.borehole_id IS NOT NULL AS is_well,
+                w.well_id,
+                w.well_id IS NOT NULL AS is_well,
+                w.well_name,
+                w.approval_type_id AS well_approval_type_id,
+                wa.approval_type_description AS well_approval,
                 w.well_purpose_id,
                 w.casing_diameter_mm,
                 w.casing_depth_to_m,
@@ -255,6 +279,10 @@ editBoreholesWells <- function(id, language) {
                 w.share_with AS well_share_with
          FROM boreholes.boreholes b
          LEFT JOIN boreholes.wells w ON w.borehole_id = b.borehole_id
+         LEFT JOIN public.approval_types ba
+           ON ba.approval_type_id = b.approval_type_id
+         LEFT JOIN public.approval_types wa
+           ON wa.approval_type_id = w.approval_type_id
          LEFT JOIN boreholes.drillers d ON d.driller_id = b.drilled_by
          LEFT JOIN LATERAL (
            SELECT depth_from_m, depth_to_m, ice_description
@@ -263,7 +291,17 @@ editBoreholesWells <- function(id, language) {
            ORDER BY p.permafrost_record_id DESC
            LIMIT 1
          ) pf ON TRUE
-         ORDER BY b.borehole_name ASC;"
+         ORDER BY b.borehole_name ASC, w.well_id ASC;"
+      )
+      moduleData$records$record_key <- ifelse(
+        is.na(moduleData$records$well_id),
+        paste0("b", moduleData$records$borehole_id),
+        paste0(
+          "b",
+          moduleData$records$borehole_id,
+          "w",
+          moduleData$records$well_id
+        )
       )
       moduleData$drillers <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -272,6 +310,13 @@ editBoreholesWells <- function(id, language) {
       moduleData$purposes <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT borehole_well_purpose_id, purpose_name FROM boreholes.borehole_well_purposes ORDER BY purpose_name ASC;"
+      )
+      moduleData$approvals <- DBI::dbGetQuery(
+        session$userData$AquaCache,
+        "SELECT approval_type_id, approval_type_code,
+                approval_type_description
+         FROM public.approval_types
+         ORDER BY approval_type_id;"
       )
       moduleData$share_with_boreholes <- DBI::dbGetQuery(
         session$userData$AquaCache,
@@ -283,22 +328,56 @@ editBoreholesWells <- function(id, language) {
       )
     }
 
+    active_borehole_id <- reactiveVal(NULL)
+    active_well_id <- reactiveVal(NULL)
+
+    record_choice_labels <- function() {
+      sprintf(
+        "%s (borehole %s; %s)",
+        moduleData$records$borehole_name,
+        moduleData$records$borehole_id,
+        ifelse(
+          is.na(moduleData$records$well_id),
+          "no well",
+          paste0(
+            "well ",
+            moduleData$records$well_id,
+            ": ",
+            moduleData$records$well_name
+          )
+        )
+      )
+    }
+
+    update_record_selector <- function(selected = isolate(input$record_id)) {
+      updateSelectizeInput(
+        session,
+        "record_id",
+        choices = stats::setNames(
+          moduleData$records$record_key,
+          record_choice_labels()
+        ),
+        selected = selected,
+        server = TRUE
+      )
+    }
+
+    default_approval_id <- function() {
+      req(moduleData$approvals)
+      id <- moduleData$approvals$approval_type_id[
+        moduleData$approvals$approval_type_code == "N"
+      ]
+      if (length(id) != 1L) {
+        stop("Expected exactly one approval type with code 'N'.")
+      }
+      as.integer(id[[1]])
+    }
+
     load_data()
 
     observe({
       req(moduleData$records)
-      labels <- sprintf(
-        "%s (ID %s)",
-        moduleData$records$borehole_name,
-        moduleData$records$borehole_id
-      )
-      updateSelectizeInput(
-        session,
-        "record_id",
-        choices = stats::setNames(moduleData$records$borehole_id, labels),
-        selected = isolate(input$record_id),
-        server = TRUE
-      )
+      update_record_selector()
 
       updateSelectizeInput(
         session,
@@ -318,6 +397,22 @@ editBoreholesWells <- function(id, language) {
         ),
         server = TRUE
       )
+      approval_choices <- stats::setNames(
+        moduleData$approvals$approval_type_id,
+        moduleData$approvals$approval_type_description
+      )
+      updateSelectizeInput(
+        session,
+        "borehole_approval_type_id",
+        choices = approval_choices,
+        server = TRUE
+      )
+      updateSelectizeInput(
+        session,
+        "well_approval_type_id",
+        choices = approval_choices,
+        server = TRUE
+      )
       updateSelectizeInput(
         session,
         "share_with_borehole",
@@ -333,10 +428,19 @@ editBoreholesWells <- function(id, language) {
     observeEvent(input$record_id, {
       req(moduleData$records)
       rec <- moduleData$records[
-        moduleData$records$borehole_id == as.integer(input$record_id),
+        moduleData$records$record_key == input$record_id,
       ]
       req(nrow(rec) == 1)
+      active_borehole_id(as.integer(rec$borehole_id))
+      active_well_id(
+        if (is.na(rec$well_id)) NULL else as.integer(rec$well_id)
+      )
       updateTextInput(session, "borehole_name", value = rec$borehole_name)
+      updateSelectizeInput(
+        session,
+        "borehole_approval_type_id",
+        selected = as.character(rec$borehole_approval_type_id)
+      )
       updateDateInput(session, "completion_date", value = rec$completion_date)
       updateNumericInput(session, "latitude", value = rec$latitude)
       updateNumericInput(session, "longitude", value = rec$longitude)
@@ -365,7 +469,9 @@ editBoreholesWells <- function(id, language) {
       updateCheckboxInput(
         session,
         "permafrost_present",
-        value = is_true(!is.na(rec$permafrost_top) || !is.na(rec$permafrost_bot))
+        value = is_true(
+          !is.na(rec$permafrost_top) || !is.na(rec$permafrost_bot)
+        )
       )
       updateNumericInput(session, "permafrost_top", value = rec$permafrost_top)
       updateNumericInput(session, "permafrost_bot", value = rec$permafrost_bot)
@@ -375,6 +481,20 @@ editBoreholesWells <- function(id, language) {
         value = rec$permafrost_ice_description
       )
       updateCheckboxInput(session, "is_well", value = isTRUE(rec$is_well))
+      updateTextInput(
+        session,
+        "well_name",
+        value = if (is.na(rec$well_name)) "" else rec$well_name
+      )
+      updateSelectizeInput(
+        session,
+        "well_approval_type_id",
+        selected = if (is.na(rec$well_approval_type_id)) {
+          character(0)
+        } else {
+          as.character(rec$well_approval_type_id)
+        }
+      )
       updateSelectizeInput(
         session,
         "well_purpose_id",
@@ -419,8 +539,15 @@ editBoreholesWells <- function(id, language) {
     })
 
     observeEvent(input$clear, {
+      active_borehole_id(NULL)
+      active_well_id(NULL)
       updateSelectizeInput(session, "record_id", selected = "")
       updateTextInput(session, "borehole_name", value = "")
+      updateSelectizeInput(
+        session,
+        "borehole_approval_type_id",
+        selected = character(0)
+      )
       updateDateInput(session, "completion_date", value = as.Date(NA))
       updateNumericInput(session, "latitude", value = NA_real_)
       updateNumericInput(session, "longitude", value = NA_real_)
@@ -439,6 +566,12 @@ editBoreholesWells <- function(id, language) {
       updateNumericInput(session, "permafrost_bot", value = NA_real_)
       updateTextAreaInput(session, "permafrost_ice_description", value = "")
       updateCheckboxInput(session, "is_well", value = FALSE)
+      updateTextInput(session, "well_name", value = "")
+      updateSelectizeInput(
+        session,
+        "well_approval_type_id",
+        selected = character(0)
+      )
       updateSelectizeInput(session, "well_purpose_id", selected = "")
       updateNumericInput(session, "casing_diameter_mm", value = NA_real_)
       updateNumericInput(session, "casing_depth_to_m", value = NA_real_)
@@ -450,15 +583,81 @@ editBoreholesWells <- function(id, language) {
       updateSelectizeInput(session, "share_with_well", selected = character(0))
     })
 
+    observeEvent(input$add_well, {
+      req(active_borehole_id())
+      active_well_id(NULL)
+      updateCheckboxInput(session, "is_well", value = TRUE)
+      existing_well_count <- sum(
+        moduleData$records$borehole_id == active_borehole_id() &
+          !is.na(moduleData$records$well_id)
+      )
+      default_well_name <- if (existing_well_count == 0L) {
+        trimws(input$borehole_name)
+      } else {
+        paste(trimws(input$borehole_name), existing_well_count + 1L)
+      }
+      updateTextInput(session, "well_name", value = default_well_name)
+      updateSelectizeInput(
+        session,
+        "well_approval_type_id",
+        selected = as.character(default_approval_id())
+      )
+      updateSelectizeInput(session, "well_purpose_id", selected = "")
+      updateNumericInput(session, "casing_diameter_mm", value = NA_real_)
+      updateNumericInput(session, "casing_depth_to_m", value = NA_real_)
+      updateNumericInput(session, "screen_top_depth_m", value = NA_real_)
+      updateNumericInput(session, "screen_bottom_depth_m", value = NA_real_)
+      updateNumericInput(session, "static_water_level_m", value = NA_real_)
+      updateNumericInput(session, "estimated_yield_lps", value = NA_real_)
+      updateTextAreaInput(session, "well_notes", value = "")
+      updateSelectizeInput(
+        session,
+        "share_with_well",
+        selected = input$share_with_borehole
+      )
+      showNotification(
+        "Enter the additional well details, then save changes.",
+        type = "message"
+      )
+    })
+
     observeEvent(input$reload, {
       load_data()
     })
 
     observeEvent(input$save, {
       req(input$record_id)
-      borehole_id <- as.integer(input$record_id)
-      req(!is.na(borehole_id))
+      borehole_id <- active_borehole_id()
+      req(!is.null(borehole_id), !is.na(borehole_id))
       req(nzchar(trimws(input$borehole_name)))
+      borehole_approval_type_id <- suppressWarnings(as.integer(
+        na_if_blank(input$borehole_approval_type_id)
+      ))
+      req(!is.na(borehole_approval_type_id))
+      selected_well_id <- active_well_id()
+      if (!is_true(input$is_well) && !is.null(selected_well_id)) {
+        showNotification(
+          "Unchecking the well field does not delete a well. Reload the row to continue editing it.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      well_approval_type_id <- suppressWarnings(as.integer(
+        na_if_blank(input$well_approval_type_id)
+      ))
+      if (is_true(input$is_well) && is.na(well_approval_type_id)) {
+        showNotification("Select a well approval level.", type = "error")
+        return()
+      }
+      if (
+        is_true(input$is_well) &&
+          (is.null(input$well_name) || !nzchar(trimws(input$well_name)))
+      ) {
+        showNotification("Enter a well name.", type = "error")
+        return()
+      }
 
       borehole_share <- unique(trimws(input$share_with_borehole))
       borehole_share <- borehole_share[nzchar(borehole_share)]
@@ -521,8 +720,9 @@ editBoreholesWells <- function(id, language) {
                  depth_to_bedrock_m = $7,
                  drilled_by = $8,
                  notes = $9,
-                 share_with = $10::text[]
-             WHERE borehole_id = $11;",
+                 share_with = $10::text[],
+                 approval_type_id = $11
+             WHERE borehole_id = $12;",
             params = list(
               trimws(input$borehole_name),
               completion_date,
@@ -534,6 +734,7 @@ editBoreholesWells <- function(id, language) {
               suppressWarnings(as.integer(na_if_blank(input$drilled_by))),
               na_if_blank(input$borehole_notes),
               borehole_share,
+              borehole_approval_type_id,
               borehole_id
             )
           )
@@ -567,32 +768,29 @@ editBoreholesWells <- function(id, language) {
             )
           }
 
-          has_well_query <- DBI::dbGetQuery(
-            session$userData$AquaCache,
-            "SELECT EXISTS(SELECT 1 FROM boreholes.wells WHERE borehole_id = $1) AS exists;",
-            params = list(borehole_id)
-          )
-          has_well <- FALSE
-          if (nrow(has_well_query) == 1 && "exists" %in% names(has_well_query)) {
-            has_well <- is_true(as.logical(has_well_query$exists[[1]]))
-          }
+          has_well <- !is.null(selected_well_id)
+          saved_well_id <- selected_well_id
 
           if (is_true(input$is_well)) {
             if (is_true(has_well)) {
-              DBI::dbExecute(
+              updated <- DBI::dbExecute(
                 session$userData$AquaCache,
                 "UPDATE boreholes.wells
-                 SET well_purpose_id = $1,
-                     casing_diameter_mm = $2,
-                     casing_depth_to_m = $3,
-                     screen_top_depth_m = $4,
-                     screen_bottom_depth_m = $5,
-                     static_water_level_m = $6,
-                     estimated_yield_lps = $7,
-                     notes = $8,
-                     share_with = $9::text[]
-                 WHERE borehole_id = $10;",
+                 SET well_name = $1,
+                     well_purpose_id = $2,
+                     casing_diameter_mm = $3,
+                     casing_depth_to_m = $4,
+                     screen_top_depth_m = $5,
+                     screen_bottom_depth_m = $6,
+                     static_water_level_m = $7,
+                     estimated_yield_lps = $8,
+                     notes = $9,
+                     share_with = $10::text[],
+                     approval_type_id = $11
+                 WHERE well_id = $12
+                   AND borehole_id = $13;",
                 params = list(
+                  trimws(input$well_name),
                   suppressWarnings(as.integer(na_if_blank(
                     input$well_purpose_id
                   ))),
@@ -604,14 +802,47 @@ editBoreholesWells <- function(id, language) {
                   maybe_num(input$estimated_yield_lps),
                   na_if_blank(input$well_notes),
                   well_share,
+                  well_approval_type_id,
+                  selected_well_id,
                   borehole_id
                 )
               )
+              if (updated != 1L) {
+                stop("The selected well no longer exists or is not editable.")
+              }
             } else {
-              DBI::dbExecute(
+              existing_wells <- DBI::dbGetQuery(
+                session$userData$AquaCache,
+                "SELECT well_id, well_name
+                 FROM boreholes.wells
+                 WHERE borehole_id = $1
+                 ORDER BY well_id
+                 FOR UPDATE;",
+                params = list(borehole_id)
+              )
+              if (
+                nrow(existing_wells) == 1L &&
+                  identical(
+                    trimws(existing_wells$well_name[[1]]),
+                    trimws(input$borehole_name)
+                  )
+              ) {
+                DBI::dbExecute(
+                  session$userData$AquaCache,
+                  "UPDATE boreholes.wells
+                   SET well_name = $1
+                   WHERE well_id = $2;",
+                  params = list(
+                    paste(trimws(input$borehole_name), 1L),
+                    existing_wells$well_id[[1]]
+                  )
+                )
+              }
+              inserted_well <- DBI::dbGetQuery(
                 session$userData$AquaCache,
                 "INSERT INTO boreholes.wells (
                     borehole_id,
+                    well_name,
                     well_purpose_id,
                     casing_diameter_mm,
                     casing_depth_to_m,
@@ -620,10 +851,13 @@ editBoreholesWells <- function(id, language) {
                     static_water_level_m,
                     estimated_yield_lps,
                     notes,
-                    share_with
-                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::text[]);",
+                    share_with,
+                    approval_type_id
+                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::text[],$12)
+                 RETURNING well_id;",
                 params = list(
                   borehole_id,
+                  trimws(input$well_name),
                   suppressWarnings(as.integer(na_if_blank(
                     input$well_purpose_id
                   ))),
@@ -634,20 +868,31 @@ editBoreholesWells <- function(id, language) {
                   maybe_num(input$static_water_level_m),
                   maybe_num(input$estimated_yield_lps),
                   na_if_blank(input$well_notes),
-                  well_share
+                  well_share,
+                  well_approval_type_id
                 )
               )
+              saved_well_id <- as.integer(inserted_well$well_id[[1]])
             }
-          } else if (is_true(has_well)) {
-            DBI::dbExecute(
-              session$userData$AquaCache,
-              "DELETE FROM boreholes.wells WHERE borehole_id = $1;",
-              params = list(borehole_id)
-            )
           }
 
           DBI::dbExecute(session$userData$AquaCache, "COMMIT")
           load_data()
+          selected_rows <- which(
+            moduleData$records$borehole_id == borehole_id &
+              if (is.null(saved_well_id)) {
+                TRUE
+              } else {
+                moduleData$records$well_id == saved_well_id
+              }
+          )
+          if (length(selected_rows)) {
+            updateSelectizeInput(
+              session,
+              "record_id",
+              selected = moduleData$records$record_key[selected_rows[[1]]]
+            )
+          }
           showNotification("Borehole/well updated.", type = "message")
         },
         error = function(e) {
@@ -665,9 +910,18 @@ editBoreholesWells <- function(id, language) {
       tbl <- moduleData$records
       tbl$permafrost_present <- !is.na(tbl$permafrost_top) |
         !is.na(tbl$permafrost_bot)
+      tbl$borehole_approval <- as.factor(tbl$borehole_approval)
+      tbl$well_approval <- as.factor(tbl$well_approval)
+      tbl$driller_name <- as.factor(tbl$driller_name)
+      tbl$bedrock_reached <- as.factor(tbl$bedrock_reached)
       tbl <- tbl[, c(
+        "record_key",
         "borehole_id",
+        "well_id",
         "borehole_name",
+        "well_name",
+        "borehole_approval",
+        "well_approval",
         "driller_name",
         "completion_date",
         "latitude",
@@ -695,19 +949,38 @@ editBoreholesWells <- function(id, language) {
         rownames = FALSE,
         selection = "single",
         filter = "top",
-        options = list(pageLength = 8, scrollX = TRUE)
+        callback = DT::JS(sprintf(
+          "table.on('click', 'tbody tr', function() {
+            var rowData = table.row(this).data();
+            if (rowData && rowData.length > 0) {
+              Shiny.setInputValue(
+                '%s',
+                rowData[0],
+                {priority: 'event'}
+              );
+            }
+          });",
+          ns("records_table_record_key")
+        )),
+        options = list(
+          pageLength = 8,
+          scrollX = TRUE,
+          columnDefs = list(list(targets = 0, visible = FALSE))
+        )
       )
     })
 
-    observeEvent(input$records_table_rows_selected, {
+    observeEvent(input$records_table_record_key, {
       req(moduleData$records)
-      idx <- input$records_table_rows_selected
-      if (length(idx) == 1) {
-        updateSelectizeInput(
-          session,
-          "record_id",
-          selected = as.character(moduleData$records$borehole_id[idx])
-        )
+      record_key <- input$records_table_record_key
+      if (
+        length(record_key) == 1L &&
+          record_key %in% moduleData$records$record_key
+      ) {
+        # Server-backed selectize inputs only keep a subset of choices in the
+        # browser. Re-register choices so a table-selected value can be set
+        # even when that record has not previously been loaded by selectize.
+        update_record_selector(selected = record_key)
       }
     })
   })

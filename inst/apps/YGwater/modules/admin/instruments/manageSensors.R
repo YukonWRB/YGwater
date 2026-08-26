@@ -251,38 +251,7 @@ manageSensors <- function(id, language) {
       )
     }
 
-    refresh_lookups <- function(selected = current_lookup_selection()) {
-      sensor_data$types <- data.table::as.data.table(DBI::dbGetQuery(
-        con,
-        "SELECT sensor_type_id, sensor_type, sensor_type_description
-         FROM instruments.sensor_types
-         ORDER BY sensor_type"
-      ))
-      sensor_data$makes <- data.table::as.data.table(DBI::dbGetQuery(
-        con,
-        "SELECT make_id, make, description
-         FROM instruments.sensor_makes
-         ORDER BY make"
-      ))
-      sensor_data$models <- data.table::as.data.table(DBI::dbGetQuery(
-        con,
-        "SELECT model_id, model, description
-         FROM instruments.sensor_models
-         ORDER BY model"
-      ))
-      sensor_data$owners <- data.table::as.data.table(DBI::dbGetQuery(
-        con,
-        "SELECT organization_id, name
-         FROM public.organizations
-         ORDER BY name"
-      ))
-      sensor_data$suppliers <- data.table::as.data.table(DBI::dbGetQuery(
-        con,
-        "SELECT supplier_id, supplier_name
-         FROM instruments.suppliers
-         ORDER BY supplier_name"
-      ))
-
+    update_lookup_selectors <- function(selected = current_lookup_selection()) {
       updateSelectizeInput(
         session,
         "sensor_type",
@@ -328,6 +297,57 @@ manageSensors <- function(id, language) {
       )
     }
 
+    refresh_lookups <- function(selected = current_lookup_selection()) {
+      sensor_data$types <- data.table::as.data.table(DBI::dbGetQuery(
+        con,
+        "SELECT sensor_type_id, sensor_type, sensor_type_description
+         FROM instruments.sensor_types
+         ORDER BY sensor_type"
+      ))
+      sensor_data$makes <- data.table::as.data.table(DBI::dbGetQuery(
+        con,
+        "SELECT make_id, make, description
+         FROM instruments.sensor_makes
+         ORDER BY make"
+      ))
+      sensor_data$models <- data.table::as.data.table(DBI::dbGetQuery(
+        con,
+        "SELECT model_id, model, description
+         FROM instruments.sensor_models
+         ORDER BY model"
+      ))
+      sensor_data$owners <- data.table::as.data.table(DBI::dbGetQuery(
+        con,
+        "SELECT organization_id, name
+         FROM public.organizations
+         ORDER BY name"
+      ))
+      sensor_data$suppliers <- data.table::as.data.table(DBI::dbGetQuery(
+        con,
+        "SELECT supplier_id, supplier_name
+         FROM instruments.suppliers
+         ORDER BY supplier_name"
+      ))
+
+      update_lookup_selectors(selected)
+    }
+
+    update_record_selector <- function(selected = isolate(input$record_id)) {
+      selected <- normalize_select_value(selected)
+      valid_choices <- as.character(sensor_data$records$sensor_id)
+      if (!length(selected) || !(selected %in% valid_choices)) {
+        selected <- character(0)
+      }
+
+      updateSelectizeInput(
+        session,
+        "record_id",
+        choices = build_record_choices(sensor_data$records),
+        selected = selected,
+        server = TRUE
+      )
+    }
+
     refresh_records <- function(selected = isolate(input$record_id)) {
       sensor_data$records <- data.table::as.data.table(DBI::dbGetQuery(
         con,
@@ -363,18 +383,7 @@ manageSensors <- function(id, language) {
          ORDER BY s.date_retired NULLS FIRST, st.sensor_type, s.sensor_serial, s.sensor_id"
       ))
 
-      selected <- normalize_select_value(selected)
-      valid_choices <- as.character(sensor_data$records$sensor_id)
-      if (!length(selected) || !(selected %in% valid_choices)) {
-        selected <- character(0)
-      }
-      updateSelectizeInput(
-        session,
-        "record_id",
-        choices = build_record_choices(sensor_data$records),
-        selected = selected,
-        server = TRUE
-      )
+      update_record_selector(selected)
     }
 
     refresh_all <- function(
@@ -438,31 +447,13 @@ manageSensors <- function(id, language) {
         "sensor_serial",
         value = safe_text(record$sensor_serial)
       )
-      updateSelectizeInput(
-        session,
-        "sensor_type",
-        selected = normalize_select_value(record$sensor_type)
-      )
-      updateSelectizeInput(
-        session,
-        "sensor_make",
-        selected = normalize_select_value(record$sensor_make_id)
-      )
-      updateSelectizeInput(
-        session,
-        "sensor_model",
-        selected = normalize_select_value(record$sensor_model_id)
-      )
-      updateSelectizeInput(
-        session,
-        "owner",
-        selected = normalize_select_value(record$owner)
-      )
-      updateSelectizeInput(
-        session,
-        "supplier_id",
-        selected = normalize_select_value(record$supplier_id)
-      )
+      update_lookup_selectors(list(
+        sensor_type = record$sensor_type,
+        sensor_make = record$sensor_make_id,
+        sensor_model = record$sensor_model_id,
+        owner = record$owner,
+        supplier_id = record$supplier_id
+      ))
       updateTextInput(
         session,
         "sensor_asset_tag",
@@ -688,10 +679,8 @@ manageSensors <- function(id, language) {
       {
         req(length(input$records_table_rows_selected) == 1)
         selected_row <- input$records_table_rows_selected[[1]]
-        updateSelectizeInput(
-          session,
-          "record_id",
-          selected = as.character(sensor_data$records$sensor_id[[selected_row]])
+        update_record_selector(
+          as.character(sensor_data$records$sensor_id[[selected_row]])
         )
       },
       ignoreInit = TRUE

@@ -20,7 +20,11 @@
     const params = new URLSearchParams(window.location.search);
     const page = params.get("page") || "unknown";
     document.getElementById("title").textContent = page + " help";
-    document.getElementById("page-name").innerHTML = "No dedicated help document exists yet for <code>" + page + "</code>.";
+    const pageName = document.getElementById("page-name");
+    pageName.append("No dedicated help document exists yet for ");
+    const code = document.createElement("code");
+    code.textContent = page;
+    pageName.append(code, ".");
   </script>
 </body>
 </html>

@@ -9,19 +9,19 @@ on.exit(DBI::dbDisconnect(test_con), add = TRUE)
 
 wlevel <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'water level';"
 )$parameter_id[[1]]
 
 flow <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'water flow';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'water flow';"
 )$parameter_id[[1]]
 
 # Find the first water level timeseries in the DB
 wlevel_ts <- DBI::dbGetQuery(
   test_con,
   paste0(
-    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id, start_datetime, end_datetime FROM timeseries ts WHERE parameter_id = ",
+    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id, start_datetime, end_datetime FROM continuous.timeseries ts WHERE parameter_id = ",
     wlevel,
     " LIMIT 1;"
   )
@@ -30,7 +30,7 @@ wlevel_ts <- DBI::dbGetQuery(
 flow_ts <- DBI::dbGetQuery(
   test_con,
   paste0(
-    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id,start_datetime, end_datetime FROM timeseries ts WHERE parameter_id = ",
+    "SELECT location_id, parameter_id, timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, aggregation_type_id,start_datetime, end_datetime FROM continuous.timeseries ts WHERE parameter_id = ",
     flow,
     " LIMIT 1;"
   )
@@ -156,10 +156,10 @@ test_that("plotMultiTimeseries can show data in the past", {
 
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = (SELECT parameter_id FROM parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM locations WHERE location_code = '09EA004') LIMIT 1;"
+    "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = (SELECT parameter_id FROM public.parameters WHERE param_name = 'water level') AND location_id = (SELECT location_id FROM public.locations WHERE location_code = '09EA004') LIMIT 1;"
   )$timeseries_id[[1]]
 
-  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC")
+  as_of <- historical_qc_test_as_of(con)
   start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
   end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
 

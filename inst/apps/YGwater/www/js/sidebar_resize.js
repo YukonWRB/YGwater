@@ -59,4 +59,18 @@ function initSidebarResize(opts) {
                  Shiny.setInputValue(id + '_clicked', Date.now(), {priority: 'event'});
                });
   });
+
+  const dynamicPrefixes = opts.dynamicPrefixes || [];
+  dynamicPrefixes.forEach(prefix => {
+    const selector = '.shiny-input-container:has([id^="' + prefix + '"])';
+    $(document).off('focus.rsDynamic click.rsDynamic', selector)
+               .on('focus.rsDynamic click.rsDynamic', selector, function(){
+                 const $container = $(this);
+                 let id = $container.find('select[id]').first().attr('id');
+                 if(!id) id = $container.find('input[id]').first().attr('id');
+                 if(!id) return;
+                 id = id.replace(/-selectized$/, '');
+                 Shiny.setInputValue(id + '_clicked', Date.now(), {priority: 'event'});
+               });
+  });
 }

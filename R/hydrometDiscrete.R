@@ -163,7 +163,7 @@ hydrometDiscrete <- function(
     parameter_code <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT parameter_id FROM parameters WHERE param_name = '",
+        "SELECT parameter_id FROM public.parameters WHERE param_name = '",
         parameter,
         "';"
       )
@@ -171,7 +171,7 @@ hydrometDiscrete <- function(
     exists <- DBI::dbGetQuery(
       con,
       paste0(
-        "SELECT timeseries_id, start_datetime FROM timeseries WHERE location_id = '",
+        "SELECT timeseries_id, start_datetime FROM continuous.timeseries WHERE location_id = '",
         location_id,
         "' AND parameter_id = ",
         parameter_code,
@@ -197,7 +197,7 @@ hydrometDiscrete <- function(
       all_discrete <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ",
+          "SELECT target_datetime, datetime, value FROM discrete.measurements_discrete WHERE timeseries_id = ",
           tsid,
           " AND datetime <= '",
           paste0(max(years) + 1, substr(endDay, 5, 19)),
@@ -208,7 +208,7 @@ hydrometDiscrete <- function(
       all_discrete <- DBI::dbGetQuery(
         con,
         paste0(
-          "SELECT target_datetime, datetime, value FROM measurements_discrete WHERE timeseries_id = ",
+          "SELECT target_datetime, datetime, value FROM discrete.measurements_discrete WHERE timeseries_id = ",
           tsid,
           " AND datetime <= '",
           paste0(max(years), substr(endDay, 5, 19)),
@@ -823,7 +823,7 @@ hydrometDiscrete <- function(
       if (is.null(discrete_data)) {
         stn_name <- DBI::dbGetQuery(
           con,
-          "SELECT name FROM locations where location_id = $1;",
+          "SELECT name FROM public.locations where location_id = $1;",
           params = list(location_id)
         )[1, 1]
         titl <- paste0("Location ", location, ": ", titleCase(stn_name))

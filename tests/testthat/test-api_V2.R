@@ -185,6 +185,7 @@ test_that("api(version = 2) builds a plumber2 router without running", {
   expect_equal(Sys.getenv("APIaquacachePort"), Sys.getenv("aquacachePort"))
   expect_equal(Sys.getenv("APIaquacachePublicUser"), "api_public")
   expect_equal(Sys.getenv("APIaquacachePublicPass"), "api_public_pass")
+  expect_equal(Sys.getenv("APIaquacacheLogRequests"), "TRUE")
 })
 
 test_that("API V2 async annotations are limited to long-running endpoints", {
@@ -194,6 +195,7 @@ test_that("API V2 async annotations are limited to long-running endpoints", {
   routes <- sub("^#\\* @get\\s+", "", lines[route_starts])
   async_routes <- c(
     "/timeseries/measurements",
+    "/timeseries/measurementsDaily",
     "/images/download",
     "/samples",
     "/samples/results",
@@ -288,6 +290,89 @@ test_that("API measurement SQL limits rows before metadata range joins", {
       fixed = TRUE
     )
     expect_false(grepl("FROM measurement_rows m", block, fixed = TRUE))
+  }
+})
+
+test_that("API measurement modifiedSince includes related range changes", {
+  for (route_file in c(
+    v2_route_file(),
+    system.file("plumber/v1.R", package = "YGwater")
+  )) {
+    lines <- readLines(route_file, warn = FALSE)
+    measurement_start <- grep(
+      "^#\\* @get\\s+/timeseries/measurements\\s*$",
+      lines
+    )[[1L]]
+    next_route <- grep("^#\\* @get\\s+", lines)
+    measurement_end <- next_route[next_route > measurement_start][[1L]] - 1L
+    block <- paste(lines[measurement_start:measurement_end], collapse = "\n")
+
+    expect_match(block, "modified_ranges AS MATERIALIZED", fixed = TRUE)
+    expect_match(
+      block,
+      "tt.root_timeseries_id AS timeseries_id",
+      fixed = TRUE
+    )
+    for (table in c(
+      "corrections",
+      "grades",
+      "approvals",
+      "qualifiers",
+      "owners",
+      "contributors"
+    )) {
+      expect_match(
+        block,
+        paste0("JOIN continuous.", table),
+        fixed = TRUE,
+        info = route_file
+      )
+    }
+    expect_match(block, "FROM modified_ranges changed", fixed = TRUE)
+    expect_match(
+      block,
+      "changed.start_dt <= mc.datetime",
+      fixed = TRUE
+    )
+    expect_match(
+      block,
+      "changed.start_dt <= m.datetime",
+      fixed = TRUE
+    )
+  }
+})
+
+test_that("API daily measurement routes expose timezone and optional stats", {
+  for (route_file in c(
+    v2_route_file(),
+    system.file("plumber/v1.R", package = "YGwater")
+  )) {
+    lines <- readLines(route_file, warn = FALSE)
+    route_start <- grep(
+      "^#\\* @get\\s+/timeseries/measurementsDaily\\s*$",
+      lines
+    )[[1L]]
+    next_route <- grep("^#\\* @get\\s+", lines)
+    route_end <- next_route[next_route > route_start][[1L]] - 1L
+    block <- paste(lines[route_start:route_end], collapse = "\n")
+
+    expect_match(
+      block,
+      "continuous.measurements_calculated_daily",
+      fixed = TRUE
+    )
+    expect_match(
+      block,
+      "ts.timezone_daily_calc AS day_timezone",
+      fixed = TRUE
+    )
+    expect_match(block, "include_stats", fixed = TRUE)
+    expect_match(block, "m.percent_historic_range", fixed = TRUE)
+    expect_match(block, "m.doy_count", fixed = TRUE)
+    expect_match(block, "percent_historic_range_30yr", fixed = TRUE)
+    expect_match(block, "doy_count_30yr", fixed = TRUE)
+    expect_match(block, "m.created >= $4 OR m.modified >= $4", fixed = TRUE)
+    expect_match(block, "AND ($3::boolean OR publicly_visible)", fixed = TRUE)
   }
 })
 
@@ -423,6 +508,7 @@ test_that("API V2 metadata and lookup endpoints return expected CSV and JSON", {
     "timezone_daily_calc",
     "last_daily_calculation",
     "last_synchronize",
+    "parameter_id",
     "matrix_state_id",
     "matrix_state_name",
     "matrix_state_name_fr",
@@ -647,7 +733,7 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
     }
     paste0(
       "http://example.com/samples",
-      "?start=1900-01-01&end=3000-01-01",
+      "?start=1900-01-01&end=2099-12-31",
       suffix
     )
   }
@@ -754,7 +840,7 @@ test_that("API V2 sample endpoints use discrete metadata views and modifiedSince
 
   invalid_samples_since <- get_v2(paste0(
     "http://example.com/samples",
-    "?start=1900-01-01&end=3000-01-01&modifiedSince=not-a-date"
+    "?start=1900-01-01&end=2099-12-31&modifiedSince=not-a-date"
   ))
 
   expect_equal(invalid_samples_since$status, 400)
@@ -918,6 +1004,70 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
   timeseries$end_datetime <- as.POSIXct(timeseries$end_datetime, tz = "UTC")
   timeseries <- timeseries[!is.na(timeseries$end_datetime), ]
 
+  daily_candidates <- timeseries$timeseries_id[
+    !is.na(timeseries$last_daily_calculation) &
+      nzchar(as.character(timeseries$last_daily_calculation))
+  ]
+  if (length(daily_candidates) > 0L) {
+    daily_url <- sprintf(
+      paste0(
+        "http://example.com/timeseries/measurementsDaily",
+        "?id=%s&start=1900-01-01&end=%s&limit=10"
+      ),
+      daily_candidates[[1L]],
+      Sys.Date()
+    )
+    daily <- get_v2(paste0(daily_url, "&stats=false"))
+    daily_stats <- get_v2(paste0(daily_url, "&stats=true&format=json"))
+
+    expect_equal(daily$status, 200)
+    expect_equal(daily_stats$status, 200)
+    daily_out <- read.csv(text = daily$body)
+    daily_stats_out <- parse_json_df(daily_stats)
+    if (!identical(names(daily_out), c("status", "message"))) {
+      expect_named(
+        daily_out,
+        c(
+          "timeseries_id",
+          "date",
+          "day_timezone",
+          "value",
+          "imputed"
+        )
+      )
+      expect_named(
+        daily_stats_out,
+        c(
+          "timeseries_id",
+          "date",
+          "day_timezone",
+          "value",
+          "imputed",
+          "percent_historic_range",
+          "max",
+          "min",
+          "q90",
+          "q75",
+          "q50",
+          "q25",
+          "q10",
+          "mean",
+          "doy_count",
+          "percent_historic_range_30yr",
+          "max_30yr",
+          "min_30yr",
+          "q90_30yr",
+          "q75_30yr",
+          "q50_30yr",
+          "q25_30yr",
+          "q10_30yr",
+          "mean_30yr",
+          "doy_count_30yr"
+        )
+      )
+    }
+  }
+
   skip_if(nrow(timeseries) == 0, "No timeseries with end_datetime available")
 
   test_timeseries_id <- timeseries$timeseries_id[1]
@@ -1012,8 +1162,14 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
       !identical(names(recent), c("status", "message")) ||
         !identical(recent$status[1], "info")
     ) {
-      recent_stamps <- measurement_stamp(recent)
-      expect_true(all(recent_stamps >= newest_stamp, na.rm = TRUE))
+      # Related range changes may legitimately return measurements whose own
+      # created/modified timestamps predate modifiedSince.
+      recent_keys <- paste(recent$timeseries_id, recent$datetime)
+      measurement_keys <- paste(
+        measurements$timeseries_id,
+        measurements$datetime
+      )
+      expect_true(all(recent_keys %in% measurement_keys))
       expect_lte(nrow(recent), nrow(measurements))
     }
   }

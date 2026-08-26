@@ -21,11 +21,11 @@ html_processing <- function(
   repo = yown_active_path()
 ) {
   # Debug params
-  # file <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\FAILED\\VuSitu_Log_2025-04-15_YOWN-0101_Wolf Creek.html"
+  # file <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX\\FAILED\\VuSitu_Log_2025-10-16_10-00-00_YOWN-0101_Log_2025-10-16_YOWN-0101-WolfCrk.html"
   # aq_upload <- TRUE
-  # master_sheet <- yown_master_path()
-  # logger_tracking <- yown_tracking_path()
-  # dropbox <- yown_dropbox_path()
+  # master_sheet <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\2_SPREADSHEETS\\1_YOWN_MASTER_TABLE\\YOWN_MASTER.xlsx"
+  # logger_tracking <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\2_SPREADSHEETS\\3_OTHER\\YOWN_Logger_Tracking.xlsx"
+  # dropbox <- "G:\\water\\Groundwater\\2_YUKON_OBSERVATION_WELL_NETWORK\\9_LOGGER_FILE_DROPBOX"
   # repo <- yown_active_path()
 
   # Ensure the 'file' has extension .html (last part of the string)
@@ -198,16 +198,8 @@ html_processing <- function(
   # Check location ID against master sheet, throw error if not found and move file to "FAILED" folder
   well_loc <- stringr::str_extract(
     log_properties$Value[log_properties$Property == "Log Name"],
-    "(?<=YOWN).{4,6}"
-  ) # Gets the 5 characters after YOWN-
-  well_loc <- sub("_", "", well_loc)
-  well_loc <- sub("-", "", well_loc)
-  well_loc <- sub(" ", "", well_loc)
-  well_loc <- sub("/.", "", well_loc)
-  if (grepl("[0-9]", substr(well_loc, 5, 5))) {
-    # Check if character 5 is a number. Should be one of D or S
-    well_loc <- substr(well_loc, 1, 4)
-  }
+    "(?<=YOWN[-_ ]?)\\d{4}[DS]?"
+  )
   well_loc <- paste0("YOWN-", well_loc)
   if (!well_loc %in% YOWNIDs) {
     #If YOWN ID is not found in master sheet, move file to "FAILED" folder and stop

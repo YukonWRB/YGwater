@@ -7,7 +7,7 @@ test_that("tabular report is created without error on current data", {
   # Check the 'timeseries' table to make sure there's data for today.
   check <- DBI::dbGetQuery(
     con,
-    "SELECT COUNT(*) FROM timeseries WHERE DATE(end_datetime) = CURRENT_DATE"
+    "SELECT COUNT(*) FROM continuous.timeseries WHERE DATE(end_datetime) = CURRENT_DATE"
   )[1, 1]
   if (check == 0) {
     skip("No data available for today, skipping test.")

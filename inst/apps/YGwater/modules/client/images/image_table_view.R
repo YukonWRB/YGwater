@@ -49,7 +49,7 @@ imgTableView <- function(id, language) {
       imgs = dbGetQueryDT(
         session$userData$AquaCache,
         paste0(
-          "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_series_id = ii.img_series_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
+          "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
           Sys.Date() - 14,
           "' ORDER BY datetime DESC;"
         )
@@ -57,11 +57,11 @@ imgTableView <- function(id, language) {
       img_min = Sys.Date() - 14,
       img_meta = dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT a.img_series_id, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM image_series AS a JOIN locations AS l ON a.location_id = l.location_id;"
+        "SELECT a.img_series_id, a.first_img, a.last_img, a.location_id, l.name, l.name_fr FROM files.image_series AS a JOIN public.locations AS l ON a.location_id = l.location_id;"
       ),
       imgs_types = dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT image_type_id, image_type, description FROM image_types;"
+        "SELECT image_type_id, image_type, description FROM files.image_types;"
       )
     )
 
@@ -167,7 +167,7 @@ imgTableView <- function(id, language) {
             imgs$imgs <- dbGetQueryDT(
               session$userData$AquaCache,
               paste0(
-                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_series_id = ii.img_series_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
+                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
                 input$dates[1],
                 "';"
               )
@@ -177,7 +177,7 @@ imgTableView <- function(id, language) {
             extra <- dbGetQueryDT(
               session$userData$AquaCache,
               paste0(
-                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM images AS i JOIN image_series AS ii ON i.img_series_id = ii.img_series_id JOIN locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
+                "SELECT i.image_id, i.img_series_id, i.datetime, l.name, l.name_fr, l.location_id, i.image_type FROM files.images AS i JOIN files.image_series AS ii ON i.img_series_id = ii.img_series_id JOIN public.locations AS l ON ii.location_id = l.location_id WHERE i.datetime >= '",
                 input$dates[1],
                 "' AND i.datetime < '",
                 min(imgs$imgs$datetime, na.rm = TRUE),
@@ -327,7 +327,7 @@ imgTableView <- function(id, language) {
             image <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT format, file FROM images WHERE image_id = ",
+                "SELECT format, file FROM files.images WHERE image_id = ",
                 img_id
               )
             )

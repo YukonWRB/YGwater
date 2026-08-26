@@ -63,7 +63,7 @@ DBI::dbExecute(con, "GRANT SELECT ON ALL TABLES IN SCHEMA application TO PUBLIC;
 
 # Enforce referential integrity of the page_content table
 DBI::dbExecute(con, "
-               CREATE OR REPLACE FUNCTION check_page_content_integrity() 
+               CREATE OR REPLACE FUNCTION application.check_page_content_integrity()
 RETURNS trigger AS $$
 BEGIN
   IF NEW.content_type = 'text' THEN
@@ -90,5 +90,5 @@ DBI::dbExecute(con, "
 CREATE TRIGGER trg_page_content_integrity
 BEFORE INSERT OR UPDATE ON application.page_content
 FOR EACH ROW 
-EXECUTE FUNCTION check_page_content_integrity();
+EXECUTE FUNCTION application.check_page_content_integrity();
 ")

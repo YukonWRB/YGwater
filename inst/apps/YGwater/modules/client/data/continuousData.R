@@ -260,25 +260,34 @@ contData <- function(id, language, inputs) {
       }
     }
 
-    # Assign the input value to a reactive right away (passed in from the main server) as it's reset to NULL as soon as this module is loaded
+    filteredData <- createFilteredData()
     moduleInputs <- reactiveValues(
-      location_id = if (!is.null(inputs$location_id)) {
-        as.numeric(inputs$location_id)
-      } else {
-        NULL
-      }
+      location_id = NULL,
+      location_request_id = isolate(inputs$location_request_id)
     )
 
-    # If a location was provided from the map module, pre-filter the data, else create the full filteredData object
-    if (!is.null(moduleInputs$location_id)) {
-      filteredData <- createFilteredData()
-      # If the location_id is not in the filteredData$locs, return early
-      if (!moduleInputs$location_id %in% filteredData$locs$location_id) {
+    resetFilteredData <- function() {
+      refreshed <- createFilteredData()
+      for (name in isolate(names(refreshed))) {
+        filteredData[[name]] <- isolate(refreshed[[name]])
+      }
+    }
+
+    applyLocationInput <- function(location_id) {
+      resetFilteredData()
+
+      location_id <- suppressWarnings(as.numeric(location_id))
+      if (length(location_id) != 1 || is.na(location_id)) {
         moduleInputs$location_id <- NULL
-        return()
+        return(invisible(FALSE))
+      }
+      if (!location_id %in% filteredData$locs$location_id) {
+        moduleInputs$location_id <- NULL
+        return(invisible(FALSE))
       }
 
-      loc_id <- moduleInputs$location_id
+      moduleInputs$location_id <- location_id
+      loc_id <- location_id
       filteredData$timeseries <- filteredData$timeseries[
         filteredData$timeseries$location_id %in% loc_id,
       ]
@@ -355,9 +364,27 @@ contData <- function(id, language, inputs) {
           )
         }
       }
-    } else {
-      filteredData <- createFilteredData()
+      invisible(TRUE)
     }
+
+    if (identical(isolate(inputs$location_target), "contData")) {
+      applyLocationInput(isolate(inputs$location_id))
+    }
+
+    observeEvent(
+      inputs$location_request_id,
+      {
+        req(identical(inputs$location_target, "contData"))
+        request_id <- inputs$location_request_id
+        if (identical(request_id, isolate(moduleInputs$location_request_id))) {
+          return()
+        }
+        moduleInputs$location_request_id <- request_id
+        applyLocationInput(inputs$location_id)
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     # Create UI elements and necessary helpers ################
     # NOTE: output$sidebar is rendered at module load time, but also re-rendered whenever a change to the language is made.
@@ -2223,10 +2250,10 @@ contData <- function(id, language, inputs) {
         timeseries <- dbGetQueryDT(
           session$userData$AquaCache,
           if (length(relevant_tsids) == 0) {
-            "SELECT * FROM timeseries_metadata_fr WHERE FALSE;"
+            "SELECT * FROM continuous.timeseries_metadata_fr WHERE FALSE;"
           } else {
             paste0(
-              "SELECT * FROM timeseries_metadata_fr
+              "SELECT * FROM continuous.timeseries_metadata_fr
                                    WHERE timeseries_id IN (",
               paste(relevant_tsids, collapse = ", "),
               ");"
@@ -2237,10 +2264,10 @@ contData <- function(id, language, inputs) {
         timeseries <- dbGetQueryDT(
           session$userData$AquaCache,
           if (length(relevant_tsids) == 0) {
-            "SELECT * FROM timeseries_metadata_en WHERE FALSE;"
+            "SELECT * FROM continuous.timeseries_metadata_en WHERE FALSE;"
           } else {
             paste0(
-              "SELECT * FROM timeseries_metadata_en
+              "SELECT * FROM continuous.timeseries_metadata_en
                                    WHERE timeseries_id IN (",
               paste(relevant_tsids, collapse = ", "),
               ");"
@@ -2364,7 +2391,7 @@ contData <- function(id, language, inputs) {
           timeseries_id,
           MIN(date) AS first_date,
           MAX(date) AS last_date
-          FROM measurements_calculated_daily
+          FROM continuous.measurements_calculated_daily
           WHERE timeseries_id IN (",
         paste(selected_tsids, collapse = ", "),
         ")
@@ -2377,7 +2404,7 @@ contData <- function(id, language, inputs) {
         ",
         paste(daily_stats_select, collapse = ",\n        "),
         "
-        FROM measurements_calculated_daily AS m
+        FROM continuous.measurements_calculated_daily AS m
         JOIN extremes AS e
         ON m.timeseries_id = e.timeseries_id
         AND (m.date = e.first_date OR m.date = e.last_date)
@@ -2493,7 +2520,7 @@ contData <- function(id, language, inputs) {
       min_date <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste0(
-          "SELECT MIN(start_datetime) FROM timeseries WHERE timeseries_id IN (",
+          "SELECT MIN(start_datetime) FROM continuous.timeseries WHERE timeseries_id IN (",
           paste(selected_tsids, collapse = ", "),
           ");"
         )
@@ -2501,7 +2528,7 @@ contData <- function(id, language, inputs) {
       max_date <- DBI::dbGetQuery(
         session$userData$AquaCache,
         paste0(
-          "SELECT MAX(end_datetime) FROM timeseries WHERE timeseries_id IN (",
+          "SELECT MAX(end_datetime) FROM continuous.timeseries WHERE timeseries_id IN (",
           paste(selected_tsids, collapse = ", "),
           ");"
         )
@@ -2597,14 +2624,11 @@ contData <- function(id, language, inputs) {
             rows <- DBI::dbGetQuery(
               session$userData$AquaCache,
               paste0(
-                "SELECT COUNT(*) FROM measurements_calculated_daily WHERE timeseries_id IN (",
+                "SELECT COUNT(*) FROM continuous.measurements_calculated_daily WHERE timeseries_id IN (",
                 paste(selected_tsids, collapse = ", "),
-                ") AND date > '",
-                input$modal_date_range[1],
-                "' AND date < '",
-                input$modal_date_range[2],
-                "';"
-              )
+                ") AND date > $1::date AND date < $2::date;"
+              ),
+              params = list(input$modal_date_range[1], input$modal_date_range[2])
             )[[1]]
 
             #   query <- paste0("WITH extremes AS (
@@ -2695,15 +2719,11 @@ contData <- function(id, language, inputs) {
           timeseries_id,
           MIN(date) AS first_date,
           MAX(date) AS last_date
-          FROM measurements_calculated_daily
+          FROM continuous.measurements_calculated_daily
           WHERE timeseries_id IN (",
             paste(selected_tsids, collapse = ", "),
             ")
-          AND date >= '",
-            input$modal_date_range[1],
-            "' AND date <= '",
-            input$modal_date_range[2],
-            "'
+          AND date >= $1::date AND date <= $2::date
           GROUP BY timeseries_id
         )
         SELECT
@@ -2713,7 +2733,7 @@ contData <- function(id, language, inputs) {
         ",
             paste(daily_stats_select, collapse = ",\n        "),
             "
-        FROM measurements_calculated_daily AS m
+        FROM continuous.measurements_calculated_daily AS m
         JOIN extremes AS e
         ON m.timeseries_id = e.timeseries_id
         AND (m.date = e.first_date OR m.date = e.last_date)
@@ -2721,7 +2741,11 @@ contData <- function(id, language, inputs) {
         m.doy_count;
         "
           )
-          subset <- dbGetQueryDT(session$userData$AquaCache, query)
+          subset <- dbGetQueryDT(
+            session$userData$AquaCache,
+            query,
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
+          )
           round_cols <- names(subset)[seq.int(3L, ncol(subset))]
           subset[, (round_cols) := lapply(.SD, round, 2), .SDcols = round_cols]
 
@@ -2882,14 +2906,11 @@ contData <- function(id, language, inputs) {
             paste0(
               "SELECT m.*",
               missing_30yr_select,
-              " FROM measurements_calculated_daily AS m WHERE timeseries_id IN (",
+              " FROM continuous.measurements_calculated_daily AS m WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND date >= '",
-              input$modal_date_range[1],
-              "' AND date <= '",
-              input$modal_date_range[2],
-              "';"
-            )
+              ") AND date >= $1::date AND date <= $2::date;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           grades = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2900,14 +2921,11 @@ contData <- function(id, language, inputs) {
               start_dt_expr,
               ", g.end_dt AS ",
               end_dt_expr,
-              " FROM grades g JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE timeseries_id IN (",
+              " FROM continuous.grades g JOIN public.grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "'ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           approvals = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2918,14 +2936,11 @@ contData <- function(id, language, inputs) {
               start_dt_expr,
               ", a.end_dt AS ",
               end_dt_expr,
-              " FROM approvals a JOIN approval_types at ON a.approval_type_id = at.approval_type_id WHERE timeseries_id IN (",
+              " FROM continuous.approvals a JOIN public.approval_types at ON a.approval_type_id = at.approval_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "' ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           qualifiers = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2936,14 +2951,11 @@ contData <- function(id, language, inputs) {
               start_dt_expr,
               ", q.end_dt AS ",
               end_dt_expr,
-              " FROM qualifiers q JOIN qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE timeseries_id IN (",
+              " FROM continuous.qualifiers q JOIN public.qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "'ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           ),
           owners = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2954,14 +2966,11 @@ contData <- function(id, language, inputs) {
               start_dt_expr,
               ", end_dt AS ",
               end_dt_expr,
-              " FROM owners o JOIN organizations orgs ON o.organization_id = orgs.organization_id WHERE timeseries_id IN (",
+              " FROM continuous.owners o JOIN public.organizations orgs ON o.organization_id = orgs.organization_id WHERE timeseries_id IN (",
               paste(selected_tsids, collapse = ", "),
-              ") AND start_dt < '",
-              input$modal_date_range[2],
-              "' AND end_dt > '",
-              input$modal_date_range[1],
-              "'ORDER BY timeseries_id, start_dt;"
-            )
+              ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
+            ),
+            params = list(input$modal_date_range[1], input$modal_date_range[2])
           )
         )
 

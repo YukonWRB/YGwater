@@ -141,7 +141,13 @@ reference_deployment_choices_query <- function(
   )
 }
 
-reference_timeseries_choices_query <- function() {
+reference_timeseries_choices_query <- function(require_basic = FALSE) {
+  where_sql <- if (isTRUE(require_basic)) {
+    "WHERE ts.timeseries_type = 'basic'"
+  } else {
+    ""
+  }
+
   paste(
     "SELECT ts.timeseries_id AS value,",
     "CONCAT(",
@@ -149,13 +155,24 @@ reference_timeseries_choices_query <- function() {
     "  ' | ', COALESCE(l.location_code, '?'),",
     "  ' | ', COALESCE(p.param_name, '?'),",
     "  CASE WHEN ms.matrix_state_name IS NOT NULL THEN CONCAT(' | ', ms.matrix_state_name) ELSE '' END,",
-    "  CASE WHEN mt.media_type IS NOT NULL THEN CONCAT(' | ', mt.media_type) ELSE '' END",
+    "  CASE WHEN mt.media_type IS NOT NULL THEN CONCAT(' | ', mt.media_type) ELSE '' END,",
+    "  CASE WHEN source.source_fx IS NOT NULL THEN CONCAT(' | ', source.source_fx) ELSE '' END",
     ") AS label",
     "FROM continuous.timeseries AS ts",
     "LEFT JOIN public.locations AS l ON ts.location_id = l.location_id",
     "LEFT JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id",
     "LEFT JOIN public.matrix_states AS ms ON ts.matrix_state_id = ms.matrix_state_id",
     "LEFT JOIN public.media_types AS mt ON ts.media_id = mt.media_id",
+    "LEFT JOIN LATERAL (",
+    "  SELECT tsa.source_fx",
+    "  FROM continuous.timeseries_source_adapters AS tsa",
+    "  WHERE tsa.timeseries_id = ts.timeseries_id",
+    "    AND tsa.active",
+    "    AND tsa.fetch_priority IS NOT NULL",
+    "  ORDER BY tsa.fetch_priority, tsa.timeseries_source_adapter_id",
+    "  LIMIT 1",
+    ") AS source ON TRUE",
+    where_sql,
     "ORDER BY l.location_code, p.param_name, ms.matrix_state_name, mt.media_type, ts.timeseries_id"
   )
 }
@@ -187,19 +204,42 @@ reference_transmission_setup_choices_query <- function() {
     "SELECT s.transmission_setup_id AS value,",
     "CONCAT(",
     "  '#', s.transmission_setup_id::text,",
-    "  ' | ', COALESCE(i.serial_no, '[logger]'),",
+    "  ' | ', COALESCE(l.location_code, l.name, '[location]'),",
+    "  ' | ', COALESCE(i.serial_no, '[no logger]'),",
     "  ' | ', COALESCE(tm.method_name, '?'),",
     "  CASE WHEN s.provider_name IS NOT NULL THEN CONCAT(' | ', s.provider_name) ELSE '' END,",
     "  CASE WHEN s.platform_identifier IS NOT NULL THEN CONCAT(' | ', s.platform_identifier) ELSE '' END,",
     "  ' | ', to_char(s.start_datetime AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI'), ' UTC'",
     ") AS label",
     "FROM public.locations_metadata_transmission_setups AS s",
+    "LEFT JOIN public.locations AS l ON s.location_id = l.location_id",
     "LEFT JOIN public.locations_metadata_instruments AS lmi",
     "  ON s.logger_metadata_id = lmi.metadata_id",
     "LEFT JOIN instruments.instruments AS i ON lmi.instrument_id = i.instrument_id",
     "LEFT JOIN instruments.transmission_methods AS tm",
     "  ON s.transmission_method_id = tm.transmission_method_id",
     "ORDER BY s.start_datetime DESC, s.transmission_setup_id DESC"
+  )
+}
+
+reference_transmission_route_choices_query <- function() {
+  paste(
+    "SELECT r.transmission_route_id AS value,",
+    "CONCAT(",
+    "  '#', r.transmission_route_id::text,",
+    "  ' | ', COALESCE(l.location_code, '?'),",
+    "  ' | ', COALESCE(r.route_name, '[unnamed route]'),",
+    "  ' | ', COALESCE(tm.method_name, '?'),",
+    "  CASE WHEN s.provider_name IS NOT NULL THEN CONCAT(' | ', s.provider_name) ELSE '' END,",
+    "  CASE WHEN s.platform_identifier IS NOT NULL THEN CONCAT(' | ', s.platform_identifier) ELSE '' END",
+    ") AS label",
+    "FROM public.locations_metadata_transmission_routes AS r",
+    "JOIN public.locations_metadata_transmission_setups AS s",
+    "  ON r.transmission_setup_id = s.transmission_setup_id",
+    "LEFT JOIN public.locations AS l ON s.location_id = l.location_id",
+    "LEFT JOIN instruments.transmission_methods AS tm",
+    "  ON s.transmission_method_id = tm.transmission_method_id",
+    "ORDER BY l.location_code, r.route_name, r.transmission_route_id"
   )
 }
 
@@ -799,7 +839,8 @@ reference_table_configs <- function() {
       key = "transmission_setups",
       title = "Transmission Setups",
       description = paste(
-        "Manage time-bounded telemetry setups for deployed loggers.",
+        "Manage time-bounded telemetry setups for locations.",
+        "A deployed logger can be recorded when known.",
         "Enter timestamps as UTC ISO values."
       ),
       schema = "public",
@@ -810,12 +851,23 @@ reference_table_configs <- function() {
       audit_columns = audit_cols,
       columns = list(
         reference_select_field(
+          "location_id",
+          "Location",
+          choices_query = paste(
+            "SELECT location_id AS value,",
+            "CONCAT(COALESCE(location_code, '[no code]'), ' | ', name) AS label",
+            "FROM public.locations",
+            "ORDER BY location_code, name"
+          ),
+          required = TRUE
+        ),
+        reference_select_field(
           "logger_metadata_id",
-          "Logger deployment",
+          "Logger deployment (optional)",
           choices_query = reference_deployment_choices_query(
             require_logger = TRUE
           ),
-          required = TRUE
+          required = FALSE
         ),
         reference_select_field(
           "transmission_method_id",
@@ -898,6 +950,131 @@ reference_table_configs <- function() {
           default = "{}"
         ),
         reference_textarea_field("note", "Note")
+      )
+    ),
+    transmission_timeseries_mappings = list(
+      key = "transmission_timeseries_mappings",
+      title = "Transmission Timeseries Mappings",
+      description = paste(
+        "Map provider or payload fields from a transmission route to basic",
+        "continuous timeseries. The target timeseries must belong to the",
+        "same location as the route's logger deployment."
+      ),
+      schema = "continuous",
+      table = "transmission_timeseries_mappings",
+      pk = "transmission_mapping_id",
+      id_label = "Transmission Mapping ID",
+      order_by = c(
+        "transmission_route_id",
+        "source_field",
+        "transmission_mapping_id"
+      ),
+      audit_columns = audit_cols,
+      columns = list(
+        reference_select_field(
+          "transmission_route_id",
+          "Transmission route",
+          choices_query = reference_transmission_route_choices_query(),
+          required = TRUE
+        ),
+        reference_text_field(
+          "source_field",
+          "Source field",
+          required = TRUE
+        ),
+        reference_select_field(
+          "timeseries_id",
+          "Basic timeseries",
+          choices_query = reference_timeseries_choices_query(
+            require_basic = TRUE
+          ),
+          required = TRUE
+        ),
+        reference_numeric_field(
+          "value_multiplier",
+          "Value multiplier",
+          required = TRUE,
+          default = 1
+        ),
+        reference_numeric_field(
+          "value_offset",
+          "Value offset",
+          required = TRUE,
+          default = 0
+        ),
+        reference_textarea_field(
+          "missing_values",
+          "Missing values JSON array",
+          required = TRUE,
+          rows = 3,
+          default = "[]"
+        ),
+        reference_textarea_field(
+          "mapping_config",
+          "Mapping config JSON object",
+          required = TRUE,
+          rows = 5,
+          default = "{}"
+        ),
+        reference_checkbox_field("enabled", "Enabled", default = TRUE),
+        reference_textarea_field("note", "Note")
+      )
+    ),
+    transmission_import_runs = list(
+      key = "transmission_import_runs",
+      title = "Transmission Import History",
+      description = paste(
+        "Review provider-neutral transmission retrieval history, query",
+        "windows, source metadata, parsed measurements, and failures.",
+        "These operational records are written by importers and are read-only."
+      ),
+      schema = "continuous",
+      table = "transmission_import_runs",
+      pk = "transmission_import_run_id",
+      id_label = "Transmission Import Run ID",
+      order_by = c("started", "transmission_import_run_id"),
+      order_by_desc = c("started", "transmission_import_run_id"),
+      row_limit = 1000L,
+      audit_columns = audit_cols,
+      editable = FALSE,
+      columns = list(
+        reference_select_field(
+          "transmission_route_id",
+          "Transmission route",
+          choices_query = reference_transmission_route_choices_query(),
+          required = TRUE
+        ),
+        reference_text_field("query_since", "Query since (UTC)"),
+        reference_text_field("query_until", "Query until (UTC)"),
+        reference_text_field("importer", "Importer"),
+        reference_text_field("source_server", "Source server"),
+        reference_text_field("status", "Status"),
+        reference_numeric_field("payload_bytes", "Payload bytes"),
+        reference_numeric_field(
+          "transmissions_received",
+          "Transmissions received"
+        ),
+        reference_numeric_field(
+          "measurements_parsed",
+          "Measurements parsed"
+        ),
+        reference_numeric_field(
+          "measurements_inserted",
+          "Measurements inserted"
+        ),
+        reference_text_field(
+          "last_message_datetime",
+          "Last message datetime (UTC)"
+        ),
+        reference_text_field("payload_reference", "Payload reference"),
+        reference_textarea_field(
+          "source_metadata",
+          "Source metadata JSON",
+          rows = 5
+        ),
+        reference_textarea_field("error_message", "Error message", rows = 5),
+        reference_text_field("started", "Started (UTC)"),
+        reference_text_field("completed", "Completed (UTC)")
       )
     ),
     transmission_components = list(
@@ -1335,17 +1512,37 @@ reference_prepare_for_dt <- function(df) {
 
 reference_fetch_records <- function(con, config) {
   order_cols <- reference_default(config$order_by, config$pk)
-  order_sql <- paste(
-    reference_quote_identifier_chr(con, order_cols),
-    collapse = ", "
+  descending_cols <- reference_default(
+    config$order_by_desc,
+    character(0)
   )
+  order_sql <- paste(vapply(
+    order_cols,
+    function(column_name) {
+      paste0(
+        reference_quote_identifier_chr(con, column_name),
+        if (column_name %in% descending_cols) " DESC" else ""
+      )
+    },
+    character(1)
+  ), collapse = ", ")
+  row_limit <- suppressWarnings(as.integer(reference_default(
+    config$row_limit,
+    NA_integer_
+  )))
+  limit_sql <- if (!is.na(row_limit) && row_limit > 0L) {
+    paste("LIMIT", row_limit)
+  } else {
+    ""
+  }
 
   DBI::dbGetQuery(
     con,
     sprintf(
-      "SELECT * FROM %s ORDER BY %s",
+      "SELECT * FROM %s ORDER BY %s %s",
       reference_qualified_table_chr(con, config),
-      order_sql
+      order_sql,
+      limit_sql
     )
   )
 }
@@ -1450,6 +1647,7 @@ clear_reference_caches <- function(session) {
 referenceTableManagerUI <- function(id, config, title = NULL) {
   ns <- NS(id)
   title <- reference_default(title, config$title)
+  editable <- !identical(config$editable, FALSE)
 
   bslib::layout_sidebar(
     sidebar = bslib::sidebar(
@@ -1458,18 +1656,24 @@ referenceTableManagerUI <- function(id, config, title = NULL) {
       title = title,
       uiOutput(ns("panel_intro")),
       uiOutput(ns("record_summary")),
-      div(
-        class = "d-flex gap-2 flex-wrap mb-3",
-        actionButton(ns("save"), "Save", class = "btn-primary"),
-        actionButton(ns("new_record"), "New record"),
+      if (editable) {
+        tagList(
+          div(
+            class = "d-flex gap-2 flex-wrap mb-3",
+            actionButton(ns("save"), "Save", class = "btn-primary"),
+            actionButton(ns("new_record"), "New record"),
+            actionButton(ns("reload"), "Reload")
+          ),
+          reference_render_fields_ui(
+            ns,
+            config$columns,
+            choices = reference_empty_choices(config$columns),
+            values = reference_empty_row(config$columns)
+          )
+        )
+      } else {
         actionButton(ns("reload"), "Reload")
-      ),
-      reference_render_fields_ui(
-        ns,
-        config$columns,
-        choices = reference_empty_choices(config$columns),
-        values = reference_empty_row(config$columns)
-      )
+      }
     ),
     uiOutput(ns("banner")),
     uiOutput(ns("table_heading")),
@@ -1485,6 +1689,7 @@ referenceTableManager <- function(
 ) {
   moduleServer(id, function(input, output, session) {
     con <- session$userData$AquaCache
+    editable <- !identical(config$editable, FALSE)
     table_proxy <- DT::dataTableProxy("records_table", session = session)
 
     editor_data <- reactiveValues(
@@ -1527,7 +1732,9 @@ referenceTableManager <- function(
             empty_row <- reference_empty_row(config$columns)
             current_record_id(NULL)
             current_row(empty_row)
-            reference_clear_fields(session, config$columns, choices)
+            if (editable) {
+              reference_clear_fields(session, config$columns, choices)
+            }
             DT::selectRows(table_proxy, NULL)
             return()
           }
@@ -1541,7 +1748,9 @@ referenceTableManager <- function(
             empty_row <- reference_empty_row(config$columns)
             current_record_id(NULL)
             current_row(empty_row)
-            reference_clear_fields(session, config$columns, choices)
+            if (editable) {
+              reference_clear_fields(session, config$columns, choices)
+            }
             DT::selectRows(table_proxy, NULL)
             return()
           }
@@ -1549,12 +1758,14 @@ referenceTableManager <- function(
           selected_row <- raw[selected_idx, , drop = FALSE]
           current_record_id(as.character(selected_id))
           current_row(selected_row)
-          reference_update_fields(
-            session,
-            config$columns,
-            selected_row,
-            choices
-          )
+          if (editable) {
+            reference_update_fields(
+              session,
+              config$columns,
+              selected_row,
+              choices
+            )
+          }
           DT::selectRows(table_proxy, selected_idx)
         },
         once = TRUE
@@ -1566,11 +1777,18 @@ referenceTableManager <- function(
         tags$p(class = "text-muted", config$description),
         tags$p(
           class = "text-muted small",
-          paste(
-            "This editor supports adds and updates.",
-            "Deletes are intentionally excluded because these tables are",
-            "widely referenced elsewhere in the application."
-          )
+          if (editable) {
+            paste(
+              "This editor supports adds and updates.",
+              "Deletes are intentionally excluded because these tables are",
+              "widely referenced elsewhere in the application."
+            )
+          } else {
+            paste(
+              "This view is read-only.",
+              "Operational records are written by the responsible importer."
+            )
+          }
         )
       )
     })
@@ -1581,7 +1799,13 @@ referenceTableManager <- function(
 
       tags$p(
         tags$strong("Mode: "),
-        if (is.null(record_id)) {
+        if (!editable) {
+          if (is.null(record_id)) "Reviewing history" else paste(
+            "Selected",
+            reference_default(config$id_label, config$pk),
+            record_id
+          )
+        } else if (is.null(record_id)) {
           paste("New", tolower(config$title), "record")
         } else {
           paste(
@@ -1602,11 +1826,19 @@ referenceTableManager <- function(
         tags$h4(paste(config$title, "records")),
         tags$p(
           class = "text-muted",
-          paste(
-            "Select a row to load it into the form.",
-            row_count,
-            "record(s) currently available."
-          )
+          if (editable) {
+            paste(
+              "Select a row to load it into the form.",
+              row_count,
+              "record(s) currently available."
+            )
+          } else {
+            paste(
+              "Use the column filters to review",
+              row_count,
+              "recent record(s)."
+            )
+          }
         )
       )
     })
@@ -1639,6 +1871,9 @@ referenceTableManager <- function(
     })
 
     observeEvent(input$new_record, {
+      if (!editable) {
+        return()
+      }
       empty_row <- reference_empty_row(config$columns)
       current_record_id(NULL)
       current_row(empty_row)
@@ -1660,12 +1895,14 @@ referenceTableManager <- function(
         form_row <- editor_data$records_raw[selected_row, , drop = FALSE]
         current_record_id(selected_id)
         current_row(form_row)
-        reference_update_fields(
-          session,
-          config$columns,
-          form_row,
-          editor_data$choices
-        )
+        if (editable) {
+          reference_update_fields(
+            session,
+            config$columns,
+            form_row,
+            editor_data$choices
+          )
+        }
       },
       ignoreInit = TRUE
     )
@@ -1673,6 +1910,13 @@ referenceTableManager <- function(
     observeEvent(
       input$save,
       {
+        if (!editable) {
+          showNotification(
+            paste(config$title, "is read-only."),
+            type = "error"
+          )
+          return()
+        }
         values <- lapply(config$columns, function(field) {
           reference_normalize_value(
             input[[reference_form_input_id(field$name)]],
@@ -2864,6 +3108,44 @@ manageTransmissionRoutes <- function(id, language) {
     language = language,
     config = config,
     notification_module_id = "manageTransmissionRoutes"
+  )
+}
+
+manageTransmissionTimeseriesMappingsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[[
+      "transmission_timeseries_mappings"
+    ]]
+  )
+}
+
+manageTransmissionTimeseriesMappings <- function(id, language) {
+  config <- reference_table_configs()[[
+    "transmission_timeseries_mappings"
+  ]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "manageTransmissionTimeseriesMappings"
+  )
+}
+
+viewTransmissionImportRunsUI <- function(id) {
+  referenceTableManagerUI(
+    id,
+    config = reference_table_configs()[["transmission_import_runs"]]
+  )
+}
+
+viewTransmissionImportRuns <- function(id, language) {
+  config <- reference_table_configs()[["transmission_import_runs"]]
+  referenceTableManager(
+    id = id,
+    language = language,
+    config = config,
+    notification_module_id = "viewTransmissionImportRuns"
   )
 }
 

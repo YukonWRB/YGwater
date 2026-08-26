@@ -579,7 +579,7 @@ mapParams <- function(id, language) {
             ",
                                               ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                           FROM 
-                                              measurements_calculated_daily
+                                              continuous.measurements_calculated_daily
                                           WHERE 
                                               ",
             stats_filter_count,
@@ -620,7 +620,7 @@ mapParams <- function(id, language) {
               c("timeseries_id", "date", "value", stats_select),
               collapse = ", "
             ),
-            " FROM measurements_calculated_daily WHERE ",
+            " FROM continuous.measurements_calculated_daily WHERE ",
             stats_filter_count,
             " >= ",
             as.numeric(map_params$yrs1),
@@ -718,7 +718,7 @@ mapParams <- function(id, language) {
               ",
                                                 ROW_NUMBER() OVER (PARTITION BY timeseries_id ORDER BY date DESC) AS row_num
                                             FROM 
-                                                measurements_calculated_daily
+                                                continuous.measurements_calculated_daily
                                             WHERE 
                                                 ",
               stats_filter_count,
@@ -758,7 +758,7 @@ mapParams <- function(id, language) {
                 c("timeseries_id", "date", "value", stats_select),
                 collapse = ", "
               ),
-              " FROM measurements_calculated_daily WHERE ",
+              " FROM continuous.measurements_calculated_daily WHERE ",
               stats_filter_count,
               " >= ",
               as.numeric(map_params$yrs2),
@@ -930,14 +930,20 @@ mapParams <- function(id, language) {
           options = leaflet::pathOptions(pane = "overlay"),
           popup = ~ paste0(
             "<strong>",
-            get(tr("generic_name_col", language$language)),
+            YGwater:::escape_html_text(
+              get(tr("generic_name_col", language$language))
+            ),
             "</strong><br/>",
-            param_name,
+            YGwater:::escape_html_text(param_name),
             "<br>",
             ifelse(
               is.na(matrix_state) | !nzchar(matrix_state),
               "",
-              paste0("Matrix state: ", matrix_state, "<br>")
+              paste0(
+                "Matrix state: ",
+                YGwater:::escape_html_text(matrix_state),
+                "<br>"
+              )
             ),
             tr("date", language$language),
             ": ",
@@ -955,7 +961,7 @@ mapParams <- function(id, language) {
             ": ",
             round(value, 2),
             " ",
-            param_unit,
+            YGwater:::escape_html_text(param_unit),
             "<br/>",
             tr("map_actual_hist_range", language$language),
             ": ",
@@ -965,7 +971,7 @@ mapParams <- function(id, language) {
             " ",
             round(max, 2),
             " ",
-            param_unit,
+            YGwater:::escape_html_text(param_unit),
             "<br/>",
             tr("map_actual_yrs", language$language),
             ": ",

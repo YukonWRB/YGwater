@@ -35,7 +35,7 @@ waterInfoMod <- function(id, language) {
     moduleData <- reactiveValues(
       locs = dbGetQueryDT(
         session$userData$AquaCache,
-        "SELECT DISTINCT ts.location_id, l.location_code AS location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM timeseries AS ts JOIN parameters AS p ON ts.parameter_id = p.parameter_id JOIN locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)"
+        "SELECT DISTINCT ts.location_id, l.location_code AS location, l.name, l.name_fr, ts.parameter_id, p.param_name, p.param_name_fr FROM continuous.timeseries AS ts JOIN public.parameters AS p ON ts.parameter_id = p.parameter_id JOIN public.locations AS l on ts.location_id = l.location_id WHERE ts.parameter_id IN (1150, 1165)"
       )
     )
 
@@ -344,6 +344,11 @@ waterInfoMod <- function(id, language) {
           issues,
           "Select at least one location, or choose 'All locations'."
         )
+      } else {
+        allowed_locations <- c("all", as.character(moduleData$locs$location))
+        if (length(setdiff(as.character(selections$loc), allowed_locations))) {
+          issues <- c(issues, "One or more selected locations are invalid.")
+        }
       }
 
       end_date <- as.Date(selections$end)

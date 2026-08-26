@@ -21,7 +21,7 @@ bridge_daily <- list()
 bridge_rt <- list()
 
 for (i in 1:nrow(tsid)) {
-  bridge_daily[[tsid$location[i]]] <- DBI::dbGetQuery(con, paste0("SELECT value, date FROM measurements_calculated_daily_corrected WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND date BETWEEN '", Sys.Date()-365, "' AND '", Sys.Date(), "'" ))
+  bridge_daily[[tsid$location[i]]] <- DBI::dbGetQuery(con, paste0("SELECT value, date FROM continuous.measurements_calculated_daily_corrected WHERE timeseries_id = '", tsid$timeseries_id[i], "' AND date BETWEEN '", Sys.Date()-365, "' AND '", Sys.Date(), "'" ))
   bridge_rt[[tsid$location[i]]] <-  DBI::dbGetQuery(
     con,
     "SELECT value_corrected AS value, datetime FROM continuous.measurements_continuous_corrected($1, $2, $3)",

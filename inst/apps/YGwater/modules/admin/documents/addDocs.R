@@ -117,7 +117,7 @@ addDocs <- function(id, language) {
       )
       moduleData$organizations <- DBI::dbGetQuery(
         session$userData$AquaCache,
-        "SELECT organization_id, name FROM organizations ORDER BY name ASC"
+        "SELECT organization_id, name FROM public.organizations ORDER BY name ASC"
       )
       moduleData$organization_agreements <- DBI::dbGetQuery(
         session$userData$AquaCache,

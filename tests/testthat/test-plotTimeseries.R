@@ -6,7 +6,7 @@ on.exit(DBI::dbDisconnect(test_con), add = TRUE)
 
 wlevel <- DBI::dbGetQuery(
   test_con,
-  "SELECT parameter_id FROM parameters WHERE param_name = 'water level';"
+  "SELECT parameter_id FROM public.parameters WHERE param_name = 'water level';"
 )$parameter_id[[1]]
 
 # Find the first water level timeseries in the DB
@@ -301,8 +301,8 @@ test_that("plotTimeseries hourly resolution uses timeseries aggregation logic", 
   agg_type <- DBI::dbGetQuery(
     test_con,
     paste0(
-      "SELECT at.aggregation_type FROM timeseries ts ",
-      "LEFT JOIN aggregation_types at ",
+      "SELECT at.aggregation_type FROM continuous.timeseries ts ",
+      "LEFT JOIN continuous.aggregation_types at ",
       "ON ts.aggregation_type_id = at.aggregation_type_id ",
       "WHERE ts.timeseries_id = $1;"
     ),
@@ -391,19 +391,19 @@ test_that("plotTimeseries can show data in the past", {
 
   wl <- DBI::dbGetQuery(
     con,
-    "SELECT parameter_id FROM parameters WHERE param_name = 'water level' LIMIT 1;"
+    "SELECT parameter_id FROM public.parameters WHERE param_name = 'water level' LIMIT 1;"
   )[1, 1]
   loc_id <- DBI::dbGetQuery(
     con,
-    "SELECT location_id FROM locations WHERE location_code = '09EA004';"
+    "SELECT location_id FROM public.locations WHERE location_code = '09EA004';"
   )[1, 1]
   tsid <- DBI::dbGetQuery(
     con,
-    "SELECT timeseries_id FROM timeseries WHERE parameter_id = $1 AND location_id = $2 LIMIT 1;",
+    "SELECT timeseries_id FROM continuous.timeseries WHERE parameter_id = $1 AND location_id = $2 LIMIT 1;",
     params = list(wl, loc_id)
   )[1, 1]
 
-  as_of <- as.POSIXct("2026-03-30 12:00:00", tz = "UTC") # Has to be after implementation of patch_38, otherwise the old AquaCache logic was deleting rows and replacing, resulting in recent created_on timestamps - this made it appear as if there was nothing in the past.
+  as_of <- historical_qc_test_as_of(con)
   start_dt <- as.POSIXct("2022-06-01 00:00:00", tz = "UTC")
   end_dt <- as.POSIXct("2022-06-02 23:59:59", tz = "UTC")
 

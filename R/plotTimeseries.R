@@ -11,8 +11,8 @@
 #' @param aggregation_type The period type for the parameter and location to plot. Options other than the default NULL are 'sum', 'min', 'max', or '(min+max)/2', which is how the daily 'mean' temperature is often calculated for meteorological purposes. NULL will search for what's available and get the first timeseries found in this order: 'instantaneous', followed by the 'mean', '(min+max)/2', 'min', and 'max'.
 #' @param z Depth/height in meters further identifying the timeseries of interest. Default is NULL, and where multiple elevations exist for the same location/parameter/record_rate/aggregation_type combo the function will default to the absolute elevation value closest to ground. Otherwise set to a numeric value.
 #' @param z_approx Number of meters by which to approximate the elevation. Default is NULL, which will use the exact elevation. Otherwise set to a numeric value.
-#' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Default is one year ago.
-#' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Default is today.
+#' @param start_date The day or datetime on which to start the plot as character, Date, or POSIXct. Date-only values start at the beginning of that day in `tzone`. Default is one year ago.
+#' @param end_date The day or datetime on which to end the plot as character, Date, or POSIXct. Date-only values include the full selected day in `tzone`. Default is today.
 #' @param invert Should the y-axis be inverted? TRUE/FALSE, or leave as default NULL to use the database default value.
 #' @param slider Should a slider be included to show where you are zoomed in to? If TRUE the slider will be included but this prevents horizontal zooming or zooming in using the box tool. If legend_position is set to 'h', slider will be set to FALSE due to interference. Default is TRUE.
 #' @param datum Should a vertical offset be applied to the data? Looks for it in the database and applies it if it exists. Default is FALSE.
@@ -36,10 +36,11 @@
 #' @param resolution The resolution at which to plot the data. Default is NULL, which will adjust for reasonable plot performance depending on the date range. Otherwise set to one of "max", "hour", "day".
 #' @param tzone The timezone to use for the plot. Default is "auto", which will use the system default timezone. Otherwise set to a valid timezone string or a numeric UTC offset (in hours).
 #' @param raw Should raw data be used instead of corrected data (if corrections exist)? Default is FALSE.
-#' @param as_of Optional point-in-time timestamp at which measurement values and
-#'   stored daily summaries should be reconstructed. Character, Date, and
-#'   POSIXct inputs are supported. Date-like inputs are interpreted as the end
-#'   of that day in `tzone`. When `NULL` (default), current data are used.
+#' @param as_of Optional point-in-time timestamp at which measurement values,
+#'   daily summaries, quality-control metadata, and unusable-grade exclusions
+#'   should be reconstructed. Character, Date, and POSIXct inputs are supported.
+#'   Date-like inputs are interpreted as the end of that day in `tzone`. When
+#'   `NULL` (default), current data are used.
 #' @param stats_period Historical range statistics period. Use "full" for
 #'   full-record statistics or "30yr" for the most recent 30-year statistics
 #'   when the connected database provides them. Default is "full".
@@ -249,24 +250,18 @@ plotTimeseries <- function(
     }
   }
 
-  if (inherits(start_date, "character")) {
-    start_date <- as.Date(start_date)
-  }
-  if (inherits(start_date, "Date")) {
-    start_date <- as.POSIXct(start_date, tz = tzone)
-    start_date <- start_date + 24 * 60 * 60
-  }
-  if (inherits(end_date, "character")) {
-    end_date <- as.Date(end_date)
-  }
-  if (inherits(end_date, "Date")) {
-    end_date <- as.POSIXct(end_date, tz = tzone)
-    end_date <- end_date + 24 * 60 * 60
-  }
-
-  # back to UTC because DB queries are in UTC
-  attr(start_date, "tzone") <- "UTC"
-  attr(end_date, "tzone") <- "UTC"
+  start_date <- normalize_plot_datetime_bound(
+    start_date,
+    tzone,
+    bound = "start",
+    arg_name = "start_date"
+  )
+  end_date <- normalize_plot_datetime_bound(
+    end_date,
+    tzone,
+    bound = "end",
+    arg_name = "end_date"
+  )
 
   if (!(lang %in% c("en", "fr"))) {
     stop(
@@ -307,7 +302,7 @@ plotTimeseries <- function(
         } else {
           aggregation_type <- DBI::dbGetQuery(
             con,
-            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_types.aggregation_type = $1;",
+            "SELECT aggregation_type_id FROM continuous.aggregation_types WHERE aggregation_types.aggregation_type = $1;",
             params = list(aggregation_type)
           )[1, 1]
         }
@@ -315,7 +310,7 @@ plotTimeseries <- function(
         if (inherits(aggregation_type, "numeric")) {
           aggregation_type <- DBI::dbGetQuery(
             con,
-            "SELECT aggregation_type_id FROM aggregation_types WHERE aggregation_type_id = $1;",
+            "SELECT aggregation_type_id FROM continuous.aggregation_types WHERE aggregation_type_id = $1;",
             params = list(aggregation_type)
           )[1, 1]
           if (is.na(aggregation_type)) {
@@ -344,7 +339,7 @@ plotTimeseries <- function(
         "SELECT p.parameter_id, p.param_name, p.param_name_fr,",
         "p.plot_default_y_orientation,",
         ac_parameter_unit_select_sql(con, "p", "unit_default"),
-        "FROM parameters p",
+        "FROM public.parameters p",
         "WHERE LOWER(p.param_name) = $1",
         "OR LOWER(p.param_name_fr) = $1",
         "OR p.parameter_id::text = $1",
@@ -361,7 +356,7 @@ plotTimeseries <- function(
       # Check if there are multiple sub_locations for this parameter_code, location regardless of sub_location. If so, throw a stop
       sub_loc_check <- DBI::dbGetQuery(
         con,
-        "SELECT sub_location_id FROM timeseries WHERE location_id = $1 AND parameter_id = $2 AND sub_location_id IS NOT NULL;",
+        "SELECT sub_location_id FROM continuous.timeseries WHERE location_id = $1 AND parameter_id = $2 AND sub_location_id IS NOT NULL;",
         params = list(location_id, parameter_code)
       )
       if (nrow(sub_loc_check) > 1) {
@@ -377,7 +372,7 @@ plotTimeseries <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.parameter_id = ",
               parameter_code,
@@ -389,7 +384,7 @@ plotTimeseries <- function(
           exist_check <- DBI::dbGetQuery(
             con,
             paste0(
-              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+              "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
               location_id,
               " AND ts.parameter_id = ",
               parameter_code,
@@ -405,7 +400,7 @@ plotTimeseries <- function(
           con,
           paste0(
             "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime 
-          FROM timeseries ts 
+          FROM continuous.timeseries ts
           LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
@@ -421,7 +416,7 @@ plotTimeseries <- function(
           con,
           paste0(
             "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime 
-          FROM timeseries ts 
+          FROM continuous.timeseries ts
           LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.parameter_id = ",
@@ -440,7 +435,7 @@ plotTimeseries <- function(
       sub_loc_txt <- as.character(sub_location)
       sub_location_id <- DBI::dbGetQuery(
         con,
-        "SELECT sub_location_id FROM sub_locations WHERE sub_location_name = $1 OR sub_location_name_fr = $1 OR sub_location_id::text = $1 LIMIT 1;",
+        "SELECT sub_location_id FROM public.sub_locations WHERE sub_location_name = $1 OR sub_location_name_fr = $1 OR sub_location_id::text = $1 LIMIT 1;",
         params = list(sub_loc_txt)
       )[1, 1]
       if (is.na(sub_location_id)) {
@@ -452,14 +447,14 @@ plotTimeseries <- function(
           #both record_rate and aggregation_type_id are NULL
           exist_check <- DBI::dbGetQuery(
             con,
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id = $2 AND ts.parameter_id = $3;",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id = $2 AND ts.parameter_id = $3;",
             params = list(location_id, sub_location_id, parameter_code)
           )
         } else {
           #aggregation_type_id is not NULL but record_rate is
           exist_check <- DBI::dbGetQuery(
             con,
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id =$2 AND ts.parameter_id = $3 AND ts.aggregation_type_id = $4;",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = $1 AND ts.sub_location_id =$2 AND ts.parameter_id = $3 AND ts.aggregation_type_id = $4;",
             params = list(
               location_id,
               sub_location_id,
@@ -473,7 +468,7 @@ plotTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -489,7 +484,7 @@ plotTimeseries <- function(
         exist_check <- DBI::dbGetQuery(
           con,
           paste0(
-            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
+            "SELECT ts.timeseries_id, EXTRACT(EPOCH FROM ts.record_rate) AS record_rate, ts.aggregation_type_id, lz.z_meters AS z, ts.start_datetime, ts.end_datetime FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.location_id = ",
             location_id,
             " AND ts.sub_location_id = ",
             sub_location_id,
@@ -567,7 +562,7 @@ plotTimeseries <- function(
           )
           agg_types <- DBI::dbGetQuery(
             con,
-            "SELECT aggregation_type_id, aggregation_type FROM aggregation_types;"
+            "SELECT aggregation_type_id, aggregation_type FROM continuous.aggregation_types;"
           )
 
           exist_check <- exist_check[
@@ -631,7 +626,7 @@ plotTimeseries <- function(
     # need to fetch pieces to get location_id and parameter_id
     exist_check <- DBI::dbGetQuery(
       con,
-      "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ts.start_datetime, ts.end_datetime, lz.z_meters AS z FROM timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
+      "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ts.start_datetime, ts.end_datetime, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
       params = list(tsid)
     )
     location_id <- exist_check$location_id[1]
@@ -640,7 +635,7 @@ plotTimeseries <- function(
       paste(
         "SELECT p.param_name, p.param_name_fr, p.plot_default_y_orientation,",
         ac_parameter_unit_select_sql(con, "p", "unit_default"),
-        "FROM parameters p WHERE p.parameter_id = $1;"
+        "FROM public.parameters p WHERE p.parameter_id = $1;"
       ),
       params = list(exist_check$parameter_id[1])
     )
@@ -685,7 +680,7 @@ plotTimeseries <- function(
     } else {
       datum_m <- DBI::dbGetQuery(
         con,
-        "SELECT conversion_m FROM datum_conversions WHERE location_id = $1 AND current = TRUE;",
+        "SELECT conversion_m FROM public.datum_conversions WHERE location_id = $1 AND current = TRUE;",
         params = list(location_id)
       )[1, 1]
       if (is.na(datum_m)) {
@@ -725,14 +720,14 @@ plotTimeseries <- function(
       if (lang == "fr") {
         stn_name <- DBI::dbGetQuery(
           con,
-          "SELECT name_fr FROM locations where location_id = $1;",
+          "SELECT name_fr FROM public.locations where location_id = $1;",
           params = list(location_id)
         )[1, 1]
       }
       if (lang == "en" || is.na(stn_name)) {
         stn_name <- DBI::dbGetQuery(
           con,
-          "SELECT name FROM locations where location_id = $1;",
+          "SELECT name FROM public.locations where location_id = $1;",
           params = list(location_id)
         )[1, 1]
       }
@@ -753,28 +748,37 @@ plotTimeseries <- function(
 
   ## Grades, approvals, qualifiers ############
   if (grades | !unusable) {
-    # if unusable, the grades must be pulled so that we can filter them out
-    grades_dt <- dbGetQueryDT(
+    # If unusable is FALSE, grades are also needed to filter the trace.
+    grades_dt <- fetch_continuous_qc_intervals(
       con,
-      paste0(
-        "SELECT g.start_dt, g.end_dt, gt.grade_type_description, gt.grade_type_description_fr, gt.color_code FROM grades g LEFT JOIN grade_types gt ON g.grade_type_id = gt.grade_type_id WHERE g.timeseries_id = ",
-        tsid,
-        " AND g.end_dt >= '",
-        start_date,
-        "' AND g.start_dt <= '",
-        end_date,
-        "' ORDER BY start_dt;"
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      qc_type = "grade",
+      as_of = as_of
+    )
+    data.table::setnames(
+      grades_dt,
+      c(
+        "qc_type_code",
+        "qc_type_description",
+        "qc_type_description_fr"
+      ),
+      c(
+        "grade_type_code",
+        "grade_type_description",
+        "grade_type_description_fr"
       )
     )
 
-    # Many rows could be adjacent repeats of grade_type_description with different start_dt and end_dt, in which case these rows should be amalgamated
-    grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_description)]
+    # Amalgamate adjacent intervals of the same grade.
+    grades_dt[, "run" := data.table::rleid(grades_dt$grade_type_code)]
 
-    # now collapse each run into one interval
     grades_dt <- grades_dt[,
       .(
         start_dt = data.table::first(.SD$start_dt),
         end_dt = data.table::last(.SD$end_dt),
+        grade_type_code = data.table::first(.SD$grade_type_code),
         grade_type_description = data.table::first(.SD$grade_type_description),
         grade_type_description_fr = data.table::first(
           .SD$grade_type_description_fr
@@ -787,26 +791,36 @@ plotTimeseries <- function(
     grades_dt[, "run" := NULL]
   }
   if (approvals) {
-    approvals_dt <- dbGetQueryDT(
+    approvals_dt <- fetch_continuous_qc_intervals(
       con,
-      paste0(
-        "SELECT a.start_dt, a.end_dt, at.approval_type_description, at.approval_type_description_fr, at.color_code FROM approvals a LEFT JOIN approval_types at ON a.approval_type_id = at.approval_type_id WHERE a.timeseries_id = ",
-        tsid,
-        " AND a.end_dt >= '",
-        start_date,
-        "' AND a.start_dt <= '",
-        end_date,
-        "' ORDER BY start_dt;"
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      qc_type = "approval",
+      as_of = as_of
+    )
+    data.table::setnames(
+      approvals_dt,
+      c(
+        "qc_type_code",
+        "qc_type_description",
+        "qc_type_description_fr"
+      ),
+      c(
+        "approval_type_code",
+        "approval_type_description",
+        "approval_type_description_fr"
       )
     )
     # amalgamate
     approvals_dt[,
-      "run" := data.table::rleid(approvals_dt$approval_type_description)
+      "run" := data.table::rleid(approvals_dt$approval_type_code)
     ]
     approvals_dt <- approvals_dt[,
       .(
         start_dt = data.table::first(.SD$start_dt),
         end_dt = data.table::last(.SD$end_dt),
+        approval_type_code = data.table::first(.SD$approval_type_code),
         approval_type_description = data.table::first(
           .SD$approval_type_description
         ),
@@ -820,26 +834,36 @@ plotTimeseries <- function(
     approvals_dt[, "run" := NULL]
   }
   if (qualifiers) {
-    qualifiers_dt <- dbGetQueryDT(
+    qualifiers_dt <- fetch_continuous_qc_intervals(
       con,
-      paste0(
-        "SELECT q.start_dt, q.end_dt, qt.qualifier_type_description, qt.qualifier_type_description_fr, qt.color_code FROM qualifiers q LEFT JOIN qualifier_types qt ON q.qualifier_type_id = qt.qualifier_type_id WHERE q.timeseries_id = ",
-        tsid,
-        " AND q.end_dt >= '",
-        start_date,
-        "' AND q.start_dt <= '",
-        end_date,
-        "' ORDER BY start_dt;"
+      timeseries_id = tsid,
+      start_date = start_date,
+      end_date = end_date,
+      qc_type = "qualifier",
+      as_of = as_of
+    )
+    data.table::setnames(
+      qualifiers_dt,
+      c(
+        "qc_type_code",
+        "qc_type_description",
+        "qc_type_description_fr"
+      ),
+      c(
+        "qualifier_type_code",
+        "qualifier_type_description",
+        "qualifier_type_description_fr"
       )
     )
     # amalgamate
     qualifiers_dt[,
-      "run" := data.table::rleid(qualifiers_dt$qualifier_type_description)
+      "run" := data.table::rleid(qualifiers_dt$qualifier_type_code)
     ]
     qualifiers_dt <- qualifiers_dt[,
       .(
         start_dt = data.table::first(.SD$start_dt),
         end_dt = data.table::last(.SD$end_dt),
+        qualifier_type_code = data.table::first(.SD$qualifier_type_code),
         qualifier_type_description = data.table::first(
           .SD$qualifier_type_description
         ),
@@ -859,7 +883,7 @@ plotTimeseries <- function(
     if (is.null(as_of)) {
       trace_data <- dbGetQueryDT(
         con,
-        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        "SELECT date AS datetime, value, imputed FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
         params = list(tsid, start_date, end_date)
       )
     } else {
@@ -950,7 +974,7 @@ plotTimeseries <- function(
         paste0(
           "SELECT ",
           range_select,
-          " FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
+          " FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
         ),
         params = list(tsid, range_start, range_end)
       )
@@ -1011,8 +1035,8 @@ plotTimeseries <- function(
   }
 
   if (!unusable) {
-    # Trow out unusable data (replace with NAs)
-    unus <- grades_dt[grades_dt$grade_type_description == "Unusable"]
+    # Throw out data carrying the no-use grade that existed at `as_of`.
+    unus <- grades_dt[grades_dt$grade_type_code == "N"]
     if (nrow(unus) > 0) {
       # Using a non-equi join to update trace_data: it finds all rows where datetime falls between start_dt and end_dt and updates value to NA in one go.
       trace_data[
@@ -1082,7 +1106,7 @@ plotTimeseries <- function(
       if (is.null(as_of)) {
         extra <- dbGetQueryDT(
           con,
-          "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
+          "SELECT date AS datetime, value, imputed FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date < $2 AND date >= $3;",
           params = list(
             tsid,
             min(trace_data$datetime),
@@ -1125,7 +1149,7 @@ plotTimeseries <- function(
     if (is.null(as_of)) {
       trace_data <- dbGetQueryDT(
         con,
-        "SELECT date AS datetime, value, imputed FROM measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
+        "SELECT date AS datetime, value, imputed FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date DESC;",
         params = list(tsid, start_date, end_date)
       )
     } else {

@@ -71,23 +71,23 @@ about <- function(id, language) {
 
         timeseries_count <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT COUNT(*) AS count FROM timeseries;"
+          "SELECT COUNT(*) AS count FROM continuous.timeseries;"
         )$count[1]
         measurements_estimate <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT reltuples::bigint AS estimate FROM pg_class WHERE oid = 'measurements_continuous'::regclass;"
+          "SELECT reltuples::bigint AS estimate FROM pg_catalog.pg_class WHERE oid = 'measurements_continuous'::regclass;"
         )$estimate[1]
         samples_count <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT COUNT(*) AS count FROM samples;"
+          "SELECT COUNT(*) AS count FROM discrete.samples;"
         )$count[1]
         results_count <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT reltuples::bigint AS estimate FROM pg_class WHERE oid = 'results'::regclass;"
+          "SELECT reltuples::bigint AS estimate FROM pg_catalog.pg_class WHERE oid = 'results'::regclass;"
         )$estimate[1]
         wells_count <- DBI::dbGetQuery(
           session$userData$AquaCache,
-          "SELECT COUNT(*) AS count FROM wells;"
+          "SELECT COUNT(*) AS count FROM boreholes.wells;"
         )$count[1]
 
         HTML(paste0(

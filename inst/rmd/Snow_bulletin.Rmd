@@ -343,7 +343,7 @@ snowbullpillow2 <- function(location_pil,
                             custom_title) {
   # Get this years snow pillow
   snow_p <- DBI::dbGetQuery(con, paste0(
-    "SELECT date, value FROM measurements_calculated_daily ",
+    "SELECT date, value FROM continuous.measurements_calculated_daily ",
     "WHERE timeseries_id = ", location_pil,
     " AND date >= '", year - 1, "-09-01' ", # bulletin_year
     "AND date <= '", year, "-0", month, "-01' "
@@ -354,8 +354,8 @@ snowbullpillow2 <- function(location_pil,
   }
 
   # Get historical snow survey data
-  snow_s <- DBI::dbGetQuery(con, paste0("SELECT s.target_datetime, r.result AS value FROM results r
-                                      JOIN samples s ON r.sample_id = s.sample_id
+  snow_s <- DBI::dbGetQuery(con, paste0("SELECT s.target_datetime, r.result AS value FROM discrete.results r
+                                      JOIN discrete.samples s ON r.sample_id = s.sample_id
                                       WHERE s.location_id = ", location_surv, " AND r.parameter_id = 21"))
   snow_s$fake_date <- as.Date(paste0(year, "-", format(snow_s$target_datetime, "%m-%d"))) # bulletin_year
   # Only keep those for March, April, May
@@ -2960,11 +2960,11 @@ tryCatch(
 
 ```{r correction factors, echo=FALSE}
 # Get information about the correction factor applied
-twin_correction_note <- DBI::dbGetQuery(con, "SELECT note FROM sample_series WHERE location_id = 86")
+twin_correction_note <- DBI::dbGetQuery(con, "SELECT note FROM discrete.sample_series WHERE location_id = 86")
 twin_corrections <- as.numeric(strsplit(gsub(".*?([0-9]\\.[0-9]+).*?([0-9]\\.[0-9]+).*", "\\1 \\2", twin_correction_note$note), " ")[[1]])
 # twin_correction_pts <- gsub(".*from ([0-9]+) data points.*", "\\1", twin_correction_note$note)
 
-hyland_correction_note <- DBI::dbGetQuery(con, "SELECT note FROM sample_series WHERE location_id = 170")
+hyland_correction_note <- DBI::dbGetQuery(con, "SELECT note FROM discrete.sample_series WHERE location_id = 170")
 hyland_corrections <- as.numeric(strsplit(gsub(".*?([0-9]\\.[0-9]+).*?([0-9]\\.[0-9]+).*", "\\1 \\2", hyland_correction_note$note), " ")[[1]])
 # hyland_correction_pts <- gsub(".*from ([0-9]+) data points.*", "\\1", hyland_correction_note$note)
 ```
