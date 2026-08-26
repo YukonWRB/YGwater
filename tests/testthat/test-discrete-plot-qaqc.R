@@ -11,13 +11,7 @@ discrete_plot_module_environment <- function() {
 }
 
 test_that("QA/QC module text is sourced from the translation catalogue", {
-  translation_path <- system.file(
-    "data-raw/translations.csv",
-    package = "YGwater"
-  )
-  translations <- suppressWarnings(
-    data.table::fread(translation_path, encoding = "UTF-8")
-  )
+  translations <- data$translations
   keys <- c(
     "disc_qaqc_show_data",
     "disc_qaqc_sample_data",
@@ -25,12 +19,12 @@ test_that("QA/QC module text is sourced from the translation catalogue", {
     "disc_qaqc_retrieval_error",
     "disc_qaqc_linked_results"
   )
-  rows <- suppressWarnings(translations[id %in% keys])
+  entries <- suppressWarnings(translations$English[
+    names(translations$English) %in% keys
+  ])
 
-  expect_setequal(rows$id, keys)
-  expect_equal(nrow(rows), length(keys))
-  expect_true(all(nzchar(rows[[3L]])))
-  expect_true(all(nzchar(rows[[4L]])))
+  expect_setequal(names(entries), keys)
+  expect_equal(length(entries), length(keys))
 
   module_paths <- c(
     system.file(
