@@ -2573,9 +2573,18 @@ addLocation <- function(id, inputs, language) {
                 )
               )
             } else if (
-              !identical(datum_id_from, as.numeric(existing_datum$datum_id_from[[1]])) ||
-                !identical(datum_id_to, as.numeric(existing_datum$datum_id_to[[1]])) ||
-                !identical(conversion_m, as.numeric(existing_datum$conversion_m[[1]]))
+              !identical(
+                datum_id_from,
+                as.numeric(existing_datum$datum_id_from[[1]])
+              ) ||
+                !identical(
+                  datum_id_to,
+                  as.numeric(existing_datum$datum_id_to[[1]])
+                ) ||
+                !identical(
+                  conversion_m,
+                  as.numeric(existing_datum$conversion_m[[1]])
+                )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -2906,17 +2915,11 @@ addLocation <- function(id, inputs, language) {
           return()
         }
       }
-      if (!isTruthy(input$loc_name_fr)) {
-        showModal(modalDialog(
-          "Location name (French) is mandatory",
-          easyClose = TRUE,
-          footer = tagList(
-            actionButton(ns("close"), "Close")
-          )
-        ))
-        return()
+      name_fr <- input$loc_name_fr
+      if (!isTruthy(name_fr)) {
+        name_fr <- "Traduction manquante!"
       } else {
-        if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
+        if (name_fr %in% moduleData$exist_locs$name_fr) {
           showModal(modalDialog(
             "Location name (French) already exists",
             easyClose = TRUE,
@@ -2946,7 +2949,7 @@ addLocation <- function(id, inputs, language) {
       df <- data.frame(
         location_code = input$loc_code,
         name = input$loc_name,
-        name_fr = input$loc_name_fr,
+        name_fr = name_fr,
         alias = if (isTruthy(input$alias)) input$alias else NA,
         latitude = input$lat,
         longitude = input$lon,
