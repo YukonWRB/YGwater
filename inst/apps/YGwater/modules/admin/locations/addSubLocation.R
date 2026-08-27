@@ -239,7 +239,7 @@ addSubLocation <- function(id, inputs, language) {
         updateTextInput(
           session,
           "subloc_name_fr",
-          label = "French sub-location name (must not exist already)"
+          label = "French sub-location name (leave blank if unable to translate)"
         )
       }
     })
@@ -258,26 +258,6 @@ addSubLocation <- function(id, inputs, language) {
             shinyjs::js$backgroundCol(ns("subloc_name"), "#fdd")
           } else {
             shinyjs::js$backgroundCol(ns("subloc_name"), "#fff")
-          }
-        }
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(
-      input$subloc_name_fr,
-      {
-        req(input$subloc_name_fr)
-        if (input$mode == "modify") {
-          shinyjs::js$backgroundCol(ns("subloc_name_fr"), "#fff")
-        } else {
-          if (
-            input$subloc_name_fr %in%
-              moduleData$exist_sub_locs$sub_location_name_fr
-          ) {
-            shinyjs::js$backgroundCol(ns("subloc_name_fr"), "#fdd")
-          } else {
-            shinyjs::js$backgroundCol(ns("subloc_name_fr"), "#fff")
           }
         }
       },

@@ -545,7 +545,7 @@ addLocation <- function(id, inputs, language) {
               ),
               textInput(
                 ns("loc_name_fr"),
-                "French location name (must not exist already)",
+                "French location name (leave blank if unable to translate)",
                 width = "100%"
               ),
               textInput(
@@ -1042,25 +1042,6 @@ addLocation <- function(id, inputs, language) {
       },
       ignoreInit = TRUE
     )
-
-    observeEvent(
-      input$loc_name_fr,
-      {
-        req(input$loc_name_fr)
-        if (input$mode == "modify") {
-          shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fff")
-        } else {
-          if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
-            shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fdd")
-          } else {
-            shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fff")
-          }
-        }
-      },
-      ignoreInit = TRUE
-    )
-
-    # Alias does not get the same treatment because it can be non-unique
 
     observeEvent(
       input$hydat_fill,
