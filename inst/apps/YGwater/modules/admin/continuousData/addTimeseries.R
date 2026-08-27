@@ -4785,9 +4785,9 @@ addTimeseries <- function(id, language) {
               )
 
               # Make a new entry to the timeseries table
-              new_timeseries_id <- DBI::dbGetQuery(
+              new_timeseries <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING timeseries_id;",
+                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT ON CONSTRAINT timeseries_unique DO NOTHING RETURNING timeseries_id;",
                 params = list(
                   as.numeric(loc),
                   ifelse(is.na(sub_loc), NA, sub_loc),
@@ -4804,7 +4804,19 @@ addTimeseries <- function(id, language) {
                   if (nzchar(note)) note else NA,
                   ifelse(is.na(end_datetime), NA, end_datetime)
                 )
-              )[1, 1]
+              )
+
+              if (nrow(new_timeseries) == 0L) {
+                DBI::dbRollback(con)
+                transaction_active <- FALSE
+                return(list(
+                  status = "error",
+                  timeseries_id = NA_integer_,
+                  message = "A timeseries already exists with this combination. Timeseries must be unique by location, parameter, aggregation type, media, matrix state, record rate, elevation/depth (z), sensor priority, sub-location, and timeseries type. Change at least one of these fields or modify the existing timeseries."
+                ))
+              }
+
+              new_timeseries_id <- new_timeseries[1, 1]
 
               if (nrow(source_assignments) > 0L) {
                 for (row_idx in seq_len(nrow(source_assignments))) {
