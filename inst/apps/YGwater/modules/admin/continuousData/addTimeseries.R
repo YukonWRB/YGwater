@@ -80,6 +80,9 @@ addTimeseries <- function(id, language) {
     source_args_existing_source <- reactiveVal(NA_character_)
     source_args_secondary_existing <- reactiveVal(NA_character_)
     source_args_secondary_existing_source <- reactiveVal(NA_character_)
+    source_test_role <- reactiveVal("primary")
+    source_test_run_id <- reactiveVal(0L)
+    source_test_state <- reactiveVal(list(status = "ready"))
 
     safe_text <- function(x) {
       ifelse(is.na(x), "", as.character(x))
@@ -2368,6 +2371,11 @@ addTimeseries <- function(id, language) {
                 actionButton(
                   ns("source_fx_doc"),
                   "Open function documentation"
+                ),
+                actionButton(
+                  ns("test_primary_source"),
+                  "Test primary response",
+                  icon = icon("flask")
                 )
               ),
               verticalLayout(
@@ -2450,7 +2458,12 @@ addTimeseries <- function(id, language) {
                     class = "alert alert-info",
                     "Secondary arguments are stored independently from the primary adapter."
                   ),
-                  uiOutput(ns("source_fx_secondary_args_ui"))
+                  uiOutput(ns("source_fx_secondary_args_ui")),
+                  actionButton(
+                    ns("test_secondary_source"),
+                    "Test secondary response",
+                    icon = icon("flask")
+                  )
                 )
               ),
               uiOutput(ns("secondary_transmission_mapping_ui"))
@@ -3766,6 +3779,317 @@ addTimeseries <- function(id, language) {
       ignoreNULL = TRUE
     )
 
+    show_source_test_modal <- function(role = c("primary", "secondary")) {
+      role <- match.arg(role)
+      if (identical(source_test_task$status(), "running")) {
+        showNotification(
+          "A source test is already underway. Wait for it to finish.",
+          type = "warning",
+          duration = 8
+        )
+        return(invisible(NULL))
+      }
+      secondary <- identical(role, "secondary")
+      source_fx <- nullable_text(if (secondary) {
+        input$source_fx_secondary
+      } else {
+        input$source_fx
+      })
+      if (is.na(source_fx)) {
+        showNotification(
+          paste("Select a", role, "source function to test."),
+          type = "warning",
+          duration = 8
+        )
+        return(invisible(NULL))
+      }
+
+      source_test_role(role)
+      source_test_run_id(source_test_run_id() + 1L)
+      source_test_state(list(status = "ready"))
+      end_datetime <- as.POSIXct(Sys.time(), tz = "UTC")
+      start_datetime <- end_datetime - 24 * 60 * 60
+      showModal(modalDialog(
+        title = paste("Test", role, "source response"),
+        size = "xl",
+        easyClose = TRUE,
+        tags$div(
+          class = "alert alert-info",
+          paste(
+            "This calls",
+            source_fx,
+            "with the source arguments currently shown in the form. The",
+            "assignment's active setting and fetch priority are ignored, and",
+            "the test does not save returned measurements or import history."
+          )
+        ),
+        splitLayout(
+          cellWidths = c("50%", "50%"),
+          shinyWidgets::airDatepickerInput(
+            ns("source_test_start"),
+            "Start datetime (UTC)",
+            value = start_datetime,
+            range = FALSE,
+            multiple = FALSE,
+            timepicker = TRUE,
+            update_on = "change",
+            tz = "UTC",
+            timepickerOpts = shinyWidgets::timepickerOptions(
+              minutesStep = 1,
+              timeFormat = "HH:mm"
+            )
+          ),
+          shinyWidgets::airDatepickerInput(
+            ns("source_test_end"),
+            "End datetime (UTC)",
+            value = end_datetime,
+            range = FALSE,
+            multiple = FALSE,
+            timepicker = TRUE,
+            update_on = "change",
+            tz = "UTC",
+            timepickerOpts = shinyWidgets::timepickerOptions(
+              minutesStep = 1,
+              timeFormat = "HH:mm"
+            )
+          )
+        ),
+        uiOutput(ns("source_test_result_ui")),
+        footer = tagList(
+          modalButton("Close"),
+          bslib::input_task_button(
+            ns("run_source_test"),
+            "Run test",
+            icon = icon("play"),
+            label_busy = "Testing..."
+          )
+        )
+      ))
+    }
+
+    observeEvent(input$test_primary_source, {
+      show_source_test_modal("primary")
+    })
+
+    observeEvent(input$test_secondary_source, {
+      show_source_test_modal("secondary")
+    })
+
+    output$source_test_result_ui <- renderUI({
+      state <- source_test_state()
+      if (identical(state$status, "ready")) {
+        return(tags$p(
+          class = "text-muted",
+          "Choose a UTC window and click Run test."
+        ))
+      }
+      if (identical(state$status, "running")) {
+        return(tags$div(
+          class = "alert alert-secondary",
+          icon("spinner", class = "fa-spin"),
+          paste("Testing", state$source_fx, "...")
+        ))
+      }
+      if (identical(state$status, "error")) {
+        return(tagList(
+          tags$div(
+            class = "alert alert-danger",
+            tags$strong("Source test failed.")
+          ),
+          tags$pre(
+            style = "max-height: 50vh; overflow: auto; white-space: pre-wrap;",
+            state$message
+          )
+        ))
+      }
+
+      tagList(
+        tags$div(
+          class = "alert alert-success",
+          paste(
+            state$source_fx,
+            "completed for",
+            format(state$start_datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+            "to",
+            format(state$end_datetime, "%Y-%m-%d %H:%M:%S UTC", tz = "UTC")
+          )
+        ),
+        if (length(state$warnings)) {
+          tags$div(
+            class = "alert alert-warning",
+            tags$strong("Warnings:"),
+            tags$ul(lapply(unique(state$warnings), tags$li))
+          )
+        },
+        tags$pre(
+          style = "max-height: 55vh; overflow: auto; white-space: pre;",
+          state$output
+        )
+      )
+    })
+
+    source_test_task <- ExtendedTask$new(function(request) {
+      promises::future_promise(seed = TRUE, expr = {
+        tryCatch(
+          {
+            con <- AquaCache::AquaConnect(
+              name = request$config$dbName,
+              host = request$config$dbHost,
+              port = request$config$dbPort,
+              username = request$config$dbUser,
+              password = request$config$dbPass,
+              silent = TRUE
+            )
+            on.exit(DBI::dbDisconnect(con), add = TRUE)
+            DBI::dbExecute(con, "SET default_transaction_read_only = on")
+            test_warnings <- character()
+            result <- withCallingHandlers(
+              source_adapter_test(
+                source_fx = request$source_fx,
+                source_fx_args = request$source_fx_args,
+                start_datetime = request$start_datetime,
+                end_datetime = request$end_datetime,
+                con = con
+              ),
+              warning = function(warning) {
+                test_warnings <<- c(
+                  test_warnings,
+                  conditionMessage(warning)
+                )
+                invokeRestart("muffleWarning")
+              }
+            )
+            list(
+              ok = TRUE,
+              run_id = request$run_id,
+              source_fx = request$source_fx,
+              start_datetime = request$start_datetime,
+              end_datetime = request$end_datetime,
+              output = source_adapter_test_result_text(result),
+              warnings = test_warnings
+            )
+          },
+          error = function(error) {
+            list(
+              ok = FALSE,
+              run_id = request$run_id,
+              message = conditionMessage(error)
+            )
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("run_source_test")
+
+    observe({
+      role <- source_test_role()
+      secondary <- identical(role, "secondary")
+      run_id <- source_test_run_id() + 1L
+      source_test_run_id(run_id)
+      test_request <- tryCatch(
+        {
+          capability <- if (secondary) {
+            secondary_adapter_capability()
+          } else {
+            current_adapter_capability()
+          }
+          if (is.null(capability)) {
+            stop("The selected source function is not available in the registry.")
+          }
+          source_fx <- nullable_text(if (secondary) {
+            input$source_fx_secondary
+          } else {
+            input$source_fx
+          })
+          source_fx_args <- if (secondary) {
+            collect_secondary_source_fx_args()
+          } else {
+            collect_source_fx_args()
+          }
+          if (isTRUE(capability$requires_transmission_mapping[[1L]])) {
+            source_fx_args <- timeseries_source_args_with_transmission_route(
+              source_fx_args,
+              if (secondary) {
+                input$secondary_transmission_route
+              } else {
+                input$transmission_route
+              }
+            )
+          }
+          start_datetime <- timeseries_parse_utc_datetime(
+            input$source_test_start,
+            "Start datetime"
+          )
+          end_datetime <- timeseries_parse_utc_datetime(
+            input$source_test_end,
+            "End datetime"
+          )
+          if (start_datetime >= end_datetime) {
+            stop("Start datetime must precede end datetime.")
+          }
+          task_config <- session$userData$config[c(
+            "dbName",
+            "dbHost",
+            "dbPort",
+            "dbUser",
+            "dbPass"
+          )]
+          list(
+            run_id = run_id,
+            config = task_config,
+            source_fx = source_fx,
+            source_fx_args = source_fx_args,
+            start_datetime = start_datetime,
+            end_datetime = end_datetime
+          )
+        },
+        error = function(error) {
+          source_test_state(list(
+            status = "error",
+            message = conditionMessage(error)
+          ))
+          NULL
+        }
+      )
+      if (is.null(test_request)) {
+        return()
+      }
+
+      source_test_state(list(
+        status = "running",
+        source_fx = test_request$source_fx,
+        start_datetime = test_request$start_datetime,
+        end_datetime = test_request$end_datetime
+      ))
+      source_test_task$invoke(test_request)
+    }) |>
+      bindEvent(input$run_source_test, ignoreInit = TRUE)
+
+    observe({
+      result <- source_test_task$result()
+      if (!identical(result$run_id, source_test_run_id())) {
+        return()
+      }
+      if (!isTRUE(result$ok)) {
+        source_test_state(list(
+          status = "error",
+          message = result$message
+        ))
+        return()
+      }
+      source_test_state(c(
+        list(status = "success"),
+        result[c(
+          "source_fx",
+          "start_datetime",
+          "end_datetime",
+          "output",
+          "warnings"
+        )]
+      ))
+    }) |>
+      bindEvent(source_test_task$result(), ignoreInit = TRUE)
+
     # Show the user a modal with example arguments for the selected source function
     observeEvent(input$args_example, {
       if (is.null(input$source_fx) || input$source_fx == "") {
@@ -4461,9 +4785,9 @@ addTimeseries <- function(id, language) {
               )
 
               # Make a new entry to the timeseries table
-              new_timeseries_id <- DBI::dbGetQuery(
+              new_timeseries <- DBI::dbGetQuery(
                 con,
-                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING timeseries_id;",
+                "INSERT INTO continuous.timeseries (location_id, sub_location_id, timezone_daily_calc, z_id, parameter_id, media_id, matrix_state_id, sensor_priority, aggregation_type_id, record_rate, default_owner, share_with, note, end_datetime) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) ON CONFLICT ON CONSTRAINT timeseries_unique DO NOTHING RETURNING timeseries_id;",
                 params = list(
                   as.numeric(loc),
                   ifelse(is.na(sub_loc), NA, sub_loc),
@@ -4480,7 +4804,19 @@ addTimeseries <- function(id, language) {
                   if (nzchar(note)) note else NA,
                   ifelse(is.na(end_datetime), NA, end_datetime)
                 )
-              )[1, 1]
+              )
+
+              if (nrow(new_timeseries) == 0L) {
+                DBI::dbRollback(con)
+                transaction_active <- FALSE
+                return(list(
+                  status = "error",
+                  timeseries_id = NA_integer_,
+                  message = "A timeseries already exists with this combination. Timeseries must be unique by location, parameter, aggregation type, media, matrix state, record rate, elevation/depth (z), sensor priority, sub-location, and timeseries type. Change at least one of these fields or modify the existing timeseries."
+                ))
+              }
+
+              new_timeseries_id <- new_timeseries[1, 1]
 
               if (nrow(source_assignments) > 0L) {
                 for (row_idx in seq_len(nrow(source_assignments))) {

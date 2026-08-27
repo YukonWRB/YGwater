@@ -39,15 +39,15 @@ addSubLocation <- function(id, inputs, language) {
     moduleData <- reactiveValues()
 
     getModuleData <- function() {
-      moduleData$exist_locs = DBI::dbGetQuery(
+      moduleData$exist_locs <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT location_id, name, latitude, longitude FROM public.locations ORDER BY name"
       )
-      moduleData$exist_sub_locs = DBI::dbGetQuery(
+      moduleData$exist_sub_locs <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT sub_location_id, location_id, sub_location_name, sub_location_name_fr, latitude, longitude, note, share_with FROM public.sub_locations ORDER BY sub_location_name;"
       )
-      moduleData$users = DBI::dbGetQuery(
+      moduleData$users <- DBI::dbGetQuery(
         session$userData$AquaCache,
         "SELECT * FROM public.get_shareable_principals_for('public.sub_locations');"
       ) # This is a helper function run with SECURITY DEFINER and created by postgres that pulls all user groups (plus public_reader) with select privileges on a table
@@ -95,7 +95,7 @@ addSubLocation <- function(id, inputs, language) {
           ),
           textInput(
             ns("subloc_name_fr"),
-            "French sub-location name (must not exist already)",
+            "French sub-location name (leave blank if unable to translate)",
             width = "100%"
           )
         ),
@@ -239,7 +239,7 @@ addSubLocation <- function(id, inputs, language) {
         updateTextInput(
           session,
           "subloc_name_fr",
-          label = "French sub-location name (must not exist already)"
+          label = "French sub-location name (leave blank if unable to translate)"
         )
       }
     })
@@ -258,26 +258,6 @@ addSubLocation <- function(id, inputs, language) {
             shinyjs::js$backgroundCol(ns("subloc_name"), "#fdd")
           } else {
             shinyjs::js$backgroundCol(ns("subloc_name"), "#fff")
-          }
-        }
-      },
-      ignoreInit = TRUE
-    )
-
-    observeEvent(
-      input$subloc_name_fr,
-      {
-        req(input$subloc_name_fr)
-        if (input$mode == "modify") {
-          shinyjs::js$backgroundCol(ns("subloc_name_fr"), "#fff")
-        } else {
-          if (
-            input$subloc_name_fr %in%
-              moduleData$exist_sub_locs$sub_location_name_fr
-          ) {
-            shinyjs::js$backgroundCol(ns("subloc_name_fr"), "#fdd")
-          } else {
-            shinyjs::js$backgroundCol(ns("subloc_name_fr"), "#fff")
           }
         }
       },
@@ -838,15 +818,12 @@ addSubLocation <- function(id, inputs, language) {
           return()
         }
       }
-      if (!isTruthy(input$subloc_name_fr)) {
-        showModal(modalDialog(
-          "Location name (French) is mandatory",
-          easyClose = TRUE
-        ))
-        return()
+      name_fr <- input$subloc_name_fr
+      if (!isTruthy(name_fr)) {
+        name_fr <- "Traduction requise!"
       } else {
         if (
-          input$subloc_name_fr %in%
+          name_fr %in%
             moduleData$exist_sub_locs$sub_location_name_fr
         ) {
           showModal(modalDialog(
@@ -865,7 +842,7 @@ addSubLocation <- function(id, inputs, language) {
             params = list(
               input$location,
               input$subloc_name,
-              input$subloc_name_fr,
+              name_fr,
               input$lat,
               input$lon,
               paste0(

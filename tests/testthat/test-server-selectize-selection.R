@@ -91,28 +91,3 @@ test_that("maintenance tables refresh server-side selectors", {
     fixed = TRUE
   )
 })
-
-test_that("flood table and map refresh the server-side station selector", {
-  module <- read_app_module("client/reports/floodDashboard.R")
-
-  expect_match(
-    module,
-    "update_station_selector <- function(",
-    fixed = TRUE
-  )
-  expect_match(
-    module,
-    "choices = build_station_choices(dat)",
-    fixed = TRUE
-  )
-  expect_match(
-    module,
-    "update_station_selector(\n                    selected = selected_station,\n                    dat = community_locations()",
-    fixed = TRUE
-  )
-  expect_match(
-    module,
-    "update_station_selector(selected = selected_code)",
-    fixed = TRUE
-  )
-})

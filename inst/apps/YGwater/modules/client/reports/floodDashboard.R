@@ -686,12 +686,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             sprintf(
                 paste(
                     "SELECT DISTINCT EXTRACT(YEAR FROM s.target_datetime)::int AS year",
-                    "FROM discrete.samples s",
+                    "FROM samples s",
                     "JOIN discrete.results dr",
                     "  ON dr.sample_id = s.sample_id",
-                    "JOIN public.parameters p",
+                    "JOIN parameters p",
                     "  ON p.parameter_id = dr.parameter_id",
-                    "JOIN public.locations l",
+                    "JOIN locations l",
                     "  ON l.location_id = s.location_id",
                     "WHERE l.location_code = %s",
                     "  AND p.param_name = %s",
@@ -706,12 +706,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             sprintf(
                 paste(
                     "SELECT DISTINCT EXTRACT(YEAR FROM mcd.date)::int AS year",
-                    "FROM continuous.measurements_calculated_daily mcd",
-                    "JOIN continuous.timeseries ts",
+                    "FROM measurements_calculated_daily mcd",
+                    "JOIN timeseries ts",
                     "  ON ts.timeseries_id = mcd.timeseries_id",
-                    "JOIN public.parameters p",
+                    "JOIN parameters p",
                     "  ON p.parameter_id = ts.parameter_id",
-                    "JOIN public.locations l",
+                    "JOIN locations l",
                     "  ON l.location_id = ts.location_id",
                     "WHERE l.location_code = %s",
                     "  AND p.param_name = %s",
@@ -835,8 +835,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             sprintf(
                 paste(
                     "SELECT DISTINCT ts.location_id",
-                    "FROM continuous.timeseries ts",
-                    "JOIN public.parameters p",
+                    "FROM timeseries ts",
+                    "JOIN parameters p",
                     "  ON p.parameter_id = ts.parameter_id",
                     "WHERE ts.location_id IN (%s)",
                     "  AND p.param_name = %s"
@@ -1038,11 +1038,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "),",
                         "target_timeseries AS (",
                         "    SELECT ts.location_id, ts.timeseries_id",
-                        "    FROM continuous.timeseries ts",
-                        "    JOIN public.locations l ON l.location_id = ts.location_id",
+                        "    FROM timeseries ts",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
                         "    JOIN target_locations tl ON tl.location_code = l.location_code",
-                        "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                        "    JOIN continuous.aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
                         "    WHERE p.param_name = 'temperature, air'",
                         "      AND a.aggregation_type = %s",
                         "),",
@@ -1050,7 +1050,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "    SELECT DISTINCT ON (tt.location_id)",
                         "        tt.location_id, tt.timeseries_id, mcd.date::timestamp AS latest_time, mcd.value AS current_value",
                         "    FROM target_timeseries tt",
-                        "    JOIN continuous.measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
+                        "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
                         "    WHERE mcd.value IS NOT NULL",
                         paste0(
                             "      AND mcd.date >= ",
@@ -1067,21 +1067,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "        dl.current_value - prev1w.value AS change_1w",
                         "    FROM daily_latest dl",
                         "    LEFT JOIN LATERAL (",
-                        "        SELECT mcd.value FROM continuous.measurements_calculated_daily mcd",
+                        "        SELECT mcd.value FROM measurements_calculated_daily mcd",
                         "        WHERE mcd.timeseries_id = dl.timeseries_id",
                         "          AND mcd.value IS NOT NULL",
                         "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
                         "        ORDER BY mcd.date DESC LIMIT 1",
                         "    ) prev ON TRUE",
                         "    LEFT JOIN LATERAL (",
-                        "        SELECT mcd.value FROM continuous.measurements_calculated_daily mcd",
+                        "        SELECT mcd.value FROM measurements_calculated_daily mcd",
                         "        WHERE mcd.timeseries_id = dl.timeseries_id",
                         "          AND mcd.value IS NOT NULL",
                         "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 days'",
                         "        ORDER BY mcd.date DESC LIMIT 1",
                         "    ) prev48 ON TRUE",
                         "    LEFT JOIN LATERAL (",
-                        "        SELECT mcd.value FROM continuous.measurements_calculated_daily mcd",
+                        "        SELECT mcd.value FROM measurements_calculated_daily mcd",
                         "        WHERE mcd.timeseries_id = dl.timeseries_id",
                         "          AND mcd.value IS NOT NULL",
                         "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 days'",
@@ -1096,7 +1096,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             " - d.latest_time)) / 3600.0 AS last_data_age_hours"
                         ),
                         "FROM daily_change d",
-                        "JOIN public.locations loc ON loc.location_id = d.location_id",
+                        "JOIN locations loc ON loc.location_id = d.location_id",
                         "ORDER BY loc.location_code"
                     ),
                     location_codes_sql,
@@ -1119,10 +1119,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "),",
                     "target_timeseries AS (",
                     "    SELECT ts.location_id, ts.timeseries_id",
-                    "    FROM continuous.timeseries ts",
-                    "    JOIN public.locations l ON l.location_id = ts.location_id",
+                    "    FROM timeseries ts",
+                    "    JOIN locations l ON l.location_id = ts.location_id",
                     "    JOIN target_locations tl ON tl.location_code = l.location_code",
-                    "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                     "    WHERE p.param_name = %s",
                     "),",
                     "continuous_latest AS (",
@@ -1132,7 +1132,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        mc.datetime AS latest_time,",
                     "        mc.value AS current_value",
                     "    FROM target_timeseries tt",
-                    "    JOIN continuous.measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
+                    "    JOIN measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
                     "    WHERE mc.value IS NOT NULL",
                     paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
                     paste0("      AND mc.datetime <= ", ref_ts_sql),
@@ -1147,21 +1147,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        1 AS source_priority",
                     "    FROM continuous_latest cl",
                     "    LEFT JOIN LATERAL (",
-                    "        SELECT mc.value FROM continuous.measurements_continuous mc",
+                    "        SELECT mc.value FROM measurements_continuous mc",
                     "        WHERE mc.timeseries_id = cl.timeseries_id",
                     "          AND mc.value IS NOT NULL",
                     "          AND mc.datetime <= cl.latest_time - INTERVAL '24 hours'",
                     "        ORDER BY mc.datetime DESC LIMIT 1",
                     "    ) prev ON TRUE",
                     "    LEFT JOIN LATERAL (",
-                    "        SELECT mc.value FROM continuous.measurements_continuous mc",
+                    "        SELECT mc.value FROM measurements_continuous mc",
                     "        WHERE mc.timeseries_id = cl.timeseries_id",
                     "          AND mc.value IS NOT NULL",
                     "          AND mc.datetime <= cl.latest_time - INTERVAL '48 hours'",
                     "        ORDER BY mc.datetime DESC LIMIT 1",
                     "    ) prev48 ON TRUE",
                     "    LEFT JOIN LATERAL (",
-                    "        SELECT mc.value FROM continuous.measurements_continuous mc",
+                    "        SELECT mc.value FROM measurements_continuous mc",
                     "        WHERE mc.timeseries_id = cl.timeseries_id",
                     "          AND mc.value IS NOT NULL",
                     "          AND mc.datetime <= cl.latest_time - INTERVAL '7 days'",
@@ -1172,7 +1172,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    SELECT DISTINCT ON (tt.location_id)",
                     "        tt.location_id, tt.timeseries_id, mcd.date::timestamp AS latest_time, mcd.value AS current_value",
                     "    FROM target_timeseries tt",
-                    "    JOIN continuous.measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
+                    "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
                     "    WHERE mcd.value IS NOT NULL",
                     paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
                     paste0("      AND mcd.date <= ", ref_date_sql),
@@ -1187,21 +1187,21 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        2 AS source_priority",
                     "    FROM daily_latest dl",
                     "    LEFT JOIN LATERAL (",
-                    "        SELECT mcd.value FROM continuous.measurements_calculated_daily mcd",
+                    "        SELECT mcd.value FROM measurements_calculated_daily mcd",
                     "        WHERE mcd.timeseries_id = dl.timeseries_id",
                     "          AND mcd.value IS NOT NULL",
                     "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
                     "        ORDER BY mcd.date DESC LIMIT 1",
                     "    ) prev ON TRUE",
                     "    LEFT JOIN LATERAL (",
-                    "        SELECT mcd.value FROM continuous.measurements_calculated_daily mcd",
+                    "        SELECT mcd.value FROM measurements_calculated_daily mcd",
                     "        WHERE mcd.timeseries_id = dl.timeseries_id",
                     "          AND mcd.value IS NOT NULL",
                     "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 days'",
                     "        ORDER BY mcd.date DESC LIMIT 1",
                     "    ) prev48 ON TRUE",
                     "    LEFT JOIN LATERAL (",
-                    "        SELECT mcd.value FROM continuous.measurements_calculated_daily mcd",
+                    "        SELECT mcd.value FROM measurements_calculated_daily mcd",
                     "        WHERE mcd.timeseries_id = dl.timeseries_id",
                     "          AND mcd.value IS NOT NULL",
                     "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 days'",
@@ -1226,7 +1226,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         " - b.latest_time)) / 3600.0 AS last_data_age_hours"
                     ),
                     "FROM best_latest b",
-                    "JOIN public.locations loc ON loc.location_id = b.location_id",
+                    "JOIN locations loc ON loc.location_id = b.location_id",
                     "WHERE b.rn = 1",
                     "ORDER BY loc.location_code"
                 ),
@@ -1295,14 +1295,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "),",
                     "target_timeseries AS (",
                     "    SELECT ts.location_id, ts.timeseries_id",
-                    "    FROM continuous.timeseries ts",
-                    "    JOIN public.locations l",
+                    "    FROM timeseries ts",
+                    "    JOIN locations l",
                     "      ON l.location_id = ts.location_id",
                     "    JOIN target_locations tl",
                     "      ON tl.location_code = l.location_code",
-                    "    JOIN public.parameters p",
+                    "    JOIN parameters p",
                     "      ON p.parameter_id = ts.parameter_id",
-                    "    JOIN continuous.aggregation_types a",
+                    "    JOIN aggregation_types a",
                     "      ON a.aggregation_type_id = ts.aggregation_type_id",
                     "    WHERE p.param_name = 'temperature, air'",
                     "      AND a.aggregation_type = %s",
@@ -1314,7 +1314,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        mcd.date AS date,",
                     "        mcd.value AS mean_temp",
                     "    FROM target_timeseries tt",
-                    "    JOIN continuous.measurements_calculated_daily mcd",
+                    "    JOIN measurements_calculated_daily mcd",
                     "      ON mcd.timeseries_id = tt.timeseries_id",
                     "    WHERE mcd.value IS NOT NULL",
                     paste0("      AND mcd.date <= ", ref_date_sql),
@@ -1404,7 +1404,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    ORDER BY sf.date DESC",
                     "    LIMIT 1",
                     ") prev1w ON TRUE",
-                    "JOIN public.locations loc",
+                    "JOIN locations loc",
                     "  ON loc.location_id = l.location_id",
                     paste0("WHERE l.date >= ", recent_cutoff_date_sql),
                     "ORDER BY loc.location_code"
@@ -1474,14 +1474,14 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "),",
                     "target_timeseries AS (",
                     "    SELECT ts.location_id, ts.timeseries_id",
-                    "    FROM continuous.timeseries ts",
-                    "    JOIN public.locations l",
+                    "    FROM timeseries ts",
+                    "    JOIN locations l",
                     "      ON l.location_id = ts.location_id",
                     "    JOIN target_locations tl",
                     "      ON tl.location_code = l.location_code",
-                    "    JOIN public.parameters p",
+                    "    JOIN parameters p",
                     "      ON p.parameter_id = ts.parameter_id",
-                    "    JOIN continuous.aggregation_types a",
+                    "    JOIN aggregation_types a",
                     "      ON a.aggregation_type_id = ts.aggregation_type_id",
                     "    WHERE p.param_name = 'temperature, air'",
                     "      AND a.aggregation_type = %s",
@@ -1493,7 +1493,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        mcd.date AS date,",
                     "        mcd.value AS mean_temp",
                     "    FROM target_timeseries tt",
-                    "    JOIN continuous.measurements_calculated_daily mcd",
+                    "    JOIN measurements_calculated_daily mcd",
                     "      ON mcd.timeseries_id = tt.timeseries_id",
                     "    WHERE mcd.value IS NOT NULL",
                     paste0("      AND mcd.date <= ", ref_date_sql),
@@ -1583,7 +1583,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    ORDER BY sd.date DESC",
                     "    LIMIT 1",
                     ") prev1w ON TRUE",
-                    "JOIN public.locations loc",
+                    "JOIN locations loc",
                     "  ON loc.location_id = l.location_id",
                     paste0("WHERE l.date >= ", recent_cutoff_date_sql),
                     "ORDER BY loc.location_code"
@@ -1653,15 +1653,15 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "),",
                     "target_timeseries AS (",
                     "    SELECT ts.location_id, ts.timeseries_id",
-                    "    FROM continuous.timeseries ts",
-                    "    JOIN public.locations loc ON loc.location_id = ts.location_id",
+                    "    FROM timeseries ts",
+                    "    JOIN locations loc ON loc.location_id = ts.location_id",
                     "    JOIN target_locations tl ON tl.location_code = loc.location_code",
-                    "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                     "    WHERE p.param_name = 'precipitation, total'",
                     "),",
                     "filtered AS MATERIALIZED (",
                     "    SELECT t.location_id, t.timeseries_id, mc.date, mc.value",
-                    "    FROM continuous.measurements_calculated_daily mc",
+                    "    FROM measurements_calculated_daily mc",
                     "    JOIN target_timeseries t ON t.timeseries_id = mc.timeseries_id",
                     "    WHERE mc.value IS NOT NULL",
                     paste0(
@@ -1688,7 +1688,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '1 month' AND mc.date <= l.last_date) AS precipitation_1m_accumulation,",
                     "        SUM(mc.value) FILTER (WHERE mc.date > l.last_date - INTERVAL '6 months' AND mc.date <= l.last_date) AS precipitation_6m_accumulation",
                     "    FROM latest_by_location l",
-                    "    JOIN continuous.measurements_calculated_daily mc ON mc.timeseries_id = l.timeseries_id",
+                    "    JOIN measurements_calculated_daily mc ON mc.timeseries_id = l.timeseries_id",
                     "    WHERE mc.value IS NOT NULL",
                     "      AND mc.date > l.last_date - INTERVAL '6 months'",
                     "      AND mc.date <= l.last_date",
@@ -1706,7 +1706,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         " - l.last_date::timestamp)) / 3600.0 AS last_data_age_hours"
                     ),
                     "FROM target_locations tl",
-                    "JOIN public.locations loc ON loc.location_code = tl.location_code",
+                    "JOIN locations loc ON loc.location_code = tl.location_code",
                     "LEFT JOIN latest_by_location l ON l.location_id = loc.location_id",
                     "LEFT JOIN current_accumulations ca ON ca.location_id = loc.location_id",
                     "WHERE l.last_date IS NOT NULL",
@@ -1775,10 +1775,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    SELECT l.location_id, l.location_code, s.sample_id,",
                     "        s.target_datetime, dr.result AS value",
                     "    FROM target_locations tl",
-                    "    JOIN public.locations l ON l.location_code = tl.location_code",
-                    "    JOIN discrete.samples s ON s.location_id = l.location_id",
+                    "    JOIN locations l ON l.location_code = tl.location_code",
+                    "    JOIN samples s ON s.location_id = l.location_id",
                     "    JOIN discrete.results dr ON dr.sample_id = s.sample_id",
-                    "    JOIN public.parameters p ON p.parameter_id = dr.parameter_id",
+                    "    JOIN parameters p ON p.parameter_id = dr.parameter_id",
                     "    WHERE p.param_name = %s",
                     "      AND dr.result IS NOT NULL",
                     "      AND s.target_datetime IS NOT NULL",
@@ -1817,7 +1817,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         " - l.latest_time)) / 3600.0 AS last_data_age_hours"
                     ),
                     "FROM latest_by_location l",
-                    "JOIN public.locations loc ON loc.location_id = l.location_id",
+                    "JOIN locations loc ON loc.location_id = l.location_id",
                     "LEFT JOIN current_year_values cy ON cy.location_id = l.location_id",
                     "ORDER BY loc.location_code"
                 ),
@@ -1881,9 +1881,9 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "),",
                     "target_timeseries AS (",
                     "    SELECT ts.location_id, ts.timeseries_id",
-                    "    FROM continuous.timeseries ts",
+                    "    FROM timeseries ts",
                     "    JOIN target_locations tl ON tl.location_id = ts.location_id",
-                    "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
                     "    WHERE p.param_name = %s",
                     "),",
                     "continuous_latest AS (",
@@ -1893,7 +1893,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        mc.datetime AS latest_time,",
                     "        mc.value AS current_value",
                     "    FROM target_timeseries tt",
-                    "    JOIN continuous.measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
+                    "    JOIN measurements_continuous mc ON mc.timeseries_id = tt.timeseries_id",
                     "    WHERE mc.value IS NOT NULL",
                     paste0("      AND mc.datetime <= ", reference_ts),
                     "    ORDER BY tt.location_id, mc.datetime DESC, tt.timeseries_id",
@@ -1915,7 +1915,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    FROM continuous_latest cl",
                     "    LEFT JOIN LATERAL (",
                     "        SELECT mc.value",
-                    "        FROM continuous.measurements_continuous mc",
+                    "        FROM measurements_continuous mc",
                     "        WHERE mc.timeseries_id = cl.timeseries_id",
                     "          AND mc.value IS NOT NULL",
                     "          AND mc.datetime <= cl.latest_time - INTERVAL '24 hours'",
@@ -1924,7 +1924,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    ) prev24 ON TRUE",
                     "    LEFT JOIN LATERAL (",
                     "        SELECT mc.value",
-                    "        FROM continuous.measurements_continuous mc",
+                    "        FROM measurements_continuous mc",
                     "        WHERE mc.timeseries_id = cl.timeseries_id",
                     "          AND mc.value IS NOT NULL",
                     "          AND mc.datetime <= cl.latest_time - INTERVAL '48 hours'",
@@ -1933,7 +1933,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    ) prev48 ON TRUE",
                     "    LEFT JOIN LATERAL (",
                     "        SELECT mc.value",
-                    "        FROM continuous.measurements_continuous mc",
+                    "        FROM measurements_continuous mc",
                     "        WHERE mc.timeseries_id = cl.timeseries_id",
                     "          AND mc.value IS NOT NULL",
                     "          AND mc.datetime <= cl.latest_time - INTERVAL '7 days'",
@@ -1948,7 +1948,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        mcd.date::timestamp AS latest_time,",
                     "        mcd.value AS current_value",
                     "    FROM target_timeseries tt",
-                    "    JOIN continuous.measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
+                    "    JOIN measurements_calculated_daily mcd ON mcd.timeseries_id = tt.timeseries_id",
                     "    WHERE mcd.value IS NOT NULL",
                     paste0("      AND mcd.date <= ", reference_date),
                     "    ORDER BY tt.location_id, mcd.date DESC, tt.timeseries_id",
@@ -1970,7 +1970,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    FROM daily_latest dl",
                     "    LEFT JOIN LATERAL (",
                     "        SELECT mcd.value",
-                    "        FROM continuous.measurements_calculated_daily mcd",
+                    "        FROM measurements_calculated_daily mcd",
                     "        WHERE mcd.timeseries_id = dl.timeseries_id",
                     "          AND mcd.value IS NOT NULL",
                     "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '1 day'",
@@ -1979,7 +1979,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    ) prev24 ON TRUE",
                     "    LEFT JOIN LATERAL (",
                     "        SELECT mcd.value",
-                    "        FROM continuous.measurements_calculated_daily mcd",
+                    "        FROM measurements_calculated_daily mcd",
                     "        WHERE mcd.timeseries_id = dl.timeseries_id",
                     "          AND mcd.value IS NOT NULL",
                     "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '2 day'",
@@ -1988,7 +1988,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    ) prev48 ON TRUE",
                     "    LEFT JOIN LATERAL (",
                     "        SELECT mcd.value",
-                    "        FROM continuous.measurements_calculated_daily mcd",
+                    "        FROM measurements_calculated_daily mcd",
                     "        WHERE mcd.timeseries_id = dl.timeseries_id",
                     "          AND mcd.value IS NOT NULL",
                     "          AND mcd.date::timestamp <= dl.latest_time - INTERVAL '7 day'",
@@ -2194,7 +2194,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    location_id,",
                     "    latitude,",
                     "    longitude",
-                    "FROM public.locations",
+                    "FROM locations",
                     sprintf(
                         "WHERE %s",
                         paste(where_clauses, collapse = " OR ")
@@ -2219,7 +2219,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    location_id,",
                     "    latitude,",
                     "    longitude",
-                    "FROM public.locations",
+                    "FROM locations",
                     sprintf("WHERE name IN (%s)", location_names_sql),
                     "ORDER BY name"
                 ),
@@ -2428,10 +2428,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        l.location_code,",
                     "        EXTRACT(YEAR FROM mc.date)::int AS year,",
                     "        MAX(mc.value) AS annual_peak",
-                    "    FROM continuous.measurements_calculated_daily mc",
-                    "    JOIN continuous.timeseries ts ON mc.timeseries_id = ts.timeseries_id",
-                    "    JOIN public.locations l ON ts.location_id = l.location_id",
-                    "    JOIN public.parameters p ON ts.parameter_id = p.parameter_id",
+                    "    FROM measurements_calculated_daily mc",
+                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "    JOIN locations l ON ts.location_id = l.location_id",
+                    "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    WHERE l.location_code IN (%s)",
                     "      AND p.param_name = '%s'",
                     "    GROUP BY ts.location_id, l.location_code, EXTRACT(YEAR FROM mc.date)",
@@ -2511,11 +2511,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "        CASE WHEN EXTRACT(MONTH FROM mc.date) > 2 AND ((EXTRACT(YEAR FROM mc.date)::int %% 4 = 0 AND EXTRACT(YEAR FROM mc.date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM mc.date)::int %% 400 = 0)",
                         "            THEN EXTRACT(DOY FROM mc.date)::int - 1 ELSE EXTRACT(DOY FROM mc.date)::int END AS doy,",
                         "        mc.value",
-                        "    FROM continuous.measurements_calculated_daily mc",
-                        "    JOIN continuous.timeseries ts ON mc.timeseries_id = ts.timeseries_id",
-                        "    JOIN public.locations l ON ts.location_id = l.location_id",
-                        "    JOIN public.parameters p ON ts.parameter_id = p.parameter_id",
-                        "    JOIN continuous.aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
+                        "    FROM measurements_calculated_daily mc",
+                        "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
+                        "    JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
                         "    WHERE l.location_code IN (%s)",
                         "      AND p.param_name = 'temperature, air'",
                         "      AND a.aggregation_type = %s",
@@ -2562,10 +2562,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "    SELECT l.location_code,",
                         "        mcd.date AS date,",
                         "        mcd.value AS mean_temp",
-                        "    FROM continuous.measurements_calculated_daily mcd",
-                        "    JOIN continuous.timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
-                        "    JOIN public.locations l ON ts.location_id = l.location_id",
-                        "    JOIN public.parameters p ON ts.parameter_id = p.parameter_id",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                         "    WHERE l.location_code IN (%s)",
                         "      AND p.param_name = 'temperature, air'",
                         "      AND mcd.value IS NOT NULL",
@@ -2631,10 +2631,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "    SELECT l.location_code,",
                         "        mcd.date AS date,",
                         "        mcd.value AS mean_temp",
-                        "    FROM continuous.measurements_calculated_daily mcd",
-                        "    JOIN continuous.timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
-                        "    JOIN public.locations l ON ts.location_id = l.location_id",
-                        "    JOIN public.parameters p ON ts.parameter_id = p.parameter_id",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON mcd.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                         "    WHERE l.location_code IN (%s)",
                         "      AND p.param_name = 'temperature, air'",
                         "      AND mcd.value IS NOT NULL",
@@ -2705,10 +2705,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     paste(
                         "WITH daily_values AS (",
                         "    SELECT l.location_code, mc.date, mc.value",
-                        "    FROM continuous.measurements_calculated_daily mc",
-                        "    JOIN continuous.timeseries ts ON mc.timeseries_id = ts.timeseries_id",
-                        "    JOIN public.locations l ON ts.location_id = l.location_id",
-                        "    JOIN public.parameters p ON ts.parameter_id = p.parameter_id",
+                        "    FROM measurements_calculated_daily mc",
+                        "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                        "    JOIN locations l ON ts.location_id = l.location_id",
+                        "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                         "    WHERE l.location_code IN (%s)",
                         "      AND p.param_name = 'precipitation, total'",
                         paste0(
@@ -2772,10 +2772,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             "            ELSE EXTRACT(DOY FROM s.target_datetime)::int",
                             "        END AS doy,",
                             "        dr.result AS value",
-                            "    FROM discrete.samples s",
+                            "    FROM samples s",
                             "    JOIN discrete.results dr ON dr.sample_id = s.sample_id",
-                            "    JOIN public.parameters p ON p.parameter_id = dr.parameter_id",
-                            "    JOIN public.locations l ON l.location_id = s.location_id",
+                            "    JOIN parameters p ON p.parameter_id = dr.parameter_id",
+                            "    JOIN locations l ON l.location_id = s.location_id",
                             "    WHERE l.location_code IN (%s)",
                             "      AND p.param_name = '%s'",
                             "      AND dr.result IS NOT NULL",
@@ -2826,10 +2826,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "        CASE WHEN EXTRACT(MONTH FROM mc.date) > 2 AND ((EXTRACT(YEAR FROM mc.date)::int %% 4 = 0 AND EXTRACT(YEAR FROM mc.date)::int %% 100 <> 0) OR EXTRACT(YEAR FROM mc.date)::int %% 400 = 0)",
                     "            THEN EXTRACT(DOY FROM mc.date)::int - 1 ELSE EXTRACT(DOY FROM mc.date)::int END AS doy,",
                     "        mc.value",
-                    "    FROM continuous.measurements_calculated_daily mc",
-                    "    JOIN continuous.timeseries ts ON mc.timeseries_id = ts.timeseries_id",
-                    "    JOIN public.locations l ON ts.location_id = l.location_id",
-                    "    JOIN public.parameters p ON ts.parameter_id = p.parameter_id",
+                    "    FROM measurements_calculated_daily mc",
+                    "    JOIN timeseries ts ON mc.timeseries_id = ts.timeseries_id",
+                    "    JOIN locations l ON ts.location_id = l.location_id",
+                    "    JOIN parameters p ON ts.parameter_id = p.parameter_id",
                     "    WHERE l.location_code IN (%s)",
                     "      AND p.param_name = '%s'",
                     paste0("      AND mc.date >= ", historical_start_date_sql),
@@ -2954,20 +2954,20 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             sprintf(
                 paste(
                     "WITH recent_continuous AS (",
-                    "    SELECT 1 FROM continuous.measurements_continuous mc",
-                    "    JOIN continuous.timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                    "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                    "    JOIN public.locations l ON l.location_id = ts.location_id",
+                    "    SELECT 1 FROM measurements_continuous mc",
+                    "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "    JOIN locations l ON l.location_id = ts.location_id",
                     "    WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
                     paste0("      AND mc.datetime >= ", recent_cutoff_ts_sql),
                     paste0("      AND mc.datetime <= ", ref_ts_sql),
                     "    LIMIT 1",
                     "),",
                     "recent_daily AS (",
-                    "    SELECT 1 FROM continuous.measurements_calculated_daily mcd",
-                    "    JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                    "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                    "    JOIN public.locations l ON l.location_id = ts.location_id",
+                    "    SELECT 1 FROM measurements_calculated_daily mcd",
+                    "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "    JOIN locations l ON l.location_id = ts.location_id",
                     "    WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
                     paste0("      AND mcd.date >= ", recent_cutoff_date_sql),
                     paste0("      AND mcd.date <= ", ref_date_sql),
@@ -3026,10 +3026,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 sprintf(
                     paste(
                         "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
-                        "FROM continuous.measurements_calculated_daily mcd",
-                        "JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                        "JOIN public.locations l ON l.location_id = ts.location_id",
+                        "FROM measurements_calculated_daily mcd",
+                        "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "JOIN locations l ON l.location_id = ts.location_id",
                         "WHERE l.location_code = %s",
                         "  AND p.param_name = 'temperature, air'",
                         "  AND mcd.value IS NOT NULL",
@@ -3072,10 +3072,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     paste(
                         "WITH daily_temp AS (",
                         "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                        "    FROM continuous.measurements_calculated_daily mcd",
-                        "    JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                        "    JOIN public.locations l ON l.location_id = ts.location_id",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
                         "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
                         paste0("      AND mcd.date <= ", ref_date_sql),
                         "),",
@@ -3125,10 +3125,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     paste(
                         "WITH daily_temp AS (",
                         "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                        "    FROM continuous.measurements_calculated_daily mcd",
-                        "    JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                        "    JOIN public.locations l ON l.location_id = ts.location_id",
+                        "    FROM measurements_calculated_daily mcd",
+                        "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "    JOIN locations l ON l.location_id = ts.location_id",
                         "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
                         paste0("      AND mcd.date <= ", ref_date_sql),
                         "),",
@@ -3182,10 +3182,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         paste(
                             "SELECT mc.datetime AS datetime,",
                             "    SUM(mc.value) OVER (ORDER BY mc.datetime RANGE BETWEEN INTERVAL '%s hours' PRECEDING AND CURRENT ROW) AS value",
-                            "FROM continuous.measurements_continuous mc",
-                            "JOIN continuous.timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                            "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                            "JOIN public.locations l ON l.location_id = ts.location_id",
+                            "FROM measurements_continuous mc",
+                            "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                            "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "JOIN locations l ON l.location_id = ts.location_id",
                             "WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
                             continuous_precip_start_filter_sql,
                             paste0("  AND mc.datetime <= ", ref_ts_sql),
@@ -3206,10 +3206,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                 paste(
                                     "WITH precip AS (",
                                     "    SELECT mc.datetime, mc.value",
-                                    "    FROM continuous.measurements_continuous mc",
-                                    "    JOIN continuous.timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                                    "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                                    "    JOIN public.locations l ON l.location_id = ts.location_id",
+                                    "    FROM measurements_continuous mc",
+                                    "    JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                                    "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                    "    JOIN locations l ON l.location_id = ts.location_id",
                                     "    WHERE l.location_code = %s",
                                     "      AND p.param_name = %s",
                                     "      AND mc.value IS NOT NULL",
@@ -3259,10 +3259,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         "    SUM(mcd.value) OVER (ORDER BY mcd.date ROWS BETWEEN %d PRECEDING AND CURRENT ROW) AS value",
                         lookback_days
                     ),
-                    "FROM continuous.measurements_calculated_daily mcd",
-                    "JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                    "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                    "JOIN public.locations l ON l.location_id = ts.location_id",
+                    "FROM measurements_calculated_daily mcd",
+                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                    "JOIN locations l ON l.location_id = ts.location_id",
                     "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
                     precip_start_filter_sql,
                     paste0("  AND mcd.date <= ", ref_date_sql),
@@ -3353,10 +3353,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 sprintf(
                     paste(
                         "SELECT mc.datetime, mc.value AS value",
-                        "FROM continuous.measurements_continuous mc",
-                        "JOIN continuous.timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                        "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                        "JOIN public.locations l ON l.location_id = ts.location_id",
+                        "FROM measurements_continuous mc",
+                        "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "JOIN locations l ON l.location_id = ts.location_id",
                         "WHERE l.location_code = %s AND p.param_name = %s AND mc.value IS NOT NULL",
                         continuous_start_filter_sql,
                         paste0("  AND mc.datetime <= ", ref_ts_sql),
@@ -3375,10 +3375,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 sprintf(
                     paste(
                         "SELECT mcd.date::timestamp AS datetime, mcd.value",
-                        "FROM continuous.measurements_calculated_daily mcd",
-                        "JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                        "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                        "JOIN public.locations l ON l.location_id = ts.location_id",
+                        "FROM measurements_calculated_daily mcd",
+                        "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                        "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                        "JOIN locations l ON l.location_id = ts.location_id",
                         "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
                         daily_fallback_start_filter_sql,
                         paste0("  AND mcd.date <= ", ref_date_sql),
@@ -3572,12 +3572,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             paste(
                                 "SELECT s.target_datetime AS datetime,",
                                 "  dr.result AS value",
-                                "FROM discrete.samples s",
+                                "FROM samples s",
                                 "JOIN discrete.results dr",
                                 "  ON dr.sample_id = s.sample_id",
-                                "JOIN public.parameters p",
+                                "JOIN parameters p",
                                 "  ON p.parameter_id = dr.parameter_id",
-                                "JOIN public.locations l",
+                                "JOIN locations l",
                                 "  ON l.location_id = s.location_id",
                                 "WHERE l.location_code = %s",
                                 "  AND p.param_name = %s",
@@ -3604,10 +3604,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         paste(
                             "WITH daily_temp AS (",
                             "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                            "    FROM continuous.measurements_calculated_daily mcd",
-                            "    JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                            "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                            "    JOIN public.locations l ON l.location_id = ts.location_id",
+                            "    FROM measurements_calculated_daily mcd",
+                            "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "    JOIN locations l ON l.location_id = ts.location_id",
                             "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
                             paste0(
                                 "      AND mcd.date >= ",
@@ -3648,10 +3648,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         paste(
                             "WITH daily_temp AS (",
                             "    SELECT mcd.date AS date, mcd.value AS mean_temp",
-                            "    FROM continuous.measurements_calculated_daily mcd",
-                            "    JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                            "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                            "    JOIN public.locations l ON l.location_id = ts.location_id",
+                            "    FROM measurements_calculated_daily mcd",
+                            "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "    JOIN locations l ON l.location_id = ts.location_id",
                             "    WHERE l.location_code = %s AND p.param_name = 'temperature, air' AND mcd.value IS NOT NULL",
                             paste0(
                                 "      AND mcd.date >= ",
@@ -3701,10 +3701,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         paste(
                             "WITH daily_values AS (",
                             "    SELECT mcd.date, mcd.value",
-                            "    FROM continuous.measurements_calculated_daily mcd",
-                            "    JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                            "    JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                            "    JOIN public.locations l ON l.location_id = ts.location_id",
+                            "    FROM measurements_calculated_daily mcd",
+                            "    JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "    JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "    JOIN locations l ON l.location_id = ts.location_id",
                             "    WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
                             paste0(
                                 "      AND mcd.date >= ",
@@ -3734,10 +3734,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     sprintf(
                         paste(
                             "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
-                            "FROM continuous.measurements_calculated_daily mcd",
-                            "JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                            "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                            "JOIN public.locations l ON l.location_id = ts.location_id",
+                            "FROM measurements_calculated_daily mcd",
+                            "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                            "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                            "JOIN locations l ON l.location_id = ts.location_id",
                             "WHERE l.location_code = %s AND p.param_name = %s AND mcd.value IS NOT NULL",
                             paste0("  AND mcd.date >= ", year_start_sql),
                             paste0("  AND mcd.date <= ", year_end_sql),
@@ -4774,14 +4774,13 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             dat
         })
 
-        primary_stations_for_parameter <- function(
-            selected_parameter,
-            dat = community_locations()
-        ) {
+        available_primary_stations <- shiny::reactive({
+            dat <- community_locations()
             if (is.null(dat) || nrow(dat) == 0) {
                 return(data.frame())
             }
 
+            selected_parameter <- input$parameter
             if (is.null(selected_parameter) || !nzchar(selected_parameter)) {
                 selected_parameter <- "water level"
             }
@@ -4814,14 +4813,40 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 ,
                 drop = FALSE
             ]
-        }
-
-        available_primary_stations <- shiny::reactive({
-            primary_stations_for_parameter(input$parameter)
         })
 
-        build_station_choices <- function(dat) {
-            stats::setNames(
+        # Keep the primary station choices synchronized with the selected
+        # parameter without repeatedly re-sending an identical Selectize update.
+        # Repeated updateSelectizeInput() calls can cause visible flashing and can
+        # amplify feedback loops with the summary table and map selections.
+        last_station_choice_signature <- shiny::reactiveVal(NULL)
+
+        shiny::observe({
+            dat <- available_primary_stations()
+            current_station <- shiny::isolate(input$station %||% "")
+
+            if (is.null(dat) || nrow(dat) == 0) {
+                signature <- "__NO_STATIONS__"
+
+                if (
+                    !identical(
+                        shiny::isolate(last_station_choice_signature()),
+                        signature
+                    )
+                ) {
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "station",
+                        choices = c("No stations available" = ""),
+                        selected = "",
+                        server = TRUE
+                    )
+                    last_station_choice_signature(signature)
+                }
+                return()
+            }
+
+            station_choices <- stats::setNames(
                 dat$location_code,
                 ifelse(
                     !is.na(dat$name) & nzchar(dat$name),
@@ -4829,40 +4854,50 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     dat$location_code
                 )
             )
-        }
 
-        update_station_selector <- function(
-            selected = shiny::isolate(input$station),
-            dat = available_primary_stations()
-        ) {
-            if (is.null(dat) || nrow(dat) == 0) {
+            selected_station <- if (
+                nzchar(current_station) &&
+                    current_station %in% dat$location_code
+            ) {
+                current_station
+            } else {
+                dat$location_code[[1]]
+            }
+
+            # Include both values and labels in the signature so the Selectize
+            # widget is refreshed if station names change, but not otherwise.
+            signature <- paste(
+                paste(
+                    names(station_choices),
+                    unname(station_choices),
+                    sep = "="
+                ),
+                collapse = "|"
+            )
+
+            if (
+                !identical(
+                    shiny::isolate(last_station_choice_signature()),
+                    signature
+                )
+            ) {
                 shiny::updateSelectizeInput(
                     session,
                     inputId = "station",
-                    choices = c("No stations available" = ""),
-                    selected = "",
+                    choices = station_choices,
+                    selected = selected_station,
                     server = TRUE
                 )
-                return(invisible(NULL))
+                last_station_choice_signature(signature)
+            } else if (!identical(current_station, selected_station)) {
+                # Choices are unchanged, but the current selection is no longer
+                # valid (for example after a filter change).
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "station",
+                    selected = selected_station
+                )
             }
-
-            selected <- as.character(selected %||% "")
-            if (length(selected) != 1 || !(selected %in% dat$location_code)) {
-                selected <- dat$location_code[[1]]
-            }
-
-            shiny::updateSelectizeInput(
-                session,
-                inputId = "station",
-                choices = build_station_choices(dat),
-                selected = selected,
-                server = TRUE
-            )
-            invisible(NULL)
-        }
-
-        shiny::observe({
-            update_station_selector()
         })
 
         # Update secondary_parameter choices from community stations.
@@ -5197,8 +5232,8 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     "    l.name,",
                     "    l.latitude,",
                     "    l.longitude",
-                    "FROM files.image_series s",
-                    "JOIN public.locations l",
+                    "FROM image_series s",
+                    "JOIN locations l",
                     "  ON l.location_id = s.location_id",
                     "WHERE l.latitude IS NOT NULL",
                     "  AND l.longitude IS NOT NULL",
@@ -5355,7 +5390,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         DBI::dbGetQuery(
                             con,
                             paste0(
-                                "SELECT image_id, datetime FROM files.images WHERE img_series_id = ",
+                                "SELECT image_id, datetime FROM images WHERE img_series_id = ",
                                 img_series_id_int,
                                 " AND datetime <= ",
                                 time0_sql,
@@ -5589,7 +5624,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                 DBI::dbGetQuery(
                     con,
                     paste0(
-                        "SELECT format, file FROM files.images WHERE image_id = ",
+                        "SELECT format, file FROM images WHERE image_id = ",
                         image_id
                     )
                 ),
@@ -5668,7 +5703,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             )
 
             map <- leaflet::leaflet() %>%
-                leaflet::addProviderTiles("CartoDB.Positron")
+                leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap)
 
             map_primary_selection_input <- session$ns("map_primary_selection")
 
@@ -6163,6 +6198,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             suspendWhenHidden = FALSE
         )
 
+        # When a map click changes both parameter and station, the parameter
+        # update can rebuild the station choices asynchronously. Store the station
+        # temporarily and apply it only after the new parameter-specific choices
+        # are available. This avoids parameter/station update races and flashing.
+        pending_map_station <- shiny::reactiveVal(NULL)
+
         shiny::observeEvent(
             input$map_primary_selection,
             {
@@ -6183,19 +6224,55 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                     return()
                 }
 
-                shiny::updateSelectizeInput(
-                    session,
-                    inputId = "parameter",
-                    selected = selected_parameter
-                )
+                current_parameter <- shiny::isolate(input$parameter %||% "")
+                current_station <- shiny::isolate(input$station %||% "")
 
-                update_station_selector(
-                    selected = selected_station,
-                    dat = community_locations()
-                )
+                if (!identical(current_parameter, selected_parameter)) {
+                    pending_map_station(selected_station)
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "parameter",
+                        selected = selected_parameter
+                    )
+                } else if (!identical(current_station, selected_station)) {
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "station",
+                        selected = selected_station
+                    )
+                }
             },
             ignoreInit = TRUE
         )
+
+        # Complete a deferred map station selection once the station is present
+        # in the choices generated for the newly selected parameter.
+        shiny::observe({
+            selected_station <- pending_map_station()
+            if (is.null(selected_station) || !nzchar(selected_station)) {
+                return()
+            }
+
+            dat <- available_primary_stations()
+            if (
+                is.null(dat) ||
+                    nrow(dat) == 0 ||
+                    !selected_station %in% dat$location_code
+            ) {
+                return()
+            }
+
+            current_station <- shiny::isolate(input$station %||% "")
+            if (!identical(current_station, selected_station)) {
+                shiny::updateSelectizeInput(
+                    session,
+                    inputId = "station",
+                    selected = selected_station
+                )
+            }
+
+            pending_map_station(NULL)
+        })
 
         summary_mode_choices_for_parameter <- function(parameter) {
             selected_parameter <- as.character(parameter %||% "")
@@ -6803,44 +6880,96 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
             result_table
         })
 
-        # Table row selection -> update station selectize
-        shiny::observe({
-            row_idx <- input$summary_table_rows_selected
-            dat <- filtered_summary_data()
-            if (is.null(dat) || nrow(dat) == 0 || is.null(row_idx)) {
-                return()
-            }
-            if (row_idx < 1L || row_idx > nrow(dat)) {
-                return()
-            }
-            selected_code <- dat$location_code[[row_idx]]
-            if (!is.null(selected_code) && nzchar(selected_code)) {
-                update_station_selector(selected = selected_code)
-            }
-        })
+        # -----------------------------------------------------------------------
+        # Synchronize summary-table selection and station Selectize.
+        #
+        # These two controls update one another, so every programmatic update is
+        # guarded by an equality check. Without these guards the cycle can be:
+        # table -> station -> table -> station -> ..., which presents as a rapidly
+        # flashing Selectize input in the browser.
+        # -----------------------------------------------------------------------
 
-        # Station selectize -> highlight matching table row
-        shiny::observe({
-            code <- input$station
-            dat <- filtered_summary_data()
-            if (
-                is.null(dat) || nrow(dat) == 0 || is.null(code) || !nzchar(code)
-            ) {
-                DT::selectRows(
-                    DT::dataTableProxy("summary_table", session = session),
-                    NULL
+        # Table row selection -> station Selectize
+        shiny::observeEvent(
+            input$summary_table_rows_selected,
+            {
+                row_idx <- input$summary_table_rows_selected
+                dat <- filtered_summary_data()
+
+                if (
+                    is.null(dat) ||
+                        nrow(dat) == 0 ||
+                        is.null(row_idx) ||
+                        length(row_idx) != 1L ||
+                        row_idx < 1L ||
+                        row_idx > nrow(dat)
+                ) {
+                    return()
+                }
+
+                selected_code <- as.character(
+                    dat$location_code[[row_idx]] %||% ""
                 )
-                return()
-            }
-            row_idx <- which(dat$location_code == code)
-            if (length(row_idx) == 0) {
-                row_idx <- NULL
-            }
-            DT::selectRows(
-                DT::dataTableProxy("summary_table", session = session),
-                row_idx
-            )
-        })
+                current_code <- shiny::isolate(input$station %||% "")
+
+                if (
+                    nzchar(selected_code) &&
+                        !identical(current_code, selected_code)
+                ) {
+                    shiny::updateSelectizeInput(
+                        session,
+                        inputId = "station",
+                        selected = selected_code
+                    )
+                }
+            },
+            ignoreInit = TRUE
+        )
+
+        # Station Selectize -> highlight matching table row
+        shiny::observeEvent(
+            input$station,
+            {
+                code <- as.character(input$station %||% "")
+                dat <- filtered_summary_data()
+                proxy <- DT::dataTableProxy("summary_table", session = session)
+
+                if (is.null(dat) || nrow(dat) == 0 || !nzchar(code)) {
+                    current_row <- shiny::isolate(
+                        input$summary_table_rows_selected
+                    )
+                    if (!is.null(current_row) && length(current_row) > 0L) {
+                        DT::selectRows(proxy, NULL)
+                    }
+                    return()
+                }
+
+                row_idx <- which(dat$location_code == code)
+                if (length(row_idx) == 0L) {
+                    row_idx <- integer(0)
+                } else {
+                    # The table is configured for single selection.
+                    row_idx <- row_idx[[1]]
+                }
+
+                current_row <- shiny::isolate(input$summary_table_rows_selected)
+                current_row <- if (is.null(current_row)) {
+                    integer(0)
+                } else {
+                    as.integer(current_row)
+                }
+
+                target_row <- as.integer(row_idx)
+
+                if (!identical(current_row, target_row)) {
+                    DT::selectRows(
+                        proxy,
+                        if (length(target_row) == 0L) NULL else target_row
+                    )
+                }
+            },
+            ignoreInit = TRUE
+        )
 
         # -----------------------------------------------------------------------
         # Plot server
@@ -7430,11 +7559,11 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             sprintf(
                                 paste(
                                     "SELECT mcd.date::timestamp AS datetime, mcd.value AS value",
-                                    "FROM continuous.measurements_calculated_daily mcd",
-                                    "JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                                    "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                                    "JOIN continuous.aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
-                                    "JOIN public.locations l ON l.location_id = ts.location_id",
+                                    "FROM measurements_calculated_daily mcd",
+                                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                    "JOIN aggregation_types a ON a.aggregation_type_id = ts.aggregation_type_id",
+                                    "JOIN locations l ON l.location_id = ts.location_id",
                                     "WHERE l.location_code = %s",
                                     "  AND p.param_name = 'temperature, air'",
                                     "  AND a.aggregation_type = %s",
@@ -7475,12 +7604,12 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     paste(
                                         "SELECT s.target_datetime AS datetime,",
                                         "  dr.result AS value",
-                                        "FROM discrete.samples s",
+                                        "FROM samples s",
                                         "JOIN discrete.results dr",
                                         "  ON dr.sample_id = s.sample_id",
-                                        "JOIN public.parameters p",
+                                        "JOIN parameters p",
                                         "  ON p.parameter_id = dr.parameter_id",
-                                        "JOIN public.locations l",
+                                        "JOIN locations l",
                                         "  ON l.location_id = s.location_id",
                                         "WHERE l.location_code = %s",
                                         "  AND p.param_name = %s",
@@ -7533,10 +7662,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                 "  DATE_TRUNC('hour', mc.datetime) +",
                                 "    (FLOOR(EXTRACT(MINUTE FROM mc.datetime) / 15) * 15 || ' minutes')::interval AS datetime,",
                                 "  AVG(mc.value) AS value",
-                                "FROM continuous.measurements_continuous mc",
-                                "JOIN continuous.timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                                "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                                "JOIN public.locations l ON l.location_id = ts.location_id",
+                                "FROM measurements_continuous mc",
+                                "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                                "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                "JOIN locations l ON l.location_id = ts.location_id",
                                 "WHERE l.location_code = %s",
                                 "  AND p.param_name = %s",
                                 "  AND mc.datetime >= NOW() - INTERVAL '%s'",
@@ -7560,10 +7689,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                             sprintf(
                                 paste(
                                     "SELECT mcd.date::timestamp AS datetime, mcd.value",
-                                    "FROM continuous.measurements_calculated_daily mcd",
-                                    "JOIN continuous.timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
-                                    "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                                    "JOIN public.locations l ON l.location_id = ts.location_id",
+                                    "FROM measurements_calculated_daily mcd",
+                                    "JOIN timeseries ts ON ts.timeseries_id = mcd.timeseries_id",
+                                    "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                    "JOIN locations l ON l.location_id = ts.location_id",
                                     "WHERE l.location_code = %s",
                                     "  AND p.param_name = %s",
                                     "  AND mcd.date >= CURRENT_DATE - %s",
@@ -7598,10 +7727,10 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         sprintf(
                             paste(
                                 "SELECT mc.datetime AS datetime, mc.value AS value",
-                                "FROM continuous.measurements_continuous mc",
-                                "JOIN continuous.timeseries ts ON ts.timeseries_id = mc.timeseries_id",
-                                "JOIN public.parameters p ON p.parameter_id = ts.parameter_id",
-                                "JOIN public.locations l ON l.location_id = ts.location_id",
+                                "FROM measurements_continuous mc",
+                                "JOIN timeseries ts ON ts.timeseries_id = mc.timeseries_id",
+                                "JOIN parameters p ON p.parameter_id = ts.parameter_id",
+                                "JOIN locations l ON l.location_id = ts.location_id",
                                 "WHERE l.location_code = %s",
                                 "  AND p.param_name = 'temperature, air'",
                                 "  AND mc.datetime >= NOW() - INTERVAL '%s days'",
@@ -9175,7 +9304,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                         community_map <- leaflet::leaflet(data = map_dat)
                         community_map <- leaflet::addProviderTiles(
                             community_map,
-                            "CartoDB.Positron"
+                            leaflet::providers$Esri.WorldTopoMap
                         )
                         community_map <- leaflet::addCircleMarkers(
                             community_map,
@@ -9438,7 +9567,7 @@ floodDashboardMod <- function(id, language, inputs = NULL) {
                                     con,
                                     paste0(
                                         "SELECT image_id, datetime, format, file ",
-                                        "FROM files.images ",
+                                        "FROM images ",
                                         "WHERE img_series_id = ",
                                         series_id,
                                         " AND file IS NOT NULL ",

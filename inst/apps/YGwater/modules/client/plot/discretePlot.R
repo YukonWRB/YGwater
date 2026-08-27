@@ -1,3 +1,174 @@
+disc_plot_tabularize <- function(x) {
+  x <- data.table::copy(data.table::as.data.table(x))
+  list_columns <- names(x)[vapply(x, is.list, logical(1))]
+  for (column in list_columns) {
+    data.table::set(
+      x,
+      j = column,
+      value = vapply(
+        x[[column]],
+        function(value) paste(value, collapse = ", "),
+        character(1)
+      )
+    )
+  }
+  x[]
+}
+
+disc_plot_empty_qaqc_data <- function() {
+  list(
+    group_links = data.table::data.table(),
+    samples = data.table::data.table(),
+    results = data.table::data.table(),
+    documents = data.table::data.table()
+  )
+}
+
+disc_plot_source_sample_ids <- function(plot_result) {
+  sample_ids <- plot_result$source_sample_ids
+  if (is.null(sample_ids) && "sample_id" %in% names(plot_result$data)) {
+    sample_ids <- plot_result$data$sample_id
+  }
+  sample_ids <- suppressWarnings(as.integer(sample_ids))
+  sort(unique(sample_ids[!is.na(sample_ids)]))
+}
+
+disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
+  sample_ids <- suppressWarnings(as.integer(plotted_sample_ids))
+  sample_ids <- sort(unique(sample_ids[!is.na(sample_ids)]))
+  if (length(sample_ids) == 0L) {
+    return(disc_plot_empty_qaqc_data())
+  }
+
+  sample_id_sql <- paste(sample_ids, collapse = ", ")
+  group_links <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "WITH plotted_members AS (
+         SELECT DISTINCT sample_group_id, sample_id AS plotted_sample_id
+         FROM discrete.sample_group_members
+         WHERE sample_id IN (",
+      sample_id_sql,
+      ")
+       )
+       SELECT DISTINCT
+         pm.plotted_sample_id,
+         qm.sample_id AS qaqc_sample_id,
+         sg.sample_group_id,
+         sg.group_type,
+         CASE WHEN '",
+      if (identical(lang, "fr")) "fr" else "en",
+      "' = 'fr' THEN sgt.group_type_name_fr
+              ELSE sgt.group_type_name END AS group_type_name,
+         sg.group_code,
+         sg.group_name,
+         sg.start_datetime,
+         sg.end_datetime,
+         sg.owner AS group_owner_id,
+         sg.contributor AS group_contributor_id,
+         sg.active AS group_active,
+         sg.note AS group_note,
+         qm.sequence_in_group AS qaqc_sequence_in_group,
+         qm.note AS qaqc_membership_note
+       FROM plotted_members AS pm
+       INNER JOIN discrete.sample_group_members AS qm
+         ON qm.sample_group_id = pm.sample_group_id
+        AND qm.sample_id <> pm.plotted_sample_id
+       INNER JOIN discrete.samples AS qs
+         ON qs.sample_id = qm.sample_id
+       INNER JOIN discrete.sample_types AS qst
+         ON qst.sample_type_id = qs.sample_type
+       INNER JOIN discrete.sample_groups AS sg
+         ON sg.sample_group_id = pm.sample_group_id
+       INNER JOIN discrete.sample_group_types AS sgt
+         ON sgt.group_type = sg.group_type
+       WHERE qs.location_id IS NULL
+         AND qst.requires_sample_group
+       ORDER BY pm.plotted_sample_id, sg.sample_group_id, qm.sample_id"
+    )
+  )
+  if (nrow(group_links) == 0L) {
+    return(disc_plot_empty_qaqc_data())
+  }
+
+  qaqc_sample_ids <- sort(unique(group_links$qaqc_sample_id))
+  qaqc_sample_id_sql <- paste(qaqc_sample_ids, collapse = ", ")
+  metadata_suffix <- if (identical(lang, "fr")) "fr" else "en"
+
+  samples <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT * FROM discrete.samples_metadata_",
+      metadata_suffix,
+      " WHERE sample_id IN (",
+      qaqc_sample_id_sql,
+      ") ORDER BY datetime, sample_id"
+    )
+  )
+  results <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT * FROM discrete.results_metadata_",
+      metadata_suffix,
+      " WHERE sample_id IN (",
+      qaqc_sample_id_sql,
+      ") ORDER BY datetime, sample_id, parameter_name, result_id"
+    )
+  )
+  documents <- DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT
+         sd.sample_id,
+         sd.document_role,
+         sd.note AS relationship_note,
+         d.document_id,
+         d.name AS document_name,
+         d.type AS document_type_id,
+         d.authors,
+         d.url,
+         d.publish_date,
+         d.description,
+         d.format,
+         d.tags,
+         d.owner AS document_owner_id,
+         d.contributor AS document_contributor_id,
+         octet_length(d.document) AS embedded_size_bytes,
+         d.created,
+         d.created_by,
+         d.modified,
+         d.modified_by
+       FROM discrete.sample_documents AS sd
+       INNER JOIN files.documents AS d ON d.document_id = sd.document_id
+       WHERE sd.sample_id IN (",
+      qaqc_sample_id_sql,
+      ") ORDER BY sd.sample_id, d.document_id"
+    )
+  )
+
+  list(
+    group_links = disc_plot_tabularize(group_links),
+    samples = disc_plot_tabularize(samples),
+    results = disc_plot_tabularize(results),
+    documents = disc_plot_tabularize(documents)
+  )
+}
+
+disc_plot_download_tables <- function(plot_data, qaqc_data) {
+  tables <- list(plot_data = disc_plot_tabularize(plot_data))
+  if (nrow(qaqc_data$samples) == 0L) {
+    return(tables)
+  }
+
+  tables$qaqc_group_links <- disc_plot_tabularize(qaqc_data$group_links)
+  tables$qaqc_samples <- disc_plot_tabularize(qaqc_data$samples)
+  tables$qaqc_results <- disc_plot_tabularize(qaqc_data$results)
+  if (nrow(qaqc_data$documents) > 0L) {
+    tables$qaqc_documents <- disc_plot_tabularize(qaqc_data$documents)
+  }
+  tables
+}
+
 discPlotUI <- function(id) {
   ns <- NS(id)
 
@@ -1429,6 +1600,10 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
               tr("dl_data", language$language)
             ),
             style = "display: none;"
+          ),
+          div(
+            class = "d-inline-block",
+            uiOutput(ns("qaqc_sample_data_ui"), inline = TRUE)
           )
         )
       )
@@ -2363,6 +2538,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       {
         shinyjs::hide("full_screen")
         shinyjs::hide("download_data")
+        qaQcData(disc_plot_empty_qaqc_data())
         plot_created(FALSE)
         plotSeasonMetadata(NULL)
 
@@ -2835,8 +3011,93 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     first_plot <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session, in which case a modal is shown
     first_plot_with_standards <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session with standards, in which case a modal is shown
     plotData <- reactiveVal() # Holds the data for the plot in case the user wants to download it
+    qaQcData <- reactiveVal(disc_plot_empty_qaqc_data())
     pendingSeasonMetadata <- reactiveVal(NULL)
     plotSeasonMetadata <- reactiveVal(NULL)
+
+    output$qaqc_sample_data_ui <- renderUI({
+      data <- qaQcData()
+      if (nrow(data$samples) == 0L) {
+        return(NULL)
+      }
+      actionButton(
+        ns("show_qaqc_sample_data"),
+        tr("disc_qaqc_show_data", language$language),
+        icon = icon("table")
+      )
+    })
+
+    qaqc_table <- function(name) {
+      DT::renderDataTable({
+        data <- qaQcData()[[name]]
+        req(nrow(data) > 0L)
+        DT::datatable(
+          data,
+          rownames = FALSE,
+          filter = "top",
+          options = list(
+            pageLength = 10,
+            lengthMenu = c(10, 25, 50, 100),
+            scrollX = TRUE
+          )
+        )
+      })
+    }
+
+    output$qaqc_samples_table <- qaqc_table("samples")
+    output$qaqc_results_table <- qaqc_table("results")
+    output$qaqc_group_links_table <- qaqc_table("group_links")
+    output$qaqc_documents_table <- qaqc_table("documents")
+
+    observeEvent(input$show_qaqc_sample_data, {
+      data <- qaQcData()
+      req(nrow(data$samples) > 0L)
+
+      tabs <- list(
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("samples", language$language),
+            nrow(data$samples)
+          ),
+          DT::dataTableOutput(ns("qaqc_samples_table"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("results", language$language),
+            nrow(data$results)
+          ),
+          DT::dataTableOutput(ns("qaqc_results_table"))
+        ),
+        tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("disc_qaqc_group_links", language$language),
+            nrow(data$group_links)
+          ),
+          DT::dataTableOutput(ns("qaqc_group_links_table"))
+        )
+      )
+      if (nrow(data$documents) > 0L) {
+        tabs[[length(tabs) + 1L]] <- tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("documents", language$language),
+            nrow(data$documents)
+          ),
+          DT::dataTableOutput(ns("qaqc_documents_table"))
+        )
+      }
+
+      showModal(modalDialog(
+        title = tr("disc_qaqc_sample_data", language$language),
+        do.call(tabsetPanel, tabs),
+        footer = modalButton(tr("close", language$language)),
+        easyClose = TRUE,
+        size = "xl"
+      ))
+    })
 
     output$season_plot_metadata_ui <- renderUI({
       metadata <- plotSeasonMetadata()
@@ -2911,6 +3172,34 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         isolate(plot_output_discrete$result()$plot)
       })
       plotData(plot_output_discrete$result()$data)
+      qaQcData(disc_plot_empty_qaqc_data())
+      plotted_sample_ids <- disc_plot_source_sample_ids(
+        plot_output_discrete$result()
+      )
+      if (
+        identical(input$data_source, "AC") &&
+          length(plotted_sample_ids)
+      ) {
+        qaqc_data <- tryCatch(
+          disc_plot_related_qaqc_data(
+            session$userData$AquaCache,
+            plotted_sample_ids,
+            language$abbrev
+          ),
+          error = function(e) {
+            showNotification(
+              paste(
+                tr("disc_qaqc_retrieval_error", language$language),
+                e$message
+              ),
+              type = "warning",
+              duration = 15
+            )
+            disc_plot_empty_qaqc_data()
+          }
+        )
+        qaQcData(qaqc_data)
+      }
       plotSeasonMetadata(pendingSeasonMetadata())
       plot_created(TRUE)
 
@@ -3033,7 +3322,10 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         )
       },
       content = function(file) {
-        openxlsx::write.xlsx(plotData(), file)
+        openxlsx::write.xlsx(
+          disc_plot_download_tables(plotData(), qaQcData()),
+          file
+        )
       }
     )
   }) # End of moduleServer

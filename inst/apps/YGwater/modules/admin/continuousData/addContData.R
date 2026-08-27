@@ -1,5 +1,79 @@
 # UI and server code for adding new continuous measurements
 
+add_cont_data_class_runs <- function(datetime, code) {
+  empty <- data.frame(
+    code = character(),
+    start_datetime = character(),
+    end_datetime = character(),
+    stringsAsFactors = FALSE
+  )
+  if (length(datetime) == 0 || length(code) == 0) {
+    return(empty)
+  }
+  if (length(datetime) != length(code)) {
+    stop("'datetime' and 'code' must have the same length.")
+  }
+
+  x <- data.table::data.table(
+    datetime = datetime,
+    code = trimws(as.character(code))
+  )
+  x <- x[!is.na(datetime)]
+  if (nrow(x) == 0) {
+    return(empty)
+  }
+
+  data.table::setorder(x, datetime)
+  # Assign runs before removing blanks so an unclassified row separates
+  # otherwise identical class codes into distinct database intervals.
+  x[, run := data.table::rleid(code)]
+  out <- x[!is.na(code) & nzchar(code),
+    .(
+      code = data.table::first(code),
+      start_datetime = format(
+        min(datetime),
+        "%Y-%m-%d %H:%M:%S",
+        tz = "UTC"
+      ),
+      end_datetime = format(
+        max(datetime),
+        "%Y-%m-%d %H:%M:%S",
+        tz = "UTC"
+      )
+    ),
+    by = run
+  ]
+  out[, run := NULL]
+  as.data.frame(out)
+}
+
+add_cont_data_band_polygons <- function(ranges, y_values, label_prefix) {
+  ranges <- data.table::as.data.table(ranges)
+  # Keep the grouping id only in `by`; repeating it in the result creates
+  # duplicate column names that Plotly rejects.
+  ranges[,
+    .(
+      datetime = c(
+        start_dt[1L],
+        start_dt[1L],
+        end_dt[1L],
+        end_dt[1L]
+      ),
+      y = y_values,
+      color = color[1L],
+      text = paste0(
+        label_prefix,
+        ": ",
+        code[1L],
+        " (",
+        description[1L],
+        ")"
+      )
+    ),
+    by = id
+  ]
+}
+
 addContDataUI <- function(id) {
   ns <- NS(id)
   tagList(
@@ -1773,6 +1847,9 @@ addContData <- function(id, language) {
         ) |>
           as.data.frame()
 
+        # Drop columns with names == NA
+        out <- out[, !is.na(names(out))]
+
         return(out)
       } else if (ext == "csv") {
         # .csv files more complex due to ungraceful handling of non-equal
@@ -1796,6 +1873,7 @@ addContData <- function(id, language) {
           unname()
         # Apply header rows to data
         names(out) <- out_names
+        out <- out[, !is.na(names(out))]
 
         return(out)
       }
@@ -2057,7 +2135,9 @@ addContData <- function(id, language) {
         )
       )
 
-      uploaded_names <- names(upload_raw())
+      # Get col names, dropping any 'NA' names which might result from populated columns without heading names
+      uploaded_names <- names(upload_raw())[!is.na(names(upload_raw()))]
+
       choices_optional <- stats::setNames(uploaded_names, uploaded_names)
 
       targets <- selected_upload_timeseries_meta()
@@ -2633,25 +2713,9 @@ addContData <- function(id, language) {
         return(class_ranges[[class_name]][0, , drop = FALSE])
       }
       dt <- table_datetimes_to_utc(df$datetime, input$UTC_offset)
-      vals <- trimws(as.character(df[[class_name]]))
-      ok <- !is.na(dt) & nzchar(vals)
-      if (!any(ok)) {
-        return(class_ranges[[class_name]][0, , drop = FALSE])
-      }
-      x <- data.table::data.table(datetime = dt[ok], code = vals[ok])
-      data.table::setorder(x, datetime)
-      x[, run := data.table::rleid(code)]
-      out <- x[,
-        .(
-          code = data.table::first(code),
-          start_datetime = format(min(datetime), "%Y-%m-%d %H:%M:%S"),
-          end_datetime = format(max(datetime), "%Y-%m-%d %H:%M:%S")
-        ),
-        by = run
-      ]
-      out[, description := code_to_desc(class_name, code)]
-      out[, run := NULL]
-      as.data.frame(out[, .(code, description, start_datetime, end_datetime)])
+      out <- add_cont_data_class_runs(dt, df[[class_name]])
+      out$description <- as.character(code_to_desc(class_name, out$code))
+      out[, c("code", "description", "start_datetime", "end_datetime")]
     }
 
     normalize_class_ranges <- function(df) {
@@ -4995,24 +5059,8 @@ addContData <- function(id, language) {
             rr$description,
             as.character(type_map[[class_name]]$description[idx])
           )
-          rr_dt <- data.table::as.data.table(rr)
-          poly_list[[length(poly_list) + 1]] <<- rr_dt[,
-            .(
-              datetime = c(start_dt[1L], start_dt[1L], end_dt[1L], end_dt[1L]),
-              y = yset,
-              color = color[1L],
-              text = paste0(
-                label_prefix,
-                ": ",
-                code[1L],
-                " (",
-                description[1L],
-                ")"
-              ),
-              id = id[1L]
-            ),
-            by = id
-          ]
+          poly_list[[length(poly_list) + 1]] <<-
+            add_cont_data_band_polygons(rr, yset, label_prefix)
         }
 
         if (nrow(class_ranges$approval) > 0) {

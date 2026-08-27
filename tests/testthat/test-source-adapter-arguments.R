@@ -129,6 +129,79 @@ test_that("source adapter editor collects typed values and preserves unknown key
   )
 })
 
+test_that("source adapter tests use the requested window without writing", {
+  source(source_adapter_helper_path, local = TRUE)
+  received <- NULL
+  test_function <- function(
+    location,
+    start_datetime,
+    end_datetime,
+    con,
+    write = TRUE
+  ) {
+    received <<- list(
+      location = location,
+      start_datetime = start_datetime,
+      end_datetime = end_datetime,
+      con = con,
+      write = write
+    )
+    data.frame(
+      datetime = start_datetime,
+      value = 12.5
+    )
+  }
+
+  result <- source_adapter_test(
+    source_fx = "downloadExample",
+    source_fx_args = '{"location":"station-1","write":true}',
+    start_datetime = "2026-08-23 12:00:00",
+    end_datetime = "2026-08-24 12:00:00",
+    con = "read-only-connection",
+    source_function = test_function
+  )
+
+  expect_identical(received$location, "station-1")
+  expect_identical(received$con, "read-only-connection")
+  expect_false(received$write)
+  expect_equal(
+    as.numeric(difftime(
+      received$end_datetime,
+      received$start_datetime,
+      units = "hours"
+    )),
+    24
+  )
+  expect_equal(result$value, 12.5)
+  expect_error(
+    source_adapter_test(
+      source_fx = "downloadExample",
+      source_fx_args = '{"location":"station-1"}',
+      start_datetime = "2026-08-24 12:00:00",
+      end_datetime = "2026-08-23 12:00:00",
+      con = NULL,
+      source_function = test_function
+    ),
+    "must precede"
+  )
+})
+
+test_that("source adapter test previews are bounded and include list sections", {
+  source(source_adapter_helper_path, local = TRUE)
+  preview <- source_adapter_test_result_text(
+    list(
+      summary = data.frame(status = "success"),
+      data = data.frame(datetime = seq_len(4), value = seq_len(4))
+    ),
+    max_rows = 2
+  )
+
+  expect_match(preview, "[summary]", fixed = TRUE)
+  expect_match(preview, "[data]", fixed = TRUE)
+  expect_match(preview, "4 row(s) x 2 column(s)", fixed = TRUE)
+  expect_match(preview, "2 additional row(s) omitted", fixed = TRUE)
+})
+
 test_that("timeseries modules use the catalogued argument editor", {
   module_paths <- c(
     system.file(
@@ -152,4 +225,46 @@ test_that("timeseries modules use the catalogued argument editor", {
     expect_false(grepl('ns("source_fx_args")', module_text, fixed = TRUE))
     expect_false(grepl("format_source_args", module_text, fixed = TRUE))
   }
+
+  timeseries_text <- paste(
+    readLines(module_paths[[1L]], warn = FALSE),
+    collapse = "\n"
+  )
+  expect_match(
+    timeseries_text,
+    'ns("test_primary_source")',
+    fixed = TRUE
+  )
+  expect_match(
+    timeseries_text,
+    'ns("test_secondary_source")',
+    fixed = TRUE
+  )
+  expect_match(
+    timeseries_text,
+    "bslib::input_task_button(",
+    fixed = TRUE
+  )
+  expect_match(timeseries_text, 'ns("run_source_test")', fixed = TRUE)
+  expect_match(
+    timeseries_text,
+    "source_test_task <- ExtendedTask$new(function(request)",
+    fixed = TRUE
+  )
+  expect_match(
+    timeseries_text,
+    'bslib::bind_task_button("run_source_test")',
+    fixed = TRUE
+  )
+  expect_match(
+    timeseries_text,
+    "bindEvent(input$run_source_test, ignoreInit = TRUE)",
+    fixed = TRUE
+  )
+  expect_match(timeseries_text, "source_adapter_test(", fixed = TRUE)
+  expect_match(
+    timeseries_text,
+    "SET default_transaction_read_only = on",
+    fixed = TRUE
+  )
 })

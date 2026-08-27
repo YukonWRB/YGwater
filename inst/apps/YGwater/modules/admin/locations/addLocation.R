@@ -467,7 +467,7 @@ addLocation <- function(id, inputs, language) {
               ),
               textInput(
                 ns("loc_name_fr"),
-                "French location name (must not exist already)",
+                "French location name (leave blank if unable to translate)",
                 width = "100%"
               ),
               textInput(
@@ -545,7 +545,7 @@ addLocation <- function(id, inputs, language) {
               ),
               textInput(
                 ns("loc_name_fr"),
-                "French location name (must not exist already)",
+                "French location name (leave blank if unable to translate)",
                 width = "100%"
               ),
               textInput(
@@ -1042,25 +1042,6 @@ addLocation <- function(id, inputs, language) {
       },
       ignoreInit = TRUE
     )
-
-    observeEvent(
-      input$loc_name_fr,
-      {
-        req(input$loc_name_fr)
-        if (input$mode == "modify") {
-          shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fff")
-        } else {
-          if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
-            shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fdd")
-          } else {
-            shinyjs::js$backgroundCol(ns("loc_name_fr"), "#fff")
-          }
-        }
-      },
-      ignoreInit = TRUE
-    )
-
-    # Alias does not get the same treatment because it can be non-unique
 
     observeEvent(
       input$hydat_fill,
@@ -2573,9 +2554,18 @@ addLocation <- function(id, inputs, language) {
                 )
               )
             } else if (
-              !identical(datum_id_from, as.numeric(existing_datum$datum_id_from[[1]])) ||
-                !identical(datum_id_to, as.numeric(existing_datum$datum_id_to[[1]])) ||
-                !identical(conversion_m, as.numeric(existing_datum$conversion_m[[1]]))
+              !identical(
+                datum_id_from,
+                as.numeric(existing_datum$datum_id_from[[1]])
+              ) ||
+                !identical(
+                  datum_id_to,
+                  as.numeric(existing_datum$datum_id_to[[1]])
+                ) ||
+                !identical(
+                  conversion_m,
+                  as.numeric(existing_datum$conversion_m[[1]])
+                )
             ) {
               DBI::dbExecute(
                 session$userData$AquaCache,
@@ -2906,17 +2896,11 @@ addLocation <- function(id, inputs, language) {
           return()
         }
       }
-      if (!isTruthy(input$loc_name_fr)) {
-        showModal(modalDialog(
-          "Location name (French) is mandatory",
-          easyClose = TRUE,
-          footer = tagList(
-            actionButton(ns("close"), "Close")
-          )
-        ))
-        return()
+      name_fr <- input$loc_name_fr
+      if (!isTruthy(name_fr)) {
+        name_fr <- "Traduction requise!"
       } else {
-        if (input$loc_name_fr %in% moduleData$exist_locs$name_fr) {
+        if (name_fr %in% moduleData$exist_locs$name_fr) {
           showModal(modalDialog(
             "Location name (French) already exists",
             easyClose = TRUE,
@@ -2946,7 +2930,7 @@ addLocation <- function(id, inputs, language) {
       df <- data.frame(
         location_code = input$loc_code,
         name = input$loc_name,
-        name_fr = input$loc_name_fr,
+        name_fr = name_fr,
         alias = if (isTruthy(input$alias)) input$alias else NA,
         latitude = input$lat,
         longitude = input$lon,

@@ -222,6 +222,7 @@ simplerIndexUI <- function(id) {
             accept = ".pdf",
             multiple = TRUE
           ),
+          uiOutput(ns("pdf_processing_status")),
           numericInput(
             ns("num_boreholes"),
             "Number of boreholes",
@@ -1299,6 +1300,24 @@ simplerIndex <- function(id, language) {
     well_ui_version <- reactiveVal(0L)
     document_ui_version <- reactiveVal(0L)
     invalid_document_names <- reactiveVal(list())
+    pdf_processing <- reactiveVal(FALSE)
+
+    output$pdf_processing_status <- renderUI({
+      if (!isTRUE(pdf_processing())) {
+        return(NULL)
+      }
+
+      div(
+        class = "alert alert-info",
+        role = "status",
+        style = "margin-top: 8px; padding: 10px;",
+        icon("spinner", class = "fa-spin"),
+        tags$strong(" Processing PDF..."),
+        tags$div(
+          "Large scanned documents can take a minute or more. Please keep this page open."
+        )
+      )
+    })
 
     get_cached_image <- function(img_path) {
       cache <- image_cache()
@@ -4681,34 +4700,26 @@ simplerIndex <- function(id, language) {
                 )
               }
 
-              n_pages <- pdftools::pdf_info(pdf_path)$pages
               base <- tools::file_path_sans_ext(basename(orig_name))
               safe_base <- gsub("[^[:alnum:]_.-]+", "_", base)
               if (!nzchar(safe_base)) {
                 safe_base <- "document"
               }
-              png_tpl <- file.path(
-                upload_job_dir,
-                sprintf("%03d_%s_page_%%d.%%s", i, safe_base)
-              )
-
-              png_files <- pdftools::pdf_convert(
+              rendered_files <- render_pdf_pages(
                 pdf_path,
-                dpi = 300,
-                pages = seq_len(n_pages),
-                format = "png",
-                filenames = png_tpl
+                output_dir = upload_job_dir,
+                filename_prefix = sprintf("%03d_%s", i, safe_base)
               )
 
-              file_counts[[orig_name]] <- length(png_files)
-              file_info <- file.info(png_files)
+              file_counts[[orig_name]] <- length(rendered_files)
+              file_info <- file.info(rendered_files)
               split_df <- data.frame(
-                Name = rep(orig_name, length(png_files)),
+                Name = rep(orig_name, length(rendered_files)),
                 Size_KB = round(file_info$size / 1024, 2),
                 Date = as.character(file.info(pdf_path)$mtime),
-                OrigFile = rep(orig_name, length(png_files)),
-                Page = seq_along(png_files),
-                Path = png_files,
+                OrigFile = rep(orig_name, length(rendered_files)),
+                Page = seq_along(rendered_files),
+                Path = rendered_files,
                 stringsAsFactors = FALSE
               )
               split_df$NewFilename <- file.path(basename(split_df$Path))
@@ -4738,8 +4749,27 @@ simplerIndex <- function(id, language) {
       })
     })
 
+    observeEvent(
+      process_pdf_uploads$status(),
+      {
+        if (process_pdf_uploads$status() %in% c("success", "error")) {
+          pdf_processing(FALSE)
+        }
+      },
+      ignoreInit = TRUE
+    )
+
     # Split PDFs into single-page files on upload
     observeEvent(input$pdf_file, {
+      if (isTRUE(pdf_processing())) {
+        showNotification(
+          "A PDF is already being processed. Please wait for it to finish.",
+          type = "warning",
+          duration = 6
+        )
+        return()
+      }
+
       uploaded_files <- as.data.frame(
         input$pdf_file,
         stringsAsFactors = FALSE
@@ -4812,9 +4842,11 @@ simplerIndex <- function(id, language) {
         type = "message",
         duration = 5
       )
+      pdf_processing(TRUE)
       tryCatch(
         process_pdf_uploads$invoke(uploaded_files, upload_job_dir),
         error = function(e) {
+          pdf_processing(FALSE)
           unlink(upload_job_dir, recursive = TRUE, force = TRUE)
           upload_temp_dirs$paths <- setdiff(
             upload_temp_dirs$paths,
@@ -4834,6 +4866,7 @@ simplerIndex <- function(id, language) {
       if (is.null(result)) {
         return()
       }
+      pdf_processing(FALSE)
       if (!is.null(result$error)) {
         message("simplerIndex PDF processing failed: ", result$error)
         if (!is.null(result$upload_job_dir)) {
@@ -7036,37 +7069,10 @@ simplerIndex <- function(id, language) {
           {
             # Read the original image
             img <- magick::image_read(img_path)
-            info <- magick::image_info(img)
-
             # Check if there are redactions for this image
             rectangles <- rv$rectangles[[img_path]]
-
-            if (!is.null(rectangles) && length(rectangles) > 0) {
-              # Create a drawing canvas
-              drawing <- magick::image_draw(img)
-
-              # Draw redaction rectangles
-              for (rect_data in rectangles) {
-                # Convert coordinates (plot coordinates are already correct for image)
-                rect(
-                  rect_data$xmin,
-                  info$height - rect_data$ymax, # Flip Y coordinate
-                  rect_data$xmax,
-                  info$height - rect_data$ymin, # Flip Y coordinate
-                  col = "black",
-                  border = "black"
-                )
-              }
-
-              # Finish drawing
-              dev.off()
-
-              # Write the modified image
-              magick::image_write(drawing, path = file, format = "PNG")
-            } else {
-              # No redactions, just copy the original
-              magick::image_write(img, path = file, format = "PNG")
-            }
+            img <- apply_image_redactions(img, rectangles)
+            magick::image_write(img, path = file, format = "PNG")
 
             showNotification(
               "Redacted image saved successfully",
