@@ -95,7 +95,7 @@ addSubLocation <- function(id, inputs, language) {
           ),
           textInput(
             ns("subloc_name_fr"),
-            "French sub-location name (must not exist already)",
+            "French sub-location name (leave blank if unable to translate)",
             width = "100%"
           )
         ),
@@ -840,7 +840,7 @@ addSubLocation <- function(id, inputs, language) {
       }
       name_fr <- input$subloc_name_fr
       if (!isTruthy(name_fr)) {
-        name_fr <- "Traduction manquante!"
+        name_fr <- "Traduction requise!"
       } else {
         if (
           name_fr %in%

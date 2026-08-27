@@ -467,7 +467,7 @@ addLocation <- function(id, inputs, language) {
               ),
               textInput(
                 ns("loc_name_fr"),
-                "French location name (must not exist already)",
+                "French location name (leave blank if unable to translate)",
                 width = "100%"
               ),
               textInput(
@@ -2917,7 +2917,7 @@ addLocation <- function(id, inputs, language) {
       }
       name_fr <- input$loc_name_fr
       if (!isTruthy(name_fr)) {
-        name_fr <- "Traduction manquante!"
+        name_fr <- "Traduction requise!"
       } else {
         if (name_fr %in% moduleData$exist_locs$name_fr) {
           showModal(modalDialog(
