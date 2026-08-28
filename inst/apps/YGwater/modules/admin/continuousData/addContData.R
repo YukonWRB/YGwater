@@ -74,6 +74,29 @@ add_cont_data_band_polygons <- function(ranges, y_values, label_prefix) {
   ]
 }
 
+add_cont_data_target_label <- function(target) {
+  sensor_priority <- c("primary", "secondary", "tertiary")[
+    match(as.character(target$sensor_priority[[1L]]), c("1", "2", "3"))
+  ]
+  if (is.na(sensor_priority)) {
+    sensor_priority <- as.character(target$sensor_priority[[1L]])
+  }
+
+  parameter <- as.character(target$parameter[[1L]])
+  units <- as.character(target$units[[1L]])
+  if (!is.na(units) && nzchar(units)) {
+    parameter <- paste0(parameter, " (", units, ")")
+  }
+
+  parts <- c(
+    paste0(target$timeseries_id[[1L]], ": ", parameter),
+    sensor_priority,
+    as.character(target$aggregation[[1L]]),
+    as.character(target$record_rate[[1L]])
+  )
+  paste(parts[!is.na(parts) & nzchar(parts)], collapse = "; ")
+}
+
 addContDataUI <- function(id) {
   ns <- NS(id)
   tagList(
@@ -441,7 +464,7 @@ addContData <- function(id, language) {
            md.units,
            md.media_type AS media,
            md.aggregation_type AS aggregation,
-           md.recording_rate AS record_rate_minutes,
+           md.recording_rate AS record_rate,
            md.timeseries_type_code,
            md.timeseries_type,
            ts.active,
@@ -516,7 +539,7 @@ addContData <- function(id, language) {
           md.units,
           md.media_type AS media,
           md.aggregation_type AS aggregation,
-          md.recording_rate AS record_rate_minutes,
+          md.recording_rate AS record_rate,
           md.timeseries_type_code,
           md.timeseries_type,
           ts.active,
@@ -575,7 +598,7 @@ addContData <- function(id, language) {
     output$ts_table <- DT::renderDT({
       # Convert some data types to factors for better filtering in DT
       df <- ts_meta()
-      df$record_rate_minutes <- as.factor(df$record_rate_minutes)
+      df$record_rate <- as.factor(df$record_rate)
       df$location <- as.factor(df$location)
       df$media <- as.factor(df$media)
       df$aggregation <- as.factor(df$aggregation)
@@ -941,21 +964,6 @@ addContData <- function(id, language) {
       paste0(class_name, "_ranges_table_", as.integer(timeseries_id))
     }
 
-    target_label <- function(target, include_id = TRUE) {
-      parts <- c(
-        as.character(target$location[[1]]),
-        as.character(target$parameter[[1]]),
-        as.character(target$units[[1]]),
-        paste0(as.character(target$record_rate_minutes[[1]]), " min")
-      )
-      parts <- parts[!is.na(parts) & nzchar(parts)]
-      label <- paste(parts, collapse = " | ")
-      if (isTRUE(include_id)) {
-        label <- paste0("Timeseries ", target$timeseries_id[[1]], ": ", label)
-      }
-      label
-    }
-
     output$selected_upload_targets <- renderUI({
       targets <- selected_upload_timeseries_meta()
       if (nrow(targets) == 0) {
@@ -969,7 +977,7 @@ addContData <- function(id, language) {
           if (nrow(targets) > 1) "s" else ""
         ),
         tags$ul(lapply(seq_len(nrow(targets)), function(i) {
-          tags$li(target_label(targets[i, , drop = FALSE]))
+          tags$li(add_cont_data_target_label(targets[i, , drop = FALSE]))
         }))
       )
     })
@@ -2033,7 +2041,7 @@ addContData <- function(id, language) {
 
         jobs[[i]] <- list(
           timeseries_id = tsid,
-          label = target_label(target),
+          label = add_cont_data_target_label(target),
           data = df_mapped,
           dropped_missing_value = dropped_missing_value
         )
@@ -2159,14 +2167,7 @@ addContData <- function(id, language) {
           }
 
           tags$tr(
-            tags$td(paste0(
-              tsid,
-              ": ",
-              target$parameter[[1]],
-              " (",
-              target$units[[1]],
-              ")"
-            )),
+            tags$td(add_cont_data_target_label(target)),
             tags$td(selectizeInput(
               ns(upload_mapping_input_id("datetime", tsid)),
               NULL,
@@ -2877,7 +2878,7 @@ addContData <- function(id, language) {
           msgs <- c(
             msgs,
             paste0(
-              target_label(targets[i, , drop = FALSE]),
+              add_cont_data_target_label(targets[i, , drop = FALSE]),
               ": ",
               paste(target_msgs, collapse = " ")
             )
@@ -3142,7 +3143,7 @@ addContData <- function(id, language) {
             target <- targets[i, , drop = FALSE]
             target_id <- as.integer(target$timeseries_id[[1]])
             tabPanel(
-              title = target_label(target),
+              title = add_cont_data_target_label(target),
               value = paste0("timeseries_", target_id),
               DT::DTOutput(ns(class_range_output_id(class_name, target_id)))
             )
@@ -4151,7 +4152,7 @@ addContData <- function(id, language) {
         meta <- selected_timeseries_meta()
         label <- paste("Timeseries", timeseries())
         if (nrow(meta) == 1) {
-          label <- target_label(meta)
+          label <- add_cont_data_target_label(meta)
         }
         return(list(list(
           timeseries_id = as.integer(timeseries()),
@@ -5612,7 +5613,7 @@ addContData <- function(id, language) {
         label <- paste("Timeseries", timeseries())
         meta <- selected_timeseries_meta()
         if (nrow(meta) == 1) {
-          label <- target_label(meta)
+          label <- add_cont_data_target_label(meta)
         }
         jobs <- list(list(
           timeseries_id = as.integer(timeseries()),
