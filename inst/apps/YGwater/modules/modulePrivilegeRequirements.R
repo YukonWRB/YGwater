@@ -179,15 +179,19 @@ ygwater_module_privilege_requirements <- function() {
         "public.organizations",
         "continuous.timeseries_source_adapters",
         "continuous.transmission_timeseries_mappings",
-        "public.source_adapter_capabilities"
+        "public.source_adapter_capabilities",
+        "public.locations_metadata_instrument_timeseries",
+        "continuous.corrections"
       ),
       list(
         c("INSERT", "UPDATE"),
         c("DELETE", "INSERT", "UPDATE"),
         "INSERT",
-        c("INSERT", "UPDATE"),
-        c("INSERT", "UPDATE"),
-        "SELECT"
+        c("DELETE", "INSERT", "UPDATE"),
+        c("DELETE", "INSERT", "UPDATE"),
+        "SELECT",
+        c("DELETE", "INSERT"),
+        "INSERT"
       )
     ),
     addCompoundTimeseries = req(
