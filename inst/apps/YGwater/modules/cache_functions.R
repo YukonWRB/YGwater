@@ -109,6 +109,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
              loc.location_code AS loc_code,
              ts.media_id,
              ts.parameter_id,
+             ts.sensor_priority,
              ts.aggregation_type_id,
              EXTRACT(EPOCH FROM ts.record_rate) AS record_rate,
              lz.z_meters AS z,
