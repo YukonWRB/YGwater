@@ -397,6 +397,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       if (!"timeseries_type_name_fr" %in% names(ts)) {
         ts[, timeseries_type_name_fr := timeseries_type_name]
       }
+      if (!"sensor_priority" %in% names(ts)) {
+        ts[, sensor_priority := NA_integer_]
+      }
 
       if (language$abbrev == "fr") {
         ts[, timeseries_type := timeseries_type_name_fr]
@@ -408,6 +411,12 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         timeseries_type := timeseries_type_code
       ]
       ts[, timeseries_type := as.factor(timeseries_type)]
+      ts[,
+        sensor_priority := as.factor(YGwater:::format_sensor_priority_label(
+          sensor_priority,
+          language$language
+        ))
+      ]
 
       # Convert to periods
       ts[,
@@ -425,6 +434,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         sub_location,
         loc_code,
         parameter,
+        sensor_priority,
         media,
         aggregation,
         z,
@@ -541,7 +551,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               uiOutput(ns("selected_timeseries_output")),
               actionButton(
                 ns("add_new_timeseries"),
-                label = "Add another timeseries"
+                label = tr("add_another_timeseries", language$language)
               )
             ) # End div
           ), # End table_panel
@@ -741,21 +751,13 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                       ),
                       selectizeInput(
                         ns("historic_stats_period"),
-                        label = if (language$abbrev == "fr") {
-                          "P\u00e9riode des statistiques"
-                        } else {
-                          "Stats period"
-                        },
+                        label = tr("stats_period", language$language),
                         choices = stats::setNames(
                           c("30yr", "full"),
-                          if (language$abbrev == "fr") {
-                            c(
-                              "30 derni\u00e8res ann\u00e9es",
-                              "Toute la p\u00e9riode"
-                            )
-                          } else {
-                            c("Last 30 years", "Entire record")
-                          }
+                          YGwater:::format_stats_period_label(
+                            c("30yr", "full"),
+                            language$language
+                          )
                         ),
                         selected = "30yr",
                         multiple = FALSE
@@ -824,44 +826,76 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                       ns = ns,
                       selectizeInput(
                         ns("hist_transformation"),
-                        label = "Transformation",
-                        choices = c(
-                          "sum",
-                          "min",
-                          "max",
-                          "mean",
-                          "median",
-                          "integral"
+                        label = tr(
+                          "histogram_transformation",
+                          language$language
+                        ),
+                        choices = stats::setNames(
+                          c(
+                            "sum",
+                            "min",
+                            "max",
+                            "mean",
+                            "median",
+                            "integral"
+                          ),
+                          vapply(
+                            c(
+                              "histogram_sum",
+                              "histogram_minimum",
+                              "histogram_maximum",
+                              "histogram_mean",
+                              "snowbull_median",
+                              "histogram_integral"
+                            ),
+                            tr,
+                            character(1),
+                            lang = language$language
+                          )
                         ),
                         selected = "sum"
                       ),
                       selectizeInput(
                         ns("hist_bin_units"),
-                        label = "Bin units",
-                        choices = c(
-                          "day",
-                          "week",
-                          "month",
-                          "year"
+                        label = tr("histogram_bin_units", language$language),
+                        choices = stats::setNames(
+                          c("day", "week", "month", "year"),
+                          vapply(
+                            c(
+                              "time_unit_day",
+                              "time_unit_week",
+                              "month",
+                              "gen_snowBul_year"
+                            ),
+                            tr,
+                            character(1),
+                            lang = language$language
+                          )
                         ),
                         selected = "month"
                       ),
                       numericInput(
                         ns("hist_bin_width"),
-                        label = "Bin width",
+                        label = tr("histogram_bin_width", language$language),
                         value = 1,
                         min = 1
                       ),
                       numericInput(
                         ns("hist_threshold"),
-                        label = "Min % of records to show bin (0-100)",
+                        label = tr(
+                          "histogram_min_completeness",
+                          language$language
+                        ),
                         value = 90,
                         min = 1,
                         max = 100
                       ),
                       checkboxInput(
                         ns("hist_completeness_labels"),
-                        label = "Show completeness % above bins",
+                        label = tr(
+                          "histogram_show_completeness",
+                          language$language
+                        ),
                         value = TRUE
                       )
                     ) # End histogram conditionalPanel
@@ -1379,19 +1413,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
         duplicate_idx <- which(!is.na(slots) & slots == selected_id)
         if (length(duplicate_idx) > 0 && duplicate_idx[[1]] != idx) {
-          duplicate_message <- if (language$abbrev == "fr") {
-            paste(
-              "La série chronologique",
-              selected_id,
-              "est déjà sélectionnée. Choisissez-en une autre."
-            )
-          } else {
-            paste(
-              "Timeseries",
-              selected_id,
-              "is already selected. Choose a different timeseries."
-            )
-          }
+          duplicate_message <- sprintf(
+            tr("timeseries_already_selected", language$language),
+            selected_id
+          )
           showNotification(
             duplicate_message,
             type = "warning"
@@ -1443,6 +1468,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         sub_location = tr("sub_loc", language$language),
         loc_code = tr("code", language$language),
         parameter = tr("parameter", language$language),
+        sensor_priority = tr("sensor_priority", language$language),
         media = tr("media", language$language),
         aggregation = tr("aggregation", language$language),
         z = tr("z", language$language),
@@ -2083,7 +2109,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               if (show_delete && !is.na(ts_id)) {
                 actionButton(
                   ns(paste0("delete_timeseries_", i)),
-                  label = "Delete",
+                  label = tr("delete", language$language),
                   class = "btn btn-outline-danger btn-sm"
                 )
               }
@@ -2790,6 +2816,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       media <- ts_tbl$media
       aggregation <- ts_tbl$aggregation
       record_rate <- ts_tbl$record_rate_seconds
+      sensor_priority <- YGwater:::format_sensor_priority_label(
+        ts_tbl$sensor_priority,
+        language$language
+      )
       depth_height <- ts_tbl$depth_height_m
       start_dt <- ts_tbl$start_datetime
       end_dt <- ts_tbl$end_datetime
@@ -2807,6 +2837,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           tr("parameter", language$language),
           tr("units", language$language),
           tr("media", language$language),
+          tr("sensor_priority", language$language),
           tr("aggregation", language$language),
           tr("nominal_rate", language$language),
           tr("depth_height_m", language$language),
@@ -2818,6 +2849,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           format_metadata_value(parameter),
           format_metadata_value(units),
           format_metadata_value(media),
+          format_metadata_value(sensor_priority),
           format_metadata_value(aggregation),
           format_metadata_value(record_rate_display),
           format_metadata_value(depth_height),

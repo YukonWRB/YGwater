@@ -180,3 +180,57 @@ test_that("viewFeedback requires all feedback table privileges", {
     )$viewFeedback
   )
 })
+
+test_that("addTimeseries includes privileges used by replace-all helpers", {
+  module_env <- module_privilege_environment()
+  requirements <- module_env$ygwater_module_privilege_requirements()
+  requirement <- requirements$addTimeseries
+
+  required_privileges <- stats::setNames(
+    requirement$privileges,
+    requirement$tables
+  )
+
+  expect_setequal(
+    required_privileges[["continuous.timeseries_source_adapters"]],
+    c("DELETE", "INSERT", "UPDATE")
+  )
+  expect_setequal(
+    required_privileges[["continuous.transmission_timeseries_mappings"]],
+    c("DELETE", "INSERT", "UPDATE")
+  )
+  expect_setequal(
+    required_privileges[[
+      "public.locations_metadata_instrument_timeseries"
+    ]],
+    c("DELETE", "INSERT")
+  )
+  expect_identical(
+    required_privileges[["continuous.corrections"]],
+    "INSERT"
+  )
+})
+
+test_that("addTimeseries is hidden when a replace-all DELETE is missing", {
+  module_env <- module_privilege_environment()
+  requirements <- module_env$ygwater_module_privilege_requirements()
+  requirement <- requirements$addTimeseries
+  table_privs <- data.frame(
+    qual_name = requirement$tables,
+    extra_privileges = vapply(
+      requirement$privileges,
+      paste,
+      collapse = ", ",
+      FUN.VALUE = character(1)
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  mapping_row <- table_privs$qual_name ==
+    "continuous.transmission_timeseries_mappings"
+  table_privs$extra_privileges[mapping_row] <- "INSERT, UPDATE"
+
+  access <- module_env$ygwater_admin_privileges(table_privs, requirements)
+
+  expect_false(access$addTimeseries)
+})

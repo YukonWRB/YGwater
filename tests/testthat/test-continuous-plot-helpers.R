@@ -11,6 +11,152 @@ test_that("historic range export data is NULL when stats are unavailable", {
   expect_null(historic_range_data_for_export(range_data, "m"))
 })
 
+test_that("sensor priority labels are readable and bilingual", {
+  french <- names(YGwater:::data$translations)[
+    vapply(
+      YGwater:::data$translations,
+      function(values) identical(unname(values[["titleCase"]]), "fr"),
+      logical(1)
+    )
+  ][[1L]]
+
+  expect_identical(
+    format_sensor_priority_label(
+      c(1L, 2L, 3L, NA_integer_),
+      "English"
+    ),
+    c("Primary", "Secondary", "Tertiary", NA_character_)
+  )
+  expect_identical(
+    format_sensor_priority_label(c("1", "2", "3"), french),
+    c("Primaire", "Secondaire", "Tertiaire")
+  )
+})
+
+test_that("unknown sensor priorities remain visible", {
+  expect_identical(
+    format_sensor_priority_label(c("4", "backup", ""), "English"),
+    c("4", "backup", NA_character_)
+  )
+})
+
+test_that("sensor priority labels support additional translation catalogues", {
+  translations <- list(
+    Test = c(
+      sensor_priority_primary = "First",
+      sensor_priority_secondary = "Second",
+      sensor_priority_tertiary = "Third"
+    )
+  )
+
+  expect_identical(
+    format_sensor_priority_label(
+      c(1L, 2L, 3L),
+      "Test",
+      translations = translations
+    ),
+    c("First", "Second", "Third")
+  )
+})
+
+test_that("statistics-period labels use the translation catalogue", {
+  translations <- list(
+    Test = c(
+      stats_period_last_30_years = "Recent baseline",
+      stats_period_entire_record = "Complete baseline"
+    )
+  )
+
+  expect_identical(
+    format_stats_period_label(
+      c("30yr", "full", "custom"),
+      "Test",
+      translations = translations
+    ),
+    c("Recent baseline", "Complete baseline", "custom")
+  )
+})
+
+test_that("adaptive continuous plot displays sensor priority in both metadata views", {
+  module_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(
+    module_text,
+    'sensor_priority = tr("sensor_priority", language$language)',
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "format_metadata_value(sensor_priority)",
+    fixed = TRUE
+  )
+
+  cache_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/cache_functions.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+  expect_match(cache_text, "ts.sensor_priority", fixed = TRUE)
+})
+
+test_that("public statistics-period controls use translated labels", {
+  adaptive_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+  params_map_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/map/paramsMap.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(
+    adaptive_text,
+    'label = tr("stats_period", language$language)',
+    fixed = TRUE
+  )
+  expect_match(
+    adaptive_text,
+    "YGwater:::format_stats_period_label",
+    fixed = TRUE
+  )
+  expect_match(
+    params_map_text,
+    'label = tr("stats_period", language$language)',
+    fixed = TRUE
+  )
+  expect_match(
+    params_map_text,
+    "YGwater:::format_stats_period_label",
+    fixed = TRUE
+  )
+})
+
 test_that("historic range export data is renamed when stats are available", {
   range_data <- data.frame(
     datetime = as.POSIXct("2026-06-01", tz = "UTC"),

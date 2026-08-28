@@ -429,17 +429,9 @@ wellRegistry <- function(id, language) {
     # repeated for associated wells, while borehole-only rows remain distinct.
     popupData <- reactive({
       unknown_label <- tr("unknown", language$language)
-      bedrock_not_reached_label <- if (identical(language$abbrev, "fr")) {
-        "Non atteint"
-      } else {
-        "Not reached"
-      }
-      well_label <- if (identical(language$abbrev, "fr")) "Puits" else "Well"
-      borehole_label <- if (identical(language$abbrev, "fr")) {
-        "Trou de forage"
-      } else {
-        "Borehole"
-      }
+      bedrock_not_reached_label <- tr("not_reached", language$language)
+      well_label <- tr("well", language$language)
+      borehole_label <- tr("borehole", language$language)
 
       docs_by_borehole <- data.table::copy(moduleData$boreholes_docs)
       docs_by_borehole[

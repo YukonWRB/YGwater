@@ -225,6 +225,33 @@ reuse_values,,Reuse values,Réutiliser les valeurs
 member_timeseries_id,,Member timeseries ID,ID de la série chronologique membre
 alias_name,,Alias name,Nom d’alias
 sensor_priority,,Sensor priority,Priorité du capteur
+sensor_priority_primary,,Primary,Primaire
+sensor_priority_secondary,,Secondary,Secondaire
+sensor_priority_tertiary,,Tertiary,Tertiaire
+stats_period,,Stats period,Période des statistiques
+stats_period_last_30_years,,Last 30 years,30 dernières années
+stats_period_entire_record,,Entire record,Toute la période
+timeseries_already_selected,,Timeseries %s is already selected. Choose a different timeseries.,La série chronologique %s est déjà sélectionnée. Choisissez-en une autre.
+add_another_timeseries,,Add another timeseries,Ajouter une autre série chronologique
+histogram_transformation,,Transformation,Transformation
+histogram_bin_units,,Bin units,Unités des intervalles
+histogram_bin_width,,Bin width,Largeur de l’intervalle
+histogram_min_completeness,,Min % of records to show bin (0-100),Pourcentage minimal d’enregistrements pour afficher l’intervalle (0-100)
+histogram_show_completeness,,Show completeness % above bins,Afficher le pourcentage d’exhaustivité au-dessus des intervalles
+histogram_sum,,Sum,Somme
+histogram_minimum,,Minimum,Minimum
+histogram_maximum,,Maximum,Maximum
+histogram_mean,,Mean,Moyenne
+histogram_integral,,Integral,Intégrale
+time_unit_day,,Day,Jour
+time_unit_week,,Week,Semaine
+delete,,Delete,Supprimer
+not_reached,,Not reached,Non atteint
+well,,Well,Puits
+borehole,,Borehole,Trou de forage
+text_content_not_found,,Text content not found.,Contenu textuel introuvable.
+image_content_not_found,,Image content not found.,Contenu de l’image introuvable.
+unknown_content_type,,Unknown content type.,Type de contenu inconnu.
 start_datetime_utc,,Start datetime (UTC),Date/heure de début (UTC)
 end_datetime_utc,,End datetime (UTC),Date/heure de fin (UTC)
 location_code_label,,Location code,Code du site

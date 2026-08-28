@@ -48,7 +48,7 @@ news <- function(id, language) {
             content_text <- text_data[[lang_col]][1]
             safe_html_fragment_ui(content_text)
           } else {
-            tags$p("Text content not found.")
+            tags$p(tr("text_content_not_found", language$language))
           }
         } else if (row$content_type == "image") {
           image_data <- DBI::dbGetQuery(
@@ -68,10 +68,10 @@ news <- function(id, language) {
             )
             tags$img(src = data_url, style = "max-width:100%;")
           } else {
-            tags$p("Image content not found.")
+            tags$p(tr("image_content_not_found", language$language))
           }
         } else {
-          tags$p("Unknown content type.")
+          tags$p(tr("unknown_content_type", language$language))
         }
       })
 

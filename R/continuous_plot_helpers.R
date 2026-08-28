@@ -1,5 +1,69 @@
 # Helpers for continuous trace plotting
 
+#' Format continuous-timeseries sensor priorities for display
+#' @param sensor_priority Integer or character sensor-priority values.
+#' @param language Language name used by [tr()].
+#' @param translations Translation catalogue passed to [tr()].
+#' @return A character vector containing readable priority labels.
+#' @noRd
+#' @keywords internal
+format_sensor_priority_label <- function(
+  sensor_priority,
+  language,
+  translations = data$translations
+) {
+  priority <- as.character(sensor_priority)
+  priority_number <- suppressWarnings(as.integer(priority))
+  labels <- vapply(
+    c(
+      "sensor_priority_primary",
+      "sensor_priority_secondary",
+      "sensor_priority_tertiary"
+    ),
+    tr,
+    character(1),
+    lang = language,
+    translations = translations
+  )
+
+  out <- rep(NA_character_, length(priority))
+  matched <- !is.na(priority_number) & priority_number %in% seq_along(labels)
+  out[matched] <- labels[priority_number[matched]]
+
+  fallback <- !matched & !is.na(priority) & nzchar(priority)
+  out[fallback] <- priority[fallback]
+  out
+}
+
+#' Format the historical-statistics period for display
+#' @param stats_period Character statistics-period values.
+#' @param language Language name used by [tr()].
+#' @param translations Translation catalogue passed to [tr()].
+#' @return A character vector containing translated period labels.
+#' @noRd
+#' @keywords internal
+format_stats_period_label <- function(
+  stats_period,
+  language,
+  translations = data$translations
+) {
+  keys <- c(
+    `30yr` = "stats_period_last_30_years",
+    full = "stats_period_entire_record"
+  )
+  stats_period <- as.character(stats_period)
+  matched <- stats_period %in% names(keys)
+  out <- stats_period
+  out[matched] <- vapply(
+    unname(keys[stats_period[matched]]),
+    tr,
+    character(1),
+    lang = language,
+    translations = translations
+  )
+  out
+}
+
 #' @title Check if corrected source should be used for continuous trace
 #' @description Determines whether the continuous trace should use the corrected source based on the presence of applicable corrections in the database.
 #' @param con A DBI database connection object.
