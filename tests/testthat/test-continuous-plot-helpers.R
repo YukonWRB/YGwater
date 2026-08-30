@@ -40,6 +40,90 @@ test_that("unknown sensor priorities remain visible", {
   )
 })
 
+test_that("map location filters preserve the complete continuous table", {
+  timeseries <- data.frame(
+    timeseries_id = 1:4,
+    location_id = c(10, 10, 20, 30)
+  )
+  locations <- data.table::data.table(
+    location_id = c(10, 20, 30),
+    name = c("Alpha", "Beta", "Gamma")
+  )
+
+  location_value <- continuous_plot_map_location_value(
+    10,
+    timeseries,
+    locations,
+    "name"
+  )
+  searches <- continuous_plot_location_search_columns(
+    c("timeseries_id", "location", "parameter"),
+    location_value
+  )
+
+  expect_identical(location_value, "Alpha")
+  expect_identical(jsonlite::fromJSON(searches[[2L]]), "Alpha")
+  expect_identical(searches[c(1L, 3L)], c("", ""))
+  expect_equal(nrow(timeseries), 4L)
+  expect_equal(timeseries$timeseries_id, 1:4)
+})
+
+test_that("map location filters reject invalid and non-continuous locations", {
+  timeseries <- data.frame(
+    timeseries_id = 1:2,
+    location_id = c(10, 20)
+  )
+  locations <- data.frame(
+    location_id = c(10, 20, 30),
+    name = c("Alpha", "Beta", "Gamma")
+  )
+
+  expect_null(continuous_plot_map_location_value(
+    30,
+    timeseries,
+    locations,
+    "name"
+  ))
+  expect_null(continuous_plot_map_location_value(
+    "not-an-id",
+    timeseries,
+    locations,
+    "name"
+  ))
+  expect_identical(
+    continuous_plot_location_search_columns(
+      c("timeseries_id", "location"),
+      NULL
+    ),
+    c("", "")
+  )
+})
+
+test_that("duplicate map location names remain unambiguous", {
+  timeseries <- data.frame(
+    timeseries_id = 1:2,
+    location_id = c(10, 20)
+  )
+  locations <- data.table::data.table(
+    location_id = c(10, 20),
+    name = c("Same name", "Same name")
+  )
+
+  expect_identical(
+    continuous_plot_location_labels(locations, "name"),
+    c("Same name [10]", "Same name [20]")
+  )
+  expect_identical(
+    continuous_plot_map_location_value(
+      20,
+      timeseries,
+      locations,
+      "name"
+    ),
+    "Same name [20]"
+  )
+})
+
 test_that("sensor priority labels support additional translation catalogues", {
   translations <- list(
     Test = c(

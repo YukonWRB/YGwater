@@ -136,12 +136,37 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       timeseries = cached$timeseries
     )
 
+    map_location_value <- function(location_id) {
+      YGwater:::continuous_plot_map_location_value(
+        location_id = location_id,
+        timeseries = moduleData$timeseries,
+        locations = moduleData$locs,
+        name_col = tr("generic_name_col", language$language)
+      )
+    }
+
+    initial_location_id <- if (
+      !is.null(inputs) &&
+        identical(isolate(inputs$location_target), "contPlot") &&
+        !is.null(map_location_value(isolate(inputs$location_id)))
+    ) {
+      unique(as.numeric(isolate(inputs$location_id)))[[1L]]
+    } else {
+      NULL
+    }
+
     moduleInputs <- reactiveValues(
-      location_id = if (!is.null(inputs$location_id)) {
-        as.numeric(inputs$location_id)
+      location_id = initial_location_id,
+      location_request_id = if (!is.null(inputs)) {
+        isolate(inputs$location_request_id)
       } else {
         NULL
       }
+    )
+    pending_map_location <- reactiveVal(initial_location_id)
+    timeseries_table_proxy <- DT::dataTableProxy(
+      "timeseries_table",
+      session = session
     )
 
     values <- reactiveValues(
@@ -271,6 +296,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ts <- ts[location_id %in% loc_filter_ids]
 
       locs <- unique(moduleData$locs, by = "location_id")
+      locs[, location_label := YGwater:::continuous_plot_location_labels(
+        locs,
+        loc_name_col
+      )]
       sub_locs <- unique(moduleData$sub_locs, by = "sub_location_id")
       params <- unique(moduleData$params, by = "parameter_id")
       media <- unique(moduleData$media, by = "media_id")
@@ -332,8 +361,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ts <- merge(
         ts,
         locs[,
-          .(location_id, location = .SD[[loc_name_col]]),
-          .SDcols = loc_name_col
+          .(location_id, location = location_label)
         ],
         by = "location_id",
         all.x = TRUE
@@ -465,6 +493,71 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       data.table::setorder(ts, location, parameter)
       ts
     })
+
+    apply_map_location_filter <- function(location_id) {
+      location_value <- map_location_value(location_id)
+      if (is.null(location_value)) {
+        return(invisible(FALSE))
+      }
+
+      location_id <- unique(as.numeric(location_id))[[1L]]
+      moduleInputs$location_id <- location_id
+      pending_map_location(location_id)
+
+      had_scope_filters <-
+        length(isolate(input$network_filter)) > 0L ||
+        length(isolate(input$project_filter)) > 0L
+      updateSelectizeInput(
+        session,
+        "network_filter",
+        selected = character(0)
+      )
+      updateSelectizeInput(
+        session,
+        "project_filter",
+        selected = character(0)
+      )
+
+      # Clearing either scope filter rebuilds the table. The pending location
+      # is consumed by that render through searchCols, after all rows return.
+      if (had_scope_filters) {
+        return(invisible(TRUE))
+      }
+
+      searches <- YGwater:::continuous_plot_location_search_columns(
+        names(timeseries_table_reactive()),
+        location_value
+      )
+      DT::updateSearch(
+        timeseries_table_proxy,
+        keywords = list(global = "", columns = searches)
+      )
+      session$onFlushed(
+        function() {
+          if (identical(isolate(pending_map_location()), location_id)) {
+            pending_map_location(NULL)
+          }
+        },
+        once = TRUE
+      )
+      invisible(TRUE)
+    }
+
+    observeEvent(
+      if (!is.null(inputs)) inputs$location_request_id else NULL,
+      {
+        req(identical(inputs$location_target, "contPlot"))
+        request_id <- inputs$location_request_id
+        if (identical(request_id, isolate(moduleInputs$location_request_id))) {
+          return()
+        }
+
+        moduleInputs$location_request_id <- request_id
+        apply_map_location_filter(inputs$location_id)
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     output$banner <- renderUI({
       application_notifications_ui(
@@ -1393,7 +1486,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ignoreNULL = FALSE
     )
 
-    proxy <- DT::dataTableProxy("timeseries_table")
+    proxy <- timeseries_table_proxy
 
     # Fill the active slot when a row is selected in the table
     observeEvent(input$timeseries_table_rows_selected, {
@@ -1460,6 +1553,19 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
     # Render the timeseries table
     output$timeseries_table <- DT::renderDataTable({
       ts <- timeseries_table_reactive()
+
+      pending_location_id <- isolate(pending_map_location())
+      pending_location_value <- map_location_value(pending_location_id)
+      search_values <- YGwater:::continuous_plot_location_search_columns(
+        names(ts),
+        pending_location_value
+      )
+      search_cols <- lapply(search_values, function(value) {
+        if (nzchar(value)) list(search = value) else NULL
+      })
+      if (!is.null(pending_location_id)) {
+        isolate(pending_map_location(NULL))
+      }
 
       column_labels <- c(
         timeseries_id = "timeseries_id",
@@ -1569,6 +1675,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             infoFiltered = tr("tbl_filtered", language$language),
             zeroRecords = tr("tbl_zero", language$language)
           ),
+          searchCols = search_cols,
           order = order_columns,
           stateSave = FALSE
         ), # End options

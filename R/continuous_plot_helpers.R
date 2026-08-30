@@ -64,6 +64,95 @@ format_stats_period_label <- function(
   out
 }
 
+#' Build unambiguous location labels for the continuous table
+#' @param locations Location metadata containing `location_id` and `name_col`.
+#' @param name_col Name of the localized location-name column.
+#' @return Character labels. Duplicate display names include their location ID.
+#' @noRd
+#' @keywords internal
+continuous_plot_location_labels <- function(locations, name_col) {
+  if (!all(c("location_id", name_col) %in% names(locations))) {
+    return(character())
+  }
+
+  labels <- as.character(locations[[name_col]])
+  duplicate_labels <-
+    !is.na(labels) &
+    (duplicated(labels) | duplicated(labels, fromLast = TRUE))
+  labels[duplicate_labels] <- sprintf(
+    "%s [%s]",
+    labels[duplicate_labels],
+    locations[["location_id"]][duplicate_labels]
+  )
+  labels
+}
+
+#' Resolve a map location to the continuous table's display value
+#' @param location_id Location identifier supplied by the map module.
+#' @param timeseries Continuous-timeseries metadata containing `location_id`.
+#' @param locations Location metadata containing `location_id` and `name_col`.
+#' @param name_col Name of the localized location-name column.
+#' @return The scalar location label used by the table, or `NULL` when the
+#'   request is invalid or has no continuous timeseries.
+#' @noRd
+#' @keywords internal
+continuous_plot_map_location_value <- function(
+  location_id,
+  timeseries,
+  locations,
+  name_col
+) {
+  location_id <- suppressWarnings(as.numeric(location_id))
+  location_id <- unique(location_id[!is.na(location_id)])
+  if (
+    length(location_id) != 1L ||
+      !"location_id" %in% names(timeseries) ||
+      !location_id %in% timeseries$location_id ||
+      !all(c("location_id", name_col) %in% names(locations))
+  ) {
+    return(NULL)
+  }
+
+  location_labels <- continuous_plot_location_labels(locations, name_col)
+  location_value <- location_labels[
+    locations[["location_id"]] %in% location_id
+  ]
+  location_value <- unique(as.character(stats::na.omit(location_value)))
+  location_value <- location_value[nzchar(location_value)]
+  if (length(location_value) == 0L) {
+    return(NULL)
+  }
+
+  location_value[[1L]]
+}
+
+#' Build DataTables column searches for a map location
+#' @param column_names Names of the complete table columns.
+#' @param location_value Scalar location factor label, or `NULL` for no filter.
+#' @return A character vector suitable for [DT::updateSearch()]. Factor values
+#'   are JSON encoded so DataTables performs an exact factor match.
+#' @noRd
+#' @keywords internal
+continuous_plot_location_search_columns <- function(
+  column_names,
+  location_value = NULL
+) {
+  searches <- rep("", length(column_names))
+  location_column <- match("location", column_names)
+  if (
+    !is.na(location_column) &&
+      length(location_value) == 1L &&
+      !is.na(location_value) &&
+      nzchar(location_value)
+  ) {
+    searches[[location_column]] <- as.character(jsonlite::toJSON(
+      as.character(location_value),
+      auto_unbox = FALSE
+    ))
+  }
+  searches
+}
+
 #' @title Check if corrected source should be used for continuous trace
 #' @description Determines whether the continuous trace should use the corrected source based on the presence of applicable corrections in the database.
 #' @param con A DBI database connection object.
