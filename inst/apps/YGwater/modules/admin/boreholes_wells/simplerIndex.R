@@ -6817,10 +6817,10 @@ simplerIndex <- function(id, language) {
 
             # Clear the cached borehole/well data so the application shows the new well
             # For all public users
-            clear_cached(key = "wwr_module_data", env = .GlobalEnv)
+            clear_cached(key = "wwr_module_data_v2", env = .GlobalEnv)
             # For the logged in user
             clear_cached(
-              key = "wwr_module_data",
+              key = "wwr_module_data_v2",
               env = session$userData$app_cache
             )
           },
