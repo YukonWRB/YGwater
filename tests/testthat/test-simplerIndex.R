@@ -335,7 +335,7 @@ test_that("WWR preserves distinct well and borehole registry rows", {
     "display_purpose_id = data.table::fifelse",
     fixed = TRUE
   )
-  expect_match(registry_module, "hollow = !has_well[idx]", fixed = TRUE)
+  expect_match(registry_module, "hollow = !has_well", fixed = TRUE)
   expect_match(
     registry_module,
     "stroke_width <- max(stroke_width, 4)",

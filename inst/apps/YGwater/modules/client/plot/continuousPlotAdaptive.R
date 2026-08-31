@@ -3395,6 +3395,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 con,
                 paste0(
                   "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ",
+                  "ts.timeseries_type, ts.start_datetime, ts.end_datetime, ",
                   "ts.aggregation_type_id, lz.z_meters AS z, ",
                   "COALESCE(at.aggregation_type, '') AS aggregation_type, ",
                   if (req$lang == "fr") {
@@ -3430,6 +3431,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   timeseries_id = numeric(),
                   location_id = numeric(),
                   parameter_id = numeric(),
+                  timeseries_type = character(),
+                  start_datetime = as.POSIXct(character(), tz = "UTC"),
+                  end_datetime = as.POSIXct(character(), tz = "UTC"),
                   aggregation_type_id = numeric(),
                   z = numeric(),
                   aggregation_type = character(),
@@ -4048,14 +4052,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               trace_data
             }
 
-            fetch_fast_basic_trace <- function(ts_id, parameter_name) {
-              ts_meta <- DBI::dbGetQuery(
-                con,
-                "SELECT timeseries_type, start_datetime, end_datetime
-                 FROM continuous.timeseries
-                 WHERE timeseries_id = $1;",
-                params = list(ts_id)
-              )
+            fetch_fast_basic_trace <- function(ts_meta, parameter_name) {
               if (
                 nrow(ts_meta) == 0L ||
                   is.na(ts_meta$timeseries_type[[1]]) ||
@@ -4063,6 +4060,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               ) {
                 return(NULL)
               }
+              ts_id <- ts_meta$timeseries_id[[1]]
 
               start_dt <- max(
                 normalize_timeseries_datetime(req$start_date, bound = "start"),
@@ -4149,6 +4147,11 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               payloads <- lapply(seq_along(ids), function(i) {
                 ts_id <- ids[[i]]
                 parameter_label <- tolower(meta_rows$parameter_name[[i]])
+                fast_trace <- if (isTRUE(use_fast_trace)) {
+                  fetch_fast_basic_trace(meta_rows[i], parameter_label)
+                } else {
+                  NULL
+                }
                 plot_payload <- plotTimeseries(
                   timeseries_id = ts_id,
                   start_date = req$start_date,
@@ -4165,6 +4168,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   con = con,
                   data = TRUE,
                   build_plot = FALSE,
+                  preprocessed_trace_data = fast_trace,
                   line_scale = req$line_scale,
                   axis_scale = req$axis_scale,
                   legend_scale = req$legend_scale,
@@ -4177,16 +4181,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   as_of = req$as_of,
                   stats_period = req$stats_period
                 )
-
-                if (isTRUE(use_fast_trace)) {
-                  fast_trace <- fetch_fast_basic_trace(
-                    ts_id,
-                    parameter_label
-                  )
-                  if (!is.null(fast_trace)) {
-                    plot_payload$data$trace_data <- fast_trace
-                  }
-                }
                 plot_payload$meta$line_color <- if (mode == "single") {
                   "#00454e"
                 } else {

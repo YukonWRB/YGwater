@@ -47,6 +47,9 @@
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param build_plot Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.
+#' @param preprocessed_trace_data Optional trace data that has already had
+#'   corrections, unusable intervals, datum conversion, and filtering applied.
+#'   This internal optimisation avoids fetching and processing the trace twice.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
@@ -90,6 +93,7 @@ plotTimeseries <- function(
   imputed = FALSE,
   data = FALSE,
   build_plot = TRUE,
+  preprocessed_trace_data = NULL,
   con = NULL,
   as_of = NULL,
   stats_period = "full"
@@ -878,8 +882,27 @@ plotTimeseries <- function(
   }
 
   ## fetch trace and range data ###################
+  trace_data_is_preprocessed <- !is.null(preprocessed_trace_data)
+
   # Trace data first
-  if (resolution == "day") {
+  if (trace_data_is_preprocessed) {
+    trace_data <- data.table::copy(data.table::as.data.table(
+      preprocessed_trace_data
+    ))
+    required_trace_columns <- c("datetime", "value", "imputed")
+    if (raw) {
+      required_trace_columns <- c(required_trace_columns, "value_raw")
+    }
+    missing_trace_columns <- setdiff(required_trace_columns, names(trace_data))
+    if (length(missing_trace_columns) > 0L) {
+      stop(
+        "`preprocessed_trace_data` is missing required columns: ",
+        paste(missing_trace_columns, collapse = ", "),
+        "."
+      )
+    }
+    trace_data[, datetime := as.POSIXct(datetime, tz = "UTC")]
+  } else if (resolution == "day") {
     if (is.null(as_of)) {
       trace_data <- dbGetQueryDT(
         con,
@@ -1034,7 +1057,7 @@ plotTimeseries <- function(
     data.table::setorder(range_data, datetime)
   }
 
-  if (!unusable) {
+  if (!trace_data_is_preprocessed && !unusable) {
     # Throw out data carrying the no-use grade that existed at `as_of`.
     unus <- grades_dt[grades_dt$grade_type_code == "N"]
     if (nrow(unus) > 0) {
@@ -1050,7 +1073,9 @@ plotTimeseries <- function(
   # fill gaps with NA values
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
-  if (!is.infinite(min_trace)) {
+  if (trace_data_is_preprocessed) {
+    # The supplied trace already has the transformations below applied.
+  } else if (!is.infinite(min_trace)) {
     if (resolution == "hour") {
       trace_data <- add_gap_markers(trace_data, period_seconds = 3600)
     } else if (resolution == "max") {
@@ -1180,9 +1205,11 @@ plotTimeseries <- function(
   }
 
   if (datum) {
-    trace_data$value <- trace_data$value + datum_m
-    if (raw) {
-      trace_data$value_raw <- trace_data$value_raw + datum_m
+    if (!trace_data_is_preprocessed) {
+      trace_data$value <- trace_data$value + datum_m
+      if (raw) {
+        trace_data$value_raw <- trace_data$value_raw + datum_m
+      }
     }
     if (historic_range) {
       range_data$min <- range_data$min + datum_m
@@ -1193,7 +1220,7 @@ plotTimeseries <- function(
   }
   trace_data <- trace_data[order(trace_data$datetime), ]
 
-  if (!is.null(filter)) {
+  if (!trace_data_is_preprocessed && !is.null(filter)) {
     # Use the same approach as in ggplotOverlap to filter the value column
     if (!inherits(filter, "numeric")) {
       message(

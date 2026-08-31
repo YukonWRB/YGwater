@@ -41,6 +41,7 @@ plotTimeseries(
   imputed = FALSE,
   data = FALSE,
   build_plot = TRUE,
+  preprocessed_trace_data = NULL,
   con = NULL,
   as_of = NULL,
   stats_period = "full"
@@ -118,6 +119,10 @@ plotTimeseries(
 \item{data}{Should the data used to create the plot be returned? Default is FALSE.}
 
 \item{build_plot}{Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.}
+
+\item{preprocessed_trace_data}{Optional trace data that has already had
+corrections, unusable intervals, datum conversion, and filtering applied.
+This internal optimisation avoids fetching and processing the trace twice.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 
