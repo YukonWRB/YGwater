@@ -425,15 +425,29 @@ wellRegistry <- function(id, language) {
       )
     }) # End of observeEvent for reset filters button
 
-    # Build one popup per registry row. Borehole-level fields and documents are
-    # repeated for associated wells, while borehole-only rows remain distinct.
-    popupData <- reactive({
+    # Build detailed popup content only for the marker that was clicked.
+    popupData <- function(registry_id) {
+      selected_registry_id <- as.character(registry_id[[1]])
+      selected_well <- moduleData$wells[
+        registry_id == selected_registry_id
+      ]
+      if (nrow(selected_well) != 1L) {
+        return(data.table::data.table(
+          registry_id = character(),
+          popup_html = character()
+        ))
+      }
+
       unknown_label <- tr("unknown", language$language)
       bedrock_not_reached_label <- tr("not_reached", language$language)
       well_label <- tr("well", language$language)
       borehole_label <- tr("borehole", language$language)
 
-      docs_by_borehole <- data.table::copy(moduleData$boreholes_docs)
+      docs_by_borehole <- data.table::copy(
+        moduleData$boreholes_docs[
+          borehole_id == selected_well$borehole_id[[1]]
+        ]
+      )
       docs_by_borehole[
         moduleData$documents,
         on = .(document_id),
@@ -443,7 +457,7 @@ wellRegistry <- function(id, language) {
         )
       ]
       registry_documents <- merge(
-        moduleData$wells[, .(registry_id, borehole_id)],
+        selected_well[, .(registry_id, borehole_id)],
         docs_by_borehole,
         by = "borehole_id",
         all = FALSE,
@@ -505,7 +519,7 @@ wellRegistry <- function(id, language) {
         )
       )]
 
-      tmp <- data.table::copy(moduleData$wells)
+      tmp <- data.table::copy(selected_well)
       tmp[
         purposes_lookup,
         on = .(well_purpose_id = borehole_well_purpose_id),
@@ -718,7 +732,7 @@ wellRegistry <- function(id, language) {
         )
       ]
       tmp[, .(registry_id, popup_html)]
-    })
+    }
 
     # Create the basic map ###########################################################
     output$map <- leaflet::renderLeaflet({
@@ -730,7 +744,6 @@ wellRegistry <- function(id, language) {
           zoomPxPerZoomLevel = 120
         )
       ) %>%
-        leaflet::addTiles() %>%
         leaflet::addProviderTiles(
           "Esri.WorldTopoMap",
           group = "Topographic"
@@ -896,9 +909,16 @@ wellRegistry <- function(id, language) {
     }
 
     # Observe to filter and render location points on the map ############################
+    map_ready <- reactiveVal(FALSE)
+    observeEvent(
+      input$map_zoom,
+      map_ready(TRUE),
+      ignoreNULL = TRUE,
+      once = TRUE
+    )
+
     observe({
-      req(input$map_zoom, popupData(), language$language)
-      popup_data <- popupData()
+      req(map_ready(), language$language)
 
       wells_sub <- data.table::copy(moduleData$wells)
       purpose_column <- tr(
@@ -1014,11 +1034,6 @@ wellRegistry <- function(id, language) {
 
       wells_sub <- wells_sub[!is.na(latitude) & !is.na(longitude)]
 
-      wells_sub <- wells_sub[
-        popup_data,
-        on = .(registry_id),
-        popup_html := i.popup_html
-      ]
       wells_sub[,
         marker_label := data.table::fcase(
           !is.na(well_name) & nzchar(trimws(well_name))         ,
@@ -1115,31 +1130,29 @@ wellRegistry <- function(id, language) {
           )
         )
       ]
-      wells_sub[,
-        icon_url := vapply(
-          seq_len(.N),
-          function(idx) {
-            svg_data_uri(
-              shape = shape[idx],
-              fill = color_hex[idx],
-              size = 20,
-              stroke = "#244C5A",
-              stroke_width = 1,
-              hollow = !has_well[idx]
-            )
-          },
-          character(1)
-        )
-      ]
-
-      legend_map <- unique(wells_sub[, .(
+      symbol_map <- unique(wells_sub[, .(
         has_well,
         display_purpose_id,
         type_label,
         color_hex,
-        shape,
-        icon_url
+        shape
       )])
+      symbol_map[,
+        icon_url := mapply(
+          svg_data_uri,
+          shape = shape,
+          fill = color_hex,
+          hollow = !has_well,
+          MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
+          USE.NAMES = FALSE
+        )
+      ]
+      wells_sub[
+        symbol_map,
+        on = .(has_well, display_purpose_id, type_label, color_hex, shape),
+        icon_url := i.icon_url
+      ]
+      legend_map <- symbol_map
       legend_title <- switch(
         registry_scope,
         without_wells = tr("borehole_purpose", language$language),
@@ -1187,16 +1200,15 @@ wellRegistry <- function(id, language) {
             lat = ~latitude,
             layerId = ~registry_id,
             label = ~ htmltools::htmlEscape(marker_label),
-            popup = ~popup_html,
             icon = icons,
             clusterOptions = if (isTRUE(input$cluster_points)) {
               leaflet::markerClusterOptions(
                 iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
                 maxClusterRadius = 80, # cluster radius in pixels
-                spiderfyOnMaxZoom = TRUE
-                # chunkedLoading = TRUE,
-                # chunkInterval = 75,
-                # chunkDelay = 10
+                spiderfyOnMaxZoom = TRUE,
+                chunkedLoading = TRUE,
+                chunkInterval = 75,
+                chunkDelay = 10
               )
             } else {
               NULL
@@ -1216,79 +1228,80 @@ wellRegistry <- function(id, language) {
       map_proxy
     }) # End of observe for map filters and rendering location points
 
-    # Create document download handlers ############################
-    observeEvent(
-      list(moduleData$documents, moduleData$boreholes_docs),
-      {
-        req(moduleData$documents, moduleData$boreholes_docs)
-        registry_documents <- merge(
-          moduleData$wells[, .(registry_id, borehole_id)],
-          moduleData$boreholes_docs[, .(borehole_id, document_id)],
-          by = "borehole_id",
-          all = FALSE,
-          sort = FALSE,
-          allow.cartesian = TRUE
-        )
-        registry_documents <- unique(
-          registry_documents[, .(registry_id, document_id)]
-        )
-        if (!nrow(registry_documents)) {
-          return()
-        }
-        for (row_index in seq_len(nrow(registry_documents))) {
+    # Build the popup and its document handlers only for the selected marker.
+    observeEvent(input$map_marker_click, {
+      selected_registry_id <- as.character(input$map_marker_click$id)
+      selected_well <- moduleData$wells[
+        registry_id == selected_registry_id
+      ]
+      req(nrow(selected_well) == 1L)
+
+      popup <- popupData(selected_registry_id)
+      req(nrow(popup) == 1L)
+
+      selected_documents <- unique(moduleData$boreholes_docs[
+        borehole_id == selected_well$borehole_id[[1]],
+        .(document_id)
+      ])
+      if (nrow(selected_documents)) {
+        for (row_index in seq_len(nrow(selected_documents))) {
           local({
-            registry_id_local <- registry_documents$registry_id[[row_index]]
-            doc_id_local <- registry_documents$document_id[[row_index]]
+            registry_id_local <- selected_registry_id
+            doc_id_local <- selected_documents$document_id[[row_index]]
             output[[paste0(
               "download_document_",
               registry_id_local,
               "_",
               doc_id_local
-            )]] <-
-              downloadHandler(
-                filename = function() {
-                  doc <- DBI::dbGetQuery(
-                    session$userData$AquaCache,
-                    "SELECT name, format
-                       FROM files.documents
-                      WHERE document_id = $1;",
-                    params = list(doc_id_local)
-                  )
-                  if (nrow(doc) != 1) {
-                    return("document")
-                  }
-                  name <- gsub(
-                    "[^A-Za-z0-9_-]",
-                    "_",
-                    doc$name[[1]]
-                  )
-                  if (is.na(name) || !nzchar(name)) {
-                    name <- paste0("document_", doc_id_local)
-                  }
-                  format <- sub("^\\.", "", doc$format[[1]])
-                  if (is.na(format) || !nzchar(format)) {
-                    return(name)
-                  }
-                  paste0(name, ".", format)
-                },
-                content = function(file) {
-                  doc <- DBI::dbGetQuery(
-                    session$userData$AquaCache,
-                    "SELECT document
-                       FROM files.documents
-                      WHERE document_id = $1;",
-                    params = list(doc_id_local)
-                  )
-                  if (nrow(doc) != 1) {
-                    return(NULL)
-                  }
-                  writeBin(doc$document[[1]], file)
+            )]] <- downloadHandler(
+              filename = function() {
+                doc <- DBI::dbGetQuery(
+                  session$userData$AquaCache,
+                  "SELECT name, format
+                     FROM files.documents
+                    WHERE document_id = $1;",
+                  params = list(doc_id_local)
+                )
+                if (nrow(doc) != 1L) {
+                  return("document")
                 }
-              )
+                name <- gsub("[^A-Za-z0-9_-]", "_", doc$name[[1]])
+                if (is.na(name) || !nzchar(name)) {
+                  name <- paste0("document_", doc_id_local)
+                }
+                format <- sub("^\\.", "", doc$format[[1]])
+                if (is.na(format) || !nzchar(format)) {
+                  return(name)
+                }
+                paste0(name, ".", format)
+              },
+              content = function(file) {
+                doc <- DBI::dbGetQuery(
+                  session$userData$AquaCache,
+                  "SELECT document
+                     FROM files.documents
+                    WHERE document_id = $1;",
+                  params = list(doc_id_local)
+                )
+                if (nrow(doc) != 1L) {
+                  return(NULL)
+                }
+                writeBin(doc$document[[1]], file)
+              }
+            )
           })
         }
-      },
-      ignoreInit = FALSE
-    )
+      }
+
+      leaflet::leafletProxy("map", session = session) %>%
+        leaflet::clearPopups() %>%
+        leaflet::addPopups(
+          lng = selected_well$longitude[[1]],
+          lat = selected_well$latitude[[1]],
+          popup = popup$popup_html[[1]],
+          layerId = "selected_registry_popup",
+          options = leaflet::popupOptions(maxWidth = 480)
+        )
+    })
   }) # End of moduleServer
 }
