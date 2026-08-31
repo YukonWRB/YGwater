@@ -1,20 +1,47 @@
 # These cache functions fetch and store data in a global cache environment, allowing for efficient data retrieval across user sessions in a Shiny app or other R environments. The cache is automatically refreshed based on the specified TTL (time-to-live) value, ensuring that users always have access to up-to-date information without unnecessary database queries.
 
 continuous_timeseries_has_measurements_sql <-
-  # Technicall possible to have start_datetime and end_datetime not populated as they are populated via triggers, but the other option - checking the measurement table directly - excludes composite/derived timeseries which do not have data in the measurement table.
-  "EXISTS (
-       SELECT 1
-         FROM continuous.timeseries
-        WHERE start_datetime IS NOT NULL
-        AND end_datetime IS NOT NULL
-     )"
+  # The timeseries trigger maintains these bounds. Referencing the query's ts
+  # alias keeps empty series out without excluding composite/derived series.
+  "ts.start_datetime IS NOT NULL AND ts.end_datetime IS NOT NULL"
 
 # continuous plot and data modules ######
+cont_data_cache_signature <- function(con) {
+  # Cache identity follows each timeseries' latest UTC calendar date. It
+  # intentionally ignores within-day changes. A per-timeseries hash is used
+  # instead of MAX(end_datetime::date), which would miss a series advancing to
+  # a new day below the database-wide maximum.
+  DBI::dbGetQuery(
+    con,
+    "SELECT MD5(
+       COALESCE(
+         STRING_AGG(
+           FORMAT(
+             '%s:%s',
+             timeseries_id,
+             COALESCE((end_datetime AT TIME ZONE 'UTC')::date::text, '')
+           ),
+           ',' ORDER BY timeseries_id
+         ),
+         ''
+       )
+     ) AS cache_signature
+     FROM continuous.timeseries
+     WHERE start_datetime IS NOT NULL
+       AND end_datetime IS NOT NULL;"
+  )$cache_signature[[1]]
+}
+
 cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
+  key <- "cont_data.plot_module_data"
+  ttl <- 60 * 60 * 2
   get_cached(
-    key = "cont_data.plot_module_data",
+    key = key,
     env = env,
     fetch_fun = function() {
+      # Capture first so a data-day change during the fetch invalidates this
+      # entry on the next cache check instead of being recorded as current.
+      cache_signature <- cont_data_cache_signature(con)
       locs <- dbGetQueryDT(
         con,
         paste(
@@ -231,6 +258,7 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
       }
 
       list(
+        cache_signature = cache_signature,
         locs = locs,
         sub_locs = sub_locs,
         params = params,
@@ -249,7 +277,25 @@ cont_data.plot_module_data <- function(con, env = .GlobalEnv) {
         param_sub_groups = param_sub_groups
       )
     },
-    ttl = 60 * 60 * 2
+    check_fun = function() {
+      if (!exists("app_cache", envir = env)) {
+        return(FALSE)
+      }
+      cache_env <- get("app_cache", envir = env)
+      if (!exists(key, envir = cache_env, inherits = FALSE)) {
+        return(FALSE)
+      }
+      entry <- get(key, envir = cache_env, inherits = FALSE)
+      if (
+        as.numeric(
+          difftime(Sys.time(), entry$timestamp, units = "secs")
+        ) > ttl
+      ) {
+        return(FALSE)
+      }
+      identical(entry$value$cache_signature, cont_data_cache_signature(con))
+    },
+    ttl = ttl
   ) # Cache the data for 2 hours
 } # End cont_data.plot_module_data
 
@@ -634,7 +680,28 @@ map_location_module_data <- function(con, env = .GlobalEnv) {
       list(
         locations = dbGetQueryDT(
           con,
-          "SELECT l.location_code AS location, l.name, l.name_fr, l.latitude, l.longitude, l.location_id, lt.type, lt.type_fr FROM public.locations l JOIN public.location_types lt ON l.location_type = lt.type_id;"
+          "SELECT
+             l.location_code AS location,
+             l.name,
+             l.name_fr,
+             l.latitude,
+             l.longitude,
+             l.location_id,
+             lt.type,
+             lt.type_fr
+           FROM public.locations l
+           JOIN public.location_types lt ON l.location_type = lt.type_id
+           WHERE EXISTS (
+             SELECT 1
+             FROM continuous.timeseries ts
+             WHERE ts.location_id = l.location_id
+               AND ts.start_datetime IS NOT NULL
+               AND ts.end_datetime IS NOT NULL
+           ) OR EXISTS (
+             SELECT 1
+             FROM discrete.samples s
+             WHERE s.location_id = l.location_id
+           );"
         ),
         timeseries = dbGetQueryDT(
           con,
@@ -796,7 +863,13 @@ wwr_module_data <- function(con, env = .GlobalEnv) {
         ),
         documents = dbGetQueryDT(
           con,
-          "SELECT document_id, name, format FROM files.documents"
+          "SELECT d.document_id, d.name, d.format
+           FROM files.documents d
+           WHERE EXISTS (
+             SELECT 1
+             FROM boreholes.boreholes_documents bd
+             WHERE bd.document_id = d.document_id
+           )"
         ),
         # Keep every borehole, with one row per associated well where present
         wells = dbGetQueryDT(
