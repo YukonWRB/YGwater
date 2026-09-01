@@ -225,7 +225,7 @@ addContDataUI <- function(id) {
             )
           ),
           radioButtons(
-            ns("no_update"),
+            ns("no_source_update"),
             "Prevent updates to these data by automatic processes, such as import scripts?",
             choices = c("Yes" = "yes", "No" = "no"),
             inline = TRUE,
@@ -5773,8 +5773,8 @@ addContData <- function(id, language) {
         df$value <- parsed_value
         df$owner <- as.integer(input$owner)
         df$contributor <- as.integer(input$contributor)
-        df$no_update <- data.table::fifelse(
-          input$no_update == "yes",
+        df$no_source_update <- data.table::fifelse(
+          input$no_source_update == "yes",
           TRUE,
           FALSE
         )

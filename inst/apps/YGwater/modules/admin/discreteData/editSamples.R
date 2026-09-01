@@ -137,9 +137,9 @@ editSamples <- function(id, language) {
         cast = "::text[]"
       ),
       import_source = list(label = "Import source", column = "import_source"),
-      no_update = list(
+      no_source_update = list(
         label = "Lock sample from updates",
-        column = "no_update"
+        column = "no_source_update"
       ),
       note = list(label = "Notes", column = "note")
     )
@@ -212,7 +212,10 @@ editSamples <- function(id, language) {
     }
 
     current_sample_document_ids <- function(sample_id) {
-      if (is.null(moduleData$sample_documents) || !nrow(moduleData$sample_documents)) {
+      if (
+        is.null(moduleData$sample_documents) ||
+          !nrow(moduleData$sample_documents)
+      ) {
         return(integer())
       }
       linked_ids <- moduleData$sample_documents$document_id[
@@ -247,7 +250,10 @@ editSamples <- function(id, language) {
     }
 
     current_sample_group_ids <- function(sample_id) {
-      if (is.null(moduleData$sample_group_members) || !nrow(moduleData$sample_group_members)) {
+      if (
+        is.null(moduleData$sample_group_members) ||
+          !nrow(moduleData$sample_group_members)
+      ) {
         return(integer())
       }
       group_ids <- moduleData$sample_group_members$sample_group_id[
@@ -577,7 +583,7 @@ editSamples <- function(id, language) {
         } else {
           NA_character_
         },
-        no_update = isTRUE(input$no_update),
+        no_source_update = isTRUE(input$no_source_update),
         note = if (isTruthy(input$note)) input$note else NA_character_,
         import_source_id = if (isTruthy(input$import_source_id)) {
           input$import_source_id
@@ -645,7 +651,7 @@ editSamples <- function(id, language) {
         laboratory = integer_input("result_laboratory"),
         analysis_datetime = scalar_utc_datetime(input$result_analysis_datetime),
         share_with = share_with_to_array(input$result_share_with),
-        no_update = isTRUE(input$result_no_update),
+        no_source_update = isTRUE(input$result_no_source_update),
         private_expiry = date_input("result_private_expiry"),
         matrix_state_id = integer_input("result_matrix_state"),
         note = if (isTruthy(input$result_note)) {
@@ -871,7 +877,7 @@ editSamples <- function(id, language) {
           lab.lab_name AS laboratory_name,
           r.analysis_datetime,
           r.share_with,
-          r.no_update,
+          r.no_source_update,
           r.private_expiry,
           r.matrix_state_id,
           ms.matrix_state_name,
@@ -1239,9 +1245,9 @@ editSamples <- function(id, language) {
           column(
             4,
             checkboxInput(
-              ns("result_no_update"),
+              ns("result_no_source_update"),
               "Lock result from updates",
-              value = if (is.null(row)) FALSE else isTRUE(row$no_update)
+              value = if (is.null(row)) FALSE else isTRUE(row$no_source_update)
             )
           )
         ),
@@ -1327,7 +1333,7 @@ editSamples <- function(id, language) {
       updateTextInput(session, "import_source", value = "")
       updateTextInput(session, "import_source_id", value = "")
       updateTextAreaInput(session, "note", value = "")
-      updateCheckboxInput(session, "no_update", value = FALSE)
+      updateCheckboxInput(session, "no_source_update", value = FALSE)
       if (!is.null(input$multi_fields)) {
         updateCheckboxGroupInput(
           session,
@@ -1522,8 +1528,8 @@ editSamples <- function(id, language) {
       )
       updateCheckboxInput(
         session,
-        "no_update",
-        value = isTRUE(details$no_update)
+        "no_source_update",
+        value = isTRUE(details$no_source_update)
       )
     }
 
@@ -1531,7 +1537,7 @@ editSamples <- function(id, language) {
       con <- session$userData$AquaCache
       moduleData$samples <- DBI::dbGetQuery(
         con,
-        "SELECT sample_id, location_id, sub_location_id, media_id, z, datetime, target_datetime, collection_method, sample_type, linked_with, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, sample_grade, sample_approval, sample_qualifier, owner, contributor, comissioning_org, sampling_org, share_with, import_source, no_update, note, import_source_id FROM discrete.samples ORDER BY datetime DESC"
+        "SELECT sample_id, location_id, sub_location_id, media_id, z, datetime, target_datetime, collection_method, sample_type, linked_with, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, sample_grade, sample_approval, sample_qualifier, owner, contributor, comissioning_org, sampling_org, share_with, import_source, no_source_update, note, import_source_id FROM discrete.samples ORDER BY datetime DESC"
       )
       moduleData$samples_display <- DBI::dbGetQuery(
         con,
@@ -1895,11 +1901,11 @@ editSamples <- function(id, language) {
                 )
               ),
               multi_field_ui(
-                "no_update",
+                "no_source_update",
                 column(
                   3,
                   checkboxInput(
-                    ns("no_update"),
+                    ns("no_source_update"),
                     "Lock sample from updates",
                     value = FALSE
                   )
@@ -2021,7 +2027,9 @@ editSamples <- function(id, language) {
                       )
                     ),
                     multiple = TRUE,
-                    options = list(placeholder = "Optional for regular samples"),
+                    options = list(
+                      placeholder = "Optional for regular samples"
+                    ),
                     width = "100%"
                   )
                 )
@@ -2624,7 +2632,7 @@ editSamples <- function(id, language) {
         form$laboratory,
         form$analysis_datetime,
         form$share_with,
-        form$no_update,
+        form$no_source_update,
         form$private_expiry,
         form$matrix_state_id,
         form$note
@@ -2647,7 +2655,7 @@ editSamples <- function(id, language) {
             laboratory,
             analysis_datetime,
             share_with,
-            no_update,
+            no_source_update,
             private_expiry,
             matrix_state_id,
             note
@@ -2693,7 +2701,7 @@ editSamples <- function(id, language) {
             laboratory = $10,
             analysis_datetime = $11,
             share_with = $12::text[],
-            no_update = $13,
+            no_source_update = $13,
             private_expiry = $14,
             matrix_state_id = $15,
             note = $16
@@ -3021,7 +3029,10 @@ editSamples <- function(id, language) {
           showNotification("Select a valid sample type.", type = "error")
           return()
         }
-        if (isTRUE(selected_type$requires_location[[1]]) && is.na(form$location_id)) {
+        if (
+          isTRUE(selected_type$requires_location[[1]]) &&
+            is.na(form$location_id)
+        ) {
           showNotification(
             "Location is required for the selected sample type.",
             type = "error"
@@ -3044,7 +3055,11 @@ editSamples <- function(id, language) {
           )
           return()
         }
-        if (any(!form$sample_group_ids %in% moduleData$sample_groups$sample_group_id)) {
+        if (
+          any(
+            !form$sample_group_ids %in% moduleData$sample_groups$sample_group_id
+          )
+        ) {
           showNotification("Select valid sample groups.", type = "error")
           return()
         }
@@ -3098,7 +3113,7 @@ editSamples <- function(id, language) {
           sampling_org = $21,
           share_with = $22::text[],
           import_source = $23,
-          no_update = $24,
+          no_source_update = $24,
           note = $25,
           import_source_id = $26
         WHERE sample_id = $27;
@@ -3128,7 +3143,7 @@ editSamples <- function(id, language) {
           form$sampling_org,
           form$share_with,
           form$import_source,
-          form$no_update,
+          form$no_source_update,
           form$note,
           form$import_source_id,
           sample_id
