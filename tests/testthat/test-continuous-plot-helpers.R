@@ -197,6 +197,52 @@ test_that("adaptive continuous plot displays sensor priority in both metadata vi
   expect_match(cache_text, "ts.sensor_priority", fixed = TRUE)
 })
 
+test_that("adaptive multi-timeseries plots batch data and preserve axis units", {
+  module_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(module_text, "fetch_fast_basic_traces", fixed = TRUE)
+  expect_match(module_text, "fetch_fast_range_data", fixed = TRUE)
+  expect_match(module_text, "ids_sql", fixed = TRUE)
+  expect_match(
+    module_text,
+    "preloaded_timeseries_context = meta_rows[i]",
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "preprocessed_range_data = fast_ranges[[as.character(ts_id)]]",
+    fixed = TRUE
+  )
+  expect_match(module_text, 'output_alias = "units"', fixed = TRUE)
+  expect_match(module_text, 'paste0(" (", meta_row$units, ")")', fixed = TRUE)
+  expect_match(module_text, "meta_row[, units := item$meta$units]", fixed = TRUE)
+  expect_match(module_text, 'ns("metadata_timeseries_select")', fixed = TRUE)
+  expect_match(
+    module_text,
+    "Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    'identical(adaptiveState$mode, "timeseries_subplots")',
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "series_xaxis_names = series_xaxis_names",
+    fixed = TRUE
+  )
+})
+
 test_that("public statistics-period controls use translated labels", {
   adaptive_text <- paste(
     readLines(

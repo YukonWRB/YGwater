@@ -256,3 +256,44 @@ test_that("viewport status bands are clipped to the visible x window", {
   expect_equal(bundle$trace_count, 1L)
   expect_equal(range(bundle$traces[[1]]$x), xlim)
 })
+
+test_that("adaptive subplots resample against independent x windows", {
+  x <- as.POSIXct("2024-01-01", tz = "UTC") + seq_len(1000) * 3600
+  trace_dt <- data.table::data.table(
+    datetime = x,
+    value = seq_along(x)
+  )
+  xlim <- list(
+    xaxis = x[c(100, 200)],
+    xaxis2 = x[c(700, 800)]
+  )
+
+  built <- YGwater:::viewport_adaptive_plot(
+    payload = list(
+      series = list(
+        list(
+          trace_data = trace_dt,
+          range_data = data.table::data.table(),
+          xaxis = "x",
+          yaxis = "y"
+        ),
+        list(
+          trace_data = trace_dt,
+          range_data = data.table::data.table(),
+          xaxis = "x2",
+          yaxis = "y2"
+        )
+      ),
+      layout = list(xaxis = list(), xaxis2 = list()),
+      xaxis_names = c("xaxis", "xaxis2")
+    ),
+    xlim = xlim,
+    n_bins = 50L
+  )
+
+  expect_equal(built$summaries[[1]]$line$meta$x_window, xlim$xaxis)
+  expect_equal(built$summaries[[2]]$line$meta$x_window, xlim$xaxis2)
+  layout <- plotly::plotly_build(built$plot)$x$layout
+  expect_equal(as.POSIXct(layout$xaxis$range, tz = "UTC"), xlim$xaxis)
+  expect_equal(as.POSIXct(layout$xaxis2$range, tz = "UTC"), xlim$xaxis2)
+})

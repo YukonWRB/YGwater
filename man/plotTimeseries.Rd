@@ -42,6 +42,8 @@ plotTimeseries(
   data = FALSE,
   build_plot = TRUE,
   preprocessed_trace_data = NULL,
+  preprocessed_range_data = NULL,
+  preloaded_timeseries_context = NULL,
   con = NULL,
   as_of = NULL,
   stats_period = "full"
@@ -123,6 +125,15 @@ plotTimeseries(
 \item{preprocessed_trace_data}{Optional trace data that has already had
 corrections, unusable intervals, datum conversion, and filtering applied.
 This internal optimisation avoids fetching and processing the trace twice.}
+
+\item{preprocessed_range_data}{Optional historic-range data already fetched
+by a multi-timeseries caller. This internal optimisation avoids repeating
+the daily-statistics query for every series.}
+
+\item{preloaded_timeseries_context}{Optional one-row timeseries metadata
+supplied by a caller that has already fetched a group of timeseries. This
+internal optimisation avoids repeating metadata, unit, station, and datum
+queries for every series in a multi-timeseries plot.}
 
 \item{con}{A connection to the target database. NULL uses \code{\link[=AquaConnect]{AquaConnect()}} and automatically disconnects.}
 

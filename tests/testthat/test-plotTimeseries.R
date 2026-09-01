@@ -254,6 +254,83 @@ test_that("plotTimeseries works when given only a timeseries_id", {
   expect_snapshot_file(path)
 })
 
+test_that("preloaded timeseries context retains resolved axis units", {
+  context <- data.frame(
+    timeseries_id = 999L,
+    location_id = 50L,
+    parameter_id = 10L,
+    start_datetime = as.POSIXct("2026-08-01", tz = "UTC"),
+    end_datetime = as.POSIXct("2026-08-02", tz = "UTC"),
+    param_name = "water flow",
+    param_name_fr = "debit d'eau",
+    plot_default_y_orientation = "normal",
+    location_name_en = "Test station",
+    location_name_fr = "Station d'essai",
+    units = "m3/s",
+    z = NA_real_,
+    aggregation_type = "mean",
+    record_rate_seconds = 900
+  )
+  trace_data <- data.table::data.table(
+    datetime = as.POSIXct(
+      c("2026-08-01 00:00:00", "2026-08-01 00:15:00"),
+      tz = "UTC"
+    ),
+    value = c(1, 2),
+    imputed = FALSE
+  )
+  range_data <- data.table::data.table(
+    datetime = as.POSIXct(
+      c("2026-08-01 00:00:00", "2026-08-02 00:00:00"),
+      tz = "UTC"
+    ),
+    min = c(0.5, 0.7),
+    max = c(2.5, 2.7),
+    q75 = c(2, 2.2),
+    q25 = c(1, 1.2)
+  )
+
+  out <- plotTimeseries(
+    timeseries_id = context$timeseries_id,
+    start_date = context$start_datetime,
+    end_date = context$end_datetime,
+    slider = FALSE,
+    historic_range = TRUE,
+    data = TRUE,
+    build_plot = FALSE,
+    preprocessed_trace_data = trace_data,
+    preprocessed_range_data = range_data,
+    preloaded_timeseries_context = context,
+    con = structure(list(), class = "mock_connection")
+  )
+
+  expect_identical(out$meta$units, "m3/s")
+  expect_identical(
+    out$meta$layout$yaxis$title$text,
+    "Water Flow (m3/s)"
+  )
+  expect_equal(out$data$trace_data$value, c(1, 2))
+  expect_equal(out$data$range_data$min, range_data$min)
+
+  expect_error(
+    plotTimeseries(
+      timeseries_id = context$timeseries_id,
+      start_date = as.POSIXct("2027-01-01", tz = "UTC"),
+      end_date = as.POSIXct("2027-01-31", tz = "UTC"),
+      tzone = "UTC",
+      historic_range = FALSE,
+      data = TRUE,
+      build_plot = FALSE,
+      preloaded_timeseries_context = context,
+      con = structure(list(), class = "mock_connection")
+    ),
+    paste0(
+      "Timeseries 999 has no data in the requested range.*",
+      "available record runs from.*2026-08-02"
+    )
+  )
+})
+
 # Test that plotTimeseries plots raw and uncorrected data
 test_that("plotTimeseries plots raw and corrected data", {
   skip_on_cran()
