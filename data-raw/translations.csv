@@ -598,6 +598,7 @@ disc_qaqc_sample_data,Discrete QA/QC related samples heading,QA/QC sample data,D
 disc_qaqc_group_links,Discrete QA/QC sample group links label,Group links,Liens de groupe
 disc_qaqc_retrieval_error,Discrete QA/QC related samples retrieval error,Could not retrieve linked QA/QC samples:,Impossible de récupérer les échantillons d'AQ/CQ liés :
 disc_qaqc_linked_results,Discrete QA/QC linked result count label,Linked QA/QC results:,Résultats d'AQ/CQ liés :
+disc_result_components,Discrete component observations label,Result components,Composantes du résultat
 disc_duplicate_samples,Discrete plot duplicate sample control,Duplicate/replicate samples,Échantillons en double/réplicats
 disc_duplicates_show,Discrete plot duplicate show option,Show individually,Afficher individuellement
 disc_duplicates_average,Discrete plot duplicate average option,Average matching samples,Calculer la moyenne des échantillons correspondants

@@ -46,7 +46,11 @@
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #'
 #' @return An interactive HTML plot. When `data = TRUE`, a list containing the
-#'   plot, plotted data, and the contributing AquaCache sample IDs is returned.
+#'   plot, plotted data, and the contributing AquaCache sample and result IDs
+#'   is returned.
+#'   AquaCache rows also identify the aggregation type, calculation version,
+#'   calculation arguments, and expected component count when a result is
+#'   maintained from component observations.
 #' @export
 #'
 
@@ -601,8 +605,23 @@ plotDiscrete <- function(
         ids <- suppressWarnings(as.integer(unlist(rows$.qaqc_sample_ids)))
         out$.qaqc_sample_ids <- list(sort(unique(ids[!is.na(ids)])))
       }
+      if (".component_result_ids" %in% names(out)) {
+        ids <- suppressWarnings(as.integer(unlist(rows$.component_result_ids)))
+        out$.component_result_ids <- list(sort(unique(ids[!is.na(ids)])))
+      }
       if ("result_id" %in% names(out)) {
         out$result_id <- NA
+      }
+      for (col in intersect(
+        c(
+          "aggregation_type",
+          "calculation_version",
+          "calculation_arguments",
+          "expected_count"
+        ),
+        names(out)
+      )) {
+        out[[col]] <- rows[[col]][NA_integer_]
       }
       if ("linked_with" %in% names(out)) {
         out$linked_with <- rows$duplicate_group[[1]]
@@ -1654,6 +1673,10 @@ ORDER BY ag.result_id, ag.guideline_id;"
          at.approval_type_description_fr,
          qualifiers.qualifier_type_description,
          qualifiers.qualifier_type_description_fr,
+         rat.aggregation_type,
+         ra.calculation_version,
+         ra.calculation_arguments::text AS calculation_arguments,
+         ra.expected_count,
          l.location_code AS location,
          l.alias,
          l.name,
@@ -1707,6 +1730,10 @@ ORDER BY ag.result_id, ag.guideline_id;"
          ON r.result_value_type = rvt.result_value_type_id
        LEFT JOIN public.matrix_states AS ms
          ON r.matrix_state_id = ms.matrix_state_id
+       LEFT JOIN discrete.result_aggregations AS ra
+         ON r.result_id = ra.result_id
+       LEFT JOIN discrete.result_aggregation_types AS rat
+         ON ra.result_aggregation_type_id = rat.result_aggregation_type_id
        WHERE ",
       paste(where_clauses, collapse = "\n         AND "),
       ";"
@@ -1789,7 +1816,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "matrix_state",
         "grade_type_description_fr",
         "approval_type_description_fr",
-        "qualifier_type_description_fr"
+        "qualifier_type_description_fr",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )]
       names(data) <- c(
         "result",
@@ -1815,7 +1846,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "matrix_state",
         "grade_type_description",
         "approval_type_description",
-        "qualifier_type_description"
+        "qualifier_type_description",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )
     } else {
       data <- data[, c(
@@ -1842,7 +1877,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "matrix_state",
         "grade_type_description",
         "approval_type_description",
-        "qualifier_type_description"
+        "qualifier_type_description",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )]
       names(data) <- c(
         "result",
@@ -1868,7 +1907,11 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "matrix_state",
         "grade_type_description",
         "approval_type_description",
-        "qualifier_type_description"
+        "qualifier_type_description",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )
     }
 
@@ -1879,6 +1922,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
 
     if (duplicate_action == "average") {
       data$.qaqc_sample_ids <- lapply(data$sample_id, function(id) id)
+      data$.component_result_ids <- lapply(data$result_id, function(id) id)
       data <- average_discrete_duplicates(data)
     }
   }
@@ -2456,6 +2500,7 @@ ORDER BY ag.result_id, ag.guideline_id;"
   data <- data[order(data$location_name), ]
 
   source_sample_ids <- integer()
+  source_result_ids <- integer()
   if (dbSource == "AC") {
     source_sample_ids <- if (".qaqc_sample_ids" %in% names(data)) {
       unlist(data$.qaqc_sample_ids, use.names = FALSE)
@@ -2466,7 +2511,17 @@ ORDER BY ag.result_id, ag.guideline_id;"
     source_sample_ids <- sort(unique(
       source_sample_ids[!is.na(source_sample_ids)]
     ))
+    source_result_ids <- if (".component_result_ids" %in% names(data)) {
+      unlist(data$.component_result_ids, use.names = FALSE)
+    } else {
+      data$result_id
+    }
+    source_result_ids <- suppressWarnings(as.integer(source_result_ids))
+    source_result_ids <- sort(unique(
+      source_result_ids[!is.na(source_result_ids)]
+    ))
     data$.qaqc_sample_ids <- NULL
+    data$.component_result_ids <- NULL
   }
 
   plot <- create_facet_plot(
@@ -2481,7 +2536,8 @@ ORDER BY ag.result_id, ag.guideline_id;"
     return(list(
       plot = plot,
       data = data,
-      source_sample_ids = source_sample_ids
+      source_sample_ids = source_sample_ids,
+      source_result_ids = source_result_ids
     ))
   } else {
     return(plot)

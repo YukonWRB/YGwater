@@ -1,3 +1,15 @@
+#' Define one admin-module privilege requirement
+#'
+#' @param tables Qualified database table names.
+#' @param privileges Required privileges, either shared by every table or one
+#'   character vector per table.
+#' @param visibility Whether access requires `all` or `any` table requirement.
+#' @param role_attributes PostgreSQL role attributes required by the module.
+#'
+#' @return A normalized privilege-requirement list.
+#'
+#' @keywords internal
+#' @noRd
 module_privilege_requirement <- function(
   tables = character(0),
   privileges = list(c("DELETE", "INSERT", "UPDATE")),
@@ -24,8 +36,15 @@ module_privilege_requirement <- function(
   )
 }
 
-# Keep this catalogue as the single source of truth for admin-page visibility.
-# Full-functionality checks also require USAGE on every schema represented here.
+#' Catalogue database privileges required by YGwater admin modules
+#'
+#' This is the single source of truth for admin-page visibility. Full
+#' functionality also requires `USAGE` on every schema represented here.
+#'
+#' @return A named list of normalized module privilege requirements.
+#'
+#' @keywords internal
+#' @noRd
 ygwater_module_privilege_requirements <- function() {
   req <- module_privilege_requirement
   default_write <- list(c("DELETE", "INSERT", "UPDATE"))
@@ -220,7 +239,26 @@ ygwater_module_privilege_requirements <- function() {
       c("files.documents", "discrete.samples", "discrete.results"),
       list(c("INSERT", "UPDATE"), "INSERT", "INSERT")
     ),
-    editSamples = req("discrete.samples", list(c("INSERT", "UPDATE"))),
+    editSamples = req(
+      c(
+        "discrete.samples",
+        "discrete.results",
+        "discrete.sample_qualifiers",
+        "discrete.sample_observers",
+        "discrete.sample_documents",
+        "discrete.sample_group_members",
+        "files.documents"
+      ),
+      list(
+        "UPDATE",
+        c("INSERT", "UPDATE"),
+        c("DELETE", "INSERT"),
+        c("DELETE", "INSERT"),
+        c("DELETE", "INSERT"),
+        c("DELETE", "INSERT"),
+        c("DELETE", "INSERT")
+      )
+    ),
     addSampleSeries = req(
       c(
         "discrete.sample_series",
@@ -239,9 +277,21 @@ ygwater_module_privilege_requirements <- function() {
       c(
         "discrete.sample_series",
         "discrete.samples",
-        "discrete.results"
+        "discrete.results",
+        "discrete.sample_qualifiers",
+        "discrete.sample_observers",
+        "discrete.result_aggregations",
+        "discrete.result_components"
       ),
-      list("UPDATE", default_write[[1]], default_write[[1]])
+      list(
+        "UPDATE",
+        default_write[[1]],
+        default_write[[1]],
+        default_write[[1]],
+        default_write[[1]],
+        default_write[[1]],
+        default_write[[1]]
+      )
     ),
     addGuidelines = req(
       c(
@@ -503,6 +553,15 @@ ygwater_module_privilege_requirements <- function() {
   )
 }
 
+#' Evaluate cached table privileges for one module
+#'
+#' @param table_privs Table privilege inventory from the application cache.
+#' @param requirement A normalized module privilege requirement.
+#'
+#' @return A logical vector with one value per required table.
+#'
+#' @keywords internal
+#' @noRd
 module_table_privilege_status <- function(table_privs, requirement) {
   vapply(
     seq_along(requirement$tables),
@@ -520,6 +579,15 @@ module_table_privilege_status <- function(table_privs, requirement) {
   )
 }
 
+#' Determine visible admin modules from cached privileges
+#'
+#' @param table_privs Table privilege inventory from the application cache.
+#' @param requirements The module requirement catalogue.
+#'
+#' @return A named list of logical module-access values.
+#'
+#' @keywords internal
+#' @noRd
 ygwater_admin_privileges <- function(table_privs, requirements) {
   table_requirements <- requirements[vapply(
     requirements,
@@ -533,6 +601,17 @@ ygwater_admin_privileges <- function(table_privs, requirements) {
   })
 }
 
+#' Query detailed module access for a PostgreSQL role
+#'
+#' @param con An open AquaCache DBI connection.
+#' @param role PostgreSQL role name to inspect.
+#' @param module_ids YGwater module IDs to inspect.
+#' @param requirements The module requirement catalogue.
+#'
+#' @return A table produced by `module_access_summary()`.
+#'
+#' @keywords internal
+#' @noRd
 module_access_status_query <- function(con, role, module_ids, requirements) {
   role <- as.character(role)[1]
   if (is.na(role) || !nzchar(role)) {
@@ -650,6 +729,19 @@ ORDER BY schema_name;",
   )
 }
 
+#' Summarize module visibility and missing privileges
+#'
+#' @param module_ids YGwater module IDs to summarize.
+#' @param requirements The module requirement catalogue.
+#' @param table_status Long-form table privilege results.
+#' @param schema_status Schema `USAGE` results.
+#' @param role_attributes Named logical PostgreSQL role attributes.
+#'
+#' @return A data frame with visibility, full-functionality, and missing-access
+#'   details for each module.
+#'
+#' @keywords internal
+#' @noRd
 module_access_summary <- function(
   module_ids,
   requirements,

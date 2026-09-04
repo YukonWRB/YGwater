@@ -234,3 +234,28 @@ test_that("addTimeseries is hidden when a replace-all DELETE is missing", {
 
   expect_false(access$addTimeseries)
 })
+
+test_that("discrete administration covers Patch 60 child-table writes", {
+  module_env <- module_privilege_environment()
+  requirements <- module_env$ygwater_module_privilege_requirements()
+
+  edit_privileges <- stats::setNames(
+    requirements$editSamples$privileges,
+    requirements$editSamples$tables
+  )
+  expect_setequal(
+    edit_privileges[["discrete.sample_qualifiers"]],
+    c("DELETE", "INSERT")
+  )
+  expect_setequal(
+    edit_privileges[["discrete.sample_observers"]],
+    c("DELETE", "INSERT")
+  )
+
+  expect_true(all(c(
+    "discrete.sample_qualifiers",
+    "discrete.sample_observers",
+    "discrete.result_aggregations",
+    "discrete.result_components"
+  ) %in% requirements$syncDisc$tables))
+})

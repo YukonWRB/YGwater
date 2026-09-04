@@ -1988,7 +1988,7 @@ snowInfo_mem <- memoise::memoise(
 get_snow_stamp <- function(con) {
   rows <- DBI::dbGetQuery(
     con,
-    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourse'"
+    "SELECT count(*) FROM discrete.samples WHERE import_source = 'downloadSnowCourseYG'"
   )[1, 1]
 
   stamp <- DBI::dbGetQuery(
@@ -1997,12 +1997,12 @@ get_snow_stamp <- function(con) {
   SELECT GREATEST(
     (SELECT MAX(COALESCE(s.modified, s.created))
        FROM discrete.samples s
-      WHERE s.import_source = 'downloadSnowCourse'),
+      WHERE s.import_source = 'downloadSnowCourseYG'),
 
     (SELECT MAX(COALESCE(r.modified, r.created))
        FROM discrete.results r
        JOIN discrete.samples s ON s.sample_id = r.sample_id
-      WHERE s.import_source = 'downloadSnowCourse'
+      WHERE s.import_source = 'downloadSnowCourseYG'
         AND r.parameter_id IN (21, 1220))
   ) AS stamp
 "

@@ -1728,7 +1728,7 @@ discData <- function(id, language, inputs) {
         session$userData$AquaCache,
         paste0(
           "SELECT DISTINCT ON (s.sample_id)
-          s.sample_id, l.location_id, l.name, sl.sub_location_name, s.z AS depth, s.datetime AS sample_datetime_utc, s.target_datetime AS target_datetime_utc, m.media_type, st.sample_type, cm.collection_method, s.sample_volume_ml, s.purge_volume_l, s.purge_time_min, s.flow_rate_l_min, s.wave_hgt_m, s.sample_grade, s.sample_approval, s.sample_qualifier, s.note FROM discrete.samples s
+          s.sample_id, l.location_id, l.name, sl.sub_location_name, s.z AS depth, s.datetime AS sample_datetime_utc, s.target_datetime AS target_datetime_utc, m.media_type, st.sample_type, cm.collection_method, s.sample_volume_ml, s.purge_volume_l, s.purge_time_min, s.flow_rate_l_min, s.wave_hgt_m, s.sample_grade, s.sample_approval, qualifiers.sample_qualifier_ids, qualifiers.sample_qualifiers, s.note FROM discrete.samples s
            JOIN discrete.results r ON s.sample_id = r.sample_id
            JOIN public.locations l ON s.location_id = l.location_id
            LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id
@@ -1737,6 +1737,20 @@ discData <- function(id, language, inputs) {
            JOIN public.parameters p ON r.parameter_id = p.parameter_id
            JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id
            LEFT JOIN public.organizations orgs ON s.owner = orgs.organization_id
+           LEFT JOIN LATERAL (
+             SELECT
+               string_agg(
+                 sq.qualifier_type_id::text,
+                 ', ' ORDER BY sq.qualifier_type_id
+               ) AS sample_qualifier_ids,
+               string_agg(
+                 qt.qualifier_type_description,
+                 '; ' ORDER BY sq.qualifier_type_id
+               ) AS sample_qualifiers
+             FROM discrete.sample_qualifiers sq
+             JOIN public.qualifier_types qt USING (qualifier_type_id)
+             WHERE sq.sample_id = s.sample_id
+           ) qualifiers ON TRUE
            WHERE s.location_id IN (",
           paste(filteredData$locs$location_id, collapse = ", "),
           if (nrow(filteredData$sub_locs) > 0) {
@@ -1789,6 +1803,7 @@ discData <- function(id, language, inputs) {
 
     output$modal_qaqc_samples <- qaqc_table("samples")
     output$modal_qaqc_results <- qaqc_table("results")
+    output$modal_qaqc_result_components <- qaqc_table("result_components")
     output$modal_qaqc_group_links <- qaqc_table("group_links")
     output$modal_qaqc_documents <- qaqc_table("documents")
 
@@ -1824,6 +1839,16 @@ discData <- function(id, language, inputs) {
           DT::DTOutput(ns("modal_qaqc_group_links"))
         )
       )
+      if (nrow(data$result_components) > 0L) {
+        tabs[[length(tabs) + 1L]] <- tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("disc_result_components", language$language),
+            nrow(data$result_components)
+          ),
+          DT::DTOutput(ns("modal_qaqc_result_components"))
+        )
+      }
       if (nrow(data$documents) > 0L) {
         tabs[[length(tabs) + 1L]] <- tabPanel(
           sprintf(
@@ -1963,13 +1988,13 @@ discData <- function(id, language, inputs) {
 
       # Single query using a window function to limit to 3 rows/results per sample_id
       query <- paste0(
-        "SELECT * FROM (SELECT r.sample_id, r.result, p.param_name AS parameter, ",
+        "SELECT * FROM (SELECT r.result_id, r.sample_id, r.result, p.param_name AS parameter, ",
         parameter_unit_sql(
           "units",
           matrix_state_alias = "r",
           media_alias = "s"
         ),
-        ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, ROW_NUMBER() OVER (PARTITION BY r.sample_id ORDER BY result_id) AS rn 
+        ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, rat.aggregation_type, ra.calculation_version, ra.calculation_arguments::text AS calculation_arguments, ra.expected_count, ROW_NUMBER() OVER (PARTITION BY r.sample_id ORDER BY r.result_id) AS rn
         FROM discrete.results r
         JOIN discrete.samples s ON r.sample_id = s.sample_id
         JOIN public.parameters p ON r.parameter_id = p.parameter_id
@@ -1980,6 +2005,8 @@ discData <- function(id, language, inputs) {
         LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
         LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
+        LEFT JOIN discrete.result_aggregations ra ON r.result_id = ra.result_id
+        LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
         WHERE r.sample_id IN (",
         sample_ids_str,
         ")) sub WHERE rn <= 3;"
@@ -2229,13 +2256,13 @@ discData <- function(id, language, inputs) {
         data$results <- dbGetQueryDT(
           session$userData$AquaCache,
           paste0(
-            "SELECT s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, ",
+            "SELECT r.result_id, s.location_id, r.sample_id, s.datetime, s.target_datetime, r.result, p.param_name AS parameter, ",
             parameter_unit_sql(
               "units",
               matrix_state_alias = "r",
               media_alias = "s"
             ),
-            ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime
+            ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, rat.aggregation_type, ra.calculation_version, ra.calculation_arguments::text AS calculation_arguments, ra.expected_count
         FROM discrete.results r
         JOIN discrete.samples s ON r.sample_id = s.sample_id
         JOIN public.parameters p ON r.parameter_id = p.parameter_id
@@ -2246,17 +2273,30 @@ discData <- function(id, language, inputs) {
         LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
         LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
+        LEFT JOIN discrete.result_aggregations ra ON r.result_id = ra.result_id
+        LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
         WHERE r.sample_id IN (",
             paste(selected_sampleids, collapse = ","),
             ");"
           )
         )
+        data$result_components <- disc_result_components(
+          session$userData$AquaCache,
+          data$results$result_id,
+          lang = language$abbrev
+        )
+        if (!nrow(data$result_components)) {
+          data$result_components <- NULL
+        }
 
         qaqc_data <- selected_qaqc_data()
         if (nrow(qaqc_data$samples) > 0L) {
           data$qaqc_group_links <- qaqc_data$group_links
           data$qaqc_samples <- qaqc_data$samples
           data$qaqc_results <- qaqc_data$results
+          if (nrow(qaqc_data$result_components) > 0L) {
+            data$qaqc_result_components <- qaqc_data$result_components
+          }
           if (nrow(qaqc_data$documents) > 0L) {
             data$qaqc_documents <- qaqc_data$documents
           }
@@ -2274,7 +2314,7 @@ discData <- function(id, language, inputs) {
             "SELECT * FROM public.approval_types;"
           )
         }
-        if ("sample_qualifier" %in% names(data$samples)) {
+        if ("sample_qualifier_ids" %in% names(data$samples)) {
           data$qualifiers <- dbGetQueryDT(
             session$userData$AquaCache,
             "SELECT * FROM public.qualifier_types;"

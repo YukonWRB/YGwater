@@ -1,6 +1,19 @@
 # UI and server code for managing discrete samples
 
-edit_samples_group_link_changes <- function(existing_ids, selected_ids) {
+#' Compare existing and selected discrete-sample associations
+#'
+#' Normalizes integer identifiers and returns the minimal set of association
+#' rows to remove and add. The sample editor uses this for group, qualifier,
+#' and sampler links so unchanged rows retain their audit metadata and notes.
+#'
+#' @param existing_ids IDs currently linked to the sample.
+#' @param selected_ids IDs selected in the editor.
+#'
+#' @return A list with integer vectors named `remove` and `add`.
+#'
+#' @keywords internal
+#' @noRd
+edit_samples_link_changes <- function(existing_ids, selected_ids) {
   normalize_ids <- function(ids) {
     ids <- unique(suppressWarnings(as.integer(ids)))
     ids[!is.na(ids)]
@@ -117,9 +130,13 @@ editSamples <- function(id, language) {
         label = "Sample approval",
         column = "sample_approval"
       ),
-      sample_qualifier = list(
-        label = "Sample qualifier",
-        column = "sample_qualifier"
+      sample_qualifier_ids = list(
+        label = "Sample qualifiers",
+        association = "qualifiers"
+      ),
+      sample_observer_ids = list(
+        label = "Sample observers",
+        association = "observers"
       ),
       owner = list(label = "Owner", column = "owner"),
       contributor = list(label = "Contributor", column = "contributor"),
@@ -270,7 +287,7 @@ editSamples <- function(id, language) {
          WHERE sample_id = $1",
         params = list(as.integer(sample_id))
       )$sample_group_id
-      changes <- edit_samples_group_link_changes(existing_ids, sample_group_ids)
+      changes <- edit_samples_link_changes(existing_ids, sample_group_ids)
 
       for (sample_group_id in changes$remove) {
         DBI::dbExecute(
@@ -291,6 +308,91 @@ editSamples <- function(id, language) {
            WHERE sample_group_id = $1
            ON CONFLICT (sample_group_id, sample_id) DO NOTHING",
           params = list(sample_group_id, as.integer(sample_id))
+        )
+      }
+      invisible(NULL)
+    }
+
+    current_sample_qualifier_ids <- function(sample_id) {
+      if (is.null(moduleData$sample_qualifiers)) {
+        return(integer())
+      }
+      ids <- moduleData$sample_qualifiers$qualifier_type_id[
+        moduleData$sample_qualifiers$sample_id == sample_id
+      ]
+      unique(as.integer(ids))
+    }
+
+    sync_sample_qualifier_links <- function(con, sample_id, qualifier_ids) {
+      existing_ids <- DBI::dbGetQuery(
+        con,
+        "SELECT qualifier_type_id
+         FROM discrete.sample_qualifiers
+         WHERE sample_id = $1",
+        params = list(as.integer(sample_id))
+      )$qualifier_type_id
+      changes <- edit_samples_link_changes(existing_ids, qualifier_ids)
+
+      for (qualifier_id in changes$remove) {
+        DBI::dbExecute(
+          con,
+          "DELETE FROM discrete.sample_qualifiers
+           WHERE sample_id = $1 AND qualifier_type_id = $2",
+          params = list(as.integer(sample_id), qualifier_id)
+        )
+      }
+      for (qualifier_id in changes$add) {
+        DBI::dbExecute(
+          con,
+          "INSERT INTO discrete.sample_qualifiers (
+             sample_id, qualifier_type_id
+           ) VALUES ($1, $2)
+           ON CONFLICT (sample_id, qualifier_type_id) DO NOTHING",
+          params = list(as.integer(sample_id), qualifier_id)
+        )
+      }
+      invisible(NULL)
+    }
+
+    current_sample_observer_ids <- function(sample_id) {
+      if (is.null(moduleData$sample_observers)) {
+        return(integer())
+      }
+      ids <- moduleData$sample_observers$observer_id[
+        moduleData$sample_observers$sample_id == sample_id &
+          moduleData$sample_observers$observer_role == "sampler"
+      ]
+      unique(as.integer(ids))
+    }
+
+    sync_sample_observer_links <- function(con, sample_id, observer_ids) {
+      existing_ids <- DBI::dbGetQuery(
+        con,
+        "SELECT observer_id
+         FROM discrete.sample_observers
+         WHERE sample_id = $1 AND observer_role = 'sampler'",
+        params = list(as.integer(sample_id))
+      )$observer_id
+      changes <- edit_samples_link_changes(existing_ids, observer_ids)
+
+      for (observer_id in changes$remove) {
+        DBI::dbExecute(
+          con,
+          "DELETE FROM discrete.sample_observers
+           WHERE sample_id = $1
+             AND observer_id = $2
+             AND observer_role = 'sampler'",
+          params = list(as.integer(sample_id), observer_id)
+        )
+      }
+      for (observer_id in changes$add) {
+        DBI::dbExecute(
+          con,
+          "INSERT INTO discrete.sample_observers (
+             sample_id, observer_id, observer_role
+           ) VALUES ($1, $2, 'sampler')
+           ON CONFLICT (sample_id, observer_id, observer_role) DO NOTHING",
+          params = list(as.integer(sample_id), observer_id)
         )
       }
       invisible(NULL)
@@ -511,11 +613,18 @@ editSamples <- function(id, language) {
       } else {
         NA_integer_
       }
-      sample_qualifier <- if (length(input$sample_qualifier)) {
-        as.integer(input$sample_qualifier[[1]])
-      } else {
-        NA_integer_
-      }
+      sample_qualifier_ids <- unique(suppressWarnings(as.integer(
+        input$sample_qualifier_ids
+      )))
+      sample_qualifier_ids <- sample_qualifier_ids[
+        !is.na(sample_qualifier_ids)
+      ]
+      sample_observer_ids <- unique(suppressWarnings(as.integer(
+        input$sample_observer_ids
+      )))
+      sample_observer_ids <- sample_observer_ids[
+        !is.na(sample_observer_ids)
+      ]
 
       document_ids <- normalize_document_ids(input$documents)
       sample_group_ids <- suppressWarnings(as.integer(input$sample_groups))
@@ -570,7 +679,8 @@ editSamples <- function(id, language) {
         },
         sample_grade = sample_grade,
         sample_approval = sample_approval,
-        sample_qualifier = sample_qualifier,
+        sample_qualifier_ids = sample_qualifier_ids,
+        sample_observer_ids = sample_observer_ids,
         owner = owner,
         contributor = contributor,
         comissioning_org = comissioning_org,
@@ -881,7 +991,17 @@ editSamples <- function(id, language) {
           r.private_expiry,
           r.matrix_state_id,
           ms.matrix_state_name,
-          r.note
+          r.note,
+          rat.aggregation_type,
+          ra.calculation_version,
+          ra.calculation_arguments::text AS calculation_arguments,
+          ra.expected_count,
+          ra.note AS aggregation_note,
+          aggregation.component_count,
+          aggregation.included_component_count,
+          aggregation.excluded_component_count,
+          aggregation.missing_component_count,
+          aggregation.has_component_shortfall
         FROM discrete.results r
         JOIN public.parameters p
           ON r.parameter_id = p.parameter_id
@@ -901,6 +1021,12 @@ editSamples <- function(id, language) {
           ON r.laboratory = lab.lab_id
         JOIN public.matrix_states ms
           ON r.matrix_state_id = ms.matrix_state_id
+        LEFT JOIN discrete.result_aggregations ra
+          ON r.result_id = ra.result_id
+        LEFT JOIN discrete.result_aggregation_types rat
+          ON ra.result_aggregation_type_id = rat.result_aggregation_type_id
+        LEFT JOIN discrete.result_aggregation_summary aggregation
+          ON r.result_id = aggregation.result_id
         WHERE r.sample_id = $1
         ORDER BY p.param_name, r.result_id;
         ",
@@ -908,6 +1034,92 @@ editSamples <- function(id, language) {
       )
       selected_result_id(NA_integer_)
       invisible(NULL)
+    }
+
+    show_composite_result_modal <- function(row) {
+      components <- disc_result_components(
+        session$userData$AquaCache,
+        row$result_id,
+        lang = "en"
+      )
+      display_components <- components[, intersect(
+        c(
+          "observation_number",
+          "observation_datetime",
+          "result",
+          "result_condition_name",
+          "result_condition_value",
+          "included_in_aggregate",
+          "weight",
+          "note"
+        ),
+        names(components)
+      ), drop = FALSE]
+      output$composite_result_components <- DT::renderDT({
+        DT::datatable(
+          display_components,
+          rownames = FALSE,
+          selection = "none",
+          filter = "top",
+          options = list(pageLength = 10, scrollX = TRUE)
+        )
+      })
+
+      count_text <- sprintf(
+        "%s total; %s included; %s excluded",
+        row$component_count,
+        row$included_component_count,
+        row$excluded_component_count
+      )
+      if (isTRUE(row$has_component_shortfall)) {
+        count_text <- paste0(
+          count_text,
+          "; ",
+          row$missing_component_count,
+          " expected observation(s) not recorded"
+        )
+      }
+      showModal(modalDialog(
+        title = paste("Composite result", row$result_id),
+        size = "xl",
+        tags$div(
+          class = "alert alert-info",
+          "The canonical result is maintained by the database from these components. Direct editing is disabled so the aggregation cannot be bypassed."
+        ),
+        fluidRow(
+          column(4, tags$strong("Parameter"), tags$p(row$parameter)),
+          column(
+            4,
+            tags$strong("Canonical result"),
+            tags$p(paste(row$result, row$units))
+          ),
+          column(
+            4,
+            tags$strong("Aggregation"),
+            tags$p(row$aggregation_type)
+          )
+        ),
+        fluidRow(
+          column(4, tags$strong("Components"), tags$p(count_text)),
+          column(
+            4,
+            tags$strong("Expected count"),
+            tags$p(if (is.na(row$expected_count)) "Not specified" else row$expected_count)
+          ),
+          column(
+            4,
+            tags$strong("Calculation version"),
+            tags$p(row$calculation_version)
+          )
+        ),
+        tags$strong("Calculation arguments"),
+        tags$pre(row$calculation_arguments),
+        if (!is.na(row$aggregation_note) && nzchar(row$aggregation_note)) {
+          tagList(tags$strong("Aggregation note"), tags$p(row$aggregation_note))
+        },
+        DT::DTOutput(ns("composite_result_components")),
+        footer = modalButton("Close")
+      ))
     }
 
     show_result_modal <- function(mode = c("add", "edit")) {
@@ -925,6 +1137,14 @@ editSamples <- function(id, language) {
       row <- if (identical(mode, "edit")) selected_result_row() else NULL
       if (identical(mode, "edit") && is.null(row)) {
         showNotification("Select one result to edit.", type = "error")
+        return()
+      }
+      if (
+        identical(mode, "edit") &&
+          !is.na(row$aggregation_type) &&
+          nzchar(row$aggregation_type)
+      ) {
+        show_composite_result_modal(row)
         return()
       }
 
@@ -1322,7 +1542,16 @@ editSamples <- function(id, language) {
       updateNumericInput(session, "wave_hgt_m", value = NA)
       updateSelectizeInput(session, "sample_grade", selected = character(0))
       updateSelectizeInput(session, "sample_approval", selected = character(0))
-      updateSelectizeInput(session, "sample_qualifier", selected = character(0))
+      updateSelectizeInput(
+        session,
+        "sample_qualifier_ids",
+        selected = character(0)
+      )
+      updateSelectizeInput(
+        session,
+        "sample_observer_ids",
+        selected = character(0)
+      )
       updateSelectizeInput(session, "owner", selected = character(0))
       updateSelectizeInput(session, "contributor", selected = character(0))
       updateSelectizeInput(session, "comissioning_org", selected = character(0))
@@ -1453,12 +1682,13 @@ editSamples <- function(id, language) {
       )
       updateSelectizeInput(
         session,
-        "sample_qualifier",
-        selected = if (is.na(details$sample_qualifier)) {
-          character(0)
-        } else {
-          as.character(details$sample_qualifier)
-        }
+        "sample_qualifier_ids",
+        selected = as.character(current_sample_qualifier_ids(sample_id))
+      )
+      updateSelectizeInput(
+        session,
+        "sample_observer_ids",
+        selected = as.character(current_sample_observer_ids(sample_id))
       )
       updateSelectizeInput(
         session,
@@ -1537,11 +1767,11 @@ editSamples <- function(id, language) {
       con <- session$userData$AquaCache
       moduleData$samples <- DBI::dbGetQuery(
         con,
-        "SELECT sample_id, location_id, sub_location_id, media_id, z, datetime, target_datetime, collection_method, sample_type, linked_with, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, sample_grade, sample_approval, sample_qualifier, owner, contributor, comissioning_org, sampling_org, share_with, import_source, no_source_update, note, import_source_id FROM discrete.samples ORDER BY datetime DESC"
+        "SELECT sample_id, location_id, sub_location_id, media_id, z, datetime, target_datetime, collection_method, sample_type, linked_with, sample_volume_ml, purge_volume_l, purge_time_min, flow_rate_l_min, wave_hgt_m, sample_grade, sample_approval, owner, contributor, comissioning_org, sampling_org, share_with, import_source, no_source_update, note, import_source_id FROM discrete.samples ORDER BY datetime DESC"
       )
       moduleData$samples_display <- DBI::dbGetQuery(
         con,
-        "SELECT s.sample_id, COALESCE(l.name, '[No location]') AS location, COALESCE(sl.sub_location_name, '') AS sub_location, m.media_type, st.sample_type, cm.collection_method, s.datetime, s.target_datetime, o.name AS owner, c.name AS contributor, s.sample_volume_ml, s.purge_volume_l, s.share_with, COALESCE((SELECT string_agg(COALESCE(sg.group_code, sg.group_name), ', ' ORDER BY sg.sample_group_id) FROM discrete.sample_group_members sgm JOIN discrete.sample_groups sg ON sg.sample_group_id = sgm.sample_group_id WHERE sgm.sample_id = s.sample_id), '') AS sample_groups FROM discrete.samples s LEFT JOIN public.locations l ON s.location_id = l.location_id LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id JOIN public.media_types m ON s.media_id = m.media_id JOIN discrete.sample_types st ON s.sample_type = st.sample_type_id JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id LEFT JOIN public.organizations o ON s.owner = o.organization_id LEFT JOIN public.organizations c ON s.contributor = c.organization_id ORDER BY s.datetime DESC"
+        "SELECT s.sample_id, COALESCE(l.name, '[No location]') AS location, COALESCE(sl.sub_location_name, '') AS sub_location, m.media_type, st.sample_type, cm.collection_method, s.datetime, s.target_datetime, o.name AS owner, c.name AS contributor, s.sample_volume_ml, s.purge_volume_l, s.share_with, COALESCE((SELECT string_agg(COALESCE(sg.group_code, sg.group_name), ', ' ORDER BY sg.sample_group_id) FROM discrete.sample_group_members sgm JOIN discrete.sample_groups sg ON sg.sample_group_id = sgm.sample_group_id WHERE sgm.sample_id = s.sample_id), '') AS sample_groups, COALESCE((SELECT string_agg(qt.qualifier_type_description, '; ' ORDER BY qt.qualifier_type_id) FROM discrete.sample_qualifiers sq JOIN public.qualifier_types qt USING (qualifier_type_id) WHERE sq.sample_id = s.sample_id), '') AS sample_qualifiers, COALESCE((SELECT string_agg(concat_ws(' ', observer.observer_first, observer.observer_last), '; ' ORDER BY observer.observer_last, observer.observer_first, observer.observer_id) FROM discrete.sample_observers so JOIN instruments.observers observer USING (observer_id) WHERE so.sample_id = s.sample_id AND so.observer_role = 'sampler'), '') AS sample_observers FROM discrete.samples s LEFT JOIN public.locations l ON s.location_id = l.location_id LEFT JOIN public.sub_locations sl ON s.sub_location_id = sl.sub_location_id JOIN public.media_types m ON s.media_id = m.media_id JOIN discrete.sample_types st ON s.sample_type = st.sample_type_id JOIN discrete.collection_methods cm ON s.collection_method = cm.collection_method_id LEFT JOIN public.organizations o ON s.owner = o.organization_id LEFT JOIN public.organizations c ON s.contributor = c.organization_id ORDER BY s.datetime DESC"
       )
       moduleData$locations <- DBI::dbGetQuery(
         con,
@@ -1574,6 +1804,31 @@ editSamples <- function(id, language) {
       moduleData$qualifiers <- DBI::dbGetQuery(
         con,
         "SELECT qualifier_type_id, qualifier_type_description FROM public.qualifier_types ORDER BY qualifier_type_description ASC"
+      )
+      moduleData$sample_qualifiers <- DBI::dbGetQuery(
+        con,
+        "SELECT sample_id, qualifier_type_id, note
+         FROM discrete.sample_qualifiers
+         ORDER BY sample_id, qualifier_type_id"
+      )
+      moduleData$observers <- DBI::dbGetQuery(
+        con,
+        "SELECT
+           observer.observer_id,
+           concat_ws(' ', observer.observer_first, observer.observer_last)
+             AS observer_name,
+           organization.name AS organization
+         FROM instruments.observers observer
+         LEFT JOIN public.organizations organization
+           ON observer.organization = organization.organization_id
+         ORDER BY observer.observer_last, observer.observer_first,
+           observer.observer_id"
+      )
+      moduleData$sample_observers <- DBI::dbGetQuery(
+        con,
+        "SELECT sample_id, observer_id, observer_role, note
+         FROM discrete.sample_observers
+         ORDER BY sample_id, observer_id, observer_role"
       )
       moduleData$organizations <- DBI::dbGetQuery(
         con,
@@ -1756,6 +2011,7 @@ editSamples <- function(id, language) {
         moduleData$grades,
         moduleData$approvals,
         moduleData$qualifiers,
+        moduleData$observers,
         moduleData$result_share_groups,
         moduleData$parameters,
         moduleData$result_types,
@@ -2229,18 +2485,18 @@ editSamples <- function(id, language) {
             ),
             fluidRow(
               multi_field_ui(
-                "sample_qualifier",
+                "sample_qualifier_ids",
                 column(
                   6,
                   selectizeInput(
-                    ns("sample_qualifier"),
-                    "Sample qualifier",
+                    ns("sample_qualifier_ids"),
+                    "Sample qualifiers",
                     choices = named_choices(
                       moduleData$qualifiers$qualifier_type_id,
                       moduleData$qualifiers$qualifier_type_description
                     ),
                     multiple = TRUE,
-                    options = list(maxItems = 1, placeholder = "Optional"),
+                    options = list(placeholder = "Optional"),
                     width = "100%"
                   )
                 )
@@ -2258,6 +2514,34 @@ editSamples <- function(id, language) {
                     ),
                     multiple = TRUE,
                     options = list(maxItems = 1, placeholder = "Select owner"),
+                    width = "100%"
+                  )
+                )
+              )
+            ),
+            fluidRow(
+              multi_field_ui(
+                "sample_observer_ids",
+                column(
+                  12,
+                  selectizeInput(
+                    ns("sample_observer_ids"),
+                    "Sample observers (samplers)",
+                    choices = named_choices(
+                      moduleData$observers$observer_id,
+                      ifelse(
+                        is.na(moduleData$observers$organization),
+                        moduleData$observers$observer_name,
+                        paste0(
+                          moduleData$observers$observer_name,
+                          " (",
+                          moduleData$observers$organization,
+                          ")"
+                        )
+                      )
+                    ),
+                    multiple = TRUE,
+                    options = list(placeholder = "Optional"),
                     width = "100%"
                   )
                 )
@@ -2394,7 +2678,7 @@ editSamples <- function(id, language) {
                   6,
                   actionButton(
                     ns("edit_result"),
-                    "Edit selected result",
+                    "View/edit selected result",
                     icon = icon("edit")
                   )
                 )
@@ -2514,6 +2798,8 @@ editSamples <- function(id, language) {
           speciation = results$result_speciation,
           matrix_state = results$matrix_state_name,
           laboratory = results$laboratory_name,
+          aggregation = results$aggregation_type,
+          component_count = results$component_count,
           stringsAsFactors = FALSE
         )
       }
@@ -2553,6 +2839,21 @@ editSamples <- function(id, language) {
           type = "error"
         )
         return()
+      }
+
+      if (identical(result_edit_mode(), "edit")) {
+        selected <- selected_result_row()
+        if (
+          !is.null(selected) &&
+            !is.na(selected$aggregation_type) &&
+            nzchar(selected$aggregation_type)
+        ) {
+          showNotification(
+            "Composite results must be changed through their aggregation and component records.",
+            type = "error"
+          )
+          return()
+        }
       }
 
       form <- collect_result_inputs(sample_ids[[1]])
@@ -2934,6 +3235,9 @@ editSamples <- function(id, language) {
         for (field in selected_fields) {
           spec <- multi_editable_fields[[field]]
           value <- form[[field]]
+          if (!is.null(spec$association)) {
+            next
+          }
           if (
             field %in%
               c("collection_method", "sample_type", "owner") &&
@@ -2961,33 +3265,59 @@ editSamples <- function(id, language) {
           return()
         }
 
-        if (!length(set_clauses)) {
+        association_fields <- selected_fields[
+          vapply(
+            multi_editable_fields[selected_fields],
+            function(spec) !is.null(spec$association),
+            logical(1)
+          )
+        ]
+        if (!length(set_clauses) && !length(association_fields)) {
           showNotification("No fields selected for update.", type = "error")
           return()
         }
 
-        set_sql <- paste(set_clauses, collapse = ",\n          ")
-        update_sql <- sprintf(
-          "UPDATE discrete.samples\n        SET\n          %s\n        WHERE sample_id = $%d;",
-          set_sql,
-          length(params) + 1
-        )
+        update_sql <- if (length(set_clauses)) {
+          set_sql <- paste(set_clauses, collapse = ",\n          ")
+          sprintf(
+            "UPDATE discrete.samples\n        SET\n          %s\n        WHERE sample_id = $%d;",
+            set_sql,
+            length(params) + 1
+          )
+        } else {
+          NULL
+        }
 
         con <- session$userData$AquaCache
         update_error <- tryCatch(
           {
             DBI::dbWithTransaction(con, {
               for (id in sample_ids) {
-                tryCatch(
-                  DBI::dbExecute(
-                    con,
-                    update_sql,
-                    params = c(params, list(id))
-                  ),
-                  error = function(e) {
-                    stop(sprintf("Sample %s: %s", id, e$message), call. = FALSE)
+                tryCatch({
+                  if (!is.null(update_sql)) {
+                    DBI::dbExecute(
+                      con,
+                      update_sql,
+                      params = c(params, list(id))
+                    )
                   }
-                )
+                  if ("sample_qualifier_ids" %in% association_fields) {
+                    sync_sample_qualifier_links(
+                      con,
+                      id,
+                      form$sample_qualifier_ids
+                    )
+                  }
+                  if ("sample_observer_ids" %in% association_fields) {
+                    sync_sample_observer_links(
+                      con,
+                      id,
+                      form$sample_observer_ids
+                    )
+                  }
+                }, error = function(e) {
+                  stop(sprintf("Sample %s: %s", id, e$message), call. = FALSE)
+                })
               }
             })
             NULL
@@ -3106,17 +3436,16 @@ editSamples <- function(id, language) {
           wave_hgt_m = $14,
           sample_grade = $15,
           sample_approval = $16,
-          sample_qualifier = $17,
-          owner = $18,
-          contributor = $19,
-          comissioning_org = $20,
-          sampling_org = $21,
-          share_with = $22::text[],
-          import_source = $23,
-          no_source_update = $24,
-          note = $25,
-          import_source_id = $26
-        WHERE sample_id = $27;
+          owner = $17,
+          contributor = $18,
+          comissioning_org = $19,
+          sampling_org = $20,
+          share_with = $21::text[],
+          import_source = $22,
+          no_source_update = $23,
+          note = $24,
+          import_source_id = $25
+        WHERE sample_id = $26;
       "
 
         params <- list(
@@ -3136,7 +3465,6 @@ editSamples <- function(id, language) {
           form$wave_hgt_m,
           form$sample_grade,
           form$sample_approval,
-          form$sample_qualifier,
           form$owner,
           form$contributor,
           form$comissioning_org,
@@ -3159,6 +3487,16 @@ editSamples <- function(id, language) {
               }
               sync_sample_document_links(con, sample_id, form$document_ids)
               sync_sample_group_links(con, sample_id, form$sample_group_ids)
+              sync_sample_qualifier_links(
+                con,
+                sample_id,
+                form$sample_qualifier_ids
+              )
+              sync_sample_observer_links(
+                con,
+                sample_id,
+                form$sample_observer_ids
+              )
             })
             cleanup_messages <- cleanup_removed_documents(
               session$userData$AquaCache,

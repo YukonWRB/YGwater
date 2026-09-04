@@ -17,7 +17,8 @@ test_that("QA/QC module text is sourced from the translation catalogue", {
     "disc_qaqc_sample_data",
     "disc_qaqc_group_links",
     "disc_qaqc_retrieval_error",
-    "disc_qaqc_linked_results"
+    "disc_qaqc_linked_results",
+    "disc_result_components"
   )
   entries <- suppressWarnings(translations$English[
     names(translations$English) %in% keys
@@ -61,6 +62,9 @@ test_that("plot QA/QC uses contributing IDs for averaged rows", {
   )
 
   expect_identical(env$disc_plot_source_sample_ids(plot_result), c(5L, 7L))
+
+  plot_result$source_result_ids <- c(12L, NA_integer_, 9L, 12L)
+  expect_identical(env$disc_plot_source_result_ids(plot_result), c(9L, 12L))
 })
 
 test_that("plot downloads include applicable QA/QC tables", {
@@ -72,22 +76,58 @@ test_that("plot downloads include applicable QA/QC tables", {
   )
   qaqc$samples <- data.frame(sample_id = 2L, location_id = NA_integer_)
   qaqc$results <- data.frame(result_id = 10L, sample_id = 2L)
+  qaqc$result_components <- data.frame(
+    result_component_id = 100L,
+    result_id = 10L
+  )
+  components <- data.frame(
+    result_component_id = 99L,
+    result_id = 9L
+  )
 
   tables <- env$disc_plot_download_tables(
     data.frame(sample_id = 1L),
-    qaqc
+    qaqc,
+    components
   )
 
   expect_named(
     tables,
-    c("plot_data", "qaqc_group_links", "qaqc_samples", "qaqc_results")
+    c(
+      "plot_data",
+      "result_components",
+      "qaqc_group_links",
+      "qaqc_samples",
+      "qaqc_results",
+      "qaqc_result_components"
+    )
   )
 
   workbook <- tempfile(fileext = ".xlsx")
   openxlsx::write.xlsx(tables, workbook)
   expect_identical(
     openxlsx::getSheetNames(workbook),
-    c("plot_data", "qaqc_group_links", "qaqc_samples", "qaqc_results")
+    c(
+      "plot_data",
+      "result_components",
+      "qaqc_group_links",
+      "qaqc_samples",
+      "qaqc_results",
+      "qaqc_result_components"
+    )
+  )
+})
+
+test_that("component retrieval handles an empty result selection", {
+  env <- discrete_plot_module_environment()
+
+  expect_s3_class(
+    env$disc_result_components(NULL, c(NA_integer_, NA_integer_)),
+    "data.frame"
+  )
+  expect_equal(
+    nrow(env$disc_result_components(NULL, integer())),
+    0L
   )
 })
 

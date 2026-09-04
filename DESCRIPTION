@@ -1,6 +1,6 @@
 Package: YGwater
 Title: R functions and applications for the Yukon Water Science and Stewardship Branch
-Version: 1.10.3
+Version: 1.10.4
 Authors@R: c(
     person("Ghislain", "de Laplante", email = "ghislaindel@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-5093-9185")),
@@ -51,7 +51,7 @@ Imports:
     xml2,
     zoo
 Suggests:
-    AquaCache,
+    AquaCache (>= 2.8.4),
     base64enc,
     bslib,
     bsicons,

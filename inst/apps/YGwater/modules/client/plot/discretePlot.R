@@ -1,3 +1,11 @@
+#' Flatten list columns for display or workbook output
+#'
+#' @param x A data-frame-like object.
+#'
+#' @return A data table whose list columns contain comma-separated text.
+#'
+#' @keywords internal
+#' @noRd
 disc_plot_tabularize <- function(x) {
   x <- data.table::copy(data.table::as.data.table(x))
   list_columns <- names(x)[vapply(x, is.list, logical(1))]
@@ -15,15 +23,102 @@ disc_plot_tabularize <- function(x) {
   x[]
 }
 
+#' Retrieve component observations for discrete results
+#'
+#' Returns the observations and calculation contract behind component-built
+#' results. Direct results are omitted because they have no rows in
+#' `discrete.result_components`. The result IDs are normalized to integers
+#' before they are placed in the query.
+#'
+#' @param con An open AquaCache DBI connection.
+#' @param result_ids Result IDs to retrieve.
+#' @param lang Language code used for the parameter label.
+#'
+#' @return A data frame with one row per result component.
+#'
+#' @keywords internal
+#' @noRd
+disc_result_components <- function(con, result_ids, lang = "en") {
+  result_ids <- unique(suppressWarnings(as.integer(result_ids)))
+  result_ids <- result_ids[!is.na(result_ids)]
+  if (!length(result_ids)) {
+    return(data.frame())
+  }
+
+  parameter_name <- if (identical(lang, "fr")) {
+    "COALESCE(p.param_name_fr, p.param_name)"
+  } else {
+    "p.param_name"
+  }
+  DBI::dbGetQuery(
+    con,
+    paste0(
+      "SELECT
+         rc.result_component_id,
+         rc.result_id,
+         r.sample_id,
+         r.parameter_id,
+         ",
+      parameter_name,
+      " AS parameter,
+         public.get_parameter_unit_name(
+           r.parameter_id,
+           r.matrix_state_id
+         ) AS units,
+         rat.aggregation_type,
+         ra.calculation_version,
+         ra.calculation_arguments::text AS calculation_arguments,
+         ra.expected_count,
+         rc.observation_number,
+         rc.observation_datetime,
+         rc.result,
+         rc.result_condition,
+         condition.result_condition AS result_condition_name,
+         rc.result_condition_value,
+         rc.included_in_aggregate,
+         rc.weight,
+         rc.note
+       FROM discrete.result_components rc
+       JOIN discrete.result_aggregations ra USING (result_id)
+       JOIN discrete.result_aggregation_types rat
+         USING (result_aggregation_type_id)
+       JOIN discrete.results r USING (result_id)
+       JOIN public.parameters p USING (parameter_id)
+       LEFT JOIN discrete.result_conditions condition
+         ON rc.result_condition = condition.result_condition_id
+       WHERE rc.result_id IN (",
+      paste(result_ids, collapse = ","),
+      ")
+       ORDER BY rc.result_id, rc.observation_number"
+    )
+  )
+}
+
+#' Create an empty discrete QA/QC data bundle
+#'
+#' @return A named list of empty data tables matching the result of
+#'   `disc_plot_related_qaqc_data()`.
+#'
+#' @keywords internal
+#' @noRd
 disc_plot_empty_qaqc_data <- function() {
   list(
     group_links = data.table::data.table(),
     samples = data.table::data.table(),
     results = data.table::data.table(),
+    result_components = data.table::data.table(),
     documents = data.table::data.table()
   )
 }
 
+#' Identify source samples represented in a discrete plot
+#'
+#' @param plot_result A result returned by `plotDiscrete(data = TRUE)`.
+#'
+#' @return A sorted unique integer vector of sample IDs.
+#'
+#' @keywords internal
+#' @noRd
 disc_plot_source_sample_ids <- function(plot_result) {
   sample_ids <- plot_result$source_sample_ids
   if (is.null(sample_ids) && "sample_id" %in% names(plot_result$data)) {
@@ -33,6 +128,41 @@ disc_plot_source_sample_ids <- function(plot_result) {
   sort(unique(sample_ids[!is.na(sample_ids)]))
 }
 
+#' Identify source results represented in a discrete plot
+#'
+#' Uses the separately preserved source IDs when plotted rows combine duplicate
+#' samples, and otherwise falls back to canonical result IDs in the plotted
+#' data.
+#'
+#' @param plot_result A result returned by `plotDiscrete(data = TRUE)`.
+#'
+#' @return A sorted unique integer vector of result IDs.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_source_result_ids <- function(plot_result) {
+  result_ids <- plot_result$source_result_ids
+  if (is.null(result_ids) && "result_id" %in% names(plot_result$data)) {
+    result_ids <- plot_result$data$result_id
+  }
+  result_ids <- suppressWarnings(as.integer(result_ids))
+  sort(unique(result_ids[!is.na(result_ids)]))
+}
+
+#' Retrieve grouped QA/QC samples related to plotted samples
+#'
+#' Retrieves locationless QA/QC samples that share a sample group with a
+#' plotted sample, together with their canonical results, component
+#' observations, group links, and documents.
+#'
+#' @param con An open AquaCache DBI connection.
+#' @param plotted_sample_ids Sample IDs represented in the plot.
+#' @param lang Language code used for metadata labels.
+#'
+#' @return A named list of tabular QA/QC data.
+#'
+#' @keywords internal
+#' @noRd
 disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
   sample_ids <- suppressWarnings(as.integer(plotted_sample_ids))
   sample_ids <- sort(unique(sample_ids[!is.na(sample_ids)]))
@@ -115,6 +245,11 @@ disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
       ") ORDER BY datetime, sample_id, parameter_name, result_id"
     )
   )
+  result_components <- disc_result_components(
+    con,
+    results$result_id,
+    lang = metadata_suffix
+  )
   documents <- DBI::dbGetQuery(
     con,
     paste0(
@@ -150,12 +285,32 @@ disc_plot_related_qaqc_data <- function(con, plotted_sample_ids, lang = "en") {
     group_links = disc_plot_tabularize(group_links),
     samples = disc_plot_tabularize(samples),
     results = disc_plot_tabularize(results),
+    result_components = disc_plot_tabularize(result_components),
     documents = disc_plot_tabularize(documents)
   )
 }
 
-disc_plot_download_tables <- function(plot_data, qaqc_data) {
+#' Assemble workbook tables for a discrete-data plot download
+#'
+#' @param plot_data Canonical result rows used in the plot.
+#' @param qaqc_data Related QA/QC data returned by
+#'   `disc_plot_related_qaqc_data()`.
+#' @param result_components Component observations for the plotted canonical
+#'   results.
+#'
+#' @return A named list of tabular data suitable for `openxlsx::write.xlsx()`.
+#'
+#' @keywords internal
+#' @noRd
+disc_plot_download_tables <- function(
+  plot_data,
+  qaqc_data,
+  result_components = data.frame()
+) {
   tables <- list(plot_data = disc_plot_tabularize(plot_data))
+  if (nrow(result_components) > 0L) {
+    tables$result_components <- disc_plot_tabularize(result_components)
+  }
   if (nrow(qaqc_data$samples) == 0L) {
     return(tables)
   }
@@ -163,6 +318,11 @@ disc_plot_download_tables <- function(plot_data, qaqc_data) {
   tables$qaqc_group_links <- disc_plot_tabularize(qaqc_data$group_links)
   tables$qaqc_samples <- disc_plot_tabularize(qaqc_data$samples)
   tables$qaqc_results <- disc_plot_tabularize(qaqc_data$results)
+  if (nrow(qaqc_data$result_components) > 0L) {
+    tables$qaqc_result_components <- disc_plot_tabularize(
+      qaqc_data$result_components
+    )
+  }
   if (nrow(qaqc_data$documents) > 0L) {
     tables$qaqc_documents <- disc_plot_tabularize(qaqc_data$documents)
   }
@@ -3011,6 +3171,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
     first_plot <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session, in which case a modal is shown
     first_plot_with_standards <- reactiveVal(TRUE) # Flags if this is the first plot generated by the user in this session with standards, in which case a modal is shown
     plotData <- reactiveVal() # Holds the data for the plot in case the user wants to download it
+    plottedResultIds <- reactiveVal(integer())
     qaQcData <- reactiveVal(disc_plot_empty_qaqc_data())
     pendingSeasonMetadata <- reactiveVal(NULL)
     plotSeasonMetadata <- reactiveVal(NULL)
@@ -3046,6 +3207,7 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
 
     output$qaqc_samples_table <- qaqc_table("samples")
     output$qaqc_results_table <- qaqc_table("results")
+    output$qaqc_result_components_table <- qaqc_table("result_components")
     output$qaqc_group_links_table <- qaqc_table("group_links")
     output$qaqc_documents_table <- qaqc_table("documents")
 
@@ -3087,6 +3249,16 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
             nrow(data$documents)
           ),
           DT::dataTableOutput(ns("qaqc_documents_table"))
+        )
+      }
+      if (nrow(data$result_components) > 0L) {
+        tabs[[length(tabs) + 1L]] <- tabPanel(
+          sprintf(
+            "%s (%d)",
+            tr("disc_result_components", language$language),
+            nrow(data$result_components)
+          ),
+          DT::dataTableOutput(ns("qaqc_result_components_table"))
         )
       }
 
@@ -3172,6 +3344,9 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
         isolate(plot_output_discrete$result()$plot)
       })
       plotData(plot_output_discrete$result()$data)
+      plottedResultIds(disc_plot_source_result_ids(
+        plot_output_discrete$result()
+      ))
       qaQcData(disc_plot_empty_qaqc_data())
       plotted_sample_ids <- disc_plot_source_sample_ids(
         plot_output_discrete$result()
@@ -3323,7 +3498,15 @@ discPlot <- function(id, mdb_files, language, windowDims, inputs) {
       },
       content = function(file) {
         openxlsx::write.xlsx(
-          disc_plot_download_tables(plotData(), qaQcData()),
+          disc_plot_download_tables(
+            plotData(),
+            qaQcData(),
+            disc_result_components(
+              session$userData$AquaCache,
+              plottedResultIds(),
+              lang = language$abbrev
+            )
+          ),
           file
         )
       }

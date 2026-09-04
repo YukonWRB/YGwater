@@ -95,9 +95,9 @@ snowBulletin <- function(
   # Check for credentials with read/write authority
   if (synchronize) {
     # Make sure most recent version of AquaCache R package is downloaded
-    if (!rlang::is_installed("AquaCache", version = "2.3.3")) {
+    if (!rlang::is_installed("AquaCache", version = "2.8.4")) {
       stop(
-        "You must have the AquaCache package version minimum 2.3.3 installed to synchronize data with source. Please install the package and try again, or run without synchronization."
+        "You must have AquaCache package version 2.8.4 or newer installed to synchronize data with source. Please install the package and try again, or run without synchronization."
       )
     }
     if (DBI::dbIsReadOnly(con)) {
@@ -117,7 +117,7 @@ snowBulletin <- function(
            SELECT 1
            FROM discrete.sample_series_source_adapters ssa
            WHERE ssa.sample_series_id = ss.sample_series_id
-             AND ssa.source_fx = 'downloadSnowCourse'
+             AND ssa.source_fx = 'downloadSnowCourseYG'
              AND ssa.active
              AND ssa.synchronize_priority IS NOT NULL
          )"
