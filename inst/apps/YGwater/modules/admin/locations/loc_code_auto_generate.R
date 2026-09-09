@@ -137,7 +137,7 @@ auto_generate_server <- function(input, session, ns, moduleData) {
       code <- paste0(code, "-00001")
     } else {
       # Increment the numeric suffix by 1
-      # Find the last numbers with no in-between characters (maay not be a hyphen)
+      # Find the last numbers with no in-between characters (may not be a hyphen)
       suffix_num <- as.integer(sub(
         "^.*?(\\d+)$",
         "\\1",

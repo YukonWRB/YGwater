@@ -393,6 +393,80 @@ render_pdf_pages <- function(
 }
 
 
+# Normalize a supported upload into the JPEG page files used by the editor.
+# PDFs may contain multiple pages; JPEG and PNG uploads each become one page.
+render_document_pages <- function(
+  document_path,
+  document_type,
+  output_dir,
+  filename_prefix,
+  max_dpi = 300,
+  max_pixels = 12e6
+) {
+  document_type <- tolower(sub("^\\.", "", document_type))
+  if (identical(document_type, "pdf")) {
+    return(render_pdf_pages(
+      document_path,
+      output_dir = output_dir,
+      filename_prefix = filename_prefix,
+      max_dpi = max_dpi,
+      max_pixels = max_pixels
+    ))
+  }
+  if (!document_type %in% c("jpg", "jpeg", "png")) {
+    stop("Supported document types are PDF, JPG, JPEG, and PNG.")
+  }
+  if (
+    !is.numeric(max_pixels) || length(max_pixels) != 1 ||
+      !is.finite(max_pixels) || max_pixels <= 0
+  ) {
+    stop("Image raster limits must be a positive finite number.")
+  }
+
+  image <- magick::image_read(document_path)
+  if (length(image) != 1) {
+    stop("Uploaded image files must contain exactly one image.")
+  }
+  # With no explicit target, image_orient() applies the file's orientation
+  # metadata and resets it to the normal top-left orientation.
+  image <- magick::image_orient(image)
+  image_info <- magick::image_info(image)
+  if (
+    !is.finite(image_info$width) || !is.finite(image_info$height) ||
+      image_info$width <= 0 || image_info$height <= 0
+  ) {
+    stop("The uploaded image has invalid dimensions.")
+  }
+
+  pixel_count <- image_info$width * image_info$height
+  if (pixel_count > max_pixels) {
+    scale <- sqrt(max_pixels / pixel_count)
+    target_width <- max(1, floor(image_info$width * scale))
+    target_height <- max(1, floor(image_info$height * scale))
+    image <- magick::image_resize(
+      image,
+      geometry = sprintf("%dx%d", target_width, target_height)
+    )
+  }
+
+  output_path <- file.path(
+    output_dir,
+    sprintf("%s_page_1.jpg", filename_prefix)
+  )
+  magick::image_write(
+    image,
+    path = output_path,
+    format = "jpeg",
+    quality = 95
+  )
+  if (!file.exists(output_path)) {
+    stop("The uploaded image could not be normalized.")
+  }
+
+  normalizePath(output_path, mustWork = TRUE)
+}
+
+
 # Apply opaque redaction rectangles without opening an R graphics device.
 # This avoids ImageMagick MVG clip-path generation and its runtime dependency
 # on the R graphics API used to build the magick package.
