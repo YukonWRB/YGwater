@@ -1994,7 +1994,33 @@ discData <- function(id, language, inputs) {
           matrix_state_alias = "r",
           media_alias = "s"
         ),
-        ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, rat.aggregation_type, ra.calculation_version, ra.calculation_arguments::text AS calculation_arguments, ra.expected_count, ROW_NUMBER() OVER (PARTITION BY r.sample_id ORDER BY r.result_id) AS rn
+        ",
+          rs.result_speciation,
+          rt.result_type,
+          sf.sample_fraction,
+          rc.result_condition,
+          r.result_condition_value,
+          rvt.result_value_type,
+          pm.protocol_name,
+          l.lab_name AS laboratory,
+          r.analysis_datetime,
+          r.lab_report_no,
+          r.lab_sample_no,
+          r.grade_type_id AS result_grade_id,
+          rg.grade_type_code AS result_grade_code,
+          rg.grade_type_description AS result_grade_description,
+          rg.grade_type_description_fr AS result_grade_description_fr,
+          r.approval_type_id AS result_approval_id,
+          rap.approval_type_code AS result_approval_code,
+          rap.approval_type_description AS result_approval_description,
+          rap.approval_type_description_fr AS result_approval_description_fr,
+          rat.aggregation_type,
+          ra.calculation_version,
+          ra.calculation_arguments::text AS calculation_arguments,
+          ra.expected_count,
+          ROW_NUMBER() OVER (
+            PARTITION BY r.sample_id ORDER BY r.result_id
+          ) AS rn
         FROM discrete.results r
         JOIN discrete.samples s ON r.sample_id = s.sample_id
         JOIN public.parameters p ON r.parameter_id = p.parameter_id
@@ -2005,6 +2031,8 @@ discData <- function(id, language, inputs) {
         LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
         LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
+        LEFT JOIN public.grade_types rg ON r.grade_type_id = rg.grade_type_id
+        LEFT JOIN public.approval_types rap ON r.approval_type_id = rap.approval_type_id
         LEFT JOIN discrete.result_aggregations ra ON r.result_id = ra.result_id
         LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
         WHERE r.sample_id IN (",
@@ -2262,7 +2290,30 @@ discData <- function(id, language, inputs) {
               matrix_state_alias = "r",
               media_alias = "s"
             ),
-            ", rs.result_speciation, rt.result_type, sf.sample_fraction, rc.result_condition, r.result_condition_value, rvt.result_value_type, pm.protocol_name, l.lab_name AS laboratory, r.analysis_datetime, rat.aggregation_type, ra.calculation_version, ra.calculation_arguments::text AS calculation_arguments, ra.expected_count
+            ",
+          rs.result_speciation,
+          rt.result_type,
+          sf.sample_fraction,
+          rc.result_condition,
+          r.result_condition_value,
+          rvt.result_value_type,
+          pm.protocol_name,
+          l.lab_name AS laboratory,
+          r.analysis_datetime,
+          r.lab_report_no,
+          r.lab_sample_no,
+          r.grade_type_id AS result_grade_id,
+          rg.grade_type_code AS result_grade_code,
+          rg.grade_type_description AS result_grade_description,
+          rg.grade_type_description_fr AS result_grade_description_fr,
+          r.approval_type_id AS result_approval_id,
+          rap.approval_type_code AS result_approval_code,
+          rap.approval_type_description AS result_approval_description,
+          rap.approval_type_description_fr AS result_approval_description_fr,
+          rat.aggregation_type,
+          ra.calculation_version,
+          ra.calculation_arguments::text AS calculation_arguments,
+          ra.expected_count
         FROM discrete.results r
         JOIN discrete.samples s ON r.sample_id = s.sample_id
         JOIN public.parameters p ON r.parameter_id = p.parameter_id
@@ -2273,6 +2324,8 @@ discData <- function(id, language, inputs) {
         LEFT JOIN discrete.result_speciations rs ON r.result_speciation_id = rs.result_speciation_id
         LEFT JOIN discrete.protocols_methods pm ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories l ON r.laboratory = l.lab_id
+        LEFT JOIN public.grade_types rg ON r.grade_type_id = rg.grade_type_id
+        LEFT JOIN public.approval_types rap ON r.approval_type_id = rap.approval_type_id
         LEFT JOIN discrete.result_aggregations ra ON r.result_id = ra.result_id
         LEFT JOIN discrete.result_aggregation_types rat USING (result_aggregation_type_id)
         WHERE r.sample_id IN (",

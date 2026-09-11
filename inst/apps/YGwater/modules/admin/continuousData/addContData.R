@@ -97,6 +97,56 @@ add_cont_data_target_label <- function(target) {
   paste(parts[!is.na(parts) & nzchar(parts)], collapse = "; ")
 }
 
+add_cont_data_prepare_notes <- function(ranges, no_source_update = TRUE) {
+  empty <- data.frame(
+    note = character(),
+    start_dt = as.POSIXct(character(), tz = "UTC"),
+    end_dt = as.POSIXct(character(), tz = "UTC"),
+    no_source_update = logical(),
+    stringsAsFactors = FALSE
+  )
+  if (is.null(ranges) || nrow(ranges) == 0L) {
+    return(empty)
+  }
+
+  required <- c("note", "start_datetime", "end_datetime")
+  missing <- setdiff(required, names(ranges))
+  if (length(missing) > 0L) {
+    stop(
+      "Note ranges are missing required column(s): ",
+      paste(missing, collapse = ", "),
+      "."
+    )
+  }
+
+  note <- trimws(as.character(ranges$note))
+  start_dt <- suppressWarnings(as.POSIXct(
+    as.character(ranges$start_datetime),
+    tz = "UTC"
+  ))
+  end_dt <- suppressWarnings(as.POSIXct(
+    as.character(ranges$end_datetime),
+    tz = "UTC"
+  ))
+  invalid <- is.na(note) | !nzchar(note) |
+    is.na(start_dt) | is.na(end_dt) | start_dt > end_dt
+  if (any(invalid)) {
+    stop(
+      "Invalid note text or start/end datetime in row(s): ",
+      paste(which(invalid), collapse = ", "),
+      "."
+    )
+  }
+
+  data.frame(
+    note = note,
+    start_dt = start_dt,
+    end_dt = end_dt,
+    no_source_update = rep(isTRUE(no_source_update), length(note)),
+    stringsAsFactors = FALSE
+  )
+}
+
 addContDataUI <- function(id) {
   ns <- NS(id)
   tagList(
@@ -350,7 +400,32 @@ addContDataUI <- function(id) {
           ),
           uiOutput(ns("qualifier_ranges_ui")),
           uiOutput(ns("qualifier_ranges_warning"))
-        ) # End qualifiers accordion panel
+        ), # End qualifiers accordion panel
+
+        accordion_panel(
+          id = ns("notes_panel"),
+          title = "Add notes",
+          icon = icon("note-sticky"),
+          tags$p(
+            "Add one or more free-hand notes for specific ranges within the data being uploaded."
+          ),
+          selectizeInput(
+            ns("note_utc_offset"),
+            "Note UTC offset",
+            choices = input_timezone_choices(),
+            selected = format_utc_offset(0L),
+            multiple = FALSE,
+            width = "100%"
+          ),
+          uiOutput(ns("note_apply_all_ui")),
+          div(
+            actionButton(ns("add_note_range"), "Add note range"),
+            actionButton(ns("edit_note_range"), "Edit selected"),
+            actionButton(ns("delete_note_range"), "Delete selected")
+          ),
+          uiOutput(ns("note_ranges_ui")),
+          uiOutput(ns("note_ranges_warning"))
+        ) # End notes accordion panel
       ), # end accordion for data manipulation options
 
       br(),
@@ -676,9 +751,17 @@ addContData <- function(id, language) {
     staged_upload_data_exists <- function() {
       jobs <- isolate(upload_jobs())
       validation_jobs <- isolate(upload_validation$jobs)
+      shared_notes <- isolate(note_ranges())
+      per_target_notes <- isolate(target_note_ranges())
       nrow(isolate(data$df)) > 0 ||
         (!is.null(jobs) && length(jobs) > 0) ||
-        (!is.null(validation_jobs) && length(validation_jobs) > 0)
+        (!is.null(validation_jobs) && length(validation_jobs) > 0) ||
+        nrow(shared_notes) > 0L ||
+        any(vapply(
+          per_target_notes,
+          function(x) nrow(x) > 0L,
+          logical(1)
+        ))
     }
 
     selection_change_requires_data_reset <- function(sel) {
@@ -696,7 +779,7 @@ addContData <- function(id, language) {
       showModal(modalDialog(
         title = "Reset uploaded data?",
         tags$p(
-          "Changing the selected timeseries after data have been loaded will reset the uploaded data, preview plots, grades, approvals, and qualifiers."
+          "Changing the selected timeseries after data have been loaded will reset the uploaded data, preview plots, grades, approvals, qualifiers, and notes."
         ),
         tags$p(
           "This prevents data mapped for one set of targets from being uploaded to a different set of targets."
@@ -962,6 +1045,10 @@ addContData <- function(id, language) {
 
     class_range_output_id <- function(class_name, timeseries_id) {
       paste0(class_name, "_ranges_table_", as.integer(timeseries_id))
+    }
+
+    note_range_output_id <- function(timeseries_id) {
+      paste0("note_ranges_table_", as.integer(timeseries_id))
     }
 
     output$selected_upload_targets <- renderUI({
@@ -2525,8 +2612,7 @@ addContData <- function(id, language) {
       as.integer(sub("^timeseries_", "", selected[[1]]))
     }
 
-    uploaded_data_bounds_ui <- function(class_name) {
-      bounds <- class_modal_bounds(class_name)
+    uploaded_data_bounds_summary_ui <- function(bounds) {
       if (is.null(bounds)) {
         return(tags$p(
           class = "text-muted small",
@@ -2570,6 +2656,10 @@ addContData <- function(id, language) {
       )
     }
 
+    uploaded_data_bounds_ui <- function(class_name) {
+      uploaded_data_bounds_summary_ui(class_modal_bounds(class_name))
+    }
+
     observeEvent(input$UTC_offset, {
       master_tz <- selected_offset_tz(
         input$UTC_offset,
@@ -2583,7 +2673,8 @@ addContData <- function(id, language) {
         "preview_utc_offset",
         "approval_utc_offset",
         "grade_utc_offset",
-        "qualifier_utc_offset"
+        "qualifier_utc_offset",
+        "note_utc_offset"
       )) {
         updateSelectizeInput(session, input_id, selected = master_tz)
       }
@@ -2634,6 +2725,153 @@ addContData <- function(id, language) {
       approval = list(),
       qualifier = list()
     )
+
+    empty_note_range_df <- function() {
+      data.frame(
+        note = character(),
+        start_datetime = character(),
+        end_datetime = character(),
+        stringsAsFactors = FALSE
+      )
+    }
+
+    note_ranges <- reactiveVal(empty_note_range_df())
+    target_note_ranges <- reactiveVal(list())
+
+    note_apply_all_default <- function() {
+      ranges <- target_note_ranges()
+      if (!length(ranges)) {
+        return(TRUE)
+      }
+      !any(vapply(ranges, function(x) nrow(x) > 0L, logical(1)))
+    }
+
+    note_apply_all <- function() {
+      !isTRUE(multi_upload_active()) ||
+        checkbox_current_value(
+          "note_apply_all_timeseries",
+          note_apply_all_default()
+        )
+    }
+
+    active_note_timeseries <- function() {
+      if (!isTRUE(multi_upload_active())) {
+        return(as.integer(timeseries()))
+      }
+      selected <- input$note_ranges_tabset
+      if (
+        is.null(selected) || length(selected) == 0L || !nzchar(selected[[1L]])
+      ) {
+        targets <- selected_upload_timeseries_meta()
+        if (nrow(targets) == 0L) {
+          return(as.integer(timeseries()))
+        }
+        return(as.integer(targets$timeseries_id[[1L]]))
+      }
+      as.integer(sub("^timeseries_", "", selected[[1L]]))
+    }
+
+    get_note_ranges <- function(timeseries_id = NULL) {
+      if (note_apply_all() || is.null(timeseries_id)) {
+        return(note_ranges())
+      }
+      ranges <- target_note_ranges()
+      out <- ranges[[as.character(as.integer(timeseries_id))]]
+      if (is.null(out)) {
+        out <- empty_note_range_df()
+      }
+      out
+    }
+
+    set_note_ranges <- function(value, timeseries_id = NULL) {
+      if (note_apply_all() || is.null(timeseries_id)) {
+        note_ranges(value)
+        return(invisible(NULL))
+      }
+      ranges <- target_note_ranges()
+      ranges[[as.character(as.integer(timeseries_id))]] <- value
+      target_note_ranges(ranges)
+      invisible(NULL)
+    }
+
+    active_note_ranges <- function() {
+      get_note_ranges(active_note_timeseries())
+    }
+
+    normalize_note_ranges <- function(ranges) {
+      if (is.null(ranges) || nrow(ranges) == 0L) {
+        return(empty_note_range_df())
+      }
+      out <- data.frame(
+        note = trimws(as.character(ranges$note)),
+        start_datetime = as.character(ranges$start_datetime),
+        end_datetime = as.character(ranges$end_datetime),
+        stringsAsFactors = FALSE
+      )
+      out <- out[order(
+        out$start_datetime,
+        out$end_datetime,
+        out$note
+      ), , drop = FALSE]
+      row.names(out) <- NULL
+      out
+    }
+
+    target_note_range_list <- function() {
+      targets <- selected_upload_timeseries_meta()
+      if (nrow(targets) == 0L) {
+        return(list())
+      }
+      ranges <- target_note_ranges()
+      stats::setNames(
+        lapply(targets$timeseries_id, function(target_id) {
+          out <- ranges[[as.character(as.integer(target_id))]]
+          if (is.null(out)) empty_note_range_df() else out
+        }),
+        as.character(as.integer(targets$timeseries_id))
+      )
+    }
+
+    target_note_ranges_disagree <- function() {
+      ranges <- target_note_range_list()
+      if (length(ranges) <= 1L) {
+        return(FALSE)
+      }
+      first <- normalize_note_ranges(ranges[[1L]])
+      any(vapply(
+        ranges[-1L],
+        function(x) !identical(first, normalize_note_ranges(x)),
+        logical(1)
+      ))
+    }
+
+    populate_target_notes_from_shared <- function() {
+      targets <- selected_upload_timeseries_meta()
+      shared <- note_ranges()
+      ranges <- stats::setNames(
+        lapply(targets$timeseries_id, function(x) shared),
+        as.character(as.integer(targets$timeseries_id))
+      )
+      target_note_ranges(ranges)
+      invisible(NULL)
+    }
+
+    promote_target_notes_to_shared <- function() {
+      ranges <- target_note_range_list()
+      note_ranges(if (length(ranges)) ranges[[1L]] else empty_note_range_df())
+      invisible(NULL)
+    }
+
+    clear_note_ranges_for_all_targets <- function() {
+      targets <- selected_upload_timeseries_meta()
+      ranges <- stats::setNames(
+        lapply(targets$timeseries_id, function(x) empty_note_range_df()),
+        as.character(as.integer(targets$timeseries_id))
+      )
+      target_note_ranges(ranges)
+      note_ranges(empty_note_range_df())
+      invisible(NULL)
+    }
 
     class_apply_all <- function(class_name) {
       !isTRUE(multi_upload_active()) ||
@@ -2888,6 +3126,135 @@ addContData <- function(id, language) {
       msgs
     }
 
+    note_offset_tz <- function() {
+      selected_offset_tz(input$note_utc_offset)
+    }
+
+    note_bounds_for_target <- function(timeseries_id) {
+      uploaded_data_bounds(
+        note_offset_tz(),
+        active_job_data(timeseries_id)
+      )
+    }
+
+    note_modal_bounds <- function() {
+      if (!isTRUE(multi_upload_active()) || !note_apply_all()) {
+        return(note_bounds_for_target(active_note_timeseries()))
+      }
+
+      jobs <- upload_review_jobs()
+      if (length(jobs) == 0L) {
+        return(NULL)
+      }
+      target_rows <- lapply(jobs, function(job) {
+        bounds <- uploaded_data_bounds(note_offset_tz(), job$data)
+        if (is.null(bounds)) {
+          return(data.frame(
+            target = job$label,
+            start = "No valid datetimes",
+            end = "No valid datetimes",
+            start_utc = NA_real_,
+            end_utc = NA_real_,
+            stringsAsFactors = FALSE
+          ))
+        }
+        data.frame(
+          target = job$label,
+          start = bounds$start_display,
+          end = bounds$end_display,
+          start_utc = as.numeric(bounds$start_utc),
+          end_utc = as.numeric(bounds$end_utc),
+          stringsAsFactors = FALSE
+        )
+      })
+      per_target <- do.call(rbind, target_rows)
+      valid <- !is.na(per_target$start_utc) & !is.na(per_target$end_utc)
+      if (!any(valid)) {
+        return(NULL)
+      }
+
+      start_utc <- as.POSIXct(
+        max(per_target$start_utc[valid], na.rm = TRUE),
+        origin = "1970-01-01",
+        tz = "UTC"
+      )
+      end_utc <- as.POSIXct(
+        min(per_target$end_utc[valid], na.rm = TRUE),
+        origin = "1970-01-01",
+        tz = "UTC"
+      )
+      if (start_utc > end_utc) {
+        return(NULL)
+      }
+      list(
+        start_utc = start_utc,
+        end_utc = end_utc,
+        start_display = format_utc_datetimes_for_display(
+          start_utc,
+          note_offset_tz()
+        ),
+        end_display = format_utc_datetimes_for_display(
+          end_utc,
+          note_offset_tz()
+        ),
+        tz = note_offset_tz(),
+        per_target = per_target[, c("target", "start", "end"), drop = FALSE]
+      )
+    }
+
+    validate_note_range_set <- function(ranges, bounds) {
+      if (is.null(ranges) || nrow(ranges) == 0L) {
+        return(character())
+      }
+      prepared <- tryCatch(
+        add_cont_data_prepare_notes(ranges),
+        error = function(e) e
+      )
+      if (inherits(prepared, "error")) {
+        return(conditionMessage(prepared))
+      }
+      if (is.null(bounds)) {
+        return("Uploaded data range is unavailable for these notes.")
+      }
+      outside <- which(
+        prepared$start_dt < bounds$start_utc |
+          prepared$end_dt > bounds$end_utc
+      )
+      if (length(outside) > 0L) {
+        return(sprintf(
+          "Note range row(s) %s must stay within the uploaded data range.",
+          paste(outside, collapse = ", ")
+        ))
+      }
+      character()
+    }
+
+    note_range_validation_messages <- function() {
+      if (note_apply_all() || !isTRUE(multi_upload_active())) {
+        return(validate_note_range_set(note_ranges(), note_modal_bounds()))
+      }
+      targets <- selected_upload_timeseries_meta()
+      msgs <- character()
+      for (i in seq_len(nrow(targets))) {
+        target_id <- as.integer(targets$timeseries_id[[i]])
+        target_msgs <- validate_note_range_set(
+          get_note_ranges(target_id),
+          note_bounds_for_target(target_id)
+        )
+        if (length(target_msgs) > 0L) {
+          msgs <- c(
+            msgs,
+            paste0(
+              add_cont_data_target_label(targets[i, , drop = FALSE]),
+              ": ",
+              paste(target_msgs, collapse = " ")
+            )
+          )
+        }
+      }
+      msgs
+    }
+
     ranges_valid <- reactive({
       vapply(
         c("grade", "approval", "qualifier"),
@@ -2896,6 +3263,10 @@ addContData <- function(id, language) {
         },
         logical(1)
       )
+    })
+
+    notes_valid <- reactive({
+      length(note_range_validation_messages()) == 0L
     })
 
     observe({
@@ -2911,7 +3282,7 @@ addContData <- function(id, language) {
         shinyjs::disable("upload_overwrite_some")
         return()
       }
-      if (all(ranges_valid())) {
+      if (all(ranges_valid()) && notes_valid()) {
         shinyjs::enable("upload")
         shinyjs::enable("upload_overwrite_all")
         shinyjs::enable("upload_overwrite_some")
@@ -2939,6 +3310,13 @@ addContData <- function(id, language) {
     output$qualifier_ranges_warning <- renderUI({
       msgs <- class_range_validation_messages("qualifier")
       if (length(msgs) == 0) {
+        return(NULL)
+      }
+      div(style = "color:#b30000;", paste(msgs, collapse = " "))
+    })
+    output$note_ranges_warning <- renderUI({
+      msgs <- note_range_validation_messages()
+      if (length(msgs) == 0L) {
         return(NULL)
       }
       div(style = "color:#b30000;", paste(msgs, collapse = " "))
@@ -3600,6 +3978,397 @@ addContData <- function(id, language) {
       })
     }
 
+    note_range_table <- function(timeseries_id = NULL) {
+      out <- data.table::copy(get_note_ranges(timeseries_id))
+      if (nrow(out) > 0L) {
+        out$start_datetime <- format_utc_datetimes_for_display(
+          out$start_datetime,
+          note_offset_tz()
+        )
+        out$end_datetime <- format_utc_datetimes_for_display(
+          out$end_datetime,
+          note_offset_tz()
+        )
+      }
+      names(out) <- c("Note", "Start datetime", "End datetime")
+      out
+    }
+
+    render_note_range_table <- function(timeseries_id = NULL) {
+      DT::datatable(
+        note_range_table(timeseries_id),
+        selection = "single",
+        rownames = FALSE,
+        options = list(scrollX = TRUE)
+      )
+    }
+
+    output$note_ranges_table <- DT::renderDT(
+      {
+        render_note_range_table()
+      },
+      server = FALSE
+    )
+
+    output$note_apply_all_ui <- renderUI({
+      if (!isTRUE(multi_upload_active())) {
+        return(NULL)
+      }
+      checkboxInput(
+        ns("note_apply_all_timeseries"),
+        "Apply to all timeseries",
+        value = checkbox_current_value(
+          "note_apply_all_timeseries",
+          note_apply_all_default()
+        )
+      )
+    })
+
+    output$note_ranges_ui <- renderUI({
+      targets <- selected_upload_timeseries_meta()
+      if (!isTRUE(multi_upload_active()) || nrow(targets) <= 1L) {
+        return(DT::DTOutput(ns("note_ranges_table")))
+      }
+      if (note_apply_all()) {
+        return(tagList(
+          tags$p(
+            class = "text-muted small",
+            "Note ranges will be applied to every selected upload target."
+          ),
+          DT::DTOutput(ns("note_ranges_table"))
+        ))
+      }
+      tabs <- lapply(seq_len(nrow(targets)), function(i) {
+        target <- targets[i, , drop = FALSE]
+        target_id <- as.integer(target$timeseries_id[[1L]])
+        tabPanel(
+          title = add_cont_data_target_label(target),
+          value = paste0("timeseries_", target_id),
+          DT::DTOutput(ns(note_range_output_id(target_id)))
+        )
+      })
+      do.call(
+        tabsetPanel,
+        c(list(id = ns("note_ranges_tabset")), tabs)
+      )
+    })
+
+    suppress_note_apply_all_observer <- reactiveVal(FALSE)
+
+    observeEvent(input$note_apply_all_timeseries, {
+      if (isTRUE(suppress_note_apply_all_observer())) {
+        suppress_note_apply_all_observer(FALSE)
+        return()
+      }
+
+      if (isTRUE(input$note_apply_all_timeseries)) {
+        if (target_note_ranges_disagree()) {
+          updateCheckboxInput(
+            session,
+            "note_apply_all_timeseries",
+            value = FALSE
+          )
+          showModal(modalDialog(
+            title = "Apply notes to all timeseries?",
+            tags$p(
+              "Note ranges are not currently the same for every selected timeseries."
+            ),
+            tags$p(
+              "Switching to 'Apply to all timeseries' will erase the existing per-timeseries notes."
+            ),
+            easyClose = TRUE,
+            footer = tagList(
+              modalButton("Cancel"),
+              actionButton(
+                ns("confirm_apply_all_notes"),
+                "Erase notes and apply to all",
+                class = "btn-danger"
+              )
+            )
+          ))
+          return()
+        }
+        promote_target_notes_to_shared()
+      } else {
+        populate_target_notes_from_shared()
+      }
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$confirm_apply_all_notes, {
+      removeModal()
+      clear_note_ranges_for_all_targets()
+      suppress_note_apply_all_observer(TRUE)
+      updateCheckboxInput(
+        session,
+        "note_apply_all_timeseries",
+        value = TRUE
+      )
+    }, ignoreInit = TRUE)
+
+    observe({
+      targets <- selected_upload_timeseries_meta()
+      for (target_id in targets$timeseries_id) {
+        local({
+          target_id_local <- as.integer(target_id)
+          output[[note_range_output_id(target_id_local)]] <- DT::renderDT(
+            {
+              render_note_range_table(target_id_local)
+            },
+            server = FALSE
+          )
+        })
+      }
+    })
+
+    note_modal_datetime_value <- function(input_id) {
+      scalar_display_datetime_to_utc(input[[input_id]], note_offset_tz())
+    }
+
+    update_note_modal_datetime_limits <- function() {
+      bounds <- note_modal_bounds()
+      if (is.null(bounds)) {
+        return(invisible(NULL))
+      }
+      update_one <- function(input_id, fallback) {
+        current_value <- note_modal_datetime_value(input_id)
+        if (is.na(current_value)) {
+          current_value <- fallback
+        }
+        current_value <- min(
+          max(current_value, bounds$start_utc),
+          bounds$end_utc
+        )
+        shinyWidgets::updateAirDateInput(
+          session,
+          inputId = input_id,
+          value = current_value,
+          tz = air_datetime_widget_timezone(bounds$tz),
+          options = class_modal_date_options(bounds)
+        )
+      }
+      update_one("note_modal_start", bounds$start_utc)
+      update_one("note_modal_end", bounds$end_utc)
+      invisible(NULL)
+    }
+
+    observeEvent(
+      input$note_utc_offset,
+      update_note_modal_datetime_limits(),
+      ignoreInit = TRUE
+    )
+
+    open_note_modal <- function(mode = c("add", "edit"), row_idx = NULL) {
+      mode <- match.arg(mode)
+      rows <- active_note_ranges()
+      edit_row <- if (
+        mode == "edit" && !is.null(row_idx) && nrow(rows) >= row_idx
+      ) {
+        rows[row_idx, , drop = FALSE]
+      } else {
+        empty_note_range_df()
+      }
+      bounds <- note_modal_bounds()
+      start_value <- if (nrow(edit_row) && nzchar(edit_row$start_datetime)) {
+        scalar_utc_datetime_value(edit_row$start_datetime)
+      } else if (!is.null(bounds)) {
+        bounds$start_utc
+      } else {
+        NULL
+      }
+      end_value <- if (nrow(edit_row) && nzchar(edit_row$end_datetime)) {
+        scalar_utc_datetime_value(edit_row$end_datetime)
+      } else if (!is.null(bounds)) {
+        bounds$end_utc
+      } else {
+        NULL
+      }
+      showModal(modalDialog(
+        title = if (mode == "add") "Add note range" else "Edit note range",
+        textAreaInput(
+          ns("note_modal_text"),
+          "Note",
+          value = if (nrow(edit_row)) edit_row$note[[1L]] else "",
+          rows = 5,
+          width = "100%",
+          placeholder = "Enter a note for this time range"
+        ),
+        shinyWidgets::airDatepickerInput(
+          ns("note_modal_start"),
+          "Start datetime",
+          value = start_value,
+          range = FALSE,
+          multiple = FALSE,
+          timepicker = TRUE,
+          update_on = "change",
+          tz = air_datetime_widget_timezone(isolate(note_offset_tz())),
+          minDate = if (!is.null(bounds)) bounds$start_utc else NULL,
+          maxDate = if (!is.null(bounds)) bounds$end_utc else NULL,
+          timepickerOpts = shinyWidgets::timepickerOptions(
+            minutesStep = 15,
+            timeFormat = "HH:mm"
+          )
+        ),
+        shinyWidgets::airDatepickerInput(
+          ns("note_modal_end"),
+          "End datetime",
+          value = end_value,
+          range = FALSE,
+          multiple = FALSE,
+          timepicker = TRUE,
+          update_on = "change",
+          tz = air_datetime_widget_timezone(isolate(note_offset_tz())),
+          minDate = if (!is.null(bounds)) bounds$start_utc else NULL,
+          maxDate = if (!is.null(bounds)) bounds$end_utc else NULL,
+          timepickerOpts = shinyWidgets::timepickerOptions(
+            minutesStep = 15,
+            timeFormat = "HH:mm"
+          )
+        ),
+        uploaded_data_bounds_summary_ui(bounds),
+        tags$div(
+          class = "d-flex gap-2 flex-wrap mb-3",
+          actionButton(ns("note_modal_use_data_start"), "Use data start"),
+          actionButton(ns("note_modal_use_data_end"), "Use data end")
+        ),
+        footer = tagList(
+          modalButton("Cancel"),
+          actionButton(ns("save_note_modal"), "Save")
+        )
+      ))
+      session$userData$edit_note_row <- row_idx
+    }
+
+    observeEvent(input$add_note_range, {
+      open_note_modal("add")
+    })
+
+    observeEvent(input$edit_note_range, {
+      target_id <- active_note_timeseries()
+      table_id <- if (
+        isTRUE(multi_upload_active()) && !note_apply_all()
+      ) {
+        note_range_output_id(target_id)
+      } else {
+        "note_ranges_table"
+      }
+      idx <- input[[paste0(table_id, "_rows_selected")]]
+      req(length(idx) == 1L)
+      open_note_modal("edit", idx[[1L]])
+    })
+
+    observeEvent(input$delete_note_range, {
+      target_id <- active_note_timeseries()
+      table_id <- if (
+        isTRUE(multi_upload_active()) && !note_apply_all()
+      ) {
+        note_range_output_id(target_id)
+      } else {
+        "note_ranges_table"
+      }
+      idx <- input[[paste0(table_id, "_rows_selected")]]
+      req(length(idx) == 1L)
+      rows <- active_note_ranges()
+      set_note_ranges(rows[-idx[[1L]], , drop = FALSE], target_id)
+    })
+
+    observeEvent(input$note_modal_use_data_start, {
+      bounds <- note_modal_bounds()
+      if (is.null(bounds)) {
+        return()
+      }
+      shinyWidgets::updateAirDateInput(
+        session,
+        inputId = "note_modal_start",
+        value = bounds$start_utc,
+        tz = air_datetime_widget_timezone(bounds$tz),
+        options = class_modal_date_options(bounds)
+      )
+    })
+
+    observeEvent(input$note_modal_use_data_end, {
+      bounds <- note_modal_bounds()
+      if (is.null(bounds)) {
+        return()
+      }
+      shinyWidgets::updateAirDateInput(
+        session,
+        inputId = "note_modal_end",
+        value = bounds$end_utc,
+        tz = air_datetime_widget_timezone(bounds$tz),
+        options = class_modal_date_options(bounds)
+      )
+    })
+
+    observeEvent(input$save_note_modal, {
+      note <- trimws(as.character(input$note_modal_text))
+      start_value <- note_modal_datetime_value("note_modal_start")
+      end_value <- note_modal_datetime_value("note_modal_end")
+      bounds <- note_modal_bounds()
+      if (!nzchar(note)) {
+        showNotification(
+          "Enter note text before saving.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+      if (
+        is.na(start_value) || is.na(end_value) || end_value < start_value
+      ) {
+        showNotification(
+          "Invalid note start/end datetime.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+      if (!range_inside_data_bounds(start_value, end_value, bounds)) {
+        showNotification(
+          "The note range must stay within the uploaded/entered data range.",
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
+      new_row <- data.frame(
+        note = note,
+        start_datetime = format(
+          start_value,
+          "%Y-%m-%d %H:%M:%S",
+          tz = "UTC"
+        ),
+        end_datetime = format(
+          end_value,
+          "%Y-%m-%d %H:%M:%S",
+          tz = "UTC"
+        ),
+        stringsAsFactors = FALSE
+      )
+      target_id <- active_note_timeseries()
+      rows <- active_note_ranges()
+      edit_idx <- session$userData$edit_note_row
+      if (
+        !is.null(edit_idx) && !is.na(edit_idx) && nrow(rows) >= edit_idx
+      ) {
+        rows[edit_idx, ] <- new_row
+      } else {
+        rows <- rbind(rows, new_row)
+      }
+      range_msgs <- validate_note_range_set(rows, bounds)
+      if (length(range_msgs) > 0L) {
+        showNotification(
+          paste(range_msgs, collapse = " "),
+          type = "error",
+          duration = 10
+        )
+        return()
+      }
+
+      set_note_ranges(rows, target_id)
+      removeModal()
+    })
+
     output$map_modal_body <- renderUI({
       if (map_modal_state$step == "columns") {
         tagList(
@@ -3842,6 +4611,8 @@ addContData <- function(id, language) {
           data$df,
           "qualifier"
         )
+        note_ranges(empty_note_range_df())
+        target_note_ranges(list())
         sync_table_classes_from_ranges()
         refresh_data_table()
       },
@@ -5778,6 +6549,41 @@ addContData <- function(id, language) {
           TRUE,
           FALSE
         )
+        prepared_notes <- tryCatch(
+          add_cont_data_prepare_notes(
+            get_note_ranges(jobs[[i]]$timeseries_id),
+            no_source_update = identical(input$no_source_update, "yes")
+          ),
+          error = function(e) e
+        )
+        if (inherits(prepared_notes, "error")) {
+          showNotification(
+            paste(label, conditionMessage(prepared_notes), sep = ": "),
+            type = "error",
+            duration = 10
+          )
+          return(NULL)
+        }
+        if (nrow(prepared_notes) > 0L) {
+          outside <- which(
+            prepared_notes$start_dt < min(parsed_datetime) |
+              prepared_notes$end_dt > max(parsed_datetime)
+          )
+          if (length(outside) > 0L) {
+            showNotification(
+              paste0(
+                label,
+                ": note range row(s) ",
+                paste(outside, collapse = ", "),
+                " must stay within the uploaded data range."
+              ),
+              type = "error",
+              duration = 10
+            )
+            return(NULL)
+          }
+        }
+        jobs[[i]]$notes <- prepared_notes
         jobs[[i]]$data <- df
 
         if (
@@ -5830,6 +6636,8 @@ addContData <- function(id, language) {
       target_class_ranges$grade <- list()
       target_class_ranges$approval <- list()
       target_class_ranges$qualifier <- list()
+      note_ranges(empty_note_range_df())
+      target_note_ranges(list())
       clear_all_preview_plots()
       plot_generation_status(NULL)
       preview_plot_busy(FALSE)
@@ -5878,12 +6686,29 @@ addContData <- function(id, language) {
 
             for (job in req$jobs) {
               withCallingHandlers(
-                AquaCache::addNewContinuous(
-                  tsid = job$timeseries_id,
-                  df = job$data,
-                  con = con,
-                  overwrite = req$overwrite
-                ),
+                {
+                  AquaCache::addNewContinuous(
+                    tsid = job$timeseries_id,
+                    df = job$data,
+                    con = con,
+                    overwrite = req$overwrite
+                  )
+                  if (nrow(job$notes) > 0L) {
+                    note_ids <- AquaCache::adjust_note(
+                      con = con,
+                      timeseries_id = job$timeseries_id,
+                      data = job$notes
+                    )
+                    if (length(note_ids) != nrow(job$notes)) {
+                      detail <- if (length(warnings) > 0L) {
+                        warnings[[length(warnings)]]
+                      } else {
+                        "One or more note ranges could not be saved."
+                      }
+                      stop(detail)
+                    }
+                  }
+                },
                 warning = function(w) {
                   warnings <<- c(
                     warnings,
@@ -5907,6 +6732,11 @@ addContData <- function(id, language) {
               ok = TRUE,
               overwrite = req$overwrite,
               n_jobs = length(req$jobs),
+              n_notes = sum(vapply(
+                req$jobs,
+                function(job) nrow(job$notes),
+                integer(1)
+              )),
               warnings = unique(warnings),
               messages = unique(messages)
             )
@@ -5948,6 +6778,11 @@ addContData <- function(id, language) {
         function(job) job$label,
         character(1)
       )
+      note_count <- sum(vapply(
+        req$jobs,
+        function(job) nrow(job$notes),
+        integer(1)
+      ))
       showModal(modalDialog(
         title = "Confirm upload details",
         tags$p(
@@ -5965,6 +6800,14 @@ addContData <- function(id, language) {
           tags$li(
             tags$strong("Units: "),
             "the values are already in, or have been converted to, the units expected by the database for the selected timeseries."
+          ),
+          if (note_count > 0L) tags$li(
+            tags$strong("Notes: "),
+            paste(
+              note_count,
+              if (note_count == 1L) "note range will" else "note ranges will",
+              "be saved with this upload."
+            )
           )
         ),
         tags$div(
@@ -6063,6 +6906,14 @@ addContData <- function(id, language) {
           " Uploaded ",
           result$n_jobs,
           " timeseries."
+        )
+      }
+      if (!is.null(result$n_notes) && result$n_notes > 0L) {
+        notification <- paste0(
+          notification,
+          " Saved ",
+          result$n_notes,
+          if (result$n_notes == 1L) " note range." else " note ranges."
         )
       }
       showNotification(notification, type = 'message')

@@ -131,6 +131,27 @@ test_that("component retrieval handles an empty result selection", {
   )
 })
 
+test_that("component retrieval includes inherited Patch 60 result metadata", {
+  module_code <- readLines(
+    system.file(
+      "apps/YGwater/modules/client/plot/discretePlot.R",
+      package = "YGwater"
+    ),
+    warn = FALSE
+  )
+  code <- paste(module_code, collapse = "\n")
+
+  for (field in c(
+    "r.lab_report_no",
+    "r.lab_sample_no",
+    "r.grade_type_id AS result_grade_id",
+    "r.approval_type_id AS result_approval_id"
+  )) {
+    expect_match(code, field, fixed = TRUE)
+  }
+  expect_false(grepl("result_qualifiers", code, fixed = TRUE))
+})
+
 test_that("plot downloads omit QA/QC sheets when no blank is linked", {
   env <- discrete_plot_module_environment()
 

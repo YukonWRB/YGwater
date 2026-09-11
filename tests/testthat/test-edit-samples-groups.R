@@ -40,7 +40,19 @@ test_that("sample editor uses normalized qualifiers and observers", {
   ))
   expect_match(
     code,
-    "Composite results must be changed through their aggregation and component records.",
+    "The canonical value and analytical identity are maintained through the aggregation and its components.",
     fixed = TRUE
   )
+  expect_match(code, "r.lab_report_no", fixed = TRUE)
+  expect_match(code, "r.lab_sample_no", fixed = TRUE)
+  expect_match(code, "r.grade_type_id", fixed = TRUE)
+  expect_match(code, "r.approval_type_id", fixed = TRUE)
+  expect_match(code, "save_composite_result_metadata", fixed = TRUE)
+  expect_match(code, "observer.organization", fixed = TRUE)
+  expect_false(grepl(
+    "observer\\.organization\\s*=\\s*organization\\.organization_id",
+    code,
+    perl = TRUE
+  ))
+  expect_false(grepl("result_qualifiers", code, fixed = TRUE))
 })

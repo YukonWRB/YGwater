@@ -367,15 +367,183 @@ historic_range_data_for_export <- function(range_data, units) {
   as.data.frame(range_data)
 }
 
+#' Resolve the temporal windows covered by a continuous plot request
+#' @param req Plot request list created by the Shiny module.
+#' @return A data.table with UTC `start_dt` and `end_dt` columns.
+#' @noRd
+#' @keywords internal
+continuous_plot_note_windows <- function(req) {
+  plot_type <- as.character(req$plot_type)[[1L]]
+  plot_timezone <- if (
+    is.null(req$plot_timezone) ||
+      length(req$plot_timezone) == 0L ||
+      is.na(req$plot_timezone[[1L]])
+  ) {
+    "UTC"
+  } else {
+    as.character(req$plot_timezone[[1L]])
+  }
+
+  if (plot_type %in% c("timeseries", "timeseries_all")) {
+    return(data.table::data.table(
+      start_dt = normalize_plot_datetime_bound(
+        req$start_date,
+        plot_timezone,
+        bound = "start"
+      ),
+      end_dt = normalize_plot_datetime_bound(
+        req$end_date,
+        plot_timezone,
+        bound = "end"
+      )
+    ))
+  }
+
+  years <- suppressWarnings(as.integer(req$years))
+  years <- sort(unique(years[!is.na(years)]))
+  start_day <- suppressWarnings(as.Date(req$start_day))
+  end_day <- suppressWarnings(as.Date(req$end_day))
+  if (
+    length(years) > 0L &&
+      length(start_day) == 1L &&
+      !is.na(start_day) &&
+      length(end_day) == 1L &&
+      !is.na(end_day)
+  ) {
+    start_month_day <- format(start_day, "%m-%d")
+    end_month_day <- format(end_day, "%m-%d")
+    windows <- data.table::rbindlist(lapply(years, function(year) {
+      window_start <- as.Date(sprintf("%04d-%s", year, start_month_day))
+      end_year <- year + as.integer(end_month_day < start_month_day)
+      window_end <- as.Date(sprintf("%04d-%s", end_year, end_month_day))
+      data.table::data.table(
+        start_dt = normalize_plot_datetime_bound(
+          window_start,
+          plot_timezone,
+          bound = "start"
+        ),
+        end_dt = normalize_plot_datetime_bound(
+          window_end,
+          plot_timezone,
+          bound = "end"
+        )
+      )
+    }))
+    return(windows)
+  }
+
+  timeseries <- req$timeseries_table
+  if (
+    is.data.frame(timeseries) &&
+      nrow(timeseries) > 0L &&
+      all(c("start_datetime", "end_datetime") %in% names(timeseries))
+  ) {
+    starts <- as.POSIXct(timeseries$start_datetime, tz = "UTC")
+    ends <- as.POSIXct(timeseries$end_datetime, tz = "UTC")
+    starts <- starts[!is.na(starts)]
+    ends <- ends[!is.na(ends)]
+    if (length(starts) > 0L && length(ends) > 0L) {
+      return(data.table::data.table(
+        start_dt = min(starts),
+        end_dt = max(ends)
+      ))
+    }
+  }
+
+  data.table::data.table(
+    start_dt = as.POSIXct(character(), tz = "UTC"),
+    end_dt = as.POSIXct(character(), tz = "UTC")
+  )
+}
+
+#' Fetch notes that overlap a continuous plot request
+#' @param con A DBI database connection.
+#' @param req Plot request list created by the Shiny module.
+#' @param lang Language abbreviation, either `"en"` or `"fr"`.
+#' @return A data.table of notes and their timeseries context.
+#' @noRd
+#' @keywords internal
+fetch_continuous_plot_notes <- function(con, req, lang = "en") {
+  empty_notes <- function() {
+    data.table::data.table(
+      note_id = integer(),
+      timeseries_id = integer(),
+      location = character(),
+      parameter = character(),
+      note = character(),
+      start_datetime_utc = as.POSIXct(character(), tz = "UTC"),
+      end_datetime_utc = as.POSIXct(character(), tz = "UTC")
+    )
+  }
+
+  ids <- suppressWarnings(as.integer(req$timeseries_ids))
+  ids <- sort(unique(ids[!is.na(ids)]))
+  windows <- continuous_plot_note_windows(req)
+  if (length(ids) == 0L || nrow(windows) == 0L) {
+    return(empty_notes())
+  }
+
+  location_sql <- if (identical(lang, "fr")) {
+    "COALESCE(l.name_fr, l.name, ts.location_id::text)"
+  } else {
+    "COALESCE(l.name, ts.location_id::text)"
+  }
+  parameter_sql <- if (identical(lang, "fr")) {
+    "COALESCE(p.param_name_fr, p.param_name, ts.parameter_id::text)"
+  } else {
+    "COALESCE(p.param_name, ts.parameter_id::text)"
+  }
+
+  notes <- dbGetQueryDT(
+    con,
+    paste0(
+      "SELECT n.note_id, n.timeseries_id, ",
+      location_sql,
+      " AS location, ",
+      parameter_sql,
+      " AS parameter, n.note, ",
+      "n.start_dt AS start_datetime_utc, ",
+      "n.end_dt AS end_datetime_utc ",
+      "FROM continuous.notes n ",
+      "JOIN continuous.timeseries ts USING (timeseries_id) ",
+      "LEFT JOIN public.locations l ON l.location_id = ts.location_id ",
+      "LEFT JOIN public.parameters p ON p.parameter_id = ts.parameter_id ",
+      "WHERE n.timeseries_id IN (",
+      paste(ids, collapse = ", "),
+      ") AND n.start_dt < $2 AND n.end_dt >= $1 ",
+      "ORDER BY n.start_dt, n.end_dt, n.note_id"
+    ),
+    params = list(min(windows$start_dt), max(windows$end_dt))
+  )
+  if (nrow(notes) == 0L) {
+    return(empty_notes())
+  }
+
+  keep <- vapply(seq_len(nrow(notes)), function(i) {
+    any(
+      notes$start_datetime_utc[[i]] < windows$end_dt &
+        notes$end_datetime_utc[[i]] >= windows$start_dt
+    )
+  }, logical(1))
+  notes[keep]
+}
+
 #' Build CSV tables for continuous plot data downloads
 #' @param req Plot request list created by the Shiny module.
 #' @param out Plot data returned by the plotting task.
 #' @param module_data Module lookup data used for metadata labels.
 #' @param language Current application language object.
+#' @param notes Notes returned by `fetch_continuous_plot_notes()`.
 #' @return A named list of data frames ready for CSV export.
 #' @noRd
 #' @keywords internal
-continuous_plot_export_tables <- function(req, out, module_data, language) {
+continuous_plot_export_tables <- function(
+  req,
+  out,
+  module_data,
+  language,
+  notes = NULL
+) {
   safe_first_value <- function(data, key_col, key_value, value_col) {
     if (
       is.null(data) ||
@@ -604,11 +772,13 @@ continuous_plot_export_tables <- function(req, out, module_data, language) {
     add_table("metadata", metadata)
     add_table("trace_data", trace_data)
     add_table("historic_range_data", range_data)
+    add_table("notes", notes)
     return(tables)
   }
 
   add_table("metadata", base_metadata)
   add_data_recursive(out)
+  add_table("notes", notes)
   tables
 }
 

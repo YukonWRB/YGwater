@@ -1010,6 +1010,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           id = ns("plot_container"),
           plotly::plotlyOutput(ns("plot"), height = "800px", inline = TRUE)
         ),
+        uiOutput(ns("notes_alert")),
         uiOutput(ns("historic_stats_caption")),
         uiOutput(ns("full_screen_ui")),
 
@@ -5027,6 +5028,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
     plot_created <- reactiveVal(FALSE) # Flag to determine if a plot has been created
     historic_stats_caption <- reactiveVal(NULL)
+    pending_plot_request <- reactiveVal(NULL)
+    completed_plot_request <- reactiveVal(NULL)
+    plot_notes <- reactiveVal(NULL)
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
@@ -5057,7 +5061,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$meta <- NULL
       adaptiveState$payload <- NULL
       historic_stats_caption(NULL)
-      long_ts_plot$invoke(plot_request())
+      plot_notes(NULL)
+      request <- plot_request()
+      pending_plot_request(request)
+      long_ts_plot$invoke(request)
     })
 
     observeEvent(input$cancel, {
@@ -5078,6 +5085,24 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         ))
         return()
       }
+
+      completed_request <- pending_plot_request()
+      completed_plot_request(completed_request)
+      notes <- tryCatch(
+        YGwater:::fetch_continuous_plot_notes(
+          session$userData$AquaCache,
+          completed_request,
+          lang = completed_request$lang
+        ),
+        error = function(e) {
+          showNotification(
+            tr("plot_notes_load_error", language$language),
+            type = "warning"
+          )
+          data.table::data.table()
+        }
+      )
+      plot_notes(notes)
 
       if (identical(result$mode, "adaptive_plot")) {
         if (!is.null(result$warning) && nzchar(result$warning)) {
@@ -5150,6 +5175,74 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
       plot_created(TRUE)
     }) # End renderPlotly
+
+    output$notes_alert <- renderUI({
+      notes <- plot_notes()
+      if (!isTRUE(plot_created()) || !is.data.frame(notes) || nrow(notes) == 0L) {
+        return(NULL)
+      }
+
+      tags$div(
+        class = "alert alert-warning d-flex align-items-center",
+        role = "alert",
+        icon("note-sticky"),
+        tags$span(
+          sprintf(
+            tr("plot_notes_alert", language$language),
+            nrow(notes)
+          ),
+          style = "margin-left: 0.5rem; margin-right: 0.5rem;"
+        ),
+        actionLink(
+          ns("show_plot_notes"),
+          tr("plot_notes_view", language$language)
+        )
+      )
+    })
+
+    observeEvent(input$show_plot_notes, {
+      notes <- plot_notes()
+      req(is.data.frame(notes), nrow(notes) > 0L)
+
+      output$plot_notes_table <- DT::renderDT({
+        display_notes <- data.table::copy(notes)
+        display_notes[, note_id := NULL]
+        data.table::setnames(
+          display_notes,
+          c(
+            "timeseries_id",
+            "location",
+            "parameter",
+            "note",
+            "start_datetime_utc",
+            "end_datetime_utc"
+          ),
+          c(
+            tr("timeseries_id_label", language$language),
+            tr("loc", language$language),
+            tr("parameter", language$language),
+            tr("notes", language$language),
+            tr("start_datetime_utc", language$language),
+            tr("end_datetime_utc", language$language)
+          )
+        )
+        DT::datatable(
+          display_notes,
+          rownames = FALSE,
+          selection = "none",
+          filter = "none",
+          options = list(scrollX = TRUE, pageLength = 10)
+        )
+      })
+
+      showModal(modalDialog(
+        title = tr("plot_notes_title", language$language),
+        DT::DTOutput(ns("plot_notes_table")),
+        footer = modalButton(tr("close", language$language)),
+        easyClose = TRUE,
+        size = "xl"
+      ))
+    })
 
     output$historic_stats_caption <- renderUI({
       caption <- historic_stats_caption()
@@ -5485,7 +5578,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       },
       contentType = "application/zip",
       content = function(file) {
-        req <- isolate(plot_request())
+        req <- isolate(completed_plot_request())
+        shiny::req(req)
         out <- long_ts_plot$result()$data
 
         YGwater:::write_continuous_plot_csv_zip(
@@ -5493,7 +5587,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             req = req,
             out = out,
             module_data = moduleData,
-            language = language
+            language = language,
+            notes = isolate(plot_notes())
           ),
           file
         )

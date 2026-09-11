@@ -25,10 +25,10 @@ disc_plot_tabularize <- function(x) {
 
 #' Retrieve component observations for discrete results
 #'
-#' Returns the observations and calculation contract behind component-built
-#' results. Direct results are omitted because they have no rows in
-#' `discrete.result_components`. The result IDs are normalized to integers
-#' before they are placed in the query.
+#' Returns the observations, calculation contract, and inherited canonical
+#' result metadata behind component-built results. Direct results are omitted
+#' because they have no rows in `discrete.result_components`. The result IDs
+#' are normalized to integers before they are placed in the query.
 #'
 #' @param con An open AquaCache DBI connection.
 #' @param result_ids Result IDs to retrieve.
@@ -50,6 +50,18 @@ disc_result_components <- function(con, result_ids, lang = "en") {
   } else {
     "p.param_name"
   }
+  grade_description <- if (identical(lang, "fr")) {
+    "COALESCE(result_grade.grade_type_description_fr,
+              result_grade.grade_type_description)"
+  } else {
+    "result_grade.grade_type_description"
+  }
+  approval_description <- if (identical(lang, "fr")) {
+    "COALESCE(result_approval.approval_type_description_fr,
+              result_approval.approval_type_description)"
+  } else {
+    "result_approval.approval_type_description"
+  }
   DBI::dbGetQuery(
     con,
     paste0(
@@ -65,6 +77,18 @@ disc_result_components <- function(con, result_ids, lang = "en") {
            r.parameter_id,
            r.matrix_state_id
          ) AS units,
+         r.lab_report_no,
+         r.lab_sample_no,
+         r.grade_type_id AS result_grade_id,
+         result_grade.grade_type_code AS result_grade_code,
+         ",
+      grade_description,
+      " AS result_grade_description,
+         r.approval_type_id AS result_approval_id,
+         result_approval.approval_type_code AS result_approval_code,
+         ",
+      approval_description,
+      " AS result_approval_description,
          rat.aggregation_type,
          ra.calculation_version,
          ra.calculation_arguments::text AS calculation_arguments,
@@ -84,6 +108,10 @@ disc_result_components <- function(con, result_ids, lang = "en") {
          USING (result_aggregation_type_id)
        JOIN discrete.results r USING (result_id)
        JOIN public.parameters p USING (parameter_id)
+       LEFT JOIN public.grade_types result_grade
+         ON r.grade_type_id = result_grade.grade_type_id
+       LEFT JOIN public.approval_types result_approval
+         ON r.approval_type_id = result_approval.approval_type_id
        LEFT JOIN discrete.result_conditions condition
          ON rc.result_condition = condition.result_condition_id
        WHERE rc.result_id IN (",

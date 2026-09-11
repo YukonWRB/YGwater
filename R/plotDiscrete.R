@@ -50,7 +50,8 @@
 #'   is returned.
 #'   AquaCache rows also identify the aggregation type, calculation version,
 #'   calculation arguments, and expected component count when a result is
-#'   maintained from component observations.
+#'   maintained from component observations, plus available laboratory report,
+#'   laboratory sample, result-grade, and result-approval metadata.
 #' @export
 #'
 
@@ -643,11 +644,24 @@ plotDiscrete <- function(
           "media_type",
           "grade_type_description",
           "approval_type_description",
-          "qualifier_type_description"
+          "qualifier_type_description",
+          "lab_report_no",
+          "lab_sample_no",
+          "result_grade_code",
+          "result_grade_description",
+          "result_approval_code",
+          "result_approval_description"
         ),
         names(out)
       )) {
         out[[col]] <- collapse_unique(rows[[col]])
+      }
+      for (col in intersect(
+        c("result_grade_id", "result_approval_id"),
+        names(out)
+      )) {
+        ids <- unique(rows[[col]][!is.na(rows[[col]])])
+        out[[col]] <- if (length(ids) == 1L) ids[[1]] else NA_integer_
       }
       out
     })
@@ -1673,6 +1687,16 @@ ORDER BY ag.result_id, ag.guideline_id;"
          at.approval_type_description_fr,
          qualifiers.qualifier_type_description,
          qualifiers.qualifier_type_description_fr,
+         r.lab_report_no,
+         r.lab_sample_no,
+         r.grade_type_id AS result_grade_id,
+         result_grade.grade_type_code AS result_grade_code,
+         result_grade.grade_type_description AS result_grade_description,
+         result_grade.grade_type_description_fr AS result_grade_description_fr,
+         r.approval_type_id AS result_approval_id,
+         result_approval.approval_type_code AS result_approval_code,
+         result_approval.approval_type_description AS result_approval_description,
+         result_approval.approval_type_description_fr AS result_approval_description_fr,
          rat.aggregation_type,
          ra.calculation_version,
          ra.calculation_arguments::text AS calculation_arguments,
@@ -1698,6 +1722,10 @@ ORDER BY ag.result_id, ag.guideline_id;"
        LEFT JOIN public.grade_types AS gt ON s.sample_grade = gt.grade_type_id
        LEFT JOIN public.approval_types AS at
          ON s.sample_approval = at.approval_type_id
+       LEFT JOIN public.grade_types AS result_grade
+         ON r.grade_type_id = result_grade.grade_type_id
+       LEFT JOIN public.approval_types AS result_approval
+         ON r.approval_type_id = result_approval.approval_type_id
        LEFT JOIN LATERAL (
          SELECT
            STRING_AGG(
@@ -1817,6 +1845,14 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "grade_type_description_fr",
         "approval_type_description_fr",
         "qualifier_type_description_fr",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description_fr",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description_fr",
         "aggregation_type",
         "calculation_version",
         "calculation_arguments",
@@ -1847,6 +1883,14 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "grade_type_description",
         "approval_type_description",
         "qualifier_type_description",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description",
         "aggregation_type",
         "calculation_version",
         "calculation_arguments",
@@ -1878,6 +1922,14 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "grade_type_description",
         "approval_type_description",
         "qualifier_type_description",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description",
         "aggregation_type",
         "calculation_version",
         "calculation_arguments",
@@ -1908,6 +1960,14 @@ ORDER BY ag.result_id, ag.guideline_id;"
         "grade_type_description",
         "approval_type_description",
         "qualifier_type_description",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description",
         "aggregation_type",
         "calculation_version",
         "calculation_arguments",
@@ -2138,6 +2198,30 @@ ORDER BY ag.result_id, ag.guideline_id;"
           )
         }
       }
+      result_grade <- FALSE
+      if ("result_grade_description" %in% names(df)) {
+        if (any(!is.na(df$result_grade_description))) {
+          result_grade <- TRUE
+          df$result_grade_description <- titleCase(
+            df$result_grade_description,
+            lang
+          )
+        }
+      }
+      result_approval <- FALSE
+      if ("result_approval_description" %in% names(df)) {
+        if (any(!is.na(df$result_approval_description))) {
+          result_approval <- TRUE
+          df$result_approval_description <- titleCase(
+            df$result_approval_description,
+            lang
+          )
+        }
+      }
+      lab_report <- "lab_report_no" %in% names(df) &&
+        any(!is.na(df$lab_report_no) & nzchar(df$lab_report_no))
+      lab_sample <- "lab_sample_no" %in% names(df) &&
+        any(!is.na(df$lab_sample_no) & nzchar(df$lab_sample_no))
       qualifier <- FALSE
       if ("qualifier_type_description" %in% names(df)) {
         if (any(!is.na(df$qualifier_type_description))) {
@@ -2198,8 +2282,16 @@ ORDER BY ag.result_id, ag.guideline_id;"
             paste("<br>Result value type:", result_value_type)
           },
           if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
-          if (grade) paste("<br>Grade:", grade_type_description),
-          if (approval) paste("<br>Approval:", approval_type_description),
+          if (grade) paste("<br>Sample grade:", grade_type_description),
+          if (approval) paste("<br>Sample approval:", approval_type_description),
+          if (result_grade) {
+            paste("<br>Result grade:", result_grade_description)
+          },
+          if (result_approval) {
+            paste("<br>Result approval:", result_approval_description)
+          },
+          if (lab_report) paste("<br>Lab report:", lab_report_no),
+          if (lab_sample) paste("<br>Lab sample:", lab_sample_no),
           if (qualifier) paste("<br>Qualifier:", qualifier_type_description)
         )
       ) %>%
@@ -2267,8 +2359,16 @@ ORDER BY ag.result_id, ag.guideline_id;"
               paste("<br>Result value type:", result_value_type)
             },
             if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
-            if (grade) paste("<br>Grade:", grade_type_description),
-            if (approval) paste("<br>Approval:", approval_type_description),
+            if (grade) paste("<br>Sample grade:", grade_type_description),
+            if (approval) paste("<br>Sample approval:", approval_type_description),
+            if (result_grade) {
+              paste("<br>Result grade:", result_grade_description)
+            },
+            if (result_approval) {
+              paste("<br>Result approval:", result_approval_description)
+            },
+            if (lab_report) paste("<br>Lab report:", lab_report_no),
+            if (lab_sample) paste("<br>Lab sample:", lab_sample_no),
             if (qualifier) paste("<br>Qualifier:", qualifier_type_description)
           )
         )

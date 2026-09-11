@@ -110,7 +110,7 @@ no_ts_medias,notification of automatic reset,"This selection results in 0 corres
 no_ts_agg,notification of automatic reset,"This selection results in 0 corresponding timeseries, aggregation type selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de type d'agrégation a été réinitialisé à sa valeur précédente."
 no_ts_rate,notification of automatic reset,"This selection results in 0 corresponding timeseries, recording rate selector reset to its previous value.","Cette sélection ne correspond à aucune série temporelle, la sélection de la fréquence d'enregistrement nominale a été réinitialisé à sa valeur précédente."
 continuous_subset_msg,,Subset of daily mean data (first and last result per timeseries),Sous-ensemble des moyennes journalières (premier et dernier résultat par série temporelle)
-dl_additional_data,,"Tables for grades, approvals, and qualifiers will also be included as part of your download.","Des tableaux pour les qualificatifs, cotes de qualité, et niveaux d'approbation feront parti de votre téléchargement."
+dl_additional_data,,"Tables for grades, approvals, qualifiers, and time-ranged notes will also be included as part of your download.","Des tableaux pour les qualificatifs, les cotes de qualité, les niveaux d’approbation et les remarques temporelles feront également partie de votre téléchargement."
 filter,,Filter,Filtrer
 apply,,Apply,Appliquer
 param_modal,button text for modal,Filter by group/sub-group,Filtrer par groupe/sous-groupe
@@ -186,6 +186,11 @@ plot_show_unusable,,Show unusable data,Afficher les données inutilisables
 plot_show_grades,,Show grades,Afficher les classe de qualité
 plot_show_approvals,,Show approval levels,Afficher les niveaux d'approbation
 plot_show_qualifiers,,Show qualifiers,Afficher les qualificatifs
+notes,direct translation,Notes,Remarques
+plot_notes_alert,,%s note(s) apply to the plotted data.,%s remarque(s) s’appliquent aux données affichées.
+plot_notes_view,,View notes,Voir les remarques
+plot_notes_title,,Notes for plotted data,Remarques sur les données affichées
+plot_notes_load_error,,The plot was created but its notes could not be loaded.,Le graphique a été créé mais ses remarques n’ont pas pu être chargées.
 plot_last_30,,Last 30 days,30 derniers jours
 plot_all_record,,Entire record,Période entière
 cont_table_intro,,Choose a timeseries from the table to plot.,Choisissez une série chronologique à représenter.

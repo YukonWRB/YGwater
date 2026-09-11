@@ -155,7 +155,7 @@ editSamples <- function(id, language) {
       ),
       import_source = list(label = "Import source", column = "import_source"),
       no_source_update = list(
-        label = "Lock sample from updates",
+        label = "Lock sample from updates by automatic import processes",
         column = "no_source_update"
       ),
       note = list(label = "Notes", column = "note")
@@ -727,11 +727,29 @@ editSamples <- function(id, language) {
       value
     }
 
+    collect_result_metadata_inputs <- function() {
+      text_value <- function(input_id) {
+        value <- input[[input_id]]
+        if (!length(value) || is.na(value[[1]])) {
+          return(NA_character_)
+        }
+        value <- trimws(as.character(value[[1]]))
+        if (nzchar(value)) value else NA_character_
+      }
+      list(
+        lab_report_no = text_value("result_lab_report_no"),
+        lab_sample_no = text_value("result_lab_sample_no"),
+        grade_type_id = integer_input("result_grade_type"),
+        approval_type_id = integer_input("result_approval_type")
+      )
+    }
+
     collect_result_inputs <- function(sample_id) {
       result_entry_type <- input$result_entry_type
       if (!identical(result_entry_type, "conditional")) {
         result_entry_type <- "exact"
       }
+      metadata <- collect_result_metadata_inputs()
       list(
         sample_id = sample_id,
         result_entry_type = result_entry_type,
@@ -760,6 +778,10 @@ editSamples <- function(id, language) {
         protocol_method = integer_input("result_protocol_method"),
         laboratory = integer_input("result_laboratory"),
         analysis_datetime = scalar_utc_datetime(input$result_analysis_datetime),
+        lab_report_no = metadata$lab_report_no,
+        lab_sample_no = metadata$lab_sample_no,
+        grade_type_id = metadata$grade_type_id,
+        approval_type_id = metadata$approval_type_id,
         share_with = share_with_to_array(input$result_share_with),
         no_source_update = isTRUE(input$result_no_source_update),
         private_expiry = date_input("result_private_expiry"),
@@ -777,6 +799,73 @@ editSamples <- function(id, language) {
         return(character())
       }
       named_choices(data[[id_col]], data[[label_col]])
+    }
+
+    result_metadata_ui <- function(row = NULL) {
+      selected_value <- function(column) {
+        if (is.null(row) || is.na(row[[column]])) {
+          character(0)
+        } else {
+          as.character(row[[column]])
+        }
+      }
+      text_value <- function(column) {
+        if (is.null(row) || is.na(row[[column]])) "" else row[[column]]
+      }
+      tagList(
+        fluidRow(
+          column(
+            6,
+            textInput(
+              ns("result_lab_report_no"),
+              "Laboratory report number",
+              value = text_value("lab_report_no"),
+              placeholder = "Optional"
+            )
+          ),
+          column(
+            6,
+            textInput(
+              ns("result_lab_sample_no"),
+              "Laboratory sample number",
+              value = text_value("lab_sample_no"),
+              placeholder = "Optional"
+            )
+          )
+        ),
+        fluidRow(
+          column(
+            6,
+            selectizeInput(
+              ns("result_grade_type"),
+              "Result grade",
+              choices = result_lookup_choices(
+                moduleData$grades,
+                "grade_type_id",
+                "grade_type_description"
+              ),
+              selected = selected_value("grade_type_id"),
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = "Optional")
+            )
+          ),
+          column(
+            6,
+            selectizeInput(
+              ns("result_approval_type"),
+              "Result approval",
+              choices = result_lookup_choices(
+                moduleData$approvals,
+                "approval_type_id",
+                "approval_type_description"
+              ),
+              selected = selected_value("approval_type_id"),
+              multiple = TRUE,
+              options = list(maxItems = 1, placeholder = "Optional")
+            )
+          )
+        )
+      )
     }
 
     result_parameter_choices <- function() {
@@ -986,6 +1075,12 @@ editSamples <- function(id, language) {
           r.laboratory,
           lab.lab_name AS laboratory_name,
           r.analysis_datetime,
+          r.lab_report_no,
+          r.lab_sample_no,
+          r.grade_type_id,
+          result_grade.grade_type_description AS result_grade,
+          r.approval_type_id,
+          result_approval.approval_type_description AS result_approval,
           r.share_with,
           r.no_source_update,
           r.private_expiry,
@@ -1019,6 +1114,10 @@ editSamples <- function(id, language) {
           ON r.protocol_method = pm.protocol_id
         LEFT JOIN discrete.laboratories lab
           ON r.laboratory = lab.lab_id
+        LEFT JOIN public.grade_types result_grade
+          ON r.grade_type_id = result_grade.grade_type_id
+        LEFT JOIN public.approval_types result_approval
+          ON r.approval_type_id = result_approval.approval_type_id
         JOIN public.matrix_states ms
           ON r.matrix_state_id = ms.matrix_state_id
         LEFT JOIN discrete.result_aggregations ra
@@ -1042,19 +1141,22 @@ editSamples <- function(id, language) {
         row$result_id,
         lang = "en"
       )
-      display_components <- components[, intersect(
-        c(
-          "observation_number",
-          "observation_datetime",
-          "result",
-          "result_condition_name",
-          "result_condition_value",
-          "included_in_aggregate",
-          "weight",
-          "note"
+      display_components <- components[,
+        intersect(
+          c(
+            "observation_number",
+            "observation_datetime",
+            "result",
+            "result_condition_name",
+            "result_condition_value",
+            "included_in_aggregate",
+            "weight",
+            "note"
+          ),
+          names(components)
         ),
-        names(components)
-      ), drop = FALSE]
+        drop = FALSE
+      ]
       output$composite_result_components <- DT::renderDT({
         DT::datatable(
           display_components,
@@ -1084,7 +1186,7 @@ editSamples <- function(id, language) {
         size = "xl",
         tags$div(
           class = "alert alert-info",
-          "The canonical result is maintained by the database from these components. Direct editing is disabled so the aggregation cannot be bypassed."
+          "The canonical value and analytical identity are maintained through the aggregation and its components. The result metadata below can be edited safely."
         ),
         fluidRow(
           column(4, tags$strong("Parameter"), tags$p(row$parameter)),
@@ -1104,7 +1206,13 @@ editSamples <- function(id, language) {
           column(
             4,
             tags$strong("Expected count"),
-            tags$p(if (is.na(row$expected_count)) "Not specified" else row$expected_count)
+            tags$p(
+              if (is.na(row$expected_count)) {
+                "Not specified"
+              } else {
+                row$expected_count
+              }
+            )
           ),
           column(
             4,
@@ -1117,8 +1225,18 @@ editSamples <- function(id, language) {
         if (!is.na(row$aggregation_note) && nzchar(row$aggregation_note)) {
           tagList(tags$strong("Aggregation note"), tags$p(row$aggregation_note))
         },
+        tags$hr(),
+        tags$h5("Editable result metadata"),
+        result_metadata_ui(row),
+        tags$h5("Components"),
         DT::DTOutput(ns("composite_result_components")),
-        footer = modalButton("Close")
+        footer = tagList(
+          modalButton("Cancel"),
+          bslib::input_task_button(
+            ns("save_composite_result_metadata"),
+            label = "Save metadata"
+          )
+        )
       ))
     }
 
@@ -1431,6 +1549,7 @@ editSamples <- function(id, language) {
             )
           )
         ),
+        result_metadata_ui(row),
         fluidRow(
           column(
             4,
@@ -1817,10 +1936,8 @@ editSamples <- function(id, language) {
            observer.observer_id,
            concat_ws(' ', observer.observer_first, observer.observer_last)
              AS observer_name,
-           organization.name AS organization
+           observer.organization
          FROM instruments.observers observer
-         LEFT JOIN public.organizations organization
-           ON observer.organization = organization.organization_id
          ORDER BY observer.observer_last, observer.observer_first,
            observer.observer_id"
       )
@@ -2162,7 +2279,7 @@ editSamples <- function(id, language) {
                   3,
                   checkboxInput(
                     ns("no_source_update"),
-                    "Lock sample from updates",
+                    "Lock sample from updates by automatic import processes",
                     value = FALSE
                   )
                 )
@@ -2530,7 +2647,8 @@ editSamples <- function(id, language) {
                     choices = named_choices(
                       moduleData$observers$observer_id,
                       ifelse(
-                        is.na(moduleData$observers$organization),
+                        is.na(moduleData$observers$organization) |
+                          !nzchar(moduleData$observers$organization),
                         moduleData$observers$observer_name,
                         paste0(
                           moduleData$observers$observer_name,
@@ -2798,6 +2916,10 @@ editSamples <- function(id, language) {
           speciation = results$result_speciation,
           matrix_state = results$matrix_state_name,
           laboratory = results$laboratory_name,
+          lab_report_no = results$lab_report_no,
+          lab_sample_no = results$lab_sample_no,
+          result_grade = results$result_grade,
+          result_approval = results$result_approval,
           aggregation = results$aggregation_type,
           component_count = results$component_count,
           stringsAsFactors = FALSE
@@ -2829,6 +2951,63 @@ editSamples <- function(id, language) {
 
     observeEvent(input$edit_result, {
       show_result_modal("edit")
+    })
+
+    observeEvent(input$save_composite_result_metadata, {
+      row <- selected_result_row()
+      if (
+        is.null(row) ||
+          is.na(row$aggregation_type) ||
+          !nzchar(row$aggregation_type)
+      ) {
+        showNotification("Select a composite result.", type = "error")
+        return()
+      }
+      metadata <- collect_result_metadata_inputs()
+      tryCatch(
+        {
+          updated <- DBI::dbExecute(
+            session$userData$AquaCache,
+            "UPDATE discrete.results r
+             SET lab_report_no = $1,
+                 lab_sample_no = $2,
+                 grade_type_id = $3,
+                 approval_type_id = $4
+             WHERE r.result_id = $5
+               AND EXISTS (
+                 SELECT 1
+                 FROM discrete.result_aggregations ra
+                 WHERE ra.result_id = r.result_id
+               )",
+            params = list(
+              metadata$lab_report_no,
+              metadata$lab_sample_no,
+              metadata$grade_type_id,
+              metadata$approval_type_id,
+              row$result_id
+            )
+          )
+          if (updated != 1L) {
+            stop(
+              "The composite result metadata was not updated.",
+              call. = FALSE
+            )
+          }
+          load_sample_results(row$sample_id)
+          selected_result_id(row$result_id)
+          removeModal()
+          showNotification(
+            "Result metadata updated successfully.",
+            type = "message"
+          )
+        },
+        error = function(e) {
+          showNotification(
+            paste("Failed to update result metadata:", e$message),
+            type = "error"
+          )
+        }
+      )
     })
 
     observeEvent(input$save_result, {
@@ -2932,6 +3111,10 @@ editSamples <- function(id, language) {
         form$protocol_method,
         form$laboratory,
         form$analysis_datetime,
+        form$lab_report_no,
+        form$lab_sample_no,
+        form$grade_type_id,
+        form$approval_type_id,
         form$share_with,
         form$no_source_update,
         form$private_expiry,
@@ -2955,13 +3138,17 @@ editSamples <- function(id, language) {
             protocol_method,
             laboratory,
             analysis_datetime,
+            lab_report_no,
+            lab_sample_no,
+            grade_type_id,
+            approval_type_id,
             share_with,
             no_source_update,
             private_expiry,
             matrix_state_id,
             note
           ) VALUES (
-            $17,
+            $21,
             $1,
             $2,
             $3,
@@ -2973,11 +3160,15 @@ editSamples <- function(id, language) {
             $9,
             $10,
             $11,
-            $12::text[],
+            $12,
             $13,
             $14,
             $15,
-            $16
+            $16::text[],
+            $17,
+            $18,
+            $19,
+            $20
           ) RETURNING result_id;
         "
         params <- c(params, list(form$sample_id))
@@ -3001,13 +3192,17 @@ editSamples <- function(id, language) {
             protocol_method = $9,
             laboratory = $10,
             analysis_datetime = $11,
-            share_with = $12::text[],
-            no_source_update = $13,
-            private_expiry = $14,
-            matrix_state_id = $15,
-            note = $16
-          WHERE result_id = $17
-            AND sample_id = $18;
+            lab_report_no = $12,
+            lab_sample_no = $13,
+            grade_type_id = $14,
+            approval_type_id = $15,
+            share_with = $16::text[],
+            no_source_update = $17,
+            private_expiry = $18,
+            matrix_state_id = $19,
+            note = $20
+          WHERE result_id = $21
+            AND sample_id = $22;
         "
         params <- c(params, list(result_id, form$sample_id))
       }
@@ -3293,31 +3488,34 @@ editSamples <- function(id, language) {
           {
             DBI::dbWithTransaction(con, {
               for (id in sample_ids) {
-                tryCatch({
-                  if (!is.null(update_sql)) {
-                    DBI::dbExecute(
-                      con,
-                      update_sql,
-                      params = c(params, list(id))
-                    )
+                tryCatch(
+                  {
+                    if (!is.null(update_sql)) {
+                      DBI::dbExecute(
+                        con,
+                        update_sql,
+                        params = c(params, list(id))
+                      )
+                    }
+                    if ("sample_qualifier_ids" %in% association_fields) {
+                      sync_sample_qualifier_links(
+                        con,
+                        id,
+                        form$sample_qualifier_ids
+                      )
+                    }
+                    if ("sample_observer_ids" %in% association_fields) {
+                      sync_sample_observer_links(
+                        con,
+                        id,
+                        form$sample_observer_ids
+                      )
+                    }
+                  },
+                  error = function(e) {
+                    stop(sprintf("Sample %s: %s", id, e$message), call. = FALSE)
                   }
-                  if ("sample_qualifier_ids" %in% association_fields) {
-                    sync_sample_qualifier_links(
-                      con,
-                      id,
-                      form$sample_qualifier_ids
-                    )
-                  }
-                  if ("sample_observer_ids" %in% association_fields) {
-                    sync_sample_observer_links(
-                      con,
-                      id,
-                      form$sample_observer_ids
-                    )
-                  }
-                }, error = function(e) {
-                  stop(sprintf("Sample %s: %s", id, e$message), call. = FALSE)
-                })
+                )
               }
             })
             NULL
