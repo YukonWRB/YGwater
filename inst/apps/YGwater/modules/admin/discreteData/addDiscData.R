@@ -58,7 +58,11 @@ addDiscData_builtin_profiles <- function() {
   data.frame(
     import_profile_id = c(NA_integer_, NA_integer_, NA_integer_),
     source_code = c("ALS", "ALS", "ALS"),
-    source_name = c("ALS Environmental", "ALS Environmental", "ALS Environmental"),
+    source_name = c(
+      "ALS Environmental",
+      "ALS Environmental",
+      "ALS Environmental"
+    ),
     profile_code = c(
       "als_eqwin_can_long",
       "als_samples_transposed",
@@ -297,42 +301,81 @@ addDiscData_as_date <- function(x) {
     return(x)
   }
   if (inherits(x, "POSIXt")) {
-    return(as.Date(x))
+    return(as.Date(x, tz = "UTC"))
   }
   if (is.numeric(x)) {
     return(as.Date(x, origin = "1899-12-30"))
   }
   x <- trimws(as.character(x))
   out <- as.Date(rep(NA_character_, length(x)))
-  formats <- c(
-    "%Y-%m-%d",
-    "%Y-%b-%d",
-    "%Y/%b/%d",
-    "%d-%b-%Y",
-    "%d-%B-%Y",
-    "%m/%d/%Y",
-    "%d/%m/%Y"
+  format_groups <- list(
+    list("^\\d{4}-\\d{1,2}-\\d{1,2}$", c("%Y-%m-%d")),
+    list("^\\d{4}/\\d{1,2}/\\d{1,2}$", c("%Y/%m/%d")),
+    list("^\\d{4}-[A-Za-z]{3,9}-\\d{1,2}$", c("%Y-%b-%d", "%Y-%B-%d")),
+    list("^\\d{4}/[A-Za-z]{3,9}/\\d{1,2}$", c("%Y/%b/%d", "%Y/%B/%d")),
+    list("^\\d{1,2}-[A-Za-z]{3,9}-\\d{4}$", c("%d-%b-%Y", "%d-%B-%Y")),
+    list("^\\d{1,2}/\\d{1,2}/\\d{4}$", c("%m/%d/%Y", "%d/%m/%Y"))
   )
-  for (fmt in formats) {
-    missing <- is.na(out) & addDiscData_present(x)
-    if (!any(missing)) {
-      break
+  for (group in format_groups) {
+    candidates <- is.na(out) & grepl(group[[1]], x)
+    for (fmt in group[[2]]) {
+      missing <- candidates & is.na(out)
+      if (!any(missing)) {
+        next
+      }
+      out[missing] <- suppressWarnings(as.Date(x[missing], format = fmt))
     }
-    out[missing] <- suppressWarnings(as.Date(x[missing], format = fmt))
+  }
+  serial <- is.na(out) & grepl("^\\d+(?:\\.\\d+)?$", x)
+  serial_value <- suppressWarnings(as.numeric(x[serial]))
+  plausible <- !is.na(serial_value) &
+    serial_value >= 20000 &
+    serial_value <= 100000
+  if (any(plausible)) {
+    serial_rows <- which(serial)[plausible]
+    out[serial_rows] <- as.Date(serial_value[plausible], origin = "1899-12-30")
   }
   out
 }
 
 addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
-  if (inherits(date, "POSIXt")) {
-    return(as.POSIXct(date, tz = "UTC"))
-  }
   parsed_date <- addDiscData_as_date(date)
   if (all(is.na(parsed_date))) {
-    return(as.POSIXct(rep(NA_real_, length(parsed_date)), origin = "1970-01-01", tz = "UTC"))
+    return(as.POSIXct(
+      rep(NA_real_, length(parsed_date)),
+      origin = "1970-01-01",
+      tz = "UTC"
+    ))
   }
-  time <- trimws(as.character(time))
-  time[!addDiscData_present(time)] <- "00:00"
+  embedded_time <- rep("00:00:00", length(parsed_date))
+  if (inherits(date, "POSIXt")) {
+    embedded_time <- format(date, "%H:%M:%S", tz = "UTC")
+  } else if (is.numeric(date)) {
+    seconds <- round((date %% 1) * 86400) %% 86400
+    embedded_time <- sprintf(
+      "%02d:%02d:%02d",
+      seconds %/% 3600,
+      (seconds %% 3600) %/% 60,
+      seconds %% 60
+    )
+  }
+
+  time <- rep_len(time, length(parsed_date))
+  if (inherits(time, "POSIXt")) {
+    time <- format(time, "%H:%M:%S", tz = "UTC")
+  } else if (is.numeric(time)) {
+    seconds <- round((time %% 1) * 86400) %% 86400
+    time <- sprintf(
+      "%02d:%02d:%02d",
+      seconds %/% 3600,
+      (seconds %% 3600) %/% 60,
+      seconds %% 60
+    )
+  } else {
+    time <- trimws(as.character(time))
+  }
+  missing_time <- !addDiscData_present(time)
+  time[missing_time] <- embedded_time[missing_time]
   value <- paste(format(parsed_date, "%Y-%m-%d"), time)
   parsed <- suppressWarnings(as.POSIXct(
     value,
@@ -344,7 +387,8 @@ addDiscData_datetime <- function(date, time = NA, tz = "America/Whitehorse") {
       "%Y-%m-%d %I:%M %p"
     )
   ))
-  as.POSIXct(parsed, tz = "UTC")
+  attr(parsed, "tzone") <- "UTC"
+  parsed
 }
 
 addDiscData_parse_result <- function(x) {
@@ -462,7 +506,13 @@ addDiscData_common_rows <- function(
 addDiscData_parse_als_eqwin <- function(path, profile) {
   cmap <- profile$column_map[[1]]
   sheet <- profile$sheet_name[[1]]
-  x <- openxlsx::read.xlsx(path, sheet = sheet, colNames = TRUE)
+  x <- readxl::read_excel(
+    path,
+    sheet = sheet,
+    col_names = TRUE,
+    .name_repair = "minimal"
+  ) |>
+    as.data.frame(check.names = FALSE)
   addDiscData_clean_colnames(x)
 
   out <- addDiscData_common_rows(
@@ -487,14 +537,24 @@ addDiscData_parse_als_eqwin <- function(path, profile) {
 addDiscData_parse_als_samples <- function(path, profile) {
   cmap <- profile$column_map[[1]]
   sheet <- profile$sheet_name[[1]]
-  x <- openxlsx::read.xlsx(path, sheet = sheet, colNames = FALSE)
+  x <- readxl::read_excel(
+    path,
+    sheet = sheet,
+    col_names = FALSE,
+    .name_repair = "minimal"
+  ) |>
+    as.data.frame(check.names = FALSE)
 
   find_row <- function(label, fallback) {
     label <- tolower(label)
     search_cols <- seq_len(min(5L, ncol(x)))
-    hit <- which(vapply(seq_len(nrow(x)), function(i) {
-      any(tolower(trimws(as.character(unlist(x[i, search_cols])))) == label)
-    }, logical(1)))
+    hit <- which(vapply(
+      seq_len(nrow(x)),
+      function(i) {
+        any(tolower(trimws(as.character(unlist(x[i, search_cols])))) == label)
+      },
+      logical(1)
+    ))
     if (length(hit)) {
       return(hit[[1]])
     }
@@ -510,11 +570,22 @@ addDiscData_parse_als_samples <- function(path, profile) {
     addDiscData_int(fallback)
   }
 
-  header_row <- find_row("Parameter Code", addDiscData_int(cmap$data_start_row, 16L) - 1L)
+  header_row <- find_row(
+    "Parameter Code",
+    addDiscData_int(cmap$data_start_row, 16L) - 1L
+  )
   first_sample_col <- addDiscData_int(cmap$first_sample_column, 4L)
   data_start_row <- header_row + 1L
-  parameter_name_col <- find_col(header_row, "Parameter Name", cmap$parameter_name_column)
-  parameter_code_col <- find_col(header_row, "Parameter Code", cmap$parameter_code_column)
+  parameter_name_col <- find_col(
+    header_row,
+    "Parameter Name",
+    cmap$parameter_name_column
+  )
+  parameter_code_col <- find_col(
+    header_row,
+    "Parameter Code",
+    cmap$parameter_code_column
+  )
   unit_col <- find_col(header_row, "Units", cmap$unit_column)
   lab_sample_row <- find_row("Lab Sample #", cmap$lab_sample_row)
   lab_report_row <- find_row("Lab Report #", cmap$lab_report_row)
@@ -539,7 +610,9 @@ addDiscData_parse_als_samples <- function(path, profile) {
     for (row in data_start_row:nrow(x)) {
       result_raw <- addDiscData_cell(x, row, col)
       parameter_code <- addDiscData_cell(x, row, parameter_code_col)
-      if (!addDiscData_present(result_raw) || !addDiscData_present(parameter_code)) {
+      if (
+        !addDiscData_present(result_raw) || !addDiscData_present(parameter_code)
+      ) {
         next
       }
       rows[[length(rows) + 1L]] <- addDiscData_common_rows(
@@ -571,7 +644,13 @@ addDiscData_parse_als_samples <- function(path, profile) {
 addDiscData_parse_als_xlr <- function(path, profile) {
   cmap <- profile$column_map[[1]]
   sheet <- profile$sheet_name[[1]]
-  raw <- openxlsx::read.xlsx(path, sheet = sheet, colNames = FALSE)
+  raw <- readxl::read_excel(
+    path,
+    sheet = sheet,
+    col_names = FALSE,
+    .name_repair = "minimal"
+  ) |>
+    as.data.frame(check.names = FALSE)
   header_row <- which(
     trimws(as.character(raw[[1]])) == "Analyte" &
       trimws(as.character(raw[[2]])) == "ALS Sample ID"
@@ -582,7 +661,11 @@ addDiscData_parse_als_xlr <- function(path, profile) {
   x <- raw[(header_row + 1L):nrow(raw), , drop = FALSE]
   names(x) <- as.character(unlist(raw[header_row, ], use.names = FALSE))
   addDiscData_clean_colnames(x)
-  x <- x[addDiscData_present(addDiscData_col(x, cmap$lab_sample_id)), , drop = FALSE]
+  x <- x[
+    addDiscData_present(addDiscData_col(x, cmap$lab_sample_id)),
+    ,
+    drop = FALSE
+  ]
   x <- x[addDiscData_present(addDiscData_col(x, cmap$result)), , drop = FALSE]
   analyte <- addDiscData_col(x, cmap$parameter_name)
   x <- x[
@@ -627,7 +710,9 @@ addDiscData_parse_upload <- function(path, profile) {
     "transposed"
   } else if ("parameter_code" %in% names(cmap)) {
     "long"
-  } else if (all(c("parameter_name", "lab_sample_id", "result") %in% names(cmap))) {
+  } else if (
+    all(c("parameter_name", "lab_sample_id", "result") %in% names(cmap))
+  ) {
     "xlr"
   } else {
     NA_character_
@@ -668,14 +753,26 @@ addDiscData_location_labels <- function(locations) {
   } else {
     rep("", nrow(locations))
   }
-  vapply(seq_len(nrow(locations)), function(i) {
-    details <- c(
-      if (nzchar(code[[i]])) paste0("Code: ", code[[i]]),
-      if (nzchar(alias[[i]])) paste0("Alias: ", alias[[i]])
-    )
-    label <- if (nzchar(name[[i]])) name[[i]] else paste0("Location ", locations$location_id[[i]])
-    if (length(details)) paste(label, paste(details, collapse = " | "), sep = " | ") else label
-  }, character(1))
+  vapply(
+    seq_len(nrow(locations)),
+    function(i) {
+      details <- c(
+        if (nzchar(code[[i]])) paste0("Code: ", code[[i]]),
+        if (nzchar(alias[[i]])) paste0("Alias: ", alias[[i]])
+      )
+      label <- if (nzchar(name[[i]])) {
+        name[[i]]
+      } else {
+        paste0("Location ", locations$location_id[[i]])
+      }
+      if (length(details)) {
+        paste(label, paste(details, collapse = " | "), sep = " | ")
+      } else {
+        label
+      }
+    },
+    character(1)
+  )
 }
 
 addDiscData_location_choices <- function(locations, include_blank = FALSE) {
@@ -686,16 +783,25 @@ addDiscData_location_choices <- function(locations, include_blank = FALSE) {
   if (isTRUE(include_blank)) c("Select a location" = "", choices) else choices
 }
 
-addDiscData_location_match <- function(rows, locations, selected_location = NULL) {
+addDiscData_location_match <- function(
+  rows,
+  locations,
+  selected_location = NULL
+) {
   if (!nrow(rows)) {
     return(rows)
   }
-  match_columns <- intersect(c("name", "location_code", "alias"), names(locations))
+  match_columns <- intersect(
+    c("name", "location_code", "alias"),
+    names(locations)
+  )
   location_values <- lapply(
     locations[match_columns],
     function(x) tolower(addDiscData_clean_location_text(x))
   )
-  source_names <- tolower(addDiscData_clean_location_text(rows$source_location_name))
+  source_names <- tolower(addDiscData_clean_location_text(
+    rows$source_location_name
+  ))
 
   rows$location_id <- NA_integer_
   for (i in seq_along(source_names)) {
@@ -829,11 +935,24 @@ addDiscData_apply_mappings <- function(rows, con) {
         next
       }
       rows$parameter_id[[i]] <- addDiscData_int(hit$parameter_id[[1]])
-      rows$result_type[[i]] <- addDiscData_int(hit$result_type[[1]], rows$result_type[[i]])
-      rows$sample_fraction_id[[i]] <- addDiscData_int(hit$sample_fraction_id[[1]])
-      rows$result_value_type[[i]] <- addDiscData_int(hit$result_value_type[[1]], rows$result_value_type[[i]])
-      rows$result_speciation_id[[i]] <- addDiscData_int(hit$result_speciation_id[[1]])
-      rows$matrix_state_id[[i]] <- addDiscData_int(hit$matrix_state_id[[1]], rows$matrix_state_id[[i]])
+      rows$result_type[[i]] <- addDiscData_int(
+        hit$result_type[[1]],
+        rows$result_type[[i]]
+      )
+      rows$sample_fraction_id[[i]] <- addDiscData_int(hit$sample_fraction_id[[
+        1
+      ]])
+      rows$result_value_type[[i]] <- addDiscData_int(
+        hit$result_value_type[[1]],
+        rows$result_value_type[[i]]
+      )
+      rows$result_speciation_id[[
+        i
+      ]] <- addDiscData_int(hit$result_speciation_id[[1]])
+      rows$matrix_state_id[[i]] <- addDiscData_int(
+        hit$matrix_state_id[[1]],
+        rows$matrix_state_id[[i]]
+      )
       conversion <- addDiscData_num(hit$conversion[[1]], 1)
       result_offset <- addDiscData_num(hit$result_offset[[1]], 0)
       rows$conversion[[i]] <- conversion
@@ -875,7 +994,11 @@ addDiscData_upsert_mapping <- function(
      ON CONFLICT (source_code) DO UPDATE
      SET active = TRUE
      RETURNING import_source_id;",
-    params = list(source_code, source_name, "Created from YGwater add discrete data.")
+    params = list(
+      source_code,
+      source_name,
+      "Created from YGwater add discrete data."
+    )
   )$import_source_id[[1]]
   source_match <- jsonlite::toJSON(
     list(parameter_code = parameter_code, unit = unit),
@@ -939,7 +1062,9 @@ addDiscData_target_unit <- function(parameters, parameter_id, matrix_state_id) {
   for (i in seq_along(out)) {
     row <- match(parameter_id[[i]], parameters$parameter_id)
     unit_column <- unname(unit_columns[as.character(matrix_state_id[[i]])])
-    if (!is.na(row) && length(unit_column) && unit_column %in% names(parameters)) {
+    if (
+      !is.na(row) && length(unit_column) && unit_column %in% names(parameters)
+    ) {
       out[[i]] <- as.character(parameters[[unit_column]][[row]])
     }
   }
@@ -948,25 +1073,34 @@ addDiscData_target_unit <- function(parameters, parameter_id, matrix_state_id) {
 }
 
 addDiscData_parameter_choices <- function(parameters) {
-  labels <- vapply(seq_len(nrow(parameters)), function(i) {
-    unit_labels <- character()
-    for (spec in list(
-      c("Liquid", "unit_liquid"),
-      c("Solid", "unit_solid"),
-      c("Gas", "unit_gas")
-    )) {
-      if (spec[[2]] %in% names(parameters)) {
-        unit <- parameters[[spec[[2]]]][[i]]
-        if (addDiscData_present(unit)) {
-          unit_labels <- c(unit_labels, paste0(spec[[1]], ": ", unit))
+  labels <- vapply(
+    seq_len(nrow(parameters)),
+    function(i) {
+      unit_labels <- character()
+      for (spec in list(
+        c("Liquid", "unit_liquid"),
+        c("Solid", "unit_solid"),
+        c("Gas", "unit_gas")
+      )) {
+        if (spec[[2]] %in% names(parameters)) {
+          unit <- parameters[[spec[[2]]]][[i]]
+          if (addDiscData_present(unit)) {
+            unit_labels <- c(unit_labels, paste0(spec[[1]], ": ", unit))
+          }
         }
       }
-    }
-    if (!length(unit_labels)) {
-      return(as.character(parameters$param_name[[i]]))
-    }
-    paste0(parameters$param_name[[i]], " [", paste(unit_labels, collapse = "; "), "]")
-  }, character(1))
+      if (!length(unit_labels)) {
+        return(as.character(parameters$param_name[[i]]))
+      }
+      paste0(
+        parameters$param_name[[i]],
+        " [",
+        paste(unit_labels, collapse = "; "),
+        "]"
+      )
+    },
+    character(1)
+  )
 
   c(
     "Select AquaCache parameter" = "",
@@ -1006,15 +1140,22 @@ addDiscData_result_display <- function(
     rep("", nrow(rows))
   }
   missing_source_result <- !addDiscData_present(source_result)
-  source_result[missing_source_result & !is.na(rows$source_result)] <- as.character(
+  source_result[
+    missing_source_result & !is.na(rows$source_result)
+  ] <- as.character(
     rows$source_result[missing_source_result & !is.na(rows$source_result)]
   )
   condition_prefix <- c("1" = "<", "2" = ">")
   rebuild <- missing_source_result & !is.na(rows$source_result_condition_value)
   if (any(rebuild)) {
-    prefix <- unname(condition_prefix[as.character(rows$result_condition[rebuild])])
+    prefix <- unname(condition_prefix[as.character(rows$result_condition[
+      rebuild
+    ])])
     prefix[is.na(prefix)] <- ""
-    source_result[rebuild] <- paste0(prefix, rows$source_result_condition_value[rebuild])
+    source_result[rebuild] <- paste0(
+      prefix,
+      rows$source_result_condition_value[rebuild]
+    )
   }
 
   location_index <- match(rows$location_id, locations$location_id)
@@ -1024,20 +1165,28 @@ addDiscData_result_display <- function(
     "parameter_id",
     "param_name"
   )
-  parameter_name[!addDiscData_present(parameter_name)] <- rows$source_parameter_name[
+  parameter_name[
+    !addDiscData_present(parameter_name)
+  ] <- rows$source_parameter_name[
     !addDiscData_present(parameter_name)
   ]
   out <- data.frame(
     `Source sample` = rows$source_sample_id,
     `Source location` = rows$source_location_name,
-    Location = addDiscData_location_labels(locations)[location_index],
+    `AquaCache location` = addDiscData_location_labels(locations)[
+      location_index
+    ],
     `Sub-location` = addDiscData_lookup_label(
       rows$sub_location_id,
       sub_locations,
       "sub_location_id",
       "sub_location_name"
     ),
-    `Sample datetime (UTC)` = format(rows$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    `Sample datetime (UTC)` = format(
+      rows$datetime,
+      "%Y-%m-%d %H:%M:%S",
+      tz = "UTC"
+    ),
     Parameter = parameter_name,
     `Source parameter` = rows$source_parameter_code,
     `Source unit` = rows$source_unit,
@@ -1091,7 +1240,12 @@ addDiscData_result_display <- function(
       "lab_id",
       "lab_name"
     ),
-    Media = addDiscData_lookup_label(rows$media_id, media, "media_id", "media_type"),
+    Media = addDiscData_lookup_label(
+      rows$media_id,
+      media,
+      "media_id",
+      "media_type"
+    ),
     `Collection method` = addDiscData_lookup_label(
       rows$collection_method,
       collection_methods,
@@ -1192,7 +1346,10 @@ addDiscDataUI <- function(id) {
                 choices = NULL
               )
             ),
-            column(3, selectizeInput(ns("sample_type"), "Sample type", choices = NULL)),
+            column(
+              3,
+              selectizeInput(ns("sample_type"), "Sample type", choices = NULL)
+            ),
             column(
               3,
               selectizeInput(
@@ -1218,24 +1375,43 @@ addDiscDataUI <- function(id) {
           radioButtons(
             ns("sample_group_mode"),
             "Sample group",
-            choices = c("None" = "none", "Existing" = "existing", "Create new" = "new"),
+            choices = c(
+              "None" = "none",
+              "Existing" = "existing",
+              "Create new" = "new"
+            ),
             selected = "none",
             inline = TRUE
           ),
           conditionalPanel(
             condition = "input.sample_group_mode == 'existing'",
             ns = ns,
-            selectizeInput(ns("sample_group_id"), "Existing sample group", choices = NULL)
+            selectizeInput(
+              ns("sample_group_id"),
+              "Existing sample group",
+              choices = NULL
+            )
           ),
           conditionalPanel(
             condition = "input.sample_group_mode == 'new'",
             ns = ns,
             fluidRow(
-              column(4, selectizeInput(ns("sample_group_type"), "Group type", choices = NULL)),
+              column(
+                4,
+                selectizeInput(
+                  ns("sample_group_type"),
+                  "Group type",
+                  choices = NULL
+                )
+              ),
               column(4, textInput(ns("sample_group_code"), "Group code")),
               column(4, textInput(ns("sample_group_name"), "Group name"))
             ),
-            textAreaInput(ns("sample_group_note"), "Group notes", width = "100%")
+            textAreaInput(
+              ns("sample_group_note"),
+              "Group notes",
+              width = "100%"
+            )
           )
         ),
         accordion_panel(
@@ -1256,7 +1432,14 @@ addDiscDataUI <- function(id) {
               accept = c(".csv", ".xls", ".xlsx")
             ),
             fluidRow(
-              column(9, selectizeInput(ns("import_profile"), "Import profile", choices = NULL)),
+              column(
+                9,
+                selectizeInput(
+                  ns("import_profile"),
+                  "Import profile",
+                  choices = NULL
+                )
+              ),
               column(
                 3,
                 tags$div(
@@ -1282,7 +1465,14 @@ addDiscDataUI <- function(id) {
             condition = "input.entry_mode == 'manual'",
             ns = ns,
             fluidRow(
-              column(5, selectizeInput(ns("manual_parameter"), "Parameter", choices = NULL)),
+              column(
+                5,
+                selectizeInput(
+                  ns("manual_parameter"),
+                  "Parameter",
+                  choices = NULL
+                )
+              ),
               column(3, textInput(ns("manual_result"), "Result")),
               column(2, actionButton(ns("add_manual_result"), "Add result")),
               column(2, actionButton(ns("new_manual_sample"), "New sample"))
@@ -1554,7 +1744,10 @@ addDiscData <- function(id, language) {
     updateSelectizeInput(
       session,
       "sample_type",
-      choices = stats::setNames(sample_types$sample_type_id, sample_types$sample_type),
+      choices = stats::setNames(
+        sample_types$sample_type_id,
+        sample_types$sample_type
+      ),
       selected = 34L
     )
     updateSelectizeInput(
@@ -1569,7 +1762,11 @@ addDiscData <- function(id, language) {
       "%s: %s",
       sample_groups$group_type,
       ifelse(
-        nzchar(ifelse(is.na(sample_groups$group_code), "", sample_groups$group_code)),
+        nzchar(ifelse(
+          is.na(sample_groups$group_code),
+          "",
+          sample_groups$group_code
+        )),
         sample_groups$group_code,
         sample_groups$group_name
       )
@@ -1577,13 +1774,21 @@ addDiscData <- function(id, language) {
     updateSelectizeInput(
       session,
       "sample_group_id",
-      choices = stats::setNames(sample_groups$sample_group_id, sample_group_labels)
+      choices = stats::setNames(
+        sample_groups$sample_group_id,
+        sample_group_labels
+      )
     )
 
     observeEvent(
       input$timezone,
       {
-        shift_air_datetime_input_timezone(session, input, "sample_datetime", input$timezone)
+        shift_air_datetime_input_timezone(
+          session,
+          input,
+          "sample_datetime",
+          input$timezone
+        )
       },
       ignoreInit = TRUE
     )
@@ -1706,7 +1911,11 @@ addDiscData <- function(id, language) {
     selected_profile <- reactive({
       profiles <- import_profiles()
       req(nrow(profiles), input$import_profile)
-      hit <- profiles[profiles$profile_key == input$import_profile, , drop = FALSE]
+      hit <- profiles[
+        profiles$profile_key == input$import_profile,
+        ,
+        drop = FALSE
+      ]
       validate(need(nrow(hit) == 1L, "Select an import profile."))
       hit
     })
@@ -1740,7 +1949,11 @@ addDiscData <- function(id, language) {
         fluidRow(
           column(
             4,
-            textInput(ns("new_profile_code"), "Profile code", value = suggested_code)
+            textInput(
+              ns("new_profile_code"),
+              "Profile code",
+              value = suggested_code
+            )
           ),
           column(
             8,
@@ -1806,14 +2019,29 @@ addDiscData <- function(id, language) {
       tryCatch(
         {
           profile <- selected_profile()
-          source_code <- toupper(trimws(addDiscData_first(input$new_profile_source_code, "")))
-          source_name <- trimws(addDiscData_first(input$new_profile_source_name, ""))
-          profile_code <- tolower(trimws(addDiscData_first(input$new_profile_code, "")))
+          source_code <- toupper(trimws(addDiscData_first(
+            input$new_profile_source_code,
+            ""
+          )))
+          source_name <- trimws(addDiscData_first(
+            input$new_profile_source_name,
+            ""
+          ))
+          profile_code <- tolower(trimws(addDiscData_first(
+            input$new_profile_code,
+            ""
+          )))
           profile_name <- trimws(addDiscData_first(input$new_profile_name, ""))
           if (!grepl("^[a-z0-9][a-z0-9_]*$", profile_code)) {
-            stop("Profile code must contain only lowercase letters, numbers, and underscores.")
+            stop(
+              "Profile code must contain only lowercase letters, numbers, and underscores."
+            )
           }
-          if (!nzchar(source_code) || !nzchar(source_name) || !nzchar(profile_name)) {
+          if (
+            !nzchar(source_code) ||
+              !nzchar(source_name) ||
+              !nzchar(profile_name)
+          ) {
             stop("Source code, source name, and profile name are required.")
           }
           new_profile_key <- addDiscData_profile_key(source_code, profile_code)
@@ -1827,30 +2055,57 @@ addDiscData <- function(id, language) {
             }
             parsed
           }
-          column_map <- parse_json_object(input$new_profile_column_map, "Column map")
+          column_map <- parse_json_object(
+            input$new_profile_column_map,
+            "Column map"
+          )
           defaults <- parse_json_object(input$new_profile_defaults, "Defaults")
           profile_id <- DBI::dbWithTransaction(con, {
             AquaCache::upsertImportProfile(
               con = con,
               source_code = source_code,
               source_name = source_name,
-              source_description = addDiscData_profile_value(profile, "source_description"),
+              source_description = addDiscData_profile_value(
+                profile,
+                "source_description"
+              ),
               profile_code = profile_code,
               profile_name = profile_name,
-              profile_description = trimws(addDiscData_first(input$new_profile_description, "")),
-              file_type = addDiscData_profile_value(profile, "file_type", "xlsx"),
-              parser_type = addDiscData_profile_value(profile, "parser_type", "long"),
+              profile_description = trimws(addDiscData_first(
+                input$new_profile_description,
+                ""
+              )),
+              file_type = addDiscData_profile_value(
+                profile,
+                "file_type",
+                "xlsx"
+              ),
+              parser_type = addDiscData_profile_value(
+                profile,
+                "parser_type",
+                "long"
+              ),
               sheet_strategy = addDiscData_profile_value(
                 profile,
                 "sheet_strategy",
                 "name_or_first"
               ),
-              sheet_name = trimws(addDiscData_first(input$new_profile_sheet, "")),
+              sheet_name = trimws(addDiscData_first(
+                input$new_profile_sheet,
+                ""
+              )),
               sheet_index = addDiscData_profile_value(profile, "sheet_index"),
               header_row = addDiscData_profile_value(profile, "header_row", 1L),
               units_row = addDiscData_profile_value(profile, "units_row"),
-              parameter_row = addDiscData_profile_value(profile, "parameter_row"),
-              data_start_row = addDiscData_profile_value(profile, "data_start_row", 2L),
+              parameter_row = addDiscData_profile_value(
+                profile,
+                "parameter_row"
+              ),
+              data_start_row = addDiscData_profile_value(
+                profile,
+                "data_start_row",
+                2L
+              ),
               datetime_origin = addDiscData_profile_value(
                 profile,
                 "datetime_origin",
@@ -1861,7 +2116,11 @@ addDiscData <- function(id, language) {
                 "America/Whitehorse"
               ),
               column_map = column_map,
-              wide_config = addDiscData_profile_value(profile, "wide_config", list()),
+              wide_config = addDiscData_profile_value(
+                profile,
+                "wide_config",
+                list()
+              ),
               defaults = defaults,
               sample_identity = addDiscData_profile_value(
                 profile,
@@ -1912,7 +2171,10 @@ addDiscData <- function(id, language) {
           )
         },
         error = function(e) {
-          showNotification(paste("Creating profile failed:", e$message), type = "error")
+          showNotification(
+            paste("Creating profile failed:", e$message),
+            type = "error"
+          )
         }
       )
     })
@@ -1921,7 +2183,10 @@ addDiscData <- function(id, language) {
       req(input$file)
       tryCatch(
         {
-          parsed <- addDiscData_parse_upload(input$file$datapath, selected_profile())
+          parsed <- addDiscData_parse_upload(
+            input$file$datapath,
+            selected_profile()
+          )
           parsed <- addDiscData_location_match(
             parsed,
             locations,
@@ -1959,8 +2224,12 @@ addDiscData <- function(id, language) {
       row[1, ] <- NA
       row$sample_key <- paste0(manual_upload_id, "-", current_manual_sample())
       row$source_location_name <- ""
-      row$location_id <- addDiscData_int(addDiscData_first(normalize_selectize_values(input$location)))
-      row$sub_location_id <- addDiscData_int(addDiscData_first(normalize_selectize_values(input$sublocation)))
+      row$location_id <- addDiscData_int(addDiscData_first(normalize_selectize_values(
+        input$location
+      )))
+      row$sub_location_id <- addDiscData_int(addDiscData_first(normalize_selectize_values(
+        input$sublocation
+      )))
       row$datetime <- as.POSIXct(input$sample_datetime, tz = "UTC")
       row$media_id <- addDiscData_int(input$media_id, 1L)
       row$collection_method <- addDiscData_int(input$collection_method, 27L)
@@ -1978,7 +2247,9 @@ addDiscData <- function(id, language) {
       row$result_speciation_id <- NA_integer_
       row$source_result_text <- as.character(input$manual_result)
       row$source_result <- parsed_result$result[[1]]
-      row$source_result_condition_value <- parsed_result$result_condition_value[[1]]
+      row$source_result_condition_value <- parsed_result$result_condition_value[[
+        1
+      ]]
       row$result <- parsed_result$result[[1]]
       row$result_condition <- parsed_result$result_condition[[1]]
       row$result_condition_value <- parsed_result$result_condition_value[[1]]
@@ -2002,51 +2273,71 @@ addDiscData <- function(id, language) {
       df[order(df$datetime, df$source_sample_id), , drop = FALSE]
     })
 
-    output$sample_location_summary <- DT::renderDT({
-      df <- sample_location_rows()
-      if (!nrow(df)) {
-        return(DT::datatable(
-          data.frame(Message = "Add or preview data to assign sample locations."),
+    output$sample_location_summary <- DT::renderDT(
+      {
+        df <- sample_location_rows()
+        if (!nrow(df)) {
+          return(DT::datatable(
+            data.frame(
+              Message = "Add or preview data to assign sample locations."
+            ),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        location_index <- match(df$location_id, locations$location_id)
+        sub_location_index <- match(
+          df$sub_location_id,
+          sub_locations$sub_location_id
+        )
+        summary <- data.frame(
+          `Source sample` = df$source_sample_id,
+          `Source location` = df$source_location_name,
+          `Sample datetime` = format(
+            df$datetime,
+            "%Y-%m-%d %H:%M:%S",
+            tz = "UTC"
+          ),
+          `AquaCache location` = addDiscData_location_labels(locations)[
+            location_index
+          ],
+          `Sub-location` = sub_locations$sub_location_name[sub_location_index],
+          check.names = FALSE
+        )
+        summary[is.na(summary)] <- ""
+        DT::datatable(
+          summary,
           rownames = FALSE,
-          selection = "none",
-          options = list(dom = "t")
-        ))
-      }
-      location_index <- match(df$location_id, locations$location_id)
-      sub_location_index <- match(df$sub_location_id, sub_locations$sub_location_id)
-      summary <- data.frame(
-        `Source sample` = df$source_sample_id,
-        `Source location` = df$source_location_name,
-        `Sample datetime` = format(df$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
-        Location = addDiscData_location_labels(locations)[location_index],
-        `Sub-location` = sub_locations$sub_location_name[sub_location_index],
-        check.names = FALSE
-      )
-      summary[is.na(summary)] <- ""
-      DT::datatable(
-        summary,
-        rownames = FALSE,
-        selection = list(mode = "multiple", target = "row"),
-        options = list(scrollX = TRUE, pageLength = 10)
-      )
-    }, server = FALSE)
+          selection = list(mode = "multiple", target = "row"),
+          options = list(scrollX = TRUE, pageLength = 10)
+        )
+      },
+      server = FALSE
+    )
 
-    observeEvent(input$sample_location, {
-      location_id <- addDiscData_int(input$sample_location)
-      available <- sub_locations[!is.na(location_id) & sub_locations$location_id == location_id, ]
-      updateSelectizeInput(
-        session,
-        "sample_sub_location",
-        choices = c(
-          "None" = "",
-          stats::setNames(
-            as.character(available$sub_location_id),
-            available$sub_location_name
-          )
-        ),
-        selected = ""
-      )
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$sample_location,
+      {
+        location_id <- addDiscData_int(input$sample_location)
+        available <- sub_locations[
+          !is.na(location_id) & sub_locations$location_id == location_id,
+        ]
+        updateSelectizeInput(
+          session,
+          "sample_sub_location",
+          choices = c(
+            "None" = "",
+            stats::setNames(
+              as.character(available$sub_location_id),
+              available$sub_location_name
+            )
+          ),
+          selected = ""
+        )
+      },
+      ignoreInit = TRUE
+    )
 
     selected_sample_keys <- reactive({
       rows <- sample_location_rows()
@@ -2075,7 +2366,10 @@ addDiscData <- function(id, language) {
             sub_locations$location_id == location_id
         )
         if (!valid_sub_location) {
-          showNotification("The sub-location does not belong to that location.", type = "error")
+          showNotification(
+            "The sub-location does not belong to that location.",
+            type = "error"
+          )
           return()
         }
       }
@@ -2111,7 +2405,9 @@ addDiscData <- function(id, language) {
       selected <- if (identical(target, "sample")) {
         addDiscData_int(input$sample_location)
       } else {
-        addDiscData_int(addDiscData_first(normalize_selectize_values(input$location)))
+        addDiscData_int(addDiscData_first(normalize_selectize_values(
+          input$location
+        )))
       }
       map_location_selected(selected)
       showModal(modalDialog(
@@ -2119,7 +2415,10 @@ addDiscData <- function(id, language) {
         selectizeInput(
           ns("map_location_search"),
           "Search by location name, code, or alias",
-          choices = addDiscData_location_choices(locations, include_blank = TRUE),
+          choices = addDiscData_location_choices(
+            locations,
+            include_blank = TRUE
+          ),
           selected = if (is.na(selected)) "" else as.character(selected)
         ),
         leaflet::leafletOutput(ns("location_search_map"), height = "520px"),
@@ -2160,30 +2459,44 @@ addDiscData <- function(id, language) {
           clusterOptions = leaflet::markerClusterOptions()
         )
       if (nrow(mapped) == 1L) {
-        map |> leaflet::setView(mapped$longitude[[1]], mapped$latitude[[1]], zoom = 11)
+        map |>
+          leaflet::setView(
+            mapped$longitude[[1]],
+            mapped$latitude[[1]],
+            zoom = 11
+          )
       } else {
-        map |> leaflet::fitBounds(
-          min(mapped$longitude),
-          min(mapped$latitude),
-          max(mapped$longitude),
-          max(mapped$latitude)
-        )
+        map |>
+          leaflet::fitBounds(
+            min(mapped$longitude),
+            min(mapped$latitude),
+            max(mapped$longitude),
+            max(mapped$latitude)
+          )
       }
     })
 
-    observeEvent(input$map_location_search, {
-      location_id <- addDiscData_int(input$map_location_search)
-      map_location_selected(location_id)
-      row <- match(location_id, locations$location_id)
-      if (!is.na(row) && is.finite(locations$latitude[[row]]) && is.finite(locations$longitude[[row]])) {
-        leaflet::leafletProxy("location_search_map", session = session) |>
-          leaflet::setView(
-            lng = locations$longitude[[row]],
-            lat = locations$latitude[[row]],
-            zoom = 12
-          )
-      }
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$map_location_search,
+      {
+        location_id <- addDiscData_int(input$map_location_search)
+        map_location_selected(location_id)
+        row <- match(location_id, locations$location_id)
+        if (
+          !is.na(row) &&
+            is.finite(locations$latitude[[row]]) &&
+            is.finite(locations$longitude[[row]])
+        ) {
+          leaflet::leafletProxy("location_search_map", session = session) |>
+            leaflet::setView(
+              lng = locations$longitude[[row]],
+              lat = locations$latitude[[row]],
+              zoom = 12
+            )
+        }
+      },
+      ignoreInit = TRUE
+    )
 
     observeEvent(input$location_search_map_marker_click, {
       location_id <- addDiscData_int(input$location_search_map_marker_click$id)
@@ -2197,13 +2510,20 @@ addDiscData <- function(id, language) {
 
     output$map_location_selected_label <- renderText({
       row <- match(map_location_selected(), locations$location_id)
-      if (is.na(row)) "No location selected." else addDiscData_location_labels(locations)[[row]]
+      if (is.na(row)) {
+        "No location selected."
+      } else {
+        addDiscData_location_labels(locations)[[row]]
+      }
     })
 
     observeEvent(input$use_map_location, {
       location_id <- map_location_selected()
       if (is.na(location_id)) {
-        showNotification("Select a location on the map first.", type = "warning")
+        showNotification(
+          "Select a location on the map first.",
+          type = "warning"
+        )
         return()
       }
       if (identical(map_location_target(), "sample")) {
@@ -2230,51 +2550,72 @@ addDiscData <- function(id, language) {
       if (!nrow(df)) {
         return(data.frame())
       }
-      key <- paste(df$source_code, df$source_parameter_code, df$source_unit, sep = "\r")
+      key <- paste(
+        df$source_code,
+        df$source_parameter_code,
+        df$source_unit,
+        sep = "\r"
+      )
       out <- df[!duplicated(key), , drop = FALSE]
       out[order(out$source_parameter_code, out$source_unit), , drop = FALSE]
     })
 
-    output$mapping_summary <- DT::renderDT({
-      df <- mapping_rows()
-      if (!nrow(df)) {
-        return(DT::datatable(
-          data.frame(Message = "No parameter mappings need review."),
-          rownames = FALSE,
-          selection = "none",
-          options = list(dom = "t")
-        ))
-      }
-      parameter_index <- match(df$parameter_id, params()$parameter_id)
-      fraction_index <- match(df$sample_fraction_id, sample_fractions$sample_fraction_id)
-      result_type_index <- match(df$result_type, result_types$result_type_id)
-      value_type_index <- match(df$result_value_type, result_value_types$result_value_type_id)
-      speciation_index <- match(df$result_speciation_id, result_speciations$result_speciation_id)
-      matrix_index <- match(df$matrix_state_id, matrix_states$matrix_state_id)
+    output$mapping_summary <- DT::renderDT(
+      {
+        df <- mapping_rows()
+        if (!nrow(df)) {
+          return(DT::datatable(
+            data.frame(Message = "No parameter mappings need review."),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        parameter_index <- match(df$parameter_id, params()$parameter_id)
+        fraction_index <- match(
+          df$sample_fraction_id,
+          sample_fractions$sample_fraction_id
+        )
+        result_type_index <- match(df$result_type, result_types$result_type_id)
+        value_type_index <- match(
+          df$result_value_type,
+          result_value_types$result_value_type_id
+        )
+        speciation_index <- match(
+          df$result_speciation_id,
+          result_speciations$result_speciation_id
+        )
+        matrix_index <- match(df$matrix_state_id, matrix_states$matrix_state_id)
 
-      summary <- data.frame(
-        `Source parameter` = df$source_parameter_code,
-        `Source unit` = df$source_unit,
-        `AquaCache parameter` = params()$param_name[parameter_index],
-        `Target unit` = addDiscData_target_unit(params(), df$parameter_id, df$matrix_state_id),
-        `Sample fraction` = sample_fractions$sample_fraction[fraction_index],
-        Conversion = df$conversion,
-        Offset = df$result_offset,
-        `Result type` = result_types$result_type[result_type_index],
-        `Value type` = result_value_types$result_value_type[value_type_index],
-        Speciation = result_speciations$result_speciation[speciation_index],
-        Matrix = matrix_states$matrix_state_name[matrix_index],
-        Status = df$mapping_status,
-        check.names = FALSE
-      )
-      summary[is.na(summary)] <- ""
-      DT::datatable(
-        summary,
-        rownames = FALSE,
-        selection = "single",
-        options = list(scrollX = TRUE, pageLength = 15)
-      )
-    }, server = FALSE)
+        summary <- data.frame(
+          `Source parameter` = df$source_parameter_code,
+          `Source unit` = df$source_unit,
+          `AquaCache parameter` = params()$param_name[parameter_index],
+          `Target unit` = addDiscData_target_unit(
+            params(),
+            df$parameter_id,
+            df$matrix_state_id
+          ),
+          `Sample fraction` = sample_fractions$sample_fraction[fraction_index],
+          Conversion = df$conversion,
+          Offset = df$result_offset,
+          `Result type` = result_types$result_type[result_type_index],
+          `Value type` = result_value_types$result_value_type[value_type_index],
+          Speciation = result_speciations$result_speciation[speciation_index],
+          Matrix = matrix_states$matrix_state_name[matrix_index],
+          Status = df$mapping_status,
+          check.names = FALSE
+        )
+        summary[is.na(summary)] <- ""
+        DT::datatable(
+          summary,
+          rownames = FALSE,
+          selection = "single",
+          options = list(scrollX = TRUE, pageLength = 15)
+        )
+      },
+      server = FALSE
+    )
 
     selected_mapping_row <- reactive({
       rows <- mapping_rows()
@@ -2288,7 +2629,10 @@ addDiscData <- function(id, language) {
     output$mapping_editor <- renderUI({
       row <- selected_mapping_row()
       if (is.null(row)) {
-        return(tags$div(class = "text-muted", "Select a mapping-summary row to edit."))
+        return(tags$div(
+          class = "text-muted",
+          "Select a mapping-summary row to edit."
+        ))
       }
       selected_value <- function(value, default = "") {
         value <- addDiscData_first(value, default)
@@ -2403,7 +2747,10 @@ addDiscData <- function(id, language) {
               value = addDiscData_num(row$result_offset[[1]], 0)
             )
           ),
-          column(4, tags$strong(textOutput(ns("mapping_target_unit"), inline = TRUE)))
+          column(
+            4,
+            tags$strong(textOutput(ns("mapping_target_unit"), inline = TRUE))
+          )
         )
       )
     })
@@ -2423,7 +2770,10 @@ addDiscData <- function(id, language) {
     observeEvent(input$save_parameter_mappings, {
       row <- selected_mapping_row()
       if (is.null(row)) {
-        showNotification("Select a mapping-summary row first.", type = "warning")
+        showNotification(
+          "Select a mapping-summary row first.",
+          type = "warning"
+        )
         return()
       }
       tryCatch(
@@ -2449,20 +2799,33 @@ addDiscData <- function(id, language) {
               unit = row$source_unit[[1]],
               parameter_id = parameter_id,
               result_type = addDiscData_int(input$mapping_result_type, 2L),
-              sample_fraction_id = addDiscData_int(input$mapping_sample_fraction),
-              result_value_type = addDiscData_int(input$mapping_result_value_type, 1L),
-              result_speciation_id = addDiscData_int(input$mapping_result_speciation),
+              sample_fraction_id = addDiscData_int(
+                input$mapping_sample_fraction
+              ),
+              result_value_type = addDiscData_int(
+                input$mapping_result_value_type,
+                1L
+              ),
+              result_speciation_id = addDiscData_int(
+                input$mapping_result_speciation
+              ),
               matrix_state_id = addDiscData_int(input$mapping_matrix_state, 1L),
               conversion = conversion,
               result_offset = result_offset,
               note = "Saved from YGwater add discrete data mapping editor."
             )
           })
-          data$df <- addDiscData_apply_mappings(data$df, con)[names(addDiscData_empty_table())]
+          data$df <- addDiscData_apply_mappings(
+            data$df,
+            con
+          )[names(addDiscData_empty_table())]
           showNotification("Saved mapping.", type = "message")
         },
         error = function(e) {
-          showNotification(paste("Saving mappings failed:", e$message), type = "error")
+          showNotification(
+            paste("Saving mappings failed:", e$message),
+            type = "error"
+          )
         }
       )
     })
@@ -2486,32 +2849,41 @@ addDiscData <- function(id, language) {
       )
     })
 
-    output$data_table <- DT::renderDT({
-      display <- result_display()
-      if (!nrow(display)) {
-        return(DT::datatable(
-          data.frame(Message = "Add or preview data to review mapped results."),
+    output$data_table <- DT::renderDT(
+      {
+        display <- result_display()
+        if (!nrow(display)) {
+          return(DT::datatable(
+            data.frame(
+              Message = "Add or preview data to review mapped results."
+            ),
+            rownames = FALSE,
+            selection = "none",
+            options = list(dom = "t")
+          ))
+        }
+        editable_columns <- match(
+          names(addDiscData_result_edit_columns()),
+          names(display)
+        ) -
+          1L
+        disabled_columns <- setdiff(
+          seq_len(ncol(display)) - 1L,
+          editable_columns
+        )
+        DT::datatable(
+          display,
+          editable = list(
+            target = "cell",
+            disable = list(columns = disabled_columns)
+          ),
+          selection = "single",
           rownames = FALSE,
-          selection = "none",
-          options = list(dom = "t")
-        ))
-      }
-      editable_columns <- match(
-        names(addDiscData_result_edit_columns()),
-        names(display)
-      ) - 1L
-      disabled_columns <- setdiff(seq_len(ncol(display)) - 1L, editable_columns)
-      DT::datatable(
-        display,
-        editable = list(
-          target = "cell",
-          disable = list(columns = disabled_columns)
-        ),
-        selection = "single",
-        rownames = FALSE,
-        options = list(scrollX = TRUE, pageLength = 15)
-      )
-    }, server = FALSE)
+          options = list(scrollX = TRUE, pageLength = 15)
+        )
+      },
+      server = FALSE
+    )
 
     observeEvent(input$data_table_cell_edit, {
       info <- input$data_table_cell_edit
@@ -2523,7 +2895,11 @@ addDiscData <- function(id, language) {
       source_column <- unname(
         addDiscData_result_edit_columns()[names(display)[[display_column]]]
       )
-      if (!length(source_column) || is.na(source_column) || info$row > nrow(data$df)) {
+      if (
+        !length(source_column) ||
+          is.na(source_column) ||
+          info$row > nrow(data$df)
+      ) {
         return()
       }
       value <- trimws(as.character(info$value))
@@ -2531,7 +2907,9 @@ addDiscData <- function(id, language) {
         if (!nzchar(value)) {
           new_value <- NA_integer_
         } else {
-          hit <- which(tolower(result_conditions$result_condition) == tolower(value))
+          hit <- which(
+            tolower(result_conditions$result_condition) == tolower(value)
+          )
           if (length(hit) != 1L) {
             showNotification(
               "Enter a result-condition name exactly as shown in the lookup table.",
@@ -2543,9 +2921,16 @@ addDiscData <- function(id, language) {
           new_value <- result_conditions$result_condition_id[[hit[[1]]]]
         }
       } else if (source_column %in% c("result", "result_condition_value")) {
-        new_value <- if (nzchar(value)) suppressWarnings(as.numeric(value)) else NA_real_
+        new_value <- if (nzchar(value)) {
+          suppressWarnings(as.numeric(value))
+        } else {
+          NA_real_
+        }
         if (nzchar(value) && is.na(new_value)) {
-          showNotification("Enter a numeric value or leave the cell blank.", type = "error")
+          showNotification(
+            "Enter a numeric value or leave the cell blank.",
+            type = "error"
+          )
           data$df <- data$df
           return()
         }
@@ -2675,7 +3060,10 @@ addDiscData <- function(id, language) {
       if (any(missing_location & !is.na(df$sub_location_id))) {
         stop(
           "A sub-location cannot be supplied without a location in row(s): ",
-          paste(which(missing_location & !is.na(df$sub_location_id)), collapse = ", "),
+          paste(
+            which(missing_location & !is.na(df$sub_location_id)),
+            collapse = ", "
+          ),
           call. = FALSE
         )
       }
@@ -2739,7 +3127,9 @@ addDiscData <- function(id, language) {
 
           if (identical(group_mode, "existing")) {
             group_id <- addDiscData_int(input$sample_group_id)
-            if (is.na(group_id) || !(group_id %in% sample_groups$sample_group_id)) {
+            if (
+              is.na(group_id) || !(group_id %in% sample_groups$sample_group_id)
+            ) {
               stop("Select an existing sample group.", call. = FALSE)
             }
           } else {
@@ -2862,7 +3252,11 @@ addDiscData <- function(id, language) {
                 "INSERT INTO discrete.sample_group_members (
                    sample_group_id, sample_id, sequence_in_group
                  ) VALUES ($1, $2, $3)",
-                params = list(as.integer(group_id), as.integer(sid), as.integer(i))
+                params = list(
+                  as.integer(group_id),
+                  as.integer(sid),
+                  as.integer(i)
+                )
               )
             }
             sample_lookup[[samples$sample_key[[i]]]] <- sid

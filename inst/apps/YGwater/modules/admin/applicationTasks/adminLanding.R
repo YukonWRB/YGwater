@@ -36,7 +36,7 @@ adminLandingUI <- function(id) {
         ),
         tags$li(
           tags$strong("Manage users"),
-          " — create user accounts and assign roles (if authorized)."
+          " — create user accounts, reset passwords, and assign roles (if authorized)."
         ),
         tags$li(
           tags$strong("Manage notifications"),

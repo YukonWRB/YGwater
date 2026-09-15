@@ -15,7 +15,9 @@
   <h2>Creating new groups and users</h2>
   <p>In PostgreSQL, the only difference between a user and a group is that a user can log in, while a group cannot. Groups are used to manage sets of privileges that can be assigned to multiple users.</p>
   <p>To create a new group, select the <b>Create new group</b> option from the drop-down menu. Enter the group name and click <b>Create group</b>. IMPORTANT: Use the naming convention 'orgName_group' (e.g. 'yg_editor_group')so that we can more easily identify groups from users.</p>
-  <p></p>
+  <h2>Resetting a password</h2>
+  <p>Select <b>Reset user password</b>, choose a login-enabled user, and enter the new password twice. You can also generate a password that meets the application's requirements. Review the selected user in the confirmation dialog before completing the reset. The user's old password stops working immediately.</p>
+  <p>Your own account is not listed in this tool. Use <b>Change password</b> instead so YGwater can update the credentials held by your current session.</p>
   <h2>Privileges</h2>
   <p>Review inherited privileges before changing direct grants. Role and table privilege changes affect database access outside the Shiny application as well.</p>
   <p>The schema list includes application schemas because a table grant alone is not enough: a role also needs <code>USAGE</code> on the table's schema.</p>

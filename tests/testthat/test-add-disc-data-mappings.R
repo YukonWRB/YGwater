@@ -120,6 +120,38 @@ test_that("XLR parser excludes filtration-location metadata rows", {
 
   expect_equal(nrow(parsed), 1L)
   expect_identical(parsed$source_parameter_code, "Aluminum, dissolved")
+  expect_identical(
+    format(parsed$datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    "2026-09-01 17:00:00"
+  )
+  expect_identical(
+    format(parsed$analysis_datetime, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+    "2026-09-02 07:00:00"
+  )
+})
+
+test_that("Excel and textual dates are parsed without partial-year matches", {
+  env <- add_disc_data_mapping_environment()
+  excel_serial <- as.numeric(as.Date("2025-10-02") - as.Date("1899-12-30"))
+
+  expect_identical(
+    as.character(env$addDiscData_as_date(c(
+      "02-Oct-2025",
+      "2025-Oct-02",
+      "2025-10-02",
+      as.character(excel_serial)
+    ))),
+    rep("2025-10-02", 4L)
+  )
+  expect_true(is.na(env$addDiscData_as_date("02-Oct-2025 trailing text")))
+  expect_identical(
+    format(
+      env$addDiscData_datetime("02-Oct-2025", "10:50", "America/Whitehorse"),
+      "%Y-%m-%d %H:%M:%S",
+      tz = "UTC"
+    ),
+    "2025-10-02 17:50:00"
+  )
 })
 
 test_that("location choices expose name, code, and alias", {
