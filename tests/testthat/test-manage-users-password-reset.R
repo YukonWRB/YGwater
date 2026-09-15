@@ -1,14 +1,7 @@
 test_that("Manage users exposes a guarded password-reset workflow", {
-  module_path <- testthat::test_path(
-    "..",
-    "..",
-    "inst",
-    "apps",
-    "YGwater",
-    "modules",
-    "admin",
-    "users",
-    "manageUsers.R"
+  module_path <- system.file(
+    "apps/YGwater/modules/admin/users/manageUsers.R",
+    package = "YGwater"
   )
   module <- paste(readLines(module_path, warn = FALSE), collapse = "\n")
 
@@ -47,17 +40,9 @@ test_that("Manage users exposes a guarded password-reset workflow", {
 })
 
 test_that("Manage users help documents password resets", {
-  help_path <- testthat::test_path(
-    "..",
-    "..",
-    "inst",
-    "apps",
-    "YGwater",
-    "www",
-    "html",
-    "admin_help",
-    "pages",
-    "manageUsers.html"
+  help_path <- system.file(
+    "apps/YGwater/www/html/admin_help/pages/manageUsers.html",
+    package = "YGwater"
   )
   help <- paste(readLines(help_path, warn = FALSE), collapse = "\n")
 
@@ -67,16 +52,9 @@ test_that("Manage users help documents password resets", {
 })
 
 test_that("Manage users safely resets another user's password", {
-  module_path <- testthat::test_path(
-    "..",
-    "..",
-    "inst",
-    "apps",
-    "YGwater",
-    "modules",
-    "admin",
-    "users",
-    "manageUsers.R"
+  module_path <- system.file(
+    "apps/YGwater/modules/admin/users/manageUsers.R",
+    package = "YGwater"
   )
   env <- new.env(parent = asNamespace("shiny"))
   env$application_notifications_ui <- function(...) NULL
