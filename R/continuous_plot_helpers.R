@@ -1,5 +1,158 @@
 # Helpers for continuous trace plotting
 
+#' Format continuous-timeseries sensor priorities for display
+#' @param sensor_priority Integer or character sensor-priority values.
+#' @param language Language name used by [tr()].
+#' @param translations Translation catalogue passed to [tr()].
+#' @return A character vector containing readable priority labels.
+#' @noRd
+#' @keywords internal
+format_sensor_priority_label <- function(
+  sensor_priority,
+  language,
+  translations = data$translations
+) {
+  priority <- as.character(sensor_priority)
+  priority_number <- suppressWarnings(as.integer(priority))
+  labels <- vapply(
+    c(
+      "sensor_priority_primary",
+      "sensor_priority_secondary",
+      "sensor_priority_tertiary"
+    ),
+    tr,
+    character(1),
+    lang = language,
+    translations = translations
+  )
+
+  out <- rep(NA_character_, length(priority))
+  matched <- !is.na(priority_number) & priority_number %in% seq_along(labels)
+  out[matched] <- labels[priority_number[matched]]
+
+  fallback <- !matched & !is.na(priority) & nzchar(priority)
+  out[fallback] <- priority[fallback]
+  out
+}
+
+#' Format the historical-statistics period for display
+#' @param stats_period Character statistics-period values.
+#' @param language Language name used by [tr()].
+#' @param translations Translation catalogue passed to [tr()].
+#' @return A character vector containing translated period labels.
+#' @noRd
+#' @keywords internal
+format_stats_period_label <- function(
+  stats_period,
+  language,
+  translations = data$translations
+) {
+  keys <- c(
+    `30yr` = "stats_period_last_30_years",
+    full = "stats_period_entire_record"
+  )
+  stats_period <- as.character(stats_period)
+  matched <- stats_period %in% names(keys)
+  out <- stats_period
+  out[matched] <- vapply(
+    unname(keys[stats_period[matched]]),
+    tr,
+    character(1),
+    lang = language,
+    translations = translations
+  )
+  out
+}
+
+#' Build unambiguous location labels for the continuous table
+#' @param locations Location metadata containing `location_id` and `name_col`.
+#' @param name_col Name of the localized location-name column.
+#' @return Character labels. Duplicate display names include their location ID.
+#' @noRd
+#' @keywords internal
+continuous_plot_location_labels <- function(locations, name_col) {
+  if (!all(c("location_id", name_col) %in% names(locations))) {
+    return(character())
+  }
+
+  labels <- as.character(locations[[name_col]])
+  duplicate_labels <-
+    !is.na(labels) &
+    (duplicated(labels) | duplicated(labels, fromLast = TRUE))
+  labels[duplicate_labels] <- sprintf(
+    "%s [%s]",
+    labels[duplicate_labels],
+    locations[["location_id"]][duplicate_labels]
+  )
+  labels
+}
+
+#' Resolve a map location to the continuous table's display value
+#' @param location_id Location identifier supplied by the map module.
+#' @param timeseries Continuous-timeseries metadata containing `location_id`.
+#' @param locations Location metadata containing `location_id` and `name_col`.
+#' @param name_col Name of the localized location-name column.
+#' @return The scalar location label used by the table, or `NULL` when the
+#'   request is invalid or has no continuous timeseries.
+#' @noRd
+#' @keywords internal
+continuous_plot_map_location_value <- function(
+  location_id,
+  timeseries,
+  locations,
+  name_col
+) {
+  location_id <- suppressWarnings(as.numeric(location_id))
+  location_id <- unique(location_id[!is.na(location_id)])
+  if (
+    length(location_id) != 1L ||
+      !"location_id" %in% names(timeseries) ||
+      !location_id %in% timeseries$location_id ||
+      !all(c("location_id", name_col) %in% names(locations))
+  ) {
+    return(NULL)
+  }
+
+  location_labels <- continuous_plot_location_labels(locations, name_col)
+  location_value <- location_labels[
+    locations[["location_id"]] %in% location_id
+  ]
+  location_value <- unique(as.character(stats::na.omit(location_value)))
+  location_value <- location_value[nzchar(location_value)]
+  if (length(location_value) == 0L) {
+    return(NULL)
+  }
+
+  location_value[[1L]]
+}
+
+#' Build DataTables column searches for a map location
+#' @param column_names Names of the complete table columns.
+#' @param location_value Scalar location factor label, or `NULL` for no filter.
+#' @return A character vector suitable for [DT::updateSearch()]. Factor values
+#'   are JSON encoded so DataTables performs an exact factor match.
+#' @noRd
+#' @keywords internal
+continuous_plot_location_search_columns <- function(
+  column_names,
+  location_value = NULL
+) {
+  searches <- rep("", length(column_names))
+  location_column <- match("location", column_names)
+  if (
+    !is.na(location_column) &&
+      length(location_value) == 1L &&
+      !is.na(location_value) &&
+      nzchar(location_value)
+  ) {
+    searches[[location_column]] <- as.character(jsonlite::toJSON(
+      as.character(location_value),
+      auto_unbox = FALSE
+    ))
+  }
+  searches
+}
+
 #' @title Check if corrected source should be used for continuous trace
 #' @description Determines whether the continuous trace should use the corrected source based on the presence of applicable corrections in the database.
 #' @param con A DBI database connection object.
@@ -214,15 +367,183 @@ historic_range_data_for_export <- function(range_data, units) {
   as.data.frame(range_data)
 }
 
+#' Resolve the temporal windows covered by a continuous plot request
+#' @param req Plot request list created by the Shiny module.
+#' @return A data.table with UTC `start_dt` and `end_dt` columns.
+#' @noRd
+#' @keywords internal
+continuous_plot_note_windows <- function(req) {
+  plot_type <- as.character(req$plot_type)[[1L]]
+  plot_timezone <- if (
+    is.null(req$plot_timezone) ||
+      length(req$plot_timezone) == 0L ||
+      is.na(req$plot_timezone[[1L]])
+  ) {
+    "UTC"
+  } else {
+    as.character(req$plot_timezone[[1L]])
+  }
+
+  if (plot_type %in% c("timeseries", "timeseries_all")) {
+    return(data.table::data.table(
+      start_dt = normalize_plot_datetime_bound(
+        req$start_date,
+        plot_timezone,
+        bound = "start"
+      ),
+      end_dt = normalize_plot_datetime_bound(
+        req$end_date,
+        plot_timezone,
+        bound = "end"
+      )
+    ))
+  }
+
+  years <- suppressWarnings(as.integer(req$years))
+  years <- sort(unique(years[!is.na(years)]))
+  start_day <- suppressWarnings(as.Date(req$start_day))
+  end_day <- suppressWarnings(as.Date(req$end_day))
+  if (
+    length(years) > 0L &&
+      length(start_day) == 1L &&
+      !is.na(start_day) &&
+      length(end_day) == 1L &&
+      !is.na(end_day)
+  ) {
+    start_month_day <- format(start_day, "%m-%d")
+    end_month_day <- format(end_day, "%m-%d")
+    windows <- data.table::rbindlist(lapply(years, function(year) {
+      window_start <- as.Date(sprintf("%04d-%s", year, start_month_day))
+      end_year <- year + as.integer(end_month_day < start_month_day)
+      window_end <- as.Date(sprintf("%04d-%s", end_year, end_month_day))
+      data.table::data.table(
+        start_dt = normalize_plot_datetime_bound(
+          window_start,
+          plot_timezone,
+          bound = "start"
+        ),
+        end_dt = normalize_plot_datetime_bound(
+          window_end,
+          plot_timezone,
+          bound = "end"
+        )
+      )
+    }))
+    return(windows)
+  }
+
+  timeseries <- req$timeseries_table
+  if (
+    is.data.frame(timeseries) &&
+      nrow(timeseries) > 0L &&
+      all(c("start_datetime", "end_datetime") %in% names(timeseries))
+  ) {
+    starts <- as.POSIXct(timeseries$start_datetime, tz = "UTC")
+    ends <- as.POSIXct(timeseries$end_datetime, tz = "UTC")
+    starts <- starts[!is.na(starts)]
+    ends <- ends[!is.na(ends)]
+    if (length(starts) > 0L && length(ends) > 0L) {
+      return(data.table::data.table(
+        start_dt = min(starts),
+        end_dt = max(ends)
+      ))
+    }
+  }
+
+  data.table::data.table(
+    start_dt = as.POSIXct(character(), tz = "UTC"),
+    end_dt = as.POSIXct(character(), tz = "UTC")
+  )
+}
+
+#' Fetch notes that overlap a continuous plot request
+#' @param con A DBI database connection.
+#' @param req Plot request list created by the Shiny module.
+#' @param lang Language abbreviation, either `"en"` or `"fr"`.
+#' @return A data.table of notes and their timeseries context.
+#' @noRd
+#' @keywords internal
+fetch_continuous_plot_notes <- function(con, req, lang = "en") {
+  empty_notes <- function() {
+    data.table::data.table(
+      note_id = integer(),
+      timeseries_id = integer(),
+      location = character(),
+      parameter = character(),
+      note = character(),
+      start_datetime_utc = as.POSIXct(character(), tz = "UTC"),
+      end_datetime_utc = as.POSIXct(character(), tz = "UTC")
+    )
+  }
+
+  ids <- suppressWarnings(as.integer(req$timeseries_ids))
+  ids <- sort(unique(ids[!is.na(ids)]))
+  windows <- continuous_plot_note_windows(req)
+  if (length(ids) == 0L || nrow(windows) == 0L) {
+    return(empty_notes())
+  }
+
+  location_sql <- if (identical(lang, "fr")) {
+    "COALESCE(l.name_fr, l.name, ts.location_id::text)"
+  } else {
+    "COALESCE(l.name, ts.location_id::text)"
+  }
+  parameter_sql <- if (identical(lang, "fr")) {
+    "COALESCE(p.param_name_fr, p.param_name, ts.parameter_id::text)"
+  } else {
+    "COALESCE(p.param_name, ts.parameter_id::text)"
+  }
+
+  notes <- dbGetQueryDT(
+    con,
+    paste0(
+      "SELECT n.note_id, n.timeseries_id, ",
+      location_sql,
+      " AS location, ",
+      parameter_sql,
+      " AS parameter, n.note, ",
+      "n.start_dt AS start_datetime_utc, ",
+      "n.end_dt AS end_datetime_utc ",
+      "FROM continuous.notes n ",
+      "JOIN continuous.timeseries ts USING (timeseries_id) ",
+      "LEFT JOIN public.locations l ON l.location_id = ts.location_id ",
+      "LEFT JOIN public.parameters p ON p.parameter_id = ts.parameter_id ",
+      "WHERE n.timeseries_id IN (",
+      paste(ids, collapse = ", "),
+      ") AND n.start_dt < $2 AND n.end_dt >= $1 ",
+      "ORDER BY n.start_dt, n.end_dt, n.note_id"
+    ),
+    params = list(min(windows$start_dt), max(windows$end_dt))
+  )
+  if (nrow(notes) == 0L) {
+    return(empty_notes())
+  }
+
+  keep <- vapply(seq_len(nrow(notes)), function(i) {
+    any(
+      notes$start_datetime_utc[[i]] < windows$end_dt &
+        notes$end_datetime_utc[[i]] >= windows$start_dt
+    )
+  }, logical(1))
+  notes[keep]
+}
+
 #' Build CSV tables for continuous plot data downloads
 #' @param req Plot request list created by the Shiny module.
 #' @param out Plot data returned by the plotting task.
 #' @param module_data Module lookup data used for metadata labels.
 #' @param language Current application language object.
+#' @param notes Notes returned by `fetch_continuous_plot_notes()`.
 #' @return A named list of data frames ready for CSV export.
 #' @noRd
 #' @keywords internal
-continuous_plot_export_tables <- function(req, out, module_data, language) {
+continuous_plot_export_tables <- function(
+  req,
+  out,
+  module_data,
+  language,
+  notes = NULL
+) {
   safe_first_value <- function(data, key_col, key_value, value_col) {
     if (
       is.null(data) ||
@@ -451,11 +772,13 @@ continuous_plot_export_tables <- function(req, out, module_data, language) {
     add_table("metadata", metadata)
     add_table("trace_data", trace_data)
     add_table("historic_range_data", range_data)
+    add_table("notes", notes)
     return(tables)
   }
 
   add_table("metadata", base_metadata)
   add_data_recursive(out)
+  add_table("notes", notes)
   tables
 }
 

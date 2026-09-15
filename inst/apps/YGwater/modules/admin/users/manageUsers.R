@@ -11,6 +11,7 @@ manageUsersUI <- function(id) {
           c(
             "groups",
             "users",
+            "reset_password",
             "users_to_groups",
             "group_privileges",
             "user_privileges",
@@ -20,6 +21,7 @@ manageUsersUI <- function(id) {
           c(
             "Create new group",
             "Create new user",
+            "Reset user password",
             "Assign users to groups",
             "Modify group privileges",
             "Modify user privileges",
@@ -57,6 +59,26 @@ manageUsersUI <- function(id) {
         selectInput(ns("existing_user"), "User", choices = NULL),
         selectInput(ns("existing_group"), "Group", choices = NULL),
         actionButton(ns("add_user_group"), "Add to group"),
+      ),
+      conditionalPanel(
+        condition = "input.group_user == 'reset_password'",
+        ns = ns,
+        h4("Reset user password"),
+        selectInput(ns("password_reset_user"), "User", choices = NULL),
+        passwordInput(ns("new_user_password"), "New password"),
+        passwordInput(ns("confirm_user_password"), "Confirm new password"),
+        helpText(
+          "Password must be at least 8 characters and include uppercase, lowercase, and a number. To change your own password, use the Change password page."
+        ),
+        actionButton(
+          ns("generate_user_password"),
+          "Generate password"
+        ),
+        actionButton(
+          ns("request_user_password_reset"),
+          "Reset password",
+          class = "btn-danger"
+        )
       ),
       conditionalPanel(
         condition = "input.group_user == 'group_privileges'",
@@ -218,7 +240,7 @@ manageUsers <- function(
         tags$div(
           class = "alert alert-warning",
           role = "alert",
-          "Important: You are logged in to the test database, but changes you make to users and groups here WILL persist to the production database as it is on the same server."
+          "Important: You are logged in to the test database, but changes you make to users, passwords, and groups here WILL persist to the production database as it is on the same server."
         )
       } else {
         NULL
@@ -351,6 +373,31 @@ manageUsers <- function(
       ))
     })
 
+    observeEvent(input$generate_user_password, {
+      generated_password <- generate_password()
+      updateTextInput(
+        session,
+        "new_user_password",
+        value = generated_password
+      )
+      updateTextInput(
+        session,
+        "confirm_user_password",
+        value = generated_password
+      )
+      showModal(modalDialog(
+        title = "Generated password",
+        tagList(
+          "A new password has been generated and filled in.",
+          tags$br(),
+          tags$strong("Password:"),
+          tags$code(generated_password)
+        ),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    })
+
     # Fetch the schema names; this is used to grant usage to groups on relevant schemas
     schemas <- DBI::dbGetQuery(
       session$userData$AquaCache,
@@ -365,6 +412,7 @@ ORDER BY schema_name;"
     # Reload user and group lists
     available_table_choices <- reactiveVal(character(0))
     existing_users <- reactiveVal(character(0))
+    password_reset_users <- reactiveVal(character(0))
     existing_groups <- reactiveVal(character(0))
     existing_roles <- reactiveVal(character(0))
     can_reassign_owned_to_users <- reactiveVal(FALSE)
@@ -430,10 +478,16 @@ ORDER BY rolname"
       ]
       role_names <- roles$rolname
       existing_users(users)
+      password_reset_users(setdiff(users, current_user))
       existing_groups(groups)
       existing_roles(role_names)
       can_reassign_owned_to_users(current_user %in% c("admin", "postgres"))
       updateSelectInput(session, "existing_user", choices = users)
+      updateSelectInput(
+        session,
+        "password_reset_user",
+        choices = password_reset_users()
+      )
       updateSelectInput(session, "existing_group", choices = groups)
       updateSelectInput(session, "privilege_user", choices = users)
       updateSelectInput(session, "privilege_group", choices = groups)
@@ -1145,6 +1199,106 @@ ORDER BY st.table_schema, st.table_name, p.privilege;",
               "Created user '%s'. Remember to add them to relevant user groups!",
               input$user_name
             ))
+          },
+          error = function(e) {
+            set_status(e$message)
+          }
+        )
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$request_user_password_reset,
+      {
+        user <- input$password_reset_user
+        new_password <- input$new_user_password
+        confirm_password <- input$confirm_user_password
+        req(user, new_password, confirm_password)
+
+        if (!user %in% password_reset_users()) {
+          set_status(
+            "Please select another login-enabled user. Use the Change password page for your own account."
+          )
+          return(NULL)
+        }
+        if (!identical(new_password, confirm_password)) {
+          set_status("The new passwords do not match.")
+          return(NULL)
+        }
+        if (!validate_password(new_password)) {
+          set_status(password_requirements)
+          return(NULL)
+        }
+
+        showModal(modalDialog(
+          title = "Confirm password reset",
+          tagList(
+            "Reset the password for ",
+            tags$strong(user),
+            "? Their current password will stop working immediately."
+          ),
+          easyClose = TRUE,
+          footer = tagList(
+            modalButton("Cancel"),
+            actionButton(
+              ns("confirm_user_password_reset"),
+              "Reset password",
+              class = "btn-danger"
+            )
+          )
+        ))
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
+
+    observeEvent(
+      input$confirm_user_password_reset,
+      {
+        user <- input$password_reset_user
+        new_password <- input$new_user_password
+        confirm_password <- input$confirm_user_password
+        removeModal()
+
+        if (
+          is.null(user) ||
+            !user %in% password_reset_users() ||
+            is.null(new_password) ||
+            !identical(new_password, confirm_password) ||
+            !validate_password(new_password)
+        ) {
+          set_status(
+            "The password reset request is no longer valid. Review the user and password, then try again."
+          )
+          return(NULL)
+        }
+
+        shinyjs::disable("request_user_password_reset")
+        on.exit(
+          shinyjs::enable("request_user_password_reset"),
+          add = TRUE
+        )
+
+        tryCatch(
+          {
+            sql <- sprintf(
+              "ALTER ROLE %s WITH PASSWORD %s;",
+              DBI::dbQuoteIdentifier(
+                session$userData$AquaCache,
+                user
+              ),
+              DBI::dbQuoteString(
+                session$userData$AquaCache,
+                new_password
+              )
+            )
+            DBI::dbExecute(session$userData$AquaCache, sql)
+
+            updateTextInput(session, "new_user_password", value = "")
+            updateTextInput(session, "confirm_user_password", value = "")
+            set_status(sprintf("Reset password for user '%s'.", user))
           },
           error = function(e) {
             set_status(e$message)

@@ -46,7 +46,12 @@
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #'
 #' @return An interactive HTML plot. When `data = TRUE`, a list containing the
-#'   plot, plotted data, and the contributing AquaCache sample IDs is returned.
+#'   plot, plotted data, and the contributing AquaCache sample and result IDs
+#'   is returned.
+#'   AquaCache rows also identify the aggregation type, calculation version,
+#'   calculation arguments, and expected component count when a result is
+#'   maintained from component observations, plus available laboratory report,
+#'   laboratory sample, result-grade, and result-approval metadata.
 #' @export
 #'
 
@@ -295,33 +300,6 @@ plotDiscrete <- function(
   # Create a data.frame to hold the plotting data. EQWin and aquacache fill this list in differently, but the end result is the same to pass on to the plotting portion.
   # 'data' should contain columns named location, location_name, parameter, datetime, result, result_condition (e.g. <DL, >DL, etc.), result_condition_value (the detection limit value), units. Optional columns (used by aquacache) are sample_type, collection_method, sample_fraction, result_speciation.
   data <- data.frame()
-
-  filter_ac_values <- function(df, values, id_col, label_col) {
-    if (is.null(values) || length(values) == 0 || nrow(df) == 0) {
-      return(df)
-    }
-
-    values <- values[!is.na(values) & nzchar(as.character(values))]
-    if (length(values) == 0) {
-      return(df)
-    }
-
-    value_chr <- as.character(values)
-    numeric_values <- suppressWarnings(as.numeric(value_chr))
-    use_ids <- all(!is.na(numeric_values)) && id_col %in% names(df)
-
-    if (use_ids) {
-      df[df[[id_col]] %in% numeric_values, , drop = FALSE]
-    } else if (label_col %in% names(df)) {
-      df[
-        tolower(as.character(df[[label_col]])) %in% tolower(value_chr),
-        ,
-        drop = FALSE
-      ]
-    } else {
-      df
-    }
-  }
 
   collapse_unique <- function(x) {
     x <- unique(as.character(x[!is.na(x) & nzchar(as.character(x))]))
@@ -628,8 +606,23 @@ plotDiscrete <- function(
         ids <- suppressWarnings(as.integer(unlist(rows$.qaqc_sample_ids)))
         out$.qaqc_sample_ids <- list(sort(unique(ids[!is.na(ids)])))
       }
+      if (".component_result_ids" %in% names(out)) {
+        ids <- suppressWarnings(as.integer(unlist(rows$.component_result_ids)))
+        out$.component_result_ids <- list(sort(unique(ids[!is.na(ids)])))
+      }
       if ("result_id" %in% names(out)) {
         out$result_id <- NA
+      }
+      for (col in intersect(
+        c(
+          "aggregation_type",
+          "calculation_version",
+          "calculation_arguments",
+          "expected_count"
+        ),
+        names(out)
+      )) {
+        out[[col]] <- rows[[col]][NA_integer_]
       }
       if ("linked_with" %in% names(out)) {
         out$linked_with <- rows$duplicate_group[[1]]
@@ -651,11 +644,24 @@ plotDiscrete <- function(
           "media_type",
           "grade_type_description",
           "approval_type_description",
-          "qualifier_type_description"
+          "qualifier_type_description",
+          "lab_report_no",
+          "lab_sample_no",
+          "result_grade_code",
+          "result_grade_description",
+          "result_approval_code",
+          "result_approval_description"
         ),
         names(out)
       )) {
         out[[col]] <- collapse_unique(rows[[col]])
+      }
+      for (col in intersect(
+        c("result_grade_id", "result_approval_id"),
+        names(out)
+      )) {
+        ids <- unique(rows[[col]][!is.na(rows[[col]])])
+        out[[col]] <- if (length(ids) == 1L) ids[[1]] else NA_integer_
       }
       out
     })
@@ -1444,152 +1450,333 @@ ORDER BY ag.result_id, ag.guideline_id;"
       }
     }
 
-    sample_id_clause <- if (!is.null(sample_ids)) {
+    # Fetch samples, results, and their display metadata in one query. Values
+    # are encoded as JSON parameters so broad selections do not create large,
+    # literal IN lists in the SQL statement.
+    query_params <- list()
+    bind_query_value <- function(value) {
+      query_params[[length(query_params) + 1L]] <<- value
+      paste0("$", length(query_params))
+    }
+    integer_set_clause <- function(column_sql, values) {
+      values <- unique(suppressWarnings(as.integer(values)))
+      values <- values[!is.na(values)]
+      placeholder <- bind_query_value(jsonlite::toJSON(
+        as.character(values),
+        auto_unbox = FALSE
+      ))
       paste0(
-        "
-    AND s.sample_id IN (",
-        paste0(sample_ids, collapse = ", "),
-        ")"
+        column_sql,
+        " IN (SELECT value::integer FROM jsonb_array_elements_text(",
+        placeholder,
+        "::jsonb))"
       )
-    } else {
-      ""
+    }
+    selected_value_clause <- function(values, id_sql, label_sql) {
+      if (is.null(values) || length(values) == 0L) {
+        return(NULL)
+      }
+      values <- values[!is.na(values) & nzchar(as.character(values))]
+      if (length(values) == 0L) {
+        return(NULL)
+      }
+
+      numeric_values <- suppressWarnings(as.numeric(as.character(values)))
+      if (all(!is.na(numeric_values))) {
+        return(integer_set_clause(id_sql, numeric_values))
+      }
+
+      placeholder <- bind_query_value(jsonlite::toJSON(
+        as.character(values),
+        auto_unbox = FALSE
+      ))
+      paste0(
+        "LOWER(",
+        label_sql,
+        ") IN (SELECT LOWER(value) FROM jsonb_array_elements_text(",
+        placeholder,
+        "::jsonb))"
+      )
     }
 
-    if (is.null(sub_locations) | nrow(subLocIds) == 0) {
-      samp_query <- paste0(
-        "
-    SELECT
-        s.sample_id,
-        s.location_id,
-        sl.sub_location_name,
-        sl.sub_location_name_fr,
-        s.sub_location_id,
-        s.media_id,
-        mt.media_type,
-        mt.media_type_fr,
-        s.z,
-        s.datetime,
-        s.target_datetime,
-        s.linked_with,
-        s.collection_method AS collection_method_id,
-        cm.collection_method,
-        s.sample_type AS sample_type_id,
-        st.sample_type,
-        gt.grade_type_description,
-        gt.grade_type_description_fr,
-        at.approval_type_description,
-        at.approval_type_description_fr,
-        qt.qualifier_type_description,
-        qt.qualifier_type_description_fr
-    FROM 
-        discrete.samples as s
-    LEFT JOIN
-        public.media_types as mt ON s.media_id = mt.media_id
-    LEFT JOIN
-        discrete.collection_methods as cm ON s.collection_method = cm.collection_method_id
-    LEFT JOIN
-        discrete.sample_types as st ON s.sample_type = st.sample_type_id
-    LEFT JOIN
-        public.grade_types as gt ON s.sample_grade = gt.grade_type_id
-    LEFT JOIN
-        public.approval_types as at ON s.sample_approval = at.approval_type_id
-    LEFT JOIN
-        public.qualifier_types as qt ON s.sample_qualifier = qt.qualifier_type_id
-    LEFT JOIN
-        public.sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
-    WHERE s.location_id IN (",
-        paste0(locIds$location_id, collapse = ", "),
-        ") 
-    AND s.datetime > '",
-        start,
-        "' AND s.datetime < '",
-        end,
-        "'",
-        sample_id_clause,
-        ";
-        "
-      )
-    } else {
-      samp_query <- paste0(
-        "
-SELECT
-    s.sample_id,
-    s.location_id,
-    sl.sub_location_name,
-    sl.sub_location_name_fr,
-    s.sub_location_id,
-    s.media_id,
-    mt.media_type,
-    mt.media_type_fr,
-    s.z,
-    s.datetime,
-    s.target_datetime,
-    s.linked_with,
-    s.collection_method AS collection_method_id,
-    cm.collection_method,
-    s.sample_type AS sample_type_id,
-    st.sample_type,
-    gt.grade_type_description,
-    gt.grade_type_description_fr,
-    at.approval_type_description,
-    at.approval_type_description_fr,
-    qt.qualifier_type_description,
-    qt.qualifier_type_description_fr
-FROM 
-    discrete.samples AS s
-LEFT JOIN
-    public.media_types AS mt ON s.media_id = mt.media_id
-LEFT JOIN
-    discrete.collection_methods AS cm ON s.collection_method = cm.collection_method_id
-LEFT JOIN
-    discrete.sample_types AS st ON s.sample_type = st.sample_type_id
-LEFT JOIN
-    public.grade_types AS gt ON s.sample_grade = gt.grade_type_id
-LEFT JOIN
-    public.approval_types AS at ON s.sample_approval = at.approval_type_id
-LEFT JOIN
-    public.qualifier_types AS qt ON s.sample_qualifier = qt.qualifier_type_id
-LEFT JOIN
-    public.sub_locations AS sl ON s.sub_location_id = sl.sub_location_id
-WHERE
-    (s.location_id, COALESCE(s.sub_location_id, -1)) IN (
-        ",
-        paste0(
-          "(",
-          locIds$location_id,
-          ", ",
-          data.table::fifelse(
-            is.na(subLocIds$sub_location_id),
-            -1,
-            subLocIds$sub_location_id
-          ),
-          ")",
-          collapse = ", "
-        ),
-        "
+    where_clauses <- c(
+      integer_set_clause("s.location_id", locIds$location_id),
+      integer_set_clause("r.parameter_id", paramIds$parameter_id),
+      paste0("s.datetime > ", bind_query_value(start)),
+      paste0("s.datetime < ", bind_query_value(end))
     )
-AND s.datetime > '",
-        start,
-        "' AND s.datetime < '",
-        end,
-        "'",
-        sample_id_clause,
-        ";
-"
+
+    if (!is.null(sample_ids)) {
+      where_clauses <- c(
+        where_clauses,
+        integer_set_clause("s.sample_id", sample_ids)
       )
     }
 
-    samples <- DBI::dbGetQuery(AC, samp_query)
+    if (!is.null(sub_locations) && nrow(subLocIds) > 0L) {
+      location_sub_location_pairs <- data.table::data.table(
+        location_id = locIds$location_id,
+        sub_location_id = data.table::fifelse(
+          is.na(subLocIds$sub_location_id),
+          -1L,
+          subLocIds$sub_location_id
+        )
+      )
+      pair_placeholder <- bind_query_value(jsonlite::toJSON(
+        location_sub_location_pairs,
+        dataframe = "rows",
+        auto_unbox = TRUE
+      ))
+      where_clauses <- c(
+        where_clauses,
+        paste0(
+          "EXISTS (",
+          "SELECT 1 FROM jsonb_to_recordset(",
+          pair_placeholder,
+          "::jsonb) AS selected(location_id integer, sub_location_id integer) ",
+          "WHERE selected.location_id = s.location_id ",
+          "AND selected.sub_location_id = COALESCE(s.sub_location_id, -1))"
+        )
+      )
+    }
+
+    where_clauses <- c(
+      where_clauses,
+      selected_value_clause(
+        sub_location_ids,
+        "s.sub_location_id",
+        "sl.sub_location_name"
+      ),
+      selected_value_clause(media, "s.media_id", "mt.media_type"),
+      selected_value_clause(
+        sample_types,
+        "s.sample_type",
+        "st.sample_type"
+      ),
+      selected_value_clause(
+        collection_methods,
+        "s.collection_method",
+        "cm.collection_method"
+      ),
+      selected_value_clause(
+        result_types,
+        "r.result_type",
+        "rt.result_type"
+      ),
+      selected_value_clause(
+        sample_fractions,
+        "r.sample_fraction_id",
+        "sf.sample_fraction"
+      ),
+      selected_value_clause(
+        result_value_types,
+        "r.result_value_type",
+        "rvt.result_value_type"
+      ),
+      selected_value_clause(
+        result_speciations,
+        "r.result_speciation_id",
+        "rs.result_speciation"
+      )
+    )
+    if (!isTRUE(include_blanks)) {
+      where_clauses <- c(
+        where_clauses,
+        "(st.sample_type IS NULL OR st.sample_type !~* 'blank')"
+      )
+    }
+    if (identical(duplicate_action, "hide")) {
+      where_clauses <- c(
+        where_clauses,
+        "(st.sample_type IS NULL OR st.sample_type !~* 'duplicate|replicate')"
+      )
+    }
+
+    season_filter_ranges <- season_ranges
+    if (is.data.frame(season_filter_ranges)) {
+      season_filter_ranges <- split(
+        season_filter_ranges,
+        seq_len(nrow(season_filter_ranges))
+      )
+    }
+    if (!is.null(season_filter_ranges) && length(season_filter_ranges) > 0L) {
+      season_filter_ranges <- lapply(season_filter_ranges, function(range) {
+        dates <- suppressWarnings(as.Date(unlist(range)))
+        dates <- dates[!is.na(dates)]
+        if (length(dates) < 2L) {
+          return(NULL)
+        }
+        as.integer(lubridate::yday(dates[seq_len(2L)]))
+      })
+      season_filter_ranges <- Filter(Negate(is.null), season_filter_ranges)
+    }
+    if (length(season_filter_ranges) > 0L) {
+      datetime_sql <- if (isTRUE(target_datetime)) {
+        "s.target_datetime"
+      } else {
+        "s.datetime"
+      }
+      season_clauses <- vapply(
+        season_filter_ranges,
+        function(range) {
+          start_doy <- bind_query_value(range[[1]])
+          end_doy <- bind_query_value(range[[2]])
+          day_sql <- paste0("EXTRACT(DOY FROM ", datetime_sql, ")")
+          if (range[[1]] <= range[[2]]) {
+            paste0("(", day_sql, " BETWEEN ", start_doy, " AND ", end_doy, ")")
+          } else {
+            paste0(
+              "(",
+              day_sql,
+              " >= ",
+              start_doy,
+              " OR ",
+              day_sql,
+              " <= ",
+              end_doy,
+              ")"
+            )
+          }
+        },
+        character(1)
+      )
+      where_clauses <- c(
+        where_clauses,
+        paste0("(", paste(season_clauses, collapse = " OR "), ")")
+      )
+    }
+
+    unit_sql <- ac_parameter_unit_select_sql(AC, "p", "units")
+    samp_query <- paste0(
+      "SELECT
+         r.result_id,
+         r.sample_id,
+         r.parameter_id,
+         r.result_type AS result_type_id,
+         r.result,
+         r.result_condition,
+         r.result_condition_value,
+         r.result_value_type AS result_value_type_id,
+         r.sample_fraction_id,
+         r.result_speciation_id,
+         r.matrix_state_id,
+         rt.result_type,
+         rc.result_condition AS result_condition_label,
+         rvt.result_value_type,
+         sf.sample_fraction,
+         rs.result_speciation,
+         ms.matrix_state_name AS matrix_state,
+         s.location_id,
+         sl.sub_location_name,
+         sl.sub_location_name_fr,
+         s.sub_location_id,
+         s.media_id,
+         mt.media_type,
+         mt.media_type_fr,
+         s.z,
+         s.datetime,
+         s.target_datetime,
+         s.linked_with,
+         s.collection_method AS collection_method_id,
+         cm.collection_method,
+         s.sample_type AS sample_type_id,
+         st.sample_type,
+         gt.grade_type_description,
+         gt.grade_type_description_fr,
+         at.approval_type_description,
+         at.approval_type_description_fr,
+         qualifiers.qualifier_type_description,
+         qualifiers.qualifier_type_description_fr,
+         r.lab_report_no,
+         r.lab_sample_no,
+         r.grade_type_id AS result_grade_id,
+         result_grade.grade_type_code AS result_grade_code,
+         result_grade.grade_type_description AS result_grade_description,
+         result_grade.grade_type_description_fr AS result_grade_description_fr,
+         r.approval_type_id AS result_approval_id,
+         result_approval.approval_type_code AS result_approval_code,
+         result_approval.approval_type_description AS result_approval_description,
+         result_approval.approval_type_description_fr AS result_approval_description_fr,
+         rat.aggregation_type,
+         ra.calculation_version,
+         ra.calculation_arguments::text AS calculation_arguments,
+         ra.expected_count,
+         l.location_code AS location,
+         l.alias,
+         l.name,
+         l.name_fr,
+         p.param_name,
+         p.param_name_fr,
+         ",
+      unit_sql,
+      "
+       FROM discrete.results AS r
+       INNER JOIN discrete.samples AS s ON r.sample_id = s.sample_id
+       INNER JOIN public.locations AS l ON s.location_id = l.location_id
+       INNER JOIN public.parameters AS p ON r.parameter_id = p.parameter_id
+       LEFT JOIN public.media_types AS mt ON s.media_id = mt.media_id
+       LEFT JOIN discrete.collection_methods AS cm
+         ON s.collection_method = cm.collection_method_id
+       LEFT JOIN discrete.sample_types AS st
+         ON s.sample_type = st.sample_type_id
+       LEFT JOIN public.grade_types AS gt ON s.sample_grade = gt.grade_type_id
+       LEFT JOIN public.approval_types AS at
+         ON s.sample_approval = at.approval_type_id
+       LEFT JOIN public.grade_types AS result_grade
+         ON r.grade_type_id = result_grade.grade_type_id
+       LEFT JOIN public.approval_types AS result_approval
+         ON r.approval_type_id = result_approval.approval_type_id
+       LEFT JOIN LATERAL (
+         SELECT
+           STRING_AGG(
+             qt.qualifier_type_description,
+             '; ' ORDER BY qt.qualifier_type_id
+           ) AS qualifier_type_description,
+           STRING_AGG(
+             COALESCE(
+               qt.qualifier_type_description_fr,
+               qt.qualifier_type_description
+             ),
+             '; ' ORDER BY qt.qualifier_type_id
+           ) AS qualifier_type_description_fr
+         FROM discrete.sample_qualifiers AS sq
+         INNER JOIN public.qualifier_types AS qt
+           ON sq.qualifier_type_id = qt.qualifier_type_id
+         WHERE sq.sample_id = s.sample_id
+       ) AS qualifiers ON TRUE
+       LEFT JOIN public.sub_locations AS sl
+         ON s.sub_location_id = sl.sub_location_id
+       LEFT JOIN discrete.result_types AS rt
+         ON r.result_type = rt.result_type_id
+       LEFT JOIN discrete.result_conditions AS rc
+         ON r.result_condition = rc.result_condition_id
+       LEFT JOIN discrete.sample_fractions AS sf
+         ON r.sample_fraction_id = sf.sample_fraction_id
+       LEFT JOIN discrete.result_speciations AS rs
+         ON r.result_speciation_id = rs.result_speciation_id
+       LEFT JOIN discrete.result_value_types AS rvt
+         ON r.result_value_type = rvt.result_value_type_id
+       LEFT JOIN public.matrix_states AS ms
+         ON r.matrix_state_id = ms.matrix_state_id
+       LEFT JOIN discrete.result_aggregations AS ra
+         ON r.result_id = ra.result_id
+       LEFT JOIN discrete.result_aggregation_types AS rat
+         ON ra.result_aggregation_type_id = rat.result_aggregation_type_id
+       WHERE ",
+      paste(where_clauses, collapse = "\n         AND "),
+      ";"
+    )
+
+    samples <- DBI::dbGetQuery(AC, samp_query, params = query_params)
 
     if (nrow(samples) == 0) {
       stop(
-        "No samples were found matching your requested locations and parameters."
+        "No results were found matching the requested locations, parameters, date range, and filters."
       )
     }
 
-    # Merge the locations into the samples data.frame
-    samples <- merge(samples, locIds, by = "location_id", all.x = TRUE)
-    samples <- samples[, -which(names(samples) == "location_id")] # drop unnecessary columns
+    # Location and parameter metadata are already present from the joined query.
+    samples <- samples[, -which(names(samples) == "location_id")]
 
     # Merge columns for location name and sub_location name (where not null)
     if (lang == "en") {
@@ -1620,131 +1807,7 @@ AND s.datetime > '",
       )
     }
 
-    # Get the measurements from table results
-    res_query <- paste0(
-      "
-    SELECT 
-        r.result_id,
-        r.sample_id,
-        r.parameter_id,
-        r.result_type AS result_type_id,
-        r.result,
-        r.result_condition, 
-        r.result_condition_value,
-        r.result_value_type AS result_value_type_id,
-        r.sample_fraction_id,
-        r.result_speciation_id,
-        r.matrix_state_id,
-        rt.result_type,
-        rc.result_condition AS result_condition_label,
-        rvt.result_value_type,
-        sf.sample_fraction, 
-        rs.result_speciation,
-        ms.matrix_state_name AS matrix_state
-    FROM 
-        discrete.results AS r
-    LEFT JOIN
-        discrete.result_types AS rt ON r.result_type = rt.result_type_id
-    LEFT JOIN
-        discrete.result_conditions AS rc ON r.result_condition = rc.result_condition_id
-    LEFT JOIN 
-        discrete.sample_fractions AS sf ON r.sample_fraction_id = sf.sample_fraction_id
-    LEFT JOIN 
-        discrete.result_speciations AS rs ON r.result_speciation_id = rs.result_speciation_id
-    LEFT JOIN
-        discrete.result_value_types AS rvt ON r.result_value_type = rvt.result_value_type_id
-    LEFT JOIN
-        public.matrix_states AS ms ON r.matrix_state_id = ms.matrix_state_id
-    WHERE 
-        r.sample_id IN (",
-      paste0(samples$sample_id, collapse = ", "),
-      ")
-    AND
-        r.parameter_id IN (",
-      paste0(paramIds$parameter_id, collapse = ", "),
-      ")
-        ;"
-    )
-
-    results <- DBI::dbGetQuery(AC, res_query)
-
-    if (nrow(results) == 0) {
-      stop(
-        "No results were found for the date range locations/parameter combinations specified."
-      )
-    }
-
-    # Merge the results with the samples and paramIds data.frames
-    data <- merge(results, samples, by = "sample_id", all.x = TRUE)
-    data <- merge(data, paramIds, by = "parameter_id", all.x = TRUE)
-
-    data <- filter_ac_values(
-      data,
-      sub_location_ids,
-      "sub_location_id",
-      "sub_location_name"
-    )
-    data <- filter_ac_values(data, media, "media_id", "media_type")
-    data <- filter_ac_values(
-      data,
-      sample_types,
-      "sample_type_id",
-      "sample_type"
-    )
-    data <- filter_ac_values(
-      data,
-      collection_methods,
-      "collection_method_id",
-      "collection_method"
-    )
-    data <- filter_ac_values(
-      data,
-      result_types,
-      "result_type_id",
-      "result_type"
-    )
-    data <- filter_ac_values(
-      data,
-      sample_fractions,
-      "sample_fraction_id",
-      "sample_fraction"
-    )
-    data <- filter_ac_values(
-      data,
-      result_value_types,
-      "result_value_type_id",
-      "result_value_type"
-    )
-    data <- filter_ac_values(
-      data,
-      result_speciations,
-      "result_speciation_id",
-      "result_speciation"
-    )
-
-    if (!isTRUE(include_blanks) && "sample_type" %in% names(data)) {
-      data <- data[
-        is.na(data$sample_type) |
-          !grepl("blank", data$sample_type, ignore.case = TRUE),
-        ,
-        drop = FALSE
-      ]
-    }
-
-    if (duplicate_action == "hide" && "sample_type" %in% names(data)) {
-      data <- data[
-        is.na(data$sample_type) |
-          !grepl("duplicate|replicate", data$sample_type, ignore.case = TRUE),
-        ,
-        drop = FALSE
-      ]
-    }
-
-    if (nrow(data) == 0) {
-      stop(
-        "No results were found after applying the requested sample/result filters."
-      )
-    }
+    data <- samples
 
     # Now make result_condition column understandable
     #result_condition should get < DL, > DL, or NA depending on if 1 or 2 show up in column 'result_condition'
@@ -1781,7 +1844,19 @@ AND s.datetime > '",
         "matrix_state",
         "grade_type_description_fr",
         "approval_type_description_fr",
-        "qualifier_type_description_fr"
+        "qualifier_type_description_fr",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description_fr",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description_fr",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )]
       names(data) <- c(
         "result",
@@ -1807,7 +1882,19 @@ AND s.datetime > '",
         "matrix_state",
         "grade_type_description",
         "approval_type_description",
-        "qualifier_type_description"
+        "qualifier_type_description",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )
     } else {
       data <- data[, c(
@@ -1834,7 +1921,19 @@ AND s.datetime > '",
         "matrix_state",
         "grade_type_description",
         "approval_type_description",
-        "qualifier_type_description"
+        "qualifier_type_description",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )]
       names(data) <- c(
         "result",
@@ -1860,7 +1959,19 @@ AND s.datetime > '",
         "matrix_state",
         "grade_type_description",
         "approval_type_description",
-        "qualifier_type_description"
+        "qualifier_type_description",
+        "lab_report_no",
+        "lab_sample_no",
+        "result_grade_id",
+        "result_grade_code",
+        "result_grade_description",
+        "result_approval_id",
+        "result_approval_code",
+        "result_approval_description",
+        "aggregation_type",
+        "calculation_version",
+        "calculation_arguments",
+        "expected_count"
       )
     }
 
@@ -1871,6 +1982,7 @@ AND s.datetime > '",
 
     if (duplicate_action == "average") {
       data$.qaqc_sample_ids <- lapply(data$sample_id, function(id) id)
+      data$.component_result_ids <- lapply(data$result_id, function(id) id)
       data <- average_discrete_duplicates(data)
     }
   }
@@ -2086,6 +2198,30 @@ AND s.datetime > '",
           )
         }
       }
+      result_grade <- FALSE
+      if ("result_grade_description" %in% names(df)) {
+        if (any(!is.na(df$result_grade_description))) {
+          result_grade <- TRUE
+          df$result_grade_description <- titleCase(
+            df$result_grade_description,
+            lang
+          )
+        }
+      }
+      result_approval <- FALSE
+      if ("result_approval_description" %in% names(df)) {
+        if (any(!is.na(df$result_approval_description))) {
+          result_approval <- TRUE
+          df$result_approval_description <- titleCase(
+            df$result_approval_description,
+            lang
+          )
+        }
+      }
+      lab_report <- "lab_report_no" %in% names(df) &&
+        any(!is.na(df$lab_report_no) & nzchar(df$lab_report_no))
+      lab_sample <- "lab_sample_no" %in% names(df) &&
+        any(!is.na(df$lab_sample_no) & nzchar(df$lab_sample_no))
       qualifier <- FALSE
       if ("qualifier_type_description" %in% names(df)) {
         if (any(!is.na(df$qualifier_type_description))) {
@@ -2146,8 +2282,16 @@ AND s.datetime > '",
             paste("<br>Result value type:", result_value_type)
           },
           if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
-          if (grade) paste("<br>Grade:", grade_type_description),
-          if (approval) paste("<br>Approval:", approval_type_description),
+          if (grade) paste("<br>Sample grade:", grade_type_description),
+          if (approval) paste("<br>Sample approval:", approval_type_description),
+          if (result_grade) {
+            paste("<br>Result grade:", result_grade_description)
+          },
+          if (result_approval) {
+            paste("<br>Result approval:", result_approval_description)
+          },
+          if (lab_report) paste("<br>Lab report:", lab_report_no),
+          if (lab_sample) paste("<br>Lab sample:", lab_sample_no),
           if (qualifier) paste("<br>Qualifier:", qualifier_type_description)
         )
       ) %>%
@@ -2215,8 +2359,16 @@ AND s.datetime > '",
               paste("<br>Result value type:", result_value_type)
             },
             if (has_matrix_state) paste("<br>Matrix state:", matrix_state),
-            if (grade) paste("<br>Grade:", grade_type_description),
-            if (approval) paste("<br>Approval:", approval_type_description),
+            if (grade) paste("<br>Sample grade:", grade_type_description),
+            if (approval) paste("<br>Sample approval:", approval_type_description),
+            if (result_grade) {
+              paste("<br>Result grade:", result_grade_description)
+            },
+            if (result_approval) {
+              paste("<br>Result approval:", result_approval_description)
+            },
+            if (lab_report) paste("<br>Lab report:", lab_report_no),
+            if (lab_sample) paste("<br>Lab sample:", lab_sample_no),
             if (qualifier) paste("<br>Qualifier:", qualifier_type_description)
           )
         )
@@ -2448,6 +2600,7 @@ AND s.datetime > '",
   data <- data[order(data$location_name), ]
 
   source_sample_ids <- integer()
+  source_result_ids <- integer()
   if (dbSource == "AC") {
     source_sample_ids <- if (".qaqc_sample_ids" %in% names(data)) {
       unlist(data$.qaqc_sample_ids, use.names = FALSE)
@@ -2458,7 +2611,17 @@ AND s.datetime > '",
     source_sample_ids <- sort(unique(
       source_sample_ids[!is.na(source_sample_ids)]
     ))
+    source_result_ids <- if (".component_result_ids" %in% names(data)) {
+      unlist(data$.component_result_ids, use.names = FALSE)
+    } else {
+      data$result_id
+    }
+    source_result_ids <- suppressWarnings(as.integer(source_result_ids))
+    source_result_ids <- sort(unique(
+      source_result_ids[!is.na(source_result_ids)]
+    ))
     data$.qaqc_sample_ids <- NULL
+    data$.component_result_ids <- NULL
   }
 
   plot <- create_facet_plot(
@@ -2473,7 +2636,8 @@ AND s.datetime > '",
     return(list(
       plot = plot,
       data = data,
-      source_sample_ids = source_sample_ids
+      source_sample_ids = source_sample_ids,
+      source_result_ids = source_result_ids
     ))
   } else {
     return(plot)

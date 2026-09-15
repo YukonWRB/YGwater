@@ -47,6 +47,16 @@
 #' @param imputed Should imputed data be displayed differently? Default is FALSE.
 #' @param data Should the data used to create the plot be returned? Default is FALSE.
 #' @param build_plot Should a plotly object be constructed? Internal optimisation for Shiny modules. Default is TRUE.
+#' @param preprocessed_trace_data Optional trace data that has already had
+#'   corrections, unusable intervals, datum conversion, and filtering applied.
+#'   This internal optimisation avoids fetching and processing the trace twice.
+#' @param preprocessed_range_data Optional historic-range data already fetched
+#'   by a multi-timeseries caller. This internal optimisation avoids repeating
+#'   the daily-statistics query for every series.
+#' @param preloaded_timeseries_context Optional one-row timeseries metadata
+#'   supplied by a caller that has already fetched a group of timeseries. This
+#'   internal optimisation avoids repeating metadata, unit, station, and datum
+#'   queries for every series in a multi-timeseries plot.
 #' @param con A connection to the target database. NULL uses [AquaConnect()] and automatically disconnects.
 #'
 #' @return A plotly object and a data frame with the data used to create the plot (if `data` is TRUE).
@@ -90,6 +100,9 @@ plotTimeseries <- function(
   imputed = FALSE,
   data = FALSE,
   build_plot = TRUE,
+  preprocessed_trace_data = NULL,
+  preprocessed_range_data = NULL,
+  preloaded_timeseries_context = NULL,
   con = NULL,
   as_of = NULL,
   stats_period = "full"
@@ -138,6 +151,9 @@ plotTimeseries <- function(
 
   if (!build_plot && !data) {
     stop("`build_plot = FALSE` requires `data = TRUE`.")
+  }
+  if (!is.null(preloaded_timeseries_context) && is.null(timeseries_id)) {
+    stop("`preloaded_timeseries_context` requires `timeseries_id`.")
   }
 
   if (!is.null(resolution)) {
@@ -623,25 +639,80 @@ plotTimeseries <- function(
   } else {
     # timeseries_id was provided
     tsid <- timeseries_id
-    # need to fetch pieces to get location_id and parameter_id
-    exist_check <- DBI::dbGetQuery(
-      con,
-      "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ts.start_datetime, ts.end_datetime, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
-      params = list(tsid)
-    )
-    location_id <- exist_check$location_id[1]
-    parameter_tbl <- DBI::dbGetQuery(
-      con,
-      paste(
-        "SELECT p.param_name, p.param_name_fr, p.plot_default_y_orientation,",
-        ac_parameter_unit_select_sql(con, "p", "unit_default"),
-        "FROM public.parameters p WHERE p.parameter_id = $1;"
-      ),
-      params = list(exist_check$parameter_id[1])
-    )
+    if (is.null(preloaded_timeseries_context)) {
+      # Fetch metadata when this function is called independently.
+      exist_check <- DBI::dbGetQuery(
+        con,
+        "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ts.start_datetime, ts.end_datetime, lz.z_meters AS z FROM continuous.timeseries ts LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id WHERE ts.timeseries_id = $1;",
+        params = list(tsid)
+      )
+      location_id <- exist_check$location_id[1]
+      parameter_tbl <- DBI::dbGetQuery(
+        con,
+        paste(
+          "SELECT p.param_name, p.param_name_fr, p.plot_default_y_orientation,",
+          ac_parameter_unit_select_sql(con, "p", "unit_default"),
+          "FROM public.parameters p WHERE p.parameter_id = $1;"
+        ),
+        params = list(exist_check$parameter_id[1])
+      )
+    } else {
+      context <- if (is.data.frame(preloaded_timeseries_context)) {
+        as.list(preloaded_timeseries_context[1, , drop = FALSE])
+      } else {
+        as.list(preloaded_timeseries_context)
+      }
+      required_context <- c(
+        "timeseries_id",
+        "location_id",
+        "parameter_id",
+        "start_datetime",
+        "end_datetime",
+        "param_name",
+        "param_name_fr",
+        "plot_default_y_orientation",
+        "location_name_en",
+        "location_name_fr",
+        "units"
+      )
+      missing_context <- setdiff(required_context, names(context))
+      if (length(missing_context)) {
+        stop(
+          "`preloaded_timeseries_context` is missing required fields: ",
+          paste(missing_context, collapse = ", "),
+          "."
+        )
+      }
+      if (!identical(as.numeric(context$timeseries_id), as.numeric(tsid))) {
+        stop("`preloaded_timeseries_context` does not match `timeseries_id`.")
+      }
+      exist_check <- data.frame(
+        timeseries_id = as.numeric(context$timeseries_id),
+        location_id = as.numeric(context$location_id),
+        parameter_id = as.numeric(context$parameter_id),
+        start_datetime = as.POSIXct(context$start_datetime, tz = "UTC"),
+        end_datetime = as.POSIXct(context$end_datetime, tz = "UTC"),
+        z = if (is.null(context$z)) NA_real_ else as.numeric(context$z)
+      )
+      location_id <- exist_check$location_id[[1]]
+      parameter_tbl <- data.frame(
+        param_name = as.character(context$param_name),
+        param_name_fr = as.character(context$param_name_fr),
+        plot_default_y_orientation = as.character(
+          context$plot_default_y_orientation
+        ),
+        unit_default = if (is.null(context$units)) {
+          NA_character_
+        } else {
+          as.character(context$units)
+        }
+      )
+    }
   }
 
-  # adjust start and end datetimes
+  # Adjust start and end datetimes to the timeseries' available record.
+  requested_start_date <- start_date
+  requested_end_date <- end_date
   if (start_date < exist_check$start_datetime) {
     start_date <- exist_check$start_datetime
   }
@@ -651,7 +722,28 @@ plotTimeseries <- function(
 
   if (end_date < start_date) {
     stop(
-      "It looks like data for this location begins before your requested start date."
+      paste0(
+        "Timeseries ",
+        tsid,
+        " has no data in the requested range (",
+        format(requested_start_date, "%Y-%m-%d %H:%M %Z", tz = tzone),
+        " to ",
+        format(requested_end_date, "%Y-%m-%d %H:%M %Z", tz = tzone),
+        "). Its available record runs from ",
+        format(
+          exist_check$start_datetime,
+          "%Y-%m-%d %H:%M %Z",
+          tz = tzone
+        ),
+        " to ",
+        format(
+          exist_check$end_datetime,
+          "%Y-%m-%d %H:%M %Z",
+          tz = tzone
+        ),
+        "."
+      ),
+      call. = FALSE
     )
   }
 
@@ -667,7 +759,19 @@ plotTimeseries <- function(
   }
 
   # Find the resolved timeseries units, which can now depend on matrix state.
-  units <- ac_get_timeseries_unit(con, tsid)
+  units <- if (
+    !is.null(preloaded_timeseries_context) &&
+      "units" %in% names(context)
+  ) {
+    as.character(context$units)[[1]]
+  } else {
+    ac_get_timeseries_unit(con, tsid)
+  }
+  if (length(units) == 0L || is.na(units[[1]])) {
+    units <- ""
+  } else {
+    units <- units[[1]]
+  }
 
   # Find the necessary datum (latest datum)
   if (datum) {
@@ -678,11 +782,18 @@ plotTimeseries <- function(
       datum_m <- 0
       datum <- FALSE
     } else {
-      datum_m <- DBI::dbGetQuery(
-        con,
-        "SELECT conversion_m FROM public.datum_conversions WHERE location_id = $1 AND current = TRUE;",
-        params = list(location_id)
-      )[1, 1]
+      datum_m <- if (
+        !is.null(preloaded_timeseries_context) &&
+          "datum_conversion_m" %in% names(context)
+      ) {
+        as.numeric(context$datum_conversion_m)[[1]]
+      } else {
+        DBI::dbGetQuery(
+          con,
+          "SELECT conversion_m FROM public.datum_conversions WHERE location_id = $1 AND current = TRUE;",
+          params = list(location_id)
+        )[1, 1]
+      }
       if (is.na(datum_m)) {
         warning(
           "No datum conversion found for this location. Datum will not be applied."
@@ -703,7 +814,17 @@ plotTimeseries <- function(
   }
 
   if (historic_range) {
-    historic_range_meta <- fetch_historic_range_timeseries_metadata(con, tsid)
+    historic_range_meta <- if (
+      !is.null(preloaded_timeseries_context) &&
+        all(c("aggregation_type", "record_rate_seconds") %in% names(context))
+    ) {
+      data.frame(
+        aggregation_type = as.character(context$aggregation_type),
+        record_rate_seconds = as.numeric(context$record_rate_seconds)
+      )
+    } else {
+      fetch_historic_range_timeseries_metadata(con, tsid)
+    }
     if (
       historic_range_is_meaningless(
         aggregation_types = historic_range_meta$aggregation_type,
@@ -717,14 +838,30 @@ plotTimeseries <- function(
 
   if (title) {
     if (is.null(custom_title)) {
-      if (lang == "fr") {
+      if (
+        !is.null(preloaded_timeseries_context) &&
+          all(c("location_name_en", "location_name_fr") %in% names(context))
+      ) {
+        stn_name <- if (
+          lang == "fr" &&
+            !is.na(context$location_name_fr[[1]]) &&
+            nzchar(context$location_name_fr[[1]])
+        ) {
+          context$location_name_fr[[1]]
+        } else {
+          context$location_name_en[[1]]
+        }
+      } else if (lang == "fr") {
         stn_name <- DBI::dbGetQuery(
           con,
           "SELECT name_fr FROM public.locations where location_id = $1;",
           params = list(location_id)
         )[1, 1]
       }
-      if (lang == "en" || is.na(stn_name)) {
+      if (
+        is.null(preloaded_timeseries_context) &&
+          (lang == "en" || is.na(stn_name))
+      ) {
         stn_name <- DBI::dbGetQuery(
           con,
           "SELECT name FROM public.locations where location_id = $1;",
@@ -746,8 +883,10 @@ plotTimeseries <- function(
     }
   }
 
+  trace_data_is_preprocessed <- !is.null(preprocessed_trace_data)
+
   ## Grades, approvals, qualifiers ############
-  if (grades | !unusable) {
+  if (grades || (!unusable && !trace_data_is_preprocessed)) {
     # If unusable is FALSE, grades are also needed to filter the trace.
     grades_dt <- fetch_continuous_qc_intervals(
       con,
@@ -879,7 +1018,24 @@ plotTimeseries <- function(
 
   ## fetch trace and range data ###################
   # Trace data first
-  if (resolution == "day") {
+  if (trace_data_is_preprocessed) {
+    trace_data <- data.table::copy(data.table::as.data.table(
+      preprocessed_trace_data
+    ))
+    required_trace_columns <- c("datetime", "value", "imputed")
+    if (raw) {
+      required_trace_columns <- c(required_trace_columns, "value_raw")
+    }
+    missing_trace_columns <- setdiff(required_trace_columns, names(trace_data))
+    if (length(missing_trace_columns) > 0L) {
+      stop(
+        "`preprocessed_trace_data` is missing required columns: ",
+        paste(missing_trace_columns, collapse = ", "),
+        "."
+      )
+    }
+    trace_data[, datetime := as.POSIXct(datetime, tz = "UTC")]
+  } else if (resolution == "day") {
     if (is.null(as_of)) {
       trace_data <- dbGetQueryDT(
         con,
@@ -954,87 +1110,104 @@ plotTimeseries <- function(
 
   # Range data
   if (historic_range) {
-    range_select <- paste(
-      c(
-        "date AS datetime",
-        daily_stats_select_sql(
-          con,
-          stats_period = stats_period,
-          columns = c("min", "max", "q75", "q25")
+    if (!is.null(preprocessed_range_data)) {
+      range_data <- data.table::copy(data.table::as.data.table(
+        preprocessed_range_data
+      ))
+      required_range_columns <- c("datetime", "min", "max", "q75", "q25")
+      if (!all(required_range_columns %in% names(range_data))) {
+        stop(
+          "`preprocessed_range_data` must contain datetime, min, max, q75, and q25 columns."
         )
-      ),
-      collapse = ", "
-    )
-    # get data from the measurements_calculated_daily table for historic ranges plus values from the measurements_continuous_corrected function. Where there isn't any data in the table fill in with the value from the daily table.
-    range_end <- end_date + 1 * 24 * 60 * 60
-    range_start <- start_date - 1 * 24 * 60 * 60
-    if (is.null(as_of)) {
-      range_data <- dbGetQueryDT(
-        con,
-        paste0(
-          "SELECT ",
-          range_select,
-          " FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
-        ),
-        params = list(tsid, range_start, range_end)
-      )
+      }
     } else {
-      range_data <- dbGetQueryDT(
-        con,
-        paste(
-          paste0("SELECT ", range_select),
-          "FROM continuous.measurements_calculated_daily_at(",
-          "  $1,",
-          "  ARRAY[$2]::INTEGER[],",
-          "  $3::DATE,",
-          "  $4::DATE",
-          ")",
-          "ORDER BY date ASC;"
+      range_select <- paste(
+        c(
+          "date AS datetime",
+          daily_stats_select_sql(
+            con,
+            stats_period = stats_period,
+            columns = c("min", "max", "q75", "q25")
+          )
         ),
-        params = list(as_of, tsid, range_start, range_end)
+        collapse = ", "
       )
+      # Get historic-range values, extending by one day so ribbons reach the
+      # visible trace bounds.
+      range_end <- end_date + 1 * 24 * 60 * 60
+      range_start <- start_date - 1 * 24 * 60 * 60
+      if (is.null(as_of)) {
+        range_data <- dbGetQueryDT(
+          con,
+          paste0(
+            "SELECT ",
+            range_select,
+            " FROM continuous.measurements_calculated_daily WHERE timeseries_id = $1 AND date BETWEEN $2 AND $3 ORDER BY date ASC;"
+          ),
+          params = list(tsid, range_start, range_end)
+        )
+      } else {
+        range_data <- dbGetQueryDT(
+          con,
+          paste(
+            paste0("SELECT ", range_select),
+            "FROM continuous.measurements_calculated_daily_at(",
+            "  $1,",
+            "  ARRAY[$2]::INTEGER[],",
+            "  $3::DATE,",
+            "  $4::DATE",
+            ")",
+            "ORDER BY date ASC;"
+          ),
+          params = list(as_of, tsid, range_start, range_end)
+        )
+      }
     }
     range_data$datetime <- as.POSIXct(range_data$datetime, tz = "UTC")
     attr(range_data$datetime, "tzone") <- tzone
 
-    # Check if the range data extends to the end of trace data. Because range is taken from calculated daily means, it's possible that there's no data yet for the current day. In this case we'll just use the values from the last available range_data$datetime, incrementing it by a day
-    if (
-      max(range_data$datetime, na.rm = TRUE) <
-        max(trace_data$datetime, na.rm = TRUE)
-    ) {
-      last <- range_data[nrow(range_data), ]
-      range_data <- rbind(
-        range_data,
-        data.table(
-          datetime = last$datetime + 1 * 24 * 60 * 60,
-          min = last$min,
-          max = last$max,
-          q25 = last$q25,
-          q75 = last$q75
+    if (!nrow(range_data)) {
+      historic_range <- FALSE
+    } else {
+      # Check if the range data extends to the end of trace data. Because range is taken from calculated daily means, it's possible that there's no data yet for the current day. In this case we'll just use the values from the last available range_data$datetime, incrementing it by a day
+      if (
+        max(range_data$datetime, na.rm = TRUE) <
+          max(trace_data$datetime, na.rm = TRUE)
+      ) {
+        last <- range_data[nrow(range_data), ]
+        range_data <- rbind(
+          range_data,
+          data.table(
+            datetime = last$datetime + 1 * 24 * 60 * 60,
+            min = last$min,
+            max = last$max,
+            q25 = last$q25,
+            q75 = last$q75
+          )
+        )
+      }
+
+      # Find gaps in range data and add NAs
+      full_range <- data.table::data.table(
+        datetime = seq.POSIXt(
+          from = min(range_data$datetime, na.rm = TRUE),
+          to = max(range_data$datetime, na.rm = TRUE),
+          by = "day"
         )
       )
-    }
-
-    # Find gaps in range data and add NAs
-    full_range <- data.table::data.table(
-      datetime = seq.POSIXt(
-        from = min(range_data$datetime, na.rm = TRUE),
-        to = max(range_data$datetime, na.rm = TRUE),
-        by = "day"
+      range_data <- merge(
+        full_range,
+        range_data,
+        by = "datetime",
+        all.x = TRUE
       )
-    )
-    range_data <- merge(
-      full_range,
-      range_data,
-      by = "datetime",
-      all.x = TRUE
-    )
 
-    # order by datetime
-    data.table::setorder(range_data, datetime)
+      # order by datetime
+      data.table::setorder(range_data, datetime)
+    }
   }
 
-  if (!unusable) {
+  if (!trace_data_is_preprocessed && !unusable) {
     # Throw out data carrying the no-use grade that existed at `as_of`.
     unus <- grades_dt[grades_dt$grade_type_code == "N"]
     if (nrow(unus) > 0) {
@@ -1050,7 +1223,9 @@ plotTimeseries <- function(
   # fill gaps with NA values
   # Since recording rate can change within a timeseries, use calculate_period and some data.table magic to fill in gaps
   min_trace <- suppressWarnings(min(trace_data$datetime, na.rm = TRUE))
-  if (!is.infinite(min_trace)) {
+  if (trace_data_is_preprocessed) {
+    # The supplied trace already has the transformations below applied.
+  } else if (!is.infinite(min_trace)) {
     if (resolution == "hour") {
       trace_data <- add_gap_markers(trace_data, period_seconds = 3600)
     } else if (resolution == "max") {
@@ -1180,9 +1355,11 @@ plotTimeseries <- function(
   }
 
   if (datum) {
-    trace_data$value <- trace_data$value + datum_m
-    if (raw) {
-      trace_data$value_raw <- trace_data$value_raw + datum_m
+    if (!trace_data_is_preprocessed) {
+      trace_data$value <- trace_data$value + datum_m
+      if (raw) {
+        trace_data$value_raw <- trace_data$value_raw + datum_m
+      }
     }
     if (historic_range) {
       range_data$min <- range_data$min + datum_m
@@ -1193,7 +1370,7 @@ plotTimeseries <- function(
   }
   trace_data <- trace_data[order(trace_data$datetime), ]
 
-  if (!is.null(filter)) {
+  if (!trace_data_is_preprocessed && !is.null(filter)) {
     # Use the same approach as in ggplotOverlap to filter the value column
     if (!inherits(filter, "numeric")) {
       message(
@@ -1328,6 +1505,7 @@ plotTimeseries <- function(
   adaptive_meta <- list(
     hover = hover,
     line_name = corrected_name,
+    units = units,
     line_color = "#00454e",
     line_width = 2.5 * line_scale,
     band_names = list(

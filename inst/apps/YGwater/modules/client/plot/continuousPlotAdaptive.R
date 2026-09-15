@@ -136,12 +136,37 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       timeseries = cached$timeseries
     )
 
+    map_location_value <- function(location_id) {
+      YGwater:::continuous_plot_map_location_value(
+        location_id = location_id,
+        timeseries = moduleData$timeseries,
+        locations = moduleData$locs,
+        name_col = tr("generic_name_col", language$language)
+      )
+    }
+
+    initial_location_id <- if (
+      !is.null(inputs) &&
+        identical(isolate(inputs$location_target), "contPlot") &&
+        !is.null(map_location_value(isolate(inputs$location_id)))
+    ) {
+      unique(as.numeric(isolate(inputs$location_id)))[[1L]]
+    } else {
+      NULL
+    }
+
     moduleInputs <- reactiveValues(
-      location_id = if (!is.null(inputs$location_id)) {
-        as.numeric(inputs$location_id)
+      location_id = initial_location_id,
+      location_request_id = if (!is.null(inputs)) {
+        isolate(inputs$location_request_id)
       } else {
         NULL
       }
+    )
+    pending_map_location <- reactiveVal(initial_location_id)
+    timeseries_table_proxy <- DT::dataTableProxy(
+      "timeseries_table",
+      session = session
     )
 
     values <- reactiveValues(
@@ -271,6 +296,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ts <- ts[location_id %in% loc_filter_ids]
 
       locs <- unique(moduleData$locs, by = "location_id")
+      locs[, location_label := YGwater:::continuous_plot_location_labels(
+        locs,
+        loc_name_col
+      )]
       sub_locs <- unique(moduleData$sub_locs, by = "sub_location_id")
       params <- unique(moduleData$params, by = "parameter_id")
       media <- unique(moduleData$media, by = "media_id")
@@ -332,8 +361,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ts <- merge(
         ts,
         locs[,
-          .(location_id, location = .SD[[loc_name_col]]),
-          .SDcols = loc_name_col
+          .(location_id, location = location_label)
         ],
         by = "location_id",
         all.x = TRUE
@@ -397,6 +425,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       if (!"timeseries_type_name_fr" %in% names(ts)) {
         ts[, timeseries_type_name_fr := timeseries_type_name]
       }
+      if (!"sensor_priority" %in% names(ts)) {
+        ts[, sensor_priority := NA_integer_]
+      }
 
       if (language$abbrev == "fr") {
         ts[, timeseries_type := timeseries_type_name_fr]
@@ -408,6 +439,12 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         timeseries_type := timeseries_type_code
       ]
       ts[, timeseries_type := as.factor(timeseries_type)]
+      ts[,
+        sensor_priority := as.factor(YGwater:::format_sensor_priority_label(
+          sensor_priority,
+          language$language
+        ))
+      ]
 
       # Convert to periods
       ts[,
@@ -425,6 +462,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         sub_location,
         loc_code,
         parameter,
+        sensor_priority,
         media,
         aggregation,
         z,
@@ -455,6 +493,71 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       data.table::setorder(ts, location, parameter)
       ts
     })
+
+    apply_map_location_filter <- function(location_id) {
+      location_value <- map_location_value(location_id)
+      if (is.null(location_value)) {
+        return(invisible(FALSE))
+      }
+
+      location_id <- unique(as.numeric(location_id))[[1L]]
+      moduleInputs$location_id <- location_id
+      pending_map_location(location_id)
+
+      had_scope_filters <-
+        length(isolate(input$network_filter)) > 0L ||
+        length(isolate(input$project_filter)) > 0L
+      updateSelectizeInput(
+        session,
+        "network_filter",
+        selected = character(0)
+      )
+      updateSelectizeInput(
+        session,
+        "project_filter",
+        selected = character(0)
+      )
+
+      # Clearing either scope filter rebuilds the table. The pending location
+      # is consumed by that render through searchCols, after all rows return.
+      if (had_scope_filters) {
+        return(invisible(TRUE))
+      }
+
+      searches <- YGwater:::continuous_plot_location_search_columns(
+        names(timeseries_table_reactive()),
+        location_value
+      )
+      DT::updateSearch(
+        timeseries_table_proxy,
+        keywords = list(global = "", columns = searches)
+      )
+      session$onFlushed(
+        function() {
+          if (identical(isolate(pending_map_location()), location_id)) {
+            pending_map_location(NULL)
+          }
+        },
+        once = TRUE
+      )
+      invisible(TRUE)
+    }
+
+    observeEvent(
+      if (!is.null(inputs)) inputs$location_request_id else NULL,
+      {
+        req(identical(inputs$location_target, "contPlot"))
+        request_id <- inputs$location_request_id
+        if (identical(request_id, isolate(moduleInputs$location_request_id))) {
+          return()
+        }
+
+        moduleInputs$location_request_id <- request_id
+        apply_map_location_filter(inputs$location_id)
+      },
+      ignoreInit = TRUE,
+      ignoreNULL = TRUE
+    )
 
     output$banner <- renderUI({
       application_notifications_ui(
@@ -541,7 +644,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               uiOutput(ns("selected_timeseries_output")),
               actionButton(
                 ns("add_new_timeseries"),
-                label = "Add another timeseries"
+                label = tr("add_another_timeseries", language$language)
               )
             ) # End div
           ), # End table_panel
@@ -741,21 +844,13 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                       ),
                       selectizeInput(
                         ns("historic_stats_period"),
-                        label = if (language$abbrev == "fr") {
-                          "P\u00e9riode des statistiques"
-                        } else {
-                          "Stats period"
-                        },
+                        label = tr("stats_period", language$language),
                         choices = stats::setNames(
                           c("30yr", "full"),
-                          if (language$abbrev == "fr") {
-                            c(
-                              "30 derni\u00e8res ann\u00e9es",
-                              "Toute la p\u00e9riode"
-                            )
-                          } else {
-                            c("Last 30 years", "Entire record")
-                          }
+                          YGwater:::format_stats_period_label(
+                            c("30yr", "full"),
+                            language$language
+                          )
                         ),
                         selected = "30yr",
                         multiple = FALSE
@@ -824,44 +919,76 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                       ns = ns,
                       selectizeInput(
                         ns("hist_transformation"),
-                        label = "Transformation",
-                        choices = c(
-                          "sum",
-                          "min",
-                          "max",
-                          "mean",
-                          "median",
-                          "integral"
+                        label = tr(
+                          "histogram_transformation",
+                          language$language
+                        ),
+                        choices = stats::setNames(
+                          c(
+                            "sum",
+                            "min",
+                            "max",
+                            "mean",
+                            "median",
+                            "integral"
+                          ),
+                          vapply(
+                            c(
+                              "histogram_sum",
+                              "histogram_minimum",
+                              "histogram_maximum",
+                              "histogram_mean",
+                              "snowbull_median",
+                              "histogram_integral"
+                            ),
+                            tr,
+                            character(1),
+                            lang = language$language
+                          )
                         ),
                         selected = "sum"
                       ),
                       selectizeInput(
                         ns("hist_bin_units"),
-                        label = "Bin units",
-                        choices = c(
-                          "day",
-                          "week",
-                          "month",
-                          "year"
+                        label = tr("histogram_bin_units", language$language),
+                        choices = stats::setNames(
+                          c("day", "week", "month", "year"),
+                          vapply(
+                            c(
+                              "time_unit_day",
+                              "time_unit_week",
+                              "month",
+                              "gen_snowBul_year"
+                            ),
+                            tr,
+                            character(1),
+                            lang = language$language
+                          )
                         ),
                         selected = "month"
                       ),
                       numericInput(
                         ns("hist_bin_width"),
-                        label = "Bin width",
+                        label = tr("histogram_bin_width", language$language),
                         value = 1,
                         min = 1
                       ),
                       numericInput(
                         ns("hist_threshold"),
-                        label = "Min % of records to show bin (0-100)",
+                        label = tr(
+                          "histogram_min_completeness",
+                          language$language
+                        ),
                         value = 90,
                         min = 1,
                         max = 100
                       ),
                       checkboxInput(
                         ns("hist_completeness_labels"),
-                        label = "Show completeness % above bins",
+                        label = tr(
+                          "histogram_show_completeness",
+                          language$language
+                        ),
                         value = TRUE
                       )
                     ) # End histogram conditionalPanel
@@ -883,6 +1010,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           id = ns("plot_container"),
           plotly::plotlyOutput(ns("plot"), height = "800px", inline = TRUE)
         ),
+        uiOutput(ns("notes_alert")),
         uiOutput(ns("historic_stats_caption")),
         uiOutput(ns("full_screen_ui")),
 
@@ -1359,7 +1487,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       ignoreNULL = FALSE
     )
 
-    proxy <- DT::dataTableProxy("timeseries_table")
+    proxy <- timeseries_table_proxy
 
     # Fill the active slot when a row is selected in the table
     observeEvent(input$timeseries_table_rows_selected, {
@@ -1379,19 +1507,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
         duplicate_idx <- which(!is.na(slots) & slots == selected_id)
         if (length(duplicate_idx) > 0 && duplicate_idx[[1]] != idx) {
-          duplicate_message <- if (language$abbrev == "fr") {
-            paste(
-              "La série chronologique",
-              selected_id,
-              "est déjà sélectionnée. Choisissez-en une autre."
-            )
-          } else {
-            paste(
-              "Timeseries",
-              selected_id,
-              "is already selected. Choose a different timeseries."
-            )
-          }
+          duplicate_message <- sprintf(
+            tr("timeseries_already_selected", language$language),
+            selected_id
+          )
           showNotification(
             duplicate_message,
             type = "warning"
@@ -1436,6 +1555,19 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
     output$timeseries_table <- DT::renderDataTable({
       ts <- timeseries_table_reactive()
 
+      pending_location_id <- isolate(pending_map_location())
+      pending_location_value <- map_location_value(pending_location_id)
+      search_values <- YGwater:::continuous_plot_location_search_columns(
+        names(ts),
+        pending_location_value
+      )
+      search_cols <- lapply(search_values, function(value) {
+        if (nzchar(value)) list(search = value) else NULL
+      })
+      if (!is.null(pending_location_id)) {
+        isolate(pending_map_location(NULL))
+      }
+
       column_labels <- c(
         timeseries_id = "timeseries_id",
         timeseries_type = tr("type", language$language),
@@ -1443,6 +1575,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         sub_location = tr("sub_loc", language$language),
         loc_code = tr("code", language$language),
         parameter = tr("parameter", language$language),
+        sensor_priority = tr("sensor_priority", language$language),
         media = tr("media", language$language),
         aggregation = tr("aggregation", language$language),
         z = tr("z", language$language),
@@ -1543,6 +1676,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             infoFiltered = tr("tbl_filtered", language$language),
             zeroRecords = tr("tbl_zero", language$language)
           ),
+          searchCols = search_cols,
           order = order_columns,
           stateSave = FALSE
         ), # End options
@@ -2083,7 +2217,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               if (show_delete && !is.na(ts_id)) {
                 actionButton(
                   ns(paste0("delete_timeseries_", i)),
-                  label = "Delete",
+                  label = tr("delete", language$language),
                   class = "btn btn-outline-danger btn-sm"
                 )
               }
@@ -2565,13 +2699,12 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
       ts <- timeseries_table_reactive()
       ids_chr <- as.character(ids)
-      current_tab <- if (is.null(input$metadata_timeseries_tab)) {
-        ""
-      } else {
-        as.character(input$metadata_timeseries_tab)
-      }
-      selected_tab <- if (nzchar(current_tab) && current_tab %in% ids_chr) {
-        current_tab
+      current_tab <- input$metadata_timeseries_select
+      selected_tab <- if (
+        !is.null(current_tab) &&
+          as.character(current_tab) %in% ids_chr
+      ) {
+        as.character(current_tab)
       } else {
         ids_chr[[1]]
       }
@@ -2601,24 +2734,37 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           ]
           label <- paste(label_parts, collapse = " | ")
         }
-
-        tabPanel(
-          title = label,
-          value = as.character(ts_id),
-          tags$div(style = "height: 1px;")
+        tags$li(
+          class = "nav-item",
+          role = "presentation",
+          tags$a(
+            class = paste(
+              "nav-link",
+              if (identical(as.character(ts_id), selected_tab)) "active"
+            ),
+            href = "#",
+            role = "tab",
+            `aria-selected` = if (
+              identical(as.character(ts_id), selected_tab)
+            ) {
+              "true"
+            } else {
+              "false"
+            },
+            onclick = sprintf(
+              "Shiny.setInputValue('%s', '%s', {priority: 'event'}); return false;",
+              ns("metadata_timeseries_select"),
+              ts_id
+            ),
+            label
+          )
         )
       })
 
-      do.call(
-        tabsetPanel,
-        c(
-          list(
-            id = ns("metadata_timeseries_tab"),
-            type = "tabs",
-            selected = selected_tab
-          ),
-          tabs
-        )
+      tags$ul(
+        class = "nav nav-tabs",
+        role = "tablist",
+        tabs
       )
     })
 
@@ -2629,7 +2775,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
 
       selected_tab <- suppressWarnings(as.numeric(
-        input$metadata_timeseries_tab
+        input$metadata_timeseries_select
       ))
       if (
         length(selected_tab) == 1 &&
@@ -2790,6 +2936,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       media <- ts_tbl$media
       aggregation <- ts_tbl$aggregation
       record_rate <- ts_tbl$record_rate_seconds
+      sensor_priority <- YGwater:::format_sensor_priority_label(
+        ts_tbl$sensor_priority,
+        language$language
+      )
       depth_height <- ts_tbl$depth_height_m
       start_dt <- ts_tbl$start_datetime
       end_dt <- ts_tbl$end_datetime
@@ -2807,6 +2957,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           tr("parameter", language$language),
           tr("units", language$language),
           tr("media", language$language),
+          tr("sensor_priority", language$language),
           tr("aggregation", language$language),
           tr("nominal_rate", language$language),
           tr("depth_height_m", language$language),
@@ -2818,6 +2969,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           format_metadata_value(parameter),
           format_metadata_value(units),
           format_metadata_value(media),
+          format_metadata_value(sensor_priority),
           format_metadata_value(aggregation),
           format_metadata_value(record_rate_display),
           format_metadata_value(depth_height),
@@ -2969,6 +3121,17 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
       key_xlim <- if (is.null(xlim)) {
         "full"
+      } else if (is.list(xlim) && !inherits(xlim, "POSIXt")) {
+        paste(
+          names(xlim),
+          vapply(xlim, function(axis_xlim) {
+            if (is.null(axis_xlim)) {
+              return("auto")
+            }
+            paste(format(axis_xlim, tz = "UTC", usetz = TRUE), collapse = "|")
+          }, character(1)),
+          collapse = ";"
+        )
       } else {
         paste(format(xlim, tz = "UTC", usetz = TRUE), collapse = "|")
       }
@@ -3030,10 +3193,20 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       if (is.null(xaxis_names) || length(xaxis_names) == 0) {
         xaxis_names <- "xaxis"
       }
+      if (is.list(xlim) && !inherits(xlim, "POSIXt")) {
+        xaxis_names <- adaptiveState$payload$series_xaxis_names
+      }
       relayout_args <- do.call(
         c,
         lapply(xaxis_names, function(axis_name) {
-          if (is.null(xlim)) {
+          axis_xlim <- if (
+            is.list(xlim) && !inherits(xlim, "POSIXt")
+          ) {
+            xlim[[axis_name]]
+          } else {
+            xlim
+          }
+          if (is.null(axis_xlim)) {
             return(stats::setNames(
               list(TRUE),
               paste0(axis_name, ".autorange")
@@ -3041,7 +3214,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           }
 
           stats::setNames(
-            list(xlim[[1]], xlim[[2]], FALSE),
+            list(axis_xlim[[1]], axis_xlim[[2]], FALSE),
             paste0(axis_name, c(".range[0]", ".range[1]", ".autorange"))
           )
         })
@@ -3252,34 +3425,42 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
             fetch_timeseries_plot_metadata <- function(ids) {
               ids_sql <- paste(as.integer(ids), collapse = ",")
+              unit_sql <- ac_parameter_unit_select_sql(
+                con,
+                parameter_alias = "p",
+                output_alias = "units",
+                matrix_state_alias = "ts",
+                media_alias = "ts"
+              )
               meta <- DBI::dbGetQuery(
                 con,
                 paste0(
                   "SELECT ts.timeseries_id, ts.location_id, ts.parameter_id, ",
-                  "ts.aggregation_type_id, lz.z_meters AS z, ",
+                  "ts.timeseries_type, ts.start_datetime, ts.end_datetime, ",
+                  "ts.aggregation_type_id, ",
+                  "EXTRACT(EPOCH FROM ts.record_rate) AS record_rate_seconds, ",
+                  "lz.z_meters AS z, ",
                   "COALESCE(at.aggregation_type, '') AS aggregation_type, ",
-                  if (req$lang == "fr") {
-                    paste0(
-                      "COALESCE(l.name_fr, l.name, ts.location_id::text) ",
-                      "AS location_name, ",
-                      "COALESCE(p.param_name_fr, p.param_name, ",
-                      "ts.parameter_id::text) AS parameter_name, "
-                    )
-                  } else {
-                    paste0(
-                      "COALESCE(l.name, ts.location_id::text) ",
-                      "AS location_name, ",
-                      "COALESCE(p.param_name, ts.parameter_id::text) ",
-                      "AS parameter_name, "
-                    )
-                  },
-                  "p.plot_default_y_orientation ",
+                  "COALESCE(l.name, ts.location_id::text) AS location_name_en, ",
+                  "COALESCE(l.name_fr, l.name, ts.location_id::text) ",
+                  "AS location_name_fr, ",
+                  "COALESCE(p.param_name, ts.parameter_id::text) AS param_name, ",
+                  "COALESCE(p.param_name_fr, p.param_name, ",
+                  "ts.parameter_id::text) AS param_name_fr, ",
+                  "p.plot_default_y_orientation, ",
+                  unit_sql,
+                  ", datum.conversion_m AS datum_conversion_m ",
                   "FROM continuous.timeseries ts ",
                   "LEFT JOIN public.locations l ON ts.location_id = l.location_id ",
                   "LEFT JOIN public.parameters p ON ts.parameter_id = p.parameter_id ",
                   "LEFT JOIN continuous.aggregation_types at ",
                   "ON ts.aggregation_type_id = at.aggregation_type_id ",
                   "LEFT JOIN public.locations_z lz ON ts.z_id = lz.z_id ",
+                  "LEFT JOIN LATERAL (",
+                  "SELECT dc.conversion_m FROM public.datum_conversions dc ",
+                  "WHERE dc.location_id = ts.location_id AND dc.current = TRUE ",
+                  "ORDER BY dc.conversion_id DESC LIMIT 1",
+                  ") datum ON TRUE ",
                   "WHERE ts.timeseries_id IN (",
                   ids_sql,
                   ");"
@@ -3291,12 +3472,20 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   timeseries_id = numeric(),
                   location_id = numeric(),
                   parameter_id = numeric(),
+                  timeseries_type = character(),
+                  start_datetime = as.POSIXct(character(), tz = "UTC"),
+                  end_datetime = as.POSIXct(character(), tz = "UTC"),
                   aggregation_type_id = numeric(),
+                  record_rate_seconds = numeric(),
                   z = numeric(),
                   aggregation_type = character(),
-                  location_name = character(),
-                  parameter_name = character(),
-                  plot_default_y_orientation = character()
+                  location_name_en = character(),
+                  location_name_fr = character(),
+                  param_name = character(),
+                  param_name_fr = character(),
+                  plot_default_y_orientation = character(),
+                  units = character(),
+                  datum_conversion_m = numeric()
                 )
               }
 
@@ -3311,34 +3500,34 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 ]
                 meta[
                   missing_rows,
-                  location_name := paste(
+                  location_name_en := paste(
                     "Timeseries",
                     timeseries_id
                   )
                 ]
                 meta[
                   missing_rows,
-                  parameter_name := paste(
+                  location_name_fr := location_name_en
+                ]
+                meta[
+                  missing_rows,
+                  param_name := paste(
                     "Timeseries",
                     timeseries_id
                   )
                 ]
+                meta[missing_rows, param_name_fr := param_name]
+              }
+              if (req$lang == "fr") {
+                meta[, location_name := location_name_fr]
+                meta[, parameter_name := param_name_fr]
+              } else {
+                meta[, location_name := location_name_en]
+                meta[, parameter_name := param_name]
               }
               meta[, location_name := titleCase(location_name, req$lang)]
               meta[, parameter_name := titleCase(parameter_name, req$lang)]
-              meta[,
-                units := vapply(
-                  timeseries_id,
-                  function(ts_id) {
-                    unit <- tryCatch(
-                      ac_get_timeseries_unit(con, ts_id),
-                      error = function(e) NA_character_
-                    )
-                    if (is.na(unit) || !nzchar(unit)) "" else unit
-                  },
-                  character(1)
-                )
-              ]
+              meta[is.na(units), units := ""]
               meta[, data_key := paste0(location_id, "_", parameter_id)]
               meta[
                 is.na(data_key) | data_key == "NA_NA",
@@ -3580,15 +3769,18 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 )
               }
 
-              YGwater:::viewport_layout_apply_xlim(
-                layout,
-                xlim = selected_xlim,
-                xaxis_names = vapply(
-                  seq_len(n),
-                  function(i) YGwater:::viewport_layout_axis_name("x", i),
-                  character(1)
+              if (isTRUE(req$shareX)) {
+                layout <- YGwater:::viewport_layout_apply_xlim(
+                  layout,
+                  xlim = selected_xlim,
+                  xaxis_names = vapply(
+                    seq_len(n),
+                    function(i) YGwater:::viewport_layout_axis_name("x", i),
+                    character(1)
+                  )
                 )
-              )
+              }
+              layout
             }
 
             traces_layout <- function(series, selected_xlim) {
@@ -3781,26 +3973,11 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
             apply_unusable_intervals <- function(
               trace_data,
-              ts_id,
-              start_dt,
-              end_dt
+              unusable_dt
             ) {
               if (isTRUE(req$unusable) || !nrow(trace_data)) {
                 return(trace_data)
               }
-
-              unusable_dt <- YGwater:::fetch_continuous_qc_intervals(
-                con,
-                timeseries_id = ts_id,
-                start_date = start_dt,
-                end_date = end_dt,
-                qc_type = "grade",
-                as_of = req$as_of
-              )
-              unusable_dt <- unusable_dt[
-                unusable_dt$qc_type_code == "N",
-                c("start_dt", "end_dt")
-              ]
               if (!nrow(unusable_dt)) {
                 return(trace_data)
               }
@@ -3813,43 +3990,30 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               trace_data
             }
 
-            apply_trace_datum <- function(trace_data, ts_id) {
+            apply_trace_datum <- function(trace_data, ts_meta) {
               if (!isTRUE(req$datum) || !nrow(trace_data)) {
                 return(trace_data)
               }
 
-              datum_m <- trace_datum_offset(ts_id)
+              datum_m <- trace_datum_offset(ts_meta)
               if (!is.na(datum_m) && datum_m != 0) {
                 trace_data[, value := value + datum_m]
               }
               trace_data
             }
 
-            trace_datum_offset <- function(ts_id) {
+            trace_datum_offset <- function(ts_meta) {
               if (!isTRUE(req$datum)) {
                 return(0)
               }
-
-              units <- ac_get_timeseries_unit(con, ts_id)
-              if (is.na(units) || units != "m") {
+              if (
+                nrow(ts_meta) != 1L ||
+                  is.na(ts_meta$units[[1]]) ||
+                  ts_meta$units[[1]] != "m"
+              ) {
                 return(0)
               }
-
-              location_id <- DBI::dbGetQuery(
-                con,
-                "SELECT location_id
-                 FROM continuous.timeseries
-                 WHERE timeseries_id = $1;",
-                params = list(ts_id)
-              )[1, 1]
-              datum_m <- DBI::dbGetQuery(
-                con,
-                "SELECT conversion_m
-                 FROM public.datum_conversions
-                  WHERE location_id = $1
-                    AND current = TRUE;",
-                params = list(location_id)
-              )[1, 1]
+              datum_m <- ts_meta$datum_conversion_m[[1]]
               if (is.na(datum_m)) {
                 return(0)
               }
@@ -3909,82 +4073,246 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               trace_data
             }
 
-            fetch_fast_basic_trace <- function(ts_id, parameter_name) {
-              ts_meta <- DBI::dbGetQuery(
-                con,
-                "SELECT timeseries_type, start_datetime, end_datetime
-                 FROM continuous.timeseries
-                 WHERE timeseries_id = $1;",
-                params = list(ts_id)
-              )
-              if (
-                nrow(ts_meta) == 0L ||
-                  is.na(ts_meta$timeseries_type[[1]]) ||
-                  ts_meta$timeseries_type[[1]] != "basic"
-              ) {
-                return(NULL)
+            fetch_fast_basic_traces <- function(meta_rows) {
+              ids <- as.numeric(meta_rows$timeseries_id)
+              traces <- stats::setNames(vector("list", length(ids)), ids)
+              eligible <- data.table::copy(meta_rows[
+                !is.na(timeseries_type) & timeseries_type == "basic"
+              ])
+              if (!nrow(eligible)) {
+                return(traces)
               }
 
-              start_dt <- max(
-                normalize_timeseries_datetime(req$start_date, bound = "start"),
-                as.POSIXct(ts_meta$start_datetime[[1]], tz = "UTC"),
-                na.rm = TRUE
+              request_start <- normalize_timeseries_datetime(
+                req$start_date,
+                bound = "start"
               )
-              end_dt <- min(
-                normalize_timeseries_datetime(req$end_date, bound = "end"),
-                as.POSIXct(ts_meta$end_datetime[[1]], tz = "UTC"),
-                na.rm = TRUE
+              request_end <- normalize_timeseries_datetime(
+                req$end_date,
+                bound = "end"
               )
-              if (is.na(start_dt) || is.na(end_dt) || end_dt < start_dt) {
-                return(NULL)
+              eligible[,
+                `:=`(
+                  fetch_start = pmax(
+                    request_start,
+                    as.POSIXct(start_datetime, tz = "UTC"),
+                    na.rm = TRUE
+                  ),
+                  fetch_end = pmin(
+                    request_end,
+                    as.POSIXct(end_datetime, tz = "UTC"),
+                    na.rm = TRUE
+                  )
+                )
+              ]
+              eligible <- eligible[
+                !is.na(fetch_start) &
+                  !is.na(fetch_end) &
+                  fetch_end >= fetch_start
+              ]
+              if (!nrow(eligible)) {
+                return(traces)
               }
 
+              ids_sql <- paste(as.integer(eligible$timeseries_id), collapse = ",")
+              min_start <- min(eligible$fetch_start)
+              max_end <- max(eligible$fetch_end)
               trace_data <- dbGetQueryDT(
                 con,
-                "SELECT datetime, value, imputed
+                paste0(
+                  "SELECT timeseries_id, datetime, value, imputed
                  FROM continuous.measurements_continuous
-                 WHERE timeseries_id = $1
-                   AND datetime BETWEEN $2 AND $3
-                 ORDER BY datetime ASC;",
-                params = list(ts_id, start_dt, end_dt)
+                 WHERE timeseries_id IN (",
+                  ids_sql,
+                  ") AND datetime BETWEEN $1 AND $2
+                 ORDER BY timeseries_id, datetime ASC;"
+                ),
+                params = list(min_start, max_end)
               )
-              if (!nrow(trace_data)) {
-                return(NULL)
-              }
-
               corrections <- dbGetQueryDT(
                 con,
-                "SELECT c.start_dt, c.end_dt, c.value1, c.value2,
-                        c.timestep_window, c.equation,
+                paste0(
+                  "SELECT c.timeseries_id, c.start_dt, c.end_dt,
+                        c.value1, c.value2, c.timestep_window, c.equation,
                         ct.correction_type, ct.priority
                  FROM continuous.corrections c
                  JOIN continuous.correction_types ct
                    ON c.correction_type = ct.correction_type_id
-                 WHERE c.timeseries_id = $1
-                   AND c.start_dt <= $2
-                   AND c.end_dt >= $3
-                 ORDER BY ct.priority ASC, c.start_dt ASC, c.correction_id ASC;",
-                params = list(ts_id, end_dt, start_dt)
+                 WHERE c.timeseries_id IN (",
+                  ids_sql,
+                  ") AND c.start_dt <= $2
+                   AND c.end_dt >= $1
+                 ORDER BY c.timeseries_id, ct.priority ASC,
+                          c.start_dt ASC, c.correction_id ASC;"
+                ),
+                params = list(min_start, max_end)
               )
-
-              trace_data <- apply_simple_corrections(trace_data, corrections)
-              if (is.null(trace_data)) {
-                return(NULL)
+              unusable_intervals <- data.table::data.table(
+                timeseries_id = integer(),
+                start_dt = as.POSIXct(character(), tz = "UTC"),
+                end_dt = as.POSIXct(character(), tz = "UTC")
+              )
+              if (!isTRUE(req$unusable)) {
+                unusable_intervals <- dbGetQueryDT(
+                  con,
+                  paste0(
+                    "SELECT g.timeseries_id, g.start_dt, g.end_dt
+                   FROM continuous.grades g
+                   JOIN public.grade_types gt
+                     ON gt.grade_type_id = g.grade_type_id
+                   WHERE g.timeseries_id IN (",
+                    ids_sql,
+                    ") AND gt.grade_type_code = 'N'
+                     AND g.start_dt <= $2
+                     AND g.end_dt >= $1
+                   ORDER BY g.timeseries_id, g.start_dt, g.end_dt;"
+                  ),
+                  params = list(min_start, max_end)
+                )
               }
 
-              trace_data <- apply_unusable_intervals(
-                trace_data,
-                ts_id,
-                start_dt,
-                end_dt
+              for (i in seq_len(nrow(eligible))) {
+                ts_meta <- eligible[i]
+                ts_id <- ts_meta$timeseries_id[[1]]
+                trace_i <- data.table::copy(trace_data[
+                  timeseries_id == ts_id &
+                    datetime >= ts_meta$fetch_start[[1]] &
+                    datetime <= ts_meta$fetch_end[[1]],
+                  .(datetime, value, imputed)
+                ])
+                if (!nrow(trace_i)) {
+                  next
+                }
+                corrections_i <- corrections[
+                  timeseries_id == ts_id,
+                  .(
+                    start_dt,
+                    end_dt,
+                    value1,
+                    value2,
+                    timestep_window,
+                    equation,
+                    correction_type,
+                    priority
+                  )
+                ]
+                trace_i <- apply_simple_corrections(trace_i, corrections_i)
+                if (is.null(trace_i)) {
+                  next
+                }
+                trace_i <- apply_unusable_intervals(
+                  trace_i,
+                  unusable_intervals[
+                    timeseries_id == ts_id,
+                    .(start_dt, end_dt)
+                  ]
+                )
+                trace_i <- apply_trace_datum(trace_i, ts_meta)
+                trace_i <- apply_adaptive_trace_filter(
+                  trace_i,
+                  tolower(ts_meta$parameter_name[[1]])
+                )
+                attr(trace_i$datetime, "tzone") <- plot_timezone
+                traces[[as.character(ts_id)]] <- trace_i
+              }
+              traces
+            }
+
+            fetch_fast_range_data <- function(meta_rows) {
+              ids <- as.numeric(meta_rows$timeseries_id)
+              ranges <- stats::setNames(vector("list", length(ids)), ids)
+              if (
+                !isTRUE(req$historic_range) ||
+                  !is.null(req$as_of) ||
+                  !length(ids)
+              ) {
+                return(ranges)
+              }
+
+              request_start <- normalize_timeseries_datetime(
+                req$start_date,
+                bound = "start"
               )
-              trace_data <- apply_trace_datum(trace_data, ts_id)
-              trace_data <- apply_adaptive_trace_filter(
-                trace_data,
-                parameter_name
+              request_end <- normalize_timeseries_datetime(
+                req$end_date,
+                bound = "end"
               )
-              attr(trace_data$datetime, "tzone") <- plot_timezone
-              trace_data
+              bounds <- data.table::copy(meta_rows)
+              bounds[,
+                `:=`(
+                  range_start = pmax(
+                    request_start,
+                    as.POSIXct(start_datetime, tz = "UTC"),
+                    na.rm = TRUE
+                  ) - 24 * 60 * 60,
+                  range_end = pmin(
+                    request_end,
+                    as.POSIXct(end_datetime, tz = "UTC"),
+                    na.rm = TRUE
+                  ) + 24 * 60 * 60
+                )
+              ]
+              bounds <- bounds[
+                !is.na(range_start) &
+                  !is.na(range_end) &
+                  range_end >= range_start
+              ]
+              if (!nrow(bounds)) {
+                return(ranges)
+              }
+
+              empty_range <- data.table::data.table(
+                datetime = as.POSIXct(character(), tz = "UTC"),
+                min = numeric(),
+                max = numeric(),
+                q75 = numeric(),
+                q25 = numeric()
+              )
+              for (ts_id in bounds$timeseries_id) {
+                ranges[[as.character(ts_id)]] <- empty_range
+              }
+
+              ids_sql <- paste(as.integer(bounds$timeseries_id), collapse = ",")
+              range_select <- paste(
+                c(
+                  "timeseries_id",
+                  "date AS datetime",
+                  YGwater:::daily_stats_select_sql(
+                    con,
+                    stats_period = req$stats_period,
+                    columns = c("min", "max", "q75", "q25")
+                  )
+                ),
+                collapse = ", "
+              )
+              range_data <- dbGetQueryDT(
+                con,
+                paste0(
+                  "SELECT ",
+                  range_select,
+                  " FROM continuous.measurements_calculated_daily ",
+                  "WHERE timeseries_id IN (",
+                  ids_sql,
+                  ") AND date BETWEEN $1 AND $2 ",
+                  "ORDER BY timeseries_id, date ASC;"
+                ),
+                params = list(
+                  min(bounds$range_start),
+                  max(bounds$range_end)
+                )
+              )
+              range_data[, datetime := as.POSIXct(datetime, tz = "UTC")]
+
+              for (i in seq_len(nrow(bounds))) {
+                ts_id <- bounds$timeseries_id[[i]]
+                ranges[[as.character(ts_id)]] <- data.table::copy(range_data[
+                  timeseries_id == ts_id &
+                    datetime >= bounds$range_start[[i]] &
+                    datetime <= bounds$range_end[[i]],
+                  .(datetime, min, max, q75, q25)
+                ])
+              }
+              ranges
             }
 
             build_adaptive_timeseries <- function(
@@ -4006,10 +4334,16 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               colors <- palette_for_series(length(ids))
               use_fast_trace <- is.null(req$as_of) &&
                 (is.null(plot_resolution) || identical(plot_resolution, "max"))
+              fast_traces <- if (isTRUE(use_fast_trace)) {
+                fetch_fast_basic_traces(meta_rows)
+              } else {
+                stats::setNames(vector("list", length(ids)), ids)
+              }
+              fast_ranges <- fetch_fast_range_data(meta_rows)
 
               payloads <- lapply(seq_along(ids), function(i) {
                 ts_id <- ids[[i]]
-                parameter_label <- tolower(meta_rows$parameter_name[[i]])
+                fast_trace <- fast_traces[[as.character(ts_id)]]
                 plot_payload <- plotTimeseries(
                   timeseries_id = ts_id,
                   start_date = req$start_date,
@@ -4026,6 +4360,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   con = con,
                   data = TRUE,
                   build_plot = FALSE,
+                  preprocessed_trace_data = fast_trace,
+                  preprocessed_range_data = fast_ranges[[as.character(ts_id)]],
+                  preloaded_timeseries_context = meta_rows[i],
                   line_scale = req$line_scale,
                   axis_scale = req$axis_scale,
                   legend_scale = req$legend_scale,
@@ -4038,16 +4375,6 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   as_of = req$as_of,
                   stats_period = req$stats_period
                 )
-
-                if (isTRUE(use_fast_trace)) {
-                  fast_trace <- fetch_fast_basic_trace(
-                    ts_id,
-                    parameter_label
-                  )
-                  if (!is.null(fast_trace)) {
-                    plot_payload$data$trace_data <- fast_trace
-                  }
-                }
                 plot_payload$meta$line_color <- if (mode == "single") {
                   "#00454e"
                 } else {
@@ -4059,6 +4386,14 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
               series <- lapply(seq_along(payloads), function(i) {
                 item <- payloads[[i]]
                 meta_row <- meta_rows[i]
+                if (
+                  !is.null(item$meta$units) &&
+                    length(item$meta$units) == 1L &&
+                    !is.na(item$meta$units) &&
+                    nzchar(item$meta$units)
+                ) {
+                  meta_row[, units := item$meta$units]
+                }
                 xaxis <- NULL
                 yaxis <- NULL
                 line_name <- item$meta$line_name
@@ -4163,6 +4498,11 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 layout <- payloads[[1]]$meta$layout
                 xaxis_names <- "xaxis"
               }
+              series_xaxis_names <- xaxis_names
+              xaxis_parent <- stats::setNames(
+                series_xaxis_names,
+                series_xaxis_names
+              )
 
               status_band_list <- list()
               if (include_status_bands) {
@@ -4199,6 +4539,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
                   status_bands$xaxis <- status_xaxis_ref
                   status_bands$yaxis <- status_yaxis_ref
+                  status_bands$xlim_axis <- YGwater:::viewport_axis_ref("x", i)
                   if (!is.null(status_bands$annotations)) {
                     status_bands$annotations <- lapply(
                       status_bands$annotations,
@@ -4220,6 +4561,7 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                   series[[i]]$xaxis <- YGwater:::viewport_axis_ref("x", i)
                   series[[i]]$yaxis <- YGwater:::viewport_axis_ref("y", i)
                   xaxis_names <- c(xaxis_names, status_xaxis_name)
+                  xaxis_parent[[status_xaxis_name]] <- main_xaxis_name
                   status_band_list[[
                     length(status_band_list) + 1L
                   ]] <- status_bands
@@ -4236,13 +4578,25 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
                 },
                 adaptive = list(
                   mode = paste0("timeseries_", mode),
-                  initial_xlim = selected_xlim,
+                  initial_xlim = if (
+                    mode == "subplots" && !isTRUE(req$shareX)
+                  ) {
+                    stats::setNames(
+                      vector("list", length(series_xaxis_names)),
+                      series_xaxis_names
+                    )
+                  } else {
+                    selected_xlim
+                  },
                   meta = list(),
                   payload = list(
                     series = series,
                     layout = layout,
                     config = payloads[[1]]$meta$config,
+                    share_x = isTRUE(req$shareX),
                     xaxis_names = xaxis_names,
+                    series_xaxis_names = series_xaxis_names,
+                    xaxis_parent = xaxis_parent,
                     status_bands = if (length(status_band_list) > 0L) {
                       status_band_list
                     } else {
@@ -4674,6 +5028,9 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
 
     plot_created <- reactiveVal(FALSE) # Flag to determine if a plot has been created
     historic_stats_caption <- reactiveVal(NULL)
+    pending_plot_request <- reactiveVal(NULL)
+    completed_plot_request <- reactiveVal(NULL)
+    plot_notes <- reactiveVal(NULL)
 
     # Kick off task on button click
     observeEvent(input$make_plot, {
@@ -4704,7 +5061,10 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       adaptiveState$meta <- NULL
       adaptiveState$payload <- NULL
       historic_stats_caption(NULL)
-      long_ts_plot$invoke(plot_request())
+      plot_notes(NULL)
+      request <- plot_request()
+      pending_plot_request(request)
+      long_ts_plot$invoke(request)
     })
 
     observeEvent(input$cancel, {
@@ -4725,6 +5085,24 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
         ))
         return()
       }
+
+      completed_request <- pending_plot_request()
+      completed_plot_request(completed_request)
+      notes <- tryCatch(
+        YGwater:::fetch_continuous_plot_notes(
+          session$userData$AquaCache,
+          completed_request,
+          lang = completed_request$lang
+        ),
+        error = function(e) {
+          showNotification(
+            tr("plot_notes_load_error", language$language),
+            type = "warning"
+          )
+          data.table::data.table()
+        }
+      )
+      plot_notes(notes)
 
       if (identical(result$mode, "adaptive_plot")) {
         if (!is.null(result$warning) && nzchar(result$warning)) {
@@ -4797,6 +5175,74 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       }
       plot_created(TRUE)
     }) # End renderPlotly
+
+    output$notes_alert <- renderUI({
+      notes <- plot_notes()
+      if (!isTRUE(plot_created()) || !is.data.frame(notes) || nrow(notes) == 0L) {
+        return(NULL)
+      }
+
+      tags$div(
+        class = "alert alert-warning d-flex align-items-center",
+        role = "alert",
+        icon("note-sticky"),
+        tags$span(
+          sprintf(
+            tr("plot_notes_alert", language$language),
+            nrow(notes)
+          ),
+          style = "margin-left: 0.5rem; margin-right: 0.5rem;"
+        ),
+        actionLink(
+          ns("show_plot_notes"),
+          tr("plot_notes_view", language$language)
+        )
+      )
+    })
+
+    observeEvent(input$show_plot_notes, {
+      notes <- plot_notes()
+      req(is.data.frame(notes), nrow(notes) > 0L)
+
+      output$plot_notes_table <- DT::renderDT({
+        display_notes <- data.table::copy(notes)
+        display_notes[, note_id := NULL]
+        data.table::setnames(
+          display_notes,
+          c(
+            "timeseries_id",
+            "location",
+            "parameter",
+            "note",
+            "start_datetime_utc",
+            "end_datetime_utc"
+          ),
+          c(
+            tr("timeseries_id_label", language$language),
+            tr("loc", language$language),
+            tr("parameter", language$language),
+            tr("notes", language$language),
+            tr("start_datetime_utc", language$language),
+            tr("end_datetime_utc", language$language)
+          )
+        )
+        DT::datatable(
+          display_notes,
+          rownames = FALSE,
+          selection = "none",
+          filter = "none",
+          options = list(scrollX = TRUE, pageLength = 10)
+        )
+      })
+
+      showModal(modalDialog(
+        title = tr("plot_notes_title", language$language),
+        DT::DTOutput(ns("plot_notes_table")),
+        footer = modalButton(tr("close", language$language)),
+        easyClose = TRUE,
+        size = "xl"
+      ))
+    })
 
     output$historic_stats_caption <- renderUI({
       caption <- historic_stats_caption()
@@ -5021,7 +5467,51 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
           adaptiveState$ignore_relayout_events <- 0L
           adaptiveState$ignore_relayout_until <- NULL
         }
-        xlim <- YGwater:::viewport_ribbon_relayout_xlim(relayout, tz = "UTC")
+        if (
+          identical(adaptiveState$mode, "timeseries_subplots") &&
+            !isTRUE(adaptiveState$payload$share_x)
+        ) {
+          changed_axes <- unique(sub(
+            "\\.(range\\[[01]\\]|autorange)$",
+            "",
+            grep(
+              "^xaxis[0-9]*\\.(range\\[[01]\\]|autorange)$",
+              names(relayout),
+              value = TRUE
+            )
+          ))
+          xlim <- adaptiveState$current_xlim
+          if (!is.list(xlim)) {
+            xlim <- stats::setNames(
+              vector(
+                "list",
+                length(adaptiveState$payload$series_xaxis_names)
+              ),
+              adaptiveState$payload$series_xaxis_names
+            )
+          }
+          for (changed_axis in changed_axes) {
+            parent_axis <- adaptiveState$payload$xaxis_parent[[changed_axis]]
+            if (is.null(parent_axis)) {
+              next
+            }
+            axis_event <- relayout[startsWith(
+              names(relayout),
+              paste0(changed_axis, ".")
+            )]
+            xlim[parent_axis] <- list(
+              YGwater:::viewport_ribbon_relayout_xlim(
+                axis_event,
+                tz = "UTC"
+              )
+            )
+          }
+        } else {
+          xlim <- YGwater:::viewport_ribbon_relayout_xlim(
+            relayout,
+            tz = "UTC"
+          )
+        }
         render_adaptive_plot(xlim = xlim)
       },
       ignoreInit = TRUE
@@ -5088,7 +5578,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
       },
       contentType = "application/zip",
       content = function(file) {
-        req <- isolate(plot_request())
+        req <- isolate(completed_plot_request())
+        shiny::req(req)
         out <- long_ts_plot$result()$data
 
         YGwater:::write_continuous_plot_csv_zip(
@@ -5096,7 +5587,8 @@ contPlotAdaptive <- function(id, language, windowDims, inputs) {
             req = req,
             out = out,
             module_data = moduleData,
-            language = language
+            language = language,
+            notes = isolate(plot_notes())
           ),
           file
         )

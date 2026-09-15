@@ -79,3 +79,41 @@ test_that("map download requests refresh existing module instances", {
     expect_true(any(grepl("applyLocationInput", code, fixed = TRUE)))
   }
 })
+
+test_that("map plot requests filter both new and existing continuous plot modules", {
+  path <- ygwater_app_test_path(
+    "modules",
+    "client",
+    "plot",
+    "continuousPlotAdaptive.R"
+  )
+  code <- readLines(path, warn = FALSE)
+
+  expect_true(any(grepl(
+    "identical(isolate(inputs$location_target), \"contPlot\")",
+    code,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    "inputs$location_request_id",
+    code,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl("DT::updateSearch(", code, fixed = TRUE)))
+  expect_true(any(grepl("searchCols = search_cols", code, fixed = TRUE)))
+  expect_true(any(grepl(
+    '"network_filter",',
+    code,
+    fixed = TRUE
+  )))
+  expect_true(any(grepl(
+    '"project_filter",',
+    code,
+    fixed = TRUE
+  )))
+  expect_false(any(grepl(
+    "ts <- ts[location_id %in% moduleInputs$location_id]",
+    code,
+    fixed = TRUE
+  )))
+})

@@ -525,29 +525,36 @@ mapLocs <- function(id, language, outputs = NULL) {
     }) # End of observeEvent for reset filters button
 
     # Update map popup based on language ###########################################
-    popupData <- reactive({
+    popupData <- function(location_id) {
+      selected_location_id <- suppressWarnings(as.integer(location_id[[1]]))
       get_cached(
-        key = if (language$abbrev == "fr") {
-          "map_popup_data_fr"
-        } else {
-          "map_popup_data_en"
-        },
+        key = paste0(
+          "map_popup_data_",
+          language$abbrev,
+          "_",
+          selected_location_id
+        ),
         env = if (session$userData$user_logged_in) {
           session$userData$app_cache
         } else {
           .GlobalEnv
         },
         fetch_fun = function() {
-          # Create popup text for each location. This is a bit slow when first loading the tab, but it doesn't need to be run again when the user modifies a filter.
+          selected_timeseries <- moduleData$timeseries[
+            location_id == selected_location_id
+          ]
           # Get location names
-          popup_names <- moduleData$locations[, .(
-            location_id,
-            popup_name = YGwater:::escape_html_text(
-              get(tr("generic_name_col", language$language))
+          popup_names <- moduleData$locations[
+            location_id == selected_location_id,
+            .(
+              location_id,
+              popup_name = YGwater:::escape_html_text(
+                get(tr("generic_name_col", language$language))
+              )
             )
-          )]
+          ]
           # Aggregate time range for each location
-          time_range <- moduleData$timeseries[,
+          time_range <- selected_timeseries[,
             .(
               start_time = min(start_datetime),
               end_time = max(end_datetime)
@@ -557,7 +564,7 @@ mapLocs <- function(id, language, outputs = NULL) {
           # Get parameters per location
           param_name_col <- tr("param_name_col", language$language)
           to_text <- tr("to", language$language)
-          tmp <- moduleData$timeseries
+          tmp <- data.table::copy(selected_timeseries)
           tmp[,
             formatted_param := paste(
               YGwater:::escape_html_text(get(param_name_col)),
@@ -577,9 +584,12 @@ mapLocs <- function(id, language, outputs = NULL) {
           ]
           # Get networks per location
           network_col <- tr("generic_name_col", language$language)
-          tmp <- moduleData$locations_networks[
-            moduleData$networks,
+          tmp <- moduleData$networks[
+            moduleData$locations_networks[
+              location_id == selected_location_id
+            ],
             on = "network_id",
+            nomatch = 0L,
             allow.cartesian = TRUE
           ]
           tmp[,
@@ -591,9 +601,12 @@ mapLocs <- function(id, language, outputs = NULL) {
           ]
           # Get projects per location
           projects_col <- tr("generic_name_col", language$language)
-          tmp <- moduleData$locations_projects[
-            moduleData$projects,
+          tmp <- moduleData$projects[
+            moduleData$locations_projects[
+              location_id == selected_location_id
+            ],
             on = "project_id",
+            nomatch = 0L,
             allow.cartesian = TRUE
           ]
           tmp[,
@@ -620,7 +633,7 @@ mapLocs <- function(id, language, outputs = NULL) {
           tmp[location_projects, on = .(location_id), projects := projects] # Join location_projects
 
           # Determine available data types for each location
-          loc_data_types <- moduleData$timeseries[,
+          loc_data_types <- selected_timeseries[,
             .(
               has_discrete = any(data_type == "discrete"),
               has_continuous = any(data_type == "continuous")
@@ -717,7 +730,7 @@ mapLocs <- function(id, language, outputs = NULL) {
         },
         ttl = 60 * 60
       ) # Cache for 1 hours
-    })
+    }
 
     # Create the basic map ###########################################################
     output$map <- leaflet::renderLeaflet({
@@ -729,7 +742,6 @@ mapLocs <- function(id, language, outputs = NULL) {
           zoomPxPerZoomLevel = 120
         )
       ) |>
-        leaflet::addTiles() |>
         leaflet::addProviderTiles(
           "Esri.WorldTopoMap",
           group = "Topographic"
@@ -855,9 +867,16 @@ mapLocs <- function(id, language, outputs = NULL) {
       ))
     }
 
+    map_ready <- reactiveVal(FALSE)
+    observeEvent(
+      input$map_zoom,
+      map_ready(TRUE),
+      ignoreNULL = TRUE,
+      once = TRUE
+    )
+
     observe({
-      req(input$map_zoom, popupData(), language$language)
-      popup_data <- popupData()
+      req(map_ready(), language$language)
       if (!is.null(input$data_type)) {
         if (length(input$data_type) > 1) {
           timeseries.sub <- moduleData$timeseries[
@@ -1035,12 +1054,6 @@ mapLocs <- function(id, language, outputs = NULL) {
         loc.sub <- loc.sub[match_idx]
       }
 
-      loc.sub <- loc.sub[
-        popup_data,
-        on = .(location_id),
-        popup_html := popup_html
-      ]
-
       type_col <- if (language$abbrev == "fr") "type_fr" else "type"
       unknown_label <- tr("unknown", language$language)
       loc.sub[, type_label := get(type_col)]
@@ -1094,13 +1107,23 @@ mapLocs <- function(id, language, outputs = NULL) {
           ((seq_along(loc_types) - 1) %% length(shape_choices)) + 1
         ]
       )
+      type_map[,
+        icon_url := mapply(
+          svg_data_uri,
+          shape = shape,
+          fill = color_hex,
+          MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
+          USE.NAMES = FALSE
+        )
+      ]
 
       loc.sub[
         type_map,
         on = .(type_label),
         `:=`(
           color_hex = i.color_hex,
-          shape = i.shape
+          shape = i.shape,
+          icon_url = i.icon_url
         )
       ]
 
@@ -1110,19 +1133,10 @@ mapLocs <- function(id, language, outputs = NULL) {
         leaflet::removeControl("location_type_legend")
 
       if (nrow(loc.sub) > 0) {
-        # Build per-row SVG data URIs (matches nrow(loc.sub))
-        icon_urls <- mapply(
-          svg_data_uri,
-          shape = loc.sub$shape,
-          fill = loc.sub$color_hex,
-          MoreArgs = list(size = 20, stroke = "#244C5A", stroke_width = 1),
-          USE.NAMES = FALSE
-        )
-
         # Create icons with custom class names, used for pie chart cluster icons
         slug <- function(x) gsub("[^A-Za-z0-9_-]", "_", x)
         icons <- leaflet::icons(
-          iconUrl = icon_urls,
+          iconUrl = loc.sub$icon_url,
           iconWidth = 15,
           iconHeight = 15,
           className = paste0(
@@ -1138,13 +1152,16 @@ mapLocs <- function(id, language, outputs = NULL) {
             data = loc.sub,
             lng = ~longitude,
             lat = ~latitude,
-            popup = ~popup_html,
+            layerId = ~location_id,
             icon = icons,
             clusterOptions = if (isTRUE(input$cluster_points)) {
               leaflet::markerClusterOptions(
                 iconCreateFunction = htmlwidgets::JS("pieClusterIcon"), # pieClusterIcon defined in tags$script above
                 maxClusterRadius = 80, # cluster radius in pixels
-                spiderfyOnMaxZoom = TRUE
+                spiderfyOnMaxZoom = TRUE,
+                chunkedLoading = TRUE,
+                chunkInterval = 75,
+                chunkDelay = 10
               )
             } else {
               NULL
@@ -1163,6 +1180,30 @@ mapLocs <- function(id, language, outputs = NULL) {
       }
       map_proxy
     }) # End of observe for map filters and rendering location points
+
+    observeEvent(input$map_marker_click, {
+      click <- input$map_marker_click
+      location_id <- suppressWarnings(as.integer(click$id))
+      req(!is.na(location_id))
+
+      selected_location_id <- location_id
+      location_row <- moduleData$locations[
+        location_id == selected_location_id
+      ]
+      req(nrow(location_row) == 1L)
+      popup <- popupData(location_id)
+      req(nrow(popup) == 1L)
+
+      leaflet::leafletProxy("map", session = session) |>
+        leaflet::clearPopups() |>
+        leaflet::addPopups(
+          lng = location_row$longitude[[1]],
+          lat = location_row$latitude[[1]],
+          popup = popup$popup_html[[1]],
+          layerId = "selected_location_popup",
+          options = leaflet::popupOptions(maxWidth = 420)
+        )
+    })
 
     # Pass a message to the main map server when a location link is clicked ############################
     # Listen for a click in the popup

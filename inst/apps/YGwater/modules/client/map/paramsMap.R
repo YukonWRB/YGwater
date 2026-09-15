@@ -1,11 +1,3 @@
-params_map_stats_period_label <- function(value, lang) {
-  if (identical(value, "full")) {
-    if (identical(lang, "fr")) "Toute la p\u00e9riode" else "Entire record"
-  } else {
-    if (identical(lang, "fr")) "30 derni\u00e8res ann\u00e9es" else "Last 30 years"
-  }
-}
-
 params_map_daily_stats_select_sql <- function(
   con,
   stats_period = "30yr",
@@ -152,18 +144,12 @@ mapParams <- function(id, language) {
         ),
         selectizeInput(
           ns("stats_period"),
-          label = if (language$abbrev == "fr") {
-            "P\u00e9riode des statistiques"
-          } else {
-            "Stats period"
-          },
+          label = tr("stats_period", language$language),
           choices = stats::setNames(
             c("30yr", "full"),
-            vapply(
+            YGwater:::format_stats_period_label(
               c("30yr", "full"),
-              params_map_stats_period_label,
-              character(1),
-              lang = language$abbrev
+              language$language
             )
           ),
           selected = map_params$stats_period,

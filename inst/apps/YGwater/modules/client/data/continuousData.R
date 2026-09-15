@@ -2872,19 +2872,18 @@ contData <- function(id, language, inputs) {
           "orgs.name AS organization"
         }
         start_dt_expr <- if (language$abbrev == "fr") {
-          "date_debut_UTC"
+          "date_debut_utc"
         } else {
-          "start_datetime_UTC"
+          "start_datetime_utc"
         }
         end_dt_expr <- if (language$abbrev == "fr") {
-          "date_fin_UTC"
+          "date_fin_utc"
         } else {
-          "end_datetime_UTC"
+          "end_datetime_utc"
         }
         missing_30yr_select <- continuous_data_missing_30yr_select_sql(
           session$userData$AquaCache
         )
-
         data <- list(
           location_metadata = dbGetQueryDT(
             session$userData$AquaCache,
@@ -2956,6 +2955,24 @@ contData <- function(id, language, inputs) {
               ") AND start_dt < $2::timestamptz AND end_dt > $1::timestamptz ORDER BY timeseries_id, start_dt;"
             ),
             params = list(input$modal_date_range[1], input$modal_date_range[2])
+          ),
+          notes = dbGetQueryDT(
+            session$userData$AquaCache,
+            paste0(
+              "SELECT n.timeseries_id, n.note, n.start_dt AS ",
+              start_dt_expr,
+              ", n.end_dt AS ",
+              end_dt_expr,
+              " FROM continuous.notes n WHERE n.timeseries_id IN (",
+              paste(selected_tsids, collapse = ", "),
+              ") AND n.start_dt < ($2::date + 1)::timestamptz ",
+              "AND n.end_dt >= $1::date::timestamptz ",
+              "ORDER BY n.timeseries_id, n.start_dt, n.end_dt, n.note_id;"
+            ),
+            params = list(
+              input$modal_date_range[1],
+              input$modal_date_range[2]
+            )
           ),
           owners = dbGetQueryDT(
             session$userData$AquaCache,

@@ -1036,6 +1036,19 @@ viewport_status_band_trace_bundle <- function(status_bands, xlim = NULL) {
     ))
   }
 
+  if (is.list(xlim) && !inherits(xlim, "POSIXt")) {
+    xlim_axis <- status_bands$xlim_axis
+    if (is.null(xlim_axis)) {
+      xlim_axis <- status_bands$xaxis
+    }
+    xlim_axis <- if (is.null(xlim_axis) || identical(xlim_axis, "x")) {
+      "xaxis"
+    } else {
+      sub("^x", "xaxis", xlim_axis)
+    }
+    xlim <- xlim[[xlim_axis]]
+  }
+
   if (is.null(status_bands$polygons)) {
     return(empty_bundle)
   }
@@ -1276,7 +1289,7 @@ viewport_layout_apply_xlim <- function(
   xlim = NULL,
   xaxis_names = NULL
 ) {
-  if (is.null(xlim) || length(xlim) != 2 || any(is.na(xlim))) {
+  if (is.null(xlim)) {
     return(layout)
   }
 
@@ -1285,10 +1298,21 @@ viewport_layout_apply_xlim <- function(
   }
 
   for (axis_name in xaxis_names) {
+    axis_xlim <- xlim
+    if (is.list(xlim) && !inherits(xlim, "POSIXt")) {
+      axis_xlim <- xlim[[axis_name]]
+    }
+    if (
+      is.null(axis_xlim) ||
+        length(axis_xlim) != 2 ||
+        any(is.na(axis_xlim))
+    ) {
+      next
+    }
     if (is.null(layout[[axis_name]])) {
       layout[[axis_name]] <- list()
     }
-    layout[[axis_name]]$range <- xlim
+    layout[[axis_name]]$range <- axis_xlim
   }
 
   layout
@@ -1331,6 +1355,15 @@ viewport_adaptive_plot <- function(
     } else {
       x_col
     }
+    item_xlim <- xlim
+    if (is.list(xlim) && !inherits(xlim, "POSIXt")) {
+      item_xaxis <- if (is.null(item$xaxis) || identical(item$xaxis, "x")) {
+        "xaxis"
+      } else {
+        sub("^x", "xaxis", item$xaxis)
+      }
+      item_xlim <- xlim[[item_xaxis]]
+    }
 
     line_name <- if (!is.null(item$line_name)) {
       item$line_name
@@ -1364,7 +1397,7 @@ viewport_adaptive_plot <- function(
         x_col = x_col,
         line_col = y_col,
         line_hover_x_col = item$line_hover_x_col,
-        xlim = xlim,
+        xlim = item_xlim,
         n_bins = n_bins
       )
     }
@@ -1397,7 +1430,7 @@ viewport_adaptive_plot <- function(
           line_col = NULL,
           bands = band_defs,
           band_hover_x_col = item$range_hover_x_col,
-          xlim = xlim,
+          xlim = item_xlim,
           n_bins = n_bins
         )
       }

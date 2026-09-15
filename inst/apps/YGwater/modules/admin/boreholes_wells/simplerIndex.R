@@ -218,8 +218,8 @@ simplerIndexUI <- function(id) {
           div(class = "resize-handle", id = ns("resize-handle")),
           fileInput(
             ns("pdf_file"),
-            "Upload PDF(s)",
-            accept = ".pdf",
+            "Upload PDF(s) or image(s)",
+            accept = c(".pdf", ".jpg", ".jpeg", ".png"),
             multiple = TRUE
           ),
           uiOutput(ns("pdf_processing_status")),
@@ -4662,7 +4662,7 @@ simplerIndex <- function(id, language) {
           {
             if (is.null(uploaded_files) || nrow(uploaded_files) == 0) {
               return(list(
-                error = "No PDF files were provided.",
+                error = "No document files were provided.",
                 upload_job_dir = upload_job_dir
               ))
             }
@@ -4680,17 +4680,17 @@ simplerIndex <- function(id, language) {
             file_counts <- list()
 
             for (i in seq_len(nrow(uploaded_files))) {
-              pdf_path <- uploaded_files$datapath[i][1]
+              document_path <- uploaded_files$datapath[i][1]
               orig_name <- as.character(uploaded_files$name[i])
               if (is.na(orig_name) || !nzchar(orig_name)) {
-                orig_name <- sprintf("uploaded_%03d.pdf", i)
+                orig_name <- sprintf("uploaded_%03d", i)
               }
 
-              pdf_info <- file.info(pdf_path)
+              document_info <- file.info(document_path)
               if (
-                !file.exists(pdf_path) ||
-                  is.na(pdf_info$size) ||
-                  pdf_info$size <= 0
+                !file.exists(document_path) ||
+                  is.na(document_info$size) ||
+                  document_info$size <= 0
               ) {
                 stop(
                   sprintf(
@@ -4705,8 +4705,9 @@ simplerIndex <- function(id, language) {
               if (!nzchar(safe_base)) {
                 safe_base <- "document"
               }
-              rendered_files <- render_pdf_pages(
-                pdf_path,
+              rendered_files <- render_document_pages(
+                document_path,
+                document_type = tools::file_ext(orig_name),
                 output_dir = upload_job_dir,
                 filename_prefix = sprintf("%03d_%s", i, safe_base)
               )
@@ -4716,7 +4717,7 @@ simplerIndex <- function(id, language) {
               split_df <- data.frame(
                 Name = rep(orig_name, length(rendered_files)),
                 Size_KB = round(file_info$size / 1024, 2),
-                Date = as.character(file.info(pdf_path)$mtime),
+                Date = as.character(document_info$mtime),
                 OrigFile = rep(orig_name, length(rendered_files)),
                 Page = seq_along(rendered_files),
                 Path = rendered_files,
@@ -4759,11 +4760,11 @@ simplerIndex <- function(id, language) {
       ignoreInit = TRUE
     )
 
-    # Split PDFs into single-page files on upload
+    # Normalize PDFs and images into one JPEG per document page on upload.
     observeEvent(input$pdf_file, {
       if (isTRUE(pdf_processing())) {
         showNotification(
-          "A PDF is already being processed. Please wait for it to finish.",
+          "A document is already being processed. Please wait for it to finish.",
           type = "warning",
           duration = 6
         )
@@ -4776,13 +4777,30 @@ simplerIndex <- function(id, language) {
       )
       req(nrow(uploaded_files) > 0)
 
+      file_extensions <- tolower(tools::file_ext(uploaded_files$name))
+      supported_extensions <- c("pdf", "jpg", "jpeg", "png")
+      unsupported <- is.na(file_extensions) |
+        !file_extensions %in% supported_extensions
+      if (any(unsupported)) {
+        showNotification(
+          paste0(
+            "Unsupported file type: ",
+            paste(uploaded_files$name[unsupported], collapse = ", "),
+            ". Upload PDF, JPG, JPEG, or PNG files."
+          ),
+          type = "error",
+          duration = 8
+        )
+        return()
+      }
+
       upload_job_dir <- tempfile(
         pattern = "simplerIndex_upload_",
         tmpdir = tempdir()
       )
       if (!dir.create(upload_job_dir)) {
         showNotification(
-          "Could not create a temporary directory for this PDF upload.",
+          "Could not create a temporary directory for this document upload.",
           type = "error",
           duration = 7
         )
@@ -4791,7 +4809,11 @@ simplerIndex <- function(id, language) {
 
       staged_paths <- file.path(
         upload_job_dir,
-        sprintf("input_%03d.pdf", seq_len(nrow(uploaded_files)))
+        sprintf(
+          "input_%03d.%s",
+          seq_len(nrow(uploaded_files)),
+          file_extensions
+        )
       )
       source_sizes <- file.info(uploaded_files$datapath)$size
       copy_success <- file.copy(
@@ -4812,7 +4834,7 @@ simplerIndex <- function(id, language) {
         unlink(upload_job_dir, recursive = TRUE, force = TRUE)
         showNotification(
           paste0(
-            "Could not stage the uploaded PDF(s): ",
+            "Could not stage the uploaded document(s): ",
             paste(failed_names, collapse = ", "),
             ". Please select the file(s) again."
           ),
@@ -4838,7 +4860,7 @@ simplerIndex <- function(id, language) {
       ))
 
       showNotification(
-        "Processing PDFs in the background. This can take a few minutes.",
+        "Processing documents in the background. This can take a few minutes.",
         type = "message",
         duration = 5
       )
@@ -4853,7 +4875,7 @@ simplerIndex <- function(id, language) {
             upload_job_dir
           )
           showNotification(
-            paste("Could not start PDF processing:", e$message),
+            paste("Could not start document processing:", e$message),
             type = "error",
             duration = 8
           )
@@ -4868,7 +4890,7 @@ simplerIndex <- function(id, language) {
       }
       pdf_processing(FALSE)
       if (!is.null(result$error)) {
-        message("simplerIndex PDF processing failed: ", result$error)
+        message("simplerIndex document processing failed: ", result$error)
         if (!is.null(result$upload_job_dir)) {
           unlink(
             result$upload_job_dir,
@@ -4898,7 +4920,7 @@ simplerIndex <- function(id, language) {
           )
         }
         showNotification(
-          "No pages were generated from the uploaded PDFs.",
+          "No pages were generated from the uploaded documents.",
           type = "warning",
           duration = 6
         )
@@ -6817,10 +6839,10 @@ simplerIndex <- function(id, language) {
 
             # Clear the cached borehole/well data so the application shows the new well
             # For all public users
-            clear_cached(key = "wwr_module_data", env = .GlobalEnv)
+            clear_cached(key = "wwr_module_data_v2", env = .GlobalEnv)
             # For the logged in user
             clear_cached(
-              key = "wwr_module_data",
+              key = "wwr_module_data_v2",
               env = session$userData$app_cache
             )
           },

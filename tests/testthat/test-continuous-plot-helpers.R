@@ -11,6 +11,282 @@ test_that("historic range export data is NULL when stats are unavailable", {
   expect_null(historic_range_data_for_export(range_data, "m"))
 })
 
+test_that("sensor priority labels are readable and bilingual", {
+  french <- names(YGwater:::data$translations)[
+    vapply(
+      YGwater:::data$translations,
+      function(values) identical(unname(values[["titleCase"]]), "fr"),
+      logical(1)
+    )
+  ][[1L]]
+
+  expect_identical(
+    format_sensor_priority_label(
+      c(1L, 2L, 3L, NA_integer_),
+      "English"
+    ),
+    c("Primary", "Secondary", "Tertiary", NA_character_)
+  )
+  expect_identical(
+    format_sensor_priority_label(c("1", "2", "3"), french),
+    c("Primaire", "Secondaire", "Tertiaire")
+  )
+})
+
+test_that("unknown sensor priorities remain visible", {
+  expect_identical(
+    format_sensor_priority_label(c("4", "backup", ""), "English"),
+    c("4", "backup", NA_character_)
+  )
+})
+
+test_that("map location filters preserve the complete continuous table", {
+  timeseries <- data.frame(
+    timeseries_id = 1:4,
+    location_id = c(10, 10, 20, 30)
+  )
+  locations <- data.table::data.table(
+    location_id = c(10, 20, 30),
+    name = c("Alpha", "Beta", "Gamma")
+  )
+
+  location_value <- continuous_plot_map_location_value(
+    10,
+    timeseries,
+    locations,
+    "name"
+  )
+  searches <- continuous_plot_location_search_columns(
+    c("timeseries_id", "location", "parameter"),
+    location_value
+  )
+
+  expect_identical(location_value, "Alpha")
+  expect_identical(jsonlite::fromJSON(searches[[2L]]), "Alpha")
+  expect_identical(searches[c(1L, 3L)], c("", ""))
+  expect_equal(nrow(timeseries), 4L)
+  expect_equal(timeseries$timeseries_id, 1:4)
+})
+
+test_that("map location filters reject invalid and non-continuous locations", {
+  timeseries <- data.frame(
+    timeseries_id = 1:2,
+    location_id = c(10, 20)
+  )
+  locations <- data.frame(
+    location_id = c(10, 20, 30),
+    name = c("Alpha", "Beta", "Gamma")
+  )
+
+  expect_null(continuous_plot_map_location_value(
+    30,
+    timeseries,
+    locations,
+    "name"
+  ))
+  expect_null(continuous_plot_map_location_value(
+    "not-an-id",
+    timeseries,
+    locations,
+    "name"
+  ))
+  expect_identical(
+    continuous_plot_location_search_columns(
+      c("timeseries_id", "location"),
+      NULL
+    ),
+    c("", "")
+  )
+})
+
+test_that("duplicate map location names remain unambiguous", {
+  timeseries <- data.frame(
+    timeseries_id = 1:2,
+    location_id = c(10, 20)
+  )
+  locations <- data.table::data.table(
+    location_id = c(10, 20),
+    name = c("Same name", "Same name")
+  )
+
+  expect_identical(
+    continuous_plot_location_labels(locations, "name"),
+    c("Same name [10]", "Same name [20]")
+  )
+  expect_identical(
+    continuous_plot_map_location_value(
+      20,
+      timeseries,
+      locations,
+      "name"
+    ),
+    "Same name [20]"
+  )
+})
+
+test_that("sensor priority labels support additional translation catalogues", {
+  translations <- list(
+    Test = c(
+      sensor_priority_primary = "First",
+      sensor_priority_secondary = "Second",
+      sensor_priority_tertiary = "Third"
+    )
+  )
+
+  expect_identical(
+    format_sensor_priority_label(
+      c(1L, 2L, 3L),
+      "Test",
+      translations = translations
+    ),
+    c("First", "Second", "Third")
+  )
+})
+
+test_that("statistics-period labels use the translation catalogue", {
+  translations <- list(
+    Test = c(
+      stats_period_last_30_years = "Recent baseline",
+      stats_period_entire_record = "Complete baseline"
+    )
+  )
+
+  expect_identical(
+    format_stats_period_label(
+      c("30yr", "full", "custom"),
+      "Test",
+      translations = translations
+    ),
+    c("Recent baseline", "Complete baseline", "custom")
+  )
+})
+
+test_that("adaptive continuous plot displays sensor priority in both metadata views", {
+  module_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(
+    module_text,
+    'sensor_priority = tr("sensor_priority", language$language)',
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "format_metadata_value(sensor_priority)",
+    fixed = TRUE
+  )
+
+  cache_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/cache_functions.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+  expect_match(cache_text, "ts.sensor_priority", fixed = TRUE)
+})
+
+test_that("adaptive multi-timeseries plots batch data and preserve axis units", {
+  module_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(module_text, "fetch_fast_basic_traces", fixed = TRUE)
+  expect_match(module_text, "fetch_fast_range_data", fixed = TRUE)
+  expect_match(module_text, "ids_sql", fixed = TRUE)
+  expect_match(
+    module_text,
+    "preloaded_timeseries_context = meta_rows[i]",
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "preprocessed_range_data = fast_ranges[[as.character(ts_id)]]",
+    fixed = TRUE
+  )
+  expect_match(module_text, 'output_alias = "units"', fixed = TRUE)
+  expect_match(module_text, 'paste0(" (", meta_row$units, ")")', fixed = TRUE)
+  expect_match(module_text, "meta_row[, units := item$meta$units]", fixed = TRUE)
+  expect_match(module_text, 'ns("metadata_timeseries_select")', fixed = TRUE)
+  expect_match(
+    module_text,
+    "Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    'identical(adaptiveState$mode, "timeseries_subplots")',
+    fixed = TRUE
+  )
+  expect_match(
+    module_text,
+    "series_xaxis_names = series_xaxis_names",
+    fixed = TRUE
+  )
+})
+
+test_that("public statistics-period controls use translated labels", {
+  adaptive_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/plot/continuousPlotAdaptive.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+  params_map_text <- paste(
+    readLines(
+      system.file(
+        "apps/YGwater/modules/client/map/paramsMap.R",
+        package = "YGwater"
+      ),
+      warn = FALSE
+    ),
+    collapse = "\n"
+  )
+
+  expect_match(
+    adaptive_text,
+    'label = tr("stats_period", language$language)',
+    fixed = TRUE
+  )
+  expect_match(
+    adaptive_text,
+    "YGwater:::format_stats_period_label",
+    fixed = TRUE
+  )
+  expect_match(
+    params_map_text,
+    'label = tr("stats_period", language$language)',
+    fixed = TRUE
+  )
+  expect_match(
+    params_map_text,
+    "YGwater:::format_stats_period_label",
+    fixed = TRUE
+  )
+})
+
 test_that("historic range export data is renamed when stats are available", {
   range_data <- data.frame(
     datetime = as.POSIXct("2026-06-01", tz = "UTC"),

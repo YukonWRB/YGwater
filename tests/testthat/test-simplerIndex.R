@@ -130,7 +130,7 @@ test_that("simplerIndex supports named and document-free borehole uploads", {
   expect_false(grepl("No PDF pages available to upload.", module, fixed = TRUE))
 })
 
-test_that("simplerIndex stages PDFs before background processing", {
+test_that("simplerIndex stages supported documents before background processing", {
   module <- paste(
     readLines(
       system.file(
@@ -143,6 +143,16 @@ test_that("simplerIndex stages PDFs before background processing", {
   )
 
   expect_match(module, 'pattern = "simplerIndex_upload_"', fixed = TRUE)
+  expect_match(
+    module,
+    'accept = c(".pdf", ".jpg", ".jpeg", ".png")',
+    fixed = TRUE
+  )
+  expect_match(
+    module,
+    'supported_extensions <- c("pdf", "jpg", "jpeg", "png")',
+    fixed = TRUE
+  )
   expect_match(module, "copy_success <- file.copy(", fixed = TRUE)
   expect_match(
     module,
@@ -159,6 +169,52 @@ test_that("simplerIndex stages PDFs before background processing", {
   expect_match(module, "pdf_processing(TRUE)", fixed = TRUE)
   expect_match(module, "pdf_processing(FALSE)", fixed = TRUE)
   expect_false(grepl("file.rename(from_path, orig_path)", module, fixed = TRUE))
+})
+
+test_that("simplerIndex normalizes JPEG and PNG uploads", {
+  skip_if_not_installed("magick")
+
+  helper_environment <- new.env(parent = globalenv())
+  sys.source(
+    system.file(
+      "apps/YGwater/modules/admin/boreholes_wells/simplerIndex_helpers.R",
+      package = "YGwater"
+    ),
+    envir = helper_environment
+  )
+
+  output_dir <- tempfile("simplerIndex_image_test_")
+  dir.create(output_dir)
+  png_path <- tempfile(fileext = ".png")
+  magick::image_write(
+    magick::image_blank(2000, 1000, color = "white"),
+    path = png_path,
+    format = "png"
+  )
+  on.exit(unlink(c(png_path, output_dir), recursive = TRUE), add = TRUE)
+
+  rendered <- helper_environment$render_document_pages(
+    png_path,
+    document_type = "PNG",
+    output_dir = output_dir,
+    filename_prefix = "test_image",
+    max_pixels = 5e5
+  )
+  info <- magick::image_info(magick::image_read(rendered))
+
+  expect_length(rendered, 1)
+  expect_true(file.exists(rendered))
+  expect_identical(tolower(tools::file_ext(rendered)), "jpg")
+  expect_lte(info$width * info$height, 5e5)
+  expect_error(
+    helper_environment$render_document_pages(
+      png_path,
+      document_type = "gif",
+      output_dir = output_dir,
+      filename_prefix = "unsupported"
+    ),
+    "Supported document types"
+  )
 })
 
 test_that("simplerIndex caps PDF raster size and avoids graphics-device redactions", {
@@ -242,7 +298,8 @@ test_that("simplerIndex caps PDF raster size and avoids graphics-device redactio
     collapse = "\n"
   )
 
-  expect_match(module, "render_pdf_pages(", fixed = TRUE)
+  expect_match(module, "render_document_pages(", fixed = TRUE)
+  expect_match(helpers, "render_pdf_pages(", fixed = TRUE)
   expect_match(module, "apply_image_redactions(img, rectangles)", fixed = TRUE)
   expect_match(helpers, "quality = 95", fixed = TRUE)
   expect_false(grepl("image_draw(", paste(module, helpers), fixed = TRUE))
@@ -335,7 +392,7 @@ test_that("WWR preserves distinct well and borehole registry rows", {
     "display_purpose_id = data.table::fifelse",
     fixed = TRUE
   )
-  expect_match(registry_module, "hollow = !has_well[idx]", fixed = TRUE)
+  expect_match(registry_module, "hollow = !has_well", fixed = TRUE)
   expect_match(
     registry_module,
     "stroke_width <- max(stroke_width, 4)",

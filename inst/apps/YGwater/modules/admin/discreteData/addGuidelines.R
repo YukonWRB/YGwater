@@ -4629,7 +4629,9 @@ FROM vals",
             on.exit(DBI::dbDisconnect(con), add = TRUE)
 
             is_empty <- function(x) {
-              is.null(x) || !length(x) || all(is.na(x)) ||
+              is.null(x) ||
+                !length(x) ||
+                all(is.na(x)) ||
                 !nzchar(trimws(as.character(x[[1]])))
             }
             int_or_na <- function(x) {
@@ -4852,19 +4854,31 @@ FROM vals",
                     rule_id,
                     txt_value(df$input_code[i]),
                     txt_or_na(df$input_name[i]),
-                    if (is_empty(df$input_source[i])) "sample_result" else txt_value(df$input_source[i]),
+                    if (is_empty(df$input_source[i])) {
+                      "sample_result"
+                    } else {
+                      txt_value(df$input_source[i])
+                    },
                     int_or_na(df$parameter_id[i]),
                     int_or_na(df$matrix_state_id[i]),
                     int_or_na(df$sample_fraction_id[i]),
                     int_or_na(df$result_speciation_id[i]),
                     int_or_na(df$result_type[i]),
                     txt_value(df$result_type_preference[i]),
-                    if (is_empty(df$aggregate_method[i])) "single" else txt_value(df$aggregate_method[i]),
+                    if (is_empty(df$aggregate_method[i])) {
+                      "single"
+                    } else {
+                      txt_value(df$aggregate_method[i])
+                    },
                     bool_value_worker(df$required[i], TRUE),
                     bool_value_worker(df$allow_condition_value[i], FALSE),
                     num_or_na(df$lower_calibrated_bound[i]),
                     num_or_na(df$upper_calibrated_bound[i]),
-                    if (is_empty(df$bounds_action[i])) "flag" else txt_value(df$bounds_action[i]),
+                    if (is_empty(df$bounds_action[i])) {
+                      "flag"
+                    } else {
+                      txt_value(df$bounds_action[i])
+                    },
                     txt_or_na(df$note[i])
                   )
                 )
@@ -4906,7 +4920,9 @@ FROM vals",
                   next
                 }
                 if (!nzchar(value_code) || !nzchar(condition_label)) {
-                  stop("Narrative value rows require both value_code and condition_label.")
+                  stop(
+                    "Narrative value rows require both value_code and condition_label."
+                  )
                 }
                 DBI::dbExecute(
                   con,
@@ -5131,10 +5147,18 @@ FROM vals",
                 stop("Lower and upper values are required.")
               }
               insert_rule(
-                guideline_id, "lower", "constant", req$lower_value, priority = 10L
+                guideline_id,
+                "lower",
+                "constant",
+                req$lower_value,
+                priority = 10L
               )
               insert_rule(
-                guideline_id, "upper", "constant", req$upper_value, priority = 20L
+                guideline_id,
+                "upper",
+                "constant",
+                req$upper_value,
+                priority = 20L
               )
             } else if (identical(type, "narrative")) {
               insert_rule(guideline_id, NA_character_, "narrative")
@@ -5482,7 +5506,10 @@ FROM vals",
       candidate_limit <- max(10L, as.integer(candidate_limit))
       choice_limit <- max(1L, as.integer(choice_limit))
       sample_where <- if (length(sample_conditions)) {
-        paste0("WHERE ", paste(sample_conditions, collapse = "\n             AND "))
+        paste0(
+          "WHERE ",
+          paste(sample_conditions, collapse = "\n             AND ")
+        )
       } else {
         ""
       }
@@ -5690,7 +5717,10 @@ FROM vals",
                    FROM discrete.samples s
                    JOIN discrete.results r ON r.sample_id = s.sample_id
                    WHERE ",
-                paste(target_conditions, collapse = "\n                     AND "),
+                paste(
+                  target_conditions,
+                  collapse = "\n                     AND "
+                ),
                 "
                    GROUP BY s.sample_id, s.datetime, s.location_id
                    ORDER BY s.datetime DESC NULLS LAST, s.sample_id DESC
@@ -5827,17 +5857,24 @@ FROM vals",
               if (is.null(values) || !nrow(values)) {
                 return("")
               }
-              paste(vapply(seq_len(nrow(values)), function(i) {
-                label <- values$input_name[[i]]
-                if (is.na(label) || !nzchar(label)) {
-                  label <- values$input_code[[i]]
-                }
-                if (identical(values$status[[i]], "value")) {
-                  paste0(label, " = ", values$input_value[[i]])
-                } else {
-                  paste0(label, " = ", values$status[[i]])
-                }
-              }, character(1)), collapse = "; ")
+              paste(
+                vapply(
+                  seq_len(nrow(values)),
+                  function(i) {
+                    label <- values$input_name[[i]]
+                    if (is.na(label) || !nzchar(label)) {
+                      label <- values$input_code[[i]]
+                    }
+                    if (identical(values$status[[i]], "value")) {
+                      paste0(label, " = ", values$input_value[[i]])
+                    } else {
+                      paste0(label, " = ", values$status[[i]])
+                    }
+                  },
+                  character(1)
+                ),
+                collapse = "; "
+              )
             }
             target_result_for_sample <- function(sample_id) {
               guideline_row <- req$guideline_row
@@ -5911,7 +5948,7 @@ FROM vals",
                    sample_id, result_type, parameter_id, sample_fraction_id,
                    result, result_condition, result_condition_value,
                    result_value_type, result_speciation_id,
-                   analysis_datetime, share_with, no_update, matrix_state_id
+                   analysis_datetime, share_with, no_source_update, matrix_state_id
                  )
                  VALUES (
                    ?sample_id, ?result_type_id, ?parameter_id,
@@ -5937,10 +5974,13 @@ FROM vals",
             if (identical(req$mode, "existing")) {
               target <- target_result_for_sample(req$sample_id)
               if (!nrow(target)) {
-                return(list(ok = TRUE, result = data.frame(
-                  error = "No matching result for the guideline parameter was found on the selected sample.",
-                  stringsAsFactors = FALSE
-                )))
+                return(list(
+                  ok = TRUE,
+                  result = data.frame(
+                    error = "No matching result for the guideline parameter was found on the selected sample.",
+                    stringsAsFactors = FALSE
+                  )
+                ))
               }
               result <- guideline_query(target$result_id[[1]])
               if (!nrow(result)) {
@@ -6011,7 +6051,7 @@ FROM vals",
                  target_datetime, collection_method, sample_type,
                  sample_volume_ml, sample_grade, sample_approval,
                  owner, contributor, sampling_org, share_with, import_source,
-                 no_update, note, import_source_id
+                 no_source_update, note, import_source_id
                )
                VALUES (
                  $1, $2, $3, 0, $4::timestamptz, $4::timestamptz,
@@ -6051,14 +6091,20 @@ FROM vals",
             )
             input_results <- req$input_results
             if (!is.null(input_results) && nrow(input_results)) {
-              input_results <- input_results[!is.na(input_results$value), , drop = FALSE]
+              input_results <- input_results[
+                !is.na(input_results$value),
+                ,
+                drop = FALSE
+              ]
               for (i in seq_len(nrow(input_results))) {
                 insert_temp_result(
                   sample_id = sample_id,
                   parameter_id = input_results$parameter_id[[i]],
                   matrix_state_id = input_results$matrix_state_id[[i]],
                   sample_fraction_id = input_results$sample_fraction_id[[i]],
-                  result_speciation_id = input_results$result_speciation_id[[i]],
+                  result_speciation_id = input_results$result_speciation_id[[
+                    i
+                  ]],
                   value = input_results$value[[i]],
                   result_type_id = input_results$result_type_id[[i]],
                   analysis_datetime = sample_datetime
@@ -6176,7 +6222,7 @@ FROM vals",
            target_datetime, collection_method, sample_type,
            sample_volume_ml, sample_grade, sample_approval,
            owner, contributor, sampling_org, share_with, import_source,
-           no_update, note, import_source_id
+           no_source_update, note, import_source_id
          )
          VALUES (
            $1, $2, $3, 0, $4::timestamptz, $4::timestamptz,
@@ -6237,7 +6283,7 @@ FROM vals",
            sample_id, result_type, parameter_id, sample_fraction_id,
            result, result_condition, result_condition_value,
            result_value_type, result_speciation_id, analysis_datetime,
-           share_with, no_update, matrix_state_id
+           share_with, no_source_update, matrix_state_id
          )
          VALUES (
            $1, $2, $3, $4, $5, NULL, NULL, $6, $7, $8::timestamptz,
@@ -6446,27 +6492,31 @@ FROM vals",
         size = "l"
       ))
     })
-    observeEvent(input$test_mode, {
-      if (!identical(input$test_mode, "existing")) {
-        return()
-      }
-      guideline_id <- selected_guideline_id()
-      if (is.na(guideline_id)) {
-        return()
-      }
-      rules <- load_rules(guideline_id)
-      guideline_row <- moduleData$guidelines[
-        moduleData$guidelines$guideline_id == guideline_id,
-        ,
-        drop = FALSE
-      ]
-      existing_sample_choices_state(list(loading = TRUE))
-      load_existing_samples_task$invoke(list(
-        config = session$userData$config,
-        guideline_row = guideline_row,
-        primary_rule_id = if (nrow(rules)) rules$rule_id[[1]] else NA_integer_
-      ))
-    }, ignoreInit = TRUE)
+    observeEvent(
+      input$test_mode,
+      {
+        if (!identical(input$test_mode, "existing")) {
+          return()
+        }
+        guideline_id <- selected_guideline_id()
+        if (is.na(guideline_id)) {
+          return()
+        }
+        rules <- load_rules(guideline_id)
+        guideline_row <- moduleData$guidelines[
+          moduleData$guidelines$guideline_id == guideline_id,
+          ,
+          drop = FALSE
+        ]
+        existing_sample_choices_state(list(loading = TRUE))
+        load_existing_samples_task$invoke(list(
+          config = session$userData$config,
+          guideline_row = guideline_row,
+          primary_rule_id = if (nrow(rules)) rules$rule_id[[1]] else NA_integer_
+        ))
+      },
+      ignoreInit = TRUE
+    )
     observeEvent(load_existing_samples_task$result(), {
       result <- load_existing_samples_task$result()
       if (is.null(result)) {
@@ -6516,7 +6566,11 @@ FROM vals",
           mode = "existing",
           guideline_id = guideline_id,
           guideline_row = guideline_row,
-          primary_rule_id = if (nrow(rules)) rules$rule_id[[1]] else NA_integer_,
+          primary_rule_id = if (nrow(rules)) {
+            rules$rule_id[[1]]
+          } else {
+            NA_integer_
+          },
           sample_id = sample_id
         )
       } else {
@@ -6534,7 +6588,11 @@ FROM vals",
           mode = "fake",
           guideline_id = guideline_id,
           guideline_row = guideline_row,
-          primary_rule_id = if (nrow(rules)) rules$rule_id[[1]] else NA_integer_,
+          primary_rule_id = if (nrow(rules)) {
+            rules$rule_id[[1]]
+          } else {
+            NA_integer_
+          },
           target_value = target_value,
           input_results = collect_temporary_input_results(primary_inputs)
         )
