@@ -7,7 +7,7 @@
 
 #### Welcome to the Yukon Water Science and Stewardship Branch's YGwater GitHub repository!
 
-This repository holds many of the R functions that we use on a day-to-day basis at the Water Science and Stewardship Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application deployed at https://service.yukon.ca/water-data/shiny, and an API that's deployed at https://service.yukon.ca/water-data/api/V1 or (for the in development version) at https://service.yukon.ca/water-data/api/V2.
+This repository holds many of the R functions that we use on a day-to-day basis at the Water Science and Stewardship Branch for data visualization, statistical analysis, and reporting purposes. It also holds the R Shiny application deployed at https://service.yukon.ca/water-data/shiny, and an API that's deployed at https://service.yukon.ca/water-data/api/V1 or (for the in development version) at https://service.yukon.ca/water-data/api/V2/__docs__/.
 
 You'll also find a host of other interesting R functions, some more hydrology/climate specific than others:
 
