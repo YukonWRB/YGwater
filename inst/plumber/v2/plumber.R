@@ -940,7 +940,7 @@ v2_snowbull_stamp <- function(
       JOIN discrete.results r ON s.sample_id = r.sample_id
       WHERE r.parameter_id = %s
         AND r.result IS NOT NULL
-        AND DATE(s.target_datetime) < DATE('%s')
+        AND DATE(s.target_datetime) <= DATE('%s')
         AND DATE(s.target_datetime) >= DATE('1990-10-01')
       ",
         as.integer(param_id),
@@ -3484,7 +3484,10 @@ function(client_id, query) {
 #* @then
 v2_finalize_response
 
-#* Return CSW layer data
+#* Return CSW layer data to drive Yukon Flood Hub maps
+#*
+#* Returns a CSV or JSON table of CSW layer data for use in Yukon Flood Hub maps. The data is derived from the public.get_csw_layer() database function.
+#*
 #* @get /csw-layer
 #* @query format:string Response format: "csv" or "json". Defaults to "csv" unless Accept: application/json is sent in the request header.
 #* @serializer text/plain v2_identity_serializer()

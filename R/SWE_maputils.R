@@ -4763,38 +4763,65 @@ get_display_data <- function(
         "%"
     )
 
-    dataset_state$annotation_en <- escape_html_text(dataset_state$annotation_en)
-    dataset_state$annotation_fr <- escape_html_text(dataset_state$annotation_fr)
+    # Only polygon layers use translated map annotations. Point layers are
+    # labelled from their name and location in make_leaflet_map().
+    if (identical(dataset$geom, "poly")) {
+        annotation_cols <- c("annotation_en", "annotation_fr")
+        missing_annotation_cols <- setdiff(
+            annotation_cols,
+            names(dataset_state)
+        )
+        if (length(missing_annotation_cols) > 0L) {
+            stop(
+                "Polygon metadata is missing required annotation column(s): ",
+                paste(missing_annotation_cols, collapse = ", "),
+                call. = FALSE
+            )
+        }
 
-    dataset_state$annotation_fr <- paste0(
-        dataset_state$annotation_fr,
-        "<br>(",
-        round(dataset_state[[statistic]], 0),
-        " ",
-        unit_suffix,
-        ")"
-    )
+        dataset_state$annotation_en <- gsub(
+            "&lt;br&gt;",
+            "<br>",
+            escape_html_text(dataset_state$annotation_en),
+            fixed = TRUE
+        )
+        dataset_state$annotation_fr <- gsub(
+            "&lt;br&gt;",
+            "<br>",
+            escape_html_text(dataset_state$annotation_fr),
+            fixed = TRUE
+        )
 
-    dataset_state$annotation_en <- paste0(
-        dataset_state$annotation_en,
-        "<br>(",
-        round(dataset_state[[statistic]], 0),
-        " ",
-        unit_suffix,
-        ")"
-    )
+        dataset_state$annotation_fr <- paste0(
+            dataset_state$annotation_fr,
+            "<br>(",
+            round(dataset_state[[statistic]], 0),
+            " ",
+            unit_suffix,
+            ")"
+        )
 
-    dataset_state$annotation_en <- gsub(
-        "\\(NA [^)]*\\)",
-        "(N/A)",
-        dataset_state$annotation_en
-    )
+        dataset_state$annotation_en <- paste0(
+            dataset_state$annotation_en,
+            "<br>(",
+            round(dataset_state[[statistic]], 0),
+            " ",
+            unit_suffix,
+            ")"
+        )
 
-    dataset_state$annotation_fr <- gsub(
-        "\\(NA [^)]*\\)",
-        "(s. o.)",
-        dataset_state$annotation_fr
-    )
+        dataset_state$annotation_en <- gsub(
+            "\\(NA [^)]*\\)",
+            "(N/A)",
+            dataset_state$annotation_en
+        )
+
+        dataset_state$annotation_fr <- gsub(
+            "\\(NA [^)]*\\)",
+            "(s. o.)",
+            dataset_state$annotation_fr
+        )
+    }
 
     dataset_state$preposition <- vapply(
         dataset_state$relative_to_med,
