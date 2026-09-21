@@ -126,6 +126,31 @@ test_that("get_display_data preserves generated polygon line breaks", {
     )
 })
 
+test_that("make_snowbull_map preserves its language interface", {
+    captured_language <- NULL
+
+    expect_error(
+        testthat::with_mocked_bindings(
+            make_snowbull_map(
+                year = 2026,
+                month = 5,
+                param_name = "snow water equivalent",
+                language = "fr",
+                format = "ggplot"
+            ),
+            get_dynamic_style_elements = function(..., language) {
+                captured_language <<- language
+                stop("language captured", call. = FALSE)
+            },
+            .package = "YGwater"
+        ),
+        "language captured"
+    )
+
+    expect_identical(captured_language, "Fran\u00e7ais")
+    expect_identical(formals(make_snowbull_map)$language, "English")
+})
+
 test_that("standardize_swe_param_name returns valid param", {
     expect_equal(
         standardize_swe_param_name("snow water equivalent"),

@@ -394,6 +394,22 @@ test_that("API V2 anonymous requests use public credentials", {
   expect_false(credentials$authenticated)
 })
 
+test_that("API V2 normalizes supported lang values and rejects others", {
+  env <- new.env(parent = globalenv())
+  sys.source(v2_route_file(), envir = env)
+
+  expect_identical(env$v2_validate_lang("en"), "en")
+  expect_identical(env$v2_validate_lang("English"), "en")
+  expect_identical(env$v2_validate_lang("anglais"), "en")
+  expect_identical(env$v2_validate_lang("fr"), "fr")
+  expect_identical(env$v2_validate_lang("French"), "fr")
+  expect_identical(env$v2_validate_lang("fran\u00e7ais"), "fr")
+  expect_identical(env$v2_validate_lang("francais"), "fr")
+  expect_identical(env$v2_validate_lang("fran"), "fr")
+  expect_null(env$v2_validate_lang("es"))
+  expect_null(env$v2_validate_lang(NA_character_))
+})
+
 test_that("API V2 file cache reuses values and waits on in-flight work", {
   env <- new.env(parent = globalenv())
   sys.source(v2_route_file(), envir = env)
@@ -469,7 +485,20 @@ test_that("API V2 metadata and lookup endpoints return expected CSV and JSON", {
   expect_equal(get_ts_json$status, 200)
 
   out <- read.csv(text = get_ts$body)
+  # Drop rows with NA end_datetime or start_datetime, which are just timeseries that haven't been populated yet
+  out <- out[
+    !out$end_datetime == "" &
+      !out$start_datetime == "" &
+      !is.na(out$end_datetime) &
+      !is.na(out$start_datetime),
+  ]
   out_json <- parse_json_df(get_ts_json)
+  out_json <- out_json[
+    !out_json$end_datetime == "" &
+      !out_json$start_datetime == "" &
+      !is.na(out_json$end_datetime) &
+      !is.na(out_json$start_datetime),
+  ]
   out$end_datetime <- as.POSIXct(out$end_datetime, tz = "UTC")
   out$start_datetime <- as.POSIXct(out$start_datetime, tz = "UTC")
   out_json$end_datetime <- as.POSIXct(out_json$end_datetime, tz = "UTC")
@@ -1001,6 +1030,15 @@ test_that("API V2 measurements endpoint returns corrected measurements", {
 
   get_ts <- get_v2("http://example.com/timeseries")
   timeseries <- read.csv(text = get_ts$body)
+
+  # Drop rows with NA end_datetime or start_datetime, which are just timeseries that haven't been populated yet
+  timeseries <- timeseries[
+    !timeseries$end_datetime == "" &
+      !timeseries$start_datetime == "" &
+      !is.na(timeseries$end_datetime) &
+      !is.na(timeseries$start_datetime),
+  ]
+
   timeseries$end_datetime <- as.POSIXct(timeseries$end_datetime, tz = "UTC")
   timeseries <- timeseries[!is.na(timeseries$end_datetime), ]
 
@@ -1248,11 +1286,13 @@ test_that("API V2 snow bulletin map endpoint returns HTML", {
   withr::local_options(list(plumber2.async = v2_test_async))
   ns <- asNamespace("YGwater")
   original <- get("create_snowbull_leaflet_html", envir = ns)
+  received_language <- NULL
 
   unlockBinding("create_snowbull_leaflet_html", ns)
   assign(
     "create_snowbull_leaflet_html",
-    function(year = NULL, month = NULL, ...) {
+    function(year = NULL, month = NULL, language = NULL, ...) {
+      received_language <<- language
       list(html = "<html>stub map</html>", year = year, month = month)
     },
     envir = ns
@@ -1279,12 +1319,26 @@ test_that("API V2 snow bulletin map endpoint returns HTML", {
   )
 
   res <- v2_resolve_request(pr$test_request(reqres:::mock_rook(
-    url = "http://example.com/snow-bulletin/leaflet?year=2024&month=5",
+    url = paste0(
+      "http://example.com/snow-bulletin/leaflet",
+      "?year=2024&month=5&lang=fr"
+    ),
     method = "get"
   )))
 
   expect_equal(res$status, 200)
   expect_match(res$body, "stub map", fixed = TRUE)
+  expect_identical(received_language, "Fran\u00e7ais")
+
+  invalid_lang <- v2_resolve_request(pr$test_request(reqres:::mock_rook(
+    url = paste0(
+      "http://example.com/snow-bulletin/leaflet",
+      "?year=2024&month=5&lang=es"
+    ),
+    method = "get"
+  )))
+
+  expect_equal(invalid_lang$status, 400)
 })
 
 test_that("leaflet map HTML renderer inlines widget dependencies", {
