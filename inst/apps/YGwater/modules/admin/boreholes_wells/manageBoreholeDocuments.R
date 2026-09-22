@@ -47,10 +47,12 @@ manageBoreholeDocumentsUI <- function(id) {
           multiple = TRUE,
           selected = "public_reader"
         ),
-        actionButton(
+        bslib::input_task_button(
           ns("upload_and_associate"),
-          "Upload + associate",
-          class = "btn-primary"
+          label = "Upload + associate",
+          icon = icon("upload"),
+          label_busy = "Uploading...",
+          type = "primary"
         )
       ),
       column(
@@ -501,6 +503,78 @@ manageBoreholeDocuments <- function(id, language) {
       )
     })
 
+    upload_task <- ExtendedTask$new(function(request) {
+      promises::future_promise(seed = NULL, expr = {
+        # Shiny removes its upload tempfile independently of this worker. The
+        # request therefore points to a task-owned copy made before invoke().
+        on.exit(unlink(request$path, force = TRUE), add = TRUE)
+
+        con <- NULL
+        transaction_active <- FALSE
+        tryCatch(
+          {
+            con <- YGwater::AquaConnect(
+              name = request$db$name,
+              host = request$db$host,
+              port = request$db$port,
+              username = request$db$username,
+              password = request$db$password,
+              silent = TRUE
+            )
+            on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+            DBI::dbExecute(con, "BEGIN")
+            transaction_active <- TRUE
+            on.exit(
+              {
+                if (isTRUE(transaction_active)) {
+                  try(DBI::dbExecute(con, "ROLLBACK"), silent = TRUE)
+                }
+              },
+              add = TRUE
+            )
+
+            # insertACDocument resolves the indexed file-hash conflict and
+            # returns either the new or existing document ID.
+            result <- AquaCache::insertACDocument(
+              path = request$path,
+              name = request$name,
+              type = request$type,
+              description = request$description,
+              tags = request$tags,
+              authors = request$authors,
+              publish_date = request$publish_date,
+              url = request$url,
+              share_with = request$share_with,
+              geoms = NULL,
+              con = con
+            )
+            document_id <- as.integer(result$new_document_id[[1]])
+            if (length(document_id) != 1L || is.na(document_id)) {
+              stop("The uploaded document ID was not returned.")
+            }
+
+            DBI::dbExecute(
+              con,
+              "INSERT INTO boreholes.boreholes_documents (borehole_id, document_id)
+               VALUES ($1, $2)
+               ON CONFLICT DO NOTHING;",
+              params = list(request$borehole_id, document_id)
+            )
+
+            DBI::dbExecute(con, "COMMIT")
+            transaction_active <- FALSE
+
+            list(ok = TRUE, document_id = document_id)
+          },
+          error = function(e) {
+            list(ok = FALSE, message = conditionMessage(e))
+          }
+        )
+      })
+    }) |>
+      bslib::bind_task_button("upload_and_associate")
+
     observeEvent(input$upload_and_associate, {
       req(
         input$borehole_id,
@@ -510,25 +584,25 @@ manageBoreholeDocuments <- function(id, language) {
         input$doc_description
       )
 
-      doc_bytes <- readBin(
-        input$doc_file$datapath,
-        "raw",
-        n = file.info(input$doc_file$datapath)$size
+      extension <- tools::file_ext(input$doc_file$name)
+      staged_path <- tempfile(
+        pattern = "ygwater-borehole-document-",
+        fileext = if (nzchar(extension)) paste0(".", extension) else ""
       )
-      doc_hash <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT md5($1::bytea) AS md5;",
-        params = list(doc_bytes)
-      )$md5[[1]]
-
-      existing <- DBI::dbGetQuery(
-        session$userData$AquaCache,
-        "SELECT document_id
-         FROM files.documents
-         WHERE md5(document) = $1
-         LIMIT 1;",
-        params = list(doc_hash)
+      copied <- file.copy(
+        from = input$doc_file$datapath,
+        to = staged_path,
+        overwrite = FALSE
       )
+      if (!isTRUE(copied)) {
+        unlink(staged_path, force = TRUE)
+        showNotification(
+          "The uploaded document could not be staged for processing.",
+          type = "error",
+          duration = 15
+        )
+        return()
+      }
 
       tags <- array_to_text(input$doc_tags)
       authors <- array_to_text(input$doc_authors)
@@ -537,59 +611,58 @@ manageBoreholeDocuments <- function(id, language) {
         share_with <- "public_reader"
       }
 
+      request <- list(
+        path = staged_path,
+        borehole_id = as.integer(input$borehole_id),
+        name = input$doc_name,
+        type = input$doc_type,
+        description = input$doc_description,
+        tags = if (length(tags)) tags else NULL,
+        authors = if (length(authors)) authors else NULL,
+        publish_date = if (
+          is.null(input$doc_publish_date) || is.na(input$doc_publish_date)
+        ) {
+          NULL
+        } else {
+          as.Date(input$doc_publish_date)
+        },
+        url = if (nzchar(trimws(input$doc_url))) input$doc_url else NULL,
+        share_with = share_with,
+        db = list(
+          name = session$userData$config$dbName,
+          host = session$userData$config$dbHost,
+          port = session$userData$config$dbPort,
+          username = session$userData$config$dbUser,
+          password = session$userData$config$dbPass
+        )
+      )
+
+      tryCatch(
+        upload_task$invoke(request),
+        error = function(e) {
+          unlink(staged_path, force = TRUE)
+          showNotification(
+            paste("Upload could not be started:", conditionMessage(e)),
+            type = "error",
+            duration = 15
+          )
+        }
+      )
+    })
+
+    observeEvent(upload_task$result(), {
+      result <- upload_task$result()
+      if (!isTRUE(result$ok)) {
+        showNotification(
+          paste("Upload/association failed:", result$message),
+          type = "error",
+          duration = 15
+        )
+        return()
+      }
+
       tryCatch(
         {
-          DBI::dbExecute(session$userData$AquaCache, "BEGIN")
-          if (nrow(existing) > 0) {
-            document_id <- existing$document_id[[1]]
-          } else {
-            AquaCache::insertACDocument(
-              path = input$doc_file$datapath,
-              name = input$doc_name,
-              type = input$doc_type,
-              description = input$doc_description,
-              tags = if (length(tags)) tags else NULL,
-              authors = if (length(authors)) authors else NULL,
-              publish_date = if (
-                is.null(input$doc_publish_date) || is.na(input$doc_publish_date)
-              ) {
-                NULL
-              } else {
-                as.Date(input$doc_publish_date)
-              },
-              url = if (nzchar(trimws(input$doc_url))) input$doc_url else NULL,
-              share_with = share_with,
-              geoms = NULL,
-              con = session$userData$AquaCache
-            )
-            type_id <- moduleData$document_types$document_type_id[
-              match(input$doc_type, moduleData$document_types$document_type_en)
-            ]
-            new_doc <- DBI::dbGetQuery(
-              session$userData$AquaCache,
-              "SELECT document_id
-               FROM files.documents
-               WHERE name = $1 AND type = $2
-               ORDER BY document_id DESC
-               LIMIT 1;",
-              params = list(input$doc_name, type_id)
-            )
-            req(nrow(new_doc) == 1)
-            document_id <- new_doc$document_id[[1]]
-          }
-
-          DBI::dbExecute(
-            session$userData$AquaCache,
-            "INSERT INTO boreholes.boreholes_documents (borehole_id, document_id)
-             VALUES ($1, $2)
-             ON CONFLICT DO NOTHING;",
-            params = list(
-              as.integer(input$borehole_id),
-              as.integer(document_id)
-            )
-          )
-
-          DBI::dbExecute(session$userData$AquaCache, "COMMIT")
           load_data()
           docs_refresh(isolate(docs_refresh()) + 1L)
           showNotification(
@@ -598,10 +671,14 @@ manageBoreholeDocuments <- function(id, language) {
           )
         },
         error = function(e) {
-          DBI::dbExecute(session$userData$AquaCache, "ROLLBACK")
           showNotification(
-            paste("Upload/association failed:", e$message),
-            type = "error"
+            paste(
+              "Document uploaded, but the document list could not be",
+              "refreshed. Click Reload.",
+              conditionMessage(e)
+            ),
+            type = "warning",
+            duration = 15
           )
         }
       )
