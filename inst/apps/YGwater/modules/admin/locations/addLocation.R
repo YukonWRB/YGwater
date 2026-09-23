@@ -1295,8 +1295,7 @@ addLocation <- function(id, inputs, language) {
             modalButton("Close")
           )
         ))
-      },
-      ignoreInit = TRUE
+      }
     )
 
     observeEvent(

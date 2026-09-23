@@ -610,6 +610,12 @@ simplerIndexUI <- function(id) {
                 step = 0.000001
               )
             ),
+            actionButton(
+              ns("open_coordinates_map"),
+              "Choose or show coordinates on map",
+              icon = icon("map-location-dot"),
+              width = "100%"
+            ),
             selectizeInput(
               ns("location_source"),
               "Location source *",
@@ -717,7 +723,7 @@ simplerIndexUI <- function(id) {
                 8,
                 numericInput(
                   ns("surveyed_ground_elev"),
-                  "Surveyed ground elevation",
+                  "Ground elevation",
                   value = NULL,
                   step = 0.01
                 ) |>
@@ -735,6 +741,15 @@ simplerIndexUI <- function(id) {
                   inline = TRUE
                 )
               )
+            ),
+            textInput(
+              ns("elevation_source"),
+              "Elevation source",
+              value = ""
+            ),
+            bslib::input_task_button(
+              ns("fetch_elevation"),
+              "Fetch elevation estimate"
             ),
             radioButtons(
               ns("bedrock_reached"),
@@ -1201,6 +1216,7 @@ simplerIndexUI <- function(id) {
               'northing',
               'latitude',
               'longitude',
+              'open_coordinates_map',
               'location_source',
               'associate_loc_with_borehole',
               'location_search_radius',
@@ -1227,6 +1243,7 @@ simplerIndexUI <- function(id) {
               'screen_type',
               'drill_depth',
               'surveyed_ground_elev',
+              'elevation_source',
               'top_of_screen',
               'bottom_of_screen',
               'well_head_stick_up',
@@ -1247,6 +1264,129 @@ simplerIndexUI <- function(id) {
 simplerIndex <- function(id, language) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
+
+    fetched_elevation <- reactiveVal(NULL)
+    elevation_lookup_task <- ExtendedTask$new(function(request) {
+      promises::future_promise({
+        details <- AquaCache::get_elevation(
+          lat = request$lat,
+          lon = request$lon,
+          details = TRUE
+        )
+        list(details = details, lat = request$lat, lon = request$lon)
+      })
+    }) |>
+      bslib::bind_task_button("fetch_elevation")
+
+    observeEvent(input$fetch_elevation, {
+      lat <- suppressWarnings(as.numeric(input$latitude))
+      lon <- suppressWarnings(as.numeric(input$longitude))
+      if (identical(input$coordinate_system, "utm")) {
+        if (
+          is.null(input$easting) || is.null(input$northing) ||
+            is.null(input$utm_zone)
+        ) {
+          showModal(modalDialog(
+            "Enter easting, northing, and UTM zone before fetching an elevation.",
+            easyClose = TRUE,
+            footer = modalButton("Close")
+          ))
+          return()
+        }
+        coordinates <- tryCatch(
+          convert_utm_to_ll(input$easting, input$northing, input$utm_zone),
+          error = function(e) NULL
+        )
+        if (!is.null(coordinates)) {
+          lat <- suppressWarnings(as.numeric(coordinates$latitude))
+          lon <- suppressWarnings(as.numeric(coordinates$longitude))
+        }
+      }
+      if (
+        length(lat) != 1L || length(lon) != 1L || !is.finite(lat) ||
+          !is.finite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180
+      ) {
+        showModal(modalDialog(
+          "Enter valid coordinates before fetching an elevation.",
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        return()
+      }
+      fetched_elevation(NULL)
+      elevation_lookup_task$invoke(request = list(lat = lat, lon = lon))
+    }, ignoreInit = TRUE)
+
+    observeEvent(elevation_lookup_task$result(), {
+      result <- tryCatch(elevation_lookup_task$result(), error = function(e) e)
+      if (inherits(result, "error")) {
+        fetched_elevation(NULL)
+        showModal(modalDialog(
+          paste("Elevation lookup failed:", conditionMessage(result)),
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        return()
+      }
+      details <- result$details
+      if (is.null(details) || length(details$elevation) != 1L ||
+          !is.finite(details$elevation)) {
+        fetched_elevation(NULL)
+        showModal(modalDialog(
+          "No elevation was returned by the available services.",
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        return()
+      }
+      fetched_elevation(result)
+      showModal(modalDialog(
+        title = "Elevation estimate",
+        tags$p("Review the elevation estimate before applying it to the form."),
+        tags$table(class = "table table-sm", tags$tbody(
+          tags$tr(tags$th("Elevation"), tags$td(paste0(details$elevation, " m"))),
+          tags$tr(tags$th("Source"), tags$td(details$source)),
+          tags$tr(tags$th("Resolution"), tags$td(paste0(details$resolution, " m"))),
+          tags$tr(tags$th("Vertical datum"), tags$td(details$vertical_datum))
+        )),
+        easyClose = TRUE,
+        footer = tagList(
+          actionButton(ns("use_fetched_elevation"), "Use this elevation"),
+          modalButton("Close")
+        )
+      ))
+    })
+
+    observeEvent(input$use_fetched_elevation, {
+      estimate <- fetched_elevation()
+      req(estimate)
+      current_lat <- suppressWarnings(as.numeric(input$latitude))
+      current_lon <- suppressWarnings(as.numeric(input$longitude))
+      if (identical(input$coordinate_system, "utm")) {
+        coordinates <- tryCatch(
+          convert_utm_to_ll(input$easting, input$northing, input$utm_zone),
+          error = function(e) NULL
+        )
+        if (!is.null(coordinates)) {
+          current_lat <- suppressWarnings(as.numeric(coordinates$latitude))
+          current_lon <- suppressWarnings(as.numeric(coordinates$longitude))
+        }
+      }
+      if (!isTRUE(all.equal(current_lat, estimate$lat)) ||
+          !isTRUE(all.equal(current_lon, estimate$lon))) {
+        removeModal()
+        showModal(modalDialog(
+          "The coordinates changed after this estimate was fetched. Fetch a new estimate for the current coordinates.",
+          easyClose = TRUE,
+          footer = modalButton("Close")
+        ))
+        return()
+      }
+      updateNumericInput(session, "surveyed_ground_elev", value = estimate$details$elevation)
+      updateRadioButtons(session, "surveyed_ground_elev_unit", selected = "m")
+      updateTextInput(session, "elevation_source", value = estimate$details$source)
+      removeModal()
+    }, ignoreInit = TRUE)
 
     output$banner <- renderUI({
       req(language$language)
@@ -1726,6 +1866,15 @@ simplerIndex <- function(id, language) {
           "surveyed_ground_elev",
           value = target_metadata$surveyed_ground_elev
         )
+        updateTextInput(
+          session,
+          "elevation_source",
+          value = if (is.null(target_metadata$elevation_source)) {
+            ""
+          } else {
+            target_metadata$elevation_source
+          }
+        )
         updateRadioButtons(
           session,
           "surveyed_ground_elev_unit",
@@ -1898,6 +2047,7 @@ simplerIndex <- function(id, language) {
       )
       updateTextInput(session, "notes_borehole", value = "")
       updateTextInput(session, "notes_well", value = "")
+      updateTextInput(session, "elevation_source", value = "")
       updateSelectizeInput(
         session,
         "location_source",
@@ -2169,6 +2319,7 @@ simplerIndex <- function(id, language) {
       "estimated_yield_unit",
       "surveyed_ground_elev",
       "surveyed_ground_elev_unit",
+      "elevation_source",
       "permafrost_present",
       "permafrost_top",
       "permafrost_top_unit",
@@ -2716,6 +2867,191 @@ simplerIndex <- function(id, language) {
       ))
     }
 
+    form_latlon <- function() {
+      if (identical(input$coordinate_system, "utm")) {
+        coordinates <- convert_utm_to_ll(
+          input$easting,
+          input$northing,
+          input$utm_zone
+        )
+        lat <- coordinates$latitude
+        lon <- coordinates$longitude
+      } else {
+        lat <- suppressWarnings(as.numeric(input$latitude))
+        lon <- suppressWarnings(as.numeric(input$longitude))
+      }
+
+      lat <- suppressWarnings(as.numeric(lat))
+      lon <- suppressWarnings(as.numeric(lon))
+      if (
+        length(lat) != 1L || length(lon) != 1L || !is.finite(lat) ||
+          !is.finite(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180
+      ) {
+        return(NULL)
+      }
+      list(lat = lat, lon = lon)
+    }
+
+    coordinate_map_center <- reactiveVal(list(lat = 64, lon = -135, zoom = 4))
+    coordinate_map_selection <- reactiveVal(NULL)
+
+    output$coordinates_map <- leaflet::renderLeaflet({
+      center <- coordinate_map_center()
+      selection <- isolate(coordinate_map_selection())
+
+      map <- leaflet::leaflet(
+        options = leaflet::leafletOptions(maxZoom = 19)
+      ) %>%
+        leaflet::addProviderTiles(leaflet::providers$Esri.WorldTopoMap) %>%
+        leaflet::addProviderTiles(
+          leaflet::providers$Esri.WorldImagery,
+          group = "Satellite"
+        ) %>%
+        leaflet::addLayersControl(
+          baseGroups = c("Esri.WorldTopoMap", "Satellite"),
+          options = leaflet::layersControlOptions(collapsed = FALSE)
+        ) %>%
+        leaflet::addScaleBar(
+          options = leaflet::scaleBarOptions(imperial = FALSE)
+        ) %>%
+        leaflet::setView(
+          lng = center$lon,
+          lat = center$lat,
+          zoom = center$zoom
+        )
+
+      if (!is.null(selection)) {
+        map <- map %>%
+          leaflet::addCircleMarkers(
+            lng = selection$lon,
+            lat = selection$lat,
+            radius = 6,
+            color = "#007B8A",
+            fillOpacity = 0.9,
+            group = "selected_point",
+            popup = sprintf(
+              "Latitude: %.6f<br>Longitude: %.6f",
+              selection$lat,
+              selection$lon
+            )
+          ) %>%
+          leaflet::addLegend(
+            position = "bottomright",
+            colors = "#007B8A",
+            labels = "Selected coordinates",
+            opacity = 1
+          )
+      }
+      map
+    }) %>%
+      bindEvent(input$open_coordinates_map)
+
+    output$coordinate_map_zoom_note <- renderUI({
+      zoom <- input$coordinates_map_zoom
+      if (is.null(zoom)) {
+        return(NULL)
+      }
+      if (zoom < 14) {
+        div(
+          style = "color: #b42318; font-size: 14px; margin-top: 8px;",
+          "Zoom in to level 14 or higher to select coordinates."
+        )
+      } else {
+        div(
+          style = "color: #027a48; font-size: 14px; margin-top: 8px;",
+          "Zoom level is sufficient to select coordinates."
+        )
+      }
+    })
+
+    observeEvent(input$open_coordinates_map, {
+      selection <- form_latlon()
+      coordinate_map_selection(selection)
+      if (is.null(selection)) {
+        coordinate_map_center(list(lat = 64, lon = -135, zoom = 4))
+      } else {
+        coordinate_map_center(list(
+          lat = selection$lat,
+          lon = selection$lon,
+          zoom = 12
+        ))
+      }
+      shinyjs::disable("use_coordinates_map")
+      showModal(modalDialog(
+        title = "Check borehole coordinates",
+        tags$p(
+          if (is.null(selection)) {
+            "No valid coordinates are available. Click the map to choose a point."
+          } else {
+            "The marker shows the current coordinates. Click the map to choose a different point."
+          }
+        ),
+        leaflet::leafletOutput(ns("coordinates_map"), height = "400px"),
+        uiOutput(ns("coordinate_map_zoom_note")),
+        footer = tagList(
+          modalButton("Close"),
+          actionButton(
+            ns("use_coordinates_map"),
+            "Use selected point",
+            disabled = TRUE
+          )
+        ),
+        size = "l",
+        easyClose = TRUE
+      ))
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$coordinates_map_zoom, {
+      req(input$coordinates_map_zoom)
+      if (input$coordinates_map_zoom < 14) {
+        shinyjs::disable("use_coordinates_map")
+      } else {
+        shinyjs::enable("use_coordinates_map")
+      }
+    })
+
+    observeEvent(input$coordinates_map_click, {
+      click <- input$coordinates_map_click
+      selection <- list(lat = click$lat, lon = click$lng)
+      coordinate_map_selection(selection)
+      leaflet::leafletProxy(ns("coordinates_map"), session = session) %>%
+        leaflet::clearGroup("selected_point") %>%
+        leaflet::addCircleMarkers(
+          lng = selection$lon,
+          lat = selection$lat,
+          radius = 6,
+          color = "#007B8A",
+          fillOpacity = 0.9,
+          group = "selected_point",
+          popup = sprintf(
+            "Latitude: %.6f<br>Longitude: %.6f",
+            selection$lat,
+            selection$lon
+          )
+        )
+    }, ignoreInit = TRUE)
+
+    observeEvent(input$use_coordinates_map, {
+      if (
+        is.null(input$coordinates_map_zoom) || input$coordinates_map_zoom < 14
+      ) {
+        showNotification(
+          "Zoom in to level 14 or higher before selecting coordinates.",
+          type = "warning"
+        )
+        return()
+      }
+      selection <- coordinate_map_selection()
+      if (is.null(selection)) {
+        showNotification("Click a point on the map to select coordinates.")
+        return()
+      }
+      updateRadioButtons(session, "coordinate_system", selected = "latlon")
+      updateNumericInput(session, "latitude", value = selection$lat)
+      updateNumericInput(session, "longitude", value = selection$lon)
+      removeModal()
+    }, ignoreInit = TRUE)
+
     sanitize_metadata_for_insert <- function(metadata) {
       if (is.null(metadata) || !is.list(metadata)) {
         metadata <- empty_well_entry()$metadata
@@ -2977,6 +3313,10 @@ simplerIndex <- function(id, language) {
       )
       sanitized$well_name <- parse_character_scalar(
         metadata$well_name,
+        empty_to_null = TRUE
+      )
+      sanitized$elevation_source <- parse_character_scalar(
+        metadata$elevation_source,
         empty_to_null = TRUE
       )
       sanitized$location_id <- parse_numeric(metadata$location_id)
@@ -6172,6 +6512,7 @@ simplerIndex <- function(id, language) {
         drill_depth_unit = input$drill_depth_unit,
         surveyed_ground_elev = input$surveyed_ground_elev,
         surveyed_ground_elev_unit = input$surveyed_ground_elev_unit,
+        elevation_source = input$elevation_source,
         is_well = input$is_well,
         purpose_of_well = input$purpose_of_well,
         purpose_well_inferred = input$purpose_well_inferred,
@@ -6257,6 +6598,15 @@ simplerIndex <- function(id, language) {
             session,
             "notes_well",
             value = get_meta_value("notes_well", metadata = metadata)
+          )
+          updateTextInput(
+            session,
+            "elevation_source",
+            value = get_meta_value(
+              "elevation_source",
+              metadata = metadata,
+              default = ""
+            )
           )
           updateSelectizeInput(
             session,
@@ -6680,7 +7030,7 @@ simplerIndex <- function(id, language) {
       path,
       document_name = NULL
     ) {
-      AquaCache::insertACBorehole(
+      borehole_id <- AquaCache::insertACBorehole(
         con = session$userData$AquaCache,
         path = path,
         document_name = document_name,
@@ -6735,6 +7085,15 @@ simplerIndex <- function(id, language) {
         ),
         share_with_well = lapply(wells, `[[`, "share_with_well")
       )
+      elevation_source <- null_if_empty(metadata[["elevation_source"]])
+      if (!is.null(elevation_source)) {
+        DBI::dbExecute(
+          session$userData$AquaCache,
+          "UPDATE boreholes.boreholes SET elevation_source = $1 WHERE borehole_id = $2",
+          params = list(elevation_source[[1]], borehole_id)
+        )
+      }
+      borehole_id
     }
 
     # Upload handlers
