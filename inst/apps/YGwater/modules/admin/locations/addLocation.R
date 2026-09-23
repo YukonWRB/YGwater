@@ -2270,11 +2270,7 @@ addLocation <- function(id, inputs, language) {
       )
     })
 
-    output$fn_language_rows <- renderUI({
-      req(language_choices())
-      n_rows <- fn_name_row_count()
-      saved <- fn_names_draft()
-
+    fn_language_rows_ui <- function(n_rows, saved, choices) {
       tagList(lapply(seq_len(n_rows), function(i) {
         div(
           style = "margin-bottom: 8px;",
@@ -2283,7 +2279,7 @@ addLocation <- function(id, inputs, language) {
             selectizeInput(
               ns(paste0("fn_language_", i)),
               if (i == 1) "Language" else NULL,
-              choices = language_choices(),
+              choices = choices,
               selected = if (nrow(saved) >= i) saved$language_id[i] else NULL,
               options = list(maxItems = 1),
               width = "100%"
@@ -2303,17 +2299,16 @@ addLocation <- function(id, inputs, language) {
           )
         )
       }))
-    })
+    }
 
-    observeEvent(input$open_fn_names_modal, {
-      saved <- fn_names()
-      fn_names_draft(saved)
-      fn_name_row_count(max(1L, nrow(saved)))
-
+    show_fn_names_modal <- function() {
+      choices <- isolate(language_choices())
+      n_rows <- isolate(fn_name_row_count())
+      saved <- isolate(fn_names_draft())
       showModal(modalDialog(
         title = "Location names in other languages",
         size = "l",
-        uiOutput(ns("fn_language_rows")),
+        fn_language_rows_ui(n_rows, saved, choices),
         actionButton(
           ns("add_fn_language_row"),
           "Add another language and name"
@@ -2324,12 +2319,20 @@ addLocation <- function(id, inputs, language) {
           actionButton(ns("save_fn_names"), "Save names")
         )
       ))
+    }
+
+    observeEvent(input$open_fn_names_modal, {
+      saved <- fn_names()
+      fn_names_draft(saved)
+      fn_name_row_count(max(1L, nrow(saved)))
+      show_fn_names_modal()
     })
 
     observeEvent(input$add_fn_language_row, {
       current <- collect_fn_modal_rows(fn_name_row_count())
       fn_names_draft(current)
       fn_name_row_count(fn_name_row_count() + 1L)
+      show_fn_names_modal()
     })
 
     observe({
